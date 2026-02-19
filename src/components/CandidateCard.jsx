@@ -5,9 +5,15 @@ export default function CandidateCard({ candidate, rank }) {
 
   // Color coding for scores
   const getScoreColor = (score) => {
-    if (score >= 85) return 'bg-green-100 text-green-800 border-green-300'
-    if (score >= 75) return 'bg-blue-100 text-blue-800 border-blue-300'
-    return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+    if (score >= 85) return 'from-green-500 to-emerald-600 shadow-lg'
+    if (score >= 75) return 'from-blue-500 to-cyan-600 shadow-md'
+    return 'from-amber-500 to-orange-600 shadow-md'
+  }
+
+  const getScoreBgColor = (score) => {
+    if (score >= 85) return 'bg-green-50 border-green-200'
+    if (score >= 75) return 'bg-blue-50 border-blue-200'
+    return 'bg-amber-50 border-amber-200'
   }
 
   const getRecommendationIcon = (rec) => {
@@ -17,61 +23,61 @@ export default function CandidateCard({ candidate, rank }) {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+    <div className={`bg-white rounded-2xl border-2 overflow-hidden hover:shadow-xl transition-all duration-200 ${getScoreBgColor(candidate.score)}`}>
       {/* Header */}
       <div
-        className="p-6 cursor-pointer hover:bg-gray-50 transition-colors flex items-center justify-between"
+        className="p-6 sm:p-8 cursor-pointer hover:bg-opacity-50 transition-colors flex items-center justify-between gap-4"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-6 flex-1">
+        <div className="flex items-center gap-4 sm:gap-6 flex-1 min-w-0">
           {/* Rank Badge */}
-          <div className="text-center">
-            <div className="text-3xl font-bold text-gray-400">#{rank}</div>
+          <div className="flex-shrink-0 w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center">
+            <span className="text-lg font-bold text-slate-700">#{rank}</span>
           </div>
 
           {/* Candidate Info */}
-          <div className="flex-1">
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1 truncate">
               {candidate.name}
             </h3>
-            <p className="text-gray-600">{candidate.experience}</p>
+            <p className="text-sm sm:text-base text-slate-600 truncate">{candidate.experience}</p>
           </div>
+        </div>
 
-          {/* Score & Recommendation */}
-          <div className="text-right">
-            <div className={`inline-block px-4 py-2 rounded-lg border font-bold text-lg mb-2 ${getScoreColor(candidate.score)}`}>
-              {candidate.score}%
-            </div>
-            <div className="text-sm">
-              <span className="mr-2">{getRecommendationIcon(candidate.recommendation)}</span>
-              <span className="text-gray-700 font-semibold">{candidate.recommendation}</span>
-            </div>
+        {/* Score & Recommendation */}
+        <div className="flex-shrink-0 text-right">
+          <div className={`inline-block bg-gradient-to-r ${getScoreColor(candidate.score)} text-white font-black text-2xl px-6 py-3 rounded-xl mb-2`}>
+            {candidate.score}%
+          </div>
+          <div className="text-xs sm:text-sm whitespace-nowrap">
+            <span className="mr-1">{getRecommendationIcon(candidate.recommendation)}</span>
+            <span className="text-slate-700 font-semibold">{candidate.recommendation}</span>
           </div>
         </div>
 
         {/* Expand Toggle */}
-        <div className="ml-4 text-2xl text-gray-400">
+        <div className="flex-shrink-0 text-xl text-slate-400 ml-2">
           {isExpanded ? '▼' : '▶'}
         </div>
       </div>
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t border-gray-200 bg-gray-50 p-6 space-y-6">
+        <div className="border-t-2 border-slate-200 bg-slate-50/50 p-6 sm:p-8 space-y-6">
           {/* Summary */}
           <div>
-            <h4 className="font-semibold text-gray-900 mb-2">AI Assessment</h4>
-            <p className="text-gray-700 leading-relaxed">{candidate.summary}</p>
+            <h4 className="font-bold text-slate-900 mb-3 text-base sm:text-lg">🤖 AI Assessment</h4>
+            <p className="text-slate-700 leading-relaxed text-sm sm:text-base">{candidate.summary}</p>
           </div>
 
           {/* Skills */}
           <div>
-            <h4 className="font-semibold text-gray-900 mb-2">Key Skills</h4>
+            <h4 className="font-bold text-slate-900 mb-3 text-base sm:text-lg">💻 Key Skills</h4>
             <div className="flex flex-wrap gap-2">
               {candidate.skills.map((skill) => (
                 <span
                   key={skill}
-                  className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"
+                  className="bg-gradient-to-r from-indigo-500 to-blue-500 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-md hover:shadow-lg transition"
                 >
                   {skill}
                 </span>
@@ -80,24 +86,24 @@ export default function CandidateCard({ candidate, rank }) {
           </div>
 
           {/* Pros & Cons */}
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-semibold text-green-900 mb-2">✓ Strengths</h4>
-              <ul className="space-y-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="bg-white p-4 rounded-xl border-2 border-green-100">
+              <h4 className="font-bold text-green-900 mb-3 text-base">✓ Strengths</h4>
+              <ul className="space-y-2">
                 {candidate.pros.map((pro, idx) => (
-                  <li key={idx} className="text-sm text-gray-700 flex gap-2">
-                    <span className="text-green-600">✓</span>
+                  <li key={idx} className="text-sm text-slate-700 flex gap-2 items-start">
+                    <span className="text-green-600 flex-shrink-0 font-bold">✓</span>
                     <span>{pro}</span>
                   </li>
                 ))}
               </ul>
             </div>
-            <div>
-              <h4 className="font-semibold text-orange-900 mb-2">⚠ Considerations</h4>
-              <ul className="space-y-1">
+            <div className="bg-white p-4 rounded-xl border-2 border-amber-100">
+              <h4 className="font-bold text-amber-900 mb-3 text-base">⚠ Considerations</h4>
+              <ul className="space-y-2">
                 {candidate.cons.map((con, idx) => (
-                  <li key={idx} className="text-sm text-gray-700 flex gap-2">
-                    <span className="text-orange-600">⚠</span>
+                  <li key={idx} className="text-sm text-slate-700 flex gap-2 items-start">
+                    <span className="text-amber-600 flex-shrink-0 font-bold">⚠</span>
                     <span>{con}</span>
                   </li>
                 ))}
@@ -106,12 +112,12 @@ export default function CandidateCard({ candidate, rank }) {
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-4 border-t border-gray-300 flex gap-3">
-            <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition flex-1">
+          <div className="pt-4 border-t-2 border-slate-200 flex flex-col sm:flex-row gap-3">
+            <button className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg transition transform hover:scale-105 shadow-lg flex-1">
               Schedule Interview
             </button>
-            <button className="border border-gray-300 text-gray-700 hover:bg-gray-100 font-bold py-2 px-6 rounded-lg transition">
-              View Full Resume
+            <button className="border-2 border-slate-300 hover:border-indigo-600 text-slate-700 hover:text-indigo-600 font-bold py-3 px-6 rounded-lg transition">
+              View Resume
             </button>
           </div>
         </div>

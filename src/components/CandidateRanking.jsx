@@ -58,35 +58,33 @@ const MOCK_CANDIDATES = [
 
 export default function CandidateRanking({ uploadedFile }) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-8">
       {/* Summary Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
-          <div className="text-3xl font-bold text-blue-600 mb-2">3</div>
-          <p className="text-gray-600">Candidates Analyzed</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl border border-indigo-200 p-6 text-center hover:shadow-lg transition">
+          <div className="text-4xl font-black text-indigo-600 mb-2">3</div>
+          <p className="text-sm font-semibold text-indigo-700">Candidates Analyzed</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
-          <div className="text-3xl font-bold text-green-600 mb-2">1</div>
-          <p className="text-gray-600">Strong Matches</p>
+        <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200 p-6 text-center hover:shadow-lg transition">
+          <div className="text-4xl font-black text-green-600 mb-2">1</div>
+          <p className="text-sm font-semibold text-green-700">Strong Matches</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
-          <div className="text-3xl font-bold text-purple-600 mb-2">86</div>
-          <p className="text-gray-600">Avg Score</p>
+        <div className="bg-gradient-to-br from-blue-50 to-cyan-100 rounded-xl border border-blue-200 p-6 text-center hover:shadow-lg transition">
+          <div className="text-4xl font-black text-blue-600 mb-2">86%</div>
+          <p className="text-sm font-semibold text-blue-700">Average Quality</p>
         </div>
       </div>
 
       {/* AI Summary Box */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-8">
+      <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl p-8 shadow-xl text-white">
         <div className="flex items-start gap-4">
-          <div className="text-3xl">🤖</div>
+          <div className="text-4xl flex-shrink-0">✨</div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              AI Summary
+            <h2 className="text-2xl font-bold mb-3">
+              AI-Powered Summary
             </h2>
-            <p className="text-gray-700 leading-relaxed">
-              Based on the uploaded resumes, Sarah Chen stands out as the top candidate with strong full-stack capabilities
-              and cultural fit. We recommend scheduling an interview with Sarah first, followed by Marcus for infrastructure
-              projects. All three candidates show solid fundamentals and would benefit your team in different ways.
+            <p className="text-indigo-100 leading-relaxed text-base">
+              Sarah Chen stands out as the <span className="font-semibold text-white">top match</span> with exceptional full-stack capabilities. Marcus brings strong backend expertise, ideal for infrastructure work. Elena offers enterprise experience. We recommend starting interviews with Sarah and Marcus.
             </p>
           </div>
         </div>
@@ -94,7 +92,10 @@ export default function CandidateRanking({ uploadedFile }) {
 
       {/* Candidate Rankings */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-gray-900">Ranked Candidates</h2>
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-3xl font-bold text-slate-900">Top Candidates</h2>
+          <span className="text-sm text-slate-600">Ranked by fit</span>
+        </div>
         <div className="space-y-4">
           {MOCK_CANDIDATES.map((candidate, index) => (
             <CandidateCard
@@ -106,23 +107,27 @@ export default function CandidateRanking({ uploadedFile }) {
         </div>
       </div>
 
-      {/* Export / Next Steps */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">
-          Next Steps
+      {/* Next Steps CTA */}
+      <div className="bg-white rounded-2xl border-2 border-slate-200 p-8 text-center hover:shadow-xl transition">
+        <h3 className="text-2xl font-bold text-slate-900 mb-3">
+          Ready to Move Forward?
         </h3>
-        <p className="text-gray-600 mb-4">
-          Ready to screen more candidates? Upload another batch or share these
-          results with your hiring team.
+        <p className="text-slate-600 mb-6 max-w-2xl mx-auto">
+          This is just the beginning. HireFlow can help you schedule interviews, send candidate feedback, and track your hiring pipeline in real time.
         </p>
-        <div className="flex gap-4 justify-center">
-          <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition">
-            Share Results
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 shadow-lg">
+            Schedule Interviews
           </button>
-          <button className="border border-blue-600 text-blue-600 hover:bg-blue-50 font-bold py-2 px-6 rounded-lg transition">
-            Download PDF
+          <button className="border-2 border-slate-300 hover:border-indigo-600 text-slate-700 hover:text-indigo-600 font-bold py-3 px-6 rounded-xl transition">
+            View Full Reports
           </button>
         </div>
+      </div>
+
+      {/* Footer Note */}
+      <div className="text-center text-sm text-slate-500">
+        <p>This is a demo. Real scoring uses AI to analyze 20+ dimensions: skills, culture fit, experience, communication, and more.</p>
       </div>
     </div>
   )
