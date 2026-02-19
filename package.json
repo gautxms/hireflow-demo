@@ -1,8 +1,11 @@
 {
   "name": "hireflow-demo",
-  "private": true,
-  "version": "0.0.0",
+  "description": "AI-powered resume screening and candidate ranking MVP",
+  "version": "1.0.0",
+  "private": false,
   "type": "module",
+  "author": "HireFlow Team",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
