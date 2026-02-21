@@ -56,7 +56,7 @@ const MOCK_CANDIDATES = [
   },
 ]
 
-export default function CandidateRanking({ uploadedFile }) {
+export default function CandidateRanking() {
   return (
     <div className="space-y-8 pb-8">
       {/* Summary Stats */}
