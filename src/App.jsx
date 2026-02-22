@@ -8,6 +8,7 @@ import SettingsPage from './components/SettingsPage'
 import HelpPage from './components/HelpPage'
 import AboutPage from './components/AboutPage'
 import DemoBookingPage from './components/DemoBookingPage'
+import ContactPage from './components/ContactPage'
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing')
@@ -73,6 +74,10 @@ export default function App() {
 
       {currentPage === 'demo' && (
         <DemoBookingPage onBack={() => setCurrentPage('landing')} />
+      )}
+
+      {currentPage === 'contact' && (
+        <ContactPage onBack={() => setCurrentPage('landing')} />
       )}
     </div>
   )
