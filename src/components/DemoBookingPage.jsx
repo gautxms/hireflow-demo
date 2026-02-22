@@ -626,7 +626,7 @@ export default function DemoBookingPage({ onBack }) {
             }}>
               <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>What Happens Next:</div>
               <ol style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.8', paddingLeft: '1.5rem' }}>
-                <li>📧 Check your email for a calendar invite and Zoom link</li>
+                <li>📧 Check your email for a calendar invite and Zoom link (we respond within 24 hours)</li>
                 <li>👥 Our team will walk you through HireFlow live</li>
                 <li>🎯 We'll discuss your specific hiring challenges</li>
                 <li>💬 Q&A time at the end - ask anything!</li>

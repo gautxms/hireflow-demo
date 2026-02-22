@@ -1,9 +1,8 @@
 import { useEffect } from 'react'
 import '../globals.css'
 
-export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboard, onViewAbout, onViewDemo, onViewContact, onViewHelp }) {
+export default function LandingPage({ onStartDemo, onViewPricing, onViewAbout, onViewContact, onViewHelp }) {
   useEffect(() => {
-    // Smooth scroll and interactive effects
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (e) {
         e.preventDefault()
@@ -15,7 +14,6 @@ export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboar
 
   return (
     <>
-      {/* Navigation */}
       <nav>
         <div className="nav-logo">
           Hire<span>Flow</span>
@@ -28,63 +26,54 @@ export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboar
         </ul>
         <div className="nav-cta">
           <button className="btn-ghost" onClick={onViewContact}>Contact</button>
-          <button className="btn-primary" onClick={onStartDemo}>Get Started</button>
+          <button className="btn-primary" onClick={onStartDemo}>Start Beta</button>
         </div>
       </nav>
 
-      {/* Hero Section */}
       <section className="hero">
         <div className="orb-2"></div>
         <div className="hero-content">
+          <div style={{ display: 'inline-block', marginBottom: '1rem', padding: '0.4rem 0.8rem', borderRadius: '999px', border: '1px solid var(--accent)', color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 'bold' }}>
+            BETA PRODUCT
+          </div>
           <h1>
-            Hire Smarter.
+            Review Resumes.
             <br />
-            <span className="gradient">Faster.</span>
+            <span className="gradient">Move Faster.</span>
           </h1>
           <p>
-            HireFlow automates candidate screening with AI. Reduce hiring time from weeks to days, 
-            eliminate bias, and make data-driven decisions. Finally, a recruiting tool built for modern teams.
+            HireFlow helps small teams parse resumes quickly so you can spend less time on manual screening and more time talking to strong candidates.
           </p>
           <div className="hero-cta">
             <button className="btn-primary" onClick={onStartDemo} style={{ fontSize: '1rem', padding: '0.75rem 2rem' }}>
-              Try Free Demo
+              Start Beta
             </button>
-            <button className="btn-ghost">Watch 2-min Demo</button>
+            <button className="btn-ghost" onClick={onViewPricing}>View Beta Access</button>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="features" id="features">
         <div className="features-grid">
           <div className="feature-card">
-            <h3>⚡ AI Screening</h3>
-            <p>Automatically analyze and score resumes in seconds. Match candidates with roles using 20+ evaluation dimensions.</p>
+            <h3>📄 Resume Upload</h3>
+            <p>Upload one or multiple PDF resumes and process them in a single flow.</p>
           </div>
           <div className="feature-card">
-            <h3>🎯 Bias Removal</h3>
-            <p>Our AI evaluates candidates on merit, not on demographics. Fair, transparent, and legally defensible.</p>
-          </div>
-          <div className="feature-card">
-            <h3>📊 Smart Analytics</h3>
-            <p>Track hiring metrics, time-to-hire, and candidate quality. Data-driven insights for continuous improvement.</p>
+            <h3>🧩 Resume Parsing</h3>
+            <p>Extract candidate details like name, skills, and experience from uploaded resumes.</p>
           </div>
           <div className="feature-card">
             <h3>🔗 ATS Integration</h3>
-            <p>Works seamlessly with your existing tools. No workflow disruption, just smarter hiring.</p>
-          </div>
-          <div className="feature-card">
-            <h3>💰 Cost Savings</h3>
-            <p>Reduce time-to-hire by 70%. Save $3-5K per hire by eliminating manual screening.</p>
+            <p>ATS integrations are on our roadmap and available for selected beta design partners.</p>
           </div>
           <div className="feature-card">
             <h3>🔐 Privacy First</h3>
-            <p>SOC 2 compliant. Your candidate data is encrypted and never shared. Enterprise-grade security.</p>
+            <p>Candidate files stay private in your workspace with secure handling throughout the beta.</p>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
       <footer>
         <p>© 2026 HireFlow Inc. All rights reserved. | <a href="#" style={{ color: 'var(--accent)' }}>Privacy</a> | <a href="#" style={{ color: 'var(--accent)' }}>Terms</a></p>
       </footer>

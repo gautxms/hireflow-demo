@@ -8,7 +8,7 @@ export default function HelpPage({ onBack }) {
     'getting-started': [
       { id: 1, title: 'Getting Started with HireFlow', desc: 'Learn the basics of uploading resumes and analyzing candidates' },
       { id: 2, title: 'Creating Your First Project', desc: 'Set up a new hiring project in 5 minutes' },
-      { id: 3, title: 'Understanding Candidate Scores', desc: 'How our AI scoring system works' }
+      { id: 3, title: 'Understanding Parsed Candidate Data', desc: 'What information is extracted from each resume today' }
     ],
     'uploading': [
       { id: 4, title: 'Upload Resumes', desc: 'Accepted formats and best practices' },
@@ -16,19 +16,19 @@ export default function HelpPage({ onBack }) {
       { id: 6, title: 'Resume Parsing', desc: 'How we extract candidate information' }
     ],
     'analysis': [
-      { id: 7, title: 'Scoring Dimensions', desc: 'The 20+ factors we evaluate' },
-      { id: 8, title: 'Custom Scoring Rules', desc: 'Create scoring rules for your specific needs' },
-      { id: 9, title: 'Candidate Comparison', desc: 'Compare candidates side by side' }
+      { id: 7, title: 'Review Parsed Fields', desc: 'Inspect extracted name, skills, and experience data' },
+      { id: 8, title: 'Use Results for Shortlisting', desc: 'How teams are using parsed data in beta workflows' },
+      { id: 9, title: 'Scoring Roadmap', desc: 'What is planned next for scoring in HireFlow' }
     ],
     'integrations': [
-      { id: 10, title: 'Slack Integration', desc: 'Get notifications in your Slack workspace' },
-      { id: 11, title: 'Email Integration', desc: 'Forward resumes directly to HireFlow' },
-      { id: 12, title: 'API Documentation', desc: 'Build custom integrations with our API' }
+      { id: 10, title: 'ATS Integration Roadmap', desc: 'Status of ATS integrations in beta' },
+      { id: 11, title: 'Email Workflow', desc: 'Current email-based support and onboarding flow' },
+      { id: 12, title: 'API Availability', desc: 'API access is not available in the MVP beta yet' }
     ],
     'billing': [
-      { id: 13, title: 'Plans and Pricing', desc: 'Understand our billing structure' },
-      { id: 14, title: 'Invoices and Receipts', desc: 'Access your billing history' },
-      { id: 15, title: 'Refund Policy', desc: 'Learn about our refund terms' }
+      { id: 13, title: 'Beta Plan', desc: 'What is included in the current starter beta' },
+      { id: 14, title: 'Early Access Availability', desc: 'How to request beta access' },
+      { id: 15, title: 'Future Pricing', desc: 'How we will share pricing updates after beta' }
     ]
   }
 
@@ -41,12 +41,12 @@ export default function HelpPage({ onBack }) {
   ]
 
   const faqs = [
-    { q: 'How many resumes can I upload?', a: 'Depends on your plan. Starter: 50/month, Pro: 500/month, Enterprise: Unlimited' },
+    { q: 'How many resumes can I upload?', a: 'In the current beta, limits are set per team during onboarding. Contact us for your cap.' },
     { q: 'What file formats are supported?', a: 'We support PDF resumes. Attach as email or upload directly on the platform' },
-    { q: 'How accurate is the AI scoring?', a: 'Our system has 94% accuracy. Results are constantly improving as we learn from your feedback' },
-    { q: 'Can I export candidate data?', a: 'Yes, you can export as CSV or integrate with your ATS via our API' },
+    { q: 'Do you provide candidate scoring?', a: 'Not yet. The MVP currently focuses on resume upload and data extraction. Scoring is coming soon.' },
+    { q: 'Can I export candidate data?', a: 'Export options are limited in beta. Reach out and we can help with manual exports for now.' },
     { q: 'What happens to my data after I delete it?', a: 'Your data is permanently deleted within 30 days. We follow GDPR and CCPA compliance' },
-    { q: 'Do you offer custom integrations?', a: 'Yes, contact our sales team for enterprise custom integrations' }
+    { q: 'Do you offer custom integrations?', a: 'Integrations are handled case-by-case in beta. ATS integration is on the roadmap.' }
   ]
 
   const filteredArticles = articles[activeCategory].filter(article =>

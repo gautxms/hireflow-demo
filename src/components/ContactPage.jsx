@@ -23,38 +23,38 @@ export default function ContactPage({ onBack }) {
     {
       icon: '📞',
       title: 'Phone',
-      description: 'Call us during business hours',
-      value: '+1 (555) 123-4567',
+      description: 'Phone support is limited during beta',
+      value: 'Phone support by request during beta',
       type: 'phone'
     },
     {
       icon: '📍',
       title: 'Office',
-      description: 'Visit us in San Francisco',
-      value: '123 Tech Street, SF, CA 94103',
+      description: 'San Francisco (by appointment)',
+      value: 'San Francisco, CA',
       type: 'address'
     },
     {
-      icon: '💬',
-      title: 'Live Chat',
-      description: 'Instant support (9am-6pm EST)',
-      value: 'Start Chat',
-      type: 'chat'
+      icon: '🌐',
+      title: 'Social',
+      description: 'Follow product updates',
+      value: 'LinkedIn, GitHub, X',
+      type: 'social'
     }
   ]
 
   const faqItems = [
     {
       question: 'What are your support hours?',
-      answer: 'We offer support Monday-Friday, 9am-6pm EST. Enterprise customers get 24/7 support.'
+      answer: 'We offer support Monday-Friday, 9am-6pm PT for beta users.'
     },
     {
       question: 'How quickly will I get a response?',
-      answer: 'We aim to respond to all inquiries within 2 hours during business hours. For urgent matters, call our phone line.'
+      answer: 'We aim to respond to all inquiries within 24 hours.'
     },
     {
       question: 'Do you offer phone support?',
-      answer: 'Yes! Pro and Enterprise plans include phone support. Starter plans can upgrade to add phone support.'
+      answer: 'Phone support is limited during beta and handled by request.'
     },
     {
       question: 'Can I schedule a call with your team?',
@@ -62,7 +62,7 @@ export default function ContactPage({ onBack }) {
     },
     {
       question: 'What if I have billing questions?',
-      answer: 'Billing inquiries can be sent to billing@hireflow.dev or discussed during a scheduled call with our team.'
+      answer: 'Billing questions can be sent to hello@hireflow.dev.'
     },
     {
       question: 'Do you have a privacy policy?',
@@ -207,7 +207,7 @@ export default function ContactPage({ onBack }) {
                     Message Sent!
                   </div>
                   <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
-                    Thank you for reaching out. We'll get back to you within 2 hours.
+                    Thank you for reaching out. We'll get back to you within 24 hours.
                   </div>
                 </div>
               </div>
@@ -428,57 +428,16 @@ export default function ContactPage({ onBack }) {
 
       {/* Office Locations */}
       <div style={{ padding: '4rem', background: 'var(--ink-2)', borderTop: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
-            Our Offices
+            Office
           </h2>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
-            {[
-              {
-                city: 'San Francisco',
-                address: '123 Tech Street',
-                state: 'San Francisco, CA 94103',
-                phone: '+1 (555) 123-4567',
-                hours: 'Mon-Fri: 9am-6pm PT'
-              },
-              {
-                city: 'New York',
-                address: '456 Innovation Ave',
-                state: 'New York, NY 10001',
-                phone: '+1 (555) 234-5678',
-                hours: 'Mon-Fri: 9am-6pm ET'
-              },
-              {
-                city: 'London',
-                address: '789 Tech Park',
-                state: 'London, UK EC1A 1AA',
-                phone: '+44 (0) 20 7946 0958',
-                hours: 'Mon-Fri: 9am-6pm GMT'
-              }
-            ].map((office, i) => (
-              <div
-                key={i}
-                style={{
-                  background: 'var(--card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '12px',
-                  padding: '2rem'
-                }}
-              >
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem', color: 'var(--accent)' }}>
-                  📍 {office.city}
-                </h3>
-                <div style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.8' }}>
-                  <div>{office.address}</div>
-                  <div>{office.state}</div>
-                  <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
-                    <div><strong>Phone:</strong> {office.phone}</div>
-                    <div><strong>Hours:</strong> {office.hours}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
+            <h3 style={{ fontWeight: 'bold', marginBottom: '1rem', color: 'var(--accent)' }}>📍 San Francisco</h3>
+            <div style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.8' }}>
+              San Francisco, CA<br />
+              Meetings available by appointment.
+            </div>
           </div>
         </div>
       </div>

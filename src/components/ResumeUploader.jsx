@@ -69,7 +69,7 @@ export default function ResumeUploader({ onFileUploaded, onBack }) {
           Upload Resumes
         </h1>
         <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>
-          Upload one or multiple resumes. Our AI will analyze and rank candidates automatically.
+          Upload one or multiple resumes. We currently parse resume details and show extracted candidate data. Coming soon: AI scoring.
         </p>
       </div>
 
@@ -198,9 +198,9 @@ export default function ResumeUploader({ onFileUploaded, onBack }) {
           <h4 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>How it works:</h4>
           <ol style={{ color: 'var(--muted)', lineHeight: '1.8', paddingLeft: '1.5rem' }}>
             <li>Upload one or multiple resumes (PDF format)</li>
-            <li>Our AI analyzes each resume across 20+ dimensions</li>
-            <li>Candidates are ranked by fit and quality</li>
-            <li>Review detailed scoring and recommendations</li>
+            <li>HireFlow extracts key fields like name, skills, and experience</li>
+            <li>Review extracted candidate data in one place</li>
+            <li>Coming soon: AI scoring and recommendations</li>
           </ol>
         </div>
       </div>
