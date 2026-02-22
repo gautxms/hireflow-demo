@@ -1,4 +1,4 @@
-export default function PricingPage({ onSelectPlan }) {
+export default function PricingPage({ onSelectPlan, hasStripeCheckout }) {
   const plans = [
     {
       id: 'starter',
@@ -63,6 +63,20 @@ export default function PricingPage({ onSelectPlan }) {
         </h1>
         <p style={{ fontSize: '1.1rem', color: 'var(--muted)', maxWidth: '600px', margin: '0 auto' }}>
           Choose the plan that fits your hiring needs. Scale up anytime.
+        </p>
+      </div>
+
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem 2rem 0' }}>
+        <p style={{
+          margin: 0,
+          color: 'var(--muted)',
+          fontSize: '0.9rem',
+          textAlign: 'center'
+        }}>
+          {hasStripeCheckout
+            ? 'Paid plans are processed securely via Stripe Checkout.'
+            : 'Stripe payment links not configured yet. Plan selection opens the demo experience.'}
         </p>
       </div>
 
