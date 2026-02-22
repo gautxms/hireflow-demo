@@ -1,21 +1,17 @@
 import { useState } from 'react'
 import LandingPage from './components/LandingPage'
 import Dashboard from './components/Dashboard'
-import './index.css'
 
-function App() {
-  const [currentPage, setCurrentPage] = useState('landing') // 'landing' or 'dashboard'
+export default function App() {
+  const [showDemo, setShowDemo] = useState(false)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {currentPage === 'landing' ? (
-        <LandingPage onStartDemo={() => setCurrentPage('dashboard')} />
+    <>
+      {!showDemo ? (
+        <LandingPage onStartDemo={() => setShowDemo(true)} />
       ) : (
-        <Dashboard onBack={() => setCurrentPage('landing')} />
+        <Dashboard onBack={() => setShowDemo(false)} />
       )}
-    </div>
+    </>
   )
 }
-
-export default App
-/* Deployment trigger 1771704125 */
