@@ -6,6 +6,7 @@ import CandidateResults from './components/CandidateResults'
 import OperationsDashboard from './components/Dashboard'
 import SettingsPage from './components/SettingsPage'
 import HelpPage from './components/HelpPage'
+import AboutPage from './components/AboutPage'
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing')
@@ -63,6 +64,10 @@ export default function App() {
 
       {currentPage === 'help' && (
         <HelpPage onBack={() => setCurrentPage('landing')} />
+      )}
+
+      {currentPage === 'about' && (
+        <AboutPage onBack={() => setCurrentPage('landing')} />
       )}
     </div>
   )
