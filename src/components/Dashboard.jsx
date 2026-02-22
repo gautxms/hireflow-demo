@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function Dashboard() {
+export default function Dashboard({ onNavigate }) {
   const [tasks] = useState([
     {
       id: 1,
@@ -91,9 +91,35 @@ export default function Dashboard() {
   return (
     <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       {/* Header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>HireFlow Operations</h1>
-        <p style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>Goal: 5 beta customers by week 8 | Current: Week 1 (warm outreach)</p>
+      <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>HireFlow Operations</h1>
+          <p style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>Goal: 5 beta customers by week 8 | Current: Week 1 (warm outreach)</p>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button onClick={() => onNavigate?.('settings')} style={{
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            color: 'var(--accent)',
+            padding: '0.5rem 1rem',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem'
+          }}>
+            ⚙️ Settings
+          </button>
+          <button onClick={() => onNavigate?.('landing')} style={{
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            color: 'var(--muted)',
+            padding: '0.5rem 1rem',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem'
+          }}>
+            ← Home
+          </button>
+        </div>
       </div>
 
       {/* Agents Status */}

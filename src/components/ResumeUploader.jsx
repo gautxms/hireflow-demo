@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function ResumeUploader({ onFileUploaded }) {
+export default function ResumeUploader({ onFileUploaded, onBack }) {
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -48,6 +48,23 @@ export default function ResumeUploader({ onFileUploaded }) {
     <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
       {/* Header */}
       <div style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              color: 'var(--accent)',
+              padding: '0.5rem 1rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginBottom: '1rem',
+              fontSize: '0.9rem'
+            }}
+          >
+            ← Back
+          </button>
+        )}
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
           Upload Resumes
         </h1>

@@ -35,6 +35,10 @@ export default function App() {
           onStartDemo={() => setCurrentPage('uploader')}
           onViewPricing={() => setCurrentPage('pricing')}
           onViewDashboard={() => setCurrentPage('dashboard')}
+          onViewAbout={() => setCurrentPage('about')}
+          onViewDemo={() => setCurrentPage('demo')}
+          onViewContact={() => setCurrentPage('contact')}
+          onViewHelp={() => setCurrentPage('help')}
         />
       )}
 
@@ -46,7 +50,7 @@ export default function App() {
       )}
 
       {currentPage === 'uploader' && (
-        <ResumeUploader onFileUploaded={handleFileUploaded} />
+        <ResumeUploader onFileUploaded={handleFileUploaded} onBack={() => setCurrentPage('landing')} />
       )}
 
       {currentPage === 'results' && (
@@ -57,7 +61,7 @@ export default function App() {
       )}
 
       {currentPage === 'dashboard' && (
-        <OperationsDashboard />
+        <OperationsDashboard onNavigate={setCurrentPage} />
       )}
 
       {currentPage === 'settings' && (
