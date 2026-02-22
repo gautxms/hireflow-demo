@@ -1,165 +1,191 @@
 import { useState } from 'react'
 
 export default function ResumeUploader({ onFileUploaded }) {
-  const [isDragActive, setIsDragActive] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
 
-  const handleDrag = (e) => {
+  const handleDragOver = (e) => {
     e.preventDefault()
-    e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setIsDragActive(true)
-    } else if (e.type === 'dragleave') {
-      setIsDragActive(false)
-    }
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = () => {
+    setIsDragging(false)
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
-    e.stopPropagation()
-    setIsDragActive(false)
-
-    const files = [...e.dataTransfer.files]
+    setIsDragging(false)
+    const files = Array.from(e.dataTransfer.files)
     handleFiles(files)
   }
 
   const handleFileInput = (e) => {
-    const files = [...e.target.files]
+    const files = Array.from(e.target.files)
     handleFiles(files)
   }
 
   const handleFiles = (files) => {
-    const validFiles = files.filter(
-      (file) => file.type === 'application/pdf' || file.type === 'text/plain'
-    )
+    const pdfFiles = files.filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'))
+    setUploadedFiles(prev => [...prev, ...pdfFiles.map(f => ({ file: f, name: f.name, size: f.size }))])
+  }
 
-    if (validFiles.length === 0) {
-      alert('Please upload PDF or TXT files only')
-      return
-    }
-
-    setUploadedFiles(validFiles)
-
-    // Simulate parsing and then show results
-    setIsProcessing(true)
+  const handleAnalyze = () => {
+    if (uploadedFiles.length === 0) return
+    setIsAnalyzing(true)
     setTimeout(() => {
-      setIsProcessing(false)
-      // Call parent to move to results page
-      onFileUploaded(validFiles[0])
+      setIsAnalyzing(false)
+      onFileUploaded(uploadedFiles)
     }, 2000)
   }
 
+  const removeFile = (index) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
   return (
-    <div className="space-y-8 pb-8">
-      {/* Upload Area */}
-      <div
-        className={`relative border-3 border-dashed rounded-3xl p-12 sm:p-16 text-center transition-all duration-200 ${
-          isDragActive
-            ? 'border-indigo-500 bg-indigo-50 shadow-xl scale-105'
-            : 'border-slate-300 bg-white hover:border-indigo-400'
-        }`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
-        <div className="mb-6">
-          <div className="text-6xl mb-6">📄</div>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-3">
-            Upload Resumes
-          </h2>
-          <p className="text-lg text-slate-600 mb-2">
-            Drag and drop your resume files here, or click to browse
-          </p>
-          <p className="text-sm text-slate-500 font-medium">
-            Accepted formats: PDF, TXT • Multiple files supported
-          </p>
-        </div>
-
-        <input
-          type="file"
-          multiple
-          accept=".pdf,.txt"
-          onChange={handleFileInput}
-          className="hidden"
-          id="file-input"
-          disabled={isProcessing}
-        />
-
-        <label htmlFor="file-input">
-          <button
-            onClick={() => document.getElementById('file-input').click()}
-            className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-black py-4 px-10 rounded-xl text-lg shadow-xl hover:shadow-2xl transition cursor-pointer inline-block transform hover:scale-105 disabled:opacity-50"
-            disabled={isProcessing}
-          >
-            {isProcessing ? '⟳ Processing...' : 'Select Files'}
-          </button>
-        </label>
+    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      {/* Header */}
+      <div style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
+          Upload Resumes
+        </h1>
+        <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>
+          Upload one or multiple resumes. Our AI will analyze and rank candidates automatically.
+        </p>
       </div>
 
-      {/* Processing Status */}
-      {isProcessing && (
-        <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-200 rounded-2xl p-8 text-center shadow-lg">
-          <div className="inline-block">
-            <div className="flex justify-center mb-4">
-              <div className="animate-spin h-10 w-10 text-indigo-600 text-2xl">⟳</div>
-            </div>
-            <p className="text-indigo-900 font-bold text-lg">
-              Analyzing resumes with AI...
-            </p>
-            <p className="text-sm text-indigo-700 mt-2">
-              Scoring candidates on 20+ dimensions
-            </p>
-            <div className="mt-4 w-48 h-1 bg-indigo-200 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-indigo-600 to-blue-600 animate-pulse"></div>
+      {/* Upload Area */}
+      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          style={{
+            border: isDragging ? '2px solid var(--accent)' : '2px dashed var(--border)',
+            borderRadius: '12px',
+            padding: '3rem',
+            textAlign: 'center',
+            background: isDragging ? 'rgba(232,255,90,0.05)' : 'var(--card)',
+            transition: 'all 0.3s',
+            cursor: 'pointer',
+            marginBottom: '2rem'
+          }}
+        >
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📄</div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            Drop resumes here
+          </h3>
+          <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
+            or click to select files (PDF format)
+          </p>
+          <input
+            type="file"
+            multiple
+            accept=".pdf"
+            onChange={handleFileInput}
+            style={{ display: 'none' }}
+            id="fileInput"
+          />
+          <label htmlFor="fileInput" style={{ cursor: 'pointer' }}>
+            <button
+              type="button"
+              style={{
+                background: 'var(--accent)',
+                color: 'var(--ink)',
+                border: 'none',
+                padding: '0.75rem 2rem',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              Select Files
+            </button>
+          </label>
+        </div>
+
+        {/* Uploaded Files List */}
+        {uploadedFiles.length > 0 && (
+          <div style={{ marginBottom: '2rem' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+              Selected Files ({uploadedFiles.length})
+            </h3>
+            <div style={{ display: 'grid', gap: '0.75rem' }}>
+              {uploadedFiles.map((f, i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '1.5rem' }}>📄</span>
+                    <div>
+                      <div style={{ fontWeight: 'bold' }}>{f.name}</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                        {(f.size / 1024).toFixed(2)} KB
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFile(i)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border)',
+                      color: 'var(--muted)',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Uploaded Files List */}
-      {uploadedFiles.length > 0 && !isProcessing && (
-        <div className="bg-white rounded-2xl border-2 border-green-200 p-8 shadow-lg">
-          <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <span className="text-2xl">✓</span>
-            Files Selected ({uploadedFiles.length})
-          </h3>
-          <ul className="space-y-3">
-            {uploadedFiles.map((file, idx) => (
-              <li
-                key={idx}
-                className="flex items-center gap-4 text-slate-700 bg-green-50 p-4 rounded-lg border border-green-100"
-              >
-                <span className="text-xl text-green-600 font-bold">✓</span>
-                <span className="font-semibold flex-1">{file.name}</span>
-                <span className="text-sm text-slate-500 font-medium">
-                  {(file.size / 1024).toFixed(1)} KB
-                </span>
-              </li>
-            ))}
-          </ul>
+        {/* Analyze Button */}
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+          <button
+            onClick={handleAnalyze}
+            disabled={uploadedFiles.length === 0 || isAnalyzing}
+            style={{
+              background: uploadedFiles.length === 0 ? 'var(--muted)' : 'var(--accent)',
+              color: 'var(--ink)',
+              border: 'none',
+              padding: '1rem 3rem',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              fontSize: '1rem',
+              cursor: uploadedFiles.length === 0 ? 'not-allowed' : 'pointer',
+              opacity: uploadedFiles.length === 0 ? 0.5 : 1
+            }}
+          >
+            {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
+          </button>
         </div>
-      )}
 
-      {/* How It Works */}
-      <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-200 p-8">
-        <h3 className="font-black text-slate-900 mb-4 text-lg">✨ How It Works:</h3>
-        <ol className="space-y-3 text-slate-700">
-          {[
-            'Upload one or more resumes (PDF or TXT)',
-            'HireFlow AI analyzes each candidate instantly',
-            'View ranked results with detailed insights',
-            'Make faster, smarter hiring decisions'
-          ].map((step, idx) => (
-            <li key={idx} className="flex gap-4 items-start">
-              <span className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                {idx + 1}
-              </span>
-              <span className="pt-0.5">{step}</span>
-            </li>
-          ))}
-        </ol>
+        {/* Info */}
+        <div style={{ marginTop: '3rem', padding: '1.5rem', background: 'var(--card)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+          <h4 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>How it works:</h4>
+          <ol style={{ color: 'var(--muted)', lineHeight: '1.8', paddingLeft: '1.5rem' }}>
+            <li>Upload one or multiple resumes (PDF format)</li>
+            <li>Our AI analyzes each resume across 20+ dimensions</li>
+            <li>Candidates are ranked by fit and quality</li>
+            <li>Review detailed scoring and recommendations</li>
+          </ol>
+        </div>
       </div>
     </div>
   )

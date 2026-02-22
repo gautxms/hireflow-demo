@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import '../globals.css'
 
-export default function LandingPage({ onStartDemo }) {
+export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboard }) {
   useEffect(() => {
     // Smooth scroll and interactive effects
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {

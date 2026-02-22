@@ -1,37 +1,69 @@
 import { useState } from 'react'
 import LandingPage from './components/LandingPage'
+import PricingPage from './components/PricingPage'
+import ResumeUploader from './components/ResumeUploader'
+import CandidateResults from './components/CandidateResults'
 import OperationsDashboard from './components/Dashboard'
+import SettingsPage from './components/SettingsPage'
+import HelpPage from './components/HelpPage'
 
 export default function App() {
-  const [view, setView] = useState('landing') // 'landing' or 'dashboard'
+  const [currentPage, setCurrentPage] = useState('landing')
+  const [uploadedFiles, setUploadedFiles] = useState(null)
+
+  const handleFileUploaded = (files) => {
+    setUploadedFiles(files)
+    setCurrentPage('results')
+  }
+
+  const handleSelectPlan = (planId) => {
+    console.log('Selected plan:', planId)
+    setCurrentPage('uploader')
+  }
+
+  const handleBack = (destination = 'landing') => {
+    setCurrentPage(destination)
+  }
 
   return (
-    <>
-      {view === 'landing' ? (
-        <LandingPage onStartDemo={() => setView('dashboard')} />
-      ) : (
-        <div>
-          <button 
-            onClick={() => setView('landing')}
-            style={{
-              position: 'fixed',
-              top: '1rem',
-              right: '2rem',
-              background: 'var(--accent)',
-              color: 'var(--ink)',
-              border: 'none',
-              padding: '0.5rem 1rem',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              zIndex: 50
-            }}
-          >
-            ← Back to Landing
-          </button>
-          <OperationsDashboard />
-        </div>
+    <div>
+      {currentPage === 'landing' && (
+        <LandingPage
+          onStartDemo={() => setCurrentPage('uploader')}
+          onViewPricing={() => setCurrentPage('pricing')}
+          onViewDashboard={() => setCurrentPage('dashboard')}
+        />
       )}
-    </>
+
+      {currentPage === 'pricing' && (
+        <PricingPage
+          onSelectPlan={handleSelectPlan}
+          onBack={() => setCurrentPage('landing')}
+        />
+      )}
+
+      {currentPage === 'uploader' && (
+        <ResumeUploader onFileUploaded={handleFileUploaded} />
+      )}
+
+      {currentPage === 'results' && (
+        <CandidateResults
+          candidates={uploadedFiles}
+          onBack={() => setCurrentPage('uploader')}
+        />
+      )}
+
+      {currentPage === 'dashboard' && (
+        <OperationsDashboard />
+      )}
+
+      {currentPage === 'settings' && (
+        <SettingsPage onBack={() => setCurrentPage('dashboard')} />
+      )}
+
+      {currentPage === 'help' && (
+        <HelpPage onBack={() => setCurrentPage('landing')} />
+      )}
+    </div>
   )
 }
