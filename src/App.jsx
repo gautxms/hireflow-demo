@@ -10,6 +10,11 @@ import AboutPage from './components/AboutPage'
 import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 
+const STRIPE_PAYMENT_LINKS = {
+  starter: import.meta.env.VITE_STRIPE_STARTER_PAYMENT_LINK,
+  pro: import.meta.env.VITE_STRIPE_PRO_PAYMENT_LINK
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
@@ -21,12 +26,26 @@ export default function App() {
 
   const handleSelectPlan = (planId) => {
     console.log('Selected plan:', planId)
+
+    if (planId === 'enterprise') {
+      setCurrentPage('contact')
+      return
+    }
+
+    const checkoutUrl = STRIPE_PAYMENT_LINKS[planId]
+
+    if (checkoutUrl) {
+      window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+
     setCurrentPage('uploader')
   }
 
-  const handleBack = (destination = 'landing') => {
-    setCurrentPage(destination)
-  }
+
+  const hasStripeCheckout = Boolean(
+    STRIPE_PAYMENT_LINKS.starter || STRIPE_PAYMENT_LINKS.pro
+  )
 
   return (
     <div>
@@ -46,6 +65,7 @@ export default function App() {
         <PricingPage
           onSelectPlan={handleSelectPlan}
           onBack={() => setCurrentPage('landing')}
+          hasStripeCheckout={hasStripeCheckout}
         />
       )}
 

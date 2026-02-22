@@ -11,6 +11,7 @@ A modern, fast resume screening and candidate ranking application powered by AI.
 - **Ranking Dashboard** - View top 3 candidates with AI insights
 - **Mobile Responsive** - Works beautifully on any device
 - **Zero Dependencies** - No backend required for MVP (client-side only)
+- **Stripe Checkout Links** - Hosted payment flow for Starter and Pro tiers
 - **Fast Performance** - Optimized build (~225KB gzipped)
 
 ## 📋 Quick Start
@@ -29,6 +30,19 @@ npm run build
 # Preview production build
 npm run preview
 ```
+
+## 💳 Stripe setup (hireflow.dev)
+
+Pricing page checkout buttons support Stripe Payment Links via Vite env vars.
+
+1. Create two payment links in Stripe (Starter + Pro).
+2. Copy `.env.example` to `.env.local`.
+3. Set:
+   - `VITE_STRIPE_STARTER_PAYMENT_LINK`
+   - `VITE_STRIPE_PRO_PAYMENT_LINK`
+4. Restart `npm run dev`.
+
+If links are not configured, plan selection falls back to the demo uploader flow.
 
 ## 🎯 How It Works
 
