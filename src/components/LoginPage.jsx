@@ -1,6 +1,16 @@
 import { useState } from 'react'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+
+async function parseResponsePayload(response) {
+  const contentType = response.headers.get('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    return response.json()
+  }
+
+  return null
+}
 
 export default function LoginPage({ onAuthSuccess }) {
   const [email, setEmail] = useState('')
@@ -21,16 +31,21 @@ export default function LoginPage({ onAuthSuccess }) {
         body: JSON.stringify({ email, password }),
       })
 
-      const payload = await response.json()
+      const payload = await parseResponsePayload(response)
 
       if (!response.ok) {
-        setError(payload.error || 'Unable to login')
+        setError(payload?.error || `Login failed (${response.status})`)
+        return
+      }
+
+      if (!payload?.token) {
+        setError('Login succeeded but token was missing from response')
         return
       }
 
       onAuthSuccess(payload.token)
     } catch {
-      setError('Unable to connect to server')
+      setError('Unable to connect to auth server. Check backend URL / CORS settings.')
     } finally {
       setLoading(false)
     }

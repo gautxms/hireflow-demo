@@ -193,3 +193,4 @@ This is a demo/MVP project. For feature requests or bug reports, contact the tea
 - Backend auth is in `backend/src` with JWT (7d), PostgreSQL-backed users, and auth rate limiting (5 requests/minute/IP on signup/login).
 - JWT is issued in an HTTP-only cookie (`token`) and also returned in response JSON.
 - Frontend currently stores token in `localStorage` as a temporary bridge for app-level auth state; migrate to cookie-only session checks for production hardening.
+- Frontend auth requests default to `http://localhost:4000` when `VITE_API_BASE_URL` is not set, which prevents the generic "Unable to connect" error when Vite proxy is unavailable.
