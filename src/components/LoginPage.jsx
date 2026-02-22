@@ -13,7 +13,7 @@ async function parseResponsePayload(response) {
   return null
 }
 
-export default function LoginPage({ onAuthSuccess, onGoToSignup }) {
+export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -60,6 +60,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup }) {
         <p className="auth-brand">Hire<span>Flow</span></p>
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-subtitle">Sign in to continue screening candidates faster.</p>
+        {promptMessage && <p className="auth-prompt">{promptMessage}</p>}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label" htmlFor="login-email">Email</label>

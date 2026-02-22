@@ -13,6 +13,7 @@ import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 
 function navigate(pathname) {
   if (window.location.pathname !== pathname) {
@@ -21,77 +22,101 @@ function navigate(pathname) {
   }
 }
 
-function AuthenticatedApp({ onLogout }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
 
+  const handleNavigate = (page, promptMessage = 'Please login or sign up to continue.') => {
+    if (!isAuthenticated && PROTECTED_PAGES.has(page)) {
+      onRequireAuth(promptMessage)
+      setCurrentPage('landing')
+      return
+    }
+
+    setCurrentPage(page)
+  }
+
   const handleFileUploaded = (files) => {
     setUploadedFiles(files)
-    setCurrentPage('results')
+    handleNavigate('results')
   }
 
   const handleSelectPlan = (planId) => {
     console.log('Selected plan:', planId)
-    setCurrentPage('uploader')
+    handleNavigate('uploader', 'Please sign up to upload resumes and run screening.')
   }
+
+  useEffect(() => {
+    if (!isAuthenticated && PROTECTED_PAGES.has(currentPage)) {
+      onRequireAuth('Please login or sign up to continue.')
+      setCurrentPage('landing')
+    }
+  }, [currentPage, isAuthenticated, onRequireAuth])
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', background: '#f9fafb' }}>
-        <button onClick={onLogout}>Logout</button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
+        {isAuthenticated ? (
+          <button onClick={onLogout}>Logout</button>
+        ) : (
+          <>
+            <button onClick={() => navigate('/login')}>Login</button>
+            <button onClick={() => navigate('/signup')}>Sign up</button>
+          </>
+        )}
       </div>
       {currentPage === 'landing' && (
         <LandingPage
-          onStartDemo={() => setCurrentPage('uploader')}
-          onViewPricing={() => setCurrentPage('pricing')}
-          onViewDashboard={() => setCurrentPage('dashboard')}
-          onViewAbout={() => setCurrentPage('about')}
-          onViewDemo={() => setCurrentPage('demo')}
-          onViewContact={() => setCurrentPage('contact')}
-          onViewHelp={() => setCurrentPage('help')}
+          onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
+          onViewPricing={() => handleNavigate('pricing')}
+          onViewDashboard={() => handleNavigate('dashboard', 'Please login to access your dashboard.')}
+          onViewAbout={() => handleNavigate('about')}
+          onViewDemo={() => handleNavigate('demo')}
+          onViewContact={() => handleNavigate('contact')}
+          onViewHelp={() => handleNavigate('help')}
         />
       )}
 
       {currentPage === 'pricing' && (
         <PricingPage
           onSelectPlan={handleSelectPlan}
-          onBack={() => setCurrentPage('landing')}
+          onBack={() => handleNavigate('landing')}
         />
       )}
 
       {currentPage === 'uploader' && (
-        <ResumeUploader onFileUploaded={handleFileUploaded} onBack={() => setCurrentPage('landing')} />
+        <ResumeUploader onFileUploaded={handleFileUploaded} onBack={() => handleNavigate('landing')} />
       )}
 
       {currentPage === 'results' && (
         <CandidateResults
           candidates={uploadedFiles}
-          onBack={() => setCurrentPage('uploader')}
+          onBack={() => handleNavigate('uploader')}
         />
       )}
 
       {currentPage === 'dashboard' && (
-        <OperationsDashboard onNavigate={setCurrentPage} />
+        <OperationsDashboard onNavigate={handleNavigate} />
       )}
 
       {currentPage === 'settings' && (
-        <SettingsPage onBack={() => setCurrentPage('dashboard')} />
+        <SettingsPage onBack={() => handleNavigate('dashboard')} />
       )}
 
       {currentPage === 'help' && (
-        <HelpPage onBack={() => setCurrentPage('landing')} />
+        <HelpPage onBack={() => handleNavigate('landing')} />
       )}
 
       {currentPage === 'about' && (
-        <AboutPage onBack={() => setCurrentPage('landing')} />
+        <AboutPage onBack={() => handleNavigate('landing')} />
       )}
 
       {currentPage === 'demo' && (
-        <DemoBookingPage onBack={() => setCurrentPage('landing')} />
+        <DemoBookingPage onBack={() => handleNavigate('landing')} />
       )}
 
       {currentPage === 'contact' && (
-        <ContactPage onBack={() => setCurrentPage('landing')} />
+        <ContactPage onBack={() => handleNavigate('landing')} />
       )}
     </div>
   )
@@ -100,6 +125,7 @@ function AuthenticatedApp({ onLogout }) {
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY) || '')
   const [pathname, setPathname] = useState(window.location.pathname)
+  const [authPrompt, setAuthPrompt] = useState('')
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
@@ -112,6 +138,7 @@ export default function App() {
   const handleAuthSuccess = (newToken) => {
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
     setToken(newToken)
+    setAuthPrompt('')
     navigate('/')
   }
 
@@ -121,15 +148,13 @@ export default function App() {
     navigate('/login')
   }
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      if (pathname !== '/login' && pathname !== '/signup') {
-        navigate('/login')
-      }
-      return
-    }
+  const requireAuth = (message) => {
+    setAuthPrompt(message)
+    navigate('/login')
+  }
 
-    if (pathname === '/login' || pathname === '/signup') {
+  useEffect(() => {
+    if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
       navigate('/')
     }
   }, [isAuthenticated, pathname])
@@ -138,9 +163,9 @@ export default function App() {
     return <SignupPage onAuthSuccess={handleAuthSuccess} onGoToLogin={() => navigate('/login')} />
   }
 
-  if (!isAuthenticated) {
-    return <LoginPage onAuthSuccess={handleAuthSuccess} onGoToSignup={() => navigate('/signup')} />
+  if (!isAuthenticated && pathname === '/login') {
+    return <LoginPage onAuthSuccess={handleAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
   }
 
-  return <AuthenticatedApp onLogout={logout} />
+  return <MainSite isAuthenticated={isAuthenticated} onLogout={logout} onRequireAuth={requireAuth} />
 }
