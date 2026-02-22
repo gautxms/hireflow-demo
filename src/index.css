@@ -1,4 +1,31 @@
-@import './globals.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ---- CSS VARIABLES FROM HTML ---- */
+:root {
+  --ink: #0a0a0f;
+  --ink-2: #1a1a2e;
+  --surface: #0f0f1a;
+  --card: #15151f;
+  --border: rgba(255,255,255,0.07);
+  --accent: #e8ff5a;
+  --accent-2: #5affb8;
+  --text: #e8e8f0;
+  --muted: #7070a0;
+}
+
+/* ---- BASE ---- */
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  overflow-x: hidden;
+}
+
+/* ---- CUSTOM CLASSES USED BY LANDING ---- */
+.font-display {
+  font-family: 'Syne', sans-serif;
+}

@@ -1,0 +1,210 @@
+dimport { useEffect } from "react";
+
+export default function App() {
+  useEffect(() => {
+    const reveals = document.querySelectorAll(".reveal");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry, i) => {
+          if (entry.isIntersecting) {
+            setTimeout(() => entry.target.classList.add("visible"), i * 80);
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    reveals.forEach((el) => observer.observe(el));
+  }, []);
+
+  return (
+    <>
+      <Navbar />
+      <Hero />
+      <HowItWorks />
+      <Features />
+      <Pricing />
+      <FinalCTA />
+      <Footer />
+    </>
+  );
+}
+
+/* ---------------- NAVBAR ---------------- */
+function Navbar() {
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur bg-black/70 border-b border-white/10 px-16 py-5 flex justify-between items-center">
+      <div className="font-display font-extrabold text-xl text-white">
+        Hire<span className="text-[var(--accent)]">Flow</span>
+      </div>
+      <div className="flex gap-3">
+        <button className="border border-white/20 px-4 py-2 rounded text-sm">
+          Log in
+        </button>
+        <button className="bg-[var(--accent)] text-black px-4 py-2 rounded text-sm font-medium">
+          Start Free →
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+/* ---------------- HERO ---------------- */
+function Hero() {
+  return (
+    <section className="min-h-screen flex items-center px-16 pt-32 relative overflow-hidden">
+      <div className="max-w-5xl">
+        <div className="inline-flex items-center gap-2 mb-8 px-4 py-1 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)] text-xs uppercase">
+          <span className="w-2 h-2 bg-[var(--accent)] rounded-full animate-pulse"></span>
+          Powered by AI
+        </div>
+
+        <h1 className="font-display text-6xl font-extrabold leading-none mb-6">
+          Hire your next <br />
+          <span className="text-[var(--accent)]">great employee</span> <br />
+          in 2 hours.
+        </h1>
+
+        <p className="text-lg text-[var(--muted)] max-w-xl mb-10">
+          Stop wasting 20+ hours per hire. HireFlow automates resume screening,
+          AI interviews, and candidate ranking.
+        </p>
+
+        <div className="flex gap-4">
+          <button className="bg-[var(--accent)] text-black px-6 py-3 rounded-lg font-medium">
+            Get Started Free →
+          </button>
+          <button className="border border-white/20 px-6 py-3 rounded-lg">
+            Watch Demo
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- HOW IT WORKS ---------------- */
+function HowItWorks() {
+  const steps = [
+    {
+      title: "Upload resumes",
+      desc: "Upload resumes or connect your ATS in minutes.",
+    },
+    {
+      title: "AI evaluation",
+      desc: "Our AI evaluates candidates across skills, experience, and fit.",
+    },
+    {
+      title: "Hire faster",
+      desc: "Review rankings and hire confidently in hours.",
+    },
+  ];
+
+  return (
+    <section className="px-16 py-32 bg-[var(--surface)]">
+      <h2 className="font-display text-4xl font-bold mb-20 text-center">
+        How it works
+      </h2>
+
+      <div className="grid md:grid-cols-3 gap-10 max-w-6xl mx-auto">
+        {steps.map((s, i) => (
+          <div
+            key={s.title}
+            className="reveal bg-[var(--card)] p-8 rounded-2xl border border-[var(--border)]"
+          >
+            <div className="text-[var(--accent)] text-3xl font-bold mb-4">
+              {i + 1}
+            </div>
+            <h3 className="font-display text-xl mb-3">{s.title}</h3>
+            <p className="text-[var(--muted)]">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- FEATURES ---------------- */
+function Features() {
+  const features = [
+    "Resume screening with AI",
+    "Bias-aware candidate scoring",
+    "ATS integrations",
+    "Automated shortlisting",
+    "Hiring insights & analytics",
+    "Secure & compliant by design",
+  ];
+
+  return (
+    <section className="px-16 py-32">
+      <h2 className="font-display text-4xl font-bold mb-20 text-center">
+        Built for hiring teams
+      </h2>
+
+      <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        {features.map((f) => (
+          <div
+            key={f}
+            className="reveal bg-[var(--card)] p-6 rounded-xl border border-[var(--border)]"
+          >
+            <span className="text-[var(--accent)]">✓</span>
+            <p className="mt-3">{f}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- PRICING ---------------- */
+function Pricing() {
+  return (
+    <section className="px-16 py-32 bg-[var(--surface)]">
+      <h2 className="font-display text-4xl font-bold mb-20 text-center">
+        Simple pricing
+      </h2>
+
+      <div className="max-w-xl mx-auto bg-[var(--card)] p-10 rounded-2xl border border-[var(--border)] text-center">
+        <h3 className="font-display text-2xl mb-4">Starter</h3>
+        <p className="text-5xl font-bold mb-6">
+          $49<span className="text-lg text-[var(--muted)]">/mo</span>
+        </p>
+        <p className="text-[var(--muted)] mb-8">
+          Perfect for early-stage teams hiring fast.
+        </p>
+        <button className="bg-[var(--accent)] text-black px-8 py-3 rounded-lg font-medium">
+          Start Free Trial →
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- FINAL CTA ---------------- */
+function FinalCTA() {
+  return (
+    <section className="px-16 py-32 text-center">
+      <h2 className="font-display text-5xl font-bold mb-6">
+        Start hiring better today
+      </h2>
+      <p className="text-[var(--muted)] mb-10">
+        Join teams who hire smarter with HireFlow.
+      </p>
+      <button className="bg-[var(--accent)] text-black px-10 py-4 rounded-xl font-medium text-lg">
+        Get Started Free →
+      </button>
+    </section>
+  );
+}
+
+/* ---------------- FOOTER ---------------- */
+function Footer() {
+  return (
+    <footer className="border-t border-white/10 px-16 py-10 flex justify-between text-sm text-[var(--muted)]">
+      <div className="font-display font-bold">
+        Hire<span className="text-[var(--accent)]">Flow</span>
+      </div>
+      <p>© 2025 HireFlow. All rights reserved.</p>
+    </footer>
+  );
+}
