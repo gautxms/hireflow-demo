@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import './AuthPage.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
@@ -12,7 +13,7 @@ async function parseResponsePayload(response) {
   return null
 }
 
-export default function SignupPage({ onAuthSuccess }) {
+export default function SignupPage({ onAuthSuccess, onGoToLogin }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -52,24 +53,32 @@ export default function SignupPage({ onAuthSuccess }) {
   }
 
   return (
-    <main style={{ maxWidth: 420, margin: '80px auto', padding: 16 }}>
-      <h1>Sign up</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12 }}>
-        <label htmlFor="signup-email">Email</label>
-        <input id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+    <main className="auth-shell">
+      <div className="auth-glow auth-glow--a" />
+      <div className="auth-glow auth-glow--b" />
+      <section className="auth-panel">
+        <p className="auth-brand">Hire<span>Flow</span></p>
+        <h1 className="auth-title">Create your account</h1>
+        <p className="auth-subtitle">Start ranking resumes in minutes.</p>
 
-        <label htmlFor="signup-password">Password</label>
-        <input id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label className="auth-label" htmlFor="signup-email">Email</label>
+          <input className="auth-input" id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
-        {error && <p style={{ color: '#b91c1c' }}>{error}</p>}
+          <label className="auth-label" htmlFor="signup-password">Password</label>
+          <input className="auth-input" id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
 
-        <button type="submit" disabled={loading}>
-          {loading ? 'Creating account...' : 'Sign up'}
-        </button>
-      </form>
-      <p style={{ marginTop: 12 }}>
-        Already have an account? <a href="/login">Login</a>
-      </p>
+          {error && <p className="auth-error">{error}</p>}
+
+          <button className="auth-submit" type="submit" disabled={loading}>
+            {loading ? 'Creating account...' : 'Sign up'}
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          Already have an account? <button className="auth-link" type="button" onClick={onGoToLogin}>Login</button>
+        </p>
+      </section>
     </main>
   )
 }

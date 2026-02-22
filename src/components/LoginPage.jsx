@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import './AuthPage.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
@@ -12,7 +13,7 @@ async function parseResponsePayload(response) {
   return null
 }
 
-export default function LoginPage({ onAuthSuccess }) {
+export default function LoginPage({ onAuthSuccess, onGoToSignup }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -52,24 +53,32 @@ export default function LoginPage({ onAuthSuccess }) {
   }
 
   return (
-    <main style={{ maxWidth: 420, margin: '80px auto', padding: 16 }}>
-      <h1>Login</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12 }}>
-        <label htmlFor="login-email">Email</label>
-        <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+    <main className="auth-shell">
+      <div className="auth-glow auth-glow--a" />
+      <div className="auth-glow auth-glow--b" />
+      <section className="auth-panel">
+        <p className="auth-brand">Hire<span>Flow</span></p>
+        <h1 className="auth-title">Welcome back</h1>
+        <p className="auth-subtitle">Sign in to continue screening candidates faster.</p>
 
-        <label htmlFor="login-password">Password</label>
-        <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label className="auth-label" htmlFor="login-email">Email</label>
+          <input className="auth-input" id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
-        {error && <p style={{ color: '#b91c1c' }}>{error}</p>}
+          <label className="auth-label" htmlFor="login-password">Password</label>
+          <input className="auth-input" id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
 
-        <button type="submit" disabled={loading}>
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-      </form>
-      <p style={{ marginTop: 12 }}>
-        Need an account? <a href="/signup">Sign up</a>
-      </p>
+          {error && <p className="auth-error">{error}</p>}
+
+          <button className="auth-submit" type="submit" disabled={loading}>
+            {loading ? 'Logging in...' : 'Login'}
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          Need an account? <button className="auth-link" type="button" onClick={onGoToSignup}>Sign up</button>
+        </p>
+      </section>
     </main>
   )
 }

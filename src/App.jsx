@@ -135,11 +135,11 @@ export default function App() {
   }, [isAuthenticated, pathname])
 
   if (!isAuthenticated && pathname === '/signup') {
-    return <SignupPage onAuthSuccess={handleAuthSuccess} />
+    return <SignupPage onAuthSuccess={handleAuthSuccess} onGoToLogin={() => navigate('/login')} />
   }
 
   if (!isAuthenticated) {
-    return <LoginPage onAuthSuccess={handleAuthSuccess} />
+    return <LoginPage onAuthSuccess={handleAuthSuccess} onGoToSignup={() => navigate('/signup')} />
   }
 
   return <AuthenticatedApp onLogout={logout} />
