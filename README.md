@@ -187,3 +187,9 @@ This is a demo/MVP project. For feature requests or bug reports, contact the tea
 **Live Demo:** [Deploy to see live](./README_DEPLOYMENT.md)  
 **Created:** Feb 19, 2026  
 **Status:** MVP Ready for Customer Feedback
+
+## Auth implementation notes
+
+- Backend auth is in `backend/src` with JWT (7d), PostgreSQL-backed users, and auth rate limiting (5 requests/minute/IP on signup/login).
+- JWT is issued in an HTTP-only cookie (`token`) and also returned in response JSON.
+- Frontend currently stores token in `localStorage` as a temporary bridge for app-level auth state; migrate to cookie-only session checks for production hardening.
