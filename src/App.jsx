@@ -7,6 +7,7 @@ import OperationsDashboard from './components/Dashboard'
 import SettingsPage from './components/SettingsPage'
 import HelpPage from './components/HelpPage'
 import AboutPage from './components/AboutPage'
+import DemoBookingPage from './components/DemoBookingPage'
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing')
@@ -68,6 +69,10 @@ export default function App() {
 
       {currentPage === 'about' && (
         <AboutPage onBack={() => setCurrentPage('landing')} />
+      )}
+
+      {currentPage === 'demo' && (
+        <DemoBookingPage onBack={() => setCurrentPage('landing')} />
       )}
     </div>
   )
