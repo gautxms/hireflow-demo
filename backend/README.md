@@ -29,3 +29,13 @@ node backend/src/index.js
 ```
 
 Render/Railway provide HTTPS at the edge; cookies are marked `secure` in production.
+
+## Users table schema assumptions
+
+The `users` table includes the following optional subscription fields (all nullable):
+- `stripe_customer_id` (`TEXT`)
+- `stripe_subscription_id` (`TEXT`)
+- `stripe_status` (`TEXT`)
+- `trial_end` (`TIMESTAMP`)
+
+These columns are metadata for Stripe billing and are intentionally nullable for backward compatibility with existing users.
