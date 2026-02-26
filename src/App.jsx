@@ -41,11 +41,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
     handleNavigate('results')
   }
 
-  const handleSelectPlan = (planId) => {
-    console.log('Selected plan:', planId)
-    handleNavigate('uploader', 'Please sign up to upload resumes and run screening.')
-  }
-
   useEffect(() => {
     if (!isAuthenticated && PROTECTED_PAGES.has(currentPage)) {
       onRequireAuth('Please login or sign up to continue.')
@@ -68,19 +63,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
       {currentPage === 'landing' && (
         <LandingPage
           onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
-          onViewPricing={() => handleNavigate('pricing')}
+          onViewPricing={() => navigate('/pricing')}
           onViewDashboard={() => handleNavigate('dashboard', 'Please login to access your dashboard.')}
           onViewAbout={() => handleNavigate('about')}
           onViewDemo={() => handleNavigate('demo')}
           onViewContact={() => handleNavigate('contact')}
           onViewHelp={() => handleNavigate('help')}
-        />
-      )}
-
-      {currentPage === 'pricing' && (
-        <PricingPage
-          onSelectPlan={handleSelectPlan}
-          onBack={() => handleNavigate('landing')}
         />
       )}
 
@@ -165,6 +153,21 @@ export default function App() {
 
   if (!isAuthenticated && pathname === '/login') {
     return <LoginPage onAuthSuccess={handleAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
+  }
+
+  if (pathname === '/pricing') {
+    return <PricingPage onStartTrial={() => navigate('/checkout')} onBack={() => navigate('/')} />
+  }
+
+  if (pathname === '/checkout') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'Inter, system-ui' }}>
+        <div style={{ textAlign: 'center', maxWidth: 520, padding: '2rem' }}>
+          <h1>Checkout</h1>
+          <p>Checkout setup is coming soon. Payments are not enabled yet.</p>
+        </div>
+      </div>
+    )
   }
 
   return <MainSite isAuthenticated={isAuthenticated} onLogout={logout} onRequireAuth={requireAuth} />
