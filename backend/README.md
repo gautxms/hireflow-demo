@@ -39,3 +39,31 @@ The `users` table includes the following optional subscription fields (all nulla
 - `trial_end` (`TIMESTAMP`)
 
 These columns are metadata for Stripe billing and are intentionally nullable for backward compatibility with existing users.
+
+## Subscription API contract (frontend ↔ backend)
+
+### Create subscription
+- **Endpoint:** `POST /api/stripe/create-subscription`
+- **Auth:** `Authorization: Bearer <JWT>`
+- **Content-Type:** `application/json`
+
+**Request body (future-ready):**
+```json
+{
+  "paymentMethodId": "string"
+}
+```
+
+**Response body (future-ready):**
+```json
+{
+  "status": "trialing",
+  "trial_end": "2026-03-15T12:00:00.000Z"
+}
+```
+
+Where:
+- `status` is one of: `"trialing" | "active"`
+- `trial_end` is an ISO-8601 timestamp string
+
+> Note: current implementation is scaffolded and may return `503` until payments are enabled/configured.
