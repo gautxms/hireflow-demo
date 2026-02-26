@@ -1,15 +1,15 @@
-import { createRequire } from 'node:module';
+import { createRequire } from 'node:module'
 
-const require = createRequire(import.meta.url);
+const require = createRequire(import.meta.url)
 
-const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+const secretKey = process.env.STRIPE_SECRET_KEY?.trim()
 
 function isDummyStripeKey(key) {
   if (!key) {
-    return true;
+    return true
   }
 
-  const normalized = key.toLowerCase();
+  const normalized = key.toLowerCase()
 
   if (
     normalized.includes('dummy') ||
@@ -17,26 +17,25 @@ function isDummyStripeKey(key) {
     normalized.includes('changeme') ||
     normalized.includes('your_')
   ) {
-    return true;
+    return true
   }
 
-  return !/^sk_(test|live)_[a-zA-Z0-9]+$/.test(key);
+  return !/^sk_(test|live)_[a-zA-Z0-9]+$/.test(key)
 }
 
-let stripe = null;
+let stripe = null
 
 if (isDummyStripeKey(secretKey)) {
-  console.info('[stripe] disabled: STRIPE_SECRET_KEY is missing or not a real Stripe secret key.');
+  console.info('[stripe] disabled: STRIPE_SECRET_KEY is missing or not a real Stripe secret key.')
 } else {
   try {
-    const Stripe = require('stripe');
-    stripe = new Stripe(secretKey);
-    console.info('[stripe] enabled: Stripe client initialized successfully.');
+    const Stripe = require('stripe')
+    stripe = new Stripe(secretKey, { apiVersion: '2022-11-15' })
+    console.info('[stripe] enabled: Stripe client initialized successfully.')
   } catch (error) {
-    stripe = null;
-    console.warn('[stripe] disabled: failed to initialize Stripe client.', error.message);
+    stripe = null
+    console.warn('[stripe] disabled: failed to initialize Stripe client.', error.message)
   }
 }
 
-export { stripe };
-export default stripe;
+export { stripe }
