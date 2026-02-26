@@ -171,60 +171,11 @@ export default function SettingsPage({ onBack }) {
           {/* Team Tab */}
           {activeTab === 'team' && (
             <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Team Members</h2>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
-                <div style={{ display: 'grid', gap: '1rem', marginBottom: '2rem' }}>
-                  {[
-                    { name: 'Gautam', email: 'gautam@hireflow.dev', role: 'Owner', status: 'Active' },
-                    { name: 'John Smith', email: 'john@hireflow.dev', role: 'Admin', status: 'Active' },
-                    { name: 'Sarah Davis', email: 'sarah@hireflow.dev', role: 'Member', status: 'Pending' }
-                  ].map((member, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr auto',
-                        gap: '2rem',
-                        padding: '1rem',
-                        background: 'rgba(0,0,0,0.2)',
-                        borderRadius: '8px',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 'bold' }}>{member.name}</div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>{member.email}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
-                          {member.role} • {member.status}
-                        </div>
-                      </div>
-                      <button style={{
-                        background: 'transparent',
-                        border: '1px solid var(--border)',
-                        color: 'var(--muted)',
-                        padding: '0.5rem 1rem',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
-                      }}>
-                        {member.status === 'Pending' ? 'Resend' : 'Remove'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <button style={{
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  border: 'none',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}>
-                  Invite Team Member
-                </button>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Team</h2>
+              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem' }}>
+                <p style={{ color: 'var(--muted)', lineHeight: '1.7' }}>
+                  Team management is not available in the MVP beta yet. Use one shared account for now and contact support if you need multi-user access.
+                </p>
               </div>
             </div>
           )}
@@ -261,8 +212,8 @@ export default function SettingsPage({ onBack }) {
                   </div>
                   <button style={{
                     background: app.status === 'Connected' ? 'transparent' : 'var(--accent)',
-                    color: app.status === 'Connected' ? color : 'var(--ink)',
-                    border: app.status === 'Connected' ? `1px solid ${color}` : 'none',
+                    color: app.status === 'Connected' ? app.color : 'var(--ink)',
+                    border: app.status === 'Connected' ? `1px solid ${app.color}` : 'none',
                     padding: '0.6rem 1.5rem',
                     borderRadius: '6px',
                     fontWeight: 'bold',
@@ -304,22 +255,10 @@ export default function SettingsPage({ onBack }) {
               </div>
 
               <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Payment Method</h3>
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    Visa ending in 4242
-                  </div>
-                  <button style={{
-                    background: 'transparent',
-                    border: '1px solid var(--border)',
-                    color: 'var(--muted)',
-                    padding: '0.5rem 1.5rem',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}>
-                    Update Payment Method
-                  </button>
-                </div>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Payment Method</h3>
+                <p style={{ color: 'var(--muted)' }}>
+                  Payment processing is not integrated in the MVP beta. Billing setup will be enabled before general availability.
+                </p>
               </div>
             </div>
           )}
