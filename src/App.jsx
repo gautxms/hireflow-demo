@@ -11,6 +11,7 @@ import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
+import CheckoutPage from './components/CheckoutPage'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
@@ -160,14 +161,7 @@ export default function App() {
   }
 
   if (pathname === '/checkout') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'Inter, system-ui' }}>
-        <div style={{ textAlign: 'center', maxWidth: 520, padding: '2rem' }}>
-          <h1>Checkout</h1>
-          <p>Checkout setup is coming soon. Payments are not enabled yet.</p>
-        </div>
-      </div>
-    )
+    return <CheckoutPage onBack={() => navigate('/pricing')} />
   }
 
   return <MainSite isAuthenticated={isAuthenticated} onLogout={logout} onRequireAuth={requireAuth} />
