@@ -1,8 +1,4 @@
-import { useMemo } from 'react'
-import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js'
-
-function CheckoutFormScaffold({ paymentsEnabled }) {
+function CheckoutFormPlaceholder({ paymentsEnabled }) {
   return (
     <form
       onSubmit={(event) => event.preventDefault()}
@@ -18,21 +14,21 @@ function CheckoutFormScaffold({ paymentsEnabled }) {
         }}
       >
         {paymentsEnabled
-          ? 'Stripe Elements placeholder (to be implemented).'
+          ? 'Stripe checkout UI will be enabled once React 19-compatible Stripe packages are available.'
           : 'Payments coming soon'}
       </div>
 
       <button
         type='submit'
-        disabled={!paymentsEnabled}
+        disabled
         style={{
-          background: paymentsEnabled ? '#eab308' : '#334155',
-          color: paymentsEnabled ? '#0f172a' : '#94a3b8',
+          background: '#334155',
+          color: '#94a3b8',
           border: 'none',
           borderRadius: 10,
           padding: '0.85rem 1rem',
           fontWeight: 700,
-          cursor: paymentsEnabled ? 'pointer' : 'not-allowed',
+          cursor: 'not-allowed',
         }}
       >
         Submit payment
@@ -43,15 +39,6 @@ function CheckoutFormScaffold({ paymentsEnabled }) {
 
 export default function CheckoutPage({ onBack }) {
   const paymentsEnabled = String(import.meta.env.VITE_STRIPE_ENABLED || '').toLowerCase() === 'true'
-  const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
-
-  const stripePromise = useMemo(() => {
-    if (!paymentsEnabled || !publishableKey) {
-      return null
-    }
-
-    return loadStripe(publishableKey)
-  }, [paymentsEnabled, publishableKey])
 
   return (
     <div
@@ -81,16 +68,13 @@ export default function CheckoutPage({ onBack }) {
 
         <h1 style={{ marginTop: 0 }}>Checkout</h1>
         <p style={{ color: '#cbd5e1' }}>
-          {paymentsEnabled ? 'Secure payment flow will be available here soon.' : 'Payments coming soon'}
+          {paymentsEnabled
+            ? 'Payments are feature-flagged, but Stripe UI is temporarily disabled pending React 19 package compatibility.'
+            : 'Payments coming soon'}
         </p>
 
-        {paymentsEnabled && stripePromise ? (
-          <Elements stripe={stripePromise}>
-            <CheckoutFormScaffold paymentsEnabled={paymentsEnabled} />
-          </Elements>
-        ) : (
-          <CheckoutFormScaffold paymentsEnabled={false} />
-        )}
+        {/* Cleanup notice: reintroduce @stripe/react-stripe-js and @stripe/stripe-js Elements flow here once React 19-compatible Stripe packages are available. */}
+        <CheckoutFormPlaceholder paymentsEnabled={paymentsEnabled} />
       </div>
     </div>
   )
