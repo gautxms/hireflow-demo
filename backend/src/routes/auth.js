@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import { pool } from '../db/client.js'
-import { signToken } from '../utils/jwt.js'
+import { signTempToken, signToken } from '../utils/jwt.js'
 
 const router = Router()
 
@@ -23,12 +23,12 @@ function validateInput(email, password) {
   return emailRegex.test(normalizedEmail) && password.length >= 8
 }
 
-function setAuthCookie(res, token) {
+function setAuthCookie(res, token, maxAge) {
   res.cookie('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge,
   })
 }
 
@@ -42,8 +42,8 @@ router.post('/signup', authRateLimit, async (req, res) => {
   const normalizedEmail = email.trim().toLowerCase()
 
   try {
-    // Auth currently only depends on core identity fields.
-    // Billing/Stripe columns on users are nullable and may remain unset.
+    // Signup now issues a short-lived temp token for payment gating.
+    // A full auth token is issued later only after trial/billing activation.
     const result = await pool.query(
       `INSERT INTO users (email, password_hash)
        VALUES ($1, crypt($2, gen_salt('bf', 10)))
@@ -52,11 +52,11 @@ router.post('/signup', authRateLimit, async (req, res) => {
     )
 
     const user = result.rows[0]
-    const token = signToken(user.id)
-    setAuthCookie(res, token)
+    const tempToken = signTempToken(user.id)
+    setAuthCookie(res, tempToken, 60 * 60 * 1000)
 
     return res.status(201).json({
-      token,
+      tempToken,
       user: {
         id: user.id,
         email: user.email,
@@ -82,7 +82,7 @@ router.post('/login', authRateLimit, async (req, res) => {
   const normalizedEmail = email.trim().toLowerCase()
 
   try {
-    // Keep auth independent of Stripe assumptions: login only needs credentials.
+    // Login remains unchanged: valid credentials issue full JWT access.
     const result = await pool.query(
       'SELECT id, email, password_hash, created_at FROM users WHERE email = $1',
       [normalizedEmail],
@@ -104,7 +104,7 @@ router.post('/login', authRateLimit, async (req, res) => {
     }
 
     const token = signToken(user.id)
-    setAuthCookie(res, token)
+    setAuthCookie(res, token, 7 * 24 * 60 * 60 * 1000)
 
     return res.json({
       token,
