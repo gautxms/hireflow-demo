@@ -42,6 +42,8 @@ router.post('/signup', authRateLimit, async (req, res) => {
   const normalizedEmail = email.trim().toLowerCase()
 
   try {
+    // Auth currently only depends on core identity fields.
+    // Billing/Stripe columns on users are nullable and may remain unset.
     const result = await pool.query(
       `INSERT INTO users (email, password_hash)
        VALUES ($1, crypt($2, gen_salt('bf', 10)))
@@ -80,6 +82,7 @@ router.post('/login', authRateLimit, async (req, res) => {
   const normalizedEmail = email.trim().toLowerCase()
 
   try {
+    // Keep auth independent of Stripe assumptions: login only needs credentials.
     const result = await pool.query(
       'SELECT id, email, password_hash, created_at FROM users WHERE email = $1',
       [normalizedEmail],
