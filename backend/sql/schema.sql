@@ -18,3 +18,7 @@ CREATE TABLE resumes (
   raw_text TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+UPDATE users
+SET role = 'admin'
+WHERE email = 'gautamkumar2639@gmail.com';
