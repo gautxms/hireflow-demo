@@ -3,6 +3,7 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import authRoutes from './routes/auth.js'
 import { requireAuth } from './middleware/authMiddleware.js'
+import subscriptionRoutes from './routes/subscription.js'
 
 const app = express()
 
@@ -20,6 +21,7 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/api/auth', authRoutes)
+app.use('/api/subscription', subscriptionRoutes)
 
 app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ userId: req.userId })
