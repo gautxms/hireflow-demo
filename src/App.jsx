@@ -11,8 +11,12 @@ import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
+import AdminUsersPage from './components/AdminUsersPage'
+import AdminUserDetailPage from './components/AdminUserDetailPage'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const USER_STORAGE_KEY = 'hireflow_auth_user'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 
 function navigate(pathname) {
@@ -22,7 +26,17 @@ function navigate(pathname) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
+async function parseResponsePayload(response) {
+  const contentType = response.headers.get('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    return response.json()
+  }
+
+  return null
+}
+
+function MainSite({ isAuthenticated, user, onLogout, onRequireAuth }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
 
@@ -57,7 +71,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
         {isAuthenticated ? (
-          <button onClick={onLogout}>Logout</button>
+          <>
+            {user?.role === 'admin' && <button onClick={() => navigate('/admin/users')}>Admin</button>}
+            <button onClick={onLogout}>Logout</button>
+          </>
         ) : (
           <>
             <button onClick={() => navigate('/login')}>Login</button>
@@ -124,6 +141,19 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY) || '')
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem(USER_STORAGE_KEY)
+
+    if (!storedUser) {
+      return null
+    }
+
+    try {
+      return JSON.parse(storedUser)
+    } catch {
+      return null
+    }
+  })
   const [pathname, setPathname] = useState(window.location.pathname)
   const [authPrompt, setAuthPrompt] = useState('')
 
@@ -135,16 +165,24 @@ export default function App() {
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
-  const handleAuthSuccess = (newToken) => {
-    localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
-    setToken(newToken)
+  const handleAuthSuccess = (payload) => {
+    localStorage.setItem(TOKEN_STORAGE_KEY, payload.token)
+
+    if (payload.user) {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user))
+      setUser(payload.user)
+    }
+
+    setToken(payload.token)
     setAuthPrompt('')
     navigate('/')
   }
 
   const logout = async () => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
+    localStorage.removeItem(USER_STORAGE_KEY)
     setToken('')
+    setUser(null)
     navigate('/login')
   }
 
@@ -152,6 +190,35 @@ export default function App() {
     setAuthPrompt(message)
     navigate('/login')
   }
+
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      if (!token) {
+        return
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+        })
+
+        const payload = await parseResponsePayload(response)
+
+        if (!response.ok || !payload?.user) {
+          logout()
+          return
+        }
+
+        setUser(payload.user)
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user))
+      } catch {
+        // keep existing local user data on temporary network errors
+      }
+    }
+
+    loadCurrentUser()
+  }, [token])
 
   useEffect(() => {
     if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
@@ -167,5 +234,29 @@ export default function App() {
     return <LoginPage onAuthSuccess={handleAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
   }
 
-  return <MainSite isAuthenticated={isAuthenticated} onLogout={logout} onRequireAuth={requireAuth} />
+  if (pathname === '/admin/users' || pathname.startsWith('/admin/users/')) {
+    if (!isAuthenticated) {
+      requireAuth('Please login as an admin to continue.')
+      return null
+    }
+
+    if (user?.role !== 'admin') {
+      return (
+        <main style={{ padding: 24 }}>
+          <h1>Admin access required</h1>
+          <p>You do not have permission to view this page.</p>
+          <button onClick={() => navigate('/')}>Back to Home</button>
+        </main>
+      )
+    }
+
+    if (pathname === '/admin/users') {
+      return <AdminUsersPage token={token} />
+    }
+
+    const userId = pathname.split('/')[3]
+    return <AdminUserDetailPage token={token} userId={userId} />
+  }
+
+  return <MainSite isAuthenticated={isAuthenticated} user={user} onLogout={logout} onRequireAuth={requireAuth} />
 }
