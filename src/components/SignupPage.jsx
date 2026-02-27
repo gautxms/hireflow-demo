@@ -44,7 +44,7 @@ export default function SignupPage({ onAuthSuccess, onGoToLogin }) {
         return
       }
 
-      onAuthSuccess(payload.token)
+      onAuthSuccess(payload)
     } catch {
       setError('Unable to connect to auth server. Check backend URL / CORS settings.')
     } finally {

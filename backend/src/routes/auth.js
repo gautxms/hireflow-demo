@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import { pool } from '../db/client.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 import { signToken } from '../utils/jwt.js'
 
 const router = Router()
@@ -45,12 +46,12 @@ router.post('/signup', authRateLimit, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (email, password_hash)
        VALUES ($1, crypt($2, gen_salt('bf', 10)))
-       RETURNING id, email, created_at`,
+       RETURNING id, email, role, created_at`,
       [normalizedEmail, password],
     )
 
     const user = result.rows[0]
-    const token = signToken(user.id)
+    const token = signToken(user.id, user.role)
     setAuthCookie(res, token)
 
     return res.status(201).json({
@@ -58,6 +59,7 @@ router.post('/signup', authRateLimit, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
+        role: user.role,
         createdAt: user.created_at,
       },
     })
@@ -81,7 +83,7 @@ router.post('/login', authRateLimit, async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, email, password_hash, created_at FROM users WHERE email = $1',
+      'SELECT id, email, role, is_blocked, blocked_reason, password_hash, created_at FROM users WHERE email = $1',
       [normalizedEmail],
     )
 
@@ -89,6 +91,10 @@ router.post('/login', authRateLimit, async (req, res) => {
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' })
+    }
+
+    if (user.is_blocked) {
+      return res.status(403).json({ error: user.blocked_reason || 'Your account has been blocked' })
     }
 
     const passwordCheck = await pool.query(
@@ -100,7 +106,7 @@ router.post('/login', authRateLimit, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    const token = signToken(user.id)
+    const token = signToken(user.id, user.role)
     setAuthCookie(res, token)
 
     return res.json({
@@ -108,6 +114,36 @@ router.post('/login', authRateLimit, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
+        role: user.role,
+        createdAt: user.created_at,
+      },
+    })
+  } catch {
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, email, role, is_blocked, blocked_reason, blocked_at, created_at FROM users WHERE id = $1',
+      [req.userId],
+    )
+
+    const user = result.rows[0]
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    return res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isBlocked: user.is_blocked,
+        blockedReason: user.blocked_reason,
+        blockedAt: user.blocked_at,
         createdAt: user.created_at,
       },
     })
