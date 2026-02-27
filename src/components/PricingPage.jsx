@@ -1,193 +1,81 @@
-export default function PricingPage({ onSelectPlan }) {
-  const plans = [
-    {
-      id: 'starter',
-      name: 'Starter',
-      price: '$99',
-      period: '/month',
-      description: 'Perfect for small teams just getting started',
-      features: [
-        'Up to 50 resumes/month',
-        'Basic AI scoring',
-        'Email integration',
-        'Up to 2 team members',
-        'Email support'
-      ],
-      cta: 'Get Started',
-      highlighted: false
-    },
-    {
-      id: 'pro',
-      name: 'Pro',
-      price: '$299',
-      period: '/month',
-      description: 'For growing teams with high hiring velocity',
-      features: [
-        'Up to 500 resumes/month',
-        'Advanced AI scoring (20+ dimensions)',
-        'Email & Slack integration',
-        'Up to 10 team members',
-        'Priority support',
-        'Custom scoring rules',
-        'Candidate analytics'
-      ],
-      cta: 'Get Started',
-      highlighted: true
-    },
-    {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: 'Custom',
-      period: 'pricing',
-      description: 'For large orgs with custom requirements',
-      features: [
-        'Unlimited resumes',
-        'Custom AI models',
-        'Full API access',
-        'Unlimited team members',
-        'Dedicated support',
-        'SSO & compliance',
-        'On-premise deployment'
-      ],
-      cta: 'Contact Sales',
-      highlighted: false
-    }
-  ]
-
+export default function PricingPage({ onStartTrial, onBack }) {
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '4rem 2rem', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-          Simple, Transparent Pricing
-        </h1>
-        <p style={{ fontSize: '1.1rem', color: 'var(--muted)', maxWidth: '600px', margin: '0 auto' }}>
-          Choose the plan that fits your hiring needs. Scale up anytime.
-        </p>
-      </div>
-
-      {/* Pricing Cards */}
-      <div style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
-          {plans.map(plan => (
-            <div
-              key={plan.id}
-              style={{
-                border: plan.highlighted ? '2px solid var(--accent)' : '1px solid var(--border)',
-                borderRadius: '12px',
-                padding: '2.5rem',
-                background: plan.highlighted ? 'rgba(232,255,90,0.05)' : 'var(--card)',
-                position: 'relative',
-                transform: plan.highlighted ? 'scale(1.05)' : 'scale(1)',
-                transition: 'transform 0.3s ease'
-              }}
-            >
-              {plan.highlighted && (
-                <div style={{
-                  position: 'absolute',
-                  top: '-12px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '4px',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold'
-                }}>
-                  MOST POPULAR
-                </div>
-              )}
-
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                {plan.name}
-              </h3>
-              <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-                {plan.description}
-              </p>
-
-              <div style={{ marginBottom: '2rem' }}>
-                <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>
-                  {plan.price}
-                  <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{plan.period}</span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => onSelectPlan(plan.id)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  marginBottom: '2rem',
-                  background: plan.highlighted ? 'var(--accent)' : 'transparent',
-                  color: plan.highlighted ? 'var(--ink)' : 'var(--accent)',
-                  border: plan.highlighted ? 'none' : '2px solid var(--accent)',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {plan.cta}
-              </button>
-
-              <div style={{ display: 'grid', gap: '1rem' }}>
-                {plan.features.map((feature, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                    <span style={{ color: 'var(--accent-2)', marginTop: '2px' }}>✓</span>
-                    <span style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>{feature}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* FAQ Section */}
-      <div style={{ padding: '4rem 2rem', borderTop: '1px solid var(--border)', background: 'var(--ink-2)' }}>
-        <h2 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '3rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
-          Frequently Asked Questions
-        </h2>
-
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'grid', gap: '2rem' }}>
-          {[
-            { q: 'Can I change plans anytime?', a: 'Yes, you can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.' },
-            { q: 'What if I need more resumes?', a: 'Contact our sales team for custom volume packages. We offer discounts for high-volume users.' },
-            { q: 'Is there a free trial?', a: 'Yes! Start with 14 days free on any plan. No credit card required.' },
-            { q: 'Do you offer annual billing?', a: 'Yes, save 20% with annual billing. Available on all plans.' }
-          ].map((item, i) => (
-            <div key={i} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1.5rem' }}>
-              <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>{item.q}</h4>
-              <p style={{ color: 'var(--muted)', lineHeight: '1.6' }}>{item.a}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-          Ready to hire smarter?
-        </h2>
-        <p style={{ color: 'var(--muted)', marginBottom: '2rem', fontSize: '1.1rem' }}>
-          Start your free trial today. No credit card required.
-        </p>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(180deg, #0f172a 0%, #111827 50%, #0b1220 100%)',
+        color: '#f8fafc',
+        fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+        padding: '3rem 1.25rem',
+      }}
+    >
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
         <button
+          onClick={onBack}
           style={{
-            background: 'var(--accent)',
-            color: 'var(--ink)',
-            border: 'none',
-            padding: '0.75rem 2rem',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            cursor: 'pointer'
+            background: 'transparent',
+            color: '#cbd5e1',
+            border: '1px solid #334155',
+            borderRadius: 8,
+            padding: '0.5rem 0.9rem',
+            cursor: 'pointer',
+            marginBottom: '2rem',
           }}
         >
-          Start Free Trial
+          ← Back
         </button>
+
+        <header style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginBottom: '0.75rem' }}>Simple pricing for growing teams</h1>
+          <p style={{ color: '#cbd5e1', margin: 0 }}>Everything you need to evaluate candidates faster.</p>
+        </header>
+
+        <section
+          style={{
+            maxWidth: 560,
+            margin: '0 auto',
+            background: '#111827',
+            border: '1px solid #334155',
+            borderRadius: 16,
+            padding: '2rem',
+            boxShadow: '0 20px 40px rgba(2, 6, 23, 0.45)',
+          }}
+        >
+          <p style={{ margin: 0, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+            Pro Plan
+          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '0.75rem 0 1.5rem' }}>
+            <span style={{ fontSize: '3rem', fontWeight: 800, lineHeight: 1 }}>$99</span>
+            <span style={{ color: '#cbd5e1', fontSize: '1.1rem' }}>/month</span>
+          </div>
+
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.75rem' }}>
+            {['7-day free trial', 'Cancel anytime'].map((item) => (
+              <li key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#e2e8f0' }}>
+                <span style={{ color: '#22c55e', fontWeight: 700 }}>✓</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={onStartTrial}
+            style={{
+              width: '100%',
+              marginTop: '1.75rem',
+              background: '#eab308',
+              color: '#0f172a',
+              border: 'none',
+              borderRadius: 10,
+              padding: '0.85rem 1rem',
+              fontWeight: 700,
+              fontSize: '1rem',
+              cursor: 'pointer',
+            }}
+          >
+            Start Free Trial
+          </button>
+        </section>
       </div>
     </div>
   )
