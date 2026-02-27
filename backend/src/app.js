@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser'
 import authRoutes from './routes/auth.js'
 import userRoutes from './routes/user.js'
 import { requireAuth } from './middleware/authMiddleware.js'
+import { requirePremiumAccess } from './middleware/subscriptionGate.js'
 
 const app = express()
 
@@ -23,7 +24,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/user', userRoutes)
 
-app.get('/api/protected', requireAuth, (req, res) => {
+app.get('/api/protected', requireAuth, requirePremiumAccess, (req, res) => {
   res.json({ userId: req.userId })
 })
 
