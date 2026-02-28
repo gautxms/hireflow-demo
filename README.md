@@ -163,7 +163,7 @@ useEffect(() => {
 4. **Database** - Store candidate results and history
 5. **Export** - Download results as PDF/CSV
 6. **Notifications** - Email reports to hiring team
-7. **Payments** - Stripe integration for premium tiers
+7. **Payments** - TODO: add Paddle integration for premium tiers
 
 ## 📊 Performance Metrics
 
