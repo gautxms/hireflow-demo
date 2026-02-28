@@ -256,7 +256,7 @@ const results = await response.json()
 - [ ] Add user authentication
 
 ### Phase 3 (Month 2): Product Hardening
-- [ ] Payment integration (Stripe)
+- [ ] Payment integration (TODO: Paddle)
 - [ ] Email notifications
 - [ ] CSV export functionality
 - [ ] Analytics dashboard

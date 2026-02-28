@@ -217,7 +217,7 @@ Edit the `MOCK_CANDIDATES` array in `src/components/CandidateRanking.jsx`
 3. **Backend:** Add Node.js/Python backend for resume analysis
 4. **Database:** Store candidate results (PostgreSQL/MongoDB)
 5. **Auth:** Add user login (GitHub, Google OAuth)
-6. **Payment:** Stripe for paid plans
+6. **Payment:** TODO: add Paddle for paid plans
 7. **Analytics:** Track usage, conversion metrics
 
 ---
