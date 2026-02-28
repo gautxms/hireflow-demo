@@ -11,6 +11,8 @@ import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
+import Terms from './pages/Terms'
+import Privacy from './pages/Privacy'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
@@ -74,6 +76,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
           onViewDemo={() => handleNavigate('demo')}
           onViewContact={() => handleNavigate('contact')}
           onViewHelp={() => handleNavigate('help')}
+          onViewTerms={() => navigate('/terms')}
+          onViewPrivacy={() => navigate('/privacy')}
         />
       )}
 
@@ -158,6 +162,14 @@ export default function App() {
       navigate('/')
     }
   }, [isAuthenticated, pathname])
+
+  if (pathname === '/terms') {
+    return <Terms />
+  }
+
+  if (pathname === '/privacy') {
+    return <Privacy />
+  }
 
   if (!isAuthenticated && pathname === '/signup') {
     return <SignupPage onAuthSuccess={handleAuthSuccess} onGoToLogin={() => navigate('/login')} />
