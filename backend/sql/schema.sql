@@ -4,6 +4,10 @@ CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  stripe_status TEXT,
+  trial_end TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
