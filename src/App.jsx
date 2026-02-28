@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import LandingPage from './components/LandingPage'
-import PricingPage from './components/PricingPage'
+import Pricing from './pages/Pricing'
 import ResumeUploader from './components/ResumeUploader'
 import CandidateResults from './components/CandidateResults'
 import OperationsDashboard from './components/Dashboard'
@@ -153,7 +153,7 @@ export default function App() {
 
 
   if (pathname === '/pricing') {
-    return <PricingPage />
+    return <Pricing />
   }
 
   if (pathname === '/terms') {
