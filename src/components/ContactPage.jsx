@@ -522,7 +522,7 @@ export default function ContactPage({ onBack }) {
         </div>
 
         <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
-          © 2024 HireFlow. All rights reserved. | <a href="#" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Privacy Policy</a> | <a href="#" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Terms of Service</a>
+          © 2024 HireFlow. All rights reserved. | <a href="/privacy" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Privacy Policy</a> | <a href="/terms" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Terms of Service</a>
         </p>
       </div>
     </div>

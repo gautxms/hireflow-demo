@@ -11,7 +11,7 @@ import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
-import TermsPage from './components/TermsPage'
+import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -157,7 +157,7 @@ export default function App() {
   }
 
   if (pathname === '/terms') {
-    return <TermsPage />
+    return <Terms />
   }
 
   if (pathname === '/privacy') {
