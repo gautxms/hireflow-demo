@@ -78,7 +78,7 @@ function phpSerializeObject(value) {
   return `a:${Object.keys(normalized).length}:{${entries}}`
 }
 
-export async function createSubscriptionSession(_user, _planId) {
+export async function createSubscriptionSession(_user, planId) {
   try {
     const client = initializePaddleClient()
 
@@ -87,6 +87,9 @@ export async function createSubscriptionSession(_user, _planId) {
       provider: 'paddle',
       environment: PADDLE_ENV,
       baseUrl: client.baseUrl,
+      planId: planId || null,
+      // Future logic: create transaction or checkout link with Paddle API.
+      checkoutUrl: null,
     }
   } catch (error) {
     console.error('Failed to initialize Paddle subscription session:', error)
