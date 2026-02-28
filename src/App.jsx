@@ -11,8 +11,10 @@ import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
+import CheckoutPage from './components/CheckoutPage'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const PAYMENTS_PROVIDER = import.meta.env.VITE_PAYMENTS_PROVIDER
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 
 function navigate(pathname) {
@@ -43,6 +45,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
 
   const handleSelectPlan = (planId) => {
     console.log('Selected plan:', planId)
+
+    if (PAYMENTS_PROVIDER === 'paddle') {
+      navigate(`/checkout?plan=${encodeURIComponent(planId)}`)
+      return
+    }
+
     handleNavigate('uploader', 'Please sign up to upload resumes and run screening.')
   }
 
@@ -165,6 +173,10 @@ export default function App() {
 
   if (!isAuthenticated && pathname === '/login') {
     return <LoginPage onAuthSuccess={handleAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
+  }
+
+  if (pathname === '/checkout') {
+    return <CheckoutPage onBackHome={() => navigate('/')} />
   }
 
   return <MainSite isAuthenticated={isAuthenticated} onLogout={logout} onRequireAuth={requireAuth} />
