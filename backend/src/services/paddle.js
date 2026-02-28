@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+
 const {
   PADDLE_VENDOR_ID,
   PADDLE_API_KEY,
@@ -37,6 +39,45 @@ function initializePaddleClient() {
   return paddleClient
 }
 
+function phpSerializeValue(value) {
+  if (value === null || value === undefined) {
+    return 'N;'
+  }
+
+  if (typeof value === 'boolean') {
+    return `b:${value ? 1 : 0};`
+  }
+
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? `i:${value};` : `d:${value};`
+  }
+
+  if (Array.isArray(value)) {
+    const entries = value
+      .map((entry, index) => `${phpSerializeValue(index)}${phpSerializeValue(entry)}`)
+      .join('')
+
+    return `a:${value.length}:{${entries}}`
+  }
+
+  const stringValue = String(value)
+  return `s:${Buffer.byteLength(stringValue, 'utf8')}:"${stringValue}";`
+}
+
+function phpSerializeObject(value) {
+  const normalized = Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== 'p_signature')
+      .sort(([left], [right]) => left.localeCompare(right)),
+  )
+
+  const entries = Object.entries(normalized)
+    .map(([key, entryValue]) => `${phpSerializeValue(key)}${phpSerializeValue(entryValue)}`)
+    .join('')
+
+  return `a:${Object.keys(normalized).length}:{${entries}}`
+}
+
 export async function createSubscriptionSession(_user, _planId) {
   try {
     const client = initializePaddleClient()
@@ -53,31 +94,56 @@ export async function createSubscriptionSession(_user, _planId) {
   }
 }
 
-export function verifyPaddleWebhookSignature(_rawBody, _signatureHeader) {
+export function verifyPaddleWebhookSignature(eventPayload, signature) {
   try {
-    initializePaddleClient()
+    const client = initializePaddleClient()
 
-    return {
-      status: 'not_implemented',
-      verified: false,
+    if (!eventPayload || !signature) {
+      return false
     }
+
+    const serializedPayload = phpSerializeObject(eventPayload)
+    const verifier = crypto.createVerify('sha1')
+    verifier.update(serializedPayload)
+    verifier.end()
+
+    return verifier.verify(client.publicKey, Buffer.from(signature, 'base64'))
   } catch (error) {
     console.error('Failed to verify Paddle webhook signature:', error)
-    return {
-      status: 'error',
-      verified: false,
-      error: 'Unable to verify Paddle webhook signature.',
-    }
+    return false
   }
 }
 
-export async function handlePaddleWebhookEvent(_eventPayload) {
+export async function handlePaddleWebhookEvent(eventPayload) {
   try {
     initializePaddleClient()
 
+    const eventType = eventPayload?.alert_name
+
+    // Internal status mapping only. Persisting to the database should happen
+    // in a future update where subscription/account tables are finalized.
+    const statusMap = {
+      subscription_created: 'active',
+      subscription_payment_succeeded: 'active',
+      subscription_cancelled: 'cancelled',
+    }
+
+    if (!statusMap[eventType]) {
+      return {
+        processed: false,
+        reason: 'unsupported_event',
+        eventType,
+      }
+    }
+
     return {
-      status: 'not_implemented',
+      processed: true,
       provider: 'paddle',
+      eventType,
+      internalStatus: statusMap[eventType],
+      // Include IDs so future persistence logic can upsert by subscription.
+      subscriptionId: eventPayload?.subscription_id ?? null,
+      userId: eventPayload?.passthrough ?? null,
     }
   } catch (error) {
     console.error('Failed to handle Paddle webhook event:', error)
