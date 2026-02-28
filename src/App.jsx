@@ -13,6 +13,7 @@ import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
+import RefundPolicy from './pages/RefundPolicy'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
@@ -162,6 +163,10 @@ export default function App() {
 
   if (pathname === '/privacy') {
     return <PrivacyPage />
+  }
+
+  if (pathname === '/refund-policy') {
+    return <RefundPolicy />
   }
 
   if (!isAuthenticated && pathname === '/signup') {

@@ -5,7 +5,8 @@ export default function PublicFooter() {
         © 2026 HireFlow Inc. All rights reserved. |{' '}
         <a href="/pricing" style={{ color: 'var(--accent)' }}>Pricing</a> |{' '}
         <a href="/privacy" style={{ color: 'var(--accent)' }}>Privacy</a> |{' '}
-        <a href="/terms" style={{ color: 'var(--accent)' }}>Terms</a>
+        <a href="/terms" style={{ color: 'var(--accent)' }}>Terms</a> |{' '}
+        <a href="/refund-policy" style={{ color: 'var(--accent)' }}>Refund Policy</a>
       </p>
     </footer>
   )
