@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import '../globals.css'
 
-export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboard, onViewAbout, onViewDemo, onViewContact, onViewHelp }) {
+export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboard, onViewAbout, onViewDemo, onViewContact, onViewHelp, onViewTerms, onViewPrivacy }) {
   useEffect(() => {
     // Smooth scroll and interactive effects
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -86,7 +86,7 @@ export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboar
 
       {/* Footer */}
       <footer>
-        <p>© 2026 HireFlow Inc. All rights reserved. | <a href="#" style={{ color: 'var(--accent)' }}>Privacy</a> | <a href="#" style={{ color: 'var(--accent)' }}>Terms</a></p>
+        <p>© 2026 HireFlow Inc. All rights reserved. | <button onClick={onViewPrivacy} style={{ color: 'var(--accent)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>Privacy</button> | <button onClick={onViewTerms} style={{ color: 'var(--accent)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>Terms</button></p>
       </footer>
     </>
   )

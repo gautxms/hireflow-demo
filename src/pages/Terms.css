@@ -1,0 +1,47 @@
+.terms-layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+  display: flex;
+  gap: 1.5rem;
+}
+
+.terms-hamburger {
+  display: none !important;
+}
+
+@media (max-width: 767px) {
+  .terms-layout {
+    display: block;
+    padding-top: 1rem;
+  }
+
+  .terms-hamburger {
+    display: inline-block !important;
+  }
+
+  .terms-sidebar {
+    display: none;
+    position: static !important;
+    width: 100% !important;
+    max-height: none !important;
+    margin-bottom: 1rem;
+  }
+
+  .terms-sidebar.open {
+    display: block;
+  }
+}
+
+@media (max-width: 479px) {
+  .terms-layout {
+    padding: 0.75rem 0.75rem 2.5rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  .terms-layout {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
