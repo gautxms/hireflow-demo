@@ -53,7 +53,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <a href="/" style={{ color: '#374151', textDecoration: 'none', fontSize: '0.9rem' }}>Home</a>
+          <a href="/pricing" style={{ color: '#374151', textDecoration: 'none', fontSize: '0.9rem' }}>Pricing</a>
+        </div>
         {isAuthenticated ? (
           <button onClick={onLogout}>Logout</button>
         ) : (
