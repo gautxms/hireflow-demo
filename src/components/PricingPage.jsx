@@ -1,4 +1,8 @@
-export default function PricingPage({ onSelectPlan }) {
+import usePageSeo from '../hooks/usePageSeo'
+import PublicFooter from './PublicFooter'
+
+export default function PricingPage() {
+  usePageSeo('HireFlow Pricing', 'Explore HireFlow pricing plans for teams of every size, from starter recruiting workflows to enterprise hiring operations.')
   const plans = [
     {
       id: 'starter',
@@ -114,7 +118,6 @@ export default function PricingPage({ onSelectPlan }) {
               </div>
 
               <button
-                onClick={() => onSelectPlan(plan.id)}
                 style={{
                   width: '100%',
                   padding: '0.75rem',
@@ -189,6 +192,8 @@ export default function PricingPage({ onSelectPlan }) {
           Start Free Trial
         </button>
       </div>
+
+      <PublicFooter />
     </div>
   )
 }

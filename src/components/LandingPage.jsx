@@ -86,7 +86,7 @@ export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboar
 
       {/* Footer */}
       <footer>
-        <p>© 2026 HireFlow Inc. All rights reserved. | <a href="#" style={{ color: 'var(--accent)' }}>Privacy</a> | <a href="#" style={{ color: 'var(--accent)' }}>Terms</a></p>
+        <p>© 2026 HireFlow Inc. All rights reserved. | <a href="/pricing" style={{ color: 'var(--accent)' }}>Pricing</a> | <a href="/privacy" style={{ color: 'var(--accent)' }}>Privacy</a> | <a href="/terms" style={{ color: 'var(--accent)' }}>Terms</a></p>
       </footer>
     </>
   )
