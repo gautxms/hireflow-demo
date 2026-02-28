@@ -11,6 +11,8 @@ import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
+import TermsPage from './components/TermsPage'
+import PrivacyPage from './components/PrivacyPage'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
@@ -41,10 +43,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
     handleNavigate('results')
   }
 
-  const handleSelectPlan = (planId) => {
-    console.log('Selected plan:', planId)
-    handleNavigate('uploader', 'Please sign up to upload resumes and run screening.')
-  }
 
   useEffect(() => {
     if (!isAuthenticated && PROTECTED_PAGES.has(currentPage)) {
@@ -68,7 +66,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
       {currentPage === 'landing' && (
         <LandingPage
           onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
-          onViewPricing={() => handleNavigate('pricing')}
+          onViewPricing={() => navigate('/pricing')}
           onViewDashboard={() => handleNavigate('dashboard', 'Please login to access your dashboard.')}
           onViewAbout={() => handleNavigate('about')}
           onViewDemo={() => handleNavigate('demo')}
@@ -77,12 +75,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
         />
       )}
 
-      {currentPage === 'pricing' && (
-        <PricingPage
-          onSelectPlan={handleSelectPlan}
-          onBack={() => handleNavigate('landing')}
-        />
-      )}
 
       {currentPage === 'uploader' && (
         <ResumeUploader onFileUploaded={handleFileUploaded} onBack={() => handleNavigate('landing')} />
@@ -158,6 +150,19 @@ export default function App() {
       navigate('/')
     }
   }, [isAuthenticated, pathname])
+
+
+  if (pathname === '/pricing') {
+    return <PricingPage />
+  }
+
+  if (pathname === '/terms') {
+    return <TermsPage />
+  }
+
+  if (pathname === '/privacy') {
+    return <PrivacyPage />
+  }
 
   if (!isAuthenticated && pathname === '/signup') {
     return <SignupPage onAuthSuccess={handleAuthSuccess} onGoToLogin={() => navigate('/login')} />
