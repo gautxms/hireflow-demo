@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 
+function navigate(pathname) {
+  if (window.location.pathname !== pathname) {
+    window.history.pushState({}, '', pathname)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -72,6 +79,23 @@ export default function Checkout() {
   return (
     <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
       <section style={{ maxWidth: '900px', margin: '0 auto', padding: '3rem 1rem 2rem' }}>
+        <button
+          type="button"
+          onClick={() => navigate('/pricing')}
+          style={{
+            border: '1px solid var(--border)',
+            background: 'transparent',
+            color: 'var(--accent)',
+            borderRadius: 8,
+            padding: '0.55rem 0.9rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            marginBottom: '1.25rem',
+          }}
+        >
+          ← Back to Pricing
+        </button>
+
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.3rem', marginBottom: '0.75rem' }}>Checkout</h1>
         <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{plan.summary}</p>
 

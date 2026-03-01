@@ -17,9 +17,14 @@ export default function BillingSuccess() {
         <p style={{ color: 'var(--muted)', marginBottom: '1.2rem' }}>
           Your checkout completed successfully. You can now continue using HireFlow.
         </p>
-        <button type="button" onClick={() => navigate('/')} style={{ border: 'none', borderRadius: 8, background: 'var(--accent)', color: 'var(--ink)', padding: '0.75rem 1.2rem', fontWeight: 700, cursor: 'pointer' }}>
-          Go to Dashboard
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => navigate('/pricing')} style={{ border: 'none', borderRadius: 8, background: 'var(--accent)', color: 'var(--ink)', padding: '0.75rem 1.2rem', fontWeight: 700, cursor: 'pointer' }}>
+            Go to Pricing
+          </button>
+          <button type="button" onClick={() => navigate('/pricing')} style={{ border: '1px solid var(--accent)', borderRadius: 8, background: 'transparent', color: 'var(--text)', padding: '0.75rem 1.2rem', fontWeight: 700, cursor: 'pointer' }}>
+            ← Back to Pricing
+          </button>
+        </div>
       </section>
     </main>
   )
