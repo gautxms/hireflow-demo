@@ -11,10 +11,38 @@ const app = express()
 
 app.set('trust proxy', 1)
 
-app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+const vercelDomainSuffix = '.vercel.app'
+const defaultAllowedOrigins = [
+  'http://localhost:5173',
+  'https://hireflow.dev',
+  'https://www.hireflow.dev',
+]
+
+const envAllowedOrigins = (process.env.FRONTEND_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins])
+
+const corsOptions = {
   credentials: true,
-}))
+  origin(origin, callback) {
+    // Allow server-to-server or local non-browser requests with no Origin header.
+    if (!origin) {
+      return callback(null, true)
+    }
+
+    if (allowedOrigins.has(origin) || origin.endsWith(vercelDomainSuffix)) {
+      return callback(null, true)
+    }
+
+    console.warn('[CORS] Blocked origin:', origin)
+    return callback(new Error('CORS not allowed'))
+  },
+}
+
+app.use(cors(corsOptions))
 
 app.use('/api/paddle/webhook', express.raw({ type: 'application/json' }), paddleWebhookRoutes)
 app.use(express.json())
