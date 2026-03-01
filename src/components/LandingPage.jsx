@@ -42,8 +42,7 @@ export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboar
             <span className="gradient">Faster.</span>
           </h1>
           <p>
-            HireFlow automates candidate screening with AI. Reduce hiring time from weeks to days, 
-            eliminate bias, and make data-driven decisions. Finally, a recruiting tool built for modern teams.
+            HireFlow provides transparent PDF resume text extraction so hiring teams can review exactly what is read from each file. No scoring, no ranking, just the raw output.
           </p>
           <div className="hero-cta">
             <button className="btn-primary" onClick={onStartDemo} style={{ fontSize: '1rem', padding: '0.75rem 2rem' }}>
@@ -58,16 +57,16 @@ export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboar
       <section className="features" id="features">
         <div className="features-grid">
           <div className="feature-card">
-            <h3>⚡ AI Screening</h3>
-            <p>Automatically analyze and score resumes in seconds. Match candidates with roles using 20+ evaluation dimensions.</p>
+            <h3>⚡ Resume Text Extraction</h3>
+            <p>Extract readable text from uploaded resumes and display deterministic fields from that text.</p>
           </div>
           <div className="feature-card">
-            <h3>🎯 Bias Removal</h3>
-            <p>Our AI evaluates candidates on merit, not on demographics. Fair, transparent, and legally defensible.</p>
+            <h3>🎯 Deterministic Parsing</h3>
+            <p>Detect candidate name, email, phone, and common sections using simple rule-based parsing.</p>
           </div>
           <div className="feature-card">
-            <h3>📊 Smart Analytics</h3>
-            <p>Track hiring metrics, time-to-hire, and candidate quality. Data-driven insights for continuous improvement.</p>
+            <h3>📊 Honest Output</h3>
+            <p>See the raw extracted text directly so teams can validate every parsed result.</p>
           </div>
           <div className="feature-card">
             <h3>🔗 ATS Integration</h3>
