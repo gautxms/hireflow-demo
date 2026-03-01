@@ -3,6 +3,7 @@ import usePageSeo from '../hooks/usePageSeo'
 import PublicFooter from '../components/PublicFooter'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -34,11 +35,20 @@ export default function Checkout() {
       setStatus('loading')
       setErrorMessage('')
 
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+
+      if (!token) {
+        setStatus('error')
+        setErrorMessage('Please log in before starting checkout.')
+        return
+      }
+
       try {
         const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             plan: selectedPlan,
