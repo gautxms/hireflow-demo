@@ -13,13 +13,6 @@ async function parseResponsePayload(response) {
   return null
 }
 
-function navigate(pathname) {
-  if (window.location.pathname !== pathname) {
-    window.history.pushState({}, '', pathname)
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  }
-}
-
 export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -64,14 +57,6 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }
       <div className="auth-glow auth-glow--a" />
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
-        <button
-          className="auth-link"
-          type="button"
-          onClick={() => navigate('/')}
-          style={{ marginBottom: '0.75rem', display: 'inline-block' }}
-        >
-          ← Back to Home
-        </button>
         <p className="auth-brand">Hire<span>Flow</span></p>
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-subtitle">Sign in to continue screening candidates faster.</p>
