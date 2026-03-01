@@ -6,11 +6,11 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000
 
 const PLAN_DETAILS = {
   monthly: {
-    label: 'Monthly Plan',
+    label: 'Monthly',
     summary: 'You selected the monthly subscription.',
   },
   annual: {
-    label: 'Annual Plan',
+    label: 'Annual',
     summary: 'You selected the annual subscription.',
   },
 }
@@ -33,7 +33,7 @@ export default function Checkout() {
   const [status, setStatus] = useState('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
-  usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()}.`)
+  usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
   useEffect(() => {
     async function sendCheckoutPayload() {
@@ -71,9 +71,7 @@ export default function Checkout() {
     <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
       <section style={{ maxWidth: '900px', margin: '0 auto', padding: '3rem 1rem 2rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.3rem', marginBottom: '0.75rem' }}>Checkout</h1>
-        <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
-          {plan.summary} Payment processing will be enabled in a later update.
-        </p>
+        <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{plan.summary}</p>
 
         <div
           style={{
@@ -87,9 +85,9 @@ export default function Checkout() {
         >
           <p style={{ margin: 0, color: 'var(--muted)' }}>Selected plan</p>
           <p style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>{plan.label}</p>
-          <p style={{ margin: 0, color: 'var(--muted)' }}>Query param: plan={selectedPlan}</p>
-          <p style={{ margin: 0, color: 'var(--muted)' }}>Price ID: {priceId || 'Missing price ID env var'}</p>
-          <p style={{ margin: 0, color: 'var(--muted)' }}>Sync status: {status}</p>
+          <p style={{ margin: 0, color: 'var(--muted)' }}>
+            {status === 'error' ? 'We could not prepare checkout. Please try again.' : 'Redirecting to secure checkout…'}
+          </p>
           {errorMessage ? <p style={{ margin: 0, color: '#ff8f8f' }}>Error: {errorMessage}</p> : null}
         </div>
       </section>
