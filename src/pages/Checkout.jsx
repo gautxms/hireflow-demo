@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import PublicFooter from '../components/PublicFooter'
 
@@ -15,11 +15,6 @@ const PLAN_DETAILS = {
   },
 }
 
-const PRICE_IDS_BY_PLAN = {
-  monthly: import.meta.env.VITE_PADDLE_PRICE_MONTHLY,
-  annual: import.meta.env.VITE_PADDLE_PRICE_ANNUAL,
-}
-
 function getPlanFromQuery() {
   const params = new URLSearchParams(window.location.search)
   const plan = params.get('plan')
@@ -29,7 +24,6 @@ function getPlanFromQuery() {
 export default function Checkout() {
   const selectedPlan = getPlanFromQuery()
   const plan = PLAN_DETAILS[selectedPlan]
-  const priceId = useMemo(() => PRICE_IDS_BY_PLAN[selectedPlan] || '', [selectedPlan])
   const [status, setStatus] = useState('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -41,14 +35,13 @@ export default function Checkout() {
       setErrorMessage('')
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/payments/checkout`, {
+        const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             plan: selectedPlan,
-            priceId,
           }),
         })
 
@@ -65,7 +58,7 @@ export default function Checkout() {
     }
 
     sendCheckoutPayload()
-  }, [selectedPlan, priceId])
+  }, [selectedPlan])
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
