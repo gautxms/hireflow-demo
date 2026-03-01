@@ -1,5 +1,4 @@
 import usePageSeo from '../hooks/usePageSeo'
-import PublicFooter from '../components/PublicFooter'
 import termsContent from '../../TERMS_AND_CONDITIONS_CONTENT.md?raw'
 
 function renderTermsMarkdown(content) {
@@ -42,7 +41,6 @@ export default function Terms() {
           {renderTermsMarkdown(termsContent)}
         </article>
       </main>
-      <PublicFooter />
     </div>
   )
 }

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
-import PublicFooter from '../components/PublicFooter'
 
 const PLAN_FEATURES = [
   'Unlimited resume uploads',
@@ -207,7 +206,6 @@ export default function Pricing() {
         </div>
       </section>
 
-      <PublicFooter />
     </main>
   )
 }

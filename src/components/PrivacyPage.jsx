@@ -1,5 +1,4 @@
 import usePageSeo from '../hooks/usePageSeo'
-import PublicFooter from './PublicFooter'
 
 export default function PrivacyPage() {
   usePageSeo('HireFlow Privacy Policy', 'Learn how HireFlow collects, uses, and protects personal information processed on our hiring platform.')
@@ -20,7 +19,6 @@ export default function PrivacyPage() {
         <h2>Your Choices</h2>
         <p>You may request access, correction, or deletion of personal information where applicable law grants these rights by contacting privacy@hireflow.example.</p>
       </main>
-      <PublicFooter />
     </div>
   )
 }
