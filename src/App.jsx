@@ -16,6 +16,7 @@ import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
 import BillingSuccess from './pages/BillingSuccess'
 import BillingCancel from './pages/BillingCancel'
+import Checkout from './pages/Checkout'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
@@ -177,6 +178,10 @@ export default function App() {
 
   if (pathname === '/billing/cancel') {
     return <BillingCancel />
+  }
+
+  if (pathname === '/checkout') {
+    return <Checkout />
   }
 
   if (!isAuthenticated && pathname === '/signup') {

@@ -2,9 +2,6 @@ import { useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import PublicFooter from '../components/PublicFooter'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
-const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-
 const PLAN_FEATURES = [
   'Unlimited resume uploads',
   'AI-powered candidate screening',
@@ -120,43 +117,9 @@ export default function Pricing() {
   usePageSeo('HireFlow Pricing', 'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.')
 
   const [selectedBilling, setSelectedBilling] = useState('annual')
-  const [loadingPlan, setLoadingPlan] = useState('')
-  const [error, setError] = useState('')
 
-  const startCheckout = async (plan) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-
-    if (!token) {
-      navigate('/login')
-      return
-    }
-
-    setError('')
-    setLoadingPlan(plan)
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: 'include',
-        body: JSON.stringify({ plan }),
-      })
-
-      const payload = await response.json().catch(() => null)
-
-      if (!response.ok || !payload?.checkoutUrl) {
-        throw new Error(payload?.error || `Unable to start checkout (${response.status})`)
-      }
-
-      window.location.assign(payload.checkoutUrl)
-    } catch (checkoutError) {
-      setError(checkoutError.message || 'Unable to start checkout right now.')
-    } finally {
-      setLoadingPlan('')
-    }
+  const startCheckout = (plan) => {
+    navigate(`/checkout?plan=${plan}`)
   }
 
   return (
@@ -219,8 +182,6 @@ export default function Pricing() {
           {selectedBilling === 'annual' ? '$79/month (billed annually at $948/year)' : '$99/month billed monthly'}
         </p>
 
-        {error && <p style={{ textAlign: 'center', color: '#f87171', marginBottom: '1.5rem' }}>{error}</p>}
-
         <div
           style={{
             display: 'grid',
@@ -234,14 +195,14 @@ export default function Pricing() {
             selected={selectedBilling === 'annual'}
             emphasized
             onStartCheckout={startCheckout}
-            loading={loadingPlan === 'annual'}
+            loading={false}
           />
           <PricingCard
             plan={PRICING.monthly}
             selected={selectedBilling === 'monthly'}
             emphasized={false}
             onStartCheckout={startCheckout}
-            loading={loadingPlan === 'monthly'}
+            loading={false}
           />
         </div>
       </section>
