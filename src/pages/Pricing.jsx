@@ -2,25 +2,28 @@ import { useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import PublicFooter from '../components/PublicFooter'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+
 const PLAN_FEATURES = [
   'Unlimited resume uploads',
   'AI-powered candidate screening',
   'Bias-reduced scoring',
   'Secure data handling',
-  'Email support'
+  'Email support',
 ]
 
 const PRICING = {
-  yearly: {
-    id: 'yearly',
-    name: 'Yearly Plan',
+  annual: {
+    id: 'annual',
+    name: 'Annual Plan',
     badge: 'Best Value',
     price: '$79',
     period: '/month',
     billing: 'Billed annually at $948/year',
     savings: 'Save $240 per year compared to monthly',
     trial: '7-day free trial, cancel anytime',
-    cta: 'Start Free Trial'
+    cta: 'Start Annual',
   },
   monthly: {
     id: 'monthly',
@@ -31,11 +34,18 @@ const PRICING = {
     billing: 'Billed monthly',
     savings: null,
     trial: '7-day free trial, cancel anytime',
-    cta: 'Start Free Trial'
+    cta: 'Start Monthly',
+  },
+}
+
+function navigate(pathname) {
+  if (window.location.pathname !== pathname) {
+    window.history.pushState({}, '', pathname)
+    window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }
 
-function PricingCard({ plan, selected, emphasized }) {
+function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
   return (
     <article
       style={{
@@ -45,7 +55,7 @@ function PricingCard({ plan, selected, emphasized }) {
         background: 'var(--card)',
         boxShadow: selected ? '0 10px 24px rgba(0, 0, 0, 0.18)' : 'none',
         transform: emphasized ? 'scale(1.03)' : 'scale(1)',
-        position: 'relative'
+        position: 'relative',
       }}
       aria-label={plan.name}
     >
@@ -60,7 +70,7 @@ function PricingCard({ plan, selected, emphasized }) {
             fontWeight: 700,
             fontSize: '0.8rem',
             borderRadius: '999px',
-            padding: '0.35rem 0.75rem'
+            padding: '0.35rem 0.75rem',
           }}
         >
           {plan.badge}
@@ -80,6 +90,8 @@ function PricingCard({ plan, selected, emphasized }) {
 
       <button
         type="button"
+        onClick={() => onStartCheckout(plan.id)}
+        disabled={loading}
         style={{
           width: '100%',
           borderRadius: '8px',
@@ -88,10 +100,11 @@ function PricingCard({ plan, selected, emphasized }) {
           background: selected ? 'var(--accent)' : 'transparent',
           color: selected ? 'var(--ink)' : 'var(--text)',
           fontWeight: 700,
-          cursor: 'pointer'
+          cursor: loading ? 'not-allowed' : 'pointer',
+          opacity: loading ? 0.7 : 1,
         }}
       >
-        {plan.cta}
+        {loading ? 'Preparing checkout…' : plan.cta}
       </button>
 
       <ul style={{ marginTop: '1.4rem', paddingLeft: '1.1rem', display: 'grid', gap: '0.55rem', color: 'var(--muted)' }}>
@@ -106,7 +119,45 @@ function PricingCard({ plan, selected, emphasized }) {
 export default function Pricing() {
   usePageSeo('HireFlow Pricing', 'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.')
 
-  const [selectedBilling, setSelectedBilling] = useState('yearly')
+  const [selectedBilling, setSelectedBilling] = useState('annual')
+  const [loadingPlan, setLoadingPlan] = useState('')
+  const [error, setError] = useState('')
+
+  const startCheckout = async (plan) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    setError('')
+    setLoadingPlan(plan)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ plan }),
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.checkoutUrl) {
+        throw new Error(payload?.error || `Unable to start checkout (${response.status})`)
+      }
+
+      window.location.assign(payload.checkoutUrl)
+    } catch (checkoutError) {
+      setError(checkoutError.message || 'Unable to start checkout right now.')
+    } finally {
+      setLoadingPlan('')
+    }
+  }
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
@@ -126,7 +177,7 @@ export default function Pricing() {
               display: 'inline-flex',
               border: '1px solid var(--border)',
               borderRadius: '999px',
-              overflow: 'hidden'
+              overflow: 'hidden',
             }}
           >
             <button
@@ -140,7 +191,7 @@ export default function Pricing() {
                 color: selectedBilling === 'monthly' ? 'var(--ink)' : 'var(--text)',
                 padding: '0.6rem 1rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               Monthly
@@ -148,44 +199,51 @@ export default function Pricing() {
             <button
               type="button"
               role="tab"
-              aria-selected={selectedBilling === 'yearly'}
-              onClick={() => setSelectedBilling('yearly')}
+              aria-selected={selectedBilling === 'annual'}
+              onClick={() => setSelectedBilling('annual')}
               style={{
                 border: 'none',
-                background: selectedBilling === 'yearly' ? 'var(--accent)' : 'transparent',
-                color: selectedBilling === 'yearly' ? 'var(--ink)' : 'var(--text)',
+                background: selectedBilling === 'annual' ? 'var(--accent)' : 'transparent',
+                color: selectedBilling === 'annual' ? 'var(--ink)' : 'var(--text)',
                 padding: '0.6rem 1rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
-              Yearly
+              Annual
             </button>
           </div>
         </div>
 
         <p style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: '1.9rem' }}>
-          {selectedBilling === 'yearly' ? '$79/month (billed annually at $948/year)' : '$99/month billed monthly'}
+          {selectedBilling === 'annual' ? '$79/month (billed annually at $948/year)' : '$99/month billed monthly'}
         </p>
+
+        {error && <p style={{ textAlign: 'center', color: '#f87171', marginBottom: '1.5rem' }}>{error}</p>}
 
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             alignItems: 'stretch',
-            gap: '1.2rem'
+            gap: '1.2rem',
           }}
         >
-          <PricingCard plan={PRICING.yearly} selected={selectedBilling === 'yearly'} emphasized />
-          <PricingCard plan={PRICING.monthly} selected={selectedBilling === 'monthly'} emphasized={false} />
+          <PricingCard
+            plan={PRICING.annual}
+            selected={selectedBilling === 'annual'}
+            emphasized
+            onStartCheckout={startCheckout}
+            loading={loadingPlan === 'annual'}
+          />
+          <PricingCard
+            plan={PRICING.monthly}
+            selected={selectedBilling === 'monthly'}
+            emphasized={false}
+            onStartCheckout={startCheckout}
+            loading={loadingPlan === 'monthly'}
+          />
         </div>
-      </section>
-
-      <section style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '0.9rem', padding: '2rem 1rem 0.5rem' }}>
-        <p>
-          Prices shown in USD. Taxes may apply. <a href="/terms" style={{ color: 'var(--accent)' }}>Terms</a> ·{' '}
-          <a href="/privacy" style={{ color: 'var(--accent)' }}>Privacy</a>
-        </p>
       </section>
 
       <PublicFooter />

@@ -14,6 +14,8 @@ import SignupPage from './components/SignupPage'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
+import BillingSuccess from './pages/BillingSuccess'
+import BillingCancel from './pages/BillingCancel'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
@@ -167,6 +169,14 @@ export default function App() {
 
   if (pathname === '/refund-policy') {
     return <RefundPolicy />
+  }
+
+  if (pathname === '/billing/success') {
+    return <BillingSuccess />
+  }
+
+  if (pathname === '/billing/cancel') {
+    return <BillingCancel />
   }
 
   if (!isAuthenticated && pathname === '/signup') {

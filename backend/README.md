@@ -23,6 +23,10 @@ Set the following environment variables:
 - `JWT_SECRET`
 - `FRONTEND_ORIGIN`
 - `PADDLE_WEBHOOK_SECRET`
+- `PADDLE_API_KEY`
+- `PADDLE_MONTHLY_PRICE_ID`
+- `PADDLE_ANNUAL_PRICE_ID`
+- `APP_ORIGIN` (optional, defaults to `FRONTEND_ORIGIN`)
 
 Use start command:
 ```bash
@@ -38,3 +42,13 @@ Render/Railway provide HTTPS at the edge; cookies are marked `secure` in product
 - Signature header: `Paddle-Signature` (`ts` + `h1` HMAC SHA256)
 - Processed events: `subscription_created`, `subscription_payment_succeeded`, `subscription_cancelled`
 - Every webhook payload is written to `paddle_webhook_audit`.
+
+
+## Paddle hosted checkout
+
+- Endpoint: `POST /api/paddle/checkout-url` (requires auth)
+- Body: `{ "plan": "monthly" | "annual" }`
+- Returns a Paddle-hosted checkout URL generated via the Paddle Transactions API.
+- Includes `userId` and `email` in `custom_data`, and redirects to:
+  - success: `/billing/success`
+  - cancel: `/billing/cancel`
