@@ -1,5 +1,8 @@
+import { useEffect, useMemo, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import PublicFooter from '../components/PublicFooter'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -12,6 +15,11 @@ const PLAN_DETAILS = {
   },
 }
 
+const PRICE_IDS_BY_PLAN = {
+  monthly: import.meta.env.VITE_PADDLE_PRICE_MONTHLY,
+  annual: import.meta.env.VITE_PADDLE_PRICE_ANNUAL,
+}
+
 function getPlanFromQuery() {
   const params = new URLSearchParams(window.location.search)
   const plan = params.get('plan')
@@ -21,8 +29,43 @@ function getPlanFromQuery() {
 export default function Checkout() {
   const selectedPlan = getPlanFromQuery()
   const plan = PLAN_DETAILS[selectedPlan]
+  const priceId = useMemo(() => PRICE_IDS_BY_PLAN[selectedPlan] || '', [selectedPlan])
+  const [status, setStatus] = useState('idle')
+  const [errorMessage, setErrorMessage] = useState('')
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()}.`)
+
+  useEffect(() => {
+    async function sendCheckoutPayload() {
+      setStatus('loading')
+      setErrorMessage('')
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/payments/checkout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            plan: selectedPlan,
+            priceId,
+          }),
+        })
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}))
+          throw new Error(payload.error || 'Checkout payload failed')
+        }
+
+        setStatus('success')
+      } catch (error) {
+        setStatus('error')
+        setErrorMessage(error.message || 'Unable to send checkout payload')
+      }
+    }
+
+    sendCheckoutPayload()
+  }, [selectedPlan, priceId])
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
@@ -45,6 +88,9 @@ export default function Checkout() {
           <p style={{ margin: 0, color: 'var(--muted)' }}>Selected plan</p>
           <p style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>{plan.label}</p>
           <p style={{ margin: 0, color: 'var(--muted)' }}>Query param: plan={selectedPlan}</p>
+          <p style={{ margin: 0, color: 'var(--muted)' }}>Price ID: {priceId || 'Missing price ID env var'}</p>
+          <p style={{ margin: 0, color: 'var(--muted)' }}>Sync status: {status}</p>
+          {errorMessage ? <p style={{ margin: 0, color: '#ff8f8f' }}>Error: {errorMessage}</p> : null}
         </div>
       </section>
 
