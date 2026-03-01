@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
-import PublicFooter from '../components/PublicFooter'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -95,7 +94,6 @@ export default function Checkout() {
         </div>
       </section>
 
-      <PublicFooter />
     </main>
   )
 }

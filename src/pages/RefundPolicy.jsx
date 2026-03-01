@@ -1,5 +1,4 @@
 import usePageSeo from '../hooks/usePageSeo'
-import PublicFooter from '../components/PublicFooter'
 
 export default function RefundPolicy() {
   usePageSeo('Refund Policy – Hireflow', 'Read Hireflow’s refund policy, including trial terms, non-refundable payments after conversion, and billing support contact information.')
@@ -27,7 +26,6 @@ export default function RefundPolicy() {
           </p>
         </article>
       </main>
-      <PublicFooter />
     </div>
   )
 }

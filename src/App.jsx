@@ -17,6 +17,7 @@ import RefundPolicy from './pages/RefundPolicy'
 import BillingSuccess from './pages/BillingSuccess'
 import BillingCancel from './pages/BillingCancel'
 import Checkout from './pages/Checkout'
+import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
@@ -28,7 +29,7 @@ function navigate(pathname) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, authPrompt }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
 
@@ -55,6 +56,96 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
     }
   }, [currentPage, isAuthenticated, onRequireAuth])
 
+  const getPageContent = () => {
+    if (pathname === '/pricing') {
+      return <Pricing />
+    }
+
+    if (pathname === '/terms') {
+      return <Terms />
+    }
+
+    if (pathname === '/privacy') {
+      return <PrivacyPage />
+    }
+
+    if (pathname === '/refund-policy') {
+      return <RefundPolicy />
+    }
+
+    if (pathname === '/billing/success') {
+      return <BillingSuccess />
+    }
+
+    if (pathname === '/billing/cancel') {
+      return <BillingCancel />
+    }
+
+    if (pathname === '/checkout') {
+      return <Checkout />
+    }
+
+    if (!isAuthenticated && pathname === '/signup') {
+      return <SignupPage onAuthSuccess={onAuthSuccess} onGoToLogin={() => navigate('/login')} />
+    }
+
+    if (!isAuthenticated && pathname === '/login') {
+      return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
+    }
+
+    return (
+      <>
+        {currentPage === 'landing' && (
+          <LandingPage
+            onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
+            onViewPricing={() => navigate('/pricing')}
+            onViewDashboard={() => handleNavigate('dashboard', 'Please login to access your dashboard.')}
+            onViewAbout={() => handleNavigate('about')}
+            onViewDemo={() => handleNavigate('demo')}
+            onViewContact={() => handleNavigate('contact')}
+            onViewHelp={() => handleNavigate('help')}
+          />
+        )}
+
+
+        {currentPage === 'uploader' && (
+          <ResumeUploader onFileUploaded={handleFileUploaded} onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentPage === 'results' && (
+          <CandidateResults
+            candidates={uploadedFiles}
+            onBack={() => handleNavigate('uploader')}
+          />
+        )}
+
+        {currentPage === 'dashboard' && (
+          <OperationsDashboard onNavigate={handleNavigate} />
+        )}
+
+        {currentPage === 'settings' && (
+          <SettingsPage onBack={() => handleNavigate('dashboard')} />
+        )}
+
+        {currentPage === 'help' && (
+          <HelpPage onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentPage === 'about' && (
+          <AboutPage onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentPage === 'demo' && (
+          <DemoBookingPage onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentPage === 'contact' && (
+          <ContactPage onBack={() => handleNavigate('landing')} />
+        )}
+      </>
+    )
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
@@ -67,53 +158,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth }) {
           </>
         )}
       </div>
-      {currentPage === 'landing' && (
-        <LandingPage
-          onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
-          onViewPricing={() => navigate('/pricing')}
-          onViewDashboard={() => handleNavigate('dashboard', 'Please login to access your dashboard.')}
-          onViewAbout={() => handleNavigate('about')}
-          onViewDemo={() => handleNavigate('demo')}
-          onViewContact={() => handleNavigate('contact')}
-          onViewHelp={() => handleNavigate('help')}
-        />
-      )}
-
-
-      {currentPage === 'uploader' && (
-        <ResumeUploader onFileUploaded={handleFileUploaded} onBack={() => handleNavigate('landing')} />
-      )}
-
-      {currentPage === 'results' && (
-        <CandidateResults
-          candidates={uploadedFiles}
-          onBack={() => handleNavigate('uploader')}
-        />
-      )}
-
-      {currentPage === 'dashboard' && (
-        <OperationsDashboard onNavigate={handleNavigate} />
-      )}
-
-      {currentPage === 'settings' && (
-        <SettingsPage onBack={() => handleNavigate('dashboard')} />
-      )}
-
-      {currentPage === 'help' && (
-        <HelpPage onBack={() => handleNavigate('landing')} />
-      )}
-
-      {currentPage === 'about' && (
-        <AboutPage onBack={() => handleNavigate('landing')} />
-      )}
-
-      {currentPage === 'demo' && (
-        <DemoBookingPage onBack={() => handleNavigate('landing')} />
-      )}
-
-      {currentPage === 'contact' && (
-        <ContactPage onBack={() => handleNavigate('landing')} />
-      )}
+      {getPageContent()}
+      <PublicFooter />
     </div>
   )
 }
@@ -155,42 +201,14 @@ export default function App() {
     }
   }, [isAuthenticated, pathname])
 
-
-  if (pathname === '/pricing') {
-    return <Pricing />
-  }
-
-  if (pathname === '/terms') {
-    return <Terms />
-  }
-
-  if (pathname === '/privacy') {
-    return <PrivacyPage />
-  }
-
-  if (pathname === '/refund-policy') {
-    return <RefundPolicy />
-  }
-
-  if (pathname === '/billing/success') {
-    return <BillingSuccess />
-  }
-
-  if (pathname === '/billing/cancel') {
-    return <BillingCancel />
-  }
-
-  if (pathname === '/checkout') {
-    return <Checkout />
-  }
-
-  if (!isAuthenticated && pathname === '/signup') {
-    return <SignupPage onAuthSuccess={handleAuthSuccess} onGoToLogin={() => navigate('/login')} />
-  }
-
-  if (!isAuthenticated && pathname === '/login') {
-    return <LoginPage onAuthSuccess={handleAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
-  }
-
-  return <MainSite isAuthenticated={isAuthenticated} onLogout={logout} onRequireAuth={requireAuth} />
+  return (
+    <MainSite
+      isAuthenticated={isAuthenticated}
+      onLogout={logout}
+      onRequireAuth={requireAuth}
+      pathname={pathname}
+      onAuthSuccess={handleAuthSuccess}
+      authPrompt={authPrompt}
+    />
+  )
 }
