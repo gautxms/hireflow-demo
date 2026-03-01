@@ -85,7 +85,7 @@ async function logWebhookAudit(eventType, payload, isValidSignature, errorMessag
   )
 }
 
-router.post('/webhook', async (req, res) => {
+router.post('/', async (req, res) => {
   const rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : ''
 
   let payload

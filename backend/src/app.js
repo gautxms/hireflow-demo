@@ -3,6 +3,7 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import authRoutes from './routes/auth.js'
 import paddleWebhookRoutes from './routes/paddleWebhook.js'
+import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 
 const app = express()
@@ -13,7 +14,8 @@ app.use(cors({
   origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
   credentials: true,
 }))
-app.use('/api/paddle', express.raw({ type: 'application/json' }), paddleWebhookRoutes)
+
+app.use('/api/paddle/webhook', express.raw({ type: 'application/json' }), paddleWebhookRoutes)
 app.use(express.json())
 app.use(cookieParser())
 
@@ -22,6 +24,7 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/api/auth', authRoutes)
+app.use('/api/paddle', paddleCheckoutRoutes)
 
 app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ userId: req.userId })
