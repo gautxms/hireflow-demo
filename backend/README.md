@@ -22,6 +22,7 @@ Set the following environment variables:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `FRONTEND_ORIGIN`
+- `PADDLE_WEBHOOK_SECRET`
 
 Use start command:
 ```bash
@@ -29,3 +30,11 @@ node backend/src/index.js
 ```
 
 Render/Railway provide HTTPS at the edge; cookies are marked `secure` in production.
+
+
+## Paddle webhook
+
+- Endpoint: `POST /api/paddle/webhook`
+- Signature header: `Paddle-Signature` (`ts` + `h1` HMAC SHA256)
+- Processed events: `subscription_created`, `subscription_payment_succeeded`, `subscription_cancelled`
+- Every webhook payload is written to `paddle_webhook_audit`.
