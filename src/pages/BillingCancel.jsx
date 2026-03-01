@@ -19,7 +19,7 @@ export default function BillingCancel() {
         </p>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
           <button type="button" onClick={() => navigate('/pricing')} style={{ border: '1px solid var(--accent)', borderRadius: 8, background: 'transparent', color: 'var(--text)', padding: '0.75rem 1.2rem', fontWeight: 700, cursor: 'pointer' }}>
-            Back to Pricing
+            ← Back to Pricing
           </button>
           <button type="button" onClick={() => navigate('/')} style={{ border: 'none', borderRadius: 8, background: 'var(--accent)', color: 'var(--ink)', padding: '0.75rem 1.2rem', fontWeight: 700, cursor: 'pointer' }}>
             Return Home
