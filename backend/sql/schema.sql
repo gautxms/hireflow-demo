@@ -4,6 +4,11 @@ CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  email_verified BOOLEAN DEFAULT false,
+  email_verification_token TEXT,
+  email_verification_expires_at TIMESTAMP,
+  company TEXT,
+  phone TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
