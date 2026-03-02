@@ -271,9 +271,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY) || '')
+  const [token, setToken] = useState('')
+  const [isAuthInitialized, setIsAuthInitialized] = useState(false)
   const [pathname, setPathname] = useState(window.location.pathname)
   const [authPrompt, setAuthPrompt] = useState('')
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY) || ''
+    setToken(storedToken)
+    setIsAuthInitialized(true)
+  }, [])
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
@@ -306,6 +313,10 @@ export default function App() {
       navigate('/')
     }
   }, [isAuthenticated, pathname])
+
+  if (!isAuthInitialized) {
+    return null
+  }
 
   return (
     <MainSite
