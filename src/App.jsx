@@ -22,6 +22,10 @@ import PublicFooter from './components/PublicFooter'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 
+function getStoredToken() {
+  return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
+}
+
 function navigate(pathname) {
   if (window.location.pathname !== pathname) {
     window.history.pushState({}, '', pathname)
@@ -271,14 +275,27 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY) || '')
+  const [token, setToken] = useState('')
   const [pathname, setPathname] = useState(window.location.pathname)
   const [authPrompt, setAuthPrompt] = useState('')
 
   useEffect(() => {
+    setToken(getStoredToken())
+
     const onPopState = () => setPathname(window.location.pathname)
+    const onStorage = (event) => {
+      if (event.key === TOKEN_STORAGE_KEY) {
+        setToken(event.newValue || '')
+      }
+    }
+
     window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
+    window.addEventListener('storage', onStorage)
+
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+      window.removeEventListener('storage', onStorage)
+    }
   }, [])
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
