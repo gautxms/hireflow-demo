@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import LandingPage from './components/LandingPage'
 import Pricing from './pages/Pricing'
 import ResumeUploader from './components/ResumeUploader'
@@ -32,6 +32,8 @@ function navigate(pathname) {
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, authPrompt }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const profileMenuRef = useRef(null)
 
   const handleNavigate = (page, promptMessage = 'Please login or sign up to continue.') => {
     if (!isAuthenticated && PROTECTED_PAGES.has(page)) {
@@ -55,6 +57,32 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       setCurrentPage('landing')
     }
   }, [currentPage, isAuthenticated, onRequireAuth])
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return undefined
+    }
+
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isProfileMenuOpen])
 
   const getPageContent = () => {
     if (pathname === '/pricing') {
@@ -83,6 +111,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/checkout') {
       return <Checkout />
+    }
+
+    if (pathname === '/account') {
+      return (
+        <div style={{ padding: '2rem', maxWidth: 680, margin: '0 auto' }}>
+          <h1 style={{ marginBottom: '0.5rem' }}>Account</h1>
+          <p style={{ color: '#4b5563' }}>Account details are coming soon.</p>
+        </div>
+      )
     }
 
     if (!isAuthenticated && pathname === '/signup') {
@@ -150,7 +187,76 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
         {isAuthenticated ? (
-          <button onClick={onLogout}>Logout</button>
+          <div style={{ position: 'relative' }} ref={profileMenuRef}>
+            <button
+              onClick={() => setIsProfileMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={isProfileMenuOpen}
+              aria-label="Open user menu"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: '50%',
+                border: '1px solid #d1d5db',
+                background: '#111827',
+                color: '#fff',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              U
+            </button>
+
+            {isProfileMenuOpen && (
+              <div
+                role="menu"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  minWidth: 180,
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
+                  padding: 6,
+                  zIndex: 20,
+                }}
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false)
+                    navigate('/account')
+                  }}
+                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Account
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false)
+                    navigate('/pricing')
+                  }}
+                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Billing
+                </button>
+                <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false)
+                    onLogout()
+                  }}
+                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: '#b91c1c' }}
+                >
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           <>
             <button onClick={() => navigate('/login')}>Login</button>
