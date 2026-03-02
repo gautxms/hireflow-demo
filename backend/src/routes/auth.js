@@ -1,7 +1,9 @@
+import crypto from 'crypto'
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import { pool } from '../db/client.js'
 import { signToken } from '../utils/jwt.js'
+import { sendVerificationEmail } from '../utils/mailer.js'
 
 const router = Router()
 
@@ -32,6 +34,29 @@ function setAuthCookie(res, token) {
   })
 }
 
+function hashVerificationToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+function buildVerificationUrl(req, token) {
+  const configuredApiUrl = process.env.BACKEND_PUBLIC_URL
+  const baseUrl = configuredApiUrl || `${req.protocol}://${req.get('host')}`
+  const url = new URL('/api/auth/verify-email', baseUrl)
+  url.searchParams.set('token', token)
+  return url.toString()
+}
+
+function getVerificationSuccessUrl() {
+  const configuredSuccessUrl = process.env.EMAIL_VERIFICATION_SUCCESS_URL
+
+  if (configuredSuccessUrl) {
+    return configuredSuccessUrl
+  }
+
+  const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173'
+  return `${frontendOrigin}/verify-email/success`
+}
+
 router.post('/signup', authRateLimit, async (req, res) => {
   const { email, password } = req.body
 
@@ -40,18 +65,27 @@ router.post('/signup', authRateLimit, async (req, res) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase()
+  const verificationToken = crypto.randomBytes(32).toString('hex')
+  const verificationTokenHash = hashVerificationToken(verificationToken)
+  const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
   try {
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash)
-       VALUES ($1, crypt($2, gen_salt('bf', 10)))
+      `INSERT INTO users (email, password_hash, email_verification_token, email_verification_expires_at)
+       VALUES ($1, crypt($2, gen_salt('bf', 10)), $3, $4)
        RETURNING id, email, created_at`,
-      [normalizedEmail, password],
+      [normalizedEmail, password, verificationTokenHash, verificationExpiresAt],
     )
 
     const user = result.rows[0]
     const token = signToken(user.id)
     setAuthCookie(res, token)
+
+    const verificationUrl = buildVerificationUrl(req, verificationToken)
+    await sendVerificationEmail({
+      to: user.email,
+      verificationUrl,
+    })
 
     return res.status(201).json({
       token,
@@ -66,6 +100,37 @@ router.post('/signup', authRateLimit, async (req, res) => {
       return res.status(409).json({ error: 'Email already exists' })
     }
 
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.get('/verify-email', async (req, res) => {
+  const token = req.query.token
+
+  if (typeof token !== 'string' || token.length === 0) {
+    return res.status(400).json({ error: 'Invalid token' })
+  }
+
+  const verificationTokenHash = hashVerificationToken(token)
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET email_verified = true,
+           email_verification_token = NULL,
+           email_verification_expires_at = NULL
+       WHERE email_verification_token = $1
+         AND email_verification_expires_at > NOW()
+       RETURNING id`,
+      [verificationTokenHash],
+    )
+
+    if (!result.rows[0]) {
+      return res.status(400).json({ error: 'Invalid or expired token' })
+    }
+
+    return res.redirect(getVerificationSuccessUrl())
+  } catch {
     return res.status(500).json({ error: 'Internal server error' })
   }
 })
