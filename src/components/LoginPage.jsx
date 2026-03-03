@@ -35,7 +35,12 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }
       const payload = await parseResponsePayload(response)
 
       if (!response.ok) {
-        setError(payload?.error || `Login failed (${response.status})`)
+        const serverError = (payload?.error || '').toLowerCase()
+        if (serverError.includes('verify') && serverError.includes('email')) {
+          setError('Please verify your email before logging in')
+        } else {
+          setError(payload?.error || `Login failed (${response.status})`)
+        }
         return
       }
 
