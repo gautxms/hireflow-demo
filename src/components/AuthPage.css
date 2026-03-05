@@ -100,6 +100,32 @@
   box-shadow: 0 0 0 2px rgba(232,255,90,0.2);
 }
 
+.auth-input-with-action {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auth-input-with-action .auth-input {
+  flex: 1;
+}
+
+.auth-input-action {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15, 15, 26, 0.85);
+  color: var(--text);
+  padding: 0.72rem 0.8rem;
+  cursor: pointer;
+}
+
+.auth-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #cfcfda;
+  font-size: 0.9rem;
+}
+
 .auth-error {
   color: #ff8f8f;
   font-size: 0.92rem;
@@ -141,4 +167,3 @@
   color: var(--accent);
   font-size: 0.92rem;
 }
-

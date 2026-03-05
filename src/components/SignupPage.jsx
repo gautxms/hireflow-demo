@@ -12,15 +12,36 @@ async function parseResponsePayload(response) {
 
   return null
 }
-export default function SignupPage({ onAuthSuccess, onGoToLogin }) {
+export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
   const [email, setEmail] = useState('')
+  const [company, setCompany] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    if (!acceptedTerms) {
+      setError('You must agree to the Terms and Privacy Policy to continue')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -28,7 +49,7 @@ export default function SignupPage({ onAuthSuccess, onGoToLogin }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, company, phone }),
       })
 
       const payload = await parseResponsePayload(response)
@@ -38,12 +59,7 @@ export default function SignupPage({ onAuthSuccess, onGoToLogin }) {
         return
       }
 
-      if (!payload?.token) {
-        setError('Signup succeeded but token was missing from response')
-        return
-      }
-
-      onAuthSuccess(payload.token)
+      onSignupSuccess()
     } catch {
       setError('Unable to connect to auth server. Check backend URL / CORS settings.')
     } finally {
@@ -64,8 +80,27 @@ export default function SignupPage({ onAuthSuccess, onGoToLogin }) {
           <label className="auth-label" htmlFor="signup-email">Email</label>
           <input className="auth-input" id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
+          <label className="auth-label" htmlFor="signup-company">Company (optional)</label>
+          <input className="auth-input" id="signup-company" type="text" value={company} onChange={(e) => setCompany(e.target.value)} />
+
+          <label className="auth-label" htmlFor="signup-phone">Phone (optional)</label>
+          <input className="auth-input" id="signup-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+
           <label className="auth-label" htmlFor="signup-password">Password</label>
-          <input className="auth-input" id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+          <div className="auth-input-with-action">
+            <input className="auth-input" id="signup-password" type={isPasswordVisible ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+            <button className="auth-input-action" type="button" onClick={() => setIsPasswordVisible((visible) => !visible)}>
+              {isPasswordVisible ? 'Hide' : 'Show'}
+            </button>
+          </div>
+
+          <label className="auth-label" htmlFor="signup-confirm-password">Confirm password</label>
+          <input className="auth-input" id="signup-confirm-password" type={isPasswordVisible ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} />
+
+          <label className="auth-checkbox-row" htmlFor="signup-terms">
+            <input id="signup-terms" type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
+            <span>I agree to the Terms and Privacy Policy</span>
+          </label>
 
           {error && <p className="auth-error">{error}</p>}
 

@@ -11,6 +11,7 @@ import DemoBookingPage from './components/DemoBookingPage'
 import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
+import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
@@ -29,7 +30,7 @@ function navigate(pathname) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, authPrompt }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
@@ -123,11 +124,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (!isAuthenticated && pathname === '/signup') {
-      return <SignupPage onAuthSuccess={onAuthSuccess} onGoToLogin={() => navigate('/login')} />
+      return <SignupPage onSignupSuccess={onSignupSuccess} onGoToLogin={() => navigate('/login')} />
     }
 
     if (!isAuthenticated && pathname === '/login') {
       return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
+    }
+
+    if (!isAuthenticated && pathname === '/verify-email-info') {
+      return <VerifyEmailInfoPage onBackToLogin={() => navigate('/login')} />
     }
 
     return (
@@ -308,6 +313,11 @@ export default function App() {
     navigate('/login')
   }
 
+  const handleSignupSuccess = () => {
+    setAuthPrompt('')
+    navigate('/verify-email-info')
+  }
+
   useEffect(() => {
     if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
       navigate('/')
@@ -325,6 +335,7 @@ export default function App() {
       onRequireAuth={requireAuth}
       pathname={pathname}
       onAuthSuccess={handleAuthSuccess}
+      onSignupSuccess={handleSignupSuccess}
       authPrompt={authPrompt}
     />
   )
