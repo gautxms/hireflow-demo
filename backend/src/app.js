@@ -44,7 +44,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions))
 
-app.use('/api/paddle/webhook', express.raw({ type: 'application/json' }), paddleWebhookRoutes)
+app.use('/api/paddle/webhook', paddleWebhookRoutes)
 app.use(express.json())
 app.use(cookieParser())
 

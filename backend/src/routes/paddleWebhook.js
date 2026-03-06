@@ -1,8 +1,10 @@
 import crypto from 'crypto'
-import { Router } from 'express'
+import express from 'express'
 import { pool } from '../db/client.js'
 
-const router = Router()
+const router = express.Router()
+
+router.use(express.raw({ type: 'application/json' }))
 
 function parseSignatureHeader(headerValue) {
   if (!headerValue || typeof headerValue !== 'string') {
