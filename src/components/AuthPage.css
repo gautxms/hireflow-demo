@@ -85,6 +85,10 @@
   font-weight: 500;
 }
 
+.auth-required {
+  color: #ff8f8f;
+}
+
 .auth-input {
   border: 1px solid var(--border);
   border-radius: 10px;
