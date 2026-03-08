@@ -44,6 +44,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions))
 
+// Keep Paddle webhook ahead of JSON parsing so route-level raw body handling still works.
 app.use('/api/paddle/webhook', paddleWebhookRoutes)
 app.use(express.json())
 app.use(cookieParser())
