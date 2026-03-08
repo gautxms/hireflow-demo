@@ -82,10 +82,15 @@ router.post('/signup', authRateLimit, async (req, res) => {
     setAuthCookie(res, token)
 
     const verificationUrl = buildVerificationUrl(req, verificationToken)
-    await sendVerificationEmail({
-      to: user.email,
-      verificationUrl,
-    })
+
+    try {
+      await sendVerificationEmail({
+        to: user.email,
+        verificationUrl,
+      })
+    } catch (mailError) {
+      console.error('[AUTH] Failed to send verification email:', mailError)
+    }
 
     return res.status(201).json({
       token,
