@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 export default function ResumeUploader({ onFileUploaded, onBack }) {
+  const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -17,18 +18,17 @@ export default function ResumeUploader({ onFileUploaded, onBack }) {
   const handleDrop = (e) => {
     e.preventDefault()
     setIsDragging(false)
-    const files = Array.from(e.dataTransfer.files)
-    handleFiles(files)
+    handleFiles(Array.from(e.dataTransfer.files))
   }
 
-  const handleFileInput = (e) => {
-    const files = Array.from(e.target.files)
-    handleFiles(files)
+  const handleFileSelect = () => {
+    fileInputRef.current?.click()
   }
 
   const handleFiles = (files) => {
-    const pdfFiles = files.filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'))
-    setUploadedFiles(prev => [...prev, ...pdfFiles.map(f => ({ file: f, name: f.name, size: f.size }))])
+    const normalizedFiles = Array.isArray(files) ? files : Array.from(files.target.files || [])
+    const pdfFiles = normalizedFiles.filter((f) => f.type === 'application/pdf' || f.name.endsWith('.pdf'))
+    setUploadedFiles((prev) => [...prev, ...pdfFiles.map((f) => ({ file: f, name: f.name, size: f.size }))])
   }
 
   const handleAnalyze = () => {
@@ -98,29 +98,28 @@ export default function ResumeUploader({ onFileUploaded, onBack }) {
             or click to select files (PDF format)
           </p>
           <input
+            ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf"
-            onChange={handleFileInput}
+            accept=".pdf,.doc,.docx"
             style={{ display: 'none' }}
-            id="fileInput"
+            onChange={handleFiles}
           />
-          <label htmlFor="fileInput" style={{ cursor: 'pointer' }}>
-            <button
-              type="button"
-              style={{
-                background: 'var(--accent)',
-                color: 'var(--ink)',
-                border: 'none',
-                padding: '0.75rem 2rem',
-                borderRadius: '6px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}
-            >
-              Select Files
-            </button>
-          </label>
+          <button
+            type="button"
+            onClick={handleFileSelect}
+            style={{
+              background: 'var(--accent)',
+              color: 'var(--ink)',
+              border: 'none',
+              padding: '0.75rem 2rem',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            Select Files
+          </button>
         </div>
 
         {/* Uploaded Files List */}
