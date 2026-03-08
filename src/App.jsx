@@ -27,9 +27,9 @@ function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
 
-function navigate(pathname) {
+function navigate(pathname, options = {}) {
   if (window.location.pathname !== pathname) {
-    window.history.pushState({}, '', pathname)
+    window.history.pushState(options.state ?? {}, '', pathname)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }
@@ -52,6 +52,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const handleFileUploaded = (files) => {
     setUploadedFiles(files)
+    navigate('/results', { state: { results: files } })
     handleNavigate('results')
   }
 
