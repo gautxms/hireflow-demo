@@ -77,29 +77,35 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
         <p className="auth-subtitle">Start ranking resumes in minutes.</p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
-          <label className="auth-label" htmlFor="signup-email">Email</label>
+          <label className="auth-label" htmlFor="signup-email">Email <span className="auth-required">*</span></label>
           <input className="auth-input" id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
-          <label className="auth-label" htmlFor="signup-company">Company (optional)</label>
+          <label className="auth-label" htmlFor="signup-company">Company</label>
           <input className="auth-input" id="signup-company" type="text" value={company} onChange={(e) => setCompany(e.target.value)} />
 
-          <label className="auth-label" htmlFor="signup-phone">Phone (optional)</label>
+          <label className="auth-label" htmlFor="signup-phone">Phone</label>
           <input className="auth-input" id="signup-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
 
-          <label className="auth-label" htmlFor="signup-password">Password</label>
+          <label className="auth-label" htmlFor="signup-password">Password <span className="auth-required">*</span></label>
           <div className="auth-input-with-action">
             <input className="auth-input" id="signup-password" type={isPasswordVisible ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-            <button className="auth-input-action" type="button" onClick={() => setIsPasswordVisible((visible) => !visible)}>
-              {isPasswordVisible ? 'Hide' : 'Show'}
+            <button
+              className="auth-input-action"
+              type="button"
+              aria-label={isPasswordVisible ? 'Hide password fields' : 'Show password fields'}
+              title={isPasswordVisible ? 'Hide password fields' : 'Show password fields'}
+              onClick={() => setIsPasswordVisible((visible) => !visible)}
+            >
+              👁
             </button>
           </div>
 
-          <label className="auth-label" htmlFor="signup-confirm-password">Confirm password</label>
+          <label className="auth-label" htmlFor="signup-confirm-password">Confirm password <span className="auth-required">*</span></label>
           <input className="auth-input" id="signup-confirm-password" type={isPasswordVisible ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} />
 
           <label className="auth-checkbox-row" htmlFor="signup-terms">
             <input id="signup-terms" type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
-            <span>I agree to the Terms and Privacy Policy</span>
+            <span>I agree to the <a className="auth-link" href="/terms">Terms</a> and <a className="auth-link" href="/privacy">Privacy Policy</a></span>
           </label>
 
           {error && <p className="auth-error">{error}</p>}
