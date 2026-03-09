@@ -112,7 +112,7 @@ router.post('/', async (req, res) => {
     payload = { rawBody }
   }
 
-  const eventType = getWebhookEventType(payload)
+  const eventType = req.body?.event_type || getWebhookEventType(payload)
   const signatureHeader = req.get('Paddle-Signature')
   const isValidSignature = verifyPaddleSignature(
     rawBody,
