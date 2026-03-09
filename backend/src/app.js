@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.js'
 import paddleWebhookRoutes from './routes/paddleWebhook.js'
 import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
+import adminRoutes from './routes/admin.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 
 const app = express()
@@ -56,6 +57,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', paymentsRoutes)
+app.use('/api/admin', adminRoutes)
 
 app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ userId: req.userId })
