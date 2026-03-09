@@ -53,8 +53,22 @@ function getWebhookEventType(payload) {
   return payload?.event_type || payload?.eventType || payload?.alert_name || null
 }
 
+function getCustomerEmail(payload) {
+  return (
+    payload?.data?.customer?.email ||
+    payload?.data?.email ||
+    payload?.customer_email ||
+    payload?.email ||
+    null
+  )
+}
+
 function getSubscriptionId(payload) {
   return payload?.data?.id || payload?.subscription_id || payload?.subscription?.id || null
+}
+
+function getSubscriptionStatus(payload) {
+  return payload?.data?.status || payload?.status || null
 }
 
 function mapToSubscriptionStatus(eventType, payload) {
@@ -106,6 +120,8 @@ router.post('/', async (req, res) => {
     process.env.PADDLE_WEBHOOK_SECRET,
   )
 
+  console.log('[PADDLE EVENT]', eventType)
+
   console.log('[Paddle webhook] event received', {
     eventType,
     signatureValid: isValidSignature,
@@ -117,31 +133,83 @@ router.post('/', async (req, res) => {
     console.error('[Paddle webhook] failed to write audit log', error)
   }
 
-  if (!isValidSignature) {
-    return res.status(401).json({ error: 'Invalid webhook signature' })
-  }
-
-  const nextStatus = mapToSubscriptionStatus(eventType, payload)
-  const subscriptionId = getSubscriptionId(payload)
-
-  if (!nextStatus || !subscriptionId) {
-    return res.status(200).json({ received: true, ignored: true })
-  }
-
   try {
-    await pool.query(
-      `INSERT INTO subscriptions (paddle_subscription_id, status, latest_event_type, latest_event_payload)
-       VALUES ($1, $2, $3, $4::jsonb)
-       ON CONFLICT (paddle_subscription_id)
-       DO UPDATE SET
-         status = EXCLUDED.status,
-         latest_event_type = EXCLUDED.latest_event_type,
-         latest_event_payload = EXCLUDED.latest_event_payload,
-         updated_at = NOW()`,
-      [subscriptionId, nextStatus, eventType, JSON.stringify(payload)],
-    )
+    if (isValidSignature) {
+      const nextStatus = mapToSubscriptionStatus(eventType, payload)
+      const subscriptionId = getSubscriptionId(payload)
 
-    return res.status(200).json({ received: true })
+      if (nextStatus && subscriptionId) {
+        await pool.query(
+          `INSERT INTO subscriptions (paddle_subscription_id, status, latest_event_type, latest_event_payload)
+           VALUES ($1, $2, $3, $4::jsonb)
+           ON CONFLICT (paddle_subscription_id)
+           DO UPDATE SET
+             status = EXCLUDED.status,
+             latest_event_type = EXCLUDED.latest_event_type,
+             latest_event_payload = EXCLUDED.latest_event_payload,
+             updated_at = NOW()`,
+          [subscriptionId, nextStatus, eventType, JSON.stringify(payload)],
+        )
+      }
+
+      if (eventType === 'transaction.completed') {
+        const email = getCustomerEmail(payload)
+
+        if (email) {
+          await pool.query(
+            `UPDATE users
+             SET subscription_status = 'active', updated_at = NOW()
+             WHERE email = $1`,
+            [email],
+          )
+        }
+      }
+
+      if (eventType === 'subscription.created') {
+        const email = getCustomerEmail(payload)
+        const createdSubscriptionId = getSubscriptionId(payload)
+
+        if (email && createdSubscriptionId) {
+          await pool.query(
+            `UPDATE users
+             SET paddle_subscription_id = $1,
+                 subscription_status = COALESCE(subscription_status, 'active'),
+                 updated_at = NOW()
+             WHERE email = $2`,
+            [createdSubscriptionId, email],
+          )
+        }
+      }
+
+      if (eventType === 'subscription.updated') {
+        const updatedSubscriptionId = getSubscriptionId(payload)
+        const updatedStatus = getSubscriptionStatus(payload)
+
+        if (updatedSubscriptionId && updatedStatus) {
+          await pool.query(
+            `UPDATE users
+             SET subscription_status = $1, updated_at = NOW()
+             WHERE paddle_subscription_id = $2`,
+            [updatedStatus, updatedSubscriptionId],
+          )
+        }
+      }
+
+      if (eventType === 'subscription.canceled') {
+        const canceledSubscriptionId = getSubscriptionId(payload)
+
+        if (canceledSubscriptionId) {
+          await pool.query(
+            `UPDATE users
+             SET subscription_status = 'inactive', updated_at = NOW()
+             WHERE paddle_subscription_id = $1`,
+            [canceledSubscriptionId],
+          )
+        }
+      }
+    } else {
+      console.warn('[Paddle webhook] invalid signature')
+    }
   } catch (error) {
     console.error('[Paddle webhook] failed to update subscription state', error)
 
@@ -151,8 +219,9 @@ router.post('/', async (req, res) => {
       // noop
     }
 
-    return res.status(500).json({ error: 'Failed to process webhook' })
   }
+
+  return res.status(200).json({ received: true })
 })
 
 export default router
