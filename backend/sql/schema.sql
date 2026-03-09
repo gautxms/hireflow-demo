@@ -9,6 +9,9 @@ CREATE TABLE users (
   email_verification_expires_at TIMESTAMP,
   company TEXT,
   phone TEXT,
+  paddle_subscription_id TEXT,
+  subscription_status TEXT DEFAULT 'inactive',
+  subscription_started_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
