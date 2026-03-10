@@ -61,15 +61,21 @@ export default function Checkout() {
           }),
         })
 
+        const payload = await response.json()
+
         if (!response.ok) {
-          const payload = await response.json().catch(() => ({}))
           throw new Error(payload.error || 'Checkout payload failed')
         }
 
+        if (!payload.checkoutUrl) {
+          throw new Error('No checkout URL received from server')
+        }
+
         setStatus('success')
+        window.location.assign(payload.checkoutUrl)
       } catch (error) {
         setStatus('error')
-        setErrorMessage(error.message || 'Unable to send checkout payload')
+        setErrorMessage(error.message || 'Unable to start checkout')
       }
     }
 
