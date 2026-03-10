@@ -153,15 +153,25 @@ router.post('/', async (req, res) => {
       }
 
       if (eventType === 'transaction.completed') {
+        const userId = payload?.data?.custom_data?.userId
         const email = getCustomerEmail(payload)
 
-        if (email) {
+        if (userId) {
+          await pool.query(
+            `UPDATE users
+             SET subscription_status = 'active', updated_at = NOW()
+             WHERE id = $1`,
+            [userId],
+          )
+          console.log('[PADDLE] Activated subscription for user:', userId)
+        } else if (email) {
           await pool.query(
             `UPDATE users
              SET subscription_status = 'active', updated_at = NOW()
              WHERE email = $1`,
             [email],
           )
+          console.log('[PADDLE] Activated subscription for email:', email)
         }
       }
 
