@@ -76,63 +76,80 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        // Pass subscription error message without triggering fallback
+        if (response.status === 403) {
+          throw new Error(errorData.message || errorData.error || 'Subscription required. Please upgrade to continue.')
+        }
         throw new Error(errorData.error || `Upload failed (${response.status})`)
       }
 
       const results = await response.json()
-      onFileUploaded(results.candidates)
+      if (results.candidates && results.candidates.length > 0) {
+        onFileUploaded(results.candidates)
+      } else {
+        throw new Error('No candidates returned from server')
+      }
     } catch (err) {
       console.error('Upload error:', err)
-      setError(err.message || 'Unable to analyze resumes. Using demo data instead.')
       setIsAnalyzing(false)
       
-      // Fallback to mock data for demo
-      setTimeout(() => {
-        const mockCandidates = [
-          {
-            id: '1',
-            name: 'Sarah Chen',
-            position: 'Senior Engineer',
-            experience: '5 years',
-            education: 'BS Computer Science, Stanford',
-            score: 92,
-            tier: 'top',
-            fit: 'Excellent',
-            skills: ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'AWS'],
-            pros: ['Strong technical background', 'Leadership experience', 'Excellent communication'],
-            cons: ['May be overqualified'],
-          },
-          {
-            id: '2',
-            name: 'Marcus Johnson',
-            position: 'Full Stack Developer',
-            experience: '3 years',
-            education: 'BS Information Technology, MIT',
-            score: 78,
-            tier: 'strong',
-            fit: 'Strong',
-            skills: ['React', 'Node.js', 'MongoDB', 'AWS'],
-            pros: ['Quick learner', 'Team player', 'Good problem solver'],
-            cons: ['Limited leadership experience'],
-          },
-          {
-            id: '3',
-            name: 'Elena Rodriguez',
-            position: 'Backend Engineer',
-            experience: '2 years',
-            education: 'BS Computer Science, UC Berkeley',
-            score: 68,
-            tier: 'consider',
-            fit: 'Good',
-            skills: ['Node.js', 'Python', 'PostgreSQL', 'Docker'],
-            pros: ['Strong backend skills', 'Quick learner'],
-            cons: ['Less frontend experience', 'No AWS exposure'],
-          },
-        ]
+      const errorMessage = err.message || 'Unable to analyze resumes'
+      
+      // Check if error is subscription-related
+      if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive')) {
+        setError(errorMessage)
+      } else {
+        // For other errors, show message and fallback to mock data
+        setError(errorMessage + '. Using demo data instead.')
         
-        setError('')
-        onFileUploaded(mockCandidates)
-      }, 2000)
+        // Fallback to mock data for demo
+        setTimeout(() => {
+          const mockCandidates = [
+            {
+              id: '1',
+              name: 'Sarah Chen',
+              position: 'Senior Engineer',
+              experience: '5 years',
+              education: 'BS Computer Science, Stanford',
+              score: 92,
+              tier: 'top',
+              fit: 'Excellent',
+              skills: ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'AWS'],
+              pros: ['Strong technical background', 'Leadership experience', 'Excellent communication'],
+              cons: ['May be overqualified'],
+            },
+            {
+              id: '2',
+              name: 'Marcus Johnson',
+              position: 'Full Stack Developer',
+              experience: '3 years',
+              education: 'BS Information Technology, MIT',
+              score: 78,
+              tier: 'strong',
+              fit: 'Strong',
+              skills: ['React', 'Node.js', 'MongoDB', 'AWS'],
+              pros: ['Quick learner', 'Team player', 'Good problem solver'],
+              cons: ['Limited leadership experience'],
+            },
+            {
+              id: '3',
+              name: 'Elena Rodriguez',
+              position: 'Backend Engineer',
+              experience: '2 years',
+              education: 'BS Computer Science, UC Berkeley',
+              score: 68,
+              tier: 'consider',
+              fit: 'Good',
+              skills: ['Node.js', 'Python', 'PostgreSQL', 'Docker'],
+              pros: ['Strong backend skills', 'Quick learner'],
+              cons: ['Less frontend experience', 'No AWS exposure'],
+            },
+          ]
+          
+          setError('')
+          onFileUploaded(mockCandidates)
+        }, 2000)
+      }
     }
   }
 
