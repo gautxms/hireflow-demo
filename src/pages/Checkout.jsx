@@ -8,7 +8,18 @@ function navigate(pathname) {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
+const DEFAULT_PROD_API_BASE_URL = 'https://hireflow-backend-production.up.railway.app'
+
+function resolveApiBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+
+  return import.meta.env.PROD ? DEFAULT_PROD_API_BASE_URL : DEFAULT_DEV_API_BASE_URL
+}
+
+const API_BASE_URL = resolveApiBaseUrl()
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
 const PLAN_DETAILS = {
