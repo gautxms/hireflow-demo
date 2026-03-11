@@ -112,12 +112,17 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
   )
 }
 
-export default function Pricing() {
+export default function Pricing({ isAuthenticated, onRequireAuth }) {
   usePageSeo('HireFlow Pricing', 'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.')
 
   const [selectedBilling, setSelectedBilling] = useState('annual')
 
   const startCheckout = (plan) => {
+    if (!isAuthenticated) {
+      onRequireAuth('Please log in or sign up to purchase a plan.')
+      return
+    }
+
     navigate(`/checkout?plan=${plan}`)
   }
 

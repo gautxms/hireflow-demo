@@ -50,9 +50,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setCurrentPage(page)
   }
 
-  const handleFileUploaded = (files) => {
-    setUploadedFiles(files)
-    navigate('/results', { state: { results: files } })
+  const handleFileUploaded = (candidateResults) => {
+    setUploadedFiles(candidateResults)
     handleNavigate('results')
   }
 
@@ -92,7 +91,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const getPageContent = () => {
     if (pathname === '/pricing') {
-      return <Pricing />
+      return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
     if (pathname === '/terms') {
