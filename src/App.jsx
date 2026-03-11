@@ -27,6 +27,10 @@ function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
 
+function getStoredSubscriptionStatus() {
+  return localStorage.getItem('subscription_status') || 'inactive'
+}
+
 function navigate(pathname, options = {}) {
   if (window.location.pathname !== pathname) {
     window.history.pushState(options.state ?? {}, '', pathname)
@@ -34,7 +38,7 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
@@ -45,6 +49,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       onRequireAuth(promptMessage)
       setCurrentPage('landing')
       return
+    }
+
+    if (page === 'uploader' && isAuthenticated) {
+      const storedSubscriptionStatus = getStoredSubscriptionStatus()
+      if (storedSubscriptionStatus !== 'active' && storedSubscriptionStatus !== 'trialing') {
+        navigate('/pricing?reason=upgrade_required')
+        return
+      }
     }
 
     setCurrentPage(page)
@@ -160,6 +172,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             onBack={() => handleNavigate('landing')}
             isAuthenticated={isAuthenticated}
             onRequireAuth={onRequireAuth}
+            subscriptionStatus={subscriptionStatus}
           />
         )}
 
@@ -293,6 +306,7 @@ export default function App() {
   const [isAuthInitialized, setIsAuthInitialized] = useState(false)
   const [pathname, setPathname] = useState(window.location.pathname)
   const [authPrompt, setAuthPrompt] = useState('')
+  const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
 
   useEffect(() => {
     setToken(getStoredToken())
@@ -308,6 +322,10 @@ export default function App() {
       if (event.key === TOKEN_STORAGE_KEY) {
         setToken(event.newValue || '')
       }
+
+      if (event.key === 'subscription_status') {
+        setSubscriptionStatus(event.newValue || 'inactive')
+      }
     }
 
     window.addEventListener('popstate', onPopState)
@@ -321,16 +339,21 @@ export default function App() {
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
-  const handleAuthSuccess = (newToken) => {
+  const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive') => {
+    const normalizedSubscriptionStatus = nextSubscriptionStatus || 'inactive'
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
+    localStorage.setItem('subscription_status', normalizedSubscriptionStatus)
     setToken(newToken)
+    setSubscriptionStatus(normalizedSubscriptionStatus)
     setAuthPrompt('')
     navigate('/')
   }
 
   const logout = async () => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
+    localStorage.removeItem('subscription_status')
     setToken('')
+    setSubscriptionStatus('inactive')
     navigate('/login')
   }
 
@@ -363,6 +386,7 @@ export default function App() {
       onAuthSuccess={handleAuthSuccess}
       onSignupSuccess={handleSignupSuccess}
       authPrompt={authPrompt}
+      subscriptionStatus={subscriptionStatus}
     />
   )
 }

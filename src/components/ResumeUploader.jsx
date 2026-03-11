@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
-export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth }) {
+export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus }) {
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
@@ -188,6 +188,21 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       {/* Upload Area */}
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        {subscriptionStatus === 'trialing' && (
+          <div
+            style={{
+              background: 'rgba(251, 191, 36, 0.1)',
+              border: '1px solid #fbbf24',
+              color: '#f59e0b',
+              padding: '1rem',
+              borderRadius: '8px',
+              marginBottom: '1.5rem',
+              textAlign: 'center',
+            }}
+          >
+            <strong>Your 7-day trial is active.</strong> After this period, upgrade your plan to continue screening resumes.
+          </div>
+        )}
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
