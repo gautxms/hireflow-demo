@@ -20,8 +20,8 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
   const { plan } = req.body || {}
 
   console.log('[Paddle Checkout] Request received:', {
+    plan,
     userId: req.userId,
-    plan: req.body.plan,
     timestamp: new Date().toISOString(),
     apiKeyExists: !!process.env.PADDLE_API_KEY,
     priceIds: {
@@ -31,16 +31,23 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
   })
 
   if (plan !== 'monthly' && plan !== 'annual') {
+    console.error('[Paddle Checkout] Invalid plan:', plan)
     return res.status(400).json({ error: 'Plan must be monthly or annual' })
   }
 
   if (!process.env.PADDLE_API_KEY) {
+    console.error('[Paddle Checkout] PADDLE_API_KEY not configured')
     return res.status(500).json({ error: 'PADDLE_API_KEY is not configured' })
   }
 
   const priceId = PRICE_IDS_BY_PLAN[plan]
 
   if (!priceId) {
+    console.error('[Paddle Checkout] Missing price ID for plan:', {
+      plan,
+      monthlyId: PRICE_IDS_BY_PLAN.monthly || 'NOT SET',
+      annualId: PRICE_IDS_BY_PLAN.annual || 'NOT SET',
+    })
     return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
   }
 
@@ -60,7 +67,6 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
       endpoint: `${PADDLE_API_BASE_URL}/transactions`,
       priceId,
       userEmail: user.email,
-      appOrigin,
     })
 
     const paddleResponse = await fetch(`${PADDLE_API_BASE_URL}/transactions`, {
@@ -91,15 +97,14 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
       }),
     })
 
-    console.log('[Paddle Checkout] Paddle API response:', paddleResponse.status)
+    console.log('[Paddle Checkout] Paddle API response status:', paddleResponse.status)
 
     const paddlePayload = await paddleResponse.json()
 
     if (!paddleResponse.ok) {
       console.error('[Paddle checkout] failed to create transaction:', {
         status: paddleResponse.status,
-        error: paddlePayload?.error,
-        details: paddlePayload,
+        payload: paddlePayload,
       })
       return res.status(502).json({ error: 'Failed to create Paddle checkout URL', details: paddlePayload })
     }
@@ -107,29 +112,24 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
     const checkoutUrl = paddlePayload?.data?.checkout?.url
 
     if (!checkoutUrl) {
-      console.error('[Paddle checkout] missing checkout URL in response:', {
-        dataExists: !!paddlePayload?.data,
-        checkoutExists: !!paddlePayload?.data?.checkout,
-        fullPayload: paddlePayload,
-      })
+      console.error('[Paddle checkout] missing checkout URL in response:', paddlePayload)
       return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
     }
 
-    console.log('[Paddle Checkout] Success - returning checkout URL')
+    console.log('[Paddle Checkout] Success, returning URL')
     return res.json({ checkoutUrl })
   } catch (error) {
     console.error('[Paddle Checkout] Error:', {
       message: error.message,
       code: error.code || 'UNKNOWN',
       status: error.status || 'UNKNOWN',
-      fullError: JSON.stringify(error),
+      stack: error.stack,
     })
 
     return res.status(500).json({
       error: 'Failed to create checkout',
       message: error.message,
       code: error.code,
-      debug: process.env.NODE_ENV === 'development' ? error : undefined,
     })
   }
 })
