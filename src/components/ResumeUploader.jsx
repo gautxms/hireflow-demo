@@ -52,6 +52,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
   const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
+    
     setIsAnalyzing(true)
     setError('')
 
@@ -62,6 +63,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       })
 
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+      
+      if (!token) {
+        throw new Error('Authentication required. Please log in first.')
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/uploads`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -70,14 +76,15 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Upload failed')
+        throw new Error(errorData.error || `Upload failed (${response.status})`)
       }
 
       const results = await response.json()
       onFileUploaded(results.candidates)
     } catch (err) {
       console.error('Upload error:', err)
-      setError(err.message || 'Unable to analyze resumes')
+      setError(err.message || 'Unable to analyze resumes. Using demo data instead.')
+      setIsAnalyzing(false)
       
       // Fallback to mock data for demo
       setTimeout(() => {
@@ -123,12 +130,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           },
         ]
         
-        setIsAnalyzing(false)
         setError('')
         onFileUploaded(mockCandidates)
       }, 2000)
-    } finally {
-      setIsAnalyzing(false)
     }
   }
 
