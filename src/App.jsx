@@ -92,7 +92,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const getPageContent = () => {
     if (pathname === '/pricing') {
-      return <Pricing />
+      return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
     if (pathname === '/terms') {
