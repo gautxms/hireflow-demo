@@ -1,84 +1,33 @@
-import express from 'express'
-import multer from 'multer'
-import { requireAuth } from '../middleware/authMiddleware.js'
+import { Router } from 'express'
 import { pool } from '../db/client.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 
-const router = express.Router()
-const upload = multer({
-  dest: 'uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-})
+const router = Router()
 
-router.post('/', requireAuth, upload.array('resumes', 20), async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'No files uploaded' })
+    const userResult = await pool.query(
+      'SELECT subscription_status FROM users WHERE id = $1',
+      [req.userId]
+    )
+
+    const user = userResult.rows[0]
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
     }
 
-    // TODO: For now, return mock data
-    // Later: Parse PDFs, extract text, call AI API
-    const mockCandidates = [
-      {
-        id: '1',
-        name: 'Sarah Chen',
-        position: 'Senior Engineer',
-        experience: '5 years',
-        education: 'BS Computer Science, Stanford',
-        score: 92,
-        tier: 'top',
-        fit: 'Excellent',
-        skills: ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'AWS'],
-        pros: ['Strong technical background', 'Leadership experience', 'Excellent communication'],
-        cons: ['May be overqualified'],
-      },
-      {
-        id: '2',
-        name: 'Miguel Alvarez',
-        position: 'Full Stack Developer',
-        experience: '4 years',
-        education: 'BS Software Engineering, UT Austin',
-        score: 86,
-        tier: 'strong',
-        fit: 'Strong',
-        skills: ['Vue', 'Node.js', 'JavaScript', 'MongoDB', 'Docker'],
-        pros: ['Versatile across frontend and backend', 'Solid product sense', 'Strong collaboration'],
-        cons: ['Limited large-scale system design experience'],
-      },
-      {
-        id: '3',
-        name: 'Priya Natarajan',
-        position: 'Backend Engineer',
-        experience: '6 years',
-        education: 'MS Computer Science, Georgia Tech',
-        score: 89,
-        tier: 'top',
-        fit: 'Excellent',
-        skills: ['Python', 'Node.js', 'PostgreSQL', 'Redis', 'Kubernetes'],
-        pros: ['Deep backend architecture experience', 'Strong database optimization skills', 'Mentors junior engineers'],
-        cons: ['Less recent frontend exposure'],
-      },
-      {
-        id: '4',
-        name: 'Jordan Kim',
-        position: 'Software Engineer',
-        experience: '3 years',
-        education: 'BS Information Systems, UC Irvine',
-        score: 81,
-        tier: 'good',
-        fit: 'Good',
-        skills: ['React', 'TypeScript', 'Express', 'MySQL', 'GCP'],
-        pros: ['Fast learner', 'Strong testing discipline', 'Reliable delivery'],
-        cons: ['Needs more leadership experience'],
-      },
-    ]
+    if (user.subscription_status !== 'active') {
+      return res.status(403).json({
+        error: 'Subscription required',
+        message: 'Your trial has expired or subscription is inactive. Please upgrade to continue.',
+      })
+    }
 
-    // Keep reference to pool for future DB persistence integration
-    void pool
-
-    res.json({ candidates: mockCandidates })
+    return res.status(200).json({ ok: true })
   } catch (error) {
-    console.error('Upload error:', error)
-    res.status(500).json({ error: 'Upload processing failed' })
+    console.error('[Uploads] failed subscription check', error)
+    return res.status(500).json({ error: 'Unable to process upload request' })
   }
 })
 
