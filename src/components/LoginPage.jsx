@@ -49,7 +49,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }
         return
       }
 
-      onAuthSuccess(payload.token)
+      onAuthSuccess(payload.token, payload?.user?.subscription_status || 'inactive')
     } catch {
       setError('Unable to connect to auth server. Check backend URL / CORS settings.')
     } finally {

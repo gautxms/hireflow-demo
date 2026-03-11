@@ -97,7 +97,7 @@ router.post('/signup', authRateLimit, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        createdAt: user.created_at,
+        subscription_status: 'trialing',
       },
     })
   } catch (error) {
@@ -151,7 +151,7 @@ router.post('/login', authRateLimit, async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, email, password_hash, created_at FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, created_at, subscription_status FROM users WHERE email = $1',
       [normalizedEmail],
     )
 
@@ -178,7 +178,7 @@ router.post('/login', authRateLimit, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        createdAt: user.created_at,
+        subscription_status: user.subscription_status,
       },
     })
   } catch {
