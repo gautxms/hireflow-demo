@@ -197,89 +197,93 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     )
   }
 
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info'
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
-        {isAuthenticated ? (
-          <div style={{ position: 'relative' }} ref={profileMenuRef}>
-            <button
-              onClick={() => setIsProfileMenuOpen((open) => !open)}
-              aria-haspopup="menu"
-              aria-expanded={isProfileMenuOpen}
-              aria-label="Open user menu"
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: '50%',
-                border: '1px solid #d1d5db',
-                background: '#111827',
-                color: '#fff',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              U
-            </button>
-
-            {isProfileMenuOpen && (
-              <div
-                role="menu"
+      {!isAuthPage && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
+          {isAuthenticated ? (
+            <div style={{ position: 'relative' }} ref={profileMenuRef}>
+              <button
+                onClick={() => setIsProfileMenuOpen((open) => !open)}
+                aria-haspopup="menu"
+                aria-expanded={isProfileMenuOpen}
+                aria-label="Open user menu"
                 style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 8px)',
-                  right: 0,
-                  minWidth: 180,
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
-                  padding: 6,
-                  zIndex: 20,
+                  width: 34,
+                  height: 34,
+                  borderRadius: '50%',
+                  border: '1px solid #d1d5db',
+                  background: '#111827',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
                 }}
               >
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setIsProfileMenuOpen(false)
-                    navigate('/account')
+                U
+              </button>
+
+              {isProfileMenuOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    minWidth: 180,
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
+                    padding: 6,
+                    zIndex: 20,
                   }}
-                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                 >
-                  Account
-                </button>
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setIsProfileMenuOpen(false)
-                    navigate('/pricing')
-                  }}
-                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
-                >
-                  Billing
-                </button>
-                <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setIsProfileMenuOpen(false)
-                    onLogout()
-                  }}
-                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: '#b91c1c' }}
-                >
-                  Log out
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <>
-            <button onClick={() => navigate('/login')}>Login</button>
-            <button onClick={() => navigate('/signup')}>Sign up</button>
-          </>
-        )}
-      </div>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false)
+                      navigate('/account')
+                    }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    Account
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false)
+                      navigate('/pricing')
+                    }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    Billing
+                  </button>
+                  <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false)
+                      onLogout()
+                    }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: '#b91c1c' }}
+                  >
+                    Log out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <button onClick={() => navigate('/login')}>Login</button>
+              <button onClick={() => navigate('/signup')}>Sign up</button>
+            </>
+          )}
+        </div>
+      )}
       {getPageContent()}
-      <PublicFooter />
+      {!isAuthPage && <PublicFooter />}
     </div>
   )
 }

@@ -3,6 +3,13 @@ import './AuthPage.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
+function navigate(pathname) {
+  if (window.location.pathname !== pathname) {
+    window.history.pushState({}, '', pathname)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+}
+
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
 
@@ -61,7 +68,25 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }
     <main className="auth-shell">
       <div className="auth-glow auth-glow--a" />
       <div className="auth-glow auth-glow--b" />
-      <section className="auth-panel">
+      <section className="auth-panel" style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          style={{
+            position: 'absolute',
+            top: '2rem',
+            left: '2rem',
+            background: 'transparent',
+            border: 'none',
+            color: 'rgba(255, 255, 255, 0.7)',
+            fontSize: '1rem',
+            cursor: 'pointer',
+            padding: '0.5rem 1rem',
+          }}
+          aria-label="Back to home"
+        >
+          ← Back to Home
+        </button>
         <p className="auth-brand">Hire<span>Flow</span></p>
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-subtitle">Sign in to continue screening candidates faster.</p>
