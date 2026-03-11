@@ -1,10 +1,25 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-export default function ResumeUploader({ onFileUploaded, onBack }) {
+export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth }) {
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+
+  const handleAuthRedirect = useCallback(() => {
+    onRequireAuth('Please sign up or log in to upload resumes.')
+    onBack()
+  }, [onBack, onRequireAuth])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      handleAuthRedirect()
+    }
+  }, [handleAuthRedirect, isAuthenticated])
+
+  if (!isAuthenticated) {
+    return null
+  }
 
   const handleDragOver = (e) => {
     e.preventDefault()
