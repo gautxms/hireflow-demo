@@ -156,7 +156,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
 
         {currentPage === 'uploader' && (
-          <ResumeUploader onFileUploaded={handleFileUploaded} onBack={() => handleNavigate('landing')} />
+          <ResumeUploader
+            onFileUploaded={handleFileUploaded}
+            onBack={() => handleNavigate('landing')}
+            isAuthenticated={isAuthenticated}
+            onRequireAuth={onRequireAuth}
+          />
         )}
 
         {currentPage === 'results' && (
