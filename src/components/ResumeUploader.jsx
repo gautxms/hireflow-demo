@@ -1,10 +1,14 @@
 import { useRef, useState } from 'react'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+
 export default function ResumeUploader({ onFileUploaded, onBack }) {
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [error, setError] = useState('')
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -31,13 +35,73 @@ export default function ResumeUploader({ onFileUploaded, onBack }) {
     setUploadedFiles((prev) => [...prev, ...pdfFiles.map((f) => ({ file: f, name: f.name, size: f.size }))])
   }
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
+    
     setIsAnalyzing(true)
-    setTimeout(() => {
+    setError('')
+
+    try {
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+
+      if (!token) {
+        setError('Please log in before uploading resumes.')
+        setIsAnalyzing(false)
+        return
+      }
+
+      // For now, simulate analysis with mock data
+      // Later: Send to backend with: POST /api/uploads
+      setTimeout(() => {
+        const mockCandidates = [
+          {
+            id: '1',
+            name: 'Sarah Chen',
+            position: 'Senior Engineer',
+            experience: '5 years',
+            education: 'BS Computer Science, Stanford',
+            score: 92,
+            tier: 'top',
+            fit: 'Excellent',
+            skills: ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'AWS'],
+            pros: ['Strong technical background', 'Leadership experience', 'Excellent communication'],
+            cons: ['May be overqualified'],
+          },
+          {
+            id: '2',
+            name: 'Marcus Johnson',
+            position: 'Full Stack Developer',
+            experience: '3 years',
+            education: 'BS Information Technology, MIT',
+            score: 78,
+            tier: 'strong',
+            fit: 'Strong',
+            skills: ['React', 'Node.js', 'MongoDB', 'AWS'],
+            pros: ['Quick learner', 'Team player', 'Good problem solver'],
+            cons: ['Limited leadership experience'],
+          },
+          {
+            id: '3',
+            name: 'Elena Rodriguez',
+            position: 'Backend Engineer',
+            experience: '2 years',
+            education: 'BS Computer Science, UC Berkeley',
+            score: 68,
+            tier: 'consider',
+            fit: 'Good',
+            skills: ['Node.js', 'Python', 'PostgreSQL', 'Docker'],
+            pros: ['Strong backend skills', 'Quick learner'],
+            cons: ['Less frontend experience', 'No AWS exposure'],
+          },
+        ]
+        
+        setIsAnalyzing(false)
+        onFileUploaded(mockCandidates)
+      }, 2000)
+    } catch (err) {
+      setError(err.message || 'Unable to analyze resumes')
       setIsAnalyzing(false)
-      onFileUploaded(uploadedFiles)
-    }, 2000)
+    }
   }
 
   const removeFile = (index) => {
@@ -168,6 +232,21 @@ export default function ResumeUploader({ onFileUploaded, onBack }) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid #ef4444',
+            color: '#ef4444',
+            padding: '1rem',
+            borderRadius: '8px',
+            marginBottom: '1.5rem',
+            textAlign: 'center'
+          }}>
+            {error}
           </div>
         )}
 
