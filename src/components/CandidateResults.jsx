@@ -1,16 +1,10 @@
 import { useState } from 'react'
-import { useLocation } from '../hooks/useLocation'
 
 export default function CandidateResults({ candidates, onBack }) {
   const [sortBy, setSortBy] = useState('score') // 'score', 'name', 'fit'
   const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
 
-  const location = useLocation()
-  const results = location.state?.results
-
-  const displayCandidates = (results && results.length > 0)
-    ? results
-    : (candidates && candidates.length > 0 ? candidates : null)
+  const displayCandidates = candidates && candidates.length > 0 ? candidates : null
 
   const hasRenderableCandidates = Array.isArray(displayCandidates)
     && displayCandidates.length > 0

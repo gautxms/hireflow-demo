@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+
 export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth }) {
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -46,13 +49,34 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setUploadedFiles((prev) => [...prev, ...pdfFiles.map((f) => ({ file: f, name: f.name, size: f.size }))])
   }
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
     setIsAnalyzing(true)
-    setTimeout(() => {
+
+    try {
+      const formData = new FormData()
+      uploadedFiles.forEach((f) => {
+        formData.append('resumes', f.file)
+      })
+
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+      const response = await fetch(`${API_BASE_URL}/api/uploads`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Upload failed')
+      }
+
+      const results = await response.json()
+      onFileUploaded(results.candidates)
+    } catch (error) {
+      console.error('Upload error:', error)
+    } finally {
       setIsAnalyzing(false)
-      onFileUploaded(uploadedFiles)
-    }, 2000)
+    }
   }
 
   const removeFile = (index) => {
