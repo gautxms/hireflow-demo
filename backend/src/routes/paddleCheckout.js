@@ -19,6 +19,17 @@ function getAppOrigin(req) {
 router.post('/checkout-url', requireAuth, async (req, res) => {
   const { plan } = req.body || {}
 
+  console.log('[Paddle Checkout] Request received:', {
+    userId: req.userId,
+    plan: req.body.plan,
+    timestamp: new Date().toISOString(),
+    apiKeyExists: !!process.env.PADDLE_API_KEY,
+    priceIds: {
+      monthly: process.env.PADDLE_MONTHLY_PRICE_ID || 'MISSING',
+      annual: process.env.PADDLE_ANNUAL_PRICE_ID || 'MISSING',
+    },
+  })
+
   if (plan !== 'monthly' && plan !== 'annual') {
     return res.status(400).json({ error: 'Plan must be monthly or annual' })
   }
@@ -89,8 +100,19 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
 
     return res.json({ checkoutUrl })
   } catch (error) {
-    console.error('[Paddle checkout] unexpected error', error)
-    return res.status(500).json({ error: 'Unable to generate checkout URL' })
+    console.error('[Paddle Checkout] Error:', {
+      message: error.message,
+      code: error.code || 'UNKNOWN',
+      status: error.status || 'UNKNOWN',
+      fullError: JSON.stringify(error),
+    })
+
+    return res.status(500).json({
+      error: 'Failed to create checkout',
+      message: error.message,
+      code: error.code,
+      debug: process.env.NODE_ENV === 'development' ? error : undefined,
+    })
   }
 })
 
