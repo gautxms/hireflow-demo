@@ -61,6 +61,13 @@ export default function Checkout() {
       }
 
       try {
+        console.log('[Checkout] Starting checkout with:', {
+          apiUrl: API_BASE_URL,
+          endpoint: `${API_BASE_URL}/api/paddle/checkout-url`,
+          plan: selectedPlan,
+          tokenExists: !!token,
+        })
+
         const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
           method: 'POST',
           headers: {
@@ -72,19 +79,36 @@ export default function Checkout() {
           }),
         })
 
-        const payload = await response.json()
+        console.log('[Checkout] Fetch completed:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+        })
+
+        let payload
+        try {
+          payload = await response.json()
+          console.log('[Checkout] Response payload:', payload)
+        } catch (parseErr) {
+          console.error('[Checkout] Failed to parse JSON:', parseErr)
+          throw new Error(`Invalid response from server: ${response.statusText}`)
+        }
 
         if (!response.ok) {
-          throw new Error(payload.error || 'Checkout payload failed')
+          console.error('[Checkout] Response not OK:', { status: response.status, payload })
+          throw new Error(payload?.error || payload?.message || `Checkout failed (${response.status})`)
         }
 
         if (!payload.checkoutUrl) {
+          console.error('[Checkout] No checkoutUrl in payload:', payload)
           throw new Error('No checkout URL received from server')
         }
 
+        console.log('[Checkout] Got URL, redirecting to:', payload.checkoutUrl)
         setStatus('success')
         window.location.assign(payload.checkoutUrl)
       } catch (error) {
+        console.error('[Checkout] Error occurred:', error)
         setStatus('error')
         setErrorMessage(error.message || 'Unable to start checkout')
       }

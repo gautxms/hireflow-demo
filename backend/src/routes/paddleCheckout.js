@@ -56,6 +56,13 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
     const successUrl = `${appOrigin}/billing/success`
     const cancelUrl = `${appOrigin}/billing/cancel`
 
+    console.log('[Paddle Checkout] Calling Paddle API:', {
+      endpoint: `${PADDLE_API_BASE_URL}/transactions`,
+      priceId,
+      userEmail: user.email,
+      appOrigin,
+    })
+
     const paddleResponse = await fetch(`${PADDLE_API_BASE_URL}/transactions`, {
       method: 'POST',
       headers: {
@@ -84,20 +91,31 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
       }),
     })
 
+    console.log('[Paddle Checkout] Paddle API response:', paddleResponse.status)
+
     const paddlePayload = await paddleResponse.json()
 
     if (!paddleResponse.ok) {
-      console.error('[Paddle checkout] failed to create transaction', paddlePayload)
-      return res.status(502).json({ error: 'Failed to create Paddle checkout URL' })
+      console.error('[Paddle checkout] failed to create transaction:', {
+        status: paddleResponse.status,
+        error: paddlePayload?.error,
+        details: paddlePayload,
+      })
+      return res.status(502).json({ error: 'Failed to create Paddle checkout URL', details: paddlePayload })
     }
 
     const checkoutUrl = paddlePayload?.data?.checkout?.url
 
     if (!checkoutUrl) {
-      console.error('[Paddle checkout] missing checkout URL in response', paddlePayload)
-      return res.status(502).json({ error: 'Paddle checkout URL was missing in response' })
+      console.error('[Paddle checkout] missing checkout URL in response:', {
+        dataExists: !!paddlePayload?.data,
+        checkoutExists: !!paddlePayload?.data?.checkout,
+        fullPayload: paddlePayload,
+      })
+      return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
     }
 
+    console.log('[Paddle Checkout] Success - returning checkout URL')
     return res.json({ checkoutUrl })
   } catch (error) {
     console.error('[Paddle Checkout] Error:', {
