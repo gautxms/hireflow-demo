@@ -21,6 +21,7 @@ import Checkout from './pages/Checkout'
 import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 
 function getStoredToken() {
@@ -31,6 +32,20 @@ function getStoredSubscriptionStatus() {
   return localStorage.getItem('subscription_status') || 'inactive'
 }
 
+function getStoredUserProfile() {
+  const storedUserProfile = localStorage.getItem(USER_STORAGE_KEY)
+
+  if (!storedUserProfile) {
+    return null
+  }
+
+  try {
+    return JSON.parse(storedUserProfile)
+  } catch {
+    return null
+  }
+}
+
 function navigate(pathname, options = {}) {
   if (window.location.pathname !== pathname) {
     window.history.pushState(options.state ?? {}, '', pathname)
@@ -38,7 +53,7 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
@@ -210,12 +225,24 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     )
   }
 
+  const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
   const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info'
 
   return (
     <div>
-      {!isAuthPage && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', background: '#f9fafb' }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <a
+          href="/"
+          className="logo"
+          onClick={(event) => {
+            event.preventDefault()
+            navigate('/')
+          }}
+          style={{ color: '#fff', textDecoration: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '1.2rem', padding: 0, height: 'auto' }}
+        >
+          Hire<span style={{ color: 'var(--accent)' }}>Flow</span>
+        </a>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           {isAuthenticated ? (
             <div style={{ position: 'relative' }} ref={profileMenuRef}>
               <button
@@ -227,14 +254,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                   width: 34,
                   height: 34,
                   borderRadius: '50%',
-                  border: '1px solid #d1d5db',
+                  border: '1px solid rgba(255,255,255,0.2)',
                   background: '#111827',
                   color: '#fff',
                   fontWeight: 600,
                   cursor: 'pointer',
                 }}
               >
-                U
+                {profileInitial}
               </button>
 
               {isProfileMenuOpen && (
@@ -245,8 +272,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                     top: 'calc(100% + 8px)',
                     right: 0,
                     minWidth: 180,
-                    background: '#fff',
-                    border: '1px solid #e5e7eb',
+                    background: '#171723',
+                    border: '1px solid rgba(255,255,255,0.1)',
                     borderRadius: 8,
                     boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
                     padding: 6,
@@ -259,7 +286,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/account')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                   >
                     Account
                   </button>
@@ -269,11 +296,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/pricing')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                   >
                     Billing
                   </button>
-                  <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '6px 0' }} />
                   <button
                     role="menuitem"
                     onClick={() => {
@@ -289,12 +316,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             </div>
           ) : (
             <>
-              <button onClick={() => navigate('/login')}>Login</button>
-              <button onClick={() => navigate('/signup')}>Sign up</button>
+              <button onClick={() => navigate('/login')} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'transparent', color: '#fff', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>Login</button>
+              <button onClick={() => navigate('/signup')} style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontWeight: 600 }}>Sign up</button>
             </>
           )}
         </div>
-      )}
+      </header>
       {getPageContent()}
       {!isAuthPage && <PublicFooter />}
     </div>
@@ -307,6 +334,7 @@ export default function App() {
   const [pathname, setPathname] = useState(window.location.pathname)
   const [authPrompt, setAuthPrompt] = useState('')
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
+  const [userProfile, setUserProfile] = useState(getStoredUserProfile())
 
   useEffect(() => {
     setToken(getStoredToken())
@@ -321,6 +349,10 @@ export default function App() {
     const onStorage = (event) => {
       if (event.key === TOKEN_STORAGE_KEY) {
         setToken(event.newValue || '')
+      }
+
+      if (event.key === USER_STORAGE_KEY) {
+        setUserProfile(getStoredUserProfile())
       }
 
       if (event.key === 'subscription_status') {
@@ -339,12 +371,16 @@ export default function App() {
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
-  const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive') => {
+  const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive', nextUserProfile = null) => {
     const normalizedSubscriptionStatus = nextSubscriptionStatus || 'inactive'
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
     localStorage.setItem('subscription_status', normalizedSubscriptionStatus)
+    if (nextUserProfile) {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUserProfile))
+    }
     setToken(newToken)
     setSubscriptionStatus(normalizedSubscriptionStatus)
+    setUserProfile(nextUserProfile)
     setAuthPrompt('')
     navigate('/')
   }
@@ -352,8 +388,10 @@ export default function App() {
   const logout = async () => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     localStorage.removeItem('subscription_status')
+    localStorage.removeItem(USER_STORAGE_KEY)
     setToken('')
     setSubscriptionStatus('inactive')
+    setUserProfile(null)
     navigate('/login')
   }
 
@@ -387,6 +425,7 @@ export default function App() {
       onSignupSuccess={handleSignupSuccess}
       authPrompt={authPrompt}
       subscriptionStatus={subscriptionStatus}
+      userProfile={userProfile}
     />
   )
 }
