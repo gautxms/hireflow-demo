@@ -50,9 +50,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setCurrentPage(page)
   }
 
-  const handleFileUploaded = (files) => {
-    setUploadedFiles(files)
-    navigate('/results', { state: { results: files } })
+  const handleFileUploaded = (candidateResults) => {
+    setUploadedFiles(candidateResults)
     handleNavigate('results')
   }
 
