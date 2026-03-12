@@ -220,10 +220,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info'
-
   return (
-    <div>
+    <>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <a
           href="/"
@@ -312,9 +310,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           )}
         </div>
       </header>
-      {getPageContent()}
-      {!isAuthPage && <PublicFooter />}
-    </div>
+      <main>
+        {getPageContent()}
+      </main>
+      <PublicFooter />
+    </>
   )
 }
 
