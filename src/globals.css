@@ -254,3 +254,7 @@ footer {
   color: var(--muted);
   font-size: 0.875rem;
 }
+
+.page-content {
+  padding-top: 80px;
+}
