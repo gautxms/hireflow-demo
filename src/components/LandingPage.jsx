@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import '../globals.css'
 
-export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboard, onViewAbout, onViewDemo, onViewContact, onViewHelp }) {
+export default function LandingPage({ onStartDemo }) {
   useEffect(() => {
     // Smooth scroll and interactive effects
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -15,23 +15,6 @@ export default function LandingPage({ onStartDemo, onViewPricing, onViewDashboar
 
   return (
     <>
-      {/* Navigation */}
-      <nav>
-        <div className="nav-logo">
-          Hire<span>Flow</span>
-        </div>
-        <ul className="nav-links">
-          <li><a href="#features">Features</a></li>
-          <li><button onClick={onViewPricing} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '400', letterSpacing: '0.02em' }}>Pricing</button></li>
-          <li><button onClick={onViewAbout} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '400', letterSpacing: '0.02em' }}>About</button></li>
-          <li><button onClick={onViewHelp} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '400', letterSpacing: '0.02em' }}>Help</button></li>
-        </ul>
-        <div className="nav-cta">
-          <button className="btn-ghost" onClick={onViewContact}>Contact</button>
-          <button className="btn-primary" onClick={onStartDemo}>Get Started</button>
-        </div>
-      </nav>
-
       {/* Hero Section */}
       <section className="hero">
         <div className="orb-2"></div>
