@@ -9,11 +9,6 @@ function navigate(pathname) {
 }
 
 function goBack() {
-  if (window.history.length > 1) {
-    window.history.back()
-    return
-  }
-
   navigate('/')
 }
 
