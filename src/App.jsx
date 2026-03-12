@@ -220,6 +220,24 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info'
+  const handlePricingClick = () => navigate('/pricing')
+  const handleFeaturesClick = () => {
+    if (pathname !== '/') {
+      navigate('/')
+    }
+    setCurrentPage('landing')
+    window.setTimeout(() => {
+      document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
+    }, 0)
+  }
+  const handleHelpClick = () => {
+    if (pathname !== '/') {
+      navigate('/')
+    }
+    setCurrentPage('help')
+  }
+
   return (
     <>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -230,6 +248,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         >
           Hire<span style={{ color: 'var(--accent)' }}>Flow</span>
         </a>
+        <div className="nav-links" aria-label="Primary">
+          <button onClick={handlePricingClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Pricing</button>
+          <button onClick={handleFeaturesClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Features</button>
+          <button onClick={handleHelpClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Help</button>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           {isAuthenticated ? (
             <div style={{ position: 'relative' }} ref={profileMenuRef}>

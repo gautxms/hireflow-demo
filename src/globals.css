@@ -81,6 +81,20 @@ nav {
   color: var(--text);
 }
 
+.nav-links button {
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  transition: color 0.2s;
+  padding: 0;
+}
+
+.nav-links button:hover {
+  color: var(--text);
+}
+
 .nav-cta {
   display: flex;
   gap: 0.75rem;
