@@ -55,7 +55,7 @@ export default function HelpPage({ onBack }) {
   )
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <div className="page-content" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '3rem 2rem', textAlign: 'center' }}>
         <button
@@ -68,10 +68,7 @@ export default function HelpPage({ onBack }) {
             borderRadius: '4px',
             cursor: 'pointer',
             marginBottom: '1rem',
-            fontSize: '0.9rem',
-            position: 'absolute',
-            top: '2rem',
-            left: '2rem'
+            fontSize: '0.9rem'
           }}
         >
           ← Back
