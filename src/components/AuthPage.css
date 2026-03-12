@@ -1,6 +1,6 @@
 .auth-shell {
   min-height: 100vh;
-  padding: 2rem;
+  padding: 80px 2rem 2rem;
   background: var(--ink);
   position: relative;
   overflow: hidden;
@@ -42,12 +42,23 @@
   position: relative;
   z-index: 1;
   max-width: 440px;
-  margin: 7rem auto 0;
+  margin: 2rem auto 0;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(21, 21, 31, 0.95);
   padding: 2rem;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+
+.auth-back-button {
+  margin: 0 0 1rem;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
 }
 
 .auth-brand {

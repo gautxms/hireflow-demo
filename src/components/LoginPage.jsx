@@ -68,21 +68,11 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }
     <main className="auth-shell">
       <div className="auth-glow auth-glow--a" />
       <div className="auth-glow auth-glow--b" />
-      <section className="auth-panel" style={{ position: 'relative' }}>
+      <section className="auth-panel">
         <button
+          className="auth-back-button"
           type="button"
           onClick={() => navigate('/')}
-          style={{
-            position: 'absolute',
-            top: '2rem',
-            left: '2rem',
-            background: 'transparent',
-            border: 'none',
-            color: 'rgba(255, 255, 255, 0.7)',
-            fontSize: '1rem',
-            cursor: 'pointer',
-            padding: '0.5rem 1rem',
-          }}
           aria-label="Back to home"
         >
           ← Back to Home
