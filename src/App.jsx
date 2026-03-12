@@ -228,10 +228,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         <a
           href="/"
           className="logo"
-          onClick={(event) => {
-            event.preventDefault()
-            navigate('/')
-          }}
           style={{ color: '#fff', textDecoration: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '1.2rem', padding: 0, height: 'auto' }}
         >
           Hire<span style={{ color: 'var(--accent)' }}>Flow</span>
