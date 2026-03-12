@@ -171,12 +171,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         {currentPage === 'landing' && (
           <LandingPage
             onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
-            onViewPricing={() => navigate('/pricing')}
-            onViewDashboard={() => handleNavigate('dashboard', 'Please login to access your dashboard.')}
-            onViewAbout={() => handleNavigate('about')}
-            onViewDemo={() => handleNavigate('demo')}
-            onViewContact={() => handleNavigate('contact')}
-            onViewHelp={() => handleNavigate('help')}
           />
         )}
 
