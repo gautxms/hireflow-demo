@@ -239,7 +239,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   return (
-    <div>
+    <>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <a
           href="/"
@@ -333,9 +333,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           )}
         </div>
       </header>
-      {getPageContent()}
-      {!isAuthPage && <PublicFooter />}
-    </div>
+      <main>
+        {getPageContent()}
+      </main>
+      <PublicFooter />
+    </>
   )
 }
 
