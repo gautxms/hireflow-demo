@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
+import BackButton from '../components/BackButton'
 
 const PLAN_FEATURES = [
   'Unlimited resume uploads',
@@ -129,22 +130,9 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
   return (
     <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
       <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '3rem 1rem 1rem' }}>
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          style={{
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            color: 'var(--accent)',
-            borderRadius: 8,
-            padding: '0.55rem 0.9rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            marginBottom: '1.25rem',
-          }}
-        >
-          ← Back to Home
-        </button>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <BackButton />
+        </div>
 
         <h1 style={{ textAlign: 'center', fontSize: '2.3rem', marginBottom: '0.8rem', fontFamily: 'var(--font-display)' }}>
           Choose your plan

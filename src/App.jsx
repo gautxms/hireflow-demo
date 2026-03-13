@@ -121,6 +121,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
+    if (pathname === '/about') {
+      return <AboutPage onBack={() => navigate('/')} />
+    }
+
     if (pathname === '/terms') {
       return <Terms />
     }
@@ -237,20 +241,26 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
     setCurrentPage('help')
   }
+  const handleAboutClick = () => navigate('/about')
 
   return (
     <>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <a
           href="/"
+          onClick={(event) => {
+            event.preventDefault()
+            navigate('/')
+          }}
           className="logo"
           style={{ color: '#fff', textDecoration: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '1.2rem', padding: 0, height: 'auto' }}
         >
           Hire<span style={{ color: 'var(--accent)' }}>Flow</span>
         </a>
         <div className="nav-links" aria-label="Primary">
-          <button onClick={handlePricingClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Pricing</button>
           <button onClick={handleFeaturesClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Features</button>
+          <button onClick={handlePricingClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Pricing</button>
+          <button onClick={handleAboutClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>About</button>
           <button onClick={handleHelpClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Help</button>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>

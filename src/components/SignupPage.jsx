@@ -1,14 +1,8 @@
 import { useState } from 'react'
 import './AuthPage.css'
+import BackButton from './BackButton'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
-
-function navigate(pathname) {
-  if (window.location.pathname !== pathname) {
-    window.history.pushState({}, '', pathname)
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  }
-}
 
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -79,14 +73,9 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
       <div className="auth-glow auth-glow--a" />
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
-        <button
-          className="auth-back-button"
-          type="button"
-          onClick={() => navigate('/')}
-          aria-label="Back to home"
-        >
-          ← Back to Home
-        </button>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <BackButton />
+        </div>
         <p className="auth-brand">Hire<span>Flow</span></p>
         <h1 className="auth-title">Create your account</h1>
         <p className="auth-subtitle">Start ranking resumes in minutes.</p>
