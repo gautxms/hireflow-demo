@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import BackButton from './BackButton'
 
-export default function HelpPage({ onBack }) {
+export default function HelpPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('getting-started')
 
@@ -58,21 +59,9 @@ export default function HelpPage({ onBack }) {
     <div className="page-content" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '3rem 2rem', textAlign: 'center' }}>
-        <button
-          onClick={onBack}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: 'var(--accent)',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginBottom: '1rem',
-            fontSize: '0.9rem'
-          }}
-        >
-          ← Back
-        </button>
+        <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
+          <BackButton />
+        </div>
 
         <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
           Help Center
