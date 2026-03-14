@@ -63,9 +63,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }
       <div className="auth-glow auth-glow--a" />
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
-        <div style={{ marginBottom: '1.25rem' }}>
-          <BackButton />
-        </div>
+        <BackButton />
         <p className="auth-brand">Hire<span>Flow</span></p>
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-subtitle">Sign in to continue screening candidates faster.</p>

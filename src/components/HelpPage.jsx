@@ -59,7 +59,7 @@ export default function HelpPage() {
     <div className="page-content" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '3rem 2rem', textAlign: 'center' }}>
-        <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
+        <div style={{ marginBottom: '1rem' }}>
           <BackButton />
         </div>
 

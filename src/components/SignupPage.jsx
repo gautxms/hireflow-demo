@@ -73,9 +73,7 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
       <div className="auth-glow auth-glow--a" />
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
-        <div style={{ marginBottom: '1.25rem' }}>
-          <BackButton />
-        </div>
+        <BackButton />
         <p className="auth-brand">Hire<span>Flow</span></p>
         <h1 className="auth-title">Create your account</h1>
         <p className="auth-subtitle">Start ranking resumes in minutes.</p>
