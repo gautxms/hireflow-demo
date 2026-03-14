@@ -1,16 +1,6 @@
 import usePageSeo from '../hooks/usePageSeo'
 import termsContent from '../../TERMS_AND_CONDITIONS_CONTENT.md?raw'
-
-function navigate(pathname) {
-  if (window.location.pathname !== pathname) {
-    window.history.pushState({}, '', pathname)
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  }
-}
-
-function goBack() {
-  navigate('/')
-}
+import BackButton from '../components/BackButton'
 
 function renderTermsMarkdown(content) {
   return content
@@ -48,22 +38,9 @@ export default function Terms() {
   return (
     <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '3rem 1.25rem', lineHeight: 1.75 }}>
-        <button
-          type="button"
-          onClick={goBack}
-          style={{
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            color: 'var(--accent)',
-            borderRadius: 8,
-            padding: '0.55rem 0.9rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            marginBottom: '1.25rem',
-          }}
-        >
-          ← Back
-        </button>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <BackButton />
+        </div>
         <article aria-label="Terms and Conditions">
           {renderTermsMarkdown(termsContent)}
         </article>
