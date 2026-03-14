@@ -63,4 +63,18 @@ app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ userId: req.userId })
 })
 
+// Log all requests that don't match a route (for debugging 404 issues)
+app.use((req, res) => {
+  console.log('[404] No route matched:', {
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'authorization': req.headers.authorization ? 'present' : 'missing',
+    },
+  })
+  res.status(404).json({ error: 'Not found' })
+})
+
 export default app
