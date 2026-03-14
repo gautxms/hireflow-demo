@@ -4,8 +4,6 @@ import { pool } from '../db/client.js'
 
 const router = express.Router()
 
-router.use(express.raw({ type: 'application/json' }))
-
 function parseSignatureHeader(headerValue) {
   if (!headerValue || typeof headerValue !== 'string') {
     return null
@@ -101,7 +99,7 @@ async function logWebhookAudit(eventType, payload, isValidSignature, errorMessag
   )
 }
 
-router.post('/', async (req, res) => {
+router.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
   const rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : ''
 
   let payload
