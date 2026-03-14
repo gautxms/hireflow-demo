@@ -121,6 +121,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
+    if (pathname === '/about') {
+      return <AboutPage onBack={() => navigate('/')} />
+    }
+
     if (pathname === '/terms') {
       return <Terms />
     }
