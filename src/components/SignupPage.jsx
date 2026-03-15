@@ -60,7 +60,7 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
         return
       }
 
-      onSignupSuccess()
+      onSignupSuccess(email.trim().toLowerCase())
     } catch {
       setError('Unable to connect to auth server. Check backend URL / CORS settings.')
     } finally {
