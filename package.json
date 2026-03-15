@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "private": false,
   "type": "module",
+  "main": "backend/src/index.js",
   "author": "HireFlow Team",
   "license": "MIT",
   "scripts": {
