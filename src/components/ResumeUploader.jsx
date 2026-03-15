@@ -8,7 +8,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [error, setError] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -52,11 +52,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
   const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
+    setErrorMessage('')
     
     setIsAnalyzing(true)
     setError('')
 
     try {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 2000)
+      })
+      await onFileUploaded(uploadedFiles)
+    } catch (error) {
+      console.error('Upload error:', error)
+      if (error.message.includes('403')) {
+        onRequireAuth('Your trial has expired. Please upgrade to continue.')
+        onBack()
+      } else {
+        setErrorMessage(error.message)
+      }
       const formData = new FormData()
       uploadedFiles.forEach((f) => {
         formData.append('resumes', f.file)
@@ -334,6 +347,12 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
           </button>
         </div>
+
+        {errorMessage && (
+          <p style={{ color: '#ff6b6b', textAlign: 'center', marginTop: '1rem' }}>
+            {errorMessage}
+          </p>
+        )}
 
         {/* Info */}
         <div style={{ marginTop: '3rem', padding: '1.5rem', background: 'var(--card)', borderRadius: '8px', border: '1px solid var(--border)' }}>
