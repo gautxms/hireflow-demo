@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import express from 'express'
-import { pool } from '../db/client.js'
+import { pool, logErrorToDatabase } from '../db/client.js'
+import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
 
 const router = express.Router()
 
@@ -91,6 +92,25 @@ function mapToSubscriptionStatus(eventType, payload) {
   return null
 }
 
+
+async function markPaymentAttemptSucceeded(payload) {
+  const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
+
+  if (!transactionId) {
+    return
+  }
+
+  await pool.query(
+    `UPDATE payment_attempts
+     SET status = 'succeeded',
+         next_retry_at = NULL,
+         updated_at = NOW(),
+         metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
+     WHERE transaction_id = $1`,
+    [transactionId, JSON.stringify({ resolved_by: 'webhook', event: 'transaction.completed' })],
+  )
+}
+
 async function logWebhookAudit(eventType, payload, isValidSignature, errorMessage = null) {
   await pool.query(
     `INSERT INTO paddle_webhook_audit (event_type, payload, signature_valid, error_message)
@@ -171,6 +191,13 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
           )
           console.log('[PADDLE] Activated subscription for email:', email)
         }
+
+        await markPaymentAttemptSucceeded(payload)
+      }
+
+
+      if (eventType === 'transaction.failed') {
+        await recordFailedPaymentAttempt(payload)
       }
 
       if (eventType === 'subscription.created') {
@@ -220,6 +247,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     }
   } catch (error) {
     console.error('[Paddle webhook] failed to update subscription state', error)
+    await logErrorToDatabase('paddle.webhook.processing_failed', error, { eventType, payload })
 
     try {
       await logWebhookAudit(eventType, payload, true, 'Failed to upsert subscription')

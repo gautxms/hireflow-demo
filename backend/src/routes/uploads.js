@@ -3,6 +3,12 @@ import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
+import { requireAuth } from '../middleware/auth.js'
+import {
+  enforceUploadLimit,
+  requireActiveSubscription,
+  trackUploadUsage,
+} from '../middleware/subscriptionCheck.js'
 
 const router = Router()
 
@@ -96,7 +102,9 @@ router.post('/', requireAuth, (req, res, next) => {
       [req.userId],
     )
 
-    const user = userResult.rows[0]
+      const usage = req.usageContext
+      const used = (usage?.currentUsage || 0) + 1
+      const limit = usage?.uploadLimit
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
@@ -107,6 +115,9 @@ router.post('/', requireAuth, (req, res, next) => {
         error: 'Subscription required',
         message: 'Your trial has expired or subscription is inactive. Please upgrade to continue.',
       })
+    } catch (error) {
+      console.error('[Uploads] Error processing upload:', error)
+      return res.status(500).json({ error: 'Unable to process upload request' })
     }
 
     const acceptedFiles = req.files.map((file) => ({
