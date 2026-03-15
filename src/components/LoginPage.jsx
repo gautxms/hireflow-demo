@@ -14,7 +14,7 @@ async function parseResponsePayload(response) {
   return null
 }
 
-export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }) {
+export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPassword, promptMessage }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -75,6 +75,10 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, promptMessage }
 
           <label className="auth-label" htmlFor="login-password">Password</label>
           <input className="auth-input" id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+
+          <p style={{ margin: '-0.25rem 0 0.25rem', textAlign: 'right' }}>
+            <button className="auth-link" type="button" onClick={onForgotPassword}>Forgot password?</button>
+          </p>
 
           {error && <p className="auth-error">{error}</p>}
 

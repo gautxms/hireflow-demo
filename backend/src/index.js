@@ -1,8 +1,11 @@
 import 'dotenv/config'
 import app from './server.js'
+import passwordResetRoutes from './routes/passwordReset.js'
 import { runMigrations } from './db/migrate.js'
 
 const port = process.env.PORT || 4000
+
+app.use('/api/password-reset', passwordResetRoutes)
 
 async function start() {
   try {

@@ -27,6 +27,14 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS subscription_started_at TIMESTAMP;
       `,
     },
+    {
+      name: '004-add-password-reset-fields',
+      sql: `
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS password_reset_token TEXT,
+        ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMP;
+      `,
+    },
   ]
 
   for (const migration of migrations) {
