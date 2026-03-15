@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import DOMPurify from 'dompurify'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const MAX_FILE_SIZE = 50 * 1024 * 1024
+const ACCEPTED_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+
+function sanitizeForDisplay(message) {
+  return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
+}
 
 export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus }) {
   const fileInputRef = useRef(null)
@@ -34,25 +44,52 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setIsDragging(false)
   }
 
+  const addFiles = (incomingFiles) => {
+    const normalizedFiles = Array.isArray(incomingFiles) ? incomingFiles : Array.from(incomingFiles.target.files || [])
+    const allowed = []
+    const rejected = []
+
+    normalizedFiles.forEach((file) => {
+      const isAllowedType = ACCEPTED_TYPES.has(file.type)
+      const isAllowedSize = file.size <= MAX_FILE_SIZE
+
+      if (!isAllowedType) {
+        rejected.push(`${file.name}: only PDF or DOCX files are allowed.`)
+        return
+      }
+
+      if (!isAllowedSize) {
+        rejected.push(`${file.name}: exceeds 50MB file size limit.`)
+        return
+      }
+
+      allowed.push({ file, name: file.name, size: file.size })
+    })
+
+    if (rejected.length > 0) {
+      setError(sanitizeForDisplay(rejected.join(' ')))
+    } else {
+      setError('')
+    }
+
+    if (allowed.length > 0) {
+      setUploadedFiles((prev) => [...prev, ...allowed])
+    }
+  }
+
   const handleDrop = (e) => {
     e.preventDefault()
     setIsDragging(false)
-    handleFiles(Array.from(e.dataTransfer.files))
+    addFiles(Array.from(e.dataTransfer.files))
   }
 
   const handleFileSelect = () => {
     fileInputRef.current?.click()
   }
 
-  const handleFiles = (files) => {
-    const normalizedFiles = Array.isArray(files) ? files : Array.from(files.target.files || [])
-    const pdfFiles = normalizedFiles.filter((f) => f.type === 'application/pdf' || f.name.endsWith('.pdf'))
-    setUploadedFiles((prev) => [...prev, ...pdfFiles.map((f) => ({ file: f, name: f.name, size: f.size }))])
-  }
-
   const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
-    
+
     setIsAnalyzing(true)
     setError('')
 
@@ -63,7 +100,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       })
 
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-      
+
       if (!token) {
         throw new Error('Authentication required. Please log in first.')
       }
@@ -76,7 +113,6 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        // Pass subscription error message without triggering fallback
         if (response.status === 403) {
           throw new Error(errorData.message || errorData.error || 'Subscription required. Please upgrade to continue.')
         }
@@ -92,17 +128,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     } catch (err) {
       console.error('Upload error:', err)
       setIsAnalyzing(false)
-      
-      const errorMessage = err.message || 'Unable to analyze resumes'
-      
-      // Check if error is subscription-related
+
+      const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
+
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive')) {
         setError(errorMessage)
       } else {
-        // For other errors, show message and fallback to mock data
-        setError(errorMessage + '. Using demo data instead.')
-        
-        // Fallback to mock data for demo
+        setError(`${errorMessage}. Using demo data instead.`)
+
         setTimeout(() => {
           const mockCandidates = [
             {
@@ -145,21 +178,22 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               cons: ['Less frontend experience', 'No AWS exposure'],
             },
           ]
-          
+
           setError('')
           onFileUploaded(mockCandidates)
         }, 2000)
       }
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
   const removeFile = (index) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index))
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   return (
     <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      {/* Header */}
       <div style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
         {onBack && (
           <button
@@ -172,7 +206,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               borderRadius: '4px',
               cursor: 'pointer',
               marginBottom: '1rem',
-              fontSize: '0.9rem'
+              fontSize: '0.9rem',
             }}
           >
             ← Back
@@ -186,7 +220,6 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         </p>
       </div>
 
-      {/* Upload Area */}
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
         {subscriptionStatus === 'trialing' && (
           <div
@@ -215,7 +248,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             background: isDragging ? 'rgba(232,255,90,0.05)' : 'var(--card)',
             transition: 'all 0.3s',
             cursor: 'pointer',
-            marginBottom: '2rem'
+            marginBottom: '2rem',
           }}
         >
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📄</div>
@@ -223,15 +256,15 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             Drop resumes here
           </h3>
           <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
-            or click to select files (PDF format)
+            or click to select files (PDF or DOCX, up to 50MB each)
           </p>
           <input
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.doc,.docx"
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             style={{ display: 'none' }}
-            onChange={handleFiles}
+            onChange={addFiles}
           />
           <button
             type="button"
@@ -243,14 +276,13 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               padding: '0.75rem 2rem',
               borderRadius: '6px',
               fontWeight: 'bold',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             Select Files
           </button>
         </div>
 
-        {/* Uploaded Files List */}
         {uploadedFiles.length > 0 && (
           <div style={{ marginBottom: '2rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '1rem' }}>
@@ -267,7 +299,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                     padding: '1rem',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
                   }}
                 >
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -288,7 +320,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                       padding: '0.5rem 1rem',
                       borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '0.9rem'
+                      fontSize: '0.9rem',
                     }}
                   >
                     Remove
@@ -299,22 +331,22 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </div>
         )}
 
-        {/* Error Message */}
         {error && (
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid #ef4444',
-            color: '#ef4444',
-            padding: '1rem',
-            borderRadius: '8px',
-            marginBottom: '1.5rem',
-            textAlign: 'center'
-          }}>
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid #ef4444',
+              color: '#ef4444',
+              padding: '1rem',
+              borderRadius: '8px',
+              marginBottom: '1.5rem',
+              textAlign: 'center',
+            }}
+          >
             {error}
           </div>
         )}
 
-        {/* Analyze Button */}
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
           <button
             onClick={handleAnalyze}
@@ -328,22 +360,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               fontWeight: 'bold',
               fontSize: '1rem',
               cursor: uploadedFiles.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: uploadedFiles.length === 0 ? 0.5 : 1
+              opacity: uploadedFiles.length === 0 ? 0.5 : 1,
             }}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
           </button>
-        </div>
-
-        {/* Info */}
-        <div style={{ marginTop: '3rem', padding: '1.5rem', background: 'var(--card)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <h4 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>How it works:</h4>
-          <ol style={{ color: 'var(--muted)', lineHeight: '1.8', paddingLeft: '1.5rem' }}>
-            <li>Upload one or multiple resumes (PDF format)</li>
-            <li>Our AI analyzes each resume across 20+ dimensions</li>
-            <li>Candidates are ranked by fit and quality</li>
-            <li>Review detailed scoring and recommendations</li>
-          </ol>
         </div>
       </div>
     </div>
