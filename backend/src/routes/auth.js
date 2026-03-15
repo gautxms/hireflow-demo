@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit'
 import { pool } from '../db/client.js'
 import { signToken } from '../utils/jwt.js'
 import { sendVerificationEmail } from '../utils/mailer.js'
+import { schemas, validateBody } from '../middleware/validation.js'
 
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
@@ -14,17 +15,6 @@ const authRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 })
-
-function validateInput(email, password) {
-  if (typeof email !== 'string' || typeof password !== 'string') {
-    return false
-  }
-
-  const normalizedEmail = email.trim().toLowerCase()
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-  return emailRegex.test(normalizedEmail) && password.length >= 8
-}
 
 function setAuthCookie(res, token) {
   res.cookie('token', token, {
@@ -103,10 +93,6 @@ function recordResendAttempt(email, now = Date.now()) {
 
 router.post('/signup', authRateLimit, async (req, res) => {
   const { email, password } = req.body
-
-  if (!validateInput(email, password)) {
-    return res.status(400).json({ error: 'Invalid email or password (min 8 chars)' })
-  }
 
   const normalizedEmail = email.trim().toLowerCase()
   const verificationToken = crypto.randomBytes(32).toString('hex')
@@ -270,10 +256,6 @@ router.post('/resend-email-verification', async (req, res) => {
 
 router.post('/login', authRateLimit, async (req, res) => {
   const { email, password } = req.body
-
-  if (!validateInput(email, password)) {
-    return res.status(400).json({ error: 'Invalid email or password' })
-  }
 
   const normalizedEmail = email.trim().toLowerCase()
 

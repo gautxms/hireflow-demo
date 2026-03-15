@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { schemas, validateBody } from '../middleware/validation.js'
 
 const router = Router()
 
@@ -16,7 +17,7 @@ function getAppOrigin(req) {
   return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
 }
 
-router.post('/checkout-url', requireAuth, async (req, res) => {
+router.post('/checkout-url', requireAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
   const { plan } = req.body || {}
 
   console.log('[Paddle Checkout] Request received:', {
@@ -29,11 +30,6 @@ router.post('/checkout-url', requireAuth, async (req, res) => {
       annual: process.env.PADDLE_ANNUAL_PRICE_ID || 'MISSING',
     },
   })
-
-  if (plan !== 'monthly' && plan !== 'annual') {
-    console.error('[Paddle Checkout] Invalid plan:', plan)
-    return res.status(400).json({ error: 'Plan must be monthly or annual' })
-  }
 
   if (!process.env.PADDLE_API_KEY) {
     console.error('[Paddle Checkout] PADDLE_API_KEY not configured')

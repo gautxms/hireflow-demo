@@ -18,6 +18,8 @@ import RefundPolicy from './pages/RefundPolicy'
 import BillingSuccess from './pages/BillingSuccess'
 import BillingCancel from './pages/BillingCancel'
 import Checkout from './pages/Checkout'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -163,11 +165,20 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (!isAuthenticated && pathname === '/login') {
-      return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} promptMessage={authPrompt} />
+      return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} />
     }
 
     if (!isAuthenticated && pathname === '/verify-email-info') {
       return <VerifyEmailInfoPage onBackToLogin={() => navigate('/login')} email={pendingVerificationEmail} />
+    }
+
+    if (!isAuthenticated && pathname === '/forgot-password') {
+      return <ForgotPasswordPage onBackToLogin={() => navigate('/login')} />
+    }
+
+    if (!isAuthenticated && pathname.startsWith('/reset-password/')) {
+      const resetToken = pathname.replace('/reset-password/', '')
+      return <ResetPasswordPage token={resetToken} onGoToLogin={() => navigate('/login')} />
     }
 
     return (
@@ -224,7 +235,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info'
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/forgot-password' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     if (pathname !== '/') {
