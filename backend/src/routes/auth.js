@@ -7,6 +7,7 @@ import { sendVerificationEmail } from '../utils/mailer.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 
 const router = Router()
+const resendVerificationAttemptsByEmail = new Map()
 
 const authRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -47,7 +48,50 @@ function getVerificationSuccessUrl() {
   return `${frontendOrigin}/verify-email/success`
 }
 
-router.post('/signup', authRateLimit, validateBody(schemas.signup), async (req, res) => {
+function getResendWindowState(email, now = Date.now()) {
+  const oneMinuteAgo = now - 60 * 1000
+  const oneHourAgo = now - 60 * 60 * 1000
+  const attemptHistory = resendVerificationAttemptsByEmail.get(email) || []
+  const recentAttempts = attemptHistory.filter((timestamp) => timestamp > oneHourAgo)
+
+  resendVerificationAttemptsByEmail.set(email, recentAttempts)
+
+  const mostRecentAttempt = recentAttempts[recentAttempts.length - 1]
+  const retryAfterOneMinute = mostRecentAttempt ? Math.ceil((mostRecentAttempt + 60 * 1000 - now) / 1000) : 0
+
+  if (mostRecentAttempt && mostRecentAttempt > oneMinuteAgo && retryAfterOneMinute > 0) {
+    return {
+      blocked: true,
+      retryAfterSeconds: retryAfterOneMinute,
+      reason: 'minute',
+    }
+  }
+
+  if (recentAttempts.length >= 5) {
+    const oldestAttemptInWindow = recentAttempts[0]
+    const retryAfterOneHour = Math.ceil((oldestAttemptInWindow + 60 * 60 * 1000 - now) / 1000)
+
+    if (retryAfterOneHour > 0) {
+      return {
+        blocked: true,
+        retryAfterSeconds: retryAfterOneHour,
+        reason: 'hour',
+      }
+    }
+  }
+
+  return {
+    blocked: false,
+    retryAfterSeconds: 0,
+  }
+}
+
+function recordResendAttempt(email, now = Date.now()) {
+  const attempts = resendVerificationAttemptsByEmail.get(email) || []
+  resendVerificationAttemptsByEmail.set(email, [...attempts, now])
+}
+
+router.post('/signup', authRateLimit, async (req, res) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -126,7 +170,91 @@ router.get('/verify-email', async (req, res) => {
   }
 })
 
-router.post('/login', authRateLimit, validateBody(schemas.login), async (req, res) => {
+router.post('/resend-email-verification', async (req, res) => {
+  const normalizedEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  if (!emailRegex.test(normalizedEmail)) {
+    return res.status(400).json({ error: 'Valid email is required' })
+  }
+
+  const resendWindow = getResendWindowState(normalizedEmail)
+
+  if (resendWindow.blocked) {
+    console.info('[AUTH] Verification email resend blocked', {
+      email: normalizedEmail,
+      retryAfterSeconds: resendWindow.retryAfterSeconds,
+      reason: resendWindow.reason,
+    })
+
+    return res.status(429).json({
+      error: 'Too many resend attempts',
+      retryAfterSeconds: resendWindow.retryAfterSeconds,
+    })
+  }
+
+  recordResendAttempt(normalizedEmail)
+
+  try {
+    const result = await pool.query(
+      `SELECT id, email, email_verified, email_verification_expires_at
+       FROM users
+       WHERE email = $1`,
+      [normalizedEmail],
+    )
+
+    const user = result.rows[0]
+
+    if (!user || user.email_verified) {
+      console.info('[AUTH] Verification email resend attempted for non-pending account', {
+        email: normalizedEmail,
+      })
+
+      return res.json({
+        message: 'Email sent! Check your inbox',
+        retryAfterSeconds: 60,
+      })
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+    const verificationTokenHash = hashVerificationToken(verificationToken)
+    const existingTokenStillValid =
+      user.email_verification_expires_at && new Date(user.email_verification_expires_at).getTime() > Date.now()
+    const verificationExpiresAt = existingTokenStillValid
+      ? new Date(user.email_verification_expires_at)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+    await pool.query(
+      `UPDATE users
+       SET email_verification_token = $1,
+           email_verification_expires_at = $2
+       WHERE id = $3`,
+      [verificationTokenHash, verificationExpiresAt, user.id],
+    )
+
+    const verificationUrl = buildVerificationUrl(req, verificationToken)
+
+    await sendVerificationEmail({
+      to: user.email,
+      verificationUrl,
+    })
+
+    console.info('[AUTH] Verification email resent', {
+      userId: user.id,
+      email: user.email,
+    })
+
+    return res.json({
+      message: 'Email sent! Check your inbox',
+      retryAfterSeconds: 60,
+    })
+  } catch (error) {
+    console.error('[AUTH] Failed to resend verification email:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/login', authRateLimit, async (req, res) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()

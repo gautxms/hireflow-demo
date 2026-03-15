@@ -55,7 +55,7 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
@@ -169,7 +169,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (!isAuthenticated && pathname === '/verify-email-info') {
-      return <VerifyEmailInfoPage onBackToLogin={() => navigate('/login')} />
+      return <VerifyEmailInfoPage onBackToLogin={() => navigate('/login')} email={pendingVerificationEmail} />
     }
 
     if (!isAuthenticated && pathname === '/forgot-password') {
@@ -369,6 +369,7 @@ export default function App() {
   const [authPrompt, setAuthPrompt] = useState('')
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
 
   useEffect(() => {
     setToken(getStoredToken())
@@ -434,8 +435,9 @@ export default function App() {
     navigate('/login')
   }
 
-  const handleSignupSuccess = () => {
+  const handleSignupSuccess = (email = '') => {
     setAuthPrompt('')
+    setPendingVerificationEmail(email)
     navigate('/verify-email-info')
   }
 
@@ -460,6 +462,7 @@ export default function App() {
       authPrompt={authPrompt}
       subscriptionStatus={subscriptionStatus}
       userProfile={userProfile}
+      pendingVerificationEmail={pendingVerificationEmail}
     />
   )
 }
