@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
+import { getFailedPaymentsForAdmin } from '../services/paymentRetry.js'
 
 const router = Router()
 
@@ -12,6 +13,15 @@ router.get('/users', async (_req, res) => {
     )
 
     return res.json(result.rows)
+  } catch {
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.get('/failed-payments', async (_req, res) => {
+  try {
+    const rows = await getFailedPaymentsForAdmin()
+    return res.json(rows)
   } catch {
     return res.status(500).json({ error: 'Internal server error' })
   }
