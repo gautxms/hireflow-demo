@@ -17,6 +17,7 @@ import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
 import BillingSuccess from './pages/BillingSuccess'
 import BillingCancel from './pages/BillingCancel'
+import BillingPage from './pages/BillingPage'
 import Checkout from './pages/Checkout'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -150,6 +151,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/checkout') {
       return <Checkout />
+    }
+
+    if (pathname === '/billing') {
+      return <BillingPage />
     }
 
     if (pathname === '/account') {
