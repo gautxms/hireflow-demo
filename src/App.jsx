@@ -12,6 +12,7 @@ import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
+import VerifyEmail from './pages/VerifyEmail'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
@@ -208,6 +209,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }
 
       return <ResetPasswordPage onGoToLogin={() => navigate('/login')} />
+    }
+
+    if (pathname === '/verify') {
+      return <VerifyEmail />
     }
 
     return (
