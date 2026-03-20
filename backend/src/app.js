@@ -6,6 +6,7 @@ import paddleWebhookRoutes from './routes/paddleWebhook.js'
 import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
 import uploadsRoutes from './routes/uploads.js'
+import passwordResetRoutes from './routes/passwordReset.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 
 const app = express()
@@ -55,6 +56,7 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/api/auth', authRoutes)
+app.use('/api/auth', passwordResetRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', paymentsRoutes)
 app.use('/api/uploads', uploadsRoutes)
