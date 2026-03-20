@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import express from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
+import { trackEvent } from '../services/analytics.js'
 
 const router = express.Router()
 
@@ -93,6 +94,43 @@ function mapToSubscriptionStatus(eventType, payload) {
 }
 
 
+
+async function resolveUserIdFromPayload(payload) {
+  const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
+
+  if (explicitUserId) {
+    return explicitUserId
+  }
+
+  const email = getCustomerEmail(payload)
+
+  if (!email) {
+    return null
+  }
+
+  const result = await pool.query(
+    `SELECT id FROM users WHERE email = $1 LIMIT 1`,
+    [email],
+  )
+
+  return result.rows[0]?.id || null
+}
+
+function getPaymentAmount(payload) {
+  const cents = payload?.data?.details?.totals?.total || payload?.data?.totals?.total || payload?.amount || null
+
+  if (typeof cents === 'number') {
+    return Number((cents / 100).toFixed(2))
+  }
+
+  const numeric = Number(cents)
+  if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+    return Number((numeric / 100).toFixed(2))
+  }
+
+  return 0
+}
+
 async function markPaymentAttemptSucceeded(payload) {
   const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
 
@@ -171,7 +209,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       }
 
       if (eventType === 'transaction.completed') {
-        const userId = payload?.data?.custom_data?.userId
+        const userId = await resolveUserIdFromPayload(payload)
         const email = getCustomerEmail(payload)
 
         if (userId) {
@@ -193,11 +231,34 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         }
 
         await markPaymentAttemptSucceeded(payload)
-      }
 
+        await trackEvent({
+          userId,
+          eventType: 'payment_success',
+          metadata: {
+            source: 'paddle.webhook',
+            transaction_id: payload?.data?.id || null,
+            plan: payload?.data?.custom_data?.plan || null,
+            amount: getPaymentAmount(payload),
+            currency: payload?.data?.currency_code || payload?.data?.currency || null,
+          },
+        })
+      }
 
       if (eventType === 'transaction.failed') {
         await recordFailedPaymentAttempt(payload)
+
+        await trackEvent({
+          userId: await resolveUserIdFromPayload(payload),
+          eventType: 'payment_fail',
+          metadata: {
+            source: 'paddle.webhook',
+            transaction_id: payload?.data?.id || null,
+            plan: payload?.data?.custom_data?.plan || null,
+            amount: getPaymentAmount(payload),
+            currency: payload?.data?.currency_code || payload?.data?.currency || null,
+          },
+        })
       }
 
       if (eventType === 'subscription.created') {
@@ -241,6 +302,15 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
             [canceledSubscriptionId],
           )
         }
+
+        await trackEvent({
+          userId: await resolveUserIdFromPayload(payload),
+          eventType: 'cancellation',
+          metadata: {
+            source: 'paddle.webhook',
+            subscription_id: canceledSubscriptionId,
+          },
+        })
       }
     } else {
       console.warn('[Paddle webhook] invalid signature')

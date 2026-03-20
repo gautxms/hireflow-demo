@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { schemas, validateBody } from '../middleware/validation.js'
+import { trackEvent } from '../services/analytics.js'
 
 const router = Router()
 
@@ -19,6 +20,12 @@ function getAppOrigin(req) {
 
 router.post('/checkout-url', requireAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
   const { plan } = req.body || {}
+
+  await trackEvent({
+    userId: req.userId,
+    eventType: 'checkout_start',
+    metadata: { plan, source: 'paddle.checkout' },
+  })
 
   console.log('[Paddle Checkout] Request received:', {
     plan,
@@ -113,6 +120,13 @@ router.post('/checkout-url', requireAuth, validateBody(schemas.paddleCheckout), 
     }
 
     console.log('[Paddle Checkout] Success, returning URL')
+
+    await trackEvent({
+      userId: req.userId,
+      eventType: 'checkout_complete',
+      metadata: { plan, source: 'paddle.checkout' },
+    })
+
     return res.json({ checkoutUrl })
   } catch (error) {
     console.error('[Paddle Checkout] Error:', {

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { getFailedPaymentsForAdmin } from '../services/paymentRetry.js'
+import { computeDailyMetrics, getAnalyticsSummary } from '../services/analytics.js'
 
 const router = Router()
 
@@ -76,6 +77,30 @@ router.delete('/usage-overrides/:userId', async (req, res) => {
   } catch (error) {
     console.error('[Admin] Failed to clear usage override:', error)
     return res.status(500).json({ error: 'Unable to clear usage override' })
+  }
+})
+
+
+
+router.get('/analytics/summary', async (req, res) => {
+  try {
+    const days = Number(req.query.days || 30)
+    const summary = await getAnalyticsSummary(days)
+    return res.status(200).json(summary)
+  } catch (error) {
+    console.error('[Admin] Failed to fetch analytics summary:', error)
+    return res.status(500).json({ error: 'Unable to fetch analytics summary' })
+  }
+})
+
+router.post('/analytics/recompute', async (req, res) => {
+  try {
+    const inputDate = req.body?.date ? new Date(req.body.date) : new Date()
+    const metrics = await computeDailyMetrics(inputDate)
+    return res.status(200).json({ ok: true, metrics })
+  } catch (error) {
+    console.error('[Admin] Failed to recompute analytics metrics:', error)
+    return res.status(500).json({ error: 'Unable to recompute analytics metrics' })
   }
 })
 

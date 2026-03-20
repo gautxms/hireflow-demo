@@ -42,3 +42,39 @@ CREATE TABLE paddle_webhook_audit (
   error_message TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE analytics_daily (
+  metric_date DATE PRIMARY KEY,
+  dau INTEGER NOT NULL DEFAULT 0,
+  wau INTEGER NOT NULL DEFAULT 0,
+  mau INTEGER NOT NULL DEFAULT 0,
+  conversion_rate NUMERIC(6, 2) NOT NULL DEFAULT 0,
+  churn_rate NUMERIC(6, 2) NOT NULL DEFAULT 0,
+  arpu NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  parsing_success_rate NUMERIC(6, 2) NOT NULL DEFAULT 0,
+  mrr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  arr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE analytics_revenue_by_plan (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  metric_month DATE NOT NULL,
+  plan_type TEXT NOT NULL,
+  revenue NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  paying_users INTEGER NOT NULL DEFAULT 0,
+  arpu NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (metric_month, plan_type)
+);
