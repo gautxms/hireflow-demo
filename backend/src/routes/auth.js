@@ -163,7 +163,7 @@ router.get('/verify-email', async (req, res) => {
   }
 })
 
-router.post('/resend-email-verification', async (req, res) => {
+router.post('/resend-email-verification', signupLimiter, async (req, res) => {
   const normalizedEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

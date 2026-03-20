@@ -1,6 +1,5 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
-import { sendPasswordResetEmail } from '../utils/mailer.js'
 import { passwordResetLimiter } from '../middleware/rateLimiter.js'
 import { resetTokenAuth } from '../middleware/resetTokenAuth.js'
 import {
@@ -27,7 +26,7 @@ function buildResetUrl(token) {
   return url.toString()
 }
 
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
   const normalizedEmail = normalizeEmail(req.body?.email)
 
   if (!EMAIL_REGEX.test(normalizedEmail)) {
