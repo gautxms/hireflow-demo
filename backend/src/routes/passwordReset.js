@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
+import { sendPasswordResetEmail } from '../utils/mailer.js'
+import { passwordResetLimiter } from '../middleware/rateLimiter.js'
 import { resetTokenAuth } from '../middleware/resetTokenAuth.js'
 import {
   createPasswordResetToken,
@@ -31,17 +33,6 @@ router.post('/forgot-password', async (req, res) => {
   if (!EMAIL_REGEX.test(normalizedEmail)) {
     return res.status(400).json({ error: 'Please enter a valid email address.' })
   }
-
-  const rateLimitState = getResetRateLimitState(normalizedEmail)
-
-  if (rateLimitState.blocked) {
-    return res.status(429).json({
-      error: 'Too many reset attempts. Please try again in an hour.',
-      retryAfterSeconds: rateLimitState.retryAfterSeconds,
-    })
-  }
-
-  recordResetAttempt(normalizedEmail)
 
   try {
     const result = await pool.query(

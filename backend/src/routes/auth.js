@@ -1,20 +1,13 @@
 import crypto from 'crypto'
 import { Router } from 'express'
-import rateLimit from 'express-rate-limit'
 import { pool } from '../db/client.js'
 import { signToken } from '../utils/jwt.js'
 import { sendVerificationEmail } from '../utils/mailer.js'
 import { schemas, validateBody } from '../middleware/validation.js'
+import { loginLimiter, signupLimiter } from '../middleware/rateLimiter.js'
 
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
-
-const authRateLimit = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-})
 
 function setAuthCookie(res, token) {
   res.cookie('token', token, {
@@ -91,7 +84,7 @@ function recordResendAttempt(email, now = Date.now()) {
   resendVerificationAttemptsByEmail.set(email, [...attempts, now])
 }
 
-router.post('/signup', authRateLimit, async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -254,7 +247,7 @@ router.post('/resend-email-verification', async (req, res) => {
   }
 })
 
-router.post('/login', authRateLimit, async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()

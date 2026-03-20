@@ -1,5 +1,4 @@
 import 'dotenv/config'
-import rateLimit from 'express-rate-limit'
 import app from './server.js'
 import { runMigrations } from './db/migrate.js'
 import { ensurePasswordResetTables, ensurePaymentTrackingTables, logErrorToDatabase } from './db/client.js'
@@ -28,18 +27,7 @@ function startPaymentRetryCron() {
   console.log('[Payment Retry] Cron job scheduled (every 15 minutes)')
 }
 
-const uploadIpRateLimit = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: 'Too many upload attempts',
-    message: 'This IP has reached the daily upload request limit. Please try again tomorrow.',
-  },
-})
-
-app.use('/api/uploads', uploadIpRateLimit)
+app.use('/api/password-reset', passwordResetRoutes)
 
 async function start() {
   try {
