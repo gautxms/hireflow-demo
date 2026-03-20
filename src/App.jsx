@@ -20,6 +20,7 @@ import BillingCancel from './pages/BillingCancel'
 import Checkout from './pages/Checkout'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
 import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
