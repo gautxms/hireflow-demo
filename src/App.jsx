@@ -21,6 +21,7 @@ import Checkout from './pages/Checkout'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
+import AccountSettingsPage from './pages/AccountSettingsPage'
 import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -140,6 +141,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <RefundPolicy />
     }
 
+    if (pathname === '/billing') {
+      return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
+    }
+
     if (pathname === '/billing/success') {
       return <BillingSuccess />
     }
@@ -152,13 +157,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <Checkout />
     }
 
-    if (pathname === '/account') {
-      return (
-        <div style={{ padding: '2rem', maxWidth: 680, margin: '0 auto' }}>
-          <h1 style={{ marginBottom: '0.5rem' }}>Account</h1>
-          <p style={{ color: '#4b5563' }}>Account details are coming soon.</p>
-        </div>
-      )
+    if (pathname === '/account' || pathname === '/settings') {
+      if (!isAuthenticated) {
+        onRequireAuth('Please login or sign up to manage your account settings.')
+        return null
+      }
+
+      return <AccountSettingsPage />
     }
 
     if (!isAuthenticated && pathname === '/signup') {

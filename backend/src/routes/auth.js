@@ -84,8 +84,8 @@ function recordResendAttempt(email, now = Date.now()) {
   resendVerificationAttemptsByEmail.set(email, [...attempts, now])
 }
 
-router.post('/signup', signupLimiter, async (req, res) => {
-  const { email, password } = req.body
+router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, res) => {
+  const { email, password, company = '', phone = '' } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
   const verificationToken = crypto.randomBytes(32).toString('hex')
@@ -94,14 +94,14 @@ router.post('/signup', signupLimiter, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, email_verification_token, email_verification_expires_at)
-       VALUES ($1, crypt($2, gen_salt('bf', 10)), $3, $4)
-       RETURNING id, email, created_at`,
-      [normalizedEmail, password, verificationTokenHash, verificationExpiresAt],
+      `INSERT INTO users (email, password_hash, company, phone, email_verification_token, email_verification_expires_at)
+       VALUES ($1, crypt($2, gen_salt('bf', 10)), $3, $4, $5, $6)
+       RETURNING id, email, company, phone, created_at`,
+      [normalizedEmail, password, company, phone, verificationTokenHash, verificationExpiresAt],
     )
 
     const user = result.rows[0]
-    const token = signToken(user.id)
+    const token = signToken({ ...user, subscription_status: 'trialing' })
     setAuthCookie(res, token)
 
     const verificationUrl = buildVerificationUrl(req, verificationToken)
@@ -120,7 +120,10 @@ router.post('/signup', signupLimiter, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
+        company: user.company || '',
+        phone: user.phone || '',
         subscription_status: 'trialing',
+        created_at: user.created_at,
       },
     })
   } catch (error) {
@@ -247,14 +250,14 @@ router.post('/resend-email-verification', async (req, res) => {
   }
 })
 
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
 
   try {
     const result = await pool.query(
-      'SELECT id, email, password_hash, created_at, subscription_status FROM users WHERE email = $1',
+      'SELECT id, email, company, phone, password_hash, created_at, subscription_status, deleted_at, deletion_scheduled_for FROM users WHERE email = $1',
       [normalizedEmail],
     )
 
@@ -273,7 +276,11 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    const token = signToken(user.id)
+    if (user.deleted_at) {
+      return res.status(403).json({ error: 'Account is scheduled for deletion. Contact support to recover access.' })
+    }
+
+    const token = signToken(user)
     setAuthCookie(res, token)
 
     return res.json({
@@ -281,7 +288,12 @@ router.post('/login', loginLimiter, async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
+        company: user.company || '',
+        phone: user.phone || '',
         subscription_status: user.subscription_status,
+        created_at: user.created_at,
+        deleted_at: user.deleted_at,
+        deletion_scheduled_for: user.deletion_scheduled_for,
       },
     })
   } catch {
