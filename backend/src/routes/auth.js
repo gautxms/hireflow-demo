@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { signToken } from '../utils/jwt.js'
-import { sendVerificationEmail } from '../utils/mailer.js'
+import { sendVerificationEmail, sendWelcomeEmail } from '../utils/mailer.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 import { loginLimiter, signupLimiter } from '../middleware/rateLimiter.js'
 
@@ -149,12 +149,20 @@ router.get('/verify-email', async (req, res) => {
            email_verification_expires_at = NULL
        WHERE email_verification_token = $1
          AND email_verification_expires_at > NOW()
-       RETURNING id`,
+       RETURNING id, email`,
       [verificationTokenHash],
     )
 
-    if (!result.rows[0]) {
+    const user = result.rows[0]
+
+    if (!user) {
       return res.status(400).json({ error: 'Invalid or expired token' })
+    }
+
+    try {
+      await sendWelcomeEmail({ to: user.email })
+    } catch (mailError) {
+      console.error('[AUTH] Failed to send welcome email:', mailError)
     }
 
     return res.redirect(getVerificationSuccessUrl())

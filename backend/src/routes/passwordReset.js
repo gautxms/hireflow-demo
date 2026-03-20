@@ -1,14 +1,10 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
-import { sendPasswordResetEmail } from '../utils/mailer.js'
-import { passwordResetLimiter } from '../middleware/rateLimiter.js'
 import { resetTokenAuth } from '../middleware/resetTokenAuth.js'
 import {
   createPasswordResetToken,
   generateResetToken,
-  getResetRateLimitState,
   normalizeEmail,
-  recordResetAttempt,
   markTokenUsedAndResetPassword,
 } from '../services/resetTokenService.js'
 import { sendPasswordResetConfirmationEmail, sendPasswordResetEmail } from '../utils/mailer.js'

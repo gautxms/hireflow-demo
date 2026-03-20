@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import express from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
+import { sendInvoiceEmail } from '../services/emailService.js'
 
 const router = express.Router()
 
@@ -173,6 +174,10 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       if (eventType === 'transaction.completed') {
         const userId = payload?.data?.custom_data?.userId
         const email = getCustomerEmail(payload)
+        const amount = payload?.data?.details?.totals?.grand_total
+        const currencyCode = payload?.data?.currency_code
+        const transactionId = payload?.data?.id || payload?.id
+        const planName = payload?.data?.custom_data?.plan || 'HireFlow plan'
 
         if (userId) {
           await pool.query(
@@ -193,6 +198,18 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         }
 
         await markPaymentAttemptSucceeded(payload)
+
+        if (email) {
+          const formattedAmount = amount && currencyCode ? `${amount} ${currencyCode}` : 'Processed successfully'
+
+          await sendInvoiceEmail({
+            to: email,
+            invoiceId: transactionId || 'N/A',
+            amount: formattedAmount,
+            invoiceDate: new Date().toISOString().slice(0, 10),
+            planName,
+          })
+        }
       }
 
 
