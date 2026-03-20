@@ -1,5 +1,4 @@
 import 'dotenv/config'
-import rateLimit from 'express-rate-limit'
 import app from './server.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import { runMigrations } from './db/migrate.js'
@@ -30,19 +29,6 @@ function startPaymentRetryCron() {
 }
 
 app.use('/api/password-reset', passwordResetRoutes)
-
-const uploadIpRateLimit = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: 'Too many upload attempts',
-    message: 'This IP has reached the daily upload request limit. Please try again tomorrow.',
-  },
-})
-
-app.use('/api/uploads', uploadIpRateLimit)
 
 async function start() {
   try {

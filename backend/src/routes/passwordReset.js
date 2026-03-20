@@ -2,14 +2,12 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
+import { passwordResetLimiter } from '../middleware/rateLimiter.js'
 
 const router = Router()
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const TOKEN_TTL_MS = 60 * 60 * 1000
-const MAX_REQUESTS_PER_WINDOW = 3
-const emailRateLimitStore = new Map()
-
 function normalizeEmail(email) {
   if (typeof email !== 'string') {
     return ''
@@ -32,32 +30,11 @@ function getDashboardUrl() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
 }
 
-function isRateLimited(normalizedEmail) {
-  const now = Date.now()
-  const record = emailRateLimitStore.get(normalizedEmail)
-
-  if (!record || now - record.windowStartedAt >= TOKEN_TTL_MS) {
-    emailRateLimitStore.set(normalizedEmail, { count: 1, windowStartedAt: now })
-    return false
-  }
-
-  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
-    return true
-  }
-
-  record.count += 1
-  return false
-}
-
-router.post('/request', async (req, res) => {
+router.post('/request', passwordResetLimiter, async (req, res) => {
   const normalizedEmail = normalizeEmail(req.body?.email)
 
   if (!EMAIL_REGEX.test(normalizedEmail)) {
     return res.status(400).json({ error: 'Please enter a valid email address.' })
-  }
-
-  if (isRateLimited(normalizedEmail)) {
-    return res.status(429).json({ error: 'Too many reset attempts. Please try again in an hour.' })
   }
 
   try {

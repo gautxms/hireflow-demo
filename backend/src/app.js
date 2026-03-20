@@ -7,6 +7,7 @@ import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
 import uploadsRoutes from './routes/uploads.js'
 import { requireAuth } from './middleware/authMiddleware.js'
+import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 
 const app = express()
 
@@ -54,12 +55,14 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
+app.use('/api', generalApiLimiterUnauth)
+
 app.use('/api/auth', authRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
-app.use('/api/payments', paymentsRoutes)
-app.use('/api/uploads', uploadsRoutes)
+app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
+app.use('/api/uploads', requireAuth, generalApiLimiterAuth, uploadsRoutes)
 
-app.get('/api/protected', requireAuth, (req, res) => {
+app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })
 })
 
