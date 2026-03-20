@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import DOMPurify from 'dompurify'
+import { validateEmail, validatePassword, validatePasswordMatch } from '../utils/validateForm'
 import './AuthPage.css'
 import BackButton from './BackButton'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const COMPANY_REGEX = /^[a-zA-Z0-9\-\s]*$/
 
 function sanitizeForDisplay(message) {
@@ -25,8 +25,9 @@ async function parseResponsePayload(response) {
 function getInlineErrors({ email, company, phone, password, confirmPassword, acceptedTerms }) {
   const errors = {}
 
-  if (!EMAIL_REGEX.test(email.trim().toLowerCase())) {
-    errors.email = 'Enter a valid email address.'
+  const emailError = validateEmail(email)
+  if (emailError) {
+    errors.email = emailError
   }
 
   if (company && (!COMPANY_REGEX.test(company) || company.length > 100)) {
@@ -37,12 +38,14 @@ function getInlineErrors({ email, company, phone, password, confirmPassword, acc
     errors.phone = 'Phone must use E.164 format (example: +14155552671).'
   }
 
-  if (password.length < 8) {
-    errors.password = 'Password must be at least 8 characters long.'
+  const passwordError = validatePassword(password)
+  if (passwordError) {
+    errors.password = passwordError
   }
 
-  if (password !== confirmPassword) {
-    errors.confirmPassword = 'Passwords do not match.'
+  const passwordMatchError = validatePasswordMatch(password, confirmPassword)
+  if (passwordMatchError) {
+    errors.confirmPassword = passwordMatchError
   }
 
   if (!acceptedTerms) {

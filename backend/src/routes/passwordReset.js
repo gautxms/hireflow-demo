@@ -2,10 +2,10 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
+import { emailSchema, validateBody, validateRequest, resetPasswordSchema } from '../middleware/validation.js'
 
 const router = Router()
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const TOKEN_TTL_MS = 60 * 60 * 1000
 const MAX_REQUESTS_PER_WINDOW = 3
 const emailRateLimitStore = new Map()
@@ -49,12 +49,18 @@ function isRateLimited(normalizedEmail) {
   return false
 }
 
-router.post('/request', async (req, res) => {
-  const normalizedEmail = normalizeEmail(req.body?.email)
 
-  if (!EMAIL_REGEX.test(normalizedEmail)) {
-    return res.status(400).json({ error: 'Please enter a valid email address.' })
+const validateResetPasswordPayload = (req, _res, next) => {
+  req.body = {
+    token: req.params.token,
+    newPassword: req.body?.password,
+    confirmPassword: req.body?.confirmPassword,
   }
+  return next()
+}
+
+router.post('/request', validateBody(emailSchema), async (req, res) => {
+  const normalizedEmail = normalizeEmail(req.body?.email)
 
   if (isRateLimited(normalizedEmail)) {
     return res.status(429).json({ error: 'Too many reset attempts. Please try again in an hour.' })
@@ -120,21 +126,8 @@ router.get('/verify/:token', async (req, res) => {
   }
 })
 
-router.post('/confirm/:token', async (req, res) => {
-  const { token } = req.params
-  const { password, confirmPassword } = req.body || {}
-
-  if (typeof token !== 'string' || token.length < 20) {
-    return res.status(400).json({ error: 'Invalid token format.' })
-  }
-
-  if (typeof password !== 'string' || password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' })
-  }
-
-  if (password !== confirmPassword) {
-    return res.status(400).json({ error: 'Passwords do not match.' })
-  }
+router.post('/confirm/:token', validateResetPasswordPayload, validateRequest(resetPasswordSchema), async (req, res) => {
+  const { token, newPassword } = req.body
 
   try {
     const tokenHash = hashToken(token)
@@ -146,7 +139,7 @@ router.post('/confirm/:token', async (req, res) => {
        WHERE password_reset_token = $2
          AND password_reset_expires_at > NOW()
        RETURNING id`,
-      [password, tokenHash],
+      [newPassword, tokenHash],
     )
 
     if (!result.rows[0]) {
