@@ -62,7 +62,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/auth', passwordResetRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
-app.use('/api/uploads', requireAuth, generalApiLimiterAuth, uploadsRoutes)
+app.use('/api/uploads', uploadsRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })

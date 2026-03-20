@@ -27,20 +27,18 @@ function startPaymentRetryCron() {
   console.log('[Payment Retry] Cron job scheduled (every 15 minutes)')
 }
 
-app.use('/api/password-reset', passwordResetRoutes)
-
 async function start() {
   try {
-    // Run database migrations first
     await runMigrations()
-
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
 
-    // Then start the server
     app.listen(port, () => {
       console.log(`✓ Backend listening on port ${port}`)
+      console.log('[RateLimit] In-memory rate limits enabled. Localhost IPs are whitelisted.')
     })
+
+    startPaymentRetryCron()
   } catch (error) {
     console.error('[Startup] Fatal error:', error)
     process.exit(1)

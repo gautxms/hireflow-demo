@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { schemas, validateBody } from '../middleware/validation.js'
+import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
 
 const router = Router()
 
@@ -17,7 +18,7 @@ function getAppOrigin(req) {
   return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
 }
 
-router.post('/checkout-url', requireAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
+router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
   const { plan } = req.body || {}
 
   console.log('[Paddle Checkout] Request received:', {

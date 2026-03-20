@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { getFailedPaymentsForAdmin } from '../services/paymentRetry.js'
+import { getRateLimitStats } from '../middleware/rateLimiter.js'
 
 const router = Router()
 
@@ -21,6 +22,11 @@ router.get('/users', async (_req, res) => {
   } catch {
     return res.status(500).json({ error: 'Internal server error' })
   }
+})
+
+
+router.get('/rate-limit-stats', (_req, res) => {
+  return res.json(getRateLimitStats())
 })
 
 router.post('/usage-overrides', async (req, res) => {
