@@ -1,9 +1,8 @@
 import 'dotenv/config'
 import rateLimit from 'express-rate-limit'
 import app from './server.js'
-import passwordResetRoutes from './routes/passwordReset.js'
 import { runMigrations } from './db/migrate.js'
-import { ensurePaymentTrackingTables, logErrorToDatabase } from './db/client.js'
+import { ensurePasswordResetTables, ensurePaymentTrackingTables, logErrorToDatabase } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
 
 const port = process.env.PORT || 4000
@@ -29,8 +28,6 @@ function startPaymentRetryCron() {
   console.log('[Payment Retry] Cron job scheduled (every 15 minutes)')
 }
 
-app.use('/api/password-reset', passwordResetRoutes)
-
 const uploadIpRateLimit = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 200,
@@ -48,6 +45,9 @@ async function start() {
   try {
     // Run database migrations first
     await runMigrations()
+
+    await ensurePasswordResetTables()
+    await ensurePaymentTrackingTables()
 
     // Then start the server
     app.listen(port, () => {
