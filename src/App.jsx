@@ -166,17 +166,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }
 
       return <AccountSettingsPage />
-    if (pathname === '/billing') {
-      return <BillingPage />
     }
 
-    if (pathname === '/account') {
-      return (
-        <div style={{ padding: '2rem', maxWidth: 680, margin: '0 auto' }}>
-          <h1 style={{ marginBottom: '0.5rem' }}>Account</h1>
-          <p style={{ color: '#4b5563' }}>Account details are coming soon.</p>
-        </div>
-      )
+    if (pathname === '/billing') {
+      return <BillingPage />
     }
 
     if (!isAuthenticated && pathname === '/signup') {
