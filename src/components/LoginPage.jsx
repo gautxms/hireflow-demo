@@ -1,8 +1,15 @@
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
 import './AuthPage.css'
 import BackButton from './BackButton'
+import { validateEmail } from '../utils/validateForm'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+
+
+function sanitizeForDisplay(message) {
+  return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
+}
 
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -18,11 +25,29 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
+    setFieldErrors({})
+
+    const nextFieldErrors = {}
+    const emailError = validateEmail(email)
+    if (emailError) nextFieldErrors.email = emailError
+
+    if (!password) {
+      nextFieldErrors.password = 'Password required'
+    } else if (password.length > 128) {
+      nextFieldErrors.password = 'Password must be 128 characters or fewer'
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors)
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -38,21 +63,21 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
       if (!response.ok) {
         const serverError = (payload?.error || '').toLowerCase()
         if (serverError.includes('verify') && serverError.includes('email')) {
-          setError('Please verify your email before logging in')
+          setError(sanitizeForDisplay('Please verify your email before logging in'))
         } else {
-          setError(payload?.error || `Login failed (${response.status})`)
+          setError(sanitizeForDisplay(payload?.error || `Login failed (${response.status})`))
         }
         return
       }
 
       if (!payload?.token) {
-        setError('Login succeeded but token was missing from response')
+        setError(sanitizeForDisplay('Login succeeded but token was missing from response'))
         return
       }
 
       onAuthSuccess(payload.token, payload?.user?.subscription_status || 'inactive', payload?.user || null)
     } catch {
-      setError('Unable to connect to auth server. Check backend URL / CORS settings.')
+      setError(sanitizeForDisplay('Unable to connect to auth server. Check backend URL / CORS settings.'))
     } finally {
       setLoading(false)
     }
@@ -72,9 +97,11 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label" htmlFor="login-email">Email</label>
           <input className="auth-input" id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          {fieldErrors.email && <p className="auth-error">{fieldErrors.email}</p>}
 
           <label className="auth-label" htmlFor="login-password">Password</label>
           <input className="auth-input" id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          {fieldErrors.password && <p className="auth-error">{fieldErrors.password}</p>}
 
           <p style={{ margin: '-0.25rem 0 0.25rem', textAlign: 'right' }}>
             <button className="auth-link" type="button" onClick={onForgotPassword}>Forgot password?</button>

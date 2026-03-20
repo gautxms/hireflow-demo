@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { signToken } from '../utils/jwt.js'
 import { sendVerificationEmail } from '../utils/mailer.js'
-import { schemas, validateBody } from '../middleware/validation.js'
+import { emailSchema, schemas, validateBody } from '../middleware/validation.js'
 import { loginLimiter, signupLimiter } from '../middleware/rateLimiter.js'
 
 const router = Router()
@@ -84,7 +84,7 @@ function recordResendAttempt(email, now = Date.now()) {
   resendVerificationAttemptsByEmail.set(email, [...attempts, now])
 }
 
-router.post('/signup', signupLimiter, async (req, res) => {
+router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, res) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -163,13 +163,8 @@ router.get('/verify-email', async (req, res) => {
   }
 })
 
-router.post('/resend-email-verification', async (req, res) => {
-  const normalizedEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-  if (!emailRegex.test(normalizedEmail)) {
-    return res.status(400).json({ error: 'Valid email is required' })
-  }
+router.post('/resend-email-verification', validateBody(emailSchema), async (req, res) => {
+  const normalizedEmail = req.body.email
 
   const resendWindow = getResendWindowState(normalizedEmail)
 
@@ -247,7 +242,7 @@ router.post('/resend-email-verification', async (req, res) => {
   }
 })
 
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()

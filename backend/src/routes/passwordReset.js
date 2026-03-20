@@ -1,21 +1,13 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
-import { passwordResetLimiter } from '../middleware/rateLimiter.js'
-import { resetTokenAuth } from '../middleware/resetTokenAuth.js'
-import {
-  createPasswordResetToken,
-  generateResetToken,
-  getResetRateLimitState,
-  normalizeEmail,
-  recordResetAttempt,
-  markTokenUsedAndResetPassword,
-} from '../services/resetTokenService.js'
-import { sendPasswordResetConfirmationEmail, sendPasswordResetEmail } from '../utils/mailer.js'
+import { emailSchema, validateBody, validateRequest, resetPasswordSchema } from '../middleware/validation.js'
 
 const router = Router()
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const TOKEN_TTL_MS = 60 * 60 * 1000
+const MAX_REQUESTS_PER_WINDOW = 3
+const emailRateLimitStore = new Map()
 
 function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
@@ -30,9 +22,17 @@ function buildResetUrl(token) {
 router.post('/forgot-password', async (req, res) => {
   const normalizedEmail = normalizeEmail(req.body?.email)
 
-  if (!EMAIL_REGEX.test(normalizedEmail)) {
-    return res.status(400).json({ error: 'Please enter a valid email address.' })
+const validateResetPasswordPayload = (req, _res, next) => {
+  req.body = {
+    token: req.params.token,
+    newPassword: req.body?.password,
+    confirmPassword: req.body?.confirmPassword,
   }
+  return next()
+}
+
+router.post('/request', validateBody(emailSchema), async (req, res) => {
+  const normalizedEmail = normalizeEmail(req.body?.email)
 
   try {
     const result = await pool.query(
@@ -82,23 +82,21 @@ router.get('/reset-password', resetTokenAuth({ allowValidFalseResponse: true }),
   })
 })
 
-router.post('/reset-password', resetTokenAuth(), async (req, res) => {
-  const { newPassword, confirmPassword } = req.body || {}
-
-  if (typeof newPassword !== 'string' || newPassword.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' })
-  }
-
-  if (newPassword !== confirmPassword) {
-    return res.status(400).json({ error: 'Passwords do not match.' })
-  }
+router.post('/confirm/:token', validateResetPasswordPayload, validateRequest(resetPasswordSchema), async (req, res) => {
+  const { token, newPassword } = req.body
 
   try {
-    await markTokenUsedAndResetPassword({
-      tokenId: req.resetTokenRecord.id,
-      userId: req.resetTokenRecord.user_id,
-      newPassword,
-    })
+    const tokenHash = hashToken(token)
+    const result = await pool.query(
+      `UPDATE users
+       SET password_hash = crypt($1, gen_salt('bf', 10)),
+           password_reset_token = NULL,
+           password_reset_expires_at = NULL
+       WHERE password_reset_token = $2
+         AND password_reset_expires_at > NOW()
+       RETURNING id`,
+      [newPassword, tokenHash],
+    )
 
     await sendPasswordResetConfirmationEmail({
       to: req.resetTokenRecord.email,

@@ -3,6 +3,11 @@ import isEmail from 'isemail'
 import { hasSuspiciousPattern, sanitizeCompany, sanitizeEmail, sanitizePhone, sanitizeText } from '../utils/sanitize.js'
 
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
+const MAX_FILE_SIZE = 50 * 1024 * 1024
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
 
 const baseOptions = {
   abortEarly: false,
@@ -50,17 +55,38 @@ const phoneField = Joi.string()
     return normalized
   })
 
+export const signupSchema = Joi.object({
+  email: emailField,
+  password: passwordField,
+  company: companyField.optional(),
+  phone: phoneField.optional(),
+})
+
+export const loginSchema = Joi.object({
+  email: emailField,
+  password: Joi.string().required(),
+})
+
+export const resetPasswordSchema = Joi.object({
+  token: Joi.string().min(20).required(),
+  newPassword: passwordField,
+  confirmPassword: Joi.string().valid(Joi.ref('newPassword')).required(),
+})
+
+export const emailSchema = Joi.object({
+  email: emailField,
+})
+
+export const fileUploadSchema = Joi.object({
+  fileSize: Joi.number().max(MAX_FILE_SIZE).required(),
+  mimeType: Joi.string().valid(...ALLOWED_MIME_TYPES).required(),
+})
+
 export const schemas = {
-  signup: Joi.object({
-    email: emailField,
-    password: passwordField,
-    company: companyField.optional(),
-    phone: phoneField.optional(),
-  }),
-  login: Joi.object({
-    email: emailField,
-    password: passwordField,
-  }),
+  signup: signupSchema,
+  login: loginSchema,
+  resetPassword: resetPasswordSchema,
+  email: emailSchema,
   paddleCheckout: Joi.object({
     plan: Joi.string().valid('monthly', 'annual').required(),
   }),
@@ -73,9 +99,10 @@ function formatJoiErrors(error) {
   }))
 }
 
-export function validateBody(schema) {
+export const validateRequest = (schema, target = 'body') => {
   return (req, res, next) => {
-    const { error, value } = schema.validate(req.body ?? {}, baseOptions)
+    const payload = req[target] ?? {}
+    const { error, value } = schema.validate(payload, baseOptions)
 
     if (error) {
       const validationErrors = formatJoiErrors(error)
@@ -99,7 +126,9 @@ export function validateBody(schema) {
       return res.status(400).json({ error: 'Invalid input detected' })
     }
 
-    req.body = value
+    req[target] = value
     return next()
   }
 }
+
+export const validateBody = (schema) => validateRequest(schema, 'body')
