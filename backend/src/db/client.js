@@ -49,31 +49,37 @@ export async function ensurePaymentTrackingTables() {
     CREATE INDEX IF NOT EXISTS idx_payment_attempts_customer_email
       ON payment_attempts (customer_email);
 
-    CREATE TABLE IF NOT EXISTS error_logs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      source TEXT NOT NULL,
-      message TEXT NOT NULL,
-      stack TEXT,
-      context JSONB,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
   `)
 }
 
 export async function logErrorToDatabase(source, error, context = null) {
-  if (process.env.SENTRY_DSN && globalThis?.Sentry?.captureException) {
-    globalThis.Sentry.captureException(error, {
-      tags: { source },
-      extra: context || {},
-    })
-    return
-  }
-
   const safeMessage = error?.message || String(error) || 'Unknown error'
+  const errorType = error?.name || error?.code || 'UnknownError'
+  const endpoint = context?.endpoint || context?.path || 'internal'
+  const method = context?.method || 'SYSTEM'
 
   await pool.query(
-    `INSERT INTO error_logs (source, message, stack, context)
-     VALUES ($1, $2, $3, $4::jsonb)`,
-    [source, safeMessage, error?.stack || null, JSON.stringify(context || {})],
+    `INSERT INTO error_logs (
+      error_type,
+      source,
+      endpoint,
+      method,
+      status_code,
+      message,
+      stack,
+      request_context,
+      error_fingerprint
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, md5($9))`,
+    [
+      errorType,
+      source,
+      endpoint,
+      method,
+      500,
+      safeMessage,
+      error?.stack || null,
+      JSON.stringify(context || {}),
+      `${errorType}:${endpoint}`,
+    ],
   )
 }
