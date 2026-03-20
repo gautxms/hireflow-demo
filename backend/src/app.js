@@ -6,6 +6,7 @@ import paddleWebhookRoutes from './routes/paddleWebhook.js'
 import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
 import uploadsRoutes from './routes/uploads.js'
+import passwordResetRoutes from './routes/passwordReset.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 
@@ -58,6 +59,7 @@ app.get('/health', (_req, res) => {
 app.use('/api', generalApiLimiterUnauth)
 
 app.use('/api/auth', authRoutes)
+app.use('/api/auth', passwordResetRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
 app.use('/api/uploads', requireAuth, generalApiLimiterAuth, uploadsRoutes)

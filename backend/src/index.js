@@ -1,8 +1,7 @@
 import 'dotenv/config'
 import app from './server.js'
-import passwordResetRoutes from './routes/passwordReset.js'
 import { runMigrations } from './db/migrate.js'
-import { ensurePaymentTrackingTables, logErrorToDatabase } from './db/client.js'
+import { ensurePasswordResetTables, ensurePaymentTrackingTables, logErrorToDatabase } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
 
 const port = process.env.PORT || 4000
@@ -34,6 +33,9 @@ async function start() {
   try {
     // Run database migrations first
     await runMigrations()
+
+    await ensurePasswordResetTables()
+    await ensurePaymentTrackingTables()
 
     // Then start the server
     app.listen(port, () => {
