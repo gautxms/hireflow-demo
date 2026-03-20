@@ -27,9 +27,25 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS subscription_started_at TIMESTAMP;
       `,
     },
-
     {
-      name: '004-add-usage-tracking',
+      name: '004-add-password-reset-tokens',
+      sql: `
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          token VARCHAR(255) UNIQUE NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          used BOOLEAN DEFAULT false,
+          used_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tokens_token ON password_reset_tokens(token);
+        CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON password_reset_tokens(user_id);
+      `,
+    },
+    {
+      name: '005-add-usage-tracking',
       sql: `
         CREATE TABLE IF NOT EXISTS usage_log (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -66,7 +82,6 @@ export async function runMigrations() {
       await pool.query(migration.sql)
       console.log(`[Migration] ✓ ${migration.name}`)
     } catch (error) {
-      // Ignore column already exists errors
       if (error.message.includes('already exists')) {
         console.log(`[Migration] ℹ ${migration.name} (already exists)`)
       } else {

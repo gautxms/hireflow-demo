@@ -176,9 +176,20 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <ForgotPasswordPage onBackToLogin={() => navigate('/login')} />
     }
 
+    if (!isAuthenticated && pathname === '/reset-password') {
+      return <ResetPasswordPage onGoToLogin={() => navigate('/login')} />
+    }
+
     if (!isAuthenticated && pathname.startsWith('/reset-password/')) {
       const resetToken = pathname.replace('/reset-password/', '')
-      return <ResetPasswordPage token={resetToken} onGoToLogin={() => navigate('/login')} />
+      const url = new URL(window.location.href)
+
+      if (!url.searchParams.get('token') && resetToken) {
+        url.searchParams.set('token', resetToken)
+        window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`)
+      }
+
+      return <ResetPasswordPage onGoToLogin={() => navigate('/login')} />
     }
 
     return (
@@ -235,7 +246,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/forgot-password' || pathname.startsWith('/reset-password/')
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     if (pathname !== '/') {
