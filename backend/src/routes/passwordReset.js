@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
-import { emailSchema, validateBody, validateRequest, resetPasswordSchema } from '../middleware/validation.js'
+import { emailSchema, resetPasswordSchema, validateBody, validateRequest } from '../middleware/validation.js'
 
 const router = Router()
 
@@ -49,8 +49,7 @@ function isRateLimited(normalizedEmail) {
   return false
 }
 
-
-const validateResetPasswordPayload = (req, _res, next) => {
+const validateResetPasswordPayloadFromParam = (req, _res, next) => {
   req.body = {
     token: req.params.token,
     newPassword: req.body?.password,
@@ -59,7 +58,16 @@ const validateResetPasswordPayload = (req, _res, next) => {
   return next()
 }
 
-router.post('/request', validateBody(emailSchema), async (req, res) => {
+const validateResetPasswordPayloadFromBody = (req, _res, next) => {
+  req.body = {
+    token: req.body?.token,
+    newPassword: req.body?.newPassword || req.body?.password,
+    confirmPassword: req.body?.confirmPassword,
+  }
+  return next()
+}
+
+async function requestPasswordReset(req, res) {
   const normalizedEmail = normalizeEmail(req.body?.email)
 
   if (isRateLimited(normalizedEmail)) {
@@ -97,36 +105,9 @@ router.post('/request', validateBody(emailSchema), async (req, res) => {
   } catch {
     return res.status(500).json({ error: 'Unable to process password reset request.' })
   }
-})
+}
 
-router.get('/verify/:token', async (req, res) => {
-  const { token } = req.params
-
-  if (typeof token !== 'string' || token.length < 20) {
-    return res.status(400).json({ error: 'Invalid token format.' })
-  }
-
-  try {
-    const tokenHash = hashToken(token)
-    const result = await pool.query(
-      `SELECT id
-       FROM users
-       WHERE password_reset_token = $1
-         AND password_reset_expires_at > NOW()`,
-      [tokenHash],
-    )
-
-    if (!result.rows[0]) {
-      return res.status(401).json({ error: 'Reset token is invalid or expired.' })
-    }
-
-    return res.json({ message: 'Reset token is valid.' })
-  } catch {
-    return res.status(500).json({ error: 'Unable to verify reset token.' })
-  }
-})
-
-router.post('/confirm/:token', validateResetPasswordPayload, validateRequest(resetPasswordSchema), async (req, res) => {
+async function confirmPasswordReset(req, res) {
   const { token, newPassword } = req.body
 
   try {
@@ -150,6 +131,39 @@ router.post('/confirm/:token', validateResetPasswordPayload, validateRequest(res
   } catch {
     return res.status(500).json({ error: 'Unable to reset password.' })
   }
+}
+
+router.post('/request', validateBody(emailSchema), requestPasswordReset)
+router.post('/forgot-password', validateBody(emailSchema), requestPasswordReset)
+
+router.get('/verify/:token', async (req, res) => {
+  const { token } = req.params
+
+  if (typeof token !== 'string' || token.length < 20) {
+    return res.status(400).json({ error: 'Invalid token format.' })
+  }
+
+  try {
+    const tokenHash = hashToken(token)
+    const result = await pool.query(
+      `SELECT id
+       FROM users
+       WHERE password_reset_token = $1
+         AND password_reset_expires_at > NOW()`,
+      [tokenHash],
+    )
+
+    if (!result.rows[0]) {
+      return res.status(401).json({ error: 'Reset token is invalid or expired.' })
+    }
+
+    return res.json({ message: 'Reset token is valid.', valid: true })
+  } catch {
+    return res.status(500).json({ error: 'Unable to verify reset token.' })
+  }
 })
+
+router.post('/confirm/:token', validateResetPasswordPayloadFromParam, validateRequest(resetPasswordSchema), confirmPasswordReset)
+router.post('/reset-password', validateResetPasswordPayloadFromBody, validateRequest(resetPasswordSchema), confirmPasswordReset)
 
 export default router
