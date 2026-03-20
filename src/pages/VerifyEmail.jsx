@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 
 export default function VerifyEmail() {
-  const [searchParams] = useSearchParams()
   const [status, setStatus] = useState('verifying') // 'verifying', 'success', 'error'
   const [message, setMessage] = useState('Verifying your email...')
+  const searchParams = new URLSearchParams(window.location.search)
   const email = searchParams.get('email')
 
   useEffect(() => {
