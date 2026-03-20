@@ -17,7 +17,7 @@ function getAppOrigin(req) {
   return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
 }
 
-router.post('/checkout-url', requireAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
+router.post('/checkout-url', requireAuth, validateBody(schemas.paddleCheckout), async (req, res, next) => {
   const { plan } = req.body || {}
 
   console.log('[Paddle Checkout] Request received:', {
@@ -115,18 +115,7 @@ router.post('/checkout-url', requireAuth, validateBody(schemas.paddleCheckout), 
     console.log('[Paddle Checkout] Success, returning URL')
     return res.json({ checkoutUrl })
   } catch (error) {
-    console.error('[Paddle Checkout] Error:', {
-      message: error.message,
-      code: error.code || 'UNKNOWN',
-      status: error.status || 'UNKNOWN',
-      stack: error.stack,
-    })
-
-    return res.status(500).json({
-      error: 'Failed to create checkout',
-      message: error.message,
-      code: error.code,
-    })
+    return next(error)
   }
 })
 

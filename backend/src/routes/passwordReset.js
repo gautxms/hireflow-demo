@@ -1,14 +1,10 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
-import { sendPasswordResetEmail } from '../utils/mailer.js'
-import { passwordResetLimiter } from '../middleware/rateLimiter.js'
 import { resetTokenAuth } from '../middleware/resetTokenAuth.js'
 import {
   createPasswordResetToken,
   generateResetToken,
-  getResetRateLimitState,
   normalizeEmail,
-  recordResetAttempt,
   markTokenUsedAndResetPassword,
 } from '../services/resetTokenService.js'
 import { sendPasswordResetConfirmationEmail, sendPasswordResetEmail } from '../utils/mailer.js'
@@ -27,7 +23,7 @@ function buildResetUrl(token) {
   return url.toString()
 }
 
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', async (req, res, next) => {
   const normalizedEmail = normalizeEmail(req.body?.email)
 
   if (!EMAIL_REGEX.test(normalizedEmail)) {
@@ -70,8 +66,7 @@ router.post('/forgot-password', async (req, res) => {
       message: 'Check your email for reset link',
     })
   } catch (error) {
-    console.error('[AUTH] Failed to create password reset request:', error)
-    return res.status(500).json({ error: 'Unable to process password reset request.' })
+    return next(error)
   }
 })
 
@@ -82,7 +77,7 @@ router.get('/reset-password', resetTokenAuth({ allowValidFalseResponse: true }),
   })
 })
 
-router.post('/reset-password', resetTokenAuth(), async (req, res) => {
+router.post('/reset-password', resetTokenAuth(), async (req, res, next) => {
   const { newPassword, confirmPassword } = req.body || {}
 
   if (typeof newPassword !== 'string' || newPassword.length < 8) {
@@ -115,8 +110,7 @@ router.post('/reset-password', resetTokenAuth(), async (req, res) => {
       message: 'Password reset successful',
     })
   } catch (error) {
-    console.error('[AUTH] Failed to reset password:', error)
-    return res.status(500).json({ error: 'Unable to reset password.' })
+    return next(error)
   }
 })
 

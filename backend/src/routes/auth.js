@@ -84,7 +84,7 @@ function recordResendAttempt(email, now = Date.now()) {
   resendVerificationAttemptsByEmail.set(email, [...attempts, now])
 }
 
-router.post('/signup', signupLimiter, async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res, next) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -128,11 +128,11 @@ router.post('/signup', signupLimiter, async (req, res) => {
       return res.status(409).json({ error: 'Email already exists' })
     }
 
-    return res.status(500).json({ error: 'Internal server error' })
+    return next(error)
   }
 })
 
-router.get('/verify-email', async (req, res) => {
+router.get('/verify-email', async (req, res, next) => {
   const token = req.query.token
 
   if (typeof token !== 'string' || token.length === 0) {
@@ -158,12 +158,12 @@ router.get('/verify-email', async (req, res) => {
     }
 
     return res.redirect(getVerificationSuccessUrl())
-  } catch {
-    return res.status(500).json({ error: 'Internal server error' })
+  } catch (error) {
+    return next(error)
   }
 })
 
-router.post('/resend-email-verification', async (req, res) => {
+router.post('/resend-email-verification', async (req, res, next) => {
   const normalizedEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -243,11 +243,11 @@ router.post('/resend-email-verification', async (req, res) => {
     })
   } catch (error) {
     console.error('[AUTH] Failed to resend verification email:', error)
-    return res.status(500).json({ error: 'Internal server error' })
+    return next(error)
   }
 })
 
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   const { email, password } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -284,8 +284,8 @@ router.post('/login', loginLimiter, async (req, res) => {
         subscription_status: user.subscription_status,
       },
     })
-  } catch {
-    return res.status(500).json({ error: 'Internal server error' })
+  } catch (error) {
+    return next(error)
   }
 })
 

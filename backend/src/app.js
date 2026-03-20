@@ -9,6 +9,7 @@ import uploadsRoutes from './routes/uploads.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 
 const app = express()
 
@@ -31,7 +32,6 @@ const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins])
 const corsOptions = {
   credentials: true,
   origin(origin, callback) {
-    // Allow server-to-server or local non-browser requests with no Origin header.
     if (!origin) {
       return callback(null, true)
     }
@@ -47,7 +47,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions))
 
-// Keep Paddle webhook ahead of JSON parsing so route-level raw body handling still works.
 app.use('/api/paddle/webhook', paddleWebhookRoutes)
 app.use(express.json())
 app.use(cookieParser())
@@ -68,18 +67,7 @@ app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })
 })
 
-// Log all requests that don't match a route (for debugging 404 issues)
-app.use((req, res) => {
-  console.log('[404] No route matched:', {
-    method: req.method,
-    path: req.path,
-    url: req.url,
-    headers: {
-      'content-type': req.headers['content-type'],
-      'authorization': req.headers.authorization ? 'present' : 'missing',
-    },
-  })
-  res.status(404).json({ error: 'Not found' })
-})
+app.use(notFoundHandler)
+app.use(errorHandler)
 
 export default app

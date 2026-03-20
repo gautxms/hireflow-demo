@@ -1,6 +1,5 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
-import { getFailedPaymentsForAdmin } from '../services/paymentRetry.js'
 
 const router = Router()
 
@@ -9,7 +8,7 @@ function getMonthStart(inputDate) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
 }
 
-router.get('/users', async (_req, res) => {
+router.get('/users', async (_req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT id, email, subscription_status, paddle_subscription_id, created_at
@@ -18,12 +17,49 @@ router.get('/users', async (_req, res) => {
     )
 
     return res.json(result.rows)
-  } catch {
-    return res.status(500).json({ error: 'Internal server error' })
+  } catch (error) {
+    return next(error)
   }
 })
 
-router.post('/usage-overrides', async (req, res) => {
+router.get('/errors/dashboard', async (_req, res, next) => {
+  try {
+    const recentErrors = await pool.query(
+      `SELECT id, error_type, endpoint, method, status_code, message, created_at, alert_sent
+       FROM error_logs
+       WHERE archived_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 100`,
+    )
+
+    const groupedErrors = await pool.query(
+      `SELECT error_type,
+              endpoint,
+              COUNT(*)::int AS occurrences,
+              MAX(created_at) AS latest_seen
+       FROM error_logs
+       WHERE archived_at IS NULL
+       GROUP BY error_type, endpoint
+       ORDER BY occurrences DESC, latest_seen DESC
+       LIMIT 50`,
+    )
+
+    return res.json({
+      recent: recentErrors.rows,
+      grouped: groupedErrors.rows,
+    })
+  } catch (error) {
+    return next(error)
+  }
+})
+
+router.get('/errors/test-500', (_req, _res, next) => {
+  const error = new Error('Intentional test error for monitoring validation')
+  error.statusCode = 500
+  next(error)
+})
+
+router.post('/usage-overrides', async (req, res, next) => {
   const { userId, monthStart, uploadLimit, resetUsage = false, note = null } = req.body || {}
 
   if (!userId) {
@@ -51,12 +87,11 @@ router.post('/usage-overrides', async (req, res) => {
       override: result.rows[0],
     })
   } catch (error) {
-    console.error('[Admin] Failed to upsert usage override:', error)
-    return res.status(500).json({ error: 'Unable to save usage override' })
+    return next(error)
   }
 })
 
-router.delete('/usage-overrides/:userId', async (req, res) => {
+router.delete('/usage-overrides/:userId', async (req, res, next) => {
   const { userId } = req.params
   const monthStart = getMonthStart(req.query.monthStart)
 
@@ -74,8 +109,7 @@ router.delete('/usage-overrides/:userId', async (req, res) => {
 
     return res.status(200).json({ ok: true, message: 'Usage override removed' })
   } catch (error) {
-    console.error('[Admin] Failed to clear usage override:', error)
-    return res.status(500).json({ error: 'Unable to clear usage override' })
+    return next(error)
   }
 })
 
