@@ -27,7 +27,7 @@ export default function ForgotPasswordPage({ onBackToLogin }) {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/password-reset/request`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -41,7 +41,7 @@ export default function ForgotPasswordPage({ onBackToLogin }) {
         return
       }
 
-      setSuccess(payload?.message || 'If the email exists, a reset link has been sent.')
+      setSuccess(payload?.message || 'Check your email for reset link')
       setEmail('')
     } catch {
       setError('Unable to process request right now. Please try again.')
@@ -75,7 +75,7 @@ export default function ForgotPasswordPage({ onBackToLogin }) {
           {success && <p style={{ color: '#047857', margin: 0 }}>{success}</p>}
 
           <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? 'Sending reset link...' : 'Send reset link'}
+            {loading ? 'Sending reset link...' : 'Send Reset Link'}
           </button>
         </form>
 

@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
@@ -10,45 +9,18 @@ const TOKEN_TTL_MS = 60 * 60 * 1000
 const MAX_REQUESTS_PER_WINDOW = 3
 const emailRateLimitStore = new Map()
 
-function normalizeEmail(email) {
-  if (typeof email !== 'string') {
-    return ''
-  }
-
-  return email.trim().toLowerCase()
-}
-
-function hashToken(token) {
-  return crypto.createHash('sha256').update(token).digest('hex')
-}
-
-function buildResetUrl(req, token) {
-  const frontendOrigin = process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
-  const url = new URL(`/reset-password/${token}`, frontendOrigin)
-  return url.toString()
-}
-
-function getDashboardUrl() {
+function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
 }
 
-function isRateLimited(normalizedEmail) {
-  const now = Date.now()
-  const record = emailRateLimitStore.get(normalizedEmail)
-
-  if (!record || now - record.windowStartedAt >= TOKEN_TTL_MS) {
-    emailRateLimitStore.set(normalizedEmail, { count: 1, windowStartedAt: now })
-    return false
-  }
-
-  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
-    return true
-  }
-
-  record.count += 1
-  return false
+function buildResetUrl(token) {
+  const url = new URL('/reset-password', getFrontendOrigin())
+  url.searchParams.set('token', token)
+  return url.toString()
 }
 
+router.post('/forgot-password', async (req, res) => {
+  const normalizedEmail = normalizeEmail(req.body?.email)
 
 const validateResetPasswordPayload = (req, _res, next) => {
   req.body = {
@@ -62,68 +34,52 @@ const validateResetPasswordPayload = (req, _res, next) => {
 router.post('/request', validateBody(emailSchema), async (req, res) => {
   const normalizedEmail = normalizeEmail(req.body?.email)
 
-  if (isRateLimited(normalizedEmail)) {
-    return res.status(429).json({ error: 'Too many reset attempts. Please try again in an hour.' })
-  }
-
   try {
-    const result = await pool.query('SELECT id, email FROM users WHERE email = $1', [normalizedEmail])
+    const result = await pool.query(
+      `SELECT id, email
+       FROM users
+       WHERE LOWER(email) = LOWER($1)
+       LIMIT 1`,
+      [normalizedEmail],
+    )
+
     const user = result.rows[0]
 
     if (user) {
-      const rawToken = crypto.randomBytes(32).toString('hex')
-      const tokenHash = hashToken(rawToken)
-      const expiresAt = new Date(Date.now() + TOKEN_TTL_MS)
+      const token = generateResetToken()
+      await createPasswordResetToken(user.id, token)
 
-      await pool.query(
-        `UPDATE users
-         SET password_reset_token = $1,
-             password_reset_expires_at = $2
-         WHERE id = $3`,
-        [tokenHash, expiresAt, user.id],
-      )
-
-      const resetUrl = buildResetUrl(req, rawToken)
       await sendPasswordResetEmail({
         to: user.email,
-        resetUrl,
-        dashboardUrl: getDashboardUrl(),
+        firstName: user.email.split('@')[0],
+        resetUrl: buildResetUrl(token),
+      })
+
+      console.info('[AUTH] Password reset requested', {
+        userId: user.id,
+        email: normalizedEmail,
+      })
+    } else {
+      console.info('[AUTH] Password reset requested for non-existent email', {
+        email: normalizedEmail,
       })
     }
 
     return res.json({
-      message: 'If that email exists in our system, a password reset link has been sent.',
+      success: true,
+      message: 'Check your email for reset link',
     })
-  } catch {
+  } catch (error) {
+    console.error('[AUTH] Failed to create password reset request:', error)
     return res.status(500).json({ error: 'Unable to process password reset request.' })
   }
 })
 
-router.get('/verify/:token', async (req, res) => {
-  const { token } = req.params
-
-  if (typeof token !== 'string' || token.length < 20) {
-    return res.status(400).json({ error: 'Invalid token format.' })
-  }
-
-  try {
-    const tokenHash = hashToken(token)
-    const result = await pool.query(
-      `SELECT id
-       FROM users
-       WHERE password_reset_token = $1
-         AND password_reset_expires_at > NOW()`,
-      [tokenHash],
-    )
-
-    if (!result.rows[0]) {
-      return res.status(401).json({ error: 'Reset token is invalid or expired.' })
-    }
-
-    return res.json({ message: 'Reset token is valid.' })
-  } catch {
-    return res.status(500).json({ error: 'Unable to verify reset token.' })
-  }
+router.get('/reset-password', resetTokenAuth({ allowValidFalseResponse: true }), (req, res) => {
+  return res.json({
+    valid: true,
+    email: req.resetTokenRecord.email,
+  })
 })
 
 router.post('/confirm/:token', validateResetPasswordPayload, validateRequest(resetPasswordSchema), async (req, res) => {
@@ -142,12 +98,22 @@ router.post('/confirm/:token', validateResetPasswordPayload, validateRequest(res
       [newPassword, tokenHash],
     )
 
-    if (!result.rows[0]) {
-      return res.status(401).json({ error: 'Reset token is invalid or expired.' })
-    }
+    await sendPasswordResetConfirmationEmail({
+      to: req.resetTokenRecord.email,
+      firstName: req.resetTokenRecord.email.split('@')[0],
+    })
 
-    return res.json({ message: 'Password has been reset successfully.' })
-  } catch {
+    console.info('[AUTH] Password reset successful', {
+      userId: req.resetTokenRecord.user_id,
+      email: req.resetTokenRecord.email,
+    })
+
+    return res.json({
+      success: true,
+      message: 'Password reset successful',
+    })
+  } catch (error) {
+    console.error('[AUTH] Failed to reset password:', error)
     return res.status(500).json({ error: 'Unable to reset password.' })
   }
 })
