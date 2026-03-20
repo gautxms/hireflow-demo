@@ -12,15 +12,18 @@ import ContactPage from './components/ContactPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
+import VerifyEmail from './pages/VerifyEmail'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
 import BillingSuccess from './pages/BillingSuccess'
 import BillingCancel from './pages/BillingCancel'
+import BillingPage from './pages/BillingPage'
 import Checkout from './pages/Checkout'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
+import AccountSettingsPage from './pages/AccountSettingsPage'
 import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -140,6 +143,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <RefundPolicy />
     }
 
+    if (pathname === '/billing') {
+      return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
+    }
+
     if (pathname === '/billing/success') {
       return <BillingSuccess />
     }
@@ -150,6 +157,17 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/checkout') {
       return <Checkout />
+    }
+
+    if (pathname === '/account' || pathname === '/settings') {
+      if (!isAuthenticated) {
+        onRequireAuth('Please login or sign up to manage your account settings.')
+        return null
+      }
+
+      return <AccountSettingsPage />
+    if (pathname === '/billing') {
+      return <BillingPage />
     }
 
     if (pathname === '/account') {
@@ -191,6 +209,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }
 
       return <ResetPasswordPage onGoToLogin={() => navigate('/login')} />
+    }
+
+    if (pathname === '/verify') {
+      return <VerifyEmail />
     }
 
     return (
