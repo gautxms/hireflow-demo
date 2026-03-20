@@ -27,7 +27,13 @@ function getStrengthLabel(password) {
   return 'Strong'
 }
 
-export default function ResetPasswordPage({ token, onGoToLogin }) {
+function getTokenFromQuery() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('token') || ''
+}
+
+export default function ResetPasswordPage({ onGoToLogin }) {
+  const [token] = useState(() => getTokenFromQuery())
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -42,24 +48,27 @@ export default function ResetPasswordPage({ token, onGoToLogin }) {
     let isMounted = true
 
     async function verifyToken() {
+      if (!token) {
+        setError('This reset link is invalid. Please request a new one.')
+        setIsTokenValid(false)
+        setIsCheckingToken(false)
+        return
+      }
+
       try {
-        const response = await fetch(`${API_BASE_URL}/api/password-reset/verify/${token}`, {
+        const response = await fetch(`${API_BASE_URL}/api/auth/reset-password?token=${encodeURIComponent(token)}`, {
           method: 'GET',
           credentials: 'include',
         })
+
+        const payload = await parseResponsePayload(response)
 
         if (!isMounted) {
           return
         }
 
-        if (response.status === 401) {
+        if (!response.ok || !payload?.valid) {
           setError('This reset link has expired or is invalid. Please request a new one.')
-          setIsTokenValid(false)
-          return
-        }
-
-        if (!response.ok) {
-          setError('Unable to verify reset link. Please try again later.')
           setIsTokenValid(false)
           return
         }
@@ -102,29 +111,28 @@ export default function ResetPasswordPage({ token, onGoToLogin }) {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/password-reset/confirm/${token}`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ password, confirmPassword }),
+        body: JSON.stringify({ token, newPassword: password, confirmPassword }),
       })
 
       const payload = await parseResponsePayload(response)
-
-      if (response.status === 401) {
-        setError('This reset link has expired or is invalid. Please request a new one.')
-        return
-      }
 
       if (!response.ok) {
         setError(payload?.error || `Reset failed (${response.status})`)
         return
       }
 
-      setSuccess(payload?.message || 'Password updated successfully. You can now log in.')
+      setSuccess('Password reset! Redirecting to login...')
       setPassword('')
       setConfirmPassword('')
       setIsTokenValid(false)
+
+      setTimeout(() => {
+        onGoToLogin()
+      }, 1500)
     } catch {
       setError('Unable to reset password right now. Please try again.')
     } finally {
@@ -177,7 +185,7 @@ export default function ResetPasswordPage({ token, onGoToLogin }) {
                 {success && <p style={{ color: '#047857', margin: 0 }}>{success}</p>}
 
                 <button className="auth-submit" type="submit" disabled={loading}>
-                  {loading ? 'Updating password...' : 'Update password'}
+                  {loading ? 'Resetting password...' : 'Reset Password'}
                 </button>
               </form>
             )}
