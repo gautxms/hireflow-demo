@@ -7,8 +7,9 @@ import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
 import uploadsRoutes from './routes/uploads.js'
 import passwordResetRoutes from './routes/passwordReset.js'
-import profileRoutes from './routes/profile.js'
 import subscriptionsRoutes from './routes/subscriptions.js'
+import emailCampaignRoutes from './routes/emailCampaigns.js'
+import profileRoutes from './routes/profile.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 
@@ -67,6 +68,7 @@ app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
 app.use('/api/uploads', requireAuth, generalApiLimiterAuth, uploadsRoutes)
 app.use('/api/profile', generalApiLimiterAuth, profileRoutes)
 app.use('/api/subscriptions', requireAuth, generalApiLimiterAuth, subscriptionsRoutes)
+app.use('/api/email-campaigns', emailCampaignRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })

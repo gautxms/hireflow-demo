@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;">
+      <tr><td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background:#fff;border-radius:12px;overflow:hidden;">
+          <tr><td style="background:#111827;padding:20px;text-align:center;"><img src="{{logoUrl}}" alt="{{companyName}}" style="max-height:40px;" /></td></tr>
+          <tr><td style="padding:28px;">
+            <h1 style="margin:0 0 14px 0;font-size:24px;">Payment Confirmed ✅</h1>
+            <p style="line-height:1.6;margin:0 0 12px 0;">Hi {{firstName}}, we received your payment for {{planName}}.</p>
+            <table role="presentation" width="100%" style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:12px 0 20px 0;">
+              <tr><td style="padding:4px 0;color:#4b5563;">Invoice ID</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{invoiceId}}</td></tr>
+              <tr><td style="padding:4px 0;color:#4b5563;">Amount</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{amount}}</td></tr>
+              <tr><td style="padding:4px 0;color:#4b5563;">Date</td><td style="padding:4px 0;text-align:right;font-weight:600;">{{invoiceDate}}</td></tr>
+            </table>
+            <p style="text-align:center;margin:0 0 20px 0;"><a href="{{billingUrl}}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">View Billing</a></p>
+            <p style="margin:0;line-height:1.6;">For billing questions, contact <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
+          </td></tr>
+          <tr><td style="padding:18px 28px;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.6;">© {{year}} {{companyName}} · <a href="{{unsubscribeUrl}}">Unsubscribe</a></td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>
