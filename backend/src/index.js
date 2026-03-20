@@ -27,8 +27,6 @@ function startPaymentRetryCron() {
   console.log('[Payment Retry] Cron job scheduled (every 15 minutes)')
 }
 
-app.use('/api/password-reset', passwordResetRoutes)
-
 async function start() {
   try {
     // Run database migrations first
@@ -36,6 +34,7 @@ async function start() {
 
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
+    startPaymentRetryCron()
 
     // Then start the server
     app.listen(port, () => {
