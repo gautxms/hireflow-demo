@@ -1,8 +1,9 @@
 import 'dotenv/config'
 import app from './server.js'
 import { runMigrations } from './db/migrate.js'
-import { ensurePasswordResetTables, ensurePaymentTrackingTables, logErrorToDatabase } from './db/client.js'
+import { ensurePasswordResetTables, ensurePaymentTrackingTables } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
+import { startAnalyticsCron } from './services/analytics.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -17,7 +18,6 @@ function startPaymentRetryCron() {
       }
     } catch (error) {
       console.error('[Payment Retry] Cron execution failed:', error)
-      await logErrorToDatabase('payment.retry.cron_failed', error)
     }
   }
 
@@ -32,6 +32,10 @@ async function start() {
     await runMigrations()
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
+    startPaymentRetryCron()
+
+    startPaymentRetryCron()
+    startAnalyticsCron()
 
     app.listen(port, () => {
       console.log(`✓ Backend listening on port ${port}`)
