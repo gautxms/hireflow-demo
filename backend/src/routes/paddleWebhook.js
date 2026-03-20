@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import express from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
-import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
+import { notifySupportPaymentFailedScheduled, recordFailedPaymentAttempt } from '../services/paymentRetry.js'
 
 const router = express.Router()
 
@@ -197,7 +197,12 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
 
 
       if (eventType === 'transaction.failed') {
-        await recordFailedPaymentAttempt(payload)
+        const attempt = await recordFailedPaymentAttempt(payload)
+
+        if (attempt) {
+          console.log('[PADDLE] Payment failure logged. Retry scheduled.')
+          await notifySupportPaymentFailedScheduled(attempt)
+        }
       }
 
       if (eventType === 'subscription.created') {

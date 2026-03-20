@@ -17,6 +17,10 @@ function getFailureReason(payload) {
   )
 }
 
+function getErrorCode(payload) {
+  return payload?.data?.status_details?.code || payload?.data?.error?.code || payload?.error_code || null
+}
+
 function getTransactionId(payload) {
   return payload?.data?.id || payload?.transaction_id || payload?.id || null
 }
@@ -47,7 +51,7 @@ function addHours(date, hours) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000)
 }
 
-function getNextRetryAtFromAttemptCount(retryCount) {
+function getNextRetryAtFromRetryCount(retryCount) {
   if (retryCount >= MAX_RETRY_ATTEMPTS) {
     return null
   }
@@ -130,6 +134,22 @@ async function alertManualInterventionNeeded(attempt) {
   ])
 }
 
+export async function notifySupportPaymentFailedScheduled(attempt) {
+  const subject = '[HireFlow] Payment failed - automatic retry scheduled'
+  const text = [
+    `Transaction ID: ${attempt.transaction_id}`,
+    `User ID: ${attempt.user_id || 'n/a'}`,
+    `Error code: ${attempt.error_code || 'n/a'}`,
+    `Error: ${attempt.last_error || 'n/a'}`,
+    `Next retry at: ${attempt.next_retry_at || 'n/a'}`,
+  ].join('\n')
+
+  await Promise.all([
+    sendSupportEmail(subject, text),
+    sendSlackAlert(':warning: Payment failed, retry scheduled', text),
+  ])
+}
+
 export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
   const transactionId = getTransactionId(payload)
 
@@ -140,8 +160,9 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
     return null
   }
 
-  const retryAt = getNextRetryAtFromAttemptCount(0)
+  const retryAt = getNextRetryAtFromRetryCount(0)
   const failureReason = errorMessage || getFailureReason(payload)
+  const errorCode = getErrorCode(payload)
 
   const result = await pool.query(
     `INSERT INTO payment_attempts (
@@ -152,19 +173,25 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
       currency,
       status,
       retry_count,
+      max_retries,
       next_retry_at,
+      last_attempted_at,
+      error_code,
       last_error,
       payload
     )
-    VALUES ($1, $2, $3, $4, $5, 'failed', 0, $6, $7, $8::jsonb)
+    VALUES ($1, $2, $3, $4, $5, 'failed', 0, $6, $7, NOW(), $8, $9, $10::jsonb)
     ON CONFLICT (transaction_id)
     DO UPDATE SET
       customer_email = COALESCE(EXCLUDED.customer_email, payment_attempts.customer_email),
       user_id = COALESCE(EXCLUDED.user_id, payment_attempts.user_id),
       amount = COALESCE(EXCLUDED.amount, payment_attempts.amount),
       currency = COALESCE(EXCLUDED.currency, payment_attempts.currency),
+      error_code = EXCLUDED.error_code,
       last_error = EXCLUDED.last_error,
       payload = EXCLUDED.payload,
+      max_retries = EXCLUDED.max_retries,
+      last_attempted_at = NOW(),
       updated_at = NOW(),
       status = CASE
         WHEN payment_attempts.status = 'succeeded' THEN payment_attempts.status
@@ -181,13 +208,31 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
       getCustomerEmail(payload),
       getTransactionAmount(payload),
       getTransactionCurrency(payload),
+      MAX_RETRY_ATTEMPTS,
       retryAt,
+      errorCode,
       failureReason,
       JSON.stringify(payload),
     ],
   )
 
   return result.rows[0]
+}
+
+async function hasActiveSubscription(userId) {
+  if (!userId) {
+    return false
+  }
+
+  const result = await pool.query(
+    `SELECT 1 FROM users
+     WHERE id = $1
+       AND subscription_status IN ('active', 'trialing')
+     LIMIT 1`,
+    [userId],
+  )
+
+  return result.rowCount > 0
 }
 
 async function retryPaddleTransaction(attempt) {
@@ -225,6 +270,7 @@ async function markAttemptAsSucceeded(id, metadata = {}) {
     `UPDATE payment_attempts
      SET status = 'succeeded',
          next_retry_at = NULL,
+         last_attempted_at = NOW(),
          updated_at = NOW(),
          metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
      WHERE id = $1`,
@@ -242,6 +288,7 @@ async function markAttemptAsRetriableFailure(attempt, error) {
        SET retry_count = $2,
            status = 'manual_required',
            next_retry_at = NULL,
+           last_attempted_at = NOW(),
            last_error = $3,
            updated_at = NOW()
        WHERE id = $1
@@ -253,13 +300,14 @@ async function markAttemptAsRetriableFailure(attempt, error) {
     return
   }
 
-  const nextRetryAt = getNextRetryAtFromAttemptCount(nextRetryCount)
+  const nextRetryAt = getNextRetryAtFromRetryCount(nextRetryCount)
 
   await pool.query(
     `UPDATE payment_attempts
      SET retry_count = $2,
          status = 'failed',
          next_retry_at = $3,
+         last_attempted_at = NOW(),
          last_error = $4,
          updated_at = NOW()
      WHERE id = $1`,
@@ -272,7 +320,7 @@ export async function retryFailedPayments() {
     `SELECT *
      FROM payment_attempts
      WHERE status IN ('failed', 'retrying')
-       AND retry_count < $1
+       AND retry_count < COALESCE(max_retries, $1)
        AND next_retry_at IS NOT NULL
        AND next_retry_at <= NOW()
      ORDER BY next_retry_at ASC
@@ -291,9 +339,21 @@ export async function retryFailedPayments() {
         continue
       }
 
-      await pool.query(`UPDATE payment_attempts SET status = 'retrying', updated_at = NOW() WHERE id = $1`, [
-        attempt.id,
-      ])
+      if (await hasActiveSubscription(attempt.user_id)) {
+        await markAttemptAsSucceeded(attempt.id, {
+          resolved_by: 'automatic_skip_active_subscription',
+        })
+        continue
+      }
+
+      await pool.query(
+        `UPDATE payment_attempts
+         SET status = 'retrying',
+             last_attempted_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [attempt.id],
+      )
 
       await retryPaddleTransaction(attempt)
       await markAttemptAsSucceeded(attempt.id, { resolved_by: 'automatic_retry' })
@@ -310,10 +370,40 @@ export async function retryFailedPayments() {
   return dueAttempts.rowCount
 }
 
+export async function getRecentFailureVolume(hours = 1) {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS failure_count
+     FROM payment_attempts
+     WHERE status IN ('failed', 'manual_required')
+       AND updated_at >= NOW() - ($1::text || ' hours')::interval`,
+    [hours],
+  )
+
+  return result.rows[0]?.failure_count || 0
+}
+
+export async function alertSupportIfHighFailureVolume() {
+  const failureCount = await getRecentFailureVolume(1)
+
+  if (failureCount <= 5) {
+    return false
+  }
+
+  const subject = '[HireFlow] High payment failure volume detected'
+  const text = `Detected ${failureCount} failed/manual-required payment records in the last hour.`
+
+  await Promise.all([
+    sendSupportEmail(subject, text),
+    sendSlackAlert(':rotating_light: High payment failure volume detected', text),
+  ])
+
+  return true
+}
+
 export async function getFailedPaymentsForAdmin() {
   const result = await pool.query(
     `SELECT id, transaction_id, user_id, customer_email, amount, currency, status, retry_count,
-            next_retry_at, last_error, created_at, updated_at
+            max_retries, next_retry_at, last_attempted_at, error_code, last_error, created_at, updated_at
      FROM payment_attempts
      WHERE status IN ('failed', 'retrying', 'manual_required')
      ORDER BY updated_at DESC
