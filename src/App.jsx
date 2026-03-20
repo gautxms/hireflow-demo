@@ -20,6 +20,7 @@ import BillingCancel from './pages/BillingCancel'
 import Checkout from './pages/Checkout'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
 import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -176,6 +177,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <ForgotPasswordPage onBackToLogin={() => navigate('/login')} />
     }
 
+    if (!isAuthenticated && pathname === '/verify') {
+      return <VerifyEmailPage onGoToLogin={() => navigate('/login')} />
+    }
+
     if (!isAuthenticated && pathname.startsWith('/reset-password/')) {
       const resetToken = pathname.replace('/reset-password/', '')
       return <ResetPasswordPage token={resetToken} onGoToLogin={() => navigate('/login')} />
@@ -235,7 +240,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/forgot-password' || pathname.startsWith('/reset-password/')
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/forgot-password' || pathname === '/verify' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     if (pathname !== '/') {
