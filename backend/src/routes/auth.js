@@ -5,6 +5,7 @@ import { signToken } from '../utils/jwt.js'
 import { sendVerificationEmail } from '../utils/mailer.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 import { loginLimiter, signupLimiter } from '../middleware/rateLimiter.js'
+import { trackEvent } from '../services/analytics.js'
 
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
@@ -115,6 +116,12 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
       console.error('[AUTH] Failed to send verification email:', mailError)
     }
 
+    await trackEvent({
+      userId: user.id,
+      eventType: 'signup',
+      metadata: { source: 'auth.signup' },
+    })
+
     return res.status(201).json({
       token,
       user: {
@@ -159,6 +166,12 @@ router.get('/verify-email', async (req, res) => {
     if (!result.rows[0]) {
       return res.status(400).json({ error: 'Invalid or expired token' })
     }
+
+    await trackEvent({
+      userId: result.rows[0].id,
+      eventType: 'email_verified',
+      metadata: { source: 'auth.verify_email' },
+    })
 
     return res.redirect(getVerificationSuccessUrl())
   } catch {
@@ -282,6 +295,12 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
 
     const token = signToken(user)
     setAuthCookie(res, token)
+
+    await trackEvent({
+      userId: user.id,
+      eventType: 'login',
+      metadata: { source: 'auth.login' },
+    })
 
     return res.json({
       token,
