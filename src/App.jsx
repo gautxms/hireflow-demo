@@ -17,6 +17,7 @@ import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
 import BillingSuccess from './pages/BillingSuccess'
 import BillingCancel from './pages/BillingCancel'
+import BillingPage from './pages/BillingPage'
 import Checkout from './pages/Checkout'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -160,6 +161,17 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }
 
       return <AccountSettingsPage />
+    if (pathname === '/billing') {
+      return <BillingPage />
+    }
+
+    if (pathname === '/account') {
+      return (
+        <div style={{ padding: '2rem', maxWidth: 680, margin: '0 auto' }}>
+          <h1 style={{ marginBottom: '0.5rem' }}>Account</h1>
+          <p style={{ color: '#4b5563' }}>Account details are coming soon.</p>
+        </div>
+      )
     }
 
     if (!isAuthenticated && pathname === '/signup') {
