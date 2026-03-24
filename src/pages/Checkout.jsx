@@ -83,7 +83,7 @@ export default function Checkout() {
       try {
         console.log('[Checkout] Starting embedded checkout with:', {
           apiUrl: API_BASE_URL,
-          endpoint: `${API_BASE_URL}/api/paddle/checkout`,
+          endpoint: `${API_BASE_URL}/api/paddle/checkout-url`,
           plan: selectedPlan,
           tokenExists: !!token,
         })
