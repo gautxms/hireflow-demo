@@ -152,31 +152,128 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
 })
 
 /**
- * Legacy endpoint - redirect to /checkout for backwards compatibility
+ * POST /api/paddle/checkout-url
+ * Legacy endpoint - now returns embedded checkout format for backwards compatibility
  */
 router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
-  // Redirect to new embedded checkout endpoint
-  const response = await fetch(`${process.env.APP_ORIGIN || 'http://localhost:3000'}/api/paddle/checkout`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': req.headers.authorization,
-    },
-    body: JSON.stringify(req.body),
+  const { plan } = req.body || {}
+
+  console.log('[Paddle Checkout URL] Request received:', {
+    plan,
+    userId: req.userId,
+    timestamp: new Date().toISOString(),
+    apiKeyExists: !!process.env.PADDLE_API_KEY,
+    clientTokenExists: !!PADDLE_CLIENT_TOKEN,
   })
 
-  const data = await response.json()
-
-  if (!response.ok) {
-    return res.status(response.status).json(data)
+  if (!process.env.PADDLE_API_KEY) {
+    console.error('[Paddle Checkout URL] PADDLE_API_KEY not configured')
+    return res.status(500).json({ error: 'PADDLE_API_KEY is not configured' })
   }
 
-  // Return in old format for backwards compatibility
-  return res.json({
-    checkoutUrl: `paddle://transaction/${data.transactionId}`,
-    transactionId: data.transactionId,
-    clientToken: data.clientToken,
-  })
+  if (!PADDLE_CLIENT_TOKEN) {
+    console.error('[Paddle Checkout URL] PADDLE_CLIENT_TOKEN not configured')
+    return res.status(500).json({ error: 'PADDLE_CLIENT_TOKEN is not configured' })
+  }
+
+  const priceId = PRICE_IDS_BY_PLAN[plan]
+
+  if (!priceId) {
+    console.error('[Paddle Checkout URL] Missing price ID for plan:', {
+      plan,
+      monthlyId: PRICE_IDS_BY_PLAN.monthly || 'NOT SET',
+      annualId: PRICE_IDS_BY_PLAN.annual || 'NOT SET',
+    })
+    return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
+  }
+
+  try {
+    const userResult = await pool.query('SELECT id, email FROM users WHERE id = $1', [req.userId])
+    const user = userResult.rows[0]
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const appOrigin = getAppOrigin(req)
+    const successUrl = `${appOrigin}/billing/success`
+    const cancelUrl = `${appOrigin}/billing/cancel`
+
+    console.log('[Paddle Checkout URL] Creating transaction:', {
+      endpoint: `${PADDLE_API_BASE_URL}/transactions`,
+      priceId,
+      userEmail: user.email,
+      successUrl,
+      cancelUrl,
+    })
+
+    const paddleResponse = await fetch(`${PADDLE_API_BASE_URL}/transactions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Paddle-Version': PADDLE_API_VERSION,
+      },
+      body: JSON.stringify({
+        items: [{
+          price_id: priceId,
+          quantity: 1,
+        }],
+        customer: {
+          email: user.email,
+        },
+        custom_data: {
+          userId: user.id,
+          email: user.email,
+          plan,
+        },
+        return_url: successUrl,
+      }),
+    })
+
+    console.log('[Paddle Checkout URL] Paddle API response status:', paddleResponse.status)
+
+    const paddlePayload = await paddleResponse.json()
+
+    if (!paddleResponse.ok) {
+      console.error('[Paddle Checkout URL] Failed to create transaction:', {
+        status: paddleResponse.status,
+        payload: paddlePayload,
+      })
+      return res.status(502).json({ error: 'Failed to create Paddle transaction', details: paddlePayload })
+    }
+
+    const transactionId = paddlePayload?.data?.id
+
+    if (!transactionId) {
+      console.error('[Paddle Checkout URL] Missing transaction ID in response:', paddlePayload)
+      return res.status(502).json({ error: 'Paddle transaction ID was missing in response', payload: paddlePayload })
+    }
+
+    console.log('[Paddle Checkout URL] Success, returning embedded checkout data:', transactionId)
+    
+    // Return in embedded checkout format (same as /checkout endpoint)
+    return res.json({
+      transactionId,
+      clientToken: PADDLE_CLIENT_TOKEN,
+      paddleEnvironment: PADDLE_ENVIRONMENT,
+      // Also include checkoutUrl for fallback
+      checkoutUrl: `${appOrigin}/checkout?plan=${plan}`,
+    })
+  } catch (error) {
+    console.error('[Paddle Checkout URL] Error:', {
+      message: error.message,
+      code: error.code || 'UNKNOWN',
+      status: error.status || 'UNKNOWN',
+      stack: error.stack,
+    })
+
+    return res.status(500).json({
+      error: 'Failed to create checkout',
+      message: error.message,
+      code: error.code,
+    })
+  }
 })
 
 export default router
