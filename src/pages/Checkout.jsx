@@ -15,7 +15,6 @@ function resolveApiBaseUrl() {
 
 const API_BASE_URL = resolveApiBaseUrl()
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-const PADDLE_SCRIPT_URL = 'https://cdn.paddle.com/paddle/v2/paddle.js'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -35,27 +34,25 @@ function getPlanFromQuery() {
 }
 
 /**
- * Load Paddle.js dynamically from CDN
+ * Wait for Paddle.js to be available (loaded globally in index.html)
  */
-function loadPaddleScript() {
+function waitForPaddle(timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     if (window.Paddle) {
       resolve(window.Paddle)
       return
     }
 
-    const script = document.createElement('script')
-    script.src = PADDLE_SCRIPT_URL
-    script.async = true
-    script.onload = () => {
+    const startTime = Date.now()
+    const checkInterval = setInterval(() => {
       if (window.Paddle) {
+        clearInterval(checkInterval)
         resolve(window.Paddle)
-      } else {
-        reject(new Error('Paddle failed to load'))
+      } else if (Date.now() - startTime > timeoutMs) {
+        clearInterval(checkInterval)
+        reject(new Error('Paddle.js failed to load (timeout)'))
       }
-    }
-    script.onerror = () => reject(new Error('Failed to load Paddle script'))
-    document.head.appendChild(script)
+    }, 100)
   })
 }
 
@@ -130,19 +127,18 @@ export default function Checkout() {
 
         console.log('[Checkout] Got transaction data:', { transactionId, paddleEnvironment })
 
-        // Step 2: Load Paddle.js library
-        console.log('[Checkout] Loading Paddle.js...')
-        const Paddle = await loadPaddleScript()
+        // Step 2: Wait for Paddle.js library (loaded globally in index.html)
+        console.log('[Checkout] Waiting for Paddle.js...')
+        const Paddle = await waitForPaddle()
 
         // Step 3: Initialize Paddle with client token
         console.log('[Checkout] Initializing Paddle with client token')
-        Paddle.Environment.set(paddleEnvironment || 'production')
-        Paddle.Initialize({
-          token: clientToken,
-          pwCustomer: {
-            email: '', // Backend provides email, Paddle will fetch from transaction
-          },
-        })
+        if (!Paddle.isInitialized && !Paddle.isInitializing) {
+          Paddle.Initialize({
+            token: clientToken,
+            environment: paddleEnvironment || 'production',
+          })
+        }
 
         // Step 4: Open the embedded checkout
         console.log('[Checkout] Opening embedded checkout for transaction:', transactionId)
