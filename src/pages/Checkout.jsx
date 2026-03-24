@@ -15,6 +15,7 @@ function resolveApiBaseUrl() {
 
 const API_BASE_URL = resolveApiBaseUrl()
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const PADDLE_SCRIPT_URL = 'https://cdn.paddle.com/paddle/v2/paddle.js'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -33,16 +34,41 @@ function getPlanFromQuery() {
   return plan === 'monthly' || plan === 'annual' ? plan : 'monthly'
 }
 
+/**
+ * Load Paddle.js dynamically from CDN
+ */
+function loadPaddleScript() {
+  return new Promise((resolve, reject) => {
+    if (window.Paddle) {
+      resolve(window.Paddle)
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = PADDLE_SCRIPT_URL
+    script.async = true
+    script.onload = () => {
+      if (window.Paddle) {
+        resolve(window.Paddle)
+      } else {
+        reject(new Error('Paddle failed to load'))
+      }
+    }
+    script.onerror = () => reject(new Error('Failed to load Paddle script'))
+    document.head.appendChild(script)
+  })
+}
+
 export default function Checkout() {
   const selectedPlan = getPlanFromQuery()
   const plan = PLAN_DETAILS[selectedPlan]
-  const [status, setStatus] = useState('idle')
+  const [status, setStatus] = useState('idle') // idle, loading, ready, opened, error
   const [errorMessage, setErrorMessage] = useState('')
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
   useEffect(() => {
-    async function sendCheckoutPayload() {
+    async function initializeCheckout() {
       setStatus('loading')
       setErrorMessage('')
 
@@ -55,14 +81,15 @@ export default function Checkout() {
       }
 
       try {
-        console.log('[Checkout] Starting checkout with:', {
+        console.log('[Checkout] Starting embedded checkout with:', {
           apiUrl: API_BASE_URL,
-          endpoint: `${API_BASE_URL}/api/paddle/checkout-url`,
+          endpoint: `${API_BASE_URL}/api/paddle/checkout`,
           plan: selectedPlan,
           tokenExists: !!token,
         })
 
-        const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
+        // Step 1: Get transaction ID and client token from backend
+        const response = await fetch(`${API_BASE_URL}/api/paddle/checkout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -73,7 +100,7 @@ export default function Checkout() {
           }),
         })
 
-        console.log('[Checkout] Fetch completed:', {
+        console.log('[Checkout] Backend response:', {
           status: response.status,
           statusText: response.statusText,
           ok: response.ok,
@@ -93,14 +120,40 @@ export default function Checkout() {
           throw new Error(payload?.error || payload?.message || `Checkout failed (${response.status})`)
         }
 
-        if (!payload.checkoutUrl) {
-          console.error('[Checkout] No checkoutUrl in payload:', payload)
-          throw new Error('No checkout URL received from server')
+        const { transactionId, clientToken, paddleEnvironment } = payload
+
+        if (!transactionId || !clientToken) {
+          console.error('[Checkout] Missing transaction ID or client token:', payload)
+          throw new Error('Invalid checkout data from server')
         }
 
-        console.log('[Checkout] Got URL, redirecting to:', payload.checkoutUrl)
-        setStatus('success')
-        window.location.assign(payload.checkoutUrl)
+        console.log('[Checkout] Got transaction data:', { transactionId, paddleEnvironment })
+
+        // Step 2: Load Paddle.js library
+        console.log('[Checkout] Loading Paddle.js...')
+        const Paddle = await loadPaddleScript()
+
+        // Step 3: Initialize Paddle with client token
+        console.log('[Checkout] Initializing Paddle with client token')
+        Paddle.Environment.set(paddleEnvironment || 'production')
+        Paddle.Initialize({
+          token: clientToken,
+          pwCustomer: {
+            email: '', // Backend provides email, Paddle will fetch from transaction
+          },
+        })
+
+        // Step 4: Open the embedded checkout
+        console.log('[Checkout] Opening embedded checkout for transaction:', transactionId)
+        setStatus('ready')
+
+        // Use setTimeout to ensure Paddle is fully initialized before opening checkout
+        setTimeout(() => {
+          Paddle.Checkout.open({
+            transactionId,
+          })
+          setStatus('opened')
+        }, 500)
       } catch (error) {
         console.error('[Checkout] Error occurred:', error)
         setStatus('error')
@@ -108,8 +161,22 @@ export default function Checkout() {
       }
     }
 
-    sendCheckoutPayload()
+    initializeCheckout()
   }, [selectedPlan])
+
+  const getStatusMessage = () => {
+    switch (status) {
+      case 'loading':
+        return 'Preparing checkout…'
+      case 'ready':
+      case 'opened':
+        return 'Loading secure checkout…'
+      case 'error':
+        return 'We could not prepare checkout. Please try again.'
+      default:
+        return 'Initializing checkout…'
+    }
+  }
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
@@ -134,12 +201,31 @@ export default function Checkout() {
           <p style={{ margin: 0, color: 'var(--muted)' }}>Selected plan</p>
           <p style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>{plan.label}</p>
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {status === 'error' ? 'We could not prepare checkout. Please try again.' : 'Redirecting to secure checkout…'}
+            {status === 'error' ? getStatusMessage() : 'Opening secure checkout…'}
           </p>
-          {errorMessage ? <p style={{ margin: 0, color: '#ff8f8f' }}>Error: {errorMessage}</p> : null}
+          {errorMessage && (
+            <p style={{ margin: 0, color: '#ff8f8f' }}>
+              Error: {errorMessage}
+              {status === 'error' && (
+                <>
+                  <br />
+                  <a href="/pricing" style={{ color: 'var(--accent)', textDecoration: 'none', marginTop: '1rem', display: 'inline-block' }}>
+                    ← Back to Pricing
+                  </a>
+                </>
+              )}
+            </p>
+          )}
         </div>
-      </section>
 
+        {status === 'opened' && (
+          <div style={{ marginTop: '2rem', padding: '1rem', background: 'var(--card)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <p style={{ color: 'var(--muted)', fontSize: '0.9rem', margin: 0 }}>
+              ✓ Checkout is open above. After completing payment, you'll be redirected to confirm your subscription.
+            </p>
+          </div>
+        )}
+      </section>
     </main>
   )
 }
