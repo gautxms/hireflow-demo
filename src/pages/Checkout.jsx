@@ -89,7 +89,8 @@ export default function Checkout() {
         })
 
         // Step 1: Get transaction ID and client token from backend
-        const response = await fetch(`${API_BASE_URL}/api/paddle/checkout`, {
+        // Try new endpoint first, fallback to old endpoint for backwards compatibility
+        const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
