@@ -11,6 +11,15 @@ const PADDLE_API_VERSION = process.env.PADDLE_API_VERSION || '1'
 const PADDLE_CLIENT_TOKEN = process.env.PADDLE_CLIENT_TOKEN
 const PADDLE_ENVIRONMENT = process.env.PADDLE_ENVIRONMENT || 'production'
 
+// Debug: Log environment on startup (masked for security)
+console.log('[Paddle Config] Loaded on startup:', {
+  hasPaddleApiKey: !!process.env.PADDLE_API_KEY,
+  paddleApiKeyPrefix: process.env.PADDLE_API_KEY?.substring(0, 10) || 'NOT SET',
+  hasPaddleClientToken: !!PADDLE_CLIENT_TOKEN,
+  paddleClientTokenPrefix: PADDLE_CLIENT_TOKEN?.substring(0, 10) || 'NOT SET',
+  paddleEnvironment: PADDLE_ENVIRONMENT,
+})
+
 const PRICE_IDS_BY_PLAN = {
   monthly: process.env.PADDLE_MONTHLY_PRICE_ID,
   annual: process.env.PADDLE_ANNUAL_PRICE_ID,
