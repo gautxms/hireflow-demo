@@ -38,16 +38,13 @@ function getAppOrigin(req) {
 router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
   const { plan } = req.body || {}
 
-  console.log('[Paddle Embedded Checkout] Request received:', {
+  console.log('[CHECKOUT] REQUEST RECEIVED - Full details:', {
+    endpoint: '/api/paddle/checkout',
     plan,
     userId: req.userId,
     timestamp: new Date().toISOString(),
     apiKeyExists: !!process.env.PADDLE_API_KEY,
     clientTokenExists: !!PADDLE_CLIENT_TOKEN,
-    priceIds: {
-      monthly: PRICE_IDS_BY_PLAN.monthly || 'MISSING',
-      annual: PRICE_IDS_BY_PLAN.annual || 'MISSING',
-    },
   })
 
   if (!process.env.PADDLE_API_KEY) {
@@ -72,10 +69,19 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
   }
 
   try {
+    console.log('[CHECKOUT] Fetching user from database for userId:', req.userId)
     const userResult = await pool.query('SELECT id, email FROM users WHERE id = $1', [req.userId])
     const user = userResult.rows[0]
 
+    console.log('[CHECKOUT] User fetch result:', {
+      userFound: !!user,
+      userId: user?.id,
+      userEmail: user?.email || 'NO EMAIL',
+      userEmailType: typeof user?.email,
+    })
+
     if (!user) {
+      console.error('[CHECKOUT] ERROR: User not found')
       return res.status(404).json({ error: 'User not found' })
     }
 
@@ -139,13 +145,7 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
       return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
     }
 
-    console.log('[Paddle Embedded Checkout] Success, returning checkout data:', {
-      transactionId,
-      userEmail: user.email,
-      checkoutUrl: checkoutUrl.substring(0, 50) + '...',
-    })
-    
-    // Return checkout URL and user email for Paddle.Initialize() to work properly
+    // Build response with all required fields
     const responseData = {
       checkoutUrl,
       userEmail: user.email,
@@ -153,12 +153,13 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
       paddleEnvironment: PADDLE_ENVIRONMENT,
     }
     
-    console.log('[Paddle Embedded Checkout] FINAL RESPONSE being sent:', {
+    console.log('[CHECKOUT] ✓ SUCCESS - SENDING RESPONSE:', {
       hasCheckoutUrl: !!responseData.checkoutUrl,
       hasUserEmail: !!responseData.userEmail,
       userEmailValue: responseData.userEmail,
       hasClientToken: !!responseData.clientToken,
       hasPaddleEnvironment: !!responseData.paddleEnvironment,
+      fullResponseKeys: Object.keys(responseData),
     })
     
     return res.json(responseData)
@@ -185,7 +186,8 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
 router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
   const { plan } = req.body || {}
 
-  console.log('[Paddle Checkout URL] Request received:', {
+  console.log('[CHECKOUT-URL] REQUEST RECEIVED - Full details:', {
+    endpoint: '/api/paddle/checkout-url',
     plan,
     userId: req.userId,
     timestamp: new Date().toISOString(),
@@ -215,10 +217,19 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
   }
 
   try {
+    console.log('[CHECKOUT-URL] Fetching user from database for userId:', req.userId)
     const userResult = await pool.query('SELECT id, email FROM users WHERE id = $1', [req.userId])
     const user = userResult.rows[0]
 
+    console.log('[CHECKOUT-URL] User fetch result:', {
+      userFound: !!user,
+      userId: user?.id,
+      userEmail: user?.email || 'NO EMAIL',
+      userEmailType: typeof user?.email,
+    })
+
     if (!user) {
+      console.error('[CHECKOUT-URL] ERROR: User not found')
       return res.status(404).json({ error: 'User not found' })
     }
 
@@ -282,13 +293,7 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
       return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
     }
 
-    console.log('[Paddle Checkout URL] Success, returning checkout data:', {
-      transactionId,
-      userEmail: user.email,
-      checkoutUrl: checkoutUrl.substring(0, 50) + '...',
-    })
-    
-    // Return checkout URL and user email for Paddle.Initialize() to work properly
+    // Build response with all required fields
     const responseData = {
       checkoutUrl,
       userEmail: user.email,
@@ -296,12 +301,13 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
       paddleEnvironment: PADDLE_ENVIRONMENT,
     }
     
-    console.log('[Paddle Checkout URL] FINAL RESPONSE being sent:', {
+    console.log('[CHECKOUT-URL] ✓ SUCCESS - SENDING RESPONSE:', {
       hasCheckoutUrl: !!responseData.checkoutUrl,
       hasUserEmail: !!responseData.userEmail,
       userEmailValue: responseData.userEmail,
       hasClientToken: !!responseData.clientToken,
       hasPaddleEnvironment: !!responseData.paddleEnvironment,
+      fullResponseKeys: Object.keys(responseData),
     })
     
     return res.json(responseData)
