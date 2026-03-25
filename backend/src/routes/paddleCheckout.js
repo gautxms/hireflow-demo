@@ -146,12 +146,22 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
     })
     
     // Return checkout URL and user email for Paddle.Initialize() to work properly
-    return res.json({
+    const responseData = {
       checkoutUrl,
       userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
+    }
+    
+    console.log('[Paddle Embedded Checkout] FINAL RESPONSE being sent:', {
+      hasCheckoutUrl: !!responseData.checkoutUrl,
+      hasUserEmail: !!responseData.userEmail,
+      userEmailValue: responseData.userEmail,
+      hasClientToken: !!responseData.clientToken,
+      hasPaddleEnvironment: !!responseData.paddleEnvironment,
     })
+    
+    return res.json(responseData)
   } catch (error) {
     console.error('[Paddle Embedded Checkout] Error:', {
       message: error.message,
@@ -279,12 +289,22 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
     })
     
     // Return checkout URL and user email for Paddle.Initialize() to work properly
-    return res.json({
+    const responseData = {
       checkoutUrl,
       userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
+    }
+    
+    console.log('[Paddle Checkout URL] FINAL RESPONSE being sent:', {
+      hasCheckoutUrl: !!responseData.checkoutUrl,
+      hasUserEmail: !!responseData.userEmail,
+      userEmailValue: responseData.userEmail,
+      hasClientToken: !!responseData.clientToken,
+      hasPaddleEnvironment: !!responseData.paddleEnvironment,
     })
+    
+    return res.json(responseData)
   } catch (error) {
     console.error('[Paddle Checkout URL] Error:', {
       message: error.message,
