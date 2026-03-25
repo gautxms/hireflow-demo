@@ -7,7 +7,6 @@ import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
 const router = Router()
 
 const PADDLE_API_BASE_URL = process.env.PADDLE_API_BASE_URL || 'https://api.paddle.com'
-const PADDLE_API_VERSION = process.env.PADDLE_API_VERSION || '1'
 const PADDLE_CLIENT_TOKEN = process.env.PADDLE_CLIENT_TOKEN
 const PADDLE_ENVIRONMENT = process.env.PADDLE_ENVIRONMENT || 'production'
 
@@ -97,7 +96,6 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
       headers: {
         Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
         'Content-Type': 'application/json',
-        'Paddle-Version': PADDLE_API_VERSION,
       },
       body: JSON.stringify({
         items: [{
@@ -112,7 +110,6 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
           email: user.email,
           plan,
         },
-        // Return URLs for after embedded checkout completes
         return_url: successUrl,
       }),
     })
@@ -221,7 +218,6 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
       headers: {
         Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
         'Content-Type': 'application/json',
-        'Paddle-Version': PADDLE_API_VERSION,
       },
       body: JSON.stringify({
         items: [{
