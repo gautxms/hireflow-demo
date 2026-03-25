@@ -127,17 +127,26 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
     }
 
     const transactionId = paddlePayload?.data?.id
+    const checkoutUrl = paddlePayload?.data?.checkout?.url
 
     if (!transactionId) {
       console.error('[Paddle Embedded Checkout] Missing transaction ID in response:', paddlePayload)
       return res.status(502).json({ error: 'Paddle transaction ID was missing in response', payload: paddlePayload })
     }
 
-    console.log('[Paddle Embedded Checkout] Success, returning transaction ID:', transactionId)
-    
-    // Return transaction ID and client token for frontend to open embedded checkout
-    return res.json({
+    if (!checkoutUrl) {
+      console.error('[Paddle Embedded Checkout] Missing checkout URL in response:', paddlePayload)
+      return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
+    }
+
+    console.log('[Paddle Embedded Checkout] Success, returning checkout URL:', {
       transactionId,
+      checkoutUrl: checkoutUrl.substring(0, 50) + '...',
+    })
+    
+    // Return checkout URL for frontend to extract transactionId and open embedded checkout
+    return res.json({
+      checkoutUrl,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
     })
@@ -249,21 +258,28 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
     }
 
     const transactionId = paddlePayload?.data?.id
+    const checkoutUrl = paddlePayload?.data?.checkout?.url
 
     if (!transactionId) {
       console.error('[Paddle Checkout URL] Missing transaction ID in response:', paddlePayload)
       return res.status(502).json({ error: 'Paddle transaction ID was missing in response', payload: paddlePayload })
     }
 
-    console.log('[Paddle Checkout URL] Success, returning embedded checkout data:', transactionId)
-    
-    // Return in embedded checkout format (same as /checkout endpoint)
-    return res.json({
+    if (!checkoutUrl) {
+      console.error('[Paddle Checkout URL] Missing checkout URL in response:', paddlePayload)
+      return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
+    }
+
+    console.log('[Paddle Checkout URL] Success, returning checkout URL:', {
       transactionId,
+      checkoutUrl: checkoutUrl.substring(0, 50) + '...',
+    })
+    
+    // Return checkout URL for frontend to extract transactionId and open embedded checkout
+    return res.json({
+      checkoutUrl,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
-      // Also include checkoutUrl for fallback
-      checkoutUrl: `${appOrigin}/checkout?plan=${plan}`,
     })
   } catch (error) {
     console.error('[Paddle Checkout URL] Error:', {
