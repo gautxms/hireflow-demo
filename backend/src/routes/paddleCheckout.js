@@ -139,14 +139,16 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
       return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
     }
 
-    console.log('[Paddle Embedded Checkout] Success, returning checkout URL:', {
+    console.log('[Paddle Embedded Checkout] Success, returning checkout data:', {
       transactionId,
+      userEmail: user.email,
       checkoutUrl: checkoutUrl.substring(0, 50) + '...',
     })
     
-    // Return checkout URL for frontend to extract transactionId and open embedded checkout
+    // Return checkout URL and user email for Paddle.Initialize() to work properly
     return res.json({
       checkoutUrl,
+      userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
     })
@@ -270,14 +272,16 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
       return res.status(502).json({ error: 'Paddle checkout URL was missing in response', payload: paddlePayload })
     }
 
-    console.log('[Paddle Checkout URL] Success, returning checkout URL:', {
+    console.log('[Paddle Checkout URL] Success, returning checkout data:', {
       transactionId,
+      userEmail: user.email,
       checkoutUrl: checkoutUrl.substring(0, 50) + '...',
     })
     
-    // Return checkout URL for frontend to extract transactionId and open embedded checkout
+    // Return checkout URL and user email for Paddle.Initialize() to work properly
     return res.json({
       checkoutUrl,
+      userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
     })

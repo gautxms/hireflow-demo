@@ -117,13 +117,23 @@ export default function Checkout() {
           throw new Error(payload?.error || payload?.message || `Checkout failed (${response.status})`)
         }
 
-        // Step 2: Extract transaction ID from checkoutUrl
-        // Backend returns: { checkoutUrl: "https://hireflow.dev/billing/success?_ptxn=txn_..." }
-        const { checkoutUrl, clientToken, paddleEnvironment } = payload
+        // Step 2: Extract transaction ID and user email from response
+        // Backend returns: { 
+        //   checkoutUrl: "https://hireflow.dev/billing/success?_ptxn=txn_...",
+        //   userEmail: "user@example.com",
+        //   clientToken: "live_...",
+        //   paddleEnvironment: "production"
+        // }
+        const { checkoutUrl, userEmail, clientToken, paddleEnvironment } = payload
 
         if (!checkoutUrl) {
           console.error('[Checkout] Missing checkoutUrl in response:', payload)
           throw new Error('Checkout URL not provided by server')
+        }
+
+        if (!userEmail) {
+          console.error('[Checkout] Missing userEmail in response:', payload)
+          throw new Error('User email not provided by server')
         }
 
         // Extract transaction ID from the URL parameter
@@ -141,24 +151,39 @@ export default function Checkout() {
           throw new Error('Transaction ID not found in checkout URL')
         }
 
-        console.log('[Checkout] Extracted transaction ID:', transactionId)
+        console.log('[Checkout] Extracted transaction ID and user email:', {
+          transactionId,
+          userEmail,
+        })
 
         // Step 3: Wait for Paddle.js library (loaded globally in index.html)
         console.log('[Checkout] Waiting for Paddle.js...')
         const Paddle = await waitForPaddle()
 
-        // Step 4: Initialize Paddle with client token (if provided)
-        console.log('[Checkout] Initializing Paddle...')
-        if (clientToken && paddleEnvironment) {
+        // Step 4: Initialize Paddle with client token and user email
+        console.log('[Checkout] Initializing Paddle with pwCustomer...')
+        if (clientToken && paddleEnvironment && userEmail) {
           if (!Paddle.isInitialized && !Paddle.isInitializing) {
-            console.log('[Checkout] Calling Paddle.Initialize with client token')
+            console.log('[Checkout] Calling Paddle.Initialize with client token and pwCustomer:', {
+              tokenExists: !!clientToken,
+              environment: paddleEnvironment,
+              userEmail,
+            })
             Paddle.Initialize({
               token: clientToken,
               environment: paddleEnvironment,
+              pwCustomer: {
+                email: userEmail,
+              },
             })
           }
         } else {
-          console.log('[Checkout] No client token provided, Paddle.js should auto-initialize')
+          console.error('[Checkout] Missing required Paddle initialization data:', {
+            hasClientToken: !!clientToken,
+            hasEnvironment: !!paddleEnvironment,
+            hasUserEmail: !!userEmail,
+          })
+          throw new Error('Missing Paddle initialization data (token, environment, or email)')
         }
 
         // Step 5: Open the embedded checkout with transaction ID
