@@ -86,7 +86,17 @@ export default function Checkout() {
         })
 
         // Step 1: Get checkout data from backend
-        const response = await fetch(`${API_BASE_URL}/api/paddle/checkout-url`, {
+        const checkoutUrl = `${API_BASE_URL}/api/paddle/checkout-url`
+        console.log('[Checkout] CALLING BACKEND:', {
+          url: checkoutUrl,
+          apiBaseUrl: API_BASE_URL,
+          isProd: import.meta.env.PROD,
+          viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
+          method: 'POST',
+          plan: selectedPlan,
+        })
+        
+        const response = await fetch(checkoutUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -97,10 +107,15 @@ export default function Checkout() {
           }),
         })
 
-        console.log('[Checkout] Backend response:', {
+        console.log('[Checkout] BACKEND RESPONSE RECEIVED:', {
           status: response.status,
           statusText: response.statusText,
           ok: response.ok,
+          contentType: response.headers.get('content-type'),
+          corsHeaders: {
+            'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+            'access-control-allow-credentials': response.headers.get('access-control-allow-credentials'),
+          },
         })
 
         let payload

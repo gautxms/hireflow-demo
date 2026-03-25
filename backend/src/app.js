@@ -52,8 +52,23 @@ app.use('/api/paddle/webhook', paddleWebhookRoutes)
 app.use(express.json())
 app.use(cookieParser())
 
+// DIAGNOSTIC ENDPOINTS - For debugging
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' })
+  console.log('[HEALTH] Health check request')
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+app.get('/api/health', (_req, res) => {
+  console.log('[API-HEALTH] API health check request')
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+app.post('/api/test-post', (req, res) => {
+  console.log('[TEST-POST] Test POST request received:', {
+    body: req.body,
+    headers: req.headers,
+  })
+  res.json({ message: 'POST received', timestamp: new Date().toISOString() })
 })
 
 app.use('/api', generalApiLimiterUnauth)
@@ -66,6 +81,19 @@ app.use('/api/uploads', uploadsRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })
+})
+
+// REQUEST LOGGING MIDDLEWARE - Log ALL incoming requests to /api/paddle
+app.use('/api/paddle', (req, res, next) => {
+  console.log('[PADDLE ROUTE] Request incoming:', {
+    method: req.method,
+    path: req.path,
+    fullUrl: req.url,
+    origin: req.headers.origin,
+    hasAuth: !!req.headers.authorization,
+    timestamp: new Date().toISOString(),
+  })
+  next()
 })
 
 // Log all requests that don't match a route (for debugging 404 issues)
