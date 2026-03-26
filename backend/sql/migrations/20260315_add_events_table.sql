@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   event_type TEXT NOT NULL,
   timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,

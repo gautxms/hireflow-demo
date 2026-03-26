@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS usage_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   ip_address TEXT NOT NULL,
   month_start DATE NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -14,7 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_log_ip_month
 
 CREATE TABLE IF NOT EXISTS usage_overrides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   month_start DATE NOT NULL,
   upload_limit INTEGER,
   reset_usage BOOLEAN NOT NULL DEFAULT false,
