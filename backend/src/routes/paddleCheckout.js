@@ -162,7 +162,7 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
       fullResponseKeys: Object.keys(responseData),
     })
     
-    return res.json(responseData)
+    return res.json({ ...responseData, userEmail: user.email })
   } catch (error) {
     console.error('[Paddle Embedded Checkout] Error:', {
       message: error.message,
