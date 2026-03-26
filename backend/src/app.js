@@ -31,7 +31,6 @@ const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins])
 const corsOptions = {
   credentials: true,
   origin(origin, callback) {
-    // Allow server-to-server or local non-browser requests with no Origin header.
     if (!origin) {
       return callback(null, true)
     }
@@ -52,23 +51,8 @@ app.use('/api/paddle/webhook', paddleWebhookRoutes)
 app.use(express.json())
 app.use(cookieParser())
 
-// DIAGNOSTIC ENDPOINTS - For debugging
 app.get('/health', (_req, res) => {
-  console.log('[HEALTH] Health check request')
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
-})
-
-app.get('/api/health', (_req, res) => {
-  console.log('[API-HEALTH] API health check request')
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
-})
-
-app.post('/api/test-post', (req, res) => {
-  console.log('[TEST-POST] Test POST request received:', {
-    body: req.body,
-    headers: req.headers,
-  })
-  res.json({ message: 'POST received', timestamp: new Date().toISOString() })
+  res.json({ status: 'ok' })
 })
 
 app.use('/api', generalApiLimiterUnauth)
@@ -83,32 +67,14 @@ app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })
 })
 
-// REQUEST LOGGING MIDDLEWARE - Log ALL incoming requests to /api/paddle
-app.use('/api/paddle', (req, res, next) => {
-  console.log('[PADDLE ROUTE] Request incoming:', {
-    method: req.method,
-    path: req.path,
-    fullUrl: req.url,
-    origin: req.headers.origin,
-    hasAuth: !!req.headers.authorization,
-    timestamp: new Date().toISOString(),
-  })
-  next()
-})
-
-// Log all requests that don't match a route (for debugging 404 issues)
+// Log all unmatched requests
 app.use((req, res) => {
   console.log('[404] No route matched:', {
     method: req.method,
     path: req.path,
     url: req.url,
-    headers: {
-      'content-type': req.headers['content-type'],
-      'authorization': req.headers.authorization ? 'present' : 'missing',
-    },
   })
   res.status(404).json({ error: 'Not found' })
 })
 
 export default app
-// Force rebuild: Thu Mar 26 18:00:50 UTC 2026
