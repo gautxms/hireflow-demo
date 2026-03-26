@@ -32,7 +32,7 @@ export async function runMigrations() {
       sql: `
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           token VARCHAR(255) UNIQUE NOT NULL,
           expires_at TIMESTAMP NOT NULL,
           used BOOLEAN DEFAULT false,
@@ -49,7 +49,7 @@ export async function runMigrations() {
       sql: `
         CREATE TABLE IF NOT EXISTS usage_log (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           ip_address TEXT NOT NULL,
           month_start DATE NOT NULL,
           created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -63,7 +63,7 @@ export async function runMigrations() {
 
         CREATE TABLE IF NOT EXISTS usage_overrides (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           month_start DATE NOT NULL,
           upload_limit INTEGER,
           reset_usage BOOLEAN NOT NULL DEFAULT false,
@@ -79,7 +79,7 @@ export async function runMigrations() {
       sql: `
         CREATE TABLE IF NOT EXISTS events (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
           event_type TEXT NOT NULL,
           timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
           metadata JSONB NOT NULL DEFAULT '{}'::jsonb,

@@ -11,7 +11,7 @@ export async function ensurePasswordResetTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       token VARCHAR(255) UNIQUE NOT NULL,
       expires_at TIMESTAMP NOT NULL,
       used BOOLEAN DEFAULT false,
@@ -29,7 +29,7 @@ export async function ensurePaymentTrackingTables() {
     CREATE TABLE IF NOT EXISTS payment_attempts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       transaction_id TEXT NOT NULL UNIQUE,
-      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       customer_email TEXT,
       amount BIGINT,
       currency TEXT,
