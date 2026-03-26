@@ -15,6 +15,8 @@ function resolveApiBaseUrl() {
 
 const API_BASE_URL = resolveApiBaseUrl()
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
+const paddleEnvironment = 'production'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -132,14 +134,13 @@ export default function Checkout() {
           throw new Error(payload?.error || payload?.message || `Checkout failed (${response.status})`)
         }
 
-        // Step 2: Extract transaction ID and user email from response
+        // Step 2: Extract checkout URL and user email from response
         // Backend returns: { 
         //   checkoutUrl: "https://hireflow.dev/billing/success?_ptxn=txn_...",
-        //   userEmail: "user@example.com",
-        //   clientToken: "live_...",
-        //   paddleEnvironment: "production"
+        //   userEmail: "user@example.com"
         // }
-        const { checkoutUrl, userEmail, clientToken, paddleEnvironment } = payload
+        // clientToken and paddleEnvironment come from environment variables, not backend
+        const { checkoutUrl, userEmail } = payload
 
         if (!checkoutUrl) {
           console.error('[Checkout] Missing checkoutUrl in response:', payload)
