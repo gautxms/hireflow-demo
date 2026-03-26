@@ -95,12 +95,13 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
     }
 
     // Return response with userEmail for Paddle.Initialize(pwCustomer)
-    return res.json({
+    const resp1 = {
       checkoutUrl,
       userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
-    })
+    }
+    return res.json(resp1)
   } catch (error) {
     return res.status(500).json({
       error: 'Failed to create checkout',
@@ -185,12 +186,13 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
     }
 
     // Return response with userEmail for Paddle.Initialize(pwCustomer)
-    return res.json({
+    const resp2 = {
       checkoutUrl,
       userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
-    })
+    }
+    return res.json(resp2)
   } catch (error) {
     return res.status(500).json({
       error: 'Failed to create checkout',
