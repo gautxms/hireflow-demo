@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import app from './server.js'
 import { runMigrations } from './db/migrate.js'
-import { ensurePasswordResetTables, ensurePaymentTrackingTables } from './db/client.js'
+import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTables } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
 import { startAnalyticsCron } from './services/analytics.js'
 
@@ -29,10 +29,10 @@ function startPaymentRetryCron() {
 
 async function start() {
   try {
+    await initializeDatabase()
     await runMigrations()
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
-    startPaymentRetryCron()
 
     startPaymentRetryCron()
     startAnalyticsCron()
@@ -41,8 +41,6 @@ async function start() {
       console.log(`✓ Backend listening on port ${port}`)
       console.log('[RateLimit] In-memory rate limits enabled. Localhost IPs are whitelisted.')
     })
-
-    startPaymentRetryCron()
   } catch (error) {
     console.error('[Startup] Fatal error:', error)
     process.exit(1)
