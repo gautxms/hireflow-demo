@@ -98,6 +98,7 @@ export default function Checkout() {
           plan: selectedPlan,
         })
         
+        console.log('[DEBUG] Fetching URL:', checkoutApiUrl)
         const response = await fetch(checkoutApiUrl, {
           method: 'POST',
           headers: {
@@ -122,7 +123,9 @@ export default function Checkout() {
 
         let payload
         try {
-          payload = await response.json()
+          const raw = await response.text()
+          console.log('[DEBUG] Raw response text:', raw)
+          payload = JSON.parse(raw)
           console.log('[Checkout] Response payload:', payload)
           console.log('[DEBUG] Full payload:', JSON.stringify(payload))
         } catch (parseErr) {
