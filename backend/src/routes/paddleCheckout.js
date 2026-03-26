@@ -100,6 +100,7 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
       userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
+      _version: 'WITH_USER_EMAIL_2026_03_26', // Marker to verify code is deployed
     }
     return res.json(resp1)
   } catch (error) {
@@ -191,6 +192,7 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
       userEmail: user.email,
       clientToken: PADDLE_CLIENT_TOKEN,
       paddleEnvironment: PADDLE_ENVIRONMENT,
+      _version: 'WITH_USER_EMAIL_2026_03_26', // Marker to verify code is deployed
     }
     return res.json(resp2)
   } catch (error) {
