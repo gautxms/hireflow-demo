@@ -211,6 +211,34 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <VerifyEmail />
     }
 
+    if (pathname === '/verify-email/success') {
+      return (
+        <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
+          <div style={{ background: 'white', padding: '40px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '400px' }}>
+            <div style={{ fontSize: '60px', color: '#22c55e', marginBottom: '20px' }}>✓</div>
+            <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '10px' }}>Email verified!</h1>
+            <p style={{ fontSize: '16px', color: '#333', marginBottom: '30px', lineHeight: '1.6' }}>
+              Your email has been successfully verified. You can now log in to your account.
+            </p>
+            <button
+              onClick={() => navigate('/login')}
+              style={{
+                background: 'var(--accent)',
+                color: '#111',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '10px 20px',
+                fontWeight: '600',
+                cursor: 'pointer',
+              }}
+            >
+              Go to login
+            </button>
+          </div>
+        </main>
+      )
+    }
+
     return (
       <>
         {currentPage === 'landing' && (
@@ -265,7 +293,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/verify-email/success' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     if (pathname !== '/') {
