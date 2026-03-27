@@ -153,6 +153,7 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
       user: {
         id: user.id,
         email: user.email,
+        email_verified: false,
         company: user.company || '',
         phone: user.phone || '',
         subscription_status: 'trialing',
@@ -298,7 +299,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
   try {
     console.log('[AUTH] Login attempt for:', normalizedEmail)
     const result = await pool.query(
-      'SELECT id, email, company, phone, password_hash, created_at, subscription_status, deleted_at, deletion_scheduled_for FROM users WHERE email = $1',
+      'SELECT id, email, company, phone, password_hash, created_at, subscription_status, deleted_at, deletion_scheduled_for, email_verified FROM users WHERE email = $1',
       [normalizedEmail],
     )
 
@@ -334,6 +335,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
       user: {
         id: user.id,
         email: user.email,
+        email_verified: user.email_verified,
         company: user.company || '',
         phone: user.phone || '',
         subscription_status: user.subscription_status,
