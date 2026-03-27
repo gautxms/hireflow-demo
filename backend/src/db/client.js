@@ -47,9 +47,11 @@ export async function initializeDatabase() {
 
     for (const column of missingColumns) {
       try {
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column.name} ${column.type};`)
+        await pool.query(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type};`)
       } catch (e) {
-        console.log(`[Database] Column ${column.name} addition skipped:`, e.message)
+        if (!e.message.includes('already exists') && !e.message.includes('duplicate column')) {
+          console.error(`[Database] Column ${column.name} error:`, e.message)
+        }
       }
     }
 
