@@ -4,6 +4,7 @@ import { runMigrations } from './db/migrate.js'
 import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTables } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
 import { startAnalyticsCron } from './services/analytics.js'
+import { logEmailConfigStatus } from './services/emailService.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -33,6 +34,8 @@ async function start() {
     await runMigrations()
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
+
+    logEmailConfigStatus()
 
     startPaymentRetryCron()
     startAnalyticsCron()

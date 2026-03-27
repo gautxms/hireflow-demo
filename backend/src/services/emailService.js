@@ -37,6 +37,18 @@ function getSmtpConfig() {
   const from = process.env.SMTP_FROM
 
   if (!host || !port || !user || !pass || !from) {
+    // Log which variables are missing for debugging
+    const missing = []
+    if (!host) missing.push('SMTP_HOST')
+    if (!port || isNaN(port)) missing.push('SMTP_PORT')
+    if (!user) missing.push('SMTP_USER')
+    if (!pass) missing.push('SMTP_PASS')
+    if (!from) missing.push('SMTP_FROM')
+    
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[EMAIL] Missing SMTP config. Required variables:', missing.join(', '))
+    }
+    
     return null
   }
 
@@ -48,7 +60,12 @@ function getTransporter() {
 
   if (!smtpConfig) {
     if (!missingConfigWarningShown) {
-      console.warn('[EMAIL] SMTP config missing. Emails will be logged to console in dev mode.')
+      if (process.env.NODE_ENV === 'production') {
+        console.warn('[EMAIL] ⚠️  SMTP config missing. Transactional and campaign emails are disabled.')
+        console.warn('[EMAIL] Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM in Railway environment.')
+      } else {
+        console.warn('[EMAIL] SMTP config missing. Emails will be logged to console in dev mode.')
+      }
       missingConfigWarningShown = true
     }
 
@@ -139,6 +156,27 @@ async function sendTemplateEmail({ to, subject, templateName, text, values }) {
   } catch (error) {
     console.warn(`[EMAIL] Failed to send ${templateName} email:`, error.message)
     return false
+  }
+}
+
+export function logEmailConfigStatus() {
+  const config = getSmtpConfig()
+  
+  if (config) {
+    console.log('[EMAIL] ✓ SMTP configured:', { host: config.host, port: config.port, user: config.user, from: config.from })
+  } else {
+    const host = process.env.SMTP_HOST
+    const port = process.env.SMTP_PORT
+    const user = process.env.SMTP_USER
+    const pass = process.env.SMTP_PASS
+    const from = process.env.SMTP_FROM
+    
+    console.log('[EMAIL] ⚠️  SMTP not fully configured:')
+    console.log('  SMTP_HOST:', host ? '✓ set' : '✗ missing')
+    console.log('  SMTP_PORT:', port ? `✓ set (${port})` : '✗ missing')
+    console.log('  SMTP_USER:', user ? '✓ set' : '✗ missing')
+    console.log('  SMTP_PASS:', pass ? '✓ set' : '✗ missing')
+    console.log('  SMTP_FROM:', from ? `✓ set (${from})` : '✗ missing')
   }
 }
 
