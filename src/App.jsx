@@ -177,7 +177,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (!isAuthenticated && pathname === '/login') {
-      return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} />
+      return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} onNavigateToVerifyEmail={(email) => {
+        setPendingVerificationEmail(email)
+        navigate('/verify-email-info')
+      }} />
     }
 
     if (!isAuthenticated && pathname === '/verify-email-info') {

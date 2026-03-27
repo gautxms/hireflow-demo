@@ -48,8 +48,25 @@ function getTransporter() {
 
   if (!smtpConfig) {
     if (!missingConfigWarningShown) {
-      console.warn('[EMAIL] SMTP config missing. Transactional and campaign emails are disabled.')
+      console.warn('[EMAIL] SMTP config missing. Emails will be logged to console in dev mode.')
       missingConfigWarningShown = true
+    }
+
+    // Return a dev transporter that logs to console
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'dev') {
+      return {
+        transporter: {
+          sendMail: async (mailOptions) => {
+            console.log('[EMAIL] Dev mode - would send email:', {
+              to: mailOptions.to,
+              subject: mailOptions.subject,
+              from: mailOptions.from,
+            })
+            return true
+          }
+        },
+        smtpConfig: { from: 'noreply@hireflow.dev' }
+      }
     }
 
     return null
