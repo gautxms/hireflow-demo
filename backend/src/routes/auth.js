@@ -86,6 +86,7 @@ function recordResendAttempt(email, now = Date.now()) {
 }
 
 router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, res) => {
+  console.log('[AUTH] Signup route called')
   const { email, password, company = '', phone = '' } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -95,12 +96,14 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
 
   try {
     console.log('[AUTH] Signup attempt for:', normalizedEmail)
+    console.log('[AUTH] About to insert user into database')
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, company, phone, email_verification_token, email_verification_expires_at)
        VALUES ($1, crypt($2, gen_salt('bf', 10)), $3, $4, $5, $6)
        RETURNING id, email, company, phone, created_at`,
       [normalizedEmail, password, company, phone, verificationTokenHash, verificationExpiresAt],
     )
+    console.log('[AUTH] Insert query completed')
 
     const user = result.rows[0]
     console.log('[AUTH] User created with id:', user?.id)
@@ -118,11 +121,17 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
       console.error('[AUTH] Failed to send verification email:', mailError)
     }
 
-    await trackEvent({
-      userId: user.id,
-      eventType: 'signup',
-      metadata: { source: 'auth.signup' },
-    })
+    try {
+      console.log('[AUTH] About to track event for user:', user.id)
+      await trackEvent({
+        userId: user.id,
+        eventType: 'signup',
+        metadata: { source: 'auth.signup' },
+      })
+      console.log('[AUTH] Event tracked successfully')
+    } catch (trackError) {
+      console.error('[AUTH] Failed to track event:', trackError)
+    }
 
     return res.status(201).json({
       token,
