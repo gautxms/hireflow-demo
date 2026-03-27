@@ -2,6 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import nodemailer from 'nodemailer'
 import { fileURLToPath } from 'url'
+import https from 'https'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -27,6 +28,17 @@ function getBrandingValues() {
     year: String(new Date().getUTCFullYear()),
     unsubscribeBaseUrl: `${appUrl}${unsubscribePath}`,
   }
+}
+
+function getSendGridConfig() {
+  const apiKey = process.env.SENDGRID_API_KEY
+  const from = process.env.SMTP_FROM || 'noreply@hireflow.dev'
+  
+  if (!apiKey) {
+    return null
+  }
+  
+  return { apiKey, from }
 }
 
 function getSmtpConfig() {
@@ -134,14 +146,89 @@ function withDefaults({ to, firstName, unsubscribeUrl, ...values }) {
   }
 }
 
-async function sendTemplateEmail({ to, subject, templateName, text, values }) {
-  const mailer = getTransporter()
-
-  if (!mailer) {
+async function sendViaSendGridAPI({ to, subject, text, html, from }) {
+  const sendGridConfig = getSendGridConfig()
+  
+  if (!sendGridConfig) {
     return false
   }
 
+  return new Promise((resolve) => {
+    const payload = JSON.stringify({
+      personalizations: [
+        {
+          to: [{ email: to }],
+          subject,
+        },
+      ],
+      from: { email: from },
+      content: [
+        { type: 'text/plain', value: text },
+        { type: 'text/html', value: html },
+      ],
+    })
+
+    const options = {
+      hostname: 'api.sendgrid.com',
+      port: 443,
+      path: '/v3/mail/send',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'Authorization': `Bearer ${sendGridConfig.apiKey}`,
+      },
+    }
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode === 202) {
+        console.log(`[EMAIL] ✓ Sent via SendGrid API: ${subject} → ${to}`)
+        resolve(true)
+      } else {
+        console.warn(`[EMAIL] SendGrid API error (${res.statusCode}): ${subject} → ${to}`)
+        let data = ''
+        res.on('data', (chunk) => {
+          data += chunk
+        })
+        res.on('end', () => {
+          console.warn('[EMAIL] Response:', data)
+          resolve(false)
+        })
+      }
+    })
+
+    req.on('error', (error) => {
+      console.warn(`[EMAIL] SendGrid API connection error: ${error.message}`)
+      resolve(false)
+    })
+
+    req.write(payload)
+    req.end()
+  })
+}
+
+async function sendTemplateEmail({ to, subject, templateName, text, values }) {
   const renderedHtml = await renderTemplate(templateName, values)
+  const from = values.companyName ? `noreply@hireflow.dev` : 'noreply@hireflow.dev'
+
+  // Try SendGrid API first (works on Railway without SMTP issues)
+  const sendGridConfig = getSendGridConfig()
+  if (sendGridConfig) {
+    const sent = await sendViaSendGridAPI({
+      to,
+      subject,
+      text,
+      html: renderedHtml,
+      from: sendGridConfig.from,
+    })
+    if (sent) return true
+  }
+
+  // Fallback to SMTP
+  const mailer = getTransporter()
+  if (!mailer) {
+    return false
+  }
 
   try {
     await mailer.transporter.sendMail({
@@ -160,23 +247,26 @@ async function sendTemplateEmail({ to, subject, templateName, text, values }) {
 }
 
 export function logEmailConfigStatus() {
-  const config = getSmtpConfig()
+  const sendGridConfig = getSendGridConfig()
+  const smtpConfig = getSmtpConfig()
   
-  if (config) {
-    console.log('[EMAIL] ✓ SMTP configured:', { host: config.host, port: config.port, user: config.user, from: config.from })
+  console.log('[EMAIL] Configuration status:')
+  
+  if (sendGridConfig) {
+    console.log('  ✓ SendGrid API:', sendGridConfig.from)
   } else {
-    const host = process.env.SMTP_HOST
-    const port = process.env.SMTP_PORT
-    const user = process.env.SMTP_USER
-    const pass = process.env.SMTP_PASS
-    const from = process.env.SMTP_FROM
-    
-    console.log('[EMAIL] ⚠️  SMTP not fully configured:')
-    console.log('  SMTP_HOST:', host ? '✓ set' : '✗ missing')
-    console.log('  SMTP_PORT:', port ? `✓ set (${port})` : '✗ missing')
-    console.log('  SMTP_USER:', user ? '✓ set' : '✗ missing')
-    console.log('  SMTP_PASS:', pass ? '✓ set' : '✗ missing')
-    console.log('  SMTP_FROM:', from ? `✓ set (${from})` : '✗ missing')
+    console.log('  ✗ SendGrid API key missing (SENDGRID_API_KEY)')
+  }
+  
+  if (smtpConfig) {
+    console.log('  ✓ SMTP:', `${smtpConfig.user}@${smtpConfig.host}:${smtpConfig.port}`)
+  } else {
+    console.log('  ✗ SMTP not configured')
+  }
+  
+  if (!sendGridConfig && !smtpConfig) {
+    console.log('[EMAIL] ⚠️  No email service configured. Verification emails will not be sent.')
+    console.log('[EMAIL] Please set either SENDGRID_API_KEY or SMTP_* variables.')
   }
 }
 

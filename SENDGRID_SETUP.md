@@ -1,125 +1,139 @@
-# SendGrid SMTP Configuration for HireFlow
+# SendGrid Email Configuration for HireFlow
 
-This guide helps you set up SendGrid email sending in Railway.
+This guide helps you set up SendGrid email sending in Railway using the **HTTP API** (recommended for cloud platforms).
+
+## Why API Over SMTP?
+
+- **More reliable on Railway**: No firewall/port blocking issues
+- **Faster**: HTTP-based, no timeout waiting for SMTP handshake
+- **Simpler setup**: Only one environment variable needed
+- **Better logs**: SendGrid tracks all events via API
 
 ## Prerequisites
 
-- SendGrid account (free tier available at https://sendgrid.com)
+- SendGrid account (free tier at https://sendgrid.com)
 - Railway project with backend deployed
 
-## SendGrid Setup Steps
+## Quick Setup (5 minutes)
 
-### 1. Create SendGrid Account & API Key
+### 1. Create SendGrid Account & Get API Key
 
 1. Go to https://sendgrid.com and sign up (or log in)
 2. Navigate to **Settings → API Keys**
 3. Click **Create API Key**
-4. Name it: `hireflow-railway` (or similar)
+4. Name it: `hireflow-railway`
 5. Select **Restricted Access**
-6. Under **Mail Send**, enable:
-   - ✓ Mail Send
+6. Enable only **Mail Send** → ✓
 7. Click **Create & View**
-8. Copy the API key (you'll need this)
+8. **Copy the full API key** (starts with `SG.`)
 
-### 2. Verify Sender Email
+### 2. Verify Sender Email (5 sec)
 
-1. In SendGrid dashboard, go to **Settings → Sender Authentication**
+1. Go to **Settings → Sender Authentication**
 2. Click **Verify a Single Sender**
-3. Enter your email (e.g., `noreply@hireflow.dev`)
-4. SendGrid will send verification email
-5. Click the link in the email to verify
+3. Enter your sender email: `noreply@hireflow.dev`
+4. SendGrid sends verification email
+5. Click the link in the email
 
-**Note**: For production, use a branded domain verification instead (requires DNS setup)
-
-### 3. Configure Railway Environment Variables
+### 3. Add to Railway
 
 1. Go to your Railway project
-2. Click **Variables** in the environment
-3. Add these variables:
+2. Click **Variables**
+3. Add this **single** variable:
 
 ```
-SMTP_HOST=smtp.sendgrid.net
-SMTP_PORT=587
-SMTP_USER=apikey
-SMTP_PASS=SG.xxxxxxxxxxxxxxxxxxxx
+SENDGRID_API_KEY=SG.your_full_api_key_here
 SMTP_FROM=noreply@hireflow.dev
 ```
 
-**Values:**
-- `SMTP_HOST`: `smtp.sendgrid.net` (always this)
-- `SMTP_PORT`: `587` (always this)
-- `SMTP_USER`: `apikey` (literally the string "apikey")
-- `SMTP_PASS`: Your SendGrid API key (from step 1)
-- `SMTP_FROM`: Your verified sender email
+4. Click **Deploy**
 
-4. Click **Deploy** or wait for auto-redeploy
+### 4. Verify It Works
 
-### 4. Verify Configuration
-
-Check Railway logs for startup message:
+Check logs for:
 
 ```
-[EMAIL] ✓ SMTP configured: { host: 'smtp.sendgrid.net', port: 587, user: 'apikey', from: 'noreply@hireflow.dev' }
+[EMAIL] Configuration status:
+  ✓ SendGrid API: noreply@hireflow.dev
+  ✓ Sent via SendGrid API: Verify your HireFlow email → user@example.com
 ```
 
-If you see missing variables listed, add them to Railway and redeploy.
+If you see this, **you're done!** 🎉
 
 ## Testing
 
-1. Sign up with a test email on your live app
-2. Check inbox for verification email from SendGrid
-3. Verify the email
+1. Sign up with a test email on `https://yourdomain.com/signup`
+2. Check your inbox for verification email
+3. Click the link to verify
 4. Log in successfully
+5. Check Railway logs for: `[EMAIL] ✓ Sent via SendGrid API`
 
 ## Troubleshooting
 
-### "SMTP config missing" Error
+### Emails Not Arriving?
 
-**Problem**: Backend logs show `[EMAIL] ⚠️  SMTP not fully configured`
+**Check Railway logs first:**
 
-**Solution**: Check Railway logs startup message to see which variables are missing. Common issues:
+```
+[EMAIL] Configuration status:
+  ✓ SendGrid API: noreply@hireflow.dev
+```
 
-- **SMTP_PASS is wrong**: Copy API key again, paste carefully
-- **SMTP_USER not "apikey"**: Must be exactly the string "apikey"
-- **SMTP_PORT not a number**: Must be `587` (not quoted)
-- **Variables not saved**: Click Deploy after adding variables
+If you see `✗` next to SendGrid API, the API key is missing or wrong.
 
-### Email Not Arriving
+**Common issues:**
 
-1. **Check spam folder** - SendGrid emails sometimes land in spam initially
-2. **Verify sender email** - In SendGrid, ensure `noreply@hireflow.dev` is verified
-3. **Check SendGrid activity log**:
-   - SendGrid dashboard → **Mail Activity**
-   - Look for your test email
-   - Click it to see delivery status/errors
+| Problem | Solution |
+|---------|----------|
+| `✗ SendGrid API key missing` | Add `SENDGRID_API_KEY=SG.xxx` to Railway variables |
+| Email in spam | Add `noreply@hireflow.dev` to contacts in your email client |
+| Sending fails silently | Check Railway logs for `[EMAIL] SendGrid API error` messages |
 
-### Sender Address Shows Wrong Email
+### How to Debug in SendGrid
 
-1. Update `SMTP_FROM` in Railway to match your verified sender
-2. Redeploy backend
-3. Resend test email
+1. Go to https://app.sendgrid.com/
+2. Click **Mail Activity** (left sidebar)
+3. Look for your test email
+4. Click it to see:
+   - Delivery status (Delivered, Bounced, etc.)
+   - Any error messages
+   - Recipient details
+
+### Still not working?
+
+1. Double-check API key is pasted correctly (no spaces, starts with `SG.`)
+2. Verify sender email in SendGrid: **Settings → Sender Authentication**
+3. Check that `SMTP_FROM=noreply@hireflow.dev` is set in Railway
+4. Redeploy backend after any variable changes
 
 ## Free Tier Limits
 
-SendGrid free tier allows:
-- **100 emails/day**
-- Perfect for dev/testing
-- Upgrade anytime for more volume
+SendGrid free tier:
+- **100 emails/day** (enough for testing)
+- Upgrade anytime for higher limits
+- No credit card required for free tier
 
-## Advanced: Domain Verification
+## Production Setup
 
-For production, verify a domain instead of individual email (looks more professional):
+For production with custom domain:
 
-1. SendGrid → **Settings → Sender Authentication**
-2. Click **Verify a Domain**
-3. Add DNS records to your domain registrar
-4. Wait for DNS to propagate (~24h)
-5. Click **Verify** in SendGrid
+1. **Verify your domain** (not just email):
+   - SendGrid → **Settings → Sender Authentication**
+   - Click **Verify a Domain**
+   - Add DNS records (CNAME)
+   - Wait ~24h for DNS propagation
 
-Then use `SMTP_FROM=noreply@yourdomain.com`
+2. **Update SMTP_FROM** to your domain:
+   ```
+   SMTP_FROM=noreply@yourdomain.com
+   ```
 
-## Support
+3. **Implement unsubscribe links** (SendGrid requires this for bulk email):
+   - Already implemented in email templates
+   - See `backend/src/templates/emails/` for examples
 
-- SendGrid Docs: https://docs.sendgrid.com/
-- API Key Help: https://docs.sendgrid.com/ui/account-and-settings/api-keys
-- SMTP Connection: https://docs.sendgrid.com/for-developers/sending-email/integrations/
+## Support & Docs
+
+- SendGrid API Docs: https://docs.sendgrid.com/api-reference/mail-send/mail-send
+- Mail Activity Guide: https://docs.sendgrid.com/ui/analytics-and-reporting/
+- Rate Limits: https://docs.sendgrid.com/glossary/rate-limit
