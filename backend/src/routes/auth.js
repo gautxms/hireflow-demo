@@ -296,6 +296,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
   const normalizedEmail = email.trim().toLowerCase()
 
   try {
+    console.log('[AUTH] Login attempt for:', normalizedEmail)
     const result = await pool.query(
       'SELECT id, email, company, phone, password_hash, created_at, subscription_status, deleted_at, deletion_scheduled_for FROM users WHERE email = $1',
       [normalizedEmail],
@@ -307,7 +308,9 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
+    console.log('[AUTH] User found, password_hash format:', user.password_hash?.substring(0, 20))
     const isValidPassword = verifyPassword(password, user.password_hash)
+    console.log('[AUTH] Password valid:', isValidPassword)
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' })
@@ -339,8 +342,9 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
         deletion_scheduled_for: user.deletion_scheduled_for,
       },
     })
-  } catch {
-    return res.status(500).json({ error: 'Internal server error' })
+  } catch (error) {
+    console.error('[AUTH] Login error:', error.message)
+    return res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 
