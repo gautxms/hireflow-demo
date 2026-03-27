@@ -41,6 +41,8 @@ export async function initializeDatabase() {
       { name: 'subscription_status', type: 'TEXT DEFAULT \'inactive\'' },
       { name: 'subscription_started_at', type: 'TIMESTAMP' },
       { name: 'trial_ends_at', type: 'TIMESTAMP' },
+      { name: 'deleted_at', type: 'TIMESTAMP' },
+      { name: 'deletion_scheduled_for', type: 'TIMESTAMP' },
     ]
 
     for (const column of missingColumns) {
