@@ -29,6 +29,29 @@ export async function initializeDatabase() {
       );
     `)
 
+    // Add missing columns if they don't exist
+    const missingColumns = [
+      'company TEXT',
+      'phone TEXT',
+      'paddle_customer_id TEXT',
+      'paddle_subscription_id TEXT',
+      'subscription_status TEXT DEFAULT \'inactive\'',
+      'subscription_started_at TIMESTAMP',
+      'trial_ends_at TIMESTAMP',
+      'email_verified BOOLEAN DEFAULT false',
+      'email_verification_token TEXT',
+      'email_verification_expires_at TIMESTAMP',
+    ]
+
+    for (const columnDef of missingColumns) {
+      const columnName = columnDef.split(' ')[0]
+      try {
+        await pool.query(`ALTER TABLE users ADD COLUMN ${columnDef};`)
+      } catch (e) {
+        // Column might already exist, continue
+      }
+    }
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS resumes (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
