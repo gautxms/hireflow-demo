@@ -10,6 +10,20 @@ import { trackEvent } from '../services/analytics.js'
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
 
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16)
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256')
+  return `$pbkdf2$${salt.toString('hex')}$${hash.toString('hex')}`
+}
+
+function verifyPassword(password, hash) {
+  const [_, __, saltHex, hashHex] = hash.split('$')
+  if (!saltHex || !hashHex) return false
+  const salt = Buffer.from(saltHex, 'hex')
+  const computed = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex')
+  return computed === hashHex
+}
+
 function setAuthCookie(res, token) {
   res.cookie('token', token, {
     httpOnly: true,
@@ -96,12 +110,13 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
 
   try {
     console.log('[AUTH] Signup attempt for:', normalizedEmail)
-    console.log('[AUTH] About to insert user into database')
+    console.log('[AUTH] About to hash password and insert user into database')
+    const passwordHash = hashPassword(password)
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, company, phone, email_verification_token, email_verification_expires_at)
-       VALUES ($1, crypt($2, gen_salt('bf', 10)), $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, email, company, phone, created_at`,
-      [normalizedEmail, password, company, phone, verificationTokenHash, verificationExpiresAt],
+      [normalizedEmail, passwordHash, company, phone, verificationTokenHash, verificationExpiresAt],
     )
     console.log('[AUTH] Insert query completed')
 
@@ -292,12 +307,9 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    const passwordCheck = await pool.query(
-      'SELECT crypt($1, $2) = $2 AS is_valid',
-      [password, user.password_hash],
-    )
+    const isValidPassword = verifyPassword(password, user.password_hash)
 
-    if (!passwordCheck.rows[0]?.is_valid) {
+    if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
