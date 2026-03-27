@@ -16,7 +16,6 @@ function resolveApiBaseUrl() {
 const API_BASE_URL = resolveApiBaseUrl()
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
-const paddleEnvironment = 'production'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -141,9 +140,10 @@ export default function Checkout() {
         // Step 2: Extract checkout URL and user email from response
         // Backend returns: { 
         //   checkoutUrl: "https://hireflow.dev/billing/success?_ptxn=txn_...",
-        //   userEmail: "user@example.com"
+        //   userEmail: "user@example.com",
+        //   clientToken: "live_..."
         // }
-        // clientToken and paddleEnvironment come from environment variables, not backend
+        // clientToken comes from environment variables for better security
         const { checkoutUrl, userEmail } = payload
         console.log('[DEBUG] userEmail value:', userEmail)
         console.log('[DEBUG] userEmail type:', typeof userEmail)
@@ -185,16 +185,14 @@ export default function Checkout() {
 
         // Step 4: Initialize Paddle with client token and user email
         console.log('[Checkout] Initializing Paddle with pwCustomer...')
-        if (clientToken && paddleEnvironment && userEmail) {
+        if (clientToken && userEmail) {
           if (!Paddle.isInitialized && !Paddle.isInitializing) {
             console.log('[Checkout] Calling Paddle.Initialize with client token and pwCustomer:', {
               tokenExists: !!clientToken,
-              environment: paddleEnvironment,
               userEmail,
             })
             Paddle.Initialize({
               token: clientToken,
-              environment: paddleEnvironment,
               pwCustomer: {
                 email: userEmail,
               },
@@ -203,10 +201,9 @@ export default function Checkout() {
         } else {
           console.error('[Checkout] Missing required Paddle initialization data:', {
             hasClientToken: !!clientToken,
-            hasEnvironment: !!paddleEnvironment,
             hasUserEmail: !!userEmail,
           })
-          throw new Error('Missing Paddle initialization data (token, environment, or email)')
+          throw new Error('Missing Paddle initialization data (token or email)')
         }
 
         // Step 5: Open the embedded checkout with transaction ID
