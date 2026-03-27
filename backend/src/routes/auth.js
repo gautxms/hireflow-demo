@@ -94,6 +94,7 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
   const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
   try {
+    console.log('[AUTH] Signup attempt for:', normalizedEmail)
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, company, phone, email_verification_token, email_verification_expires_at)
        VALUES ($1, crypt($2, gen_salt('bf', 10)), $3, $4, $5, $6)
@@ -102,6 +103,7 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
     )
 
     const user = result.rows[0]
+    console.log('[AUTH] User created with id:', user?.id)
     const token = signToken({ ...user, subscription_status: 'trialing' })
     setAuthCookie(res, token)
 
@@ -134,11 +136,12 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
       },
     })
   } catch (error) {
+    console.error('[AUTH] Signup error:', error.message, error.code)
     if (error.code === '23505') {
       return res.status(409).json({ error: 'Email already exists' })
     }
 
-    return res.status(500).json({ error: 'Internal server error' })
+    return res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 
