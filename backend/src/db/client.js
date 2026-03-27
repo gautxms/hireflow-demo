@@ -31,24 +31,23 @@ export async function initializeDatabase() {
 
     // Add missing columns if they don't exist
     const missingColumns = [
-      'company TEXT',
-      'phone TEXT',
-      'paddle_customer_id TEXT',
-      'paddle_subscription_id TEXT',
-      'subscription_status TEXT DEFAULT \'inactive\'',
-      'subscription_started_at TIMESTAMP',
-      'trial_ends_at TIMESTAMP',
-      'email_verified BOOLEAN DEFAULT false',
-      'email_verification_token TEXT',
-      'email_verification_expires_at TIMESTAMP',
+      { name: 'email_verified', type: 'BOOLEAN DEFAULT false' },
+      { name: 'email_verification_token', type: 'TEXT' },
+      { name: 'email_verification_expires_at', type: 'TIMESTAMP' },
+      { name: 'company', type: 'TEXT' },
+      { name: 'phone', type: 'TEXT' },
+      { name: 'paddle_customer_id', type: 'TEXT' },
+      { name: 'paddle_subscription_id', type: 'TEXT' },
+      { name: 'subscription_status', type: 'TEXT DEFAULT \'inactive\'' },
+      { name: 'subscription_started_at', type: 'TIMESTAMP' },
+      { name: 'trial_ends_at', type: 'TIMESTAMP' },
     ]
 
-    for (const columnDef of missingColumns) {
-      const columnName = columnDef.split(' ')[0]
+    for (const column of missingColumns) {
       try {
-        await pool.query(`ALTER TABLE users ADD COLUMN ${columnDef};`)
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column.name} ${column.type};`)
       } catch (e) {
-        // Column might already exist, continue
+        console.log(`[Database] Column ${column.name} addition skipped:`, e.message)
       }
     }
 
