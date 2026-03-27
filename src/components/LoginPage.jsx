@@ -14,15 +14,18 @@ async function parseResponsePayload(response) {
   return null
 }
 
-export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPassword, promptMessage }) {
+export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPassword, promptMessage, onNavigateToVerifyEmail }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [emailNotVerified, setEmailNotVerified] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState('')
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
+    setEmailNotVerified(false)
     setLoading(true)
 
     try {
@@ -36,17 +39,19 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
       const payload = await parseResponsePayload(response)
 
       if (!response.ok) {
-        const serverError = (payload?.error || '').toLowerCase()
-        if (serverError.includes('verify') && serverError.includes('email')) {
-          setError('Please verify your email before logging in')
-        } else {
-          setError(payload?.error || `Login failed (${response.status})`)
-        }
+        setError(payload?.error || `Login failed (${response.status})`)
         return
       }
 
       if (!payload?.token) {
         setError('Login succeeded but token was missing from response')
+        return
+      }
+
+      // Check if email is verified
+      if (payload?.user?.email_verified === false) {
+        setEmailNotVerified(true)
+        setUnverifiedEmail(payload?.user?.email || email)
         return
       }
 
@@ -56,6 +61,48 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
     } finally {
       setLoading(false)
     }
+  }
+
+  if (emailNotVerified && unverifiedEmail) {
+    return (
+      <main className="auth-shell">
+        <div className="auth-glow auth-glow--a" />
+        <div className="auth-glow auth-glow--b" />
+        <section className="auth-panel">
+          <p className="auth-brand">Hire<span>Flow</span></p>
+          <h1 className="auth-title">Verify your email</h1>
+          <p className="auth-subtitle">You must verify your email address before logging in.</p>
+
+          <div className="auth-form">
+            <p style={{ color: '#9ca3af', marginBottom: '1rem' }}>
+              We've sent a verification email to <strong>{unverifiedEmail}</strong>. Check your inbox and click the verification link to continue.
+            </p>
+
+            <p style={{ color: '#9ca3af', marginBottom: '1.5rem' }}>
+              If you don't see the email, check your spam folder or click below to resend it.
+            </p>
+
+            <button
+              className="auth-submit"
+              type="button"
+              onClick={() => onNavigateToVerifyEmail?.(unverifiedEmail)}
+              style={{ marginBottom: '1rem' }}
+            >
+              Resend verification email
+            </button>
+
+            <button
+              className="auth-link"
+              type="button"
+              onClick={() => setEmailNotVerified(false)}
+              style={{ display: 'block', width: '100%', textAlign: 'center', marginTop: '1rem' }}
+            >
+              Back to login
+            </button>
+          </div>
+        </section>
+      </main>
+    )
   }
 
   return (

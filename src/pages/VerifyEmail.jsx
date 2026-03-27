@@ -1,26 +1,24 @@
 import { useEffect, useState } from 'react'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+
 export default function VerifyEmail() {
   const [status, setStatus] = useState('verifying') // 'verifying', 'success', 'error'
   const [message, setMessage] = useState('Verifying your email...')
   const searchParams = new URLSearchParams(window.location.search)
-  const email = searchParams.get('email')
+  const token = searchParams.get('token')
 
   useEffect(() => {
-    if (!email) {
+    if (!token) {
       setStatus('error')
-      setMessage('No email provided in link.')
+      setMessage('No verification token provided in link.')
       return
     }
 
     // Call backend to verify email
     const verifyEmail = async () => {
       try {
-        const response = await fetch('/api/auth/verify-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        })
+        const response = await fetch(`${API_BASE_URL}/api/auth/verify-email?token=${encodeURIComponent(token)}`)
 
         if (response.ok) {
           setStatus('success')
@@ -31,7 +29,7 @@ export default function VerifyEmail() {
             window.location.href = '/login'
           }, 2000)
         } else {
-          const data = await response.json()
+          const data = await response.json().catch(() => ({ error: 'Verification failed' }))
           setStatus('error')
           setMessage(`Error: ${data.error || 'Verification failed'}`)
         }
@@ -42,7 +40,7 @@ export default function VerifyEmail() {
     }
 
     verifyEmail()
-  }, [email])
+  }, [token])
 
   return (
     <div style={styles.container}>
