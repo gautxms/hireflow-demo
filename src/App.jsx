@@ -1,43 +1,34 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import LandingPage from './components/LandingPage'
+import Pricing from './pages/Pricing'
+import ResumeUploader from './components/ResumeUploader'
+import CandidateResults from './components/CandidateResults'
+import OperationsDashboard from './components/Dashboard'
+import SettingsPage from './components/SettingsPage'
+import HelpPage from './components/HelpPage'
+import AboutPage from './components/AboutPage'
+import DemoBookingPage from './components/DemoBookingPage'
+import ContactPage from './components/ContactPage'
+import LoginPage from './components/LoginPage'
+import SignupPage from './components/SignupPage'
+import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
+import VerifyEmail from './pages/VerifyEmail'
+import Terms from './pages/Terms'
+import PrivacyPage from './components/PrivacyPage'
+import RefundPolicy from './pages/RefundPolicy'
+import BillingSuccess from './pages/BillingSuccess'
+import BillingCancel from './pages/BillingCancel'
+import BillingPage from './pages/BillingPage'
+import Checkout from './pages/Checkout'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
+import AccountSettingsPage from './pages/AccountSettingsPage'
 import PublicFooter from './components/PublicFooter'
-
-const LandingPage = lazy(() => import('./components/LandingPage'))
-const Pricing = lazy(() => import('./pages/Pricing'))
-const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
-const CandidateResults = lazy(() => import('./components/CandidateResults'))
-const OperationsDashboard = lazy(() => import('./components/Dashboard'))
-const SettingsPage = lazy(() => import('./components/SettingsPage'))
-const HelpPage = lazy(() => import('./components/HelpPage'))
-const AboutPage = lazy(() => import('./components/AboutPage'))
-const DemoBookingPage = lazy(() => import('./components/DemoBookingPage'))
-const ContactPage = lazy(() => import('./components/ContactPage'))
-const LoginPage = lazy(() => import('./components/LoginPage'))
-const SignupPage = lazy(() => import('./components/SignupPage'))
-const VerifyEmailInfoPage = lazy(() => import('./components/VerifyEmailInfoPage'))
-const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
-const Terms = lazy(() => import('./pages/Terms'))
-const PrivacyPage = lazy(() => import('./components/PrivacyPage'))
-const RefundPolicy = lazy(() => import('./pages/RefundPolicy'))
-const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
-const BillingCancel = lazy(() => import('./pages/BillingCancel'))
-const BillingPage = lazy(() => import('./pages/BillingPage'))
-const Checkout = lazy(() => import('./pages/Checkout'))
-const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
-const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
-const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'))
-const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
-
-function PageLoader() {
-  return (
-    <div style={{ minHeight: '40vh', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
-      Loading…
-    </div>
-  )
-}
 
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
@@ -68,11 +59,11 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, onSetPendingVerificationEmail }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
-  const [parseMeta, setParseMeta] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
 
   const handleNavigate = (page, promptMessage = 'Please login or sign up to continue.') => {
@@ -93,9 +84,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setCurrentPage(page)
   }
 
-  const handleFileUploaded = (payload) => {
-    setUploadedFiles(payload?.candidates || [])
-    setParseMeta(payload?.parseMeta || null)
+  const handleFileUploaded = (candidateResults) => {
+    setUploadedFiles(candidateResults)
     handleNavigate('results')
   }
 
@@ -189,7 +179,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (!isAuthenticated && pathname === '/login') {
       return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} onNavigateToVerifyEmail={(email) => {
-        onSetPendingVerificationEmail(email)
+        setPendingVerificationEmail(email)
         navigate('/verify-email-info')
       }} />
     }
@@ -220,12 +210,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/verify') {
       return <VerifyEmail />
-    }
-
-
-    if (pathname.startsWith('/results/')) {
-      const shareToken = pathname.replace('/results/', '').split('/')[0]
-      return <CandidateResults candidates={[]} shareToken={shareToken} onBack={() => navigate('/')} />
     }
 
     if (pathname === '/verify-email/success') {
@@ -278,7 +262,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         {currentPage === 'results' && (
           <CandidateResults
             candidates={uploadedFiles}
-            parseMeta={parseMeta}
             onBack={() => handleNavigate('uploader')}
           />
         )}
@@ -314,6 +297,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/verify-email/success' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
+    setIsMobileNavOpen(false)
     if (pathname !== '/') {
       navigate('/')
     }
@@ -323,20 +307,25 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }, 0)
   }
   const handleHelpClick = () => {
+    setIsMobileNavOpen(false)
     if (pathname !== '/') {
       navigate('/')
     }
     setCurrentPage('help')
   }
-  const handleAboutClick = () => navigate('/about')
+  const handleAboutClick = () => {
+    setIsMobileNavOpen(false)
+    navigate('/about')
+  }
 
   return (
     <>
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <header className="site-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, zIndex: 200 }}>
         <a
           href="/"
           onClick={(event) => {
             event.preventDefault()
+            setIsMobileNavOpen(false)
             navigate('/')
           }}
           className="logo"
@@ -344,13 +333,23 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         >
           Hire<span style={{ color: 'var(--accent)' }}>Flow</span>
         </a>
-        <div className="nav-links" aria-label="Primary">
+        <button
+          type="button"
+          className="mobile-nav-toggle touch-target"
+          aria-label="Toggle main navigation"
+          aria-expanded={isMobileNavOpen}
+          onClick={() => setIsMobileNavOpen((open) => !open)}
+          style={{ background: 'transparent', border: '1px solid var(--border)', color: '#fff', borderRadius: 8, display: 'none' }}
+        >
+          ☰
+        </button>
+        <div className={`nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
           <button onClick={handleFeaturesClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Features</button>
-          <button onClick={handlePricingClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Pricing</button>
+          <button onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Pricing</button>
           <button onClick={handleAboutClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>About</button>
           <button onClick={handleHelpClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Help</button>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`} style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           {isAuthenticated ? (
             <div style={{ position: 'relative' }} ref={profileMenuRef}>
               <button
@@ -424,16 +423,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             </div>
           ) : (
             <>
-              <button onClick={() => navigate('/login')} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'transparent', color: '#fff', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>Login</button>
-              <button onClick={() => navigate('/signup')} style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontWeight: 600 }}>Sign up</button>
+              <button onClick={() => { setIsMobileNavOpen(false); navigate('/login') }} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'transparent', color: '#fff', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>Login</button>
+              <button onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }} style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontWeight: 600 }}>Sign up</button>
             </>
           )}
         </div>
       </header>
       <main>
-        <Suspense fallback={<PageLoader />}>
-          {getPageContent()}
-        </Suspense>
+        {getPageContent()}
       </main>
       <PublicFooter />
     </>
@@ -481,37 +478,6 @@ export default function App() {
       window.removeEventListener('storage', onStorage)
     }
   }, [])
-
-  useEffect(() => {
-    const lazyImages = document.querySelectorAll('img[data-src]')
-    if (!lazyImages.length || !('IntersectionObserver' in window)) {
-      return undefined
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) {
-            return
-          }
-
-          const imageElement = entry.target
-          const pendingSrc = imageElement.getAttribute('data-src')
-          if (pendingSrc) {
-            imageElement.src = pendingSrc
-            imageElement.removeAttribute('data-src')
-          }
-          imageElement.setAttribute('loading', 'lazy')
-          imageElement.setAttribute('decoding', 'async')
-          observer.unobserve(imageElement)
-        })
-      },
-      { rootMargin: '150px 0px' },
-    )
-
-    lazyImages.forEach((imageElement) => observer.observe(imageElement))
-    return () => observer.disconnect()
-  }, [pathname])
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
@@ -572,7 +538,7 @@ export default function App() {
       subscriptionStatus={subscriptionStatus}
       userProfile={userProfile}
       pendingVerificationEmail={pendingVerificationEmail}
-      onSetPendingVerificationEmail={setPendingVerificationEmail}
+      setPendingVerificationEmail={setPendingVerificationEmail}
     />
   )
 }

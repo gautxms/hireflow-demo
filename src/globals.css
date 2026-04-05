@@ -272,3 +272,262 @@ footer {
 .page-content {
   padding-top: 80px;
 }
+
+.touch-target {
+  min-width: 44px !important;
+  min-height: 44px !important;
+}
+
+.landing-mobile-header,
+.landing-mobile-menu {
+  display: none;
+}
+
+.candidate-results-table-wrapper {
+  max-width: 1200px;
+  margin: 0 auto 1.5rem;
+  overflow-x: auto;
+}
+
+.candidate-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.candidate-results-table th,
+.candidate-results-table td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.candidate-results-table th {
+  color: var(--text);
+}
+
+.candidate-results-table td {
+  color: var(--muted);
+}
+
+.candidate-results-table tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 1439px) {
+  .hero,
+  .features,
+  footer {
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .candidate-top-section {
+    grid-template-columns: 1fr auto !important;
+    gap: 1rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .mobile-nav-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0.45rem 0.8rem;
+    font-size: 1.2rem;
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    flex-wrap: wrap;
+  }
+
+  .nav-links,
+  .site-auth-actions {
+    display: none !important;
+  }
+
+  .nav-links.is-open,
+  .site-auth-actions.is-open {
+    display: flex !important;
+    width: 100%;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin-top: 0.5rem;
+    align-items: stretch;
+  }
+
+  .nav-links.is-open button,
+  .site-auth-actions.is-open button {
+    min-height: 44px;
+    width: 100%;
+    text-align: left;
+    padding: 0.65rem 0.75rem !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px;
+  }
+
+  .landing-mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem 0;
+  }
+
+  .landing-menu-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+  }
+
+  .landing-mobile-cta {
+    min-height: 44px;
+  }
+
+  .landing-mobile-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem 0;
+  }
+
+  .landing-mobile-menu a,
+  .landing-mobile-menu button {
+    min-height: 44px;
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hero {
+    min-height: auto;
+    padding: 6.5rem 1rem 3rem;
+  }
+
+  .hero p {
+    font-size: 1rem;
+  }
+
+  .features {
+    padding: 3rem 1rem;
+  }
+
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-card {
+    padding: 1.25rem;
+  }
+
+  .resume-uploader-page,
+  .candidate-results-page {
+    padding: 1rem !important;
+  }
+
+  .resume-uploader-header {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .resume-drop-zone {
+    padding: 1.25rem !important;
+  }
+
+  .resume-file-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.75rem;
+  }
+
+  .resume-file-row button {
+    width: 100%;
+  }
+
+  .resume-actions {
+    flex-direction: column;
+  }
+
+  .resume-actions button {
+    width: 100%;
+  }
+
+  .candidate-results-controls {
+    flex-direction: column;
+  }
+
+  .candidate-results-controls > div {
+    width: 100%;
+  }
+
+  .candidate-results-controls select {
+    width: 100%;
+  }
+
+  .candidate-results-table thead {
+    display: none;
+  }
+
+  .candidate-results-table,
+  .candidate-results-table tbody,
+  .candidate-results-table tr,
+  .candidate-results-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .candidate-results-table tr {
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0;
+  }
+
+  .candidate-results-table td {
+    border-bottom: none;
+    padding: 0.35rem 1rem;
+  }
+
+  .candidate-results-table td::before {
+    content: attr(data-label) ": ";
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .candidate-top-section {
+    grid-template-columns: 1fr !important;
+  }
+
+  .candidate-pros-cons {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .candidate-cta-row {
+    flex-direction: column;
+  }
+
+  .candidate-cta-row button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 374px) {
+  .hero {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .hero h1 {
+    font-size: 2.1rem;
+  }
+}

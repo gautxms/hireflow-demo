@@ -372,10 +372,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     : 0
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      <div style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
+    <div className="resume-uploader-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      <div className="resume-uploader-header" style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
         {onBack && (
           <button
+            className="touch-target"
             onClick={onBack}
             style={{
               background: 'transparent',
@@ -399,7 +400,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         </p>
       </div>
 
-      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <div className="resume-uploader-content" style={{ maxWidth: '900px', margin: '0 auto' }}>
         {subscriptionStatus === 'trialing' && (
           <div
             style={{
@@ -416,6 +417,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </div>
         )}
         <div
+          className="resume-drop-zone"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -446,6 +448,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             onChange={addFiles}
           />
           <button
+            className="touch-target"
             type="button"
             onClick={handleFileSelect}
             style={{
@@ -463,13 +466,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         </div>
 
         {uploadedFiles.length > 0 && (
-          <div style={{ marginBottom: '2rem' }}>
+          <div className="resume-file-list" style={{ marginBottom: '2rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '1rem' }}>
               Selected Files ({uploadedFiles.length})
             </h3>
             <div style={{ display: 'grid', gap: '0.75rem' }}>
               {uploadedFiles.map((f, i) => (
                 <div
+                  className="resume-file-row"
                   key={i}
                   style={{
                     background: 'var(--card)',
@@ -491,6 +495,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                     </div>
                   </div>
                   <button
+                    className="touch-target"
                     onClick={() => removeFile(i)}
                     style={{
                       background: 'transparent',
@@ -550,8 +555,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </p>
         )}
 
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+        <div className="resume-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
           <button
+            className="touch-target"
             onClick={handleAnalyze}
             disabled={uploadedFiles.length === 0 || isAnalyzing}
             style={{
