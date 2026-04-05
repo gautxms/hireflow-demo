@@ -62,6 +62,53 @@ router.post('/usage-overrides', async (req, res) => {
   }
 })
 
+router.get('/actions', async (req, res) => {
+  const limit = Math.max(1, Math.min(500, Number.parseInt(String(req.query.limit || '100'), 10) || 100))
+  const adminId = req.query.adminId ? String(req.query.adminId) : null
+  const actionType = req.query.actionType ? String(req.query.actionType) : null
+
+  const params = [limit]
+  const where = []
+
+  if (adminId) {
+    params.push(adminId)
+    where.push(`admin_id::text = $${params.length}`)
+  }
+
+  if (actionType) {
+    params.push(actionType)
+    where.push(`action_type = $${params.length}`)
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+  try {
+    const result = await pool.query(
+      `SELECT id, admin_id, action_type, target_id, details, ip_address, created_at
+       FROM admin_actions
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      params,
+    )
+
+    return res.json({
+      items: result.rows.map((row) => ({
+        id: row.id,
+        adminId: row.admin_id,
+        actionType: row.action_type,
+        targetId: row.target_id,
+        details: row.details || {},
+        ipAddress: row.ip_address,
+        createdAt: row.created_at,
+      })),
+    })
+  } catch (error) {
+    console.error('[Admin] Failed to query admin actions:', error)
+    return res.status(500).json({ error: 'Unable to query admin actions' })
+  }
+})
+
 router.delete('/usage-overrides/:userId', async (req, res) => {
   const { userId } = req.params
   const monthStart = getMonthStart(req.query.monthStart)
