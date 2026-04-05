@@ -8,6 +8,8 @@ import paymentsRoutes from './routes/payments.js'
 import uploadsRoutes from './routes/uploads.js'
 import uploadChunksRoutes from './routes/uploadChunks.js'
 import parseStatusRoutes from './routes/parseStatus.js'
+import resultsRoutes from './routes/results.js'
+import resultsExportRoutes from './routes/resultsExport.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
@@ -66,6 +68,8 @@ app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
 app.use('/api/uploads', parseStatusRoutes)
 app.use('/api/uploads/chunks', uploadChunksRoutes)
 app.use('/api/uploads', uploadsRoutes)
+app.use('/api/results', resultsRoutes)
+app.use('/api/results/export', resultsExportRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })
