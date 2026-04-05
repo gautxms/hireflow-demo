@@ -122,6 +122,7 @@ export default function AdminAnalyticsDashboard() {
             <MetricCard label="Total users" value={analytics.kpis.totalUsers} trend={growthDelta('mau')} />
             <MetricCard label="Conversion" value={percent(analytics.kpis.conversionRate)} helper="Paid users / signups" />
             <MetricCard label="Parsing success" value={percent(analytics.kpis.parsingSuccessRate)} helper="parse_success / total parsing attempts" />
+            <MetricCard label="Feedback received" value={analytics.kpis.feedbackCount || 0} helper="Total candidate feedback in selected range" />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
@@ -174,6 +175,44 @@ export default function AdminAnalyticsDashboard() {
                   <li key={row.endpoint} className="flex items-center justify-between rounded border border-slate-100 px-3 py-2">
                     <span className="font-mono text-xs">{row.endpoint}</span>
                     <strong>{row.hits}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-lg font-medium text-slate-900">Candidate Feedback Trend</h2>
+              <div className="mt-3 max-h-56 overflow-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-slate-500"><tr><th className="py-2 pr-2">Date</th><th className="py-2 pr-2">Total</th><th className="py-2 pr-2">Helpful</th><th className="py-2 pr-2">Unhelpful</th><th className="py-2 pr-2">Flags</th></tr></thead>
+                  <tbody>
+                    {analytics.feedbackTrend?.slice(-14).map((row) => (
+                      <tr key={row.day} className="border-t border-slate-100">
+                        <td className="py-2 pr-2">{day(row.day)}</td>
+                        <td className="py-2 pr-2">{row.total_feedback}</td>
+                        <td className="py-2 pr-2">{row.helpful_count}</td>
+                        <td className="py-2 pr-2">{row.unhelpful_count}</td>
+                        <td className="py-2 pr-2">{Number(row.false_positive_flags || 0) + Number(row.missing_flags || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-lg font-medium text-slate-900">Feedback Sentiment Snapshot</h2>
+              <ul className="mt-3 space-y-2 text-sm">
+                {[...analytics.feedbackExport || []].slice(0, 8).map((row) => (
+                  <li key={row.id} className="rounded border border-slate-100 px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs">{row.feedback_type}</span>
+                      <span className="text-xs capitalize text-slate-500">{row.sentiment_label}</span>
+                    </div>
+                    {row.comment ? <p className="mt-1 text-slate-600">{row.comment}</p> : <p className="mt-1 text-slate-400">No comment</p>}
                   </li>
                 ))}
               </ul>

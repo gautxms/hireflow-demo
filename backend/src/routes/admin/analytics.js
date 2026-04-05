@@ -83,6 +83,9 @@ async function loadAnalytics({ start, end, planType }) {
     planBreakdownResult,
     retentionResult,
     apiUsageResult,
+    feedbackSummaryResult,
+    feedbackTrendResult,
+    feedbackCommentsResult,
   ] = await Promise.all([
     pool.query(
       `WITH scoped_users AS (
@@ -246,6 +249,50 @@ async function loadAnalytics({ start, end, planType }) {
        LIMIT 15`,
       [start, end],
     ),
+
+    pool.query(
+      `SELECT
+         COUNT(*)::int AS total_feedback,
+         COUNT(*) FILTER (WHERE feedback_type = 'helpful')::int AS helpful_count,
+         COUNT(*) FILTER (WHERE feedback_type = 'unhelpful')::int AS unhelpful_count,
+         COUNT(*) FILTER (WHERE feedback_type IN ('flag_false_positive', 'flag_missing'))::int AS flagged_count
+       FROM candidate_feedback
+       WHERE created_at::date BETWEEN $1::date AND $2::date`,
+      [start, end],
+    ),
+    pool.query(
+      `WITH days AS (
+         SELECT generate_series($1::date, $2::date, interval '1 day')::date AS day
+       )
+       SELECT
+         d.day,
+         COUNT(cf.id)::int AS total_feedback,
+         COUNT(cf.id) FILTER (WHERE cf.feedback_type = 'helpful')::int AS helpful_count,
+         COUNT(cf.id) FILTER (WHERE cf.feedback_type = 'unhelpful')::int AS unhelpful_count,
+         COUNT(cf.id) FILTER (WHERE cf.feedback_type = 'flag_false_positive')::int AS false_positive_flags,
+         COUNT(cf.id) FILTER (WHERE cf.feedback_type = 'flag_missing')::int AS missing_flags
+       FROM days d
+       LEFT JOIN candidate_feedback cf ON cf.created_at::date = d.day
+       GROUP BY d.day
+       ORDER BY d.day ASC`,
+      [start, end],
+    ),
+    pool.query(
+      `SELECT
+         id,
+         user_id,
+         candidate_id,
+         feedback_type,
+         comment,
+         sentiment_label,
+         sentiment_score,
+         created_at
+       FROM candidate_feedback
+       WHERE created_at::date BETWEEN $1::date AND $2::date
+       ORDER BY created_at DESC
+       LIMIT 2000`,
+      [start, end],
+    ),
   ])
 
   const kpis = kpiResult.rows[0] || {}
@@ -255,6 +302,7 @@ async function loadAnalytics({ start, end, planType }) {
   }))
 
   const conversion = conversionResult.rows[0] || { signups: 0, verified: 0, paid: 0 }
+  const feedbackSummary = feedbackSummaryResult.rows[0] || { total_feedback: 0, helpful_count: 0, unhelpful_count: 0, flagged_count: 0 }
 
   return {
     filters: {
@@ -271,6 +319,7 @@ async function loadAnalytics({ start, end, planType }) {
       parsingSuccessRate: Number(kpis.parsing_success_rate || 0),
       forecastNextMonthMrr: forecastNextMonthMrr(revenueTrend),
       conversionRate: Number(conversion.signups || 0) === 0 ? 0 : Number((((Number(conversion.paid || 0) / Number(conversion.signups || 0)) * 100).toFixed(2))),
+      feedbackCount: Number(feedbackSummary.total_feedback || 0),
     },
     revenueTrend,
     userGrowth: growthResult.rows,
@@ -279,6 +328,9 @@ async function loadAnalytics({ start, end, planType }) {
     planBreakdown: planBreakdownResult.rows,
     retentionCohorts: retentionResult.rows,
     apiUsage: apiUsageResult.rows,
+    feedbackSummary: feedbackSummary,
+    feedbackTrend: feedbackTrendResult.rows,
+    feedbackExport: feedbackCommentsResult.rows,
     generatedAt: new Date().toISOString(),
   }
 }
@@ -301,6 +353,9 @@ router.get('/', async (req, res) => {
         { title: 'plan_breakdown', rows: payload.planBreakdown },
         { title: 'retention_cohorts', rows: payload.retentionCohorts },
         { title: 'api_usage', rows: payload.apiUsage },
+        { title: 'feedback_summary', rows: [payload.feedbackSummary] },
+        { title: 'feedback_trend', rows: payload.feedbackTrend },
+        { title: 'feedback_export', rows: payload.feedbackExport },
       ])
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')

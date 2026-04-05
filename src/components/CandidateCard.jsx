@@ -1,9 +1,23 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+
+const FEEDBACK_OPTIONS = [
+  { type: 'helpful', label: '👍 Helpful' },
+  { type: 'unhelpful', label: '👎 Unhelpful' },
+  { type: 'flag_false_positive', label: '🚩 False Positive' },
+  { type: 'flag_missing', label: '🧩 Missing Match' },
+]
 
 export default function CandidateCard({ candidate, rank }) {
-  const [isExpanded, setIsExpanded] = useState(rank === 1) // Auto-expand top candidate
+  const [isExpanded, setIsExpanded] = useState(rank === 1)
+  const [feedbackType, setFeedbackType] = useState('')
+  const [comment, setComment] = useState('')
+  const [submitState, setSubmitState] = useState({ loading: false, success: '', error: '' })
 
-  // Color coding for scores
+  const candidateId = useMemo(() => {
+    const raw = candidate?.id ?? `${rank}-${candidate?.name || 'candidate'}`
+    return String(raw)
+  }, [candidate?.id, candidate?.name, rank])
+
   const getScoreColor = (score) => {
     if (score >= 85) return 'from-green-500 to-emerald-600 shadow-lg'
     if (score >= 75) return 'from-blue-500 to-cyan-600 shadow-md'
@@ -22,20 +36,47 @@ export default function CandidateCard({ candidate, rank }) {
     return '⏳'
   }
 
+  const submitFeedback = async (type) => {
+    try {
+      setSubmitState({ loading: true, success: '', error: '' })
+      setFeedbackType(type)
+
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          candidateId,
+          feedbackType: type,
+          comment: comment.trim() || undefined,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to save feedback')
+      }
+
+      setSubmitState({ loading: false, success: 'Thanks! Your feedback was saved.', error: '' })
+    } catch (error) {
+      setSubmitState({ loading: false, success: '', error: error.message || 'Unable to save feedback' })
+    }
+  }
+
   return (
     <div className={`bg-white rounded-2xl border-2 overflow-hidden hover:shadow-xl transition-all duration-200 ${getScoreBgColor(candidate.score)}`}>
-      {/* Header */}
       <div
         className="p-6 sm:p-8 cursor-pointer hover:bg-opacity-50 transition-colors flex items-center justify-between gap-4"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-4 sm:gap-6 flex-1 min-w-0">
-          {/* Rank Badge */}
           <div className="flex-shrink-0 w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center">
             <span className="text-lg font-bold text-slate-700">#{rank}</span>
           </div>
 
-          {/* Candidate Info */}
           <div className="flex-1 min-w-0">
             <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1 truncate">
               {candidate.name}
@@ -44,7 +85,6 @@ export default function CandidateCard({ candidate, rank }) {
           </div>
         </div>
 
-        {/* Score & Recommendation */}
         <div className="flex-shrink-0 text-right">
           <div className={`inline-block bg-gradient-to-r ${getScoreColor(candidate.score)} text-white font-black text-2xl px-6 py-3 rounded-xl mb-2`}>
             {candidate.score}%
@@ -55,22 +95,18 @@ export default function CandidateCard({ candidate, rank }) {
           </div>
         </div>
 
-        {/* Expand Toggle */}
         <div className="flex-shrink-0 text-xl text-slate-400 ml-2">
           {isExpanded ? '▼' : '▶'}
         </div>
       </div>
 
-      {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t-2 border-slate-200 bg-slate-50/50 p-6 sm:p-8 space-y-6">
-          {/* Summary */}
           <div>
             <h4 className="font-bold text-slate-900 mb-3 text-base sm:text-lg">🤖 AI Assessment</h4>
             <p className="text-slate-700 leading-relaxed text-sm sm:text-base">{candidate.summary}</p>
           </div>
 
-          {/* Skills */}
           <div>
             <h4 className="font-bold text-slate-900 mb-3 text-base sm:text-lg">💻 Key Skills</h4>
             <div className="flex flex-wrap gap-2">
@@ -85,7 +121,6 @@ export default function CandidateCard({ candidate, rank }) {
             </div>
           </div>
 
-          {/* Pros & Cons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="bg-white p-4 rounded-xl border-2 border-green-100">
               <h4 className="font-bold text-green-900 mb-3 text-base">✓ Strengths</h4>
@@ -111,7 +146,35 @@ export default function CandidateCard({ candidate, rank }) {
             </div>
           </div>
 
-          {/* Action Buttons */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <h4 className="font-bold text-slate-900 mb-3 text-base">🧠 Improve Ranking Quality</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {FEEDBACK_OPTIONS.map((option) => (
+                <button
+                  key={option.type}
+                  type="button"
+                  onClick={() => submitFeedback(option.type)}
+                  disabled={submitState.loading}
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${feedbackType === option.type ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 text-slate-700 hover:border-indigo-400'} disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <label className="mt-3 block text-sm text-slate-600">
+              Optional comment
+              <textarea
+                value={comment}
+                onChange={(event) => setComment(event.target.value.slice(0, 1000))}
+                rows={3}
+                placeholder="What looked right or wrong?"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              />
+            </label>
+            {submitState.success ? <p className="mt-2 text-sm text-green-700">{submitState.success}</p> : null}
+            {submitState.error ? <p className="mt-2 text-sm text-rose-700">{submitState.error}</p> : null}
+          </div>
+
           <div className="pt-4 border-t-2 border-slate-200 flex flex-col sm:flex-row gap-3">
             <button className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg transition transform hover:scale-105 shadow-lg flex-1">
               Schedule Interview
