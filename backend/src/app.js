@@ -6,6 +6,7 @@ import paddleWebhookRoutes from './routes/paddleWebhook.js'
 import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
 import uploadsRoutes from './routes/uploads.js'
+import uploadChunksRoutes from './routes/uploadChunks.js'
 import parseStatusRoutes from './routes/parseStatus.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import { requireAuth } from './middleware/authMiddleware.js'
@@ -63,6 +64,7 @@ app.use('/api/auth', passwordResetRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
 app.use('/api/uploads', parseStatusRoutes)
+app.use('/api/uploads/chunks', uploadChunksRoutes)
 app.use('/api/uploads', uploadsRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
