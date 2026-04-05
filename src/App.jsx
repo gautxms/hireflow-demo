@@ -211,6 +211,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <VerifyEmail />
     }
 
+
+    if (pathname.startsWith('/results/')) {
+      const shareToken = pathname.replace('/results/', '').split('/')[0]
+      return <CandidateResults candidates={[]} shareToken={shareToken} onBack={() => navigate('/')} />
+    }
+
     if (pathname === '/verify-email/success') {
       return (
         <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
