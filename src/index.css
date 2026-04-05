@@ -1,8 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* ---- CSS VARIABLES FROM HTML ---- */
 :root {
   --ink: #0a0a0f;
   --ink-2: #1a1a2e;
@@ -15,7 +10,6 @@
   --muted: #7070a0;
 }
 
-/* ---- BASE ---- */
 html { scroll-behavior: smooth; }
 
 body {
@@ -25,7 +19,6 @@ body {
   overflow-x: hidden;
 }
 
-/* ---- CUSTOM CLASSES USED BY LANDING ---- */
 .font-display {
   font-family: 'Syne', sans-serif;
 }
