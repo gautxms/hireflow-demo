@@ -1,20 +1,64 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import '../globals.css'
 
 export default function LandingPage({ onStartDemo }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
   useEffect(() => {
     // Smooth scroll and interactive effects
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
+    const anchors = document.querySelectorAll('a[href^="#"]')
+    const clickHandlers = []
+
+    anchors.forEach(anchor => {
+      const handler = function (e) {
         e.preventDefault()
         const target = document.querySelector(this.getAttribute('href'))
         if (target) target.scrollIntoView({ behavior: 'smooth' })
-      })
+      }
+      clickHandlers.push({ anchor, handler })
+      anchor.addEventListener('click', handler)
     })
+
+    return () => {
+      clickHandlers.forEach(({ anchor, handler }) => {
+        anchor.removeEventListener('click', handler)
+      })
+    }
   }, [])
 
   return (
     <>
+      <div className="landing-mobile-header">
+        <button
+          type="button"
+          className="landing-menu-toggle"
+          aria-label="Toggle landing navigation"
+          aria-expanded={isMobileMenuOpen}
+          onClick={() => setIsMobileMenuOpen((open) => !open)}
+        >
+          ☰
+        </button>
+        <button type="button" className="btn-primary landing-mobile-cta" onClick={onStartDemo}>
+          Start Demo
+        </button>
+      </div>
+
+      {isMobileMenuOpen && (
+        <div className="landing-mobile-menu" aria-label="Mobile site links">
+          <a href="#features" onClick={() => setIsMobileMenuOpen(false)}>Features</a>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => {
+              setIsMobileMenuOpen(false)
+              onStartDemo()
+            }}
+          >
+            Try Demo
+          </button>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="hero">
         <div className="orb-2"></div>

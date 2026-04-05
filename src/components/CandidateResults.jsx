@@ -262,8 +262,24 @@ export default function CandidateResults({
 
   if (isLoading || isSharedLoading) {
     return (
-      <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
+          <button
+            className="touch-target"
+            onClick={onBack}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              color: 'var(--accent)',
+              padding: '0.5rem 1rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginBottom: '1.5rem',
+              fontSize: '0.9rem',
+            }}
+          >
+            ← Upload New Resumes
+          </button>
           {!readOnly && onBack && (
             <button
               onClick={onBack}
@@ -303,7 +319,7 @@ export default function CandidateResults({
 
   if (!hasRenderableCandidates) {
     return (
-      <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           {!readOnly && onBack && (
             <button
@@ -334,6 +350,7 @@ export default function CandidateResults({
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
         {!readOnly && onBack && (
           <button
+            className="touch-target"
             onClick={onBack}
             style={{
               background: 'transparent',
@@ -350,6 +367,57 @@ export default function CandidateResults({
           </button>
         )}
 
+  let filtered = displayCandidates
+  if (filterTier !== 'all') {
+    filtered = filtered.filter(c => c.tier === filterTier)
+  }
+
+  if (sortBy === 'name') {
+    filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name))
+  } else if (sortBy === 'fit') {
+    const fitOrder = { 'Excellent': 0, 'Strong': 1, 'Good': 2, 'Consider': 3 }
+    filtered = [...filtered].sort((a, b) => (fitOrder[a.fit] || 4) - (fitOrder[b.fit] || 4))
+  } else {
+    filtered = [...filtered].sort((a, b) => b.score - a.score)
+  }
+
+  const getScoreColor = (score) => {
+    if (score >= 90) return 'var(--accent-2)' // cyan
+    if (score >= 80) return 'var(--accent)' // lime
+    if (score >= 70) return '#f59e0b' // orange
+    return '#ef4444' // red
+  }
+
+  const getTierBadge = (tier) => {
+    const styles = {
+      top: { bg: 'rgba(90,255,184,0.15)', color: 'var(--accent-2)', label: '⭐ TOP' },
+      strong: { bg: 'rgba(232,255,90,0.15)', color: 'var(--accent)', label: '✓ STRONG' },
+      consider: { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b', label: '→ CONSIDER' }
+    }
+    const style = styles[tier] || styles.consider
+    return { bg: style.bg, color: style.color, label: style.label }
+  }
+
+  return (
+    <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      {/* Header */}
+      <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
+        <button
+          className="touch-target"
+          onClick={onBack}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            color: 'var(--accent)',
+            padding: '0.5rem 1rem',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginBottom: '1rem',
+            fontSize: '0.9rem'
+          }}
+        >
+          ← Upload New Resumes
+        </button>
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>
           Candidate Ranking {readOnly ? '(Shared Read-Only)' : ''}
         </h1>
@@ -363,6 +431,26 @@ export default function CandidateResults({
         )}
       </div>
 
+      {/* Controls */}
+      <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort By</label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="touch-target"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              padding: '0.5rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="score">Score (High to Low)</option>
+            <option value="name">Name (A-Z)</option>
+            <option value="fit">Fit Quality</option>
       <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1rem' }}>
         <aside style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem', height: 'fit-content' }}>
           <h3 style={{ marginBottom: '1rem' }}>Filters</h3>
@@ -380,6 +468,25 @@ export default function CandidateResults({
             ))}
           </select>
 
+        <div>
+          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Filter</label>
+          <select
+            value={filterTier}
+            onChange={(e) => setFilterTier(e.target.value)}
+            className="touch-target"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              padding: '0.5rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="all">All Candidates</option>
+            <option value="top">Top Tier Only</option>
+            <option value="strong">Strong & Above</option>
+            <option value="consider">All Including Consider</option>
           <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block' }}>Experience Level</label>
           <select value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)} style={{ width: '100%' }}>
             <option value="all">All levels</option>
@@ -390,6 +497,58 @@ export default function CandidateResults({
           </select>
         </aside>
 
+      <div className="candidate-results-table-wrapper">
+        <table className="candidate-results-table">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Fit</th>
+              <th>Score</th>
+              <th>Top skills</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((candidate) => (
+              <tr key={`summary-${candidate.id}`}>
+                <td data-label="Candidate">{candidate.name}</td>
+                <td data-label="Fit">{candidate.fit}</td>
+                <td data-label="Score">{candidate.score}</td>
+                <td data-label="Top skills">{candidate.skills.slice(0, 3).join(', ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Candidates List */}
+      <div className="candidate-results-list" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
+        {filtered.map(candidate => {
+          const tier = getTierBadge(candidate.tier)
+          return (
+            <div
+              className="candidate-result-card"
+              key={candidate.id}
+              style={{
+                background: 'var(--card)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                padding: '2rem',
+                transition: 'all 0.3s'
+              }}
+            >
+              {/* Top Section */}
+              <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                    {candidate.name}
+                  </h3>
+                  <p style={{ color: 'var(--muted)', marginBottom: '0.75rem' }}>
+                    {candidate.position} • {candidate.experience}
+                  </p>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+                    {candidate.education}
+                  </p>
+                </div>
         <section>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'end' }}>
             <div>
@@ -448,6 +607,28 @@ export default function CandidateResults({
                   ))}
                 </div>
 
+              {/* Pros & Cons */}
+              <div className="candidate-pros-cons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                <div>
+                  <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--accent-2)' }}>
+                    ✓ Strengths
+                  </h4>
+                  <ul style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '1.5rem' }}>
+                    {candidate.pros.map((pro, i) => (
+                      <li key={i}>{pro}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem', color: '#f59e0b' }}>
+                    ⚠ Considerations
+                  </h4>
+                  <ul style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '1.5rem' }}>
+                    {candidate.cons.map((con, i) => (
+                      <li key={i}>{con}</li>
+                    ))}
+                  </ul>
+                </div>
                 {candidate.pros.length > 0 && (
                   <div style={{ marginTop: '0.75rem' }}>
                     <strong style={{ fontSize: '0.9rem' }}>Strengths:</strong>
@@ -460,6 +641,35 @@ export default function CandidateResults({
             ))}
           </div>
 
+              {/* CTA */}
+              <div className="candidate-cta-row" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+                <button style={{
+                  minHeight: 44,
+                  background: 'var(--accent)',
+                  color: 'var(--ink)',
+                  border: 'none',
+                  padding: '0.6rem 1.5rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}>
+                  Schedule Interview
+                </button>
+                <button style={{
+                  minHeight: 44,
+                  background: 'transparent',
+                  color: 'var(--accent)',
+                  border: '1px solid var(--accent)',
+                  padding: '0.6rem 1.5rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}>
+                  View Full Profile
+                </button>
+              </div>
           {viewMode === 'pagination' && (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <button onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={page <= 1}>Previous</button>
