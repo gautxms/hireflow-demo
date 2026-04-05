@@ -1,14 +1,30 @@
 import crypto from 'crypto'
 import { Router } from 'express'
+import jwt from 'jsonwebtoken'
 import { pool } from '../db/client.js'
 import { signToken } from '../utils/jwt.js'
 import { sendVerificationEmail } from '../utils/mailer.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 import { loginLimiter, signupLimiter } from '../middleware/rateLimiter.js'
 import { trackEvent } from '../services/analytics.js'
+import {
+  ADMIN_COOKIE_NAME,
+  clearAdminSession,
+  createAdminSession,
+  isIpAllowed,
+  logAdminAction,
+  setAdminCookie,
+} from '../middleware/adminAuth.js'
+import {
+  createQrCodeDataUrl,
+  createTwoFactorSetup,
+  verifyAndConsumeBackupCode,
+  verifyTotpCode,
+} from '../services/twoFactor.js'
 
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
+const ADMIN_SETUP_TOKEN_TTL_MS = 10 * 60 * 1000
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16)
@@ -31,6 +47,18 @@ function setAuthCookie(res, token) {
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   })
+}
+
+function signAdminSetupToken(userId) {
+  return jwt.sign(
+    {
+      userId,
+      admin_setup: true,
+      admin_setup_expires_at: Date.now() + ADMIN_SETUP_TOKEN_TTL_MS,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '10m' },
+  )
 }
 
 function hashVerificationToken(token) {
@@ -348,6 +376,233 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
     console.error('[AUTH] Login error:', error.message)
     return res.status(500).json({ error: 'Internal server error', details: error.message })
   }
+})
+
+router.post('/admin/login', loginLimiter, async (req, res) => {
+  const { email, password, totpCode, backupCode, acceptedEula = false } = req.body || {}
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+
+  if (!normalizedEmail || !password) {
+    return res.status(400).json({ error: 'Email and password are required' })
+  }
+
+  if (!isIpAllowed(req.ip)) {
+    return res.status(403).json({ error: 'IP address is not on the admin allow list' })
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, email, password_hash, is_admin, admin_two_factor_enabled,
+              admin_two_factor_secret_enc, admin_backup_codes, admin_eula_accepted_at,
+              admin_last_login_ip
+       FROM users
+       WHERE email = $1`,
+      [normalizedEmail],
+    )
+
+    const user = result.rows[0]
+    if (!user || !user.is_admin) {
+      return res.status(403).json({ error: 'Admin account required' })
+    }
+
+    if (!verifyPassword(password, user.password_hash)) {
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
+
+    if (!user.admin_eula_accepted_at && !acceptedEula) {
+      return res.status(428).json({
+        error: 'EULA acceptance is required before first admin login',
+        requiresEula: true,
+      })
+    }
+
+    if (!user.admin_two_factor_enabled || !user.admin_two_factor_secret_enc) {
+      const setupToken = signAdminSetupToken(user.id)
+      return res.status(200).json({
+        requiresTwoFactorSetup: true,
+        setupToken,
+      })
+    }
+
+    const hasTotpCode = typeof totpCode === 'string' && totpCode.trim().length >= 6
+    const hasBackupCode = typeof backupCode === 'string' && backupCode.trim().length > 0
+
+    if (!hasTotpCode && !hasBackupCode) {
+      return res.status(401).json({ error: '2FA code is required', requiresTwoFactor: true })
+    }
+
+    let usedBackupCode = false
+    let newBackupCodeHashes = user.admin_backup_codes || []
+    let isValidTwoFactor = false
+
+    if (hasTotpCode) {
+      isValidTwoFactor = verifyTotpCode({
+        encryptedSecret: user.admin_two_factor_secret_enc,
+        token: totpCode.trim(),
+      })
+    }
+
+    if (!isValidTwoFactor && hasBackupCode) {
+      const backupAttempt = verifyAndConsumeBackupCode(backupCode, user.admin_backup_codes || [])
+      isValidTwoFactor = backupAttempt.valid
+      usedBackupCode = backupAttempt.valid
+      newBackupCodeHashes = backupAttempt.remainingHashes
+    }
+
+    if (!isValidTwoFactor) {
+      return res.status(401).json({ error: 'Invalid 2FA code' })
+    }
+
+    const session = createAdminSession({
+      adminId: user.id,
+      email: user.email,
+      ipAddress: String(req.ip || '').replace('::ffff:', ''),
+    })
+
+    setAdminCookie(res, session.token)
+
+    const previousLoginIp = user.admin_last_login_ip || null
+
+    await pool.query(
+      `UPDATE users
+       SET admin_eula_accepted_at = COALESCE(admin_eula_accepted_at, CASE WHEN $2::boolean THEN NOW() ELSE NULL END),
+           admin_last_login_at = NOW(),
+           admin_last_login_ip = $3,
+           admin_backup_codes = $4::jsonb
+       WHERE id = $1`,
+      [user.id, acceptedEula, String(req.ip || '').replace('::ffff:', ''), JSON.stringify(newBackupCodeHashes)],
+    )
+
+    await logAdminAction({
+      adminId: user.id,
+      actionType: 'admin_login',
+      details: {
+        usedBackupCode,
+        newIpDetected: Boolean(previousLoginIp && previousLoginIp !== String(req.ip || '').replace('::ffff:', '')),
+      },
+      ipAddress: String(req.ip || '').replace('::ffff:', ''),
+    })
+
+    return res.json({
+      ok: true,
+      admin: { id: user.id, email: user.email },
+      sessionTimeoutSeconds: Math.floor((15 * 60 * 1000) / 1000),
+      sessionExpiresAt: session.expiresAt,
+      newIpDetected: Boolean(previousLoginIp && previousLoginIp !== String(req.ip || '').replace('::ffff:', '')),
+    })
+  } catch (error) {
+    console.error('[AUTH] Admin login error:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/admin/2fa/setup', async (req, res) => {
+  const { setupToken, appName = 'HireFlow Admin' } = req.body || {}
+
+  if (!setupToken) {
+    return res.status(400).json({ error: 'setupToken is required' })
+  }
+
+  try {
+    const decoded = jwt.verify(setupToken, process.env.JWT_SECRET)
+    if (!decoded?.admin_setup || Date.now() > Number(decoded.admin_setup_expires_at || 0)) {
+      return res.status(401).json({ error: 'Invalid or expired setup token' })
+    }
+
+    const userResult = await pool.query(
+      'SELECT id, email, is_admin FROM users WHERE id = $1',
+      [decoded.userId],
+    )
+    const user = userResult.rows[0]
+
+    if (!user || !user.is_admin) {
+      return res.status(403).json({ error: 'Admin account required' })
+    }
+
+    const setupPayload = createTwoFactorSetup({ label: `${appName}:${user.email}` })
+    const qrCodeDataUrl = await createQrCodeDataUrl(setupPayload.otpauthUrl)
+
+    await pool.query(
+      `UPDATE users
+       SET admin_two_factor_pending_secret_enc = $2,
+           admin_pending_backup_codes = $3::jsonb
+       WHERE id = $1`,
+      [user.id, setupPayload.encryptedSecret, JSON.stringify(setupPayload.backupCodeHashes)],
+    )
+
+    return res.json({
+      setupToken,
+      qrCodeDataUrl,
+      backupCodes: setupPayload.backupCodes,
+      message: 'Save your backup codes securely before verification.',
+    })
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired setup token' })
+  }
+})
+
+router.post('/admin/2fa/verify', async (req, res) => {
+  const { setupToken, totpCode } = req.body || {}
+
+  if (!setupToken || !totpCode) {
+    return res.status(400).json({ error: 'setupToken and totpCode are required' })
+  }
+
+  try {
+    const decoded = jwt.verify(setupToken, process.env.JWT_SECRET)
+    if (!decoded?.admin_setup) {
+      return res.status(401).json({ error: 'Invalid setup token' })
+    }
+
+    const userResult = await pool.query(
+      `SELECT id, email, is_admin, admin_two_factor_pending_secret_enc, admin_pending_backup_codes
+       FROM users WHERE id = $1`,
+      [decoded.userId],
+    )
+
+    const user = userResult.rows[0]
+    if (!user || !user.is_admin || !user.admin_two_factor_pending_secret_enc) {
+      return res.status(400).json({ error: '2FA setup not initialized' })
+    }
+
+    const isValidCode = verifyTotpCode({
+      encryptedSecret: user.admin_two_factor_pending_secret_enc,
+      token: String(totpCode).trim(),
+    })
+
+    if (!isValidCode) {
+      return res.status(401).json({ error: 'Invalid TOTP code' })
+    }
+
+    await pool.query(
+      `UPDATE users
+       SET admin_two_factor_enabled = true,
+           admin_two_factor_secret_enc = admin_two_factor_pending_secret_enc,
+           admin_backup_codes = admin_pending_backup_codes,
+           admin_two_factor_pending_secret_enc = NULL,
+           admin_pending_backup_codes = NULL,
+           admin_password_changed_at = COALESCE(admin_password_changed_at, NOW())
+       WHERE id = $1`,
+      [user.id],
+    )
+
+    await logAdminAction({
+      adminId: user.id,
+      actionType: 'admin_2fa_enabled',
+      details: { via: 'totp_setup' },
+      ipAddress: String(req.ip || '').replace('::ffff:', ''),
+    })
+
+    return res.json({ ok: true })
+  } catch {
+    return res.status(401).json({ error: 'Invalid setup token' })
+  }
+})
+
+router.post('/admin/logout', (_req, res) => {
+  clearAdminSession(res)
+  res.clearCookie(ADMIN_COOKIE_NAME)
+  return res.status(204).send()
 })
 
 router.post('/logout', (_req, res) => {
