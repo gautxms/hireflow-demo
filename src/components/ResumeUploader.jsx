@@ -258,13 +258,23 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         setParseProgress(Number(statusPayload.progress || 0))
 
         if (statusPayload.status === 'complete') {
-          const candidates = statusPayload.result?.candidates || []
+          const parseResult = statusPayload.result || {}
+          const candidates = parseResult.candidates || []
 
           if (candidates.length === 0) {
             throw new Error('Resume parsing finished, but no candidates were returned')
           }
 
-          onFileUploaded(candidates)
+          onFileUploaded({
+            candidates,
+            parseMeta: {
+              methodUsed: parseResult.methodUsed || 'ai-extraction',
+              confidence: Number(parseResult.confidence || 0),
+              attempts: Array.isArray(parseResult.attempts) ? parseResult.attempts : [],
+              requiresManualCorrection: Boolean(parseResult.requiresManualCorrection),
+              feedback: parseResult.feedback || null,
+            },
+          })
           return
         }
 
@@ -333,7 +343,19 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           ]
 
           setError('')
-          onFileUploaded(mockCandidates)
+          onFileUploaded({
+            candidates: mockCandidates,
+            parseMeta: {
+              methodUsed: 'demo-fallback',
+              confidence: 65,
+              attempts: [{ method: 'demo-fallback', confidence: 65, status: 'success' }],
+              requiresManualCorrection: true,
+              feedback: {
+                requested: true,
+                hint: 'Manual corrections improve parsing quality for future uploads.',
+              },
+            },
+          })
         }, 2000)
       }
     } finally {

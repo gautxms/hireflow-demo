@@ -1,1 +1,3 @@
-export { default } from '../../../src/components/CandidateResults.jsx'
+import CandidateResults from '../../../src/components/CandidateResults.jsx'
+
+export default CandidateResults
