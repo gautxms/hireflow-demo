@@ -13,6 +13,7 @@ const ALLOWED_EVENTS = new Set([
   'payment_success',
   'payment_fail',
   'cancellation',
+  'feedback_submitted',
 ])
 
 const PII_FIELD_PATTERN = /(email|phone|name|ip|address|password|token)/i
@@ -279,6 +280,42 @@ export async function getAnalyticsSummary(days = 30) {
     trends: trendResult.rows,
     revenueByPlan: planResult.rows,
   }
+}
+
+
+const POSITIVE_TOKENS = ['great', 'good', 'helpful', 'accurate', 'strong', 'excellent', 'clear', 'relevant']
+const NEGATIVE_TOKENS = ['bad', 'poor', 'wrong', 'unhelpful', 'inaccurate', 'missing', 'irrelevant', 'false']
+
+export function analyzeCommentSentiment(comment) {
+  if (!comment || typeof comment !== 'string') {
+    return { label: 'neutral', score: 0 }
+  }
+
+  const words = comment.toLowerCase().match(/[a-z']+/g) || []
+  let score = 0
+
+  for (const word of words) {
+    if (POSITIVE_TOKENS.includes(word)) score += 1
+    if (NEGATIVE_TOKENS.includes(word)) score -= 1
+  }
+
+  if (score > 0) return { label: 'positive', score }
+  if (score < 0) return { label: 'negative', score }
+  return { label: 'neutral', score: 0 }
+}
+
+export async function trackFeedbackSubmitted({ userId, candidateId, feedbackType, comment, sentimentLabel, sentimentScore }) {
+  await trackEvent({
+    userId,
+    eventType: 'feedback_submitted',
+    metadata: {
+      candidateId,
+      feedbackType,
+      hasComment: Boolean(comment),
+      sentimentLabel,
+      sentimentScore,
+    },
+  })
 }
 
 export function startAnalyticsCron() {
