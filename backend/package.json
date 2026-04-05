@@ -1,0 +1,14 @@
+{
+  "name": "hireflow-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "perf:load": "autocannon -c 50 -d 20 -p 10 http://localhost:4000/health",
+    "perf:profile": "clinic doctor -- node src/index.js",
+    "perf:queries": "node --trace-gc src/index.js"
+  },
+  "devDependencies": {
+    "autocannon": "^7.15.0",
+    "clinic": "^13.0.0"
+  }
+}

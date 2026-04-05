@@ -64,6 +64,12 @@ export async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_resumes_user_id
+        ON resumes (user_id);
+      CREATE INDEX IF NOT EXISTS idx_resumes_created_at
+        ON resumes (created_at DESC);
+    `)
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS subscriptions (
@@ -77,6 +83,12 @@ export async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       );
     `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id
+        ON subscriptions (user_id);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_created_at
+        ON subscriptions (created_at DESC);
+    `)
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS paddle_webhook_audit (
@@ -87,6 +99,14 @@ export async function initializeDatabase() {
         error_message TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       );
+    `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_paddle_webhook_audit_created_at
+        ON paddle_webhook_audit (created_at DESC);
+    `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_created_at
+        ON users (created_at DESC);
     `)
     
     console.log('[Database] ✓ Core tables initialized')

@@ -1,34 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import LandingPage from './components/LandingPage'
-import Pricing from './pages/Pricing'
-import ResumeUploader from './components/ResumeUploader'
-import CandidateResults from './components/CandidateResults'
-import OperationsDashboard from './components/Dashboard'
-import SettingsPage from './components/SettingsPage'
-import HelpPage from './components/HelpPage'
-import AboutPage from './components/AboutPage'
-import DemoBookingPage from './components/DemoBookingPage'
-import ContactPage from './components/ContactPage'
-import LoginPage from './components/LoginPage'
-import SignupPage from './components/SignupPage'
-import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
-import VerifyEmail from './pages/VerifyEmail'
-import Terms from './pages/Terms'
-import PrivacyPage from './components/PrivacyPage'
-import RefundPolicy from './pages/RefundPolicy'
-import BillingSuccess from './pages/BillingSuccess'
-import BillingCancel from './pages/BillingCancel'
-import BillingPage from './pages/BillingPage'
-import Checkout from './pages/Checkout'
-import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import ResetPasswordPage from './pages/ResetPasswordPage'
-import VerifyEmailPage from './pages/VerifyEmailPage'
-import AccountSettingsPage from './pages/AccountSettingsPage'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import PublicFooter from './components/PublicFooter'
+
+const LandingPage = lazy(() => import('./components/LandingPage'))
+const Pricing = lazy(() => import('./pages/Pricing'))
+const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
+const CandidateResults = lazy(() => import('./components/CandidateResults'))
+const OperationsDashboard = lazy(() => import('./components/Dashboard'))
+const SettingsPage = lazy(() => import('./components/SettingsPage'))
+const HelpPage = lazy(() => import('./components/HelpPage'))
+const AboutPage = lazy(() => import('./components/AboutPage'))
+const DemoBookingPage = lazy(() => import('./components/DemoBookingPage'))
+const ContactPage = lazy(() => import('./components/ContactPage'))
+const LoginPage = lazy(() => import('./components/LoginPage'))
+const SignupPage = lazy(() => import('./components/SignupPage'))
+const VerifyEmailInfoPage = lazy(() => import('./components/VerifyEmailInfoPage'))
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
+const Terms = lazy(() => import('./pages/Terms'))
+const PrivacyPage = lazy(() => import('./components/PrivacyPage'))
+const RefundPolicy = lazy(() => import('./pages/RefundPolicy'))
+const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
+const BillingCancel = lazy(() => import('./pages/BillingCancel'))
+const BillingPage = lazy(() => import('./pages/BillingPage'))
+const Checkout = lazy(() => import('./pages/Checkout'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'))
+const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
+
+function PageLoader() {
+  return (
+    <div style={{ minHeight: '40vh', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
+      Loading…
+    </div>
+  )
+}
 
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
@@ -59,7 +68,7 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, onSetPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [parseMeta, setParseMeta] = useState(null)
@@ -180,7 +189,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (!isAuthenticated && pathname === '/login') {
       return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} onNavigateToVerifyEmail={(email) => {
-        setPendingVerificationEmail(email)
+        onSetPendingVerificationEmail(email)
         navigate('/verify-email-info')
       }} />
     }
@@ -422,7 +431,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </div>
       </header>
       <main>
-        {getPageContent()}
+        <Suspense fallback={<PageLoader />}>
+          {getPageContent()}
+        </Suspense>
       </main>
       <PublicFooter />
     </>
@@ -470,6 +481,37 @@ export default function App() {
       window.removeEventListener('storage', onStorage)
     }
   }, [])
+
+  useEffect(() => {
+    const lazyImages = document.querySelectorAll('img[data-src]')
+    if (!lazyImages.length || !('IntersectionObserver' in window)) {
+      return undefined
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return
+          }
+
+          const imageElement = entry.target
+          const pendingSrc = imageElement.getAttribute('data-src')
+          if (pendingSrc) {
+            imageElement.src = pendingSrc
+            imageElement.removeAttribute('data-src')
+          }
+          imageElement.setAttribute('loading', 'lazy')
+          imageElement.setAttribute('decoding', 'async')
+          observer.unobserve(imageElement)
+        })
+      },
+      { rootMargin: '150px 0px' },
+    )
+
+    lazyImages.forEach((imageElement) => observer.observe(imageElement))
+    return () => observer.disconnect()
+  }, [pathname])
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
@@ -530,6 +572,7 @@ export default function App() {
       subscriptionStatus={subscriptionStatus}
       userProfile={userProfile}
       pendingVerificationEmail={pendingVerificationEmail}
+      onSetPendingVerificationEmail={setPendingVerificationEmail}
     />
   )
 }
