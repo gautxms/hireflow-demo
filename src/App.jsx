@@ -62,6 +62,7 @@ function navigate(pathname, options = {}) {
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
+  const [parseMeta, setParseMeta] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef(null)
 
@@ -83,8 +84,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setCurrentPage(page)
   }
 
-  const handleFileUploaded = (candidateResults) => {
-    setUploadedFiles(candidateResults)
+  const handleFileUploaded = (payload) => {
+    setUploadedFiles(payload?.candidates || [])
+    setParseMeta(payload?.parseMeta || null)
     handleNavigate('results')
   }
 
@@ -211,6 +213,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <VerifyEmail />
     }
 
+
+    if (pathname.startsWith('/results/')) {
+      const shareToken = pathname.replace('/results/', '').split('/')[0]
+      return <CandidateResults candidates={[]} shareToken={shareToken} onBack={() => navigate('/')} />
+    }
+
     if (pathname === '/verify-email/success') {
       return (
         <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
@@ -261,6 +269,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         {currentPage === 'results' && (
           <CandidateResults
             candidates={uploadedFiles}
+            parseMeta={parseMeta}
             onBack={() => handleNavigate('uploader')}
           />
         )}
