@@ -7,6 +7,7 @@ import { startAnalyticsCron } from './services/analytics.js'
 import { logEmailConfigStatus } from './services/emailService.js'
 import { initializeJobQueue } from './services/jobQueue.js'
 import { registerParseResumeJobProcessor } from './jobs/parseResumeJob.js'
+import { startChunkUploadCleanupCron } from './services/fileUploadService.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -44,6 +45,7 @@ async function start() {
 
     startPaymentRetryCron()
     startAnalyticsCron()
+    startChunkUploadCleanupCron()
 
     app.listen(port, () => {
       console.log(`✓ Backend listening on port ${port}`)

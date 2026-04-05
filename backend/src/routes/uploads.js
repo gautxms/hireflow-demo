@@ -4,6 +4,7 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 import { enqueueParseJob } from '../services/jobQueue.js'
+import { scanFileBuffer } from '../services/virusScanService.js'
 import {
   enforceUploadLimit,
   requireActiveSubscription,
@@ -44,6 +45,9 @@ async function ensureResumeParseColumns() {
     ADD COLUMN IF NOT EXISTS parse_result JSONB,
     ADD COLUMN IF NOT EXISTS parse_error TEXT,
     ADD COLUMN IF NOT EXISTS parse_duration_ms INTEGER,
+    ADD COLUMN IF NOT EXISTS scan_status TEXT,
+    ADD COLUMN IF NOT EXISTS scan_result JSONB,
+    ADD COLUMN IF NOT EXISTS file_sha256 TEXT,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
   `)
 }
@@ -82,11 +86,39 @@ router.post(
       const jobs = []
 
       for (const file of req.files) {
+        const scanResult = await scanFileBuffer(file.buffer, file.safeName)
+
+        if (scanResult.malicious) {
+          return res.status(400).json({
+            error: `Upload rejected for ${file.safeName}: malware detected`,
+            scan: scanResult,
+          })
+        }
+
         const insertResult = await pool.query(
-          `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, updated_at)
-           VALUES ($1, $2, '', $3, $4, 'pending', NOW())
+          `INSERT INTO resumes (
+             user_id,
+             filename,
+             raw_text,
+             file_size,
+             file_type,
+             parse_status,
+             scan_status,
+             scan_result,
+             file_sha256,
+             updated_at
+           )
+           VALUES ($1, $2, '', $3, $4, 'pending', $5, $6::jsonb, encode(digest($7, 'sha256'), 'hex'), NOW())
            RETURNING id`,
-          [req.userId, file.safeName, file.size, file.mimetype],
+          [
+            req.userId,
+            file.safeName,
+            file.size,
+            file.mimetype,
+            scanResult.status || 'clean',
+            JSON.stringify(scanResult),
+            file.buffer,
+          ],
         )
 
         const resumeId = insertResult.rows[0].id

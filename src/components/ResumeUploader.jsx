@@ -3,7 +3,10 @@ import DOMPurify from 'dompurify'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-const MAX_FILE_SIZE = 50 * 1024 * 1024
+const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
+const MAX_FILE_SIZE = 100 * 1024 * 1024
+const CHUNK_SIZE = 5 * 1024 * 1024
+const MAX_CHUNK_RETRIES = 3
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -13,6 +16,22 @@ function sanitizeForDisplay(message) {
   return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
 }
 
+function getFileFingerprint(file) {
+  return `${file.name}::${file.size}::${file.lastModified}`
+}
+
+function readUploadCache() {
+  try {
+    return JSON.parse(localStorage.getItem(RESUME_UPLOAD_STATE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function writeUploadCache(next) {
+  localStorage.setItem(RESUME_UPLOAD_STATE_KEY, JSON.stringify(next))
+}
+
 export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus }) {
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -20,6 +39,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [parseProgress, setParseProgress] = useState(0)
   const [parseStatus, setParseStatus] = useState('')
+  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
   const [error, setError] = useState('')
 
   const handleAuthRedirect = useCallback(() => {
@@ -61,7 +81,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       }
 
       if (!isAllowedSize) {
-        rejected.push(`${file.name}: exceeds 50MB file size limit.`)
+        rejected.push(`${file.name}: exceeds 100MB file size limit.`)
         return
       }
 
@@ -89,6 +109,32 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     fileInputRef.current?.click()
   }
 
+  const uploadChunkWithRetry = async ({ uploadId, chunk, chunkIndex, totalChunks, token }) => {
+    for (let attempt = 1; attempt <= MAX_CHUNK_RETRIES; attempt += 1) {
+      const formData = new FormData()
+      formData.append('chunk', chunk)
+      formData.append('chunkIndex', String(chunkIndex))
+      formData.append('totalChunks', String(totalChunks))
+
+      const response = await fetch(`${API_BASE_URL}/api/uploads/chunks/${uploadId}/chunk`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+
+      if (response.ok) {
+        return
+      }
+
+      if (attempt === MAX_CHUNK_RETRIES) {
+        const errorPayload = await response.json().catch(() => ({}))
+        throw new Error(errorPayload.error || `Chunk upload failed at chunk ${chunkIndex + 1}`)
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt))
+    }
+  }
+
   const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
 
@@ -96,36 +142,99 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setError('')
 
     try {
-      const formData = new FormData()
-      uploadedFiles.forEach((f) => {
-        formData.append('resumes', f.file)
-      })
-
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
 
       if (!token) {
         throw new Error('Authentication required. Please log in first.')
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/uploads`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      })
+      const totalChunksAllFiles = uploadedFiles.reduce((sum, item) => sum + Math.ceil(item.file.size / CHUNK_SIZE), 0)
+      let uploadedChunkCount = 0
+      setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        if (response.status === 403) {
-          throw new Error(errorData.message || errorData.error || 'Subscription required. Please upgrade to continue.')
+      const queuedJobs = []
+
+      for (const entry of uploadedFiles) {
+        const file = entry.file
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+        const fingerprint = getFileFingerprint(file)
+
+        const initResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/init`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          }),
+        })
+
+        if (!initResponse.ok) {
+          const payload = await initResponse.json().catch(() => ({}))
+          throw new Error(payload.error || `Failed to start chunk upload for ${file.name}`)
         }
-        throw new Error(errorData.error || `Upload failed (${response.status})`)
+
+        const initPayload = await initResponse.json()
+        const uploadId = initPayload.uploadId
+        const uploadedChunks = new Set(initPayload.uploadedChunks || [])
+
+        const cache = readUploadCache()
+        cache[fingerprint] = { uploadId, totalChunks }
+        writeUploadCache(cache)
+
+        uploadedChunkCount += uploadedChunks.size
+        setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
+
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+          if (uploadedChunks.has(chunkIndex)) {
+            continue
+          }
+
+          const start = chunkIndex * CHUNK_SIZE
+          const end = Math.min(start + CHUNK_SIZE, file.size)
+          const chunk = file.slice(start, end)
+
+          await uploadChunkWithRetry({
+            uploadId,
+            chunk,
+            chunkIndex,
+            totalChunks,
+            token,
+          })
+
+          uploadedChunkCount += 1
+          setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
+        }
+
+        const completeResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/${uploadId}/complete`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        const completePayload = await completeResponse.json().catch(() => ({}))
+
+        if (!completeResponse.ok) {
+          throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
+        }
+
+        if (completePayload.scan?.malicious) {
+          throw new Error(`Upload rejected for ${file.name}: malware detected`)
+        }
+
+        queuedJobs.push({ fileName: file.name, jobId: completePayload.jobId })
+
+        const nextCache = readUploadCache()
+        delete nextCache[fingerprint]
+        writeUploadCache(nextCache)
       }
 
-      const queueResult = await response.json()
-      const jobId = queueResult?.jobId
+      const primaryJobId = queuedJobs[0]?.jobId
 
-      if (!jobId) {
-        throw new Error('No job ID returned from upload request')
+      if (!primaryJobId) {
+        throw new Error('No parse job ID returned from upload request')
       }
 
       setParseStatus('processing')
@@ -135,7 +244,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       const maxPollAttempts = 300
 
       for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-        const statusResponse = await fetch(`${API_BASE_URL}/api/uploads/${jobId}/parse-status`, {
+        const statusResponse = await fetch(`${API_BASE_URL}/api/uploads/${primaryJobId}/parse-status`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -175,7 +284,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
 
-      if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive')) {
+      if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
       } else {
         setError(`${errorMessage}. Using demo data instead.`)
@@ -235,6 +344,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const removeFile = (index) => {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
   }
+
+  const uploadPercent = uploadProgress.total > 0
+    ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
+    : 0
 
   return (
     <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
@@ -300,7 +413,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             Drop resumes here
           </h3>
           <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
-            or click to select files (PDF or DOCX, up to 50MB each)
+            or click to select files (PDF or DOCX, up to 100MB each)
           </p>
           <input
             ref={fileInputRef}
@@ -351,7 +464,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                     <div>
                       <div style={{ fontWeight: 'bold' }}>{f.name}</div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-                        {(f.size / 1024).toFixed(2)} KB
+                        {(f.size / 1024 / 1024).toFixed(2)} MB
                       </div>
                     </div>
                   </div>
@@ -371,6 +484,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {isAnalyzing && uploadProgress.total > 0 && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <p style={{ color: 'var(--muted)', textAlign: 'center', marginBottom: '0.5rem' }}>
+              Upload progress: {uploadPercent}% ({uploadProgress.completed}/{uploadProgress.total} chunks)
+            </p>
+            <div style={{ height: '10px', borderRadius: '999px', background: 'var(--border)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${uploadPercent}%`,
+                  height: '100%',
+                  background: 'var(--accent)',
+                  transition: 'width 0.2s ease',
+                }}
+              />
             </div>
           </div>
         )}
