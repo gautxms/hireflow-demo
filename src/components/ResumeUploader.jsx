@@ -18,6 +18,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [parseProgress, setParseProgress] = useState(0)
+  const [parseStatus, setParseStatus] = useState('')
   const [error, setError] = useState('')
 
   const handleAuthRedirect = useCallback(() => {
@@ -119,15 +121,57 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         throw new Error(errorData.error || `Upload failed (${response.status})`)
       }
 
-      const results = await response.json()
-      if (results.candidates && results.candidates.length > 0) {
-        onFileUploaded(results.candidates)
-      } else {
-        throw new Error('No candidates returned from server')
+      const queueResult = await response.json()
+      const jobId = queueResult?.jobId
+
+      if (!jobId) {
+        throw new Error('No job ID returned from upload request')
       }
+
+      setParseStatus('processing')
+      setParseProgress(5)
+
+      const pollDelayMs = 2000
+      const maxPollAttempts = 300
+
+      for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+        const statusResponse = await fetch(`${API_BASE_URL}/api/uploads/${jobId}/parse-status`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!statusResponse.ok) {
+          throw new Error(`Polling failed (${statusResponse.status})`)
+        }
+
+        const statusPayload = await statusResponse.json()
+        setParseStatus(statusPayload.status || 'processing')
+        setParseProgress(Number(statusPayload.progress || 0))
+
+        if (statusPayload.status === 'complete') {
+          const candidates = statusPayload.result?.candidates || []
+
+          if (candidates.length === 0) {
+            throw new Error('Resume parsing finished, but no candidates were returned')
+          }
+
+          onFileUploaded(candidates)
+          return
+        }
+
+        if (statusPayload.status === 'failed') {
+          throw new Error(statusPayload.error || 'Resume parsing failed')
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
+      }
+
+      throw new Error('Resume parsing timed out. Please try again.')
     } catch (err) {
       console.error('Upload error:', err)
       setIsAnalyzing(false)
+      setParseStatus('')
+      setParseProgress(0)
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
 
@@ -345,6 +389,12 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           >
             {error}
           </div>
+        )}
+
+        {isAnalyzing && parseStatus && (
+          <p style={{ color: 'var(--muted)', textAlign: 'center', marginBottom: '1rem' }}>
+            Parsing status: {parseStatus} ({parseProgress}%)
+          </p>
         )}
 
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>

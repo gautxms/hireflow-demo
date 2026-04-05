@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { pool } from '../../db/client.js'
+import { parseQueue } from '../../services/jobQueue.js'
 
 const router = Router()
 const DEFAULT_PAGE_SIZE = 20
@@ -404,9 +405,11 @@ router.post('/:uploadId/retry', async (req, res) => {
     await ensureUploadMonitoringColumns()
 
     const result = await pool.query(
-      `SELECT id, raw_text, filename
-       FROM resumes
-       WHERE id::text = $1
+      `SELECT r.id, r.filename, p.job_id, p.status
+       FROM resumes r
+       LEFT JOIN parse_jobs p ON p.resume_id = r.id
+       WHERE r.id::text = $1
+       ORDER BY p.created_at DESC NULLS LAST
        LIMIT 1`,
       [uploadId],
     )
@@ -417,45 +420,44 @@ router.post('/:uploadId/retry', async (req, res) => {
       return res.status(404).json({ error: 'Upload not found' })
     }
 
-    const start = Date.now()
-    let parseStatus = 'complete'
-    let parseError = null
-
-    const extractedText = String(upload.raw_text || '').trim()
-
-    if (!extractedText) {
-      parseStatus = 'failed'
-      parseError = 'Empty text extracted from file during retry parse'
+    if (!upload.job_id) {
+      return res.status(400).json({ error: 'No parse job found for this upload' })
     }
 
-    const parseResult = {
-      filename: upload.filename,
-      length: extractedText.length,
-      wordCount: extractedText ? extractedText.split(/\s+/).filter(Boolean).length : 0,
-      retriedAt: new Date().toISOString(),
-      parserVersion: 'admin-retry-v1',
+    const queueJob = await parseQueue.getJob(String(upload.job_id))
+    if (!queueJob) {
+      return res.status(404).json({ error: 'Queue job no longer exists (likely expired)' })
     }
-
-    const parseDurationMs = Date.now() - start
 
     await pool.query(
       `UPDATE resumes
-       SET parse_status = $2,
-           parse_error = $3,
-           parse_result = $4::jsonb,
-           parse_duration_ms = $5,
-           retried_at = NOW(),
+       SET parse_status = 'pending',
+           parse_error = NULL,
+           parse_result = NULL,
+           parse_duration_ms = NULL,
            updated_at = NOW()
        WHERE id::text = $1`,
-      [uploadId, parseStatus, parseError, JSON.stringify(parseResult), parseDurationMs],
+      [uploadId],
     )
+
+    await pool.query(
+      `UPDATE parse_jobs
+       SET status = 'pending',
+           progress = 0,
+           result = NULL,
+           error_message = NULL,
+           updated_at = NOW()
+       WHERE job_id = $1`,
+      [String(upload.job_id)],
+    )
+
+    await queueJob.retry()
 
     return res.json({
       ok: true,
-      message: parseStatus === 'complete' ? 'Parsing retry completed successfully.' : 'Retry failed due to empty extracted text.',
-      parseStatus,
-      parseError,
-      parseResult,
+      message: 'Parsing job has been requeued.',
+      parseStatus: 'pending',
+      jobId: String(upload.job_id),
     })
   } catch (error) {
     console.error('[Admin uploads] retry failed:', error)
