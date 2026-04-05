@@ -5,6 +5,8 @@ import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTab
 import { retryFailedPayments } from './services/paymentRetry.js'
 import { startAnalyticsCron } from './services/analytics.js'
 import { logEmailConfigStatus } from './services/emailService.js'
+import { initializeJobQueue } from './services/jobQueue.js'
+import { registerParseResumeJobProcessor } from './jobs/parseResumeJob.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -34,8 +36,11 @@ async function start() {
     await runMigrations()
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
+    await initializeJobQueue()
 
     logEmailConfigStatus()
+
+    registerParseResumeJobProcessor()
 
     startPaymentRetryCron()
     startAnalyticsCron()

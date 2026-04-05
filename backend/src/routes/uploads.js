@@ -1,7 +1,9 @@
 import multer from 'multer'
 import { Router } from 'express'
+import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
+import { enqueueParseJob } from '../services/jobQueue.js'
 import {
   enforceUploadLimit,
   requireActiveSubscription,
@@ -33,47 +35,18 @@ const upload = multer({
   },
 })
 
-const getMockCandidates = () => [
-  {
-    id: '1',
-    name: 'Sarah Chen',
-    position: 'Senior Engineer',
-    experience: '5 years',
-    education: 'BS Computer Science, Stanford',
-    score: 92,
-    tier: 'top',
-    fit: 'Excellent',
-    skills: ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'AWS'],
-    pros: ['Strong technical background', 'Leadership experience', 'Excellent communication'],
-    cons: ['May be overqualified'],
-  },
-  {
-    id: '2',
-    name: 'Marcus Johnson',
-    position: 'Full Stack Developer',
-    experience: '3 years',
-    education: 'BS Information Technology, MIT',
-    score: 78,
-    tier: 'strong',
-    fit: 'Strong',
-    skills: ['React', 'Node.js', 'MongoDB', 'AWS'],
-    pros: ['Quick learner', 'Team player', 'Good problem solver'],
-    cons: ['Limited leadership experience'],
-  },
-  {
-    id: '3',
-    name: 'Elena Rodriguez',
-    position: 'Backend Engineer',
-    experience: '2 years',
-    education: 'BS Computer Science, UC Berkeley',
-    score: 68,
-    tier: 'consider',
-    fit: 'Good',
-    skills: ['Node.js', 'Python', 'PostgreSQL', 'Docker'],
-    pros: ['Strong backend skills', 'Quick learner'],
-    cons: ['Less frontend experience', 'No AWS exposure'],
-  },
-]
+async function ensureResumeParseColumns() {
+  await pool.query(`
+    ALTER TABLE resumes
+    ADD COLUMN IF NOT EXISTS file_size BIGINT,
+    ADD COLUMN IF NOT EXISTS file_type TEXT,
+    ADD COLUMN IF NOT EXISTS parse_status TEXT DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS parse_result JSONB,
+    ADD COLUMN IF NOT EXISTS parse_error TEXT,
+    ADD COLUMN IF NOT EXISTS parse_duration_ms INTEGER,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+  `)
+}
 
 router.post(
   '/',
@@ -104,21 +77,47 @@ router.post(
     }
 
     try {
-      const acceptedFiles = req.files.map((file) => ({
-        name: file.safeName,
-        type: file.mimetype,
-        size: file.size,
-      }))
+      await ensureResumeParseColumns()
 
-      return res.status(200).json({
+      const jobs = []
+
+      for (const file of req.files) {
+        const insertResult = await pool.query(
+          `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, updated_at)
+           VALUES ($1, $2, '', $3, $4, 'pending', NOW())
+           RETURNING id`,
+          [req.userId, file.safeName, file.size, file.mimetype],
+        )
+
+        const resumeId = insertResult.rows[0].id
+
+        const job = await enqueueParseJob({
+          resumeId,
+          userId: req.userId,
+          filename: file.safeName,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          fileBufferBase64: file.buffer.toString('base64'),
+        })
+
+        jobs.push({
+          jobId: String(job.id),
+          resumeId,
+          filename: file.safeName,
+          type: file.mimetype,
+          size: file.size,
+        })
+      }
+
+      return res.status(202).json({
         ok: true,
-        acceptedFiles,
-        candidates: getMockCandidates(),
-        message: 'Resumes analyzed successfully (using mock data for MVP)',
+        message: 'Resume parsing queued',
+        jobId: jobs[0].jobId,
+        jobs,
       })
     } catch (error) {
-      console.error('[Uploads] Error processing upload:', error)
-      return res.status(500).json({ error: 'Unable to process upload request' })
+      console.error('[Uploads] Error queuing upload:', error)
+      return res.status(500).json({ error: 'Unable to queue upload request' })
     }
   },
 )

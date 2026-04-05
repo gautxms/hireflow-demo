@@ -35,7 +35,9 @@
     "dompurify": "^3.2.6",
     "isemail": "^3.2.0",
     "joi": "^17.13.3",
-    "multer": "^1.4.5-lts.2"
+    "multer": "^1.4.5-lts.2",
+    "bull": "^4.16.5",
+    "ioredis": "^5.8.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

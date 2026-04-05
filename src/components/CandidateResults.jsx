@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function CandidateResults({ candidates, onBack }) {
+export default function CandidateResults({ candidates, onBack, isLoading = false, loadingProgress = 0 }) {
   const [sortBy, setSortBy] = useState('score') // 'score', 'name', 'fit'
   const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
 
@@ -9,6 +9,37 @@ export default function CandidateResults({ candidates, onBack }) {
   const hasRenderableCandidates = Array.isArray(displayCandidates)
     && displayCandidates.length > 0
     && displayCandidates.every((candidate) => candidate && Array.isArray(candidate.skills))
+
+  if (isLoading) {
+    return (
+      <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              color: 'var(--accent)',
+              padding: '0.5rem 1rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginBottom: '1.5rem',
+              fontSize: '0.9rem',
+            }}
+          >
+            ← Upload New Resumes
+          </button>
+          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.75rem', fontFamily: 'var(--font-display)' }}>
+            Parsing in background
+          </h1>
+          <p style={{ color: 'var(--muted)', marginBottom: '1rem' }}>
+            We are processing resumes. This can take 1-5 minutes.
+          </p>
+          <p style={{ color: 'var(--accent)' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!hasRenderableCandidates) {
     return (
