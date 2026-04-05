@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
-export default function CandidateResults({ candidates, onBack, isLoading = false, loadingProgress = 0 }) {
+export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0 }) {
   const [sortBy, setSortBy] = useState('score') // 'score', 'name', 'fit'
   const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
 
@@ -10,11 +10,33 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     && displayCandidates.length > 0
     && displayCandidates.every((candidate) => candidate && Array.isArray(candidate.skills))
 
-  if (isLoading) {
+  const filtered = useMemo(() => {
+    if (!hasRenderableCandidates) {
+      return []
+    }
+
+    const nextCandidates = filterTier === 'all'
+      ? [...displayCandidates]
+      : displayCandidates.filter((candidate) => candidate.tier === filterTier)
+
+    if (sortBy === 'name') {
+      return nextCandidates.sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    if (sortBy === 'fit') {
+      const fitOrder = { Excellent: 0, Strong: 1, Good: 2, Consider: 3 }
+      return nextCandidates.sort((a, b) => (fitOrder[a.fit] || 4) - (fitOrder[b.fit] || 4))
+    }
+
+    return nextCandidates.sort((a, b) => b.score - a.score)
+  }, [displayCandidates, filterTier, hasRenderableCandidates, sortBy])
+
+  if (isLoading || isSharedLoading) {
     return (
-      <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
           <button
+            className="touch-target"
             onClick={onBack}
             style={{
               background: 'transparent',
@@ -43,9 +65,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   if (!hasRenderableCandidates) {
     return (
-      <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <button
+            className="touch-target"
             onClick={onBack}
             style={{
               background: 'transparent',
@@ -69,20 +92,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     )
   }
 
-  let filtered = displayCandidates
-  if (filterTier !== 'all') {
-    filtered = filtered.filter(c => c.tier === filterTier)
-  }
-
-  if (sortBy === 'name') {
-    filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name))
-  } else if (sortBy === 'fit') {
-    const fitOrder = { 'Excellent': 0, 'Strong': 1, 'Good': 2, 'Consider': 3 }
-    filtered = [...filtered].sort((a, b) => (fitOrder[a.fit] || 4) - (fitOrder[b.fit] || 4))
-  } else {
-    filtered = [...filtered].sort((a, b) => b.score - a.score)
-  }
-
   const getScoreColor = (score) => {
     if (score >= 90) return 'var(--accent-2)' // cyan
     if (score >= 80) return 'var(--accent)' // lime
@@ -101,10 +110,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   }
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+    <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
       {/* Header */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
         <button
+          className="touch-target"
           onClick={onBack}
           style={{
             background: 'transparent',
@@ -128,12 +138,13 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       </div>
 
       {/* Controls */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+      <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort By</label>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
+            className="touch-target"
             style={{
               background: 'var(--card)',
               border: '1px solid var(--border)',
@@ -154,6 +165,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           <select
             value={filterTier}
             onChange={(e) => setFilterTier(e.target.value)}
+            className="touch-target"
             style={{
               background: 'var(--card)',
               border: '1px solid var(--border)',
@@ -171,12 +183,36 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </div>
       </div>
 
+      <div className="candidate-results-table-wrapper">
+        <table className="candidate-results-table">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Fit</th>
+              <th>Score</th>
+              <th>Top skills</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((candidate) => (
+              <tr key={`summary-${candidate.id}`}>
+                <td data-label="Candidate">{candidate.name}</td>
+                <td data-label="Fit">{candidate.fit}</td>
+                <td data-label="Score">{candidate.score}</td>
+                <td data-label="Top skills">{candidate.skills.slice(0, 3).join(', ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       {/* Candidates List */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
+      <div className="candidate-results-list" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
         {filtered.map(candidate => {
           const tier = getTierBadge(candidate.tier)
           return (
             <div
+              className="candidate-result-card"
               key={candidate.id}
               style={{
                 background: 'var(--card)',
@@ -187,7 +223,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               }}
             >
               {/* Top Section */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
+              <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
                 <div>
                   <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
                     {candidate.name}
@@ -256,7 +292,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               </div>
 
               {/* Pros & Cons */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+              <div className="candidate-pros-cons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                 <div>
                   <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--accent-2)' }}>
                     ✓ Strengths
@@ -280,8 +316,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               </div>
 
               {/* CTA */}
-              <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+              <div className="candidate-cta-row" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
                 <button style={{
+                  minHeight: 44,
                   background: 'var(--accent)',
                   color: 'var(--ink)',
                   border: 'none',
@@ -294,6 +331,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   Schedule Interview
                 </button>
                 <button style={{
+                  minHeight: 44,
                   background: 'transparent',
                   color: 'var(--accent)',
                   border: '1px solid var(--accent)',
