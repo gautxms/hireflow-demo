@@ -110,6 +110,9 @@ export async function initializeDatabase() {
     `)
     
     console.log('[Database] ✓ Core tables initialized')
+
+    // Run comprehensive schema fixes
+    await fixDatabaseSchema()
   } catch (error) {
     console.error('[Database] Initialization error:', error.message)
     // Don't fail startup if tables already exist
@@ -179,6 +182,46 @@ export async function ensurePaymentTrackingTables() {
     `)
   } catch (e) {
     // Table might already exist, continue
+  }
+}
+
+async function fixDatabaseSchema() {
+  try {
+    console.log('[Database] Running comprehensive schema fixes...')
+
+    // Fix subscriptions status check constraint
+    await pool.query(`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check`)
+    await pool.query(
+      `ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check 
+       CHECK (status IN ('trialing', 'active', 'paused', 'cancelled'))`
+    )
+    console.log('[Database] ✓ Fixed subscriptions.status constraint')
+
+    // Add missing columns to subscriptions
+    await pool.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS transaction_id TEXT UNIQUE`)
+    await pool.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
+    console.log('[Database] ✓ Added missing columns to subscriptions')
+
+    // Fix payment_attempts table
+    await pool.query(`ALTER TABLE payment_attempts ADD COLUMN IF NOT EXISTS transaction_id TEXT UNIQUE`)
+    console.log('[Database] ✓ Fixed payment_attempts.transaction_id')
+
+    // Create indexes
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_subscriptions_paddle_subscription_id ON subscriptions(paddle_subscription_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_payment_attempts_transaction_id ON payment_attempts(transaction_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_payment_attempts_user_id ON payment_attempts(user_id)`,
+    ]
+
+    for (const sql of indexes) {
+      await pool.query(sql)
+    }
+    console.log('[Database] ✓ Created all indexes')
+  } catch (error) {
+    console.error('[Database] Schema fix error:', error.message)
+    // Continue - don't block startup
   }
 }
 
