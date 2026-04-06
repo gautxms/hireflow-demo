@@ -141,7 +141,6 @@ export async function ensurePaymentTrackingTables() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         transaction_id TEXT NOT NULL UNIQUE,
         user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        customer_email TEXT,
         amount BIGINT,
         currency TEXT,
         status TEXT NOT NULL DEFAULT 'failed' CHECK (status IN ('failed', 'retrying', 'succeeded', 'manual_required')),
@@ -155,29 +154,13 @@ export async function ensurePaymentTrackingTables() {
       );
     `)
   } catch (e) {
-    // Table might already exist, try to add missing column if it does
-    if (e.message.includes('already exists')) {
-      try {
-        await pool.query(`ALTER TABLE payment_attempts ADD COLUMN IF NOT EXISTS customer_email TEXT;`)
-      } catch (alterErr) {
-        // Column might already exist, continue
-      }
-    }
+    // Table might already exist, continue
   }
 
   try {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_payment_attempts_status_retry_at
         ON payment_attempts (status, next_retry_at);
-    `)
-  } catch (e) {
-    // Index might already exist, continue
-  }
-
-  try {
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_payment_attempts_customer_email
-        ON payment_attempts (customer_email);
     `)
   } catch (e) {
     // Index might already exist, continue
