@@ -40,11 +40,29 @@ function verifyPaddleSignature(rawBody, signatureHeader, secret) {
     return false
   }
 
+  let normalizedSecret = secret.trim()
+
+  try {
+    const decodedSecret = Buffer.from(normalizedSecret, 'base64')
+    const reEncodedSecret = decodedSecret.toString('base64').replace(/=+$/, '')
+    const normalizedBase64Input = normalizedSecret.replace(/=+$/, '')
+
+    if (decodedSecret.length > 0 && reEncodedSecret === normalizedBase64Input) {
+      normalizedSecret = decodedSecret
+      console.log('[Paddle] Using base64-decoded webhook secret')
+    }
+  } catch {
+    // noop - falls back to raw secret
+  }
+
   const signedPayload = `${parsed.ts}:${rawBody}`
   const expected = crypto
-    .createHmac('sha256', secret)
+    .createHmac('sha256', normalizedSecret)
     .update(signedPayload, 'utf8')
     .digest('hex')
+
+  console.log('[Paddle] Expected signature (first 16):', expected.substring(0, 16))
+  console.log('[Paddle] Received signature (first 16):', parsed.h1.substring(0, 16))
 
   return safeCompareHex(expected, parsed.h1)
 }
@@ -159,6 +177,13 @@ async function logWebhookAudit(eventType, payload, isValidSignature, errorMessag
 
 router.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
   const rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : ''
+  const secret = process.env.PADDLE_WEBHOOK_SECRET || ''
+  const incomingSignature = req.headers['paddle-signature']
+
+  console.log('[Paddle] Secret length:', secret?.length)
+  console.log('[Paddle] Secret first 10 chars:', secret?.substring(0, 10))
+  console.log('[Paddle] Incoming signature:', incomingSignature)
+  console.log('[Paddle] Body hash attempt:', crypto.createHash('sha256').update(rawBody).digest('hex'))
 
   let payload
 
@@ -168,12 +193,12 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     payload = { rawBody }
   }
 
-  const eventType = req.body?.event_type || getWebhookEventType(payload)
-  const signatureHeader = req.get('Paddle-Signature')
+  const eventType = getWebhookEventType(payload)
+  const signatureHeader = typeof incomingSignature === 'string' ? incomingSignature : req.get('Paddle-Signature')
   const isValidSignature = verifyPaddleSignature(
     rawBody,
     signatureHeader,
-    process.env.PADDLE_WEBHOOK_SECRET,
+    secret,
   )
 
   console.log('[PADDLE EVENT]', eventType)
@@ -313,7 +338,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         })
       }
     } else {
-      console.warn('[Paddle webhook] invalid signature')
+      console.warn('[Paddle] ✗ Webhook signature invalid')
     }
   } catch (error) {
     console.error('[Paddle webhook] failed to update subscription state', error)
@@ -325,6 +350,10 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       // noop
     }
 
+  }
+
+  if (isValidSignature) {
+    console.log('[Paddle] ✓ Webhook signature valid')
   }
 
   return res.status(200).json({ received: true })
