@@ -35,9 +35,9 @@ function getPlanFromQuery() {
   return plan === 'monthly' || plan === 'annual' ? plan : 'monthly'
 }
 
-function navigate(pathname) {
+function navigate(pathname, options = {}) {
   if (window.location.pathname !== pathname) {
-    window.history.pushState({}, '', pathname)
+    window.history.pushState(options.state ?? {}, '', pathname)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }
@@ -71,13 +71,18 @@ export default function Checkout({ onAuthSuccess }) {
   const [status, setStatus] = useState('idle') // idle, loading, ready, opened, error
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [showRetry, setShowRetry] = useState(false)
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
   useEffect(() => {
     let isUnmounted = false
     let paddleRef = null
-    let transactionCompletedHandler = null
+    let checkoutCompletedHandler = null
+    let checkoutFailedHandler = null
+    let checkoutClosedHandler = null
+    let latestTransactionId = null
+    let isPaymentFlowCompleted = false
 
     const markCheckoutCompleted = () => {
       sessionStorage.setItem(CHECKOUT_COMPLETED_STORAGE_KEY, String(Date.now()))
@@ -106,7 +111,7 @@ export default function Checkout({ onAuthSuccess }) {
       }
     }
 
-    const persistActiveSubscription = (token, user) => {
+    const persistActiveSubscription = (token, user, redirectPath = '/uploader') => {
       const normalizedStatus = user?.subscription_status || 'inactive'
       localStorage.setItem('subscription_status', normalizedStatus)
 
@@ -117,53 +122,41 @@ export default function Checkout({ onAuthSuccess }) {
       window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
 
       if (typeof onAuthSuccess === 'function' && token) {
-        onAuthSuccess(token, normalizedStatus, user, '/uploader')
+        onAuthSuccess(token, normalizedStatus, user, redirectPath)
       } else {
-        navigate('/uploader')
+        navigate(redirectPath)
       }
     }
 
-    const pollForActiveSubscription = async (token, maxAttempts = 8, delayMs = 1500) => {
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        if (isUnmounted) {
-          return false
+    const verifySubscriptionStatus = async (token) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`Verification failed (${response.status})`)
         }
 
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          })
-
-          if (response.ok) {
-            const user = await response.json()
-            const subscriptionStatus = user?.subscription_status || 'inactive'
-
-            if (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') {
-              if (!isUnmounted) {
-                setSuccessMessage('Payment successful! Redirecting to uploader…')
-              }
-              persistActiveSubscription(token, user)
-              return true
-            }
-          }
-        } catch (error) {
-          console.warn('[Checkout] Polling /api/auth/me failed on attempt:', attempt, error)
+        const user = await response.json()
+        const subscriptionStatus = user?.subscription_status || 'inactive'
+        return {
+          user,
+          isActive: subscriptionStatus === 'active' || subscriptionStatus === 'trialing',
         }
-
-        if (attempt < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs))
-        }
+      } catch (error) {
+        console.error('[Checkout] Failed to verify subscription status:', error)
+        throw error
       }
-
-      return false
     }
 
     async function initializeCheckout() {
       setStatus('loading')
       setErrorMessage('')
       setSuccessMessage('')
+      setShowRetry(false)
 
       const localStatus = localStorage.getItem('subscription_status')
       if (localStatus === 'active' || localStatus === 'trialing') {
@@ -279,6 +272,7 @@ export default function Checkout({ onAuthSuccess }) {
           console.error('[Checkout] Missing transaction ID in checkout URL:', checkoutUrl)
           throw new Error('Transaction ID not found in checkout URL')
         }
+        latestTransactionId = transactionId
 
         console.log('[Checkout] Extracted transaction ID and user email:', {
           transactionId,
@@ -313,19 +307,107 @@ export default function Checkout({ onAuthSuccess }) {
           throw new Error('Missing Paddle initialization data (token or email)')
         }
 
-        const handleTransactionCompleted = async (eventData) => {
-          console.log('[Checkout] transaction.completed event received:', eventData)
-          markCheckoutCompleted()
-          closePaddleCheckout()
+        const handleCheckoutCompleted = async (eventData) => {
+          console.log('[Paddle] Checkout completed:', eventData)
+          if (isPaymentFlowCompleted) {
+            return
+          }
 
-          const wasActivated = await pollForActiveSubscription(token, 10, 1200)
-          if (!wasActivated && !isUnmounted) {
-            setSuccessMessage('Payment received. Redirecting to billing confirmation…')
-            navigate('/billing/success')
+          isPaymentFlowCompleted = true
+          markCheckoutCompleted()
+
+          const completionTransactionId = eventData?.transaction?.id || latestTransactionId
+
+          // Wait for webhook to update subscription status.
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+
+          try {
+            const { user, isActive } = await verifySubscriptionStatus(token)
+
+            if (!isActive) {
+              isPaymentFlowCompleted = false
+              if (!isUnmounted) {
+                setErrorMessage('Payment completed, but subscription activation is still processing. Please wait a moment and retry.')
+                setShowRetry(true)
+              }
+              return
+            }
+
+            if (!isUnmounted) {
+              setSuccessMessage('Payment successful! Redirecting to billing confirmation…')
+            }
+
+            closePaddleCheckout()
+            persistActiveSubscription(token, user, '/billing/success')
+            navigate('/billing/success', {
+              state: {
+                transactionId: completionTransactionId,
+                plan: user?.subscription_plan || selectedPlan,
+                message: 'Payment successful! Your subscription is now active.',
+              },
+            })
+          } catch {
+            isPaymentFlowCompleted = false
+            if (!isUnmounted) {
+              setErrorMessage('Unable to verify payment status right now. Please refresh or retry in a moment.')
+              setShowRetry(true)
+            }
           }
         }
 
-        transactionCompletedHandler = handleTransactionCompleted
+        const handleCheckoutFailed = async (eventData) => {
+          console.log('[Paddle] Checkout failed:', eventData)
+          const paddleErrorMessage = eventData?.error?.message || 'Unknown error'
+          if (!isUnmounted) {
+            setErrorMessage(`Payment failed: ${paddleErrorMessage}`)
+            setShowRetry(true)
+          }
+          console.log('[Checkout] User can retry payment')
+        }
+
+        const handleCheckoutClosed = async () => {
+          console.log('[Paddle] Checkout closed by user')
+
+          if (isPaymentFlowCompleted) {
+            return
+          }
+
+          try {
+            const { user, isActive } = await verifySubscriptionStatus(token)
+
+            if (isActive) {
+              console.log('[Checkout] Payment succeeded despite popup close')
+              isPaymentFlowCompleted = true
+              markCheckoutCompleted()
+              persistActiveSubscription(token, user, '/billing/success')
+              navigate('/billing/success', {
+                state: {
+                  transactionId: latestTransactionId,
+                  plan: user?.subscription_plan || selectedPlan,
+                  message: 'Payment successful! Welcome.',
+                },
+              })
+              return
+            }
+
+            if (!isUnmounted) {
+              console.log('[Checkout] User closed without payment, showing retry option')
+              setShowRetry(true)
+              setStatus('opened')
+              setErrorMessage('Checkout closed before payment completed. You can retry checkout from this page.')
+            }
+          } catch {
+            if (!isUnmounted) {
+              setShowRetry(true)
+              setStatus('opened')
+              setErrorMessage('Could not verify payment after closing checkout. Please retry checkout.')
+            }
+          }
+        }
+
+        checkoutCompletedHandler = handleCheckoutCompleted
+        checkoutFailedHandler = handleCheckoutFailed
+        checkoutClosedHandler = handleCheckoutClosed
 
         // Step 5: Open the embedded checkout with transaction ID
         console.log('[Checkout] Opening embedded checkout for transaction:', transactionId)
@@ -335,23 +417,16 @@ export default function Checkout({ onAuthSuccess }) {
         setTimeout(() => {
           console.log('[Checkout] Calling Paddle.Checkout.open with transactionId:', transactionId)
 
-          if (typeof Paddle.Event?.on === 'function') {
-            Paddle.Event.on('transaction.completed', handleTransactionCompleted)
+          if (typeof Paddle.Checkout?.addEventListener === 'function') {
+            Paddle.Checkout.addEventListener('checkout.completed', handleCheckoutCompleted)
+            Paddle.Checkout.addEventListener('checkout.failed', handleCheckoutFailed)
+            Paddle.Checkout.addEventListener('checkout.closed', handleCheckoutClosed)
           }
 
           Paddle.Checkout.open({
             transactionId,
             settings: {
               allowLogout: false,
-            },
-            onClose: async () => {
-              console.log('[Checkout] Paddle checkout closed. Polling user subscription status...')
-              const wasActivated = await pollForActiveSubscription(token)
-
-              if (!wasActivated && !isUnmounted) {
-                setStatus('opened')
-                setErrorMessage('Checkout closed before payment completed. You can retry checkout from pricing.')
-              }
             },
           })
           setStatus('opened')
@@ -368,8 +443,16 @@ export default function Checkout({ onAuthSuccess }) {
     return () => {
       isUnmounted = true
 
-      if (typeof paddleRef?.Event?.off === 'function' && transactionCompletedHandler) {
-        paddleRef.Event.off('transaction.completed', transactionCompletedHandler)
+      if (typeof paddleRef?.Checkout?.removeEventListener === 'function') {
+        try {
+          paddleRef.Checkout.removeEventListener('checkout.completed', checkoutCompletedHandler)
+          paddleRef.Checkout.removeEventListener('checkout.failed', checkoutFailedHandler)
+          paddleRef.Checkout.removeEventListener('checkout.closed', checkoutClosedHandler)
+        } catch {
+          paddleRef.Checkout.removeEventListener('checkout.completed')
+          paddleRef.Checkout.removeEventListener('checkout.failed')
+          paddleRef.Checkout.removeEventListener('checkout.closed')
+        }
       }
     }
   }, [onAuthSuccess, selectedPlan])
@@ -438,6 +521,24 @@ export default function Checkout({ onAuthSuccess }) {
             <p style={{ color: 'var(--muted)', fontSize: '0.9rem', margin: 0 }}>
               ✓ Checkout is open above. After completing payment, you'll be redirected to confirm your subscription.
             </p>
+            {showRetry && (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                style={{
+                  marginTop: '0.75rem',
+                  border: '1px solid var(--accent)',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  padding: '0.6rem 1rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Retry checkout
+              </button>
+            )}
           </div>
         )}
       </section>
