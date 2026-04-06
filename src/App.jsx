@@ -157,7 +157,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/checkout') {
-      return <Checkout />
+      return <Checkout onAuthSuccess={onAuthSuccess} />
     }
 
     if (pathname === '/account' || pathname === '/settings') {
@@ -456,6 +456,11 @@ export default function App() {
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
+    const onAuthStateRefresh = () => {
+      setToken(getStoredToken())
+      setSubscriptionStatus(getStoredSubscriptionStatus())
+      setUserProfile(getStoredUserProfile())
+    }
     const onStorage = (event) => {
       if (event.key === TOKEN_STORAGE_KEY) {
         setToken(event.newValue || '')
@@ -472,16 +477,18 @@ export default function App() {
 
     window.addEventListener('popstate', onPopState)
     window.addEventListener('storage', onStorage)
+    window.addEventListener('hireflow-auth-updated', onAuthStateRefresh)
 
     return () => {
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('storage', onStorage)
+      window.removeEventListener('hireflow-auth-updated', onAuthStateRefresh)
     }
   }, [])
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
-  const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive', nextUserProfile = null) => {
+  const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive', nextUserProfile = null, redirectPath = '/') => {
     const normalizedSubscriptionStatus = nextSubscriptionStatus || 'inactive'
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
     localStorage.setItem('subscription_status', normalizedSubscriptionStatus)
@@ -492,7 +499,7 @@ export default function App() {
     setSubscriptionStatus(normalizedSubscriptionStatus)
     setUserProfile(nextUserProfile)
     setAuthPrompt('')
-    navigate('/')
+    navigate(redirectPath)
   }
 
   const logout = async () => {

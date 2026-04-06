@@ -21,6 +21,7 @@ import {
   verifyAndConsumeBackupCode,
   verifyTotpCode,
 } from '../services/twoFactor.js'
+import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
@@ -375,6 +376,28 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
   } catch (error) {
     console.error('[AUTH] Login error:', error.message)
     return res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, email, company, phone, subscription_status, created_at, deleted_at, deletion_scheduled_for
+       FROM users
+       WHERE id = $1`,
+      [req.userId],
+    )
+
+    const user = result.rows[0]
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    return res.json(user)
+  } catch (error) {
+    console.error('[AUTH] Failed to fetch current user:', error)
+    return res.status(500).json({ error: 'Internal server error' })
   }
 })
 

@@ -34,6 +34,13 @@ function getPlanFromQuery() {
   return plan === 'monthly' || plan === 'annual' ? plan : 'monthly'
 }
 
+function navigate(pathname) {
+  if (window.location.pathname !== pathname) {
+    window.history.pushState({}, '', pathname)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+}
+
 /**
  * Wait for Paddle.js to be available (loaded globally in index.html)
  */
@@ -57,18 +64,76 @@ function waitForPaddle(timeoutMs = 5000) {
   })
 }
 
-export default function Checkout() {
+export default function Checkout({ onAuthSuccess }) {
   const selectedPlan = getPlanFromQuery()
   const plan = PLAN_DETAILS[selectedPlan]
   const [status, setStatus] = useState('idle') // idle, loading, ready, opened, error
   const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
   useEffect(() => {
+    let isUnmounted = false
+
+    const persistActiveSubscription = (token, user) => {
+      const normalizedStatus = user?.subscription_status || 'inactive'
+      localStorage.setItem('subscription_status', normalizedStatus)
+
+      if (user) {
+        localStorage.setItem('hireflow_user_profile', JSON.stringify(user))
+      }
+
+      window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
+
+      if (typeof onAuthSuccess === 'function' && token) {
+        onAuthSuccess(token, normalizedStatus, user, '/uploader')
+      } else {
+        navigate('/uploader')
+      }
+    }
+
+    const pollForActiveSubscription = async (token, maxAttempts = 8, delayMs = 1500) => {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (isUnmounted) {
+          return false
+        }
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (response.ok) {
+            const user = await response.json()
+            const subscriptionStatus = user?.subscription_status || 'inactive'
+
+            if (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') {
+              if (!isUnmounted) {
+                setSuccessMessage('Payment successful! Redirecting to uploader…')
+              }
+              persistActiveSubscription(token, user)
+              return true
+            }
+          }
+        } catch (error) {
+          console.warn('[Checkout] Polling /api/auth/me failed on attempt:', attempt, error)
+        }
+
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
+        }
+      }
+
+      return false
+    }
+
     async function initializeCheckout() {
       setStatus('loading')
       setErrorMessage('')
+      setSuccessMessage('')
 
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
 
@@ -206,6 +271,14 @@ export default function Checkout() {
           throw new Error('Missing Paddle initialization data (token or email)')
         }
 
+        const handleTransactionCompleted = async (eventData) => {
+          console.log('[Checkout] transaction.completed event received:', eventData)
+          const wasActivated = await pollForActiveSubscription(token, 8, 1200)
+          if (!wasActivated && !isUnmounted) {
+            setSuccessMessage('Payment received. We are finalizing your subscription status—please wait a moment.')
+          }
+        }
+
         // Step 5: Open the embedded checkout with transaction ID
         console.log('[Checkout] Opening embedded checkout for transaction:', transactionId)
         setStatus('ready')
@@ -213,8 +286,25 @@ export default function Checkout() {
         // Use setTimeout to ensure Paddle is fully initialized before opening checkout
         setTimeout(() => {
           console.log('[Checkout] Calling Paddle.Checkout.open with transactionId:', transactionId)
+
+          if (typeof Paddle.Event?.on === 'function') {
+            Paddle.Event.on('transaction.completed', handleTransactionCompleted)
+          }
+
           Paddle.Checkout.open({
             transactionId,
+            settings: {
+              allowLogout: false,
+            },
+            onClose: async () => {
+              console.log('[Checkout] Paddle checkout closed. Polling user subscription status...')
+              const wasActivated = await pollForActiveSubscription(token)
+
+              if (!wasActivated && !isUnmounted) {
+                setStatus('opened')
+                setErrorMessage('Checkout closed before payment completed. You can retry checkout from pricing.')
+              }
+            },
           })
           setStatus('opened')
         }, 500)
@@ -226,7 +316,11 @@ export default function Checkout() {
     }
 
     initializeCheckout()
-  }, [selectedPlan])
+
+    return () => {
+      isUnmounted = true
+    }
+  }, [onAuthSuccess, selectedPlan])
 
   const getStatusMessage = () => {
     switch (status) {
@@ -278,6 +372,11 @@ export default function Checkout() {
                   </a>
                 </>
               )}
+            </p>
+          )}
+          {successMessage && (
+            <p style={{ margin: 0, color: '#8effb8', fontWeight: 600 }}>
+              {successMessage}
             </p>
           )}
         </div>
