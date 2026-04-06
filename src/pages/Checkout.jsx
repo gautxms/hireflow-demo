@@ -68,10 +68,11 @@ function waitForPaddle(timeoutMs = 5000) {
 export default function Checkout({ onAuthSuccess }) {
   const selectedPlan = getPlanFromQuery()
   const plan = PLAN_DETAILS[selectedPlan]
-  const [status, setStatus] = useState('idle') // idle, loading, ready, opened, error
+  const [status, setStatus] = useState('idle') // idle, loading, ready, opened, action_required, error
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [showRetry, setShowRetry] = useState(false)
+  const [requiredAction, setRequiredAction] = useState(null)
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
@@ -137,6 +138,10 @@ export default function Checkout({ onAuthSuccess }) {
         })
 
         if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Your session has expired. Please log in again.')
+          }
+
           throw new Error(`Verification failed (${response.status})`)
         }
 
@@ -144,6 +149,7 @@ export default function Checkout({ onAuthSuccess }) {
         const subscriptionStatus = user?.subscription_status || 'inactive'
         return {
           user,
+          subscriptionStatus,
           isActive: subscriptionStatus === 'active' || subscriptionStatus === 'trialing',
         }
       } catch (error) {
@@ -157,12 +163,7 @@ export default function Checkout({ onAuthSuccess }) {
       setErrorMessage('')
       setSuccessMessage('')
       setShowRetry(false)
-
-      const localStatus = localStorage.getItem('subscription_status')
-      if (localStatus === 'active' || localStatus === 'trialing') {
-        navigate('/uploader')
-        return
-      }
+      setRequiredAction(null)
 
       if (wasCheckoutRecentlyCompleted()) {
         navigate('/billing/success')
@@ -178,6 +179,31 @@ export default function Checkout({ onAuthSuccess }) {
       }
 
       try {
+        console.log('[Checkout] Checking subscription status before initializing checkout')
+        const { user, isActive, subscriptionStatus } = await verifySubscriptionStatus(token)
+
+        if (isActive) {
+          console.log('[Checkout] User already subscribed, redirecting to dashboard')
+          persistActiveSubscription(token, user, '/uploader')
+          navigate('/uploader', { replace: true })
+          return
+        }
+
+        if (subscriptionStatus === 'cancelled') {
+          console.log('[Checkout] Subscription cancelled, showing reactivation option')
+          setStatus('action_required')
+          setRequiredAction('cancelled')
+          return
+        }
+
+        if (subscriptionStatus === 'past_due') {
+          console.log('[Checkout] Subscription past due, showing payment method update option')
+          setStatus('action_required')
+          setRequiredAction('past_due')
+          return
+        }
+
+        console.log('[Checkout] User not subscribed, opening checkout')
         console.log('[Checkout] Starting embedded checkout with:', {
           apiUrl: API_BASE_URL,
           endpoint: `${API_BASE_URL}/api/paddle/checkout-url`,
@@ -460,10 +486,12 @@ export default function Checkout({ onAuthSuccess }) {
   const getStatusMessage = () => {
     switch (status) {
       case 'loading':
-        return 'Preparing checkout…'
+        return 'Verifying subscription and preparing checkout…'
       case 'ready':
       case 'opened':
         return 'Loading secure checkout…'
+      case 'action_required':
+        return 'Action required before opening checkout.'
       case 'error':
         return 'We could not prepare checkout. Please try again.'
       default:
@@ -494,7 +522,7 @@ export default function Checkout({ onAuthSuccess }) {
           <p style={{ margin: 0, color: 'var(--muted)' }}>Selected plan</p>
           <p style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>{plan.label}</p>
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {status === 'error' ? getStatusMessage() : 'Opening secure checkout…'}
+            {getStatusMessage()}
           </p>
           {errorMessage && (
             <p style={{ margin: 0, color: '#ff8f8f' }}>
@@ -513,6 +541,26 @@ export default function Checkout({ onAuthSuccess }) {
             <p style={{ margin: 0, color: '#8effb8', fontWeight: 600 }}>
               {successMessage}
             </p>
+          )}
+          {status === 'action_required' && requiredAction === 'cancelled' && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <p style={{ margin: 0, color: 'var(--muted)' }}>
+                Your subscription is currently cancelled. Want to reactivate it?
+              </p>
+              <a href="/billing" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 700, marginTop: '0.5rem', display: 'inline-block' }}>
+                Reactivate subscription →
+              </a>
+            </div>
+          )}
+          {status === 'action_required' && requiredAction === 'past_due' && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <p style={{ margin: 0, color: 'var(--muted)' }}>
+                Your subscription is past due. Please update your payment method to continue.
+              </p>
+              <a href="/billing" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 700, marginTop: '0.5rem', display: 'inline-block' }}>
+                Update payment method →
+              </a>
+            </div>
           )}
         </div>
 
