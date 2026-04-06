@@ -263,7 +263,6 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         const user = await resolveUserFromPayload(payload)
         const userId = user?.id || null
         const transactionSubscriptionId = getSubscriptionId(payload)
-        const transactionPlan = getSubscriptionPlan(payload)
 
         if (userId) {
           await pool.query(
@@ -271,10 +270,9 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
                  paddle_subscription_id = COALESCE($2, paddle_subscription_id),
-                 subscription_plan = COALESCE($3, subscription_plan),
                  updated_at = NOW()
              WHERE id = $1`,
-            [userId, transactionSubscriptionId, transactionPlan],
+            [userId, transactionSubscriptionId],
           )
           console.log('[Webhook] Updated user subscription:', { userId, status: 'active' })
         }
@@ -314,18 +312,16 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         const user = await resolveUserFromPayload(payload)
         const createdSubscriptionId = getSubscriptionId(payload)
         const createdStatus = mapToSubscriptionStatus(eventType, payload) || 'active'
-        const createdPlan = getSubscriptionPlan(payload)
 
         if (user?.id && createdSubscriptionId) {
           await pool.query(
             `UPDATE users
              SET paddle_subscription_id = $2,
                  subscription_status = $3,
-                 subscription_plan = COALESCE($4, subscription_plan),
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
                  updated_at = NOW()
              WHERE id = $1`,
-            [user.id, createdSubscriptionId, createdStatus, createdPlan],
+            [user.id, createdSubscriptionId, createdStatus],
           )
           console.log('[Webhook] Updated user subscription:', { userId: user.id, status: createdStatus })
         }
@@ -334,16 +330,14 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       if (eventType === 'subscription.updated') {
         const user = await resolveUserFromPayload(payload)
         const updatedStatus = getSubscriptionStatus(payload)
-        const updatedPlan = getSubscriptionPlan(payload)
 
         if (user?.id && updatedStatus) {
           await pool.query(
             `UPDATE users
              SET subscription_status = $2,
-                 subscription_plan = COALESCE($3, subscription_plan),
                  updated_at = NOW()
              WHERE id = $1`,
-            [user.id, updatedStatus, updatedPlan],
+            [user.id, updatedStatus],
           )
           console.log('[Webhook] Updated user subscription:', { userId: user.id, status: updatedStatus })
         }
