@@ -293,6 +293,11 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       }
 
       if (eventType === 'transaction.failed') {
+
+      if (eventType === 'transaction.payment_failed') {
+        await recordFailedPaymentAttempt(payload)
+        console.log('[Webhook] Payment failed, recorded attempt')
+      }
         await recordFailedPaymentAttempt(payload)
 
         await trackEvent({
@@ -340,6 +345,28 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
             [user.id, updatedStatus],
           )
           console.log('[Webhook] Updated user subscription:', { userId: user.id, status: updatedStatus })
+        }
+      }
+
+      if (eventType === 'transaction.payment_failed') {
+        await recordFailedPaymentAttempt(payload)
+        console.log('[Webhook] Payment failed recorded')
+      }
+
+      if (eventType === 'subscription.trialing') {
+        const user = await resolveUserFromPayload(payload)
+        const trialeStatus = mapToSubscriptionStatus(eventType, payload) || 'trialing'
+
+        if (user?.id) {
+          await pool.query(
+            `UPDATE users
+             SET subscription_status = $2,
+                 subscription_started_at = COALESCE(subscription_started_at, NOW()),
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [user.id, trialeStatus],
+          )
+          console.log('[Webhook] Updated user subscription:', { userId: user.id, status: trialeStatus })
         }
       }
 

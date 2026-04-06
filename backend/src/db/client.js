@@ -202,9 +202,10 @@ async function fixDatabaseSchema() {
     await pool.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
     console.log('[Database] ✓ Added missing columns to subscriptions')
 
-    // Fix payment_attempts table
+    // Fix payment_attempts table - add ALL missing columns
     await pool.query(`ALTER TABLE payment_attempts ADD COLUMN IF NOT EXISTS transaction_id TEXT UNIQUE`)
-    console.log('[Database] ✓ Fixed payment_attempts.transaction_id')
+    await pool.query(`ALTER TABLE payment_attempts ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb`)
+    console.log('[Database] ✓ Fixed payment_attempts columns')
 
     // Create indexes
     const indexes = [
