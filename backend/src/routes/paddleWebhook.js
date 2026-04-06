@@ -71,14 +71,28 @@ function getWebhookEventType(payload) {
   return payload?.event_type || payload?.eventType || payload?.alert_name || null
 }
 
-function getCustomerEmail(payload) {
+function getPaddleCustomerId(payload) {
   return (
-    payload?.data?.customer?.email ||
-    payload?.data?.email ||
-    payload?.customer_email ||
-    payload?.email ||
+    payload?.data?.customer_id ||
+    payload?.data?.customer?.id ||
+    payload?.customer_id ||
+    payload?.customer?.id ||
     null
   )
+}
+
+function getSubscriptionPlan(payload) {
+  const frequency = payload?.data?.billing_cycle?.frequency || payload?.billing_cycle?.frequency || null
+
+  if (frequency === 'year') {
+    return 'annual'
+  }
+
+  if (frequency === 'month') {
+    return 'monthly'
+  }
+
+  return null
 }
 
 function getSubscriptionId(payload) {
@@ -90,48 +104,58 @@ function getSubscriptionStatus(payload) {
 }
 
 function mapToSubscriptionStatus(eventType, payload) {
-  if (eventType === 'subscription_created') {
+  const normalizedEventType = eventType ? String(eventType).toLowerCase() : ''
+
+  if (normalizedEventType === 'subscription.created' || normalizedEventType === 'subscription_created') {
     const paddleStatus = payload?.data?.status || payload?.status
 
     if (paddleStatus === 'trialing') {
       return 'trialing'
     }
 
-    return 'active'
+    return paddleStatus || 'active'
   }
 
-  if (eventType === 'subscription_payment_succeeded') {
-    return 'active'
+  if (normalizedEventType === 'subscription.updated' || normalizedEventType === 'subscription_updated') {
+    return payload?.data?.status || payload?.status || null
   }
 
-  if (eventType === 'subscription_cancelled') {
+  if (normalizedEventType === 'subscription.canceled' || normalizedEventType === 'subscription.cancelled' || normalizedEventType === 'subscription_cancelled') {
     return 'cancelled'
+  }
+
+  if (normalizedEventType === 'transaction.completed' || normalizedEventType === 'subscription_payment_succeeded') {
+    return 'active'
   }
 
   return null
 }
 
 
-
-async function resolveUserIdFromPayload(payload) {
+async function resolveUserFromPayload(payload) {
   const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
 
   if (explicitUserId) {
-    return explicitUserId
+    const result = await pool.query(
+      `SELECT id, paddle_customer_id FROM users WHERE id = $1 LIMIT 1`,
+      [explicitUserId],
+    )
+
+    return result.rows[0] || null
   }
 
-  const email = getCustomerEmail(payload)
+  const paddleCustomerId = getPaddleCustomerId(payload)
 
-  if (!email) {
+  if (!paddleCustomerId) {
     return null
   }
 
   const result = await pool.query(
-    `SELECT id FROM users WHERE email = $1 LIMIT 1`,
-    [email],
+    `SELECT id, paddle_customer_id FROM users WHERE paddle_customer_id = $1 LIMIT 1`,
+    [paddleCustomerId],
   )
 
-  return result.rows[0]?.id || null
+  return result.rows[0] || null
 }
 
 function getPaymentAmount(payload) {
@@ -234,25 +258,23 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       }
 
       if (eventType === 'transaction.completed') {
-        const userId = await resolveUserIdFromPayload(payload)
-        const email = getCustomerEmail(payload)
+        const user = await resolveUserFromPayload(payload)
+        const userId = user?.id || null
+        const transactionSubscriptionId = getSubscriptionId(payload)
+        const transactionPlan = getSubscriptionPlan(payload)
 
         if (userId) {
           await pool.query(
             `UPDATE users
-             SET subscription_status = 'active', updated_at = NOW()
+             SET subscription_status = 'active',
+                 subscription_started_at = COALESCE(subscription_started_at, NOW()),
+                 paddle_subscription_id = COALESCE($2, paddle_subscription_id),
+                 subscription_plan = COALESCE($3, subscription_plan),
+                 updated_at = NOW()
              WHERE id = $1`,
-            [userId],
+            [userId, transactionSubscriptionId, transactionPlan],
           )
-          console.log('[PADDLE] Activated subscription for user:', userId)
-        } else if (email) {
-          await pool.query(
-            `UPDATE users
-             SET subscription_status = 'active', updated_at = NOW()
-             WHERE email = $1`,
-            [email],
-          )
-          console.log('[PADDLE] Activated subscription for email:', email)
+          console.log('[Webhook] Updated user subscription:', { userId, status: 'active' })
         }
 
         await markPaymentAttemptSucceeded(payload)
@@ -274,7 +296,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         await recordFailedPaymentAttempt(payload)
 
         await trackEvent({
-          userId: await resolveUserIdFromPayload(payload),
+          userId: (await resolveUserFromPayload(payload))?.id || null,
           eventType: 'payment_fail',
           metadata: {
             source: 'paddle.webhook',
@@ -287,49 +309,62 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       }
 
       if (eventType === 'subscription.created') {
-        const email = getCustomerEmail(payload)
+        const user = await resolveUserFromPayload(payload)
         const createdSubscriptionId = getSubscriptionId(payload)
+        const createdStatus = mapToSubscriptionStatus(eventType, payload) || 'active'
+        const createdPlan = getSubscriptionPlan(payload)
 
-        if (email && createdSubscriptionId) {
+        if (user?.id && createdSubscriptionId) {
           await pool.query(
             `UPDATE users
-             SET paddle_subscription_id = $1,
-                 subscription_status = COALESCE(subscription_status, 'active'),
+             SET paddle_subscription_id = $2,
+                 subscription_status = $3,
+                 subscription_plan = COALESCE($4, subscription_plan),
+                 subscription_started_at = COALESCE(subscription_started_at, NOW()),
                  updated_at = NOW()
-             WHERE email = $2`,
-            [createdSubscriptionId, email],
+             WHERE id = $1`,
+            [user.id, createdSubscriptionId, createdStatus, createdPlan],
           )
+          console.log('[Webhook] Updated user subscription:', { userId: user.id, status: createdStatus })
         }
       }
 
       if (eventType === 'subscription.updated') {
-        const updatedSubscriptionId = getSubscriptionId(payload)
+        const user = await resolveUserFromPayload(payload)
         const updatedStatus = getSubscriptionStatus(payload)
+        const updatedPlan = getSubscriptionPlan(payload)
 
-        if (updatedSubscriptionId && updatedStatus) {
+        if (user?.id && updatedStatus) {
           await pool.query(
             `UPDATE users
-             SET subscription_status = $1, updated_at = NOW()
-             WHERE paddle_subscription_id = $2`,
-            [updatedStatus, updatedSubscriptionId],
+             SET subscription_status = $2,
+                 subscription_plan = COALESCE($3, subscription_plan),
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [user.id, updatedStatus, updatedPlan],
           )
+          console.log('[Webhook] Updated user subscription:', { userId: user.id, status: updatedStatus })
         }
       }
 
-      if (eventType === 'subscription.canceled') {
+      if (eventType === 'subscription.canceled' || eventType === 'subscription.cancelled') {
+        const user = await resolveUserFromPayload(payload)
         const canceledSubscriptionId = getSubscriptionId(payload)
 
-        if (canceledSubscriptionId) {
+        if (user?.id) {
           await pool.query(
             `UPDATE users
-             SET subscription_status = 'inactive', updated_at = NOW()
-             WHERE paddle_subscription_id = $1`,
-            [canceledSubscriptionId],
+             SET subscription_status = 'cancelled',
+                 paddle_subscription_id = COALESCE($2, paddle_subscription_id),
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [user.id, canceledSubscriptionId],
           )
+          console.log('[Webhook] Updated user subscription:', { userId: user.id, status: 'cancelled' })
         }
 
         await trackEvent({
-          userId: await resolveUserIdFromPayload(payload),
+          userId: user?.id || null,
           eventType: 'cancellation',
           metadata: {
             source: 'paddle.webhook',
