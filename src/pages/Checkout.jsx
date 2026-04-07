@@ -69,6 +69,7 @@ export default function Checkout({ onAuthSuccess }) {
   const selectedPlan = getPlanFromQuery()
   const plan = PLAN_DETAILS[selectedPlan]
   const [status, setStatus] = useState('idle') // idle, loading, ready, opened, action_required, error
+  const [reactivateRequested, setReactivateRequested] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [showRetry, setShowRetry] = useState(false)
@@ -189,7 +190,7 @@ export default function Checkout({ onAuthSuccess }) {
           return
         }
 
-        if (subscriptionStatus === 'cancelled') {
+        if (subscriptionStatus === 'cancelled' && !reactivateRequested) {
           console.log('[Checkout] Subscription cancelled, showing reactivation option')
           setStatus('action_required')
           setRequiredAction('cancelled')
@@ -203,7 +204,11 @@ export default function Checkout({ onAuthSuccess }) {
           return
         }
 
-        console.log('[Checkout] User not subscribed, opening checkout')
+        if (subscriptionStatus === 'cancelled' && reactivateRequested) {
+          console.log('[Checkout] Reactivation requested, opening checkout')
+        } else {
+          console.log('[Checkout] User not subscribed, opening checkout')
+        }
         console.log('[Checkout] Starting embedded checkout with:', {
           apiUrl: API_BASE_URL,
           endpoint: `${API_BASE_URL}/api/paddle/checkout-url`,
@@ -481,7 +486,15 @@ export default function Checkout({ onAuthSuccess }) {
         }
       }
     }
-  }, [onAuthSuccess, selectedPlan])
+  }, [onAuthSuccess, reactivateRequested, selectedPlan])
+
+  const handleReactivateSubscription = () => {
+    setErrorMessage('')
+    setSuccessMessage('')
+    setShowRetry(false)
+    setStatus('loading')
+    setReactivateRequested(true)
+  }
 
   const getStatusMessage = () => {
     switch (status) {
@@ -543,13 +556,35 @@ export default function Checkout({ onAuthSuccess }) {
             </p>
           )}
           {status === 'action_required' && requiredAction === 'cancelled' && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <p style={{ margin: 0, color: 'var(--muted)' }}>
-                Your subscription is currently cancelled. Want to reactivate it?
+            <div
+              style={{
+                marginTop: '0.5rem',
+                background: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '8px',
+                padding: '1rem',
+              }}
+            >
+              <p style={{ margin: 0, color: '#92400e' }}>
+                Your subscription was cancelled. Reactivate to regain access to resume analysis.
               </p>
-              <a href="/billing" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 700, marginTop: '0.5rem', display: 'inline-block' }}>
-                Reactivate subscription →
-              </a>
+              <button
+                type="button"
+                onClick={handleReactivateSubscription}
+                style={{
+                  marginTop: '0.75rem',
+                  background: '#f59e0b',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '0.7rem 1rem',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Reactivate Subscription
+              </button>
             </div>
           )}
           {status === 'action_required' && requiredAction === 'past_due' && (
