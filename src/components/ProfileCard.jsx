@@ -5,14 +5,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000
 export default function ProfileCard({ user, token, onRefresh }) {
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
-    email: user?.email || '',
     company: user?.company || '',
     phone: user?.phone || '',
   })
 
   useEffect(() => {
     setFormData({
-      email: user?.email || '',
       company: user?.company || '',
       phone: user?.phone || '',
     })
@@ -46,29 +44,92 @@ export default function ProfileCard({ user, token, onRefresh }) {
   return (
     <div
       style={{
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '20px',
+        background: '#1a1a1a',
+        border: '1px solid #333333',
+        borderRadius: '12px',
+        padding: '28px',
       }}
     >
-      <h2 style={{ marginBottom: '15px', fontSize: '18px', fontWeight: '600' }}>Profile</h2>
+      <h2
+        style={{
+          fontSize: '18px',
+          fontWeight: '600',
+          color: '#ffffff',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        <span style={{ fontSize: '20px' }}>👤</span>
+        Profile
+      </h2>
 
       {!editing ? (
         <>
-          <p><strong>Email:</strong> {user?.email}</p>
-          <p><strong>Company:</strong> {user?.company || 'Not set'}</p>
-          <p><strong>Phone:</strong> {user?.phone || 'Not set'}</p>
+          <div style={{ marginBottom: '16px' }}>
+            <p
+              style={{
+                fontSize: '12px',
+                color: '#a3a3a3',
+                marginBottom: '4px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              Email
+            </p>
+            <p style={{ color: '#ffffff', fontSize: '14px' }}>{user?.email}</p>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <p
+              style={{
+                fontSize: '12px',
+                color: '#a3a3a3',
+                marginBottom: '4px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              Company
+            </p>
+            <p style={{ color: user?.company ? '#ffffff' : '#666666', fontSize: '14px' }}>{user?.company || 'Not set'}</p>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <p
+              style={{
+                fontSize: '12px',
+                color: '#a3a3a3',
+                marginBottom: '4px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              Phone
+            </p>
+            <p style={{ color: user?.phone ? '#ffffff' : '#666666', fontSize: '14px' }}>{user?.phone || 'Not set'}</p>
+          </div>
+
           <button
             onClick={() => setEditing(true)}
             style={{
-              marginTop: '15px',
-              padding: '8px 16px',
-              background: '#3b82f6',
-              color: 'white',
+              background: '#CCFF00',
+              color: '#000000',
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '6px',
+              padding: '10px 20px',
               cursor: 'pointer',
+              fontWeight: '600',
+              fontSize: '14px',
+              transition: 'opacity 0.2s',
+            }}
+            onMouseEnter={(event) => {
+              event.target.style.opacity = '0.9'
+            }}
+            onMouseLeave={(event) => {
+              event.target.style.opacity = '1'
             }}
           >
             Edit Profile
@@ -79,42 +140,69 @@ export default function ProfileCard({ user, token, onRefresh }) {
           <input
             value={formData.company}
             onChange={(event) => setFormData({ ...formData, company: event.target.value })}
-            placeholder="Company"
-            style={{ display: 'block', width: '100%', marginBottom: '10px', padding: '8px' }}
+            placeholder="Company name"
+            style={{
+              display: 'block',
+              width: '100%',
+              marginBottom: '12px',
+              padding: '10px 12px',
+              background: '#0a0a0a',
+              border: '1px solid #333333',
+              borderRadius: '6px',
+              color: '#ffffff',
+              fontSize: '14px',
+            }}
           />
           <input
             value={formData.phone}
             onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
-            placeholder="Phone"
-            style={{ display: 'block', width: '100%', marginBottom: '10px', padding: '8px' }}
+            placeholder="Phone number"
+            style={{
+              display: 'block',
+              width: '100%',
+              marginBottom: '16px',
+              padding: '10px 12px',
+              background: '#0a0a0a',
+              border: '1px solid #333333',
+              borderRadius: '6px',
+              color: '#ffffff',
+              fontSize: '14px',
+            }}
           />
-          <button
-            onClick={handleSave}
-            style={{
-              marginRight: '10px',
-              padding: '8px 16px',
-              background: '#22c55e',
-              color: 'white',
-              border: 'none',
-              cursor: 'pointer',
-              borderRadius: '4px',
-            }}
-          >
-            Save
-          </button>
-          <button
-            onClick={() => setEditing(false)}
-            style={{
-              padding: '8px 16px',
-              background: '#9ca3af',
-              color: 'white',
-              border: 'none',
-              cursor: 'pointer',
-              borderRadius: '4px',
-            }}
-          >
-            Cancel
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={handleSave}
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                background: '#CCFF00',
+                color: '#000000',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '14px',
+              }}
+            >
+              Save Changes
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              style={{
+                flex: 1,
+                padding: '10px 20px',
+                background: '#333333',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '14px',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </>
       )}
     </div>

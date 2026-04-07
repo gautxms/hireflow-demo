@@ -57,25 +57,59 @@ export default function AccountPage({ token, user, onLogout }) {
     }
   }
 
-  if (loading) return <div style={{ padding: '24px' }}>Loading account...</div>
-  if (error) return <div style={{ padding: '24px' }}>Error: {error}</div>
+  if (loading) {
+    return (
+      <div style={{ background: '#0a0a0a', color: '#a3a3a3', minHeight: '100vh', padding: '24px' }}>
+        Loading account...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ background: '#0a0a0a', color: '#ef4444', minHeight: '100vh', padding: '24px' }}>
+        Error: {error}
+      </div>
+    )
+  }
 
   return (
     <main
       style={{
-        maxWidth: '1000px',
+        maxWidth: '1200px',
         margin: '0 auto',
-        padding: '40px 20px',
+        padding: '60px 20px',
+        background: '#0a0a0a',
+        minHeight: '100vh',
       }}
     >
-      <h1 style={{ marginBottom: '40px', fontSize: '32px', fontWeight: '700' }}>Account Settings</h1>
+      <div style={{ marginBottom: '60px' }}>
+        <h1
+          style={{
+            fontSize: '40px',
+            fontWeight: '700',
+            color: '#ffffff',
+            marginBottom: '12px',
+          }}
+        >
+          Account Settings
+        </h1>
+        <p
+          style={{
+            fontSize: '16px',
+            color: '#a3a3a3',
+          }}
+        >
+          Manage your profile, subscription, and billing preferences
+        </p>
+      </div>
 
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '20px',
-          marginBottom: '40px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+          gap: '24px',
+          marginBottom: '60px',
         }}
       >
         <ProfileCard user={userData} token={token} onRefresh={fetchUserData} />
@@ -85,28 +119,54 @@ export default function AccountPage({ token, user, onLogout }) {
 
       <div
         style={{
-          background: '#fee2e2',
-          border: '1px solid #fecaca',
-          borderRadius: '8px',
-          padding: '20px',
-          marginTop: '40px',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '12px',
+          padding: '32px',
+          marginTop: '60px',
         }}
       >
-        <h3 style={{ color: '#991b1b', marginBottom: '15px' }}>Danger Zone</h3>
+        <h3
+          style={{
+            color: '#ef4444',
+            marginBottom: '16px',
+            fontSize: '18px',
+            fontWeight: '600',
+          }}
+        >
+          Danger Zone
+        </h3>
+        <p
+          style={{
+            color: '#a3a3a3',
+            marginBottom: '20px',
+            lineHeight: '1.6',
+          }}
+        >
+          Once you delete your account, there is no going back. Please be certain.
+        </p>
         <button
           onClick={() => {
-            if (window.confirm('Are you sure? This cannot be undone.')) {
+            if (window.confirm('Are you absolutely sure? This action cannot be undone.')) {
               deleteAccount()
             }
           }}
           style={{
-            background: '#dc2626',
-            color: 'white',
+            background: '#ef4444',
+            color: '#ffffff',
             border: 'none',
             borderRadius: '6px',
             padding: '12px 24px',
             cursor: 'pointer',
             fontWeight: '600',
+            fontSize: '14px',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={(event) => {
+            event.target.style.background = '#dc2626'
+          }}
+          onMouseLeave={(event) => {
+            event.target.style.background = '#ef4444'
           }}
         >
           Delete Account
