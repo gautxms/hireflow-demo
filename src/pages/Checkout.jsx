@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
-import BackButton from '../components/BackButton'
 
 const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
 const DEFAULT_PROD_API_BASE_URL = 'https://hireflow-backend-production.up.railway.app'
@@ -78,6 +77,7 @@ export default function Checkout({ onAuthSuccess }) {
   const [transactionId, setTransactionId] = useState(null)
   const [hasSuccessfulTransaction, setHasSuccessfulTransaction] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const isReactivation = status === 'action_required' && requiredAction === 'cancelled'
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
@@ -553,123 +553,172 @@ export default function Checkout({ onAuthSuccess }) {
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
-      <section style={{ maxWidth: '900px', margin: '0 auto', padding: '3rem 1rem 2rem' }}>
-        <div style={{ marginBottom: '1.25rem' }}>
-          <BackButton />
-        </div>
-
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.3rem', marginBottom: '0.75rem' }}>Checkout</h1>
-        <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>{plan.summary}</p>
-
-        <div
+    <main style={{
+      background: '#0a0a0a',
+      minHeight: '100vh',
+      padding: '40px 20px',
+      color: '#ffffff',
+    }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <button
+          type="button"
+          onClick={() => window.history.back()}
           style={{
-            border: '1px solid var(--border)',
-            borderRadius: '14px',
-            background: 'var(--card)',
-            padding: '1.5rem',
-            display: 'grid',
-            gap: '0.75rem',
+            background: 'transparent',
+            color: '#CCFF00',
+            border: 'none',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            marginBottom: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}
         >
-          <p style={{ margin: 0, color: 'var(--muted)' }}>Selected plan</p>
-          <p style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>{plan.label}</p>
-          <p style={{ margin: 0, color: 'var(--muted)' }}>
-            {getStatusMessage()}
-          </p>
-          {errorMessage && (
-            <p style={{ margin: 0, color: '#ff8f8f' }}>
-              Error: {errorMessage}
-              {status === 'error' && (
-                <>
-                  <br />
-                  <a href="/pricing" style={{ color: 'var(--accent)', textDecoration: 'none', marginTop: '1rem', display: 'inline-block' }}>
-                    ← Back to Pricing
-                  </a>
-                </>
-              )}
-            </p>
-          )}
-          {successMessage && (
-            <p style={{ margin: 0, color: '#8effb8', fontWeight: 600 }}>
-              {successMessage}
-            </p>
-          )}
-          {status === 'action_required' && requiredAction === 'cancelled' && (
-            <div
-              style={{
-                marginTop: '0.5rem',
-                background: '#fef3c7',
-                border: '1px solid #f59e0b',
-                borderRadius: '8px',
-                padding: '1rem',
-              }}
-            >
-              <p style={{ margin: 0, color: '#92400e' }}>
-                Your subscription was cancelled. Reactivate to regain access to resume analysis.
-              </p>
-              <button
-                type="button"
-                onClick={handleReactivateSubscription}
-                style={{
-                  marginTop: '0.75rem',
-                  background: '#f59e0b',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '0.7rem 1rem',
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Reactivate Subscription
-              </button>
-            </div>
-          )}
-          {status === 'action_required' && requiredAction === 'past_due' && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <p style={{ margin: 0, color: 'var(--muted)' }}>
-                Your subscription is past due. Please update your payment method to continue.
-              </p>
-              <a href="/billing" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 700, marginTop: '0.5rem', display: 'inline-block' }}>
-                Update payment method →
-              </a>
-            </div>
-          )}
-        </div>
+          ← Back to Home
+        </button>
 
-        {status === 'opened' && (
-          <div style={{ marginTop: '2rem', padding: '1rem', background: 'var(--card)', borderRadius: '8px', border: '1px solid var(--border)' }}>
-            <p style={{ color: 'var(--muted)', fontSize: '0.9rem', margin: 0 }}>
-              ✓ Checkout is open above. After completing payment, you'll be redirected to confirm your subscription.
-            </p>
-            {transactionId && (
-              <p style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.5rem', marginBottom: 0 }}>
-                Transaction reference: {transactionId}
-              </p>
-            )}
-            {showRetry && (
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                style={{
-                  marginTop: '0.75rem',
-                  border: '1px solid var(--accent)',
-                  borderRadius: '8px',
-                  background: 'transparent',
-                  color: 'var(--text)',
-                  padding: '0.6rem 1rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Retry checkout
-              </button>
-            )}
+        <h1 style={{ fontSize: 'clamp(2rem, 6vw, 48px)', fontWeight: '700', marginBottom: '12px' }}>
+          Checkout
+        </h1>
+
+        <p style={{ color: '#a3a3a3', fontSize: '16px', marginBottom: '40px' }}>
+          You selected the <strong style={{ color: '#CCFF00' }}>{selectedPlan}</strong> subscription.
+        </p>
+
+        {isReactivation && (
+          <div style={{
+            background: 'rgba(204, 255, 0, 0.15)',
+            border: '2px solid #CCFF00',
+            borderRadius: '12px',
+            padding: '24px',
+            marginBottom: '32px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+              <span style={{ fontSize: '24px' }}>⚡</span>
+              <div>
+                <h3 style={{ color: '#CCFF00', fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>
+                  Reactivate Your Subscription
+                </h3>
+                <p style={{ color: '#a3a3a3', fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+                  Your subscription was cancelled. Reactivate now to regain access to resume analysis and full features.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleReactivateSubscription}
+                  style={{
+                    background: '#CCFF00',
+                    color: '#000000',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '12px 24px',
+                    fontSize: '14px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+                >
+                  Reactivate Now
+                </button>
+              </div>
+            </div>
           </div>
         )}
-      </section>
+
+        {status === 'action_required' && requiredAction === 'past_due' && (
+          <div style={{ background: '#1a1a1a', border: '1px solid #333333', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
+            <p style={{ margin: 0, color: '#a3a3a3' }}>
+              Your previous payment needs attention. Please update your payment method from the billing portal.
+            </p>
+            <a href="/billing" style={{ color: '#CCFF00', fontWeight: 700, marginTop: '10px', display: 'inline-block' }}>Open billing portal</a>
+          </div>
+        )}
+
+        {(errorMessage || successMessage) && (
+          <div style={{ marginBottom: '24px' }}>
+            {!!errorMessage && (
+              <p style={{ margin: '0 0 8px', color: '#ff8f8f' }}>
+                Error: {errorMessage}
+                {status === 'error' && (
+                  <>
+                    <br />
+                    <a href="/pricing" style={{ color: '#CCFF00', textDecoration: 'none', marginTop: '1rem', display: 'inline-block' }}>
+                      ← Back to Pricing
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
+            {!!successMessage && <p style={{ margin: 0, color: '#CCFF00', fontWeight: 600 }}>{successMessage}</p>}
+            {!errorMessage && <p style={{ margin: '8px 0 0', color: '#a3a3a3' }}>{getStatusMessage()}</p>}
+          </div>
+        )}
+
+        <div
+          id="paddle-container"
+          style={{
+            background: '#1a1a1a',
+            borderRadius: '12px',
+            padding: '32px',
+            border: '1px solid #333333',
+            minHeight: '500px',
+          }}
+        />
+
+        {!checkoutOpen && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#a3a3a3' }}>
+            <p style={{ marginBottom: '8px' }}>Loading secure checkout...</p>
+            <div style={{ animation: 'pulse 2s infinite', display: 'inline-block' }}>
+              <span style={{ fontSize: '24px' }}>🔐</span>
+            </div>
+          </div>
+        )}
+
+        {status === 'opened' && transactionId && (
+          <p style={{ color: '#a3a3a3', fontSize: '12px', marginTop: '12px' }}>
+            Transaction reference: {transactionId}
+          </p>
+        )}
+
+        {showRetry && !hasSuccessfulTransaction && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowRetry(false)
+              setStatus('loading')
+              setErrorMessage('')
+              setSuccessMessage('')
+              if (requiredAction === 'cancelled') {
+                setReactivateRequested(true)
+              } else {
+                setRequiredAction(null)
+              }
+            }}
+            style={{
+              marginTop: '16px',
+              background: '#CCFF00',
+              color: '#000000',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '12px 24px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Retry checkout
+          </button>
+        )}
+
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+        `}</style>
+      </div>
     </main>
   )
 }
