@@ -123,8 +123,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
   }, [isProfileMenuOpen])
 
+  const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
+  const isActiveSubscriber = normalizedSubscriptionStatus === 'active'
+  const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
+
   const getPageContent = () => {
     if (pathname === '/pricing') {
+      if (isAuthenticated && isActiveSubscriber) {
+        navigate('/billing')
+        return null
+      }
       return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
@@ -142,10 +150,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/refund-policy') {
       return <RefundPolicy />
-    }
-
-    if (pathname === '/billing') {
-      return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
     if (pathname === '/billing/success') {
@@ -345,7 +349,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </button>
         <div className={`nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
           <button onClick={handleFeaturesClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Features</button>
-          <button onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Pricing</button>
+          {canViewUpgradePricing && (
+            <button onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>
+              {isAuthenticated ? 'Upgrade' : 'Pricing'}
+            </button>
+          )}
           <button onClick={handleAboutClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>About</button>
           <button onClick={handleHelpClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Help</button>
         </div>
@@ -401,7 +409,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                     role="menuitem"
                     onClick={() => {
                       setIsProfileMenuOpen(false)
-                      navigate('/pricing')
+                      navigate('/billing')
                     }}
                     style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                   >
