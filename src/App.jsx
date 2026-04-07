@@ -26,6 +26,8 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 import AccountSettingsPage from './pages/AccountSettingsPage'
 import AccountPage from './pages/AccountPage'
 import PublicFooter from './components/PublicFooter'
+import AdminLogsPage from './admin/pages/AdminLogsPage'
+import AdminHealthPage from './admin/pages/AdminHealthPage'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -185,6 +187,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/billing') {
       return <BillingPage />
+    }
+
+    if (pathname === '/admin/logs') {
+      return <AdminLogsPage />
+    }
+
+    if (pathname === '/admin/health') {
+      return <AdminHealthPage />
     }
 
     if (!isAuthenticated && pathname === '/signup') {
