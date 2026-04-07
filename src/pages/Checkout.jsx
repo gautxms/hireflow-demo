@@ -18,6 +18,7 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
 const PADDLE_LAST_TRANSACTION_STORAGE_KEY = 'paddle_last_transaction'
+const PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY = 'paddle_checkout_active'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -84,7 +85,6 @@ export default function Checkout({ onAuthSuccess }) {
   useEffect(() => {
     let isUnmounted = false
     let paddleRef = null
-    let checkoutCompletedHandler = null
     let checkoutFailedHandler = null
     let checkoutClosedHandler = null
     let latestTransactionId = null
@@ -278,7 +278,7 @@ export default function Checkout({ onAuthSuccess }) {
         //   clientToken: "live_..."
         // }
         // clientToken comes from environment variables for better security
-        const { checkoutUrl, userEmail } = payload
+        const { checkoutUrl, userEmail, clientToken: checkoutClientToken, paddleEnvironment } = payload
         console.log('[DEBUG] userEmail value:', userEmail)
         console.log('[DEBUG] userEmail type:', typeof userEmail)
 
@@ -344,63 +344,6 @@ export default function Checkout({ onAuthSuccess }) {
           throw new Error('Missing Paddle initialization data (token or email)')
         }
 
-        const handleCheckoutCompleted = async (eventData) => {
-          console.log('[Paddle] Checkout completed:', eventData)
-          if (isPaymentFlowCompleted) {
-            return
-          }
-
-          const completionTransactionId = eventData?.transaction?.id || latestTransactionId
-          latestTransactionId = completionTransactionId
-          setTransactionId(completionTransactionId)
-          sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, completionTransactionId)
-          isPaymentFlowCompleted = true
-          markCheckoutCompleted()
-
-          // Wait for webhook to update subscription status.
-          console.log('[Checkout] Waiting for webhook to process...')
-          await new Promise((resolve) => setTimeout(resolve, 3000))
-
-          try {
-            const { user, isActive } = await verifySubscriptionStatus(token)
-
-            if (!isActive) {
-              isPaymentFlowCompleted = false
-              if (!isUnmounted) {
-                setErrorMessage('Payment completed, but subscription activation is still processing. Please wait a moment and retry.')
-                setShowRetry(true)
-              }
-              return
-            }
-
-            if (!isUnmounted) {
-              setHasSuccessfulTransaction(true)
-              setCheckoutOpen(false)
-              setSuccessMessage('Payment successful! Redirecting to billing confirmation…')
-            }
-
-            closePaddleCheckout()
-            sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
-            persistActiveSubscription(token, user, '/billing/success')
-            setTimeout(() => {
-              navigate('/billing/success', {
-                replace: true,
-                state: {
-                  transactionId: completionTransactionId,
-                  plan: user?.subscription_plan || selectedPlan,
-                  message: 'Welcome! Your subscription is now active.',
-                },
-              })
-            }, 500)
-          } catch {
-            isPaymentFlowCompleted = false
-            if (!isUnmounted) {
-              setErrorMessage('Unable to verify payment status right now. Please refresh or retry in a moment.')
-              setShowRetry(true)
-            }
-          }
-        }
-
         const handleCheckoutFailed = async (eventData) => {
           console.log('[Paddle] Checkout failed:', eventData)
           const paddleErrorMessage = eventData?.error?.message || 'Unknown error'
@@ -462,7 +405,6 @@ export default function Checkout({ onAuthSuccess }) {
           }
         }
 
-        checkoutCompletedHandler = handleCheckoutCompleted
         checkoutFailedHandler = handleCheckoutFailed
         checkoutClosedHandler = handleCheckoutClosed
 
@@ -475,19 +417,53 @@ export default function Checkout({ onAuthSuccess }) {
           console.log('[Checkout] Calling Paddle.Checkout.open with transactionId:', initialTransactionId)
 
           if (typeof Paddle.Checkout?.addEventListener === 'function') {
-            Paddle.Checkout.addEventListener('checkout.completed', handleCheckoutCompleted)
             Paddle.Checkout.addEventListener('checkout.failed', handleCheckoutFailed)
             Paddle.Checkout.addEventListener('checkout.closed', handleCheckoutClosed)
           }
 
           Paddle.Checkout.open({
             transactionId: initialTransactionId,
+            client: checkoutClientToken || clientToken,
+            environment: paddleEnvironment,
             settings: {
               allowLogout: false,
+            },
+            onComplete: async (transaction) => {
+              console.log('[Paddle] onComplete callback fired:', transaction)
+
+              if (isPaymentFlowCompleted) {
+                return
+              }
+
+              const completionTransactionId = transaction?.id || latestTransactionId
+              latestTransactionId = completionTransactionId
+              setTransactionId(completionTransactionId)
+              sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, completionTransactionId)
+              isPaymentFlowCompleted = true
+              markCheckoutCompleted()
+              sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
+
+              if (!isUnmounted) {
+                setStatus('loading')
+                setHasSuccessfulTransaction(true)
+                setCheckoutOpen(false)
+                setSuccessMessage('Payment successful! Redirecting to billing confirmation…')
+              }
+
+              closePaddleCheckout()
+              navigate('/billing/success', {
+                replace: true,
+                state: {
+                  transactionId: completionTransactionId,
+                  plan: selectedPlan,
+                  message: 'Welcome! Your subscription is now active.',
+                },
+              })
             },
           })
           setStatus('opened')
           setCheckoutOpen(true)
+          sessionStorage.setItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY, 'true')
         }, 500)
       } catch (error) {
         console.error('[Checkout] Error occurred:', error)
@@ -504,17 +480,68 @@ export default function Checkout({ onAuthSuccess }) {
 
       if (typeof paddleRef?.Checkout?.removeEventListener === 'function') {
         try {
-          paddleRef.Checkout.removeEventListener('checkout.completed', checkoutCompletedHandler)
           paddleRef.Checkout.removeEventListener('checkout.failed', checkoutFailedHandler)
           paddleRef.Checkout.removeEventListener('checkout.closed', checkoutClosedHandler)
         } catch {
-          paddleRef.Checkout.removeEventListener('checkout.completed')
           paddleRef.Checkout.removeEventListener('checkout.failed')
           paddleRef.Checkout.removeEventListener('checkout.closed')
         }
       }
     }
   }, [onAuthSuccess, reactivateRequested, selectedPlan])
+
+  useEffect(() => {
+    if (!checkoutOpen || hasSuccessfulTransaction) {
+      return undefined
+    }
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      return undefined
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!response.ok) {
+          return
+        }
+
+        const user = await response.json()
+        const isActive = user?.subscription_status === 'active' || user?.subscription_status === 'trialing'
+
+        if (!isActive) {
+          return
+        }
+
+        console.log('[Checkout] Polling detected payment success')
+        clearInterval(pollInterval)
+        sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
+        setHasSuccessfulTransaction(true)
+        setCheckoutOpen(false)
+
+        navigate('/billing/success', {
+          replace: true,
+          state: {
+            transactionId: transactionId || sessionStorage.getItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY),
+            plan: user?.subscription_plan || selectedPlan,
+            message: 'Payment successful! Your subscription is now active.',
+          },
+        })
+      } catch (err) {
+        console.error('[Checkout] Poll error:', err)
+      }
+    }, 2000)
+
+    return () => clearInterval(pollInterval)
+  }, [checkoutOpen, hasSuccessfulTransaction, selectedPlan, transactionId])
+
+  useEffect(() => () => {
+    sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
+  }, [])
 
   const handleReactivateSubscription = () => {
     setErrorMessage('')
