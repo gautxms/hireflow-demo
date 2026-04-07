@@ -2,30 +2,61 @@ export default function BillingCard() {
   return (
     <div
       style={{
-        background: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '20px',
+        background: '#1a1a1a',
+        border: '1px solid #333333',
+        borderRadius: '12px',
+        padding: '28px',
       }}
     >
-      <h2 style={{ marginBottom: '15px', fontSize: '18px', fontWeight: '600' }}>Billing</h2>
+      <h2
+        style={{
+          fontSize: '18px',
+          fontWeight: '600',
+          color: '#ffffff',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        <span style={{ fontSize: '20px' }}>💳</span>
+        Billing
+      </h2>
 
-      <p style={{ marginBottom: '15px', color: '#6b7280' }}>Manage your billing information and view invoices.</p>
+      <p
+        style={{
+          color: '#a3a3a3',
+          marginBottom: '24px',
+          lineHeight: '1.6',
+          fontSize: '14px',
+        }}
+      >
+        Manage your billing information, view invoices, and update payment methods.
+      </p>
 
       <button
         onClick={() => {
           window.location.href = '/billing'
         }}
         style={{
-          padding: '8px 16px',
-          background: '#3b82f6',
-          color: 'white',
-          border: 'none',
-          cursor: 'pointer',
-          borderRadius: '4px',
-          marginBottom: '10px',
           display: 'block',
           width: '100%',
+          padding: '12px 20px',
+          marginBottom: '12px',
+          background: '#CCFF00',
+          color: '#000000',
+          border: 'none',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontWeight: '600',
+          fontSize: '14px',
+          transition: 'opacity 0.2s',
+        }}
+        onMouseEnter={(event) => {
+          event.target.style.opacity = '0.9'
+        }}
+        onMouseLeave={(event) => {
+          event.target.style.opacity = '1'
         }}
       >
         View Billing Details
@@ -36,14 +67,23 @@ export default function BillingCard() {
           window.location.href = '/update-payment-method'
         }}
         style={{
-          padding: '8px 16px',
-          background: '#6b7280',
-          color: 'white',
-          border: 'none',
-          cursor: 'pointer',
-          borderRadius: '4px',
           display: 'block',
           width: '100%',
+          padding: '12px 20px',
+          background: '#333333',
+          color: '#ffffff',
+          border: '1px solid #555555',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontWeight: '600',
+          fontSize: '14px',
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={(event) => {
+          event.target.style.background = '#444444'
+        }}
+        onMouseLeave={(event) => {
+          event.target.style.background = '#333333'
         }}
       >
         Update Payment Method
