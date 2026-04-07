@@ -14,7 +14,7 @@ function getBillingState() {
   return {
     transactionId: historyState.transactionId || '',
     plan: historyState.plan || 'monthly',
-    message: historyState.message || 'Payment successful!',
+    message: historyState.message || '',
   }
 }
 
@@ -46,75 +46,80 @@ export default function BillingSuccess() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '1.25rem',
+      background: '#0a0a0a',
+      padding: '20px',
     }}>
       <div style={{
-        background: 'white',
-        borderRadius: '12px',
-        padding: 'min(60px, 10vw) min(40px, 7vw)',
+        background: '#1a1a1a',
+        border: '2px solid #CCFF00',
+        borderRadius: '16px',
+        padding: '60px 40px',
         textAlign: 'center',
         width: '100%',
         maxWidth: '500px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        boxShadow: '0 20px 60px rgba(204, 255, 0, 0.1)',
       }}>
         <div style={{
           width: '80px',
           height: '80px',
-          background: '#22c55e',
+          background: '#CCFF00',
           borderRadius: '50%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           margin: '0 auto 30px',
           animation: 'scaleIn 0.6s ease-out',
+          color: '#000000',
+          fontSize: '40px',
         }}>
-          <span style={{ fontSize: '40px', color: 'white' }}>✓</span>
+          ✓
         </div>
 
         <h1 style={{
-          fontSize: 'clamp(1.6rem, 4vw, 1.75rem)',
+          fontSize: 'clamp(1.8rem, 4vw, 32px)',
           fontWeight: '700',
-          marginBottom: '10px',
-          color: '#1f2937',
+          marginBottom: '12px',
+          color: '#CCFF00',
         }}>
-          {message}
+          Payment Successful!
         </h1>
 
         <p style={{
           fontSize: '16px',
-          color: '#6b7280',
+          color: '#a3a3a3',
           marginBottom: '30px',
           lineHeight: '1.6',
         }}>
-          Thank you for your subscription. Your account is now active and you can start uploading resumes.
+          {message || 'Thank you for your subscription. Your account is now active.'}
         </p>
 
         <div style={{
-          background: '#f3f4f6',
-          borderRadius: '8px',
+          background: '#0a0a0a',
+          borderRadius: '12px',
           padding: '20px',
           marginBottom: '30px',
+          border: '1px solid #333333',
           textAlign: 'left',
         }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            marginBottom: transactionId ? '10px' : 0,
-            gap: '12px',
+            marginBottom: '12px',
+            paddingBottom: '12px',
+            borderBottom: '1px solid #333333',
           }}>
-            <span style={{ color: '#6b7280' }}>Plan:</span>
-            <strong style={{ color: '#1f2937', textTransform: 'capitalize' }}>{plan}</strong>
+            <span style={{ color: '#a3a3a3' }}>Plan:</span>
+            <strong style={{ color: '#CCFF00', textTransform: 'capitalize' }}>
+              {plan}
+            </strong>
           </div>
           {transactionId && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: '12px',
-            }}>
-              <span style={{ color: '#6b7280' }}>Transaction ID:</span>
+            <div>
+              <span style={{ color: '#a3a3a3' }}>Transaction:</span>
               <code style={{
-                color: '#1f2937',
+                display: 'block',
+                marginTop: '8px',
+                color: '#ffffff',
                 fontFamily: 'monospace',
                 fontSize: '12px',
                 wordBreak: 'break-all',
@@ -127,7 +132,7 @@ export default function BillingSuccess() {
 
         <p style={{
           fontSize: '14px',
-          color: '#9ca3af',
+          color: '#a3a3a3',
           marginBottom: '20px',
         }}>
           Redirecting to dashboard in {countdown} seconds...
@@ -136,23 +141,19 @@ export default function BillingSuccess() {
         <button
           type="button"
           onClick={() => navigate('/uploader', { replace: true })}
-          onMouseEnter={(event) => {
-            event.currentTarget.style.background = '#764ba2'
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.background = '#667eea'
-          }}
           style={{
-            background: '#667eea',
-            color: 'white',
+            background: '#CCFF00',
+            color: '#000000',
             border: 'none',
             borderRadius: '6px',
-            padding: '12px 24px',
+            padding: '14px 32px',
             fontSize: '16px',
-            fontWeight: '600',
+            fontWeight: '700',
             cursor: 'pointer',
-            transition: 'background 0.2s',
+            transition: 'opacity 0.2s',
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
         >
           Go to Dashboard Now
         </button>
