@@ -17,6 +17,7 @@ const API_BASE_URL = resolveApiBaseUrl()
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
+const PADDLE_LAST_TRANSACTION_STORAGE_KEY = 'paddle_last_transaction'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -73,6 +74,9 @@ export default function Checkout({ onAuthSuccess }) {
   const [successMessage, setSuccessMessage] = useState('')
   const [showRetry, setShowRetry] = useState(false)
   const [requiredAction, setRequiredAction] = useState(null)
+  const [transactionId, setTransactionId] = useState(null)
+  const [hasSuccessfulTransaction, setHasSuccessfulTransaction] = useState(false)
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
@@ -285,23 +289,25 @@ export default function Checkout({ onAuthSuccess }) {
         }
 
         // Extract transaction ID from the URL parameter
-        let transactionId
+        let initialTransactionId
         try {
           const url = new URL(checkoutUrl)
-          transactionId = url.searchParams.get('_ptxn')
+          initialTransactionId = url.searchParams.get('_ptxn')
         } catch (e) {
           console.error('[Checkout] Failed to parse checkout URL:', checkoutUrl, e)
           throw new Error('Invalid checkout URL format')
         }
 
-        if (!transactionId) {
+        if (!initialTransactionId) {
           console.error('[Checkout] Missing transaction ID in checkout URL:', checkoutUrl)
           throw new Error('Transaction ID not found in checkout URL')
         }
-        latestTransactionId = transactionId
+        latestTransactionId = initialTransactionId
+        setTransactionId(initialTransactionId)
+        sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, initialTransactionId)
 
         console.log('[Checkout] Extracted transaction ID and user email:', {
-          transactionId,
+          transactionId: initialTransactionId,
           userEmail,
         })
 
@@ -339,13 +345,16 @@ export default function Checkout({ onAuthSuccess }) {
             return
           }
 
+          const completionTransactionId = eventData?.transaction?.id || latestTransactionId
+          latestTransactionId = completionTransactionId
+          setTransactionId(completionTransactionId)
+          sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, completionTransactionId)
           isPaymentFlowCompleted = true
           markCheckoutCompleted()
 
-          const completionTransactionId = eventData?.transaction?.id || latestTransactionId
-
           // Wait for webhook to update subscription status.
-          await new Promise((resolve) => setTimeout(resolve, 2000))
+          console.log('[Checkout] Waiting for webhook to process...')
+          await new Promise((resolve) => setTimeout(resolve, 3000))
 
           try {
             const { user, isActive } = await verifySubscriptionStatus(token)
@@ -360,18 +369,24 @@ export default function Checkout({ onAuthSuccess }) {
             }
 
             if (!isUnmounted) {
+              setHasSuccessfulTransaction(true)
+              setCheckoutOpen(false)
               setSuccessMessage('Payment successful! Redirecting to billing confirmation…')
             }
 
             closePaddleCheckout()
+            sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
             persistActiveSubscription(token, user, '/billing/success')
-            navigate('/billing/success', {
-              state: {
-                transactionId: completionTransactionId,
-                plan: user?.subscription_plan || selectedPlan,
-                message: 'Payment successful! Your subscription is now active.',
-              },
-            })
+            setTimeout(() => {
+              navigate('/billing/success', {
+                replace: true,
+                state: {
+                  transactionId: completionTransactionId,
+                  plan: user?.subscription_plan || selectedPlan,
+                  message: 'Welcome! Your subscription is now active.',
+                },
+              })
+            }, 500)
           } catch {
             isPaymentFlowCompleted = false
             if (!isUnmounted) {
@@ -393,9 +408,17 @@ export default function Checkout({ onAuthSuccess }) {
 
         const handleCheckoutClosed = async () => {
           console.log('[Paddle] Checkout closed by user')
+          setCheckoutOpen(false)
 
           if (isPaymentFlowCompleted) {
             return
+          }
+
+          const closedTransactionId = sessionStorage.getItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY) || latestTransactionId
+
+          if (closedTransactionId) {
+            console.log('[Checkout] Checking if transaction succeeded...')
+            await new Promise((resolve) => setTimeout(resolve, 2000))
           }
 
           try {
@@ -404,13 +427,16 @@ export default function Checkout({ onAuthSuccess }) {
             if (isActive) {
               console.log('[Checkout] Payment succeeded despite popup close')
               isPaymentFlowCompleted = true
+              setHasSuccessfulTransaction(true)
               markCheckoutCompleted()
+              sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
               persistActiveSubscription(token, user, '/billing/success')
               navigate('/billing/success', {
+                replace: true,
                 state: {
-                  transactionId: latestTransactionId,
+                  transactionId: closedTransactionId,
                   plan: user?.subscription_plan || selectedPlan,
-                  message: 'Payment successful! Welcome.',
+                  message: 'Payment received! Your subscription is now active.',
                 },
               })
               return
@@ -436,12 +462,12 @@ export default function Checkout({ onAuthSuccess }) {
         checkoutClosedHandler = handleCheckoutClosed
 
         // Step 5: Open the embedded checkout with transaction ID
-        console.log('[Checkout] Opening embedded checkout for transaction:', transactionId)
+        console.log('[Checkout] Opening embedded checkout for transaction:', initialTransactionId)
         setStatus('ready')
 
         // Use setTimeout to ensure Paddle is fully initialized before opening checkout
         setTimeout(() => {
-          console.log('[Checkout] Calling Paddle.Checkout.open with transactionId:', transactionId)
+          console.log('[Checkout] Calling Paddle.Checkout.open with transactionId:', initialTransactionId)
 
           if (typeof Paddle.Checkout?.addEventListener === 'function') {
             Paddle.Checkout.addEventListener('checkout.completed', handleCheckoutCompleted)
@@ -450,12 +476,13 @@ export default function Checkout({ onAuthSuccess }) {
           }
 
           Paddle.Checkout.open({
-            transactionId,
+            transactionId: initialTransactionId,
             settings: {
               allowLogout: false,
             },
           })
           setStatus('opened')
+          setCheckoutOpen(true)
         }, 500)
       } catch (error) {
         console.error('[Checkout] Error occurred:', error)
@@ -468,6 +495,7 @@ export default function Checkout({ onAuthSuccess }) {
 
     return () => {
       isUnmounted = true
+      sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
 
       if (typeof paddleRef?.Checkout?.removeEventListener === 'function') {
         try {
@@ -482,6 +510,18 @@ export default function Checkout({ onAuthSuccess }) {
       }
     }
   }, [onAuthSuccess, selectedPlan])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (hasSuccessfulTransaction && checkoutOpen) {
+        event.preventDefault()
+        event.returnValue = ''
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasSuccessfulTransaction, checkoutOpen])
 
   const getStatusMessage = () => {
     switch (status) {
@@ -569,6 +609,11 @@ export default function Checkout({ onAuthSuccess }) {
             <p style={{ color: 'var(--muted)', fontSize: '0.9rem', margin: 0 }}>
               ✓ Checkout is open above. After completing payment, you'll be redirected to confirm your subscription.
             </p>
+            {transactionId && (
+              <p style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.5rem', marginBottom: 0 }}>
+                Transaction reference: {transactionId}
+              </p>
+            )}
             {showRetry && (
               <button
                 type="button"
