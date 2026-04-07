@@ -24,6 +24,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import AccountSettingsPage from './pages/AccountSettingsPage'
+import AccountPage from './pages/AccountPage'
 import PublicFooter from './components/PublicFooter'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -160,7 +161,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <Checkout onAuthSuccess={onAuthSuccess} />
     }
 
-    if (pathname === '/account' || pathname === '/settings') {
+    if (pathname === '/account') {
+      if (!isAuthenticated) {
+        onRequireAuth('Please login or sign up to manage your account settings.')
+        return null
+      }
+
+      return <AccountPage token={localStorage.getItem(TOKEN_STORAGE_KEY) || ''} user={userProfile} onLogout={onLogout} />
+    }
+
+    if (pathname === '/settings') {
       if (!isAuthenticated) {
         onRequireAuth('Please login or sign up to manage your account settings.')
         return null
