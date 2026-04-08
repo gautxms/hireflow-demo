@@ -30,6 +30,7 @@ router.get('/me', async (req, res) => {
 
 router.patch('/me', async (req, res) => {
   const { company, phone, email } = req.body ?? {}
+  console.info('[profile.patch] Profile update requested', { userId: req.user?.id, hasCompany: company !== undefined, hasPhone: phone !== undefined })
 
   if (email !== undefined) {
     return res.status(400).json({ error: 'Email cannot be changed from account settings' })
@@ -73,7 +74,8 @@ router.patch('/me', async (req, res) => {
       message: 'Profile updated successfully',
       user: result.rows[0],
     })
-  } catch {
+  } catch (error) {
+    console.error('[profile.patch] Failed to update profile', { userId: req.user?.id, error: error.message })
     return res.status(500).json({ error: 'Internal server error' })
   }
 })

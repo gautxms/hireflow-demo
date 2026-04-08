@@ -19,6 +19,7 @@ import RefundPolicy from './pages/RefundPolicy'
 import BillingSuccess from './pages/BillingSuccess'
 import BillingCancel from './pages/BillingCancel'
 import BillingPage from './pages/BillingPage'
+import UpdatePaymentMethodPage from './pages/UpdatePaymentMethodPage'
 import Checkout from './pages/Checkout'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -63,7 +64,7 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
+function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
@@ -174,7 +175,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      return <AccountPage token={localStorage.getItem(TOKEN_STORAGE_KEY) || ''} user={userProfile} onLogout={onLogout} />
+      return <AccountPage token={localStorage.getItem(TOKEN_STORAGE_KEY) || ''} user={userProfile} onLogout={onLogout} onUserProfileUpdate={onUserProfileUpdate} />
     }
 
     if (pathname === '/settings') {
@@ -188,6 +189,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/billing') {
       return <BillingPage />
+    }
+
+    if (pathname === '/account/payment-method') {
+      if (!isAuthenticated) {
+        onRequireAuth('Please login to update your payment method.')
+        return null
+      }
+      return <UpdatePaymentMethodPage />
     }
 
     if (pathname === '/admin/logs') {
@@ -556,6 +565,11 @@ export default function App() {
     navigate('/verify-email-info')
   }
 
+  const handleUserProfileUpdate = (nextUserProfile) => {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUserProfile || null))
+    setUserProfile(nextUserProfile || null)
+  }
+
   useEffect(() => {
     if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
       navigate('/')
@@ -574,6 +588,7 @@ export default function App() {
       pathname={pathname}
       onAuthSuccess={handleAuthSuccess}
       onSignupSuccess={handleSignupSuccess}
+      onUserProfileUpdate={handleUserProfileUpdate}
       authPrompt={authPrompt}
       subscriptionStatus={subscriptionStatus}
       userProfile={userProfile}

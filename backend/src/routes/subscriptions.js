@@ -51,9 +51,10 @@ async function paddleRequest(path, options = {}) {
 
 router.get('/current', requireAuth, async (req, res) => {
   try {
+    console.info('[subscriptions.current] Loading subscription details', { userId: req.userId })
     const userResult = await pool.query(
       `SELECT id, email, subscription_status, subscription_plan, subscription_renewal_date,
-              next_billing_date, cancellation_effective_at, current_period_end,
+              next_billing_date, cancellation_effective_at, current_period_end, subscription_started_at,
               payment_method_brand, payment_method_last4
        FROM users
        WHERE id = $1`,
@@ -61,9 +62,22 @@ router.get('/current', requireAuth, async (req, res) => {
     )
 
     const user = userResult.rows[0]
+    const subscriptionResult = await pool.query(
+      `SELECT status, created_at
+       FROM subscriptions
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [req.userId],
+    )
+    const latestSubscription = subscriptionResult.rows[0] || null
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
+    }
+
+    if (!latestSubscription) {
+      console.warn('[subscriptions.current] No subscription row found in subscriptions table', { userId: req.userId })
     }
 
     const planKey = user.subscription_plan || 'monthly'
@@ -73,6 +87,7 @@ router.get('/current', requireAuth, async (req, res) => {
       subscription: {
         status: user.subscription_status || 'inactive',
         plan: planKey,
+        started_date: isoOrNull(user.subscription_started_at),
         planLabel: plan.label,
         costCents: plan.amountCents,
         costFormatted: money(plan.amountCents),
@@ -82,6 +97,8 @@ router.get('/current', requireAuth, async (req, res) => {
         paymentMethod: user.payment_method_last4
           ? `${user.payment_method_brand || 'Card'} •••• ${user.payment_method_last4}`
           : 'Card on file',
+        latestRecordStatus: latestSubscription?.status || null,
+        latestRecordCreatedAt: isoOrNull(latestSubscription?.created_at),
       },
     })
   } catch (error) {
@@ -206,6 +223,7 @@ router.post('/cancel', requireAuth, async (req, res) => {
   const { reason, acceptOffer } = req.body || {}
 
   try {
+    console.info('[subscriptions.cancel] Cancel request received', { userId: req.userId, reason })
     const userResult = await pool.query(
       `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end
        FROM users
@@ -251,6 +269,55 @@ router.post('/cancel', requireAuth, async (req, res) => {
   } catch (error) {
     await logErrorToDatabase('subscriptions.cancel.failed', error, { userId: req.userId })
     return res.status(500).json({ error: 'Unable to cancel subscription' })
+  }
+})
+
+router.post('/payment-method', requireAuth, async (req, res) => {
+  const { cardNumber, expiryMonth, expiryYear, cvc } = req.body || {}
+  const digitsOnly = String(cardNumber || '').replace(/\D/g, '')
+  const monthNum = Number(expiryMonth)
+  const yearNum = Number(expiryYear)
+  const cvcDigits = String(cvc || '').replace(/\D/g, '')
+
+  if (digitsOnly.length < 12 || digitsOnly.length > 19) {
+    return res.status(400).json({ error: 'Card number appears invalid' })
+  }
+
+  if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
+    return res.status(400).json({ error: 'Expiry month must be 1-12' })
+  }
+
+  if (!Number.isInteger(yearNum) || yearNum < new Date().getFullYear()) {
+    return res.status(400).json({ error: 'Expiry year is invalid' })
+  }
+
+  if (cvcDigits.length < 3 || cvcDigits.length > 4) {
+    return res.status(400).json({ error: 'CVC appears invalid' })
+  }
+
+  try {
+    const last4 = digitsOnly.slice(-4)
+    const brand = digitsOnly.startsWith('4') ? 'Visa' : 'Card'
+
+    await pool.query(
+      `UPDATE users
+       SET payment_method_brand = $1,
+           payment_method_last4 = $2,
+           updated_at = NOW()
+       WHERE id = $3`,
+      [brand, last4, req.userId],
+    )
+
+    console.info('[subscriptions.payment-method] Updated payment method', { userId: req.userId, brand, last4 })
+
+    return res.json({
+      status: 'ok',
+      message: 'Payment method updated successfully.',
+      paymentMethod: `${brand} •••• ${last4}`,
+    })
+  } catch (error) {
+    await logErrorToDatabase('subscriptions.payment-method.failed', error, { userId: req.userId })
+    return res.status(500).json({ error: 'Unable to update payment method' })
   }
 })
 

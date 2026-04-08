@@ -4,6 +4,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000
 
 export default function ProfileCard({ user, token, onRefresh }) {
   const [editing, setEditing] = useState(false)
+  const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState('success')
   const [formData, setFormData] = useState({
     company: user?.company || '',
     phone: user?.phone || '',
@@ -18,8 +20,8 @@ export default function ProfileCard({ user, token, onRefresh }) {
 
   const handleSave = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/profile`, {
-        method: 'PUT',
+      const response = await fetch(`${API_BASE_URL}/api/profile/me`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -30,14 +32,20 @@ export default function ProfileCard({ user, token, onRefresh }) {
         }),
       })
 
+      const payload = await response.json().catch(() => ({}))
+
       if (!response.ok) {
-        throw new Error('Failed to save profile')
+        throw new Error(payload.error || 'Failed to save profile')
       }
 
       setEditing(false)
-      onRefresh()
-    } catch {
-      console.error('Failed to save profile')
+      setMessageType('success')
+      setMessage('Changes saved')
+      onRefresh?.()
+    } catch (error) {
+      setMessageType('error')
+      setMessage(error.message || 'Failed to save profile')
+      console.error('Failed to save profile', error)
     }
   }
 
@@ -64,6 +72,11 @@ export default function ProfileCard({ user, token, onRefresh }) {
         <span style={{ fontSize: '20px' }}>👤</span>
         Profile
       </h2>
+      {message ? (
+        <p style={{ color: messageType === 'success' ? '#22c55e' : '#ef4444', fontSize: '13px', marginBottom: '14px' }}>
+          {message}
+        </p>
+      ) : null}
 
       {!editing ? (
         <>
