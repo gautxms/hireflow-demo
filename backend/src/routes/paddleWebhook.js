@@ -263,6 +263,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         const user = await resolveUserFromPayload(payload)
         const userId = user?.id || null
         const transactionSubscriptionId = getSubscriptionId(payload)
+        const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
 
         if (userId) {
           await pool.query(
@@ -274,7 +275,17 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
              WHERE id = $1`,
             [userId, transactionSubscriptionId],
           )
-          console.log('[Webhook] Updated user subscription:', { userId, status: 'active' })
+          console.log('[Webhook] Updated user subscription after payment success:', {
+            userId,
+            status: 'active',
+            transactionId,
+            subscriptionId: transactionSubscriptionId,
+          })
+        } else {
+          console.warn('[Webhook] transaction.completed could not resolve user', {
+            transactionId,
+            subscriptionId: transactionSubscriptionId,
+          })
         }
 
         await markPaymentAttemptSucceeded(payload)
@@ -293,12 +304,10 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       }
 
       if (eventType === 'transaction.failed') {
-
-      if (eventType === 'transaction.payment_failed') {
         await recordFailedPaymentAttempt(payload)
-        console.log('[Webhook] Payment failed, recorded attempt')
-      }
-        await recordFailedPaymentAttempt(payload)
+        console.log('[Webhook] Payment failed, recorded attempt', {
+          transactionId: payload?.data?.id || payload?.transaction_id || payload?.id || null,
+        })
 
         await trackEvent({
           userId: (await resolveUserFromPayload(payload))?.id || null,
@@ -350,7 +359,9 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
 
       if (eventType === 'transaction.payment_failed') {
         await recordFailedPaymentAttempt(payload)
-        console.log('[Webhook] Payment failed recorded')
+        console.log('[Webhook] Payment failed recorded', {
+          transactionId: payload?.data?.id || payload?.transaction_id || payload?.id || null,
+        })
       }
 
       if (eventType === 'subscription.trialing') {
