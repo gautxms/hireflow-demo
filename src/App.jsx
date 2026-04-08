@@ -196,6 +196,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/admin/health') {
       return <AdminHealthPage />
+    }
+
     if (pathname === '/admin/analytics') {
       return <AdminAnalyticsPage />
     }

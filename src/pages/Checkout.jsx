@@ -163,6 +163,38 @@ export default function Checkout({ onAuthSuccess }) {
       }
     }
 
+    const syncSubscriptionAfterPayment = async (token, attempts = 8, delayMs = 1200) => {
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+          const result = await verifySubscriptionStatus(token)
+
+          if (result.isActive) {
+            console.log('[Checkout] Subscription sync confirmed after payment', {
+              attempt,
+              status: result.subscriptionStatus,
+            })
+            return result
+          }
+
+          console.log('[Checkout] Subscription not active yet, retrying sync', {
+            attempt,
+            status: result.subscriptionStatus,
+          })
+        } catch (error) {
+          console.warn('[Checkout] Subscription sync attempt failed', {
+            attempt,
+            error: error?.message || String(error),
+          })
+        }
+
+        if (attempt < attempts) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
+        }
+      }
+
+      return null
+    }
+
     async function initializeCheckout() {
       setStatus('loading')
       setErrorMessage('')
@@ -451,11 +483,17 @@ export default function Checkout({ onAuthSuccess }) {
               }
 
               closePaddleCheckout()
+              const synced = await syncSubscriptionAfterPayment(token)
+
+              if (synced?.isActive) {
+                persistActiveSubscription(token, synced.user, '/billing/success')
+              }
+
               navigate('/billing/success', {
                 replace: true,
                 state: {
                   transactionId: completionTransactionId,
-                  plan: selectedPlan,
+                  plan: synced?.user?.subscription_plan || selectedPlan,
                   message: 'Welcome! Your subscription is now active.',
                 },
               })
@@ -522,6 +560,17 @@ export default function Checkout({ onAuthSuccess }) {
         sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
         setHasSuccessfulTransaction(true)
         setCheckoutOpen(false)
+        if (typeof window.Paddle?.Checkout?.close === 'function') {
+          window.Paddle.Checkout.close()
+        }
+        const normalizedStatus = user?.subscription_status || 'inactive'
+        localStorage.setItem('subscription_status', normalizedStatus)
+
+        if (user) {
+          localStorage.setItem('hireflow_user_profile', JSON.stringify(user))
+        }
+
+        window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
 
         navigate('/billing/success', {
           replace: true,
