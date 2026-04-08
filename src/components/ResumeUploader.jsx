@@ -16,6 +16,14 @@ function sanitizeForDisplay(message) {
   return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
 }
 
+function isInfrastructureConfigError(message) {
+  const normalizedMessage = String(message || '').toLowerCase()
+  return normalizedMessage.includes('aws_s3_bucket')
+    || normalizedMessage.includes('s3')
+    || normalizedMessage.includes('credentials')
+    || normalizedMessage.includes('access denied')
+}
+
 function getFileFingerprint(file) {
   return `${file.name}::${file.size}::${file.lastModified}`
 }
@@ -296,67 +304,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
+      } else if (isInfrastructureConfigError(errorMessage)) {
+        setError('File upload is temporarily unavailable due to storage configuration. Please retry in a few minutes or contact support if this persists.')
       } else {
-        setError(`${errorMessage}. Using demo data instead.`)
-
-        setTimeout(() => {
-          const mockCandidates = [
-            {
-              id: '1',
-              name: 'Sarah Chen',
-              position: 'Senior Engineer',
-              experience: '5 years',
-              education: 'BS Computer Science, Stanford',
-              score: 92,
-              tier: 'top',
-              fit: 'Excellent',
-              skills: ['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'AWS'],
-              pros: ['Strong technical background', 'Leadership experience', 'Excellent communication'],
-              cons: ['May be overqualified'],
-            },
-            {
-              id: '2',
-              name: 'Marcus Johnson',
-              position: 'Full Stack Developer',
-              experience: '3 years',
-              education: 'BS Information Technology, MIT',
-              score: 78,
-              tier: 'strong',
-              fit: 'Strong',
-              skills: ['React', 'Node.js', 'MongoDB', 'AWS'],
-              pros: ['Quick learner', 'Team player', 'Good problem solver'],
-              cons: ['Limited leadership experience'],
-            },
-            {
-              id: '3',
-              name: 'Elena Rodriguez',
-              position: 'Backend Engineer',
-              experience: '2 years',
-              education: 'BS Computer Science, UC Berkeley',
-              score: 68,
-              tier: 'consider',
-              fit: 'Good',
-              skills: ['Node.js', 'Python', 'PostgreSQL', 'Docker'],
-              pros: ['Strong backend skills', 'Quick learner'],
-              cons: ['Less frontend experience', 'No AWS exposure'],
-            },
-          ]
-
-          setError('')
-          onFileUploaded({
-            candidates: mockCandidates,
-            parseMeta: {
-              methodUsed: 'demo-fallback',
-              confidence: 65,
-              attempts: [{ method: 'demo-fallback', confidence: 65, status: 'success' }],
-              requiresManualCorrection: true,
-              feedback: {
-                requested: true,
-                hint: 'Manual corrections improve parsing quality for future uploads.',
-              },
-            },
-          })
-        }, 2000)
+        setError(`${errorMessage}. Please review your file(s) and retry.`)
       }
     } finally {
       setIsAnalyzing(false)

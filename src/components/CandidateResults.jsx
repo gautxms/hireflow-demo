@@ -4,11 +4,17 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [sortBy, setSortBy] = useState('score') // 'score', 'name', 'fit'
   const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
 
-  const displayCandidates = candidates && candidates.length > 0 ? candidates : null
+  const rawCandidates = Array.isArray(candidates)
+    ? candidates
+    : Array.isArray(candidates?.candidates)
+      ? candidates.candidates
+      : []
+
+  const displayCandidates = rawCandidates.length > 0 ? rawCandidates : null
 
   const hasRenderableCandidates = Array.isArray(displayCandidates)
     && displayCandidates.length > 0
-    && displayCandidates.every((candidate) => candidate && Array.isArray(candidate.skills))
+    && displayCandidates.every((candidate) => candidate && (Array.isArray(candidate.skills) || typeof candidate.skills === 'string'))
 
   const filtered = useMemo(() => {
     if (!hasRenderableCandidates) {
@@ -199,7 +205,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 <td data-label="Candidate">{candidate.name}</td>
                 <td data-label="Fit">{candidate.fit}</td>
                 <td data-label="Score">{candidate.score}</td>
-                <td data-label="Top skills">{candidate.skills.slice(0, 3).join(', ')}</td>
+                <td data-label="Top skills">{Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3).join(', ') : String(candidate.skills || 'N/A')}</td>
               </tr>
             ))}
           </tbody>
@@ -209,6 +215,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       {/* Candidates List */}
       <div className="candidate-results-list" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
         {filtered.map(candidate => {
+          const candidateSkills = Array.isArray(candidate.skills)
+            ? candidate.skills
+            : String(candidate.skills || '')
+              .split(',')
+              .map((skill) => skill.trim())
+              .filter(Boolean)
+          const candidatePros = Array.isArray(candidate.pros) ? candidate.pros : []
+          const candidateCons = Array.isArray(candidate.cons) ? candidate.cons : []
           const tier = getTierBadge(candidate.tier)
           return (
             <div
@@ -274,7 +288,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               <div style={{ marginBottom: '1.5rem' }}>
                 <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem' }}>Skills</h4>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {candidate.skills.map((skill, i) => (
+                  {candidateSkills.map((skill, i) => (
                     <span
                       key={i}
                       style={{
@@ -298,7 +312,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     ✓ Strengths
                   </h4>
                   <ul style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '1.5rem' }}>
-                    {candidate.pros.map((pro, i) => (
+                    {candidatePros.map((pro, i) => (
                       <li key={i}>{pro}</li>
                     ))}
                   </ul>
@@ -308,7 +322,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     ⚠ Considerations
                   </h4>
                   <ul style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '1.5rem' }}>
-                    {candidate.cons.map((con, i) => (
+                    {candidateCons.map((con, i) => (
                       <li key={i}>{con}</li>
                     ))}
                   </ul>
