@@ -24,6 +24,10 @@ function isInfrastructureConfigError(message) {
     || normalizedMessage.includes('access denied')
 }
 
+async function parseJsonSafe(response) {
+  return response.json().catch(() => ({}))
+}
+
 function getFileFingerprint(file) {
   return `${file.name}::${file.size}::${file.lastModified}`
 }
@@ -143,6 +147,35 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     }
   }
 
+  const queueLegacyUpload = async ({ token }) => {
+    const formData = new FormData()
+
+    uploadedFiles.forEach(({ file }) => {
+      formData.append('resumes', file)
+    })
+
+    const response = await fetch(`${API_BASE_URL}/api/uploads`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    })
+
+    const payload = await parseJsonSafe(response)
+
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to queue upload request')
+    }
+
+    const jobs = Array.isArray(payload.jobs) ? payload.jobs : []
+    const primaryJobId = payload.jobId || jobs[0]?.jobId
+
+    if (!primaryJobId) {
+      throw new Error('No parse job ID returned from upload request')
+    }
+
+    return { primaryJobId }
+  }
+
   const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
 
@@ -160,86 +193,96 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       let uploadedChunkCount = 0
       setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
 
-      const queuedJobs = []
+      let primaryJobId = ''
 
-      for (const entry of uploadedFiles) {
-        const file = entry.file
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const fingerprint = getFileFingerprint(file)
+      try {
+        for (const entry of uploadedFiles) {
+          const file = entry.file
+          const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+          const fingerprint = getFileFingerprint(file)
 
-        const initResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/init`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            filename: file.name,
-            fileSize: file.size,
-            mimeType: file.type,
-          }),
-        })
-
-        if (!initResponse.ok) {
-          const payload = await initResponse.json().catch(() => ({}))
-          throw new Error(payload.error || `Failed to start chunk upload for ${file.name}`)
-        }
-
-        const initPayload = await initResponse.json()
-        const uploadId = initPayload.uploadId
-        const uploadedChunks = new Set(initPayload.uploadedChunks || [])
-
-        const cache = readUploadCache()
-        cache[fingerprint] = { uploadId, totalChunks }
-        writeUploadCache(cache)
-
-        uploadedChunkCount += uploadedChunks.size
-        setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
-
-        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
-          if (uploadedChunks.has(chunkIndex)) {
-            continue
-          }
-
-          const start = chunkIndex * CHUNK_SIZE
-          const end = Math.min(start + CHUNK_SIZE, file.size)
-          const chunk = file.slice(start, end)
-
-          await uploadChunkWithRetry({
-            uploadId,
-            chunk,
-            chunkIndex,
-            totalChunks,
-            token,
+          const initResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/init`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              filename: file.name,
+              fileSize: file.size,
+              mimeType: file.type,
+            }),
           })
 
-          uploadedChunkCount += 1
+          if (!initResponse.ok) {
+            const payload = await parseJsonSafe(initResponse)
+            throw new Error(payload.error || `Failed to start chunk upload for ${file.name}`)
+          }
+
+          const initPayload = await parseJsonSafe(initResponse)
+          const uploadId = initPayload.uploadId
+          const uploadedChunks = new Set(initPayload.uploadedChunks || [])
+
+          const cache = readUploadCache()
+          cache[fingerprint] = { uploadId, totalChunks }
+          writeUploadCache(cache)
+
+          uploadedChunkCount += uploadedChunks.size
           setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
+
+          for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+            if (uploadedChunks.has(chunkIndex)) {
+              continue
+            }
+
+            const start = chunkIndex * CHUNK_SIZE
+            const end = Math.min(start + CHUNK_SIZE, file.size)
+            const chunk = file.slice(start, end)
+
+            await uploadChunkWithRetry({
+              uploadId,
+              chunk,
+              chunkIndex,
+              totalChunks,
+              token,
+            })
+
+            uploadedChunkCount += 1
+            setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
+          }
+
+          const completeResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/${uploadId}/complete`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+
+          const completePayload = await parseJsonSafe(completeResponse)
+
+          if (!completeResponse.ok) {
+            throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
+          }
+
+          if (completePayload.scan?.malicious) {
+            throw new Error(`Upload rejected for ${file.name}: malware detected`)
+          }
+
+          primaryJobId = primaryJobId || completePayload.jobId
+
+          const nextCache = readUploadCache()
+          delete nextCache[fingerprint]
+          writeUploadCache(nextCache)
         }
 
-        const completeResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/${uploadId}/complete`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        const completePayload = await completeResponse.json().catch(() => ({}))
-
-        if (!completeResponse.ok) {
-          throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
+      } catch (uploadError) {
+        const fallbackMessage = sanitizeForDisplay(uploadError.message || '')
+        if (!isInfrastructureConfigError(fallbackMessage)) {
+          throw uploadError
         }
 
-        if (completePayload.scan?.malicious) {
-          throw new Error(`Upload rejected for ${file.name}: malware detected`)
-        }
-
-        queuedJobs.push({ fileName: file.name, jobId: completePayload.jobId })
-
-        const nextCache = readUploadCache()
-        delete nextCache[fingerprint]
-        writeUploadCache(nextCache)
+        const legacyQueued = await queueLegacyUpload({ token })
+        primaryJobId = legacyQueued.primaryJobId
+        setUploadProgress({ completed: totalChunksAllFiles, total: totalChunksAllFiles })
       }
-
-      const primaryJobId = queuedJobs[0]?.jobId
 
       if (!primaryJobId) {
         throw new Error('No parse job ID returned from upload request')
