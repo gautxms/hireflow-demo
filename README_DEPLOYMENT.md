@@ -61,7 +61,11 @@ npm run preview
      - **Framework:** React
      - **Build Command:** `npm run build`
      - **Output Directory:** `dist`
-     - **Environment Variables:** (none needed)
+    - **Environment Variables:** configure backend + uploads before production:
+      - `AWS_REGION`
+      - `AWS_S3_BUCKET`
+      - `AWS_ACCESS_KEY_ID`
+      - `AWS_SECRET_ACCESS_KEY`
    - Click "Deploy"
    - Vercel will auto-build and deploy
 
