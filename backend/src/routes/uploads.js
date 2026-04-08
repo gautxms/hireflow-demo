@@ -95,6 +95,9 @@ router.post(
           })
         }
 
+        // Convert buffer once so it can be safely used in SQL and queue payloads.
+        const fileBufferBase64 = file.buffer.toString('base64')
+
         const insertResult = await pool.query(
           `INSERT INTO resumes (
              user_id,
@@ -108,7 +111,7 @@ router.post(
              file_sha256,
              updated_at
            )
-           VALUES ($1, $2, '', $3, $4, 'pending', $5, $6::jsonb, encode(digest($7, 'sha256'), 'hex'), NOW())
+           VALUES ($1, $2, '', $3, $4, 'pending', $5, $6::jsonb, encode(digest(decode($7, 'base64'), 'sha256'), 'hex'), NOW())
            RETURNING id`,
           [
             req.userId,
@@ -117,7 +120,7 @@ router.post(
             file.mimetype,
             scanResult.status || 'clean',
             JSON.stringify(scanResult),
-            file.buffer,
+            fileBufferBase64,
           ],
         )
 
@@ -129,7 +132,7 @@ router.post(
           filename: file.safeName,
           mimeType: file.mimetype,
           fileSize: file.size,
-          fileBufferBase64: file.buffer.toString('base64'),
+          fileBufferBase64,
         })
 
         jobs.push({
