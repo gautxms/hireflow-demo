@@ -12,6 +12,8 @@ import resultsRoutes from './routes/results.js'
 import resultsExportRoutes from './routes/resultsExport.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import feedbackRoutes from './routes/feedback.js'
+import profileRoutes from './routes/profile.js'
+import subscriptionsRoutes from './routes/subscriptions.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 
@@ -72,6 +74,8 @@ app.use('/api/uploads', uploadsRoutes)
 app.use('/api/feedback', requireAuth, generalApiLimiterAuth, feedbackRoutes)
 app.use('/api/results', resultsRoutes)
 app.use('/api/results/export', resultsExportRoutes)
+app.use('/api/profile', generalApiLimiterAuth, profileRoutes)
+app.use('/api/subscriptions', generalApiLimiterAuth, subscriptionsRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })

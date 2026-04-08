@@ -1,6 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
-export default function SubscriptionCard({ user, token, onRefresh }) {
+export default function SubscriptionCard({ user, token, onRefresh, subscription }) {
   const getStatusColor = (status) => {
     const colors = {
       active: '#CCFF00',
@@ -18,9 +18,13 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
     if (!window.confirm('Cancel subscription? You\'ll lose access after the current period.')) return
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/billing/cancel-subscription`, {
+      const response = await fetch(`${API_BASE_URL}/api/subscriptions/cancel`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: 'Cancelled from account page', acceptOffer: false }),
       })
 
       if (!response.ok) {
@@ -28,10 +32,15 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
       }
 
       onRefresh?.()
-    } catch {
-      console.error('Failed to cancel subscription')
+    } catch (error) {
+      console.error('Failed to cancel subscription', error)
     }
   }
+
+  const status = subscription?.status || user?.subscription_status || 'inactive'
+  const plan = subscription?.plan || user?.subscription_plan || 'N/A'
+  const startedAt = subscription?.started_date || user?.subscription_started_at || null
+  const hasSubscription = Boolean(subscription || user?.subscription_plan || user?.subscription_status === 'active' || user?.subscription_status === 'trialing')
 
   return (
     <div
@@ -73,8 +82,8 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
           style={{
             display: 'inline-block',
             padding: '6px 16px',
-            background: getStatusColor(user?.subscription_status),
-            color: getStatusTextColor(user?.subscription_status),
+            background: getStatusColor(status),
+            color: getStatusTextColor(status),
             borderRadius: '20px',
             fontSize: '12px',
             fontWeight: '700',
@@ -82,7 +91,7 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
             letterSpacing: '1px',
           }}
         >
-          {user?.subscription_status || 'inactive'}
+          {status}
         </span>
       </div>
 
@@ -98,7 +107,7 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
         >
           Plan
         </p>
-        <p style={{ color: '#ffffff', fontSize: '14px', textTransform: 'capitalize' }}>{user?.subscription_plan || 'None'}</p>
+        <p style={{ color: '#ffffff', fontSize: '14px', textTransform: 'capitalize' }}>{plan || 'N/A'}</p>
       </div>
 
       <div style={{ marginBottom: '24px' }}>
@@ -114,8 +123,8 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
           Started
         </p>
         <p style={{ color: '#ffffff', fontSize: '14px' }}>
-          {user?.subscription_started_at
-            ? new Date(user.subscription_started_at).toLocaleDateString('en-US', {
+          {startedAt
+            ? new Date(startedAt).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -124,7 +133,7 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
         </p>
       </div>
 
-      {user?.subscription_status === 'active' && (
+      {hasSubscription && status === 'active' && (
         <button
           onClick={handleCancelSubscription}
           style={{
@@ -152,7 +161,7 @@ export default function SubscriptionCard({ user, token, onRefresh }) {
         </button>
       )}
 
-      {user?.subscription_status === 'cancelled' && (
+      {status === 'cancelled' && (
         <button
           onClick={() => {
             window.location.href = '/checkout'

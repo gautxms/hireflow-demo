@@ -5,23 +5,39 @@ import BillingCard from '../components/BillingCard'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
-export default function AccountPage({ token, user, onLogout }) {
+export default function AccountPage({ token, user, onLogout, onUserProfileUpdate }) {
   const [loading, setLoading] = useState(true)
   const [userData, setUserData] = useState(null)
+  const [subscriptionData, setSubscriptionData] = useState(null)
   const [error, setError] = useState('')
 
   const fetchUserData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const [userResponse, subscriptionResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE_URL}/api/subscriptions/current`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ])
 
-      if (!response.ok) {
+      if (!userResponse.ok) {
         throw new Error('Failed to fetch user data')
       }
 
-      const data = await response.json()
-      setUserData(data.user || data)
+      const userPayload = await userResponse.json()
+      const subscriptionPayload = await subscriptionResponse.json().catch(() => ({}))
+      const normalizedUser = userPayload.user || userPayload
+      setUserData(normalizedUser)
+      onUserProfileUpdate?.(normalizedUser)
+
+      if (subscriptionResponse.ok) {
+        setSubscriptionData(subscriptionPayload.subscription || null)
+      } else {
+        console.error('[AccountPage] Failed to load subscription details:', subscriptionPayload.error || subscriptionResponse.statusText)
+        setSubscriptionData(null)
+      }
       setError('')
     } catch (err) {
       setError(err.message || 'Failed to load account')
@@ -113,7 +129,7 @@ export default function AccountPage({ token, user, onLogout }) {
         }}
       >
         <ProfileCard user={userData} token={token} onRefresh={fetchUserData} />
-        <SubscriptionCard user={userData} token={token} onRefresh={fetchUserData} />
+        <SubscriptionCard user={userData} token={token} onRefresh={fetchUserData} subscription={subscriptionData} />
         <BillingCard user={userData} token={token} />
       </div>
 

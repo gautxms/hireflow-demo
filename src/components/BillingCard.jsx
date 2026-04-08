@@ -64,7 +64,7 @@ export default function BillingCard() {
 
       <button
         onClick={() => {
-          window.location.href = '/update-payment-method'
+          window.location.href = '/account/payment-method'
         }}
         style={{
           display: 'block',
