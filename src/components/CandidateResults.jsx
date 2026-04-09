@@ -1,3 +1,7 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import ShortlistManager from './ShortlistManager'
+
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 import { useMemo, useState } from 'react'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -102,6 +106,13 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
 
+  const [shortlists, setShortlists] = useState([])
+  const [selectedShortlistId, setSelectedShortlistId] = useState('')
+  const [shortlistDetails, setShortlistDetails] = useState(null)
+  const [shortlistSort, setShortlistSort] = useState('rating_desc')
+  const [shortlistLoading, setShortlistLoading] = useState(false)
+  const [shortlistError, setShortlistError] = useState('')
+
   const rawCandidates = Array.isArray(candidates)
     ? candidates
     : Array.isArray(candidates?.candidates)
@@ -114,6 +125,154 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     && displayCandidates.length > 0
     && displayCandidates.every((candidate) => candidate && (Array.isArray(candidate.skills) || typeof candidate.skills === 'string'))
 
+  const authHeaders = useCallback(() => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+  }, [])
+
+  const loadShortlists = useCallback(async () => {
+    try {
+      setShortlistLoading(true)
+      setShortlistError('')
+
+      const response = await fetch('/api/shortlists', {
+        method: 'GET',
+        headers: authHeaders(),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to load shortlists')
+      }
+
+      const nextShortlists = Array.isArray(payload.shortlists) ? payload.shortlists : []
+      setShortlists(nextShortlists)
+
+      if (!selectedShortlistId && nextShortlists[0]?.id) {
+        setSelectedShortlistId(nextShortlists[0].id)
+      }
+    } catch (error) {
+      setShortlistError(error.message || 'Unable to load shortlists')
+    } finally {
+      setShortlistLoading(false)
+    }
+  }, [authHeaders, selectedShortlistId])
+
+  const loadShortlistDetails = useCallback(async (shortlistId, sortKey = shortlistSort) => {
+    if (!shortlistId) {
+      setShortlistDetails(null)
+      return
+    }
+
+    const sortMap = {
+      rating_desc: 'sortBy=rating&sortOrder=desc',
+      rating_asc: 'sortBy=rating&sortOrder=asc',
+      added_desc: 'sortBy=added_at&sortOrder=desc',
+      added_asc: 'sortBy=added_at&sortOrder=asc',
+    }
+
+    try {
+      setShortlistLoading(true)
+      setShortlistError('')
+
+      const response = await fetch(`/api/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
+        method: 'GET',
+        headers: authHeaders(),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to load shortlist details')
+      }
+
+      setShortlistDetails(payload)
+    } catch (error) {
+      setShortlistError(error.message || 'Unable to load shortlist details')
+    } finally {
+      setShortlistLoading(false)
+    }
+  }, [authHeaders, shortlistSort])
+
+  const createShortlist = useCallback(async ({ name, description }) => {
+    try {
+      setShortlistLoading(true)
+      setShortlistError('')
+
+      const response = await fetch('/api/shortlists', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ name, description }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to create shortlist')
+      }
+
+      await loadShortlists()
+
+      const createdId = payload.shortlist?.id
+      if (createdId) {
+        setSelectedShortlistId(createdId)
+        await loadShortlistDetails(createdId)
+      }
+    } catch (error) {
+      setShortlistError(error.message || 'Unable to create shortlist')
+    } finally {
+      setShortlistLoading(false)
+    }
+  }, [authHeaders, loadShortlistDetails, loadShortlists])
+
+  const addCandidateToShortlist = useCallback(async (candidate) => {
+    try {
+      if (!selectedShortlistId) {
+        throw new Error('Create or select a shortlist first')
+      }
+
+      const derivedRating = Math.max(1, Math.min(5, Math.round(Number(candidate?.score || 0) / 20)))
+
+      const response = await fetch(`/api/shortlists/${selectedShortlistId}/candidates`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          resumeId: candidate?.id,
+          notes: `Added from ranking: ${candidate?.name || 'Unknown candidate'}`,
+          rating: derivedRating,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to add candidate to shortlist')
+      }
+
+      await Promise.all([
+        loadShortlists(),
+        loadShortlistDetails(selectedShortlistId),
+      ])
+    } catch (error) {
+      setShortlistError(error.message || 'Unable to add candidate to shortlist')
+    }
+  }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
+
+  useEffect(() => {
+    loadShortlists()
+  }, [loadShortlists])
+
+  useEffect(() => {
+    if (!selectedShortlistId) {
+      return
+    }
+
+    loadShortlistDetails(selectedShortlistId)
+  }, [loadShortlistDetails, selectedShortlistId])
   const candidateRows = useMemo(() => {
     if (!Array.isArray(displayCandidates)) {
       return []
@@ -347,6 +506,46 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </p>
       </div>
 
+      <ShortlistManager
+        shortlists={shortlists}
+        selectedShortlistId={selectedShortlistId}
+        shortlistDetails={shortlistDetails}
+        onSelectShortlist={setSelectedShortlistId}
+        onCreateShortlist={createShortlist}
+        onChangeSort={async (sortOption) => {
+          setShortlistSort(sortOption)
+          await loadShortlistDetails(selectedShortlistId, sortOption)
+        }}
+        onRefresh={async () => {
+          await loadShortlists()
+          await loadShortlistDetails(selectedShortlistId)
+        }}
+        loading={shortlistLoading}
+        error={shortlistError}
+      />
+
+      {/* Controls */}
+      <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort By</label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="touch-target"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              padding: '0.5rem 1rem',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="score">Score (High to Low)</option>
+            <option value="name">Name (A-Z)</option>
+            <option value="fit">Fit Quality</option>
+          </select>
+        </div>
       <CandidateFilters
         candidates={displayCandidates}
         searchText={searchText}
@@ -549,6 +748,52 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                       : <li style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>No concerns listed.</li>}
                   </ul>
                 </div>
+              </div>
+
+              {/* CTA */}
+              <div className="candidate-cta-row" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <button style={{
+                  minHeight: 44,
+                  background: 'var(--accent)',
+                  color: 'var(--ink)',
+                  border: 'none',
+                  padding: '0.6rem 1.5rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}>
+                  Schedule Interview
+                </button>
+                <button style={{
+                  minHeight: 44,
+                  background: 'transparent',
+                  color: 'var(--accent)',
+                  border: '1px solid var(--accent)',
+                  padding: '0.6rem 1.5rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}>
+                  View Full Profile
+                </button>
+                <button
+                  onClick={() => addCandidateToShortlist(candidate)}
+                  style={{
+                    minHeight: 44,
+                    background: 'transparent',
+                    color: 'var(--accent-2)',
+                    border: '1px solid var(--accent-2)',
+                    padding: '0.6rem 1.5rem',
+                    borderRadius: '6px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Add to shortlist
+                </button>
               </div>
             </div>
           )
