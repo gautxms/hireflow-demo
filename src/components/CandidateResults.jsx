@@ -1,11 +1,5 @@
 import { useMemo, useState } from 'react'
 import BulkActions from './BulkActions'
-
-export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0 }) {
-  const [sortBy, setSortBy] = useState('score') // 'score', 'name', 'fit'
-  const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
-  const [selectedIds, setSelectedIds] = useState([])
-  const [deletedIds, setDeletedIds] = useState([])
 import CandidateFilters from './CandidateFilters'
 
 function parseSkills(skills) {
@@ -105,6 +99,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [expRange, setExpRange] = useState({ min: '', max: '' })
   const [matchRange, setMatchRange] = useState({ min: '', max: '' })
   const [sortBy, setSortBy] = useState('match_score')
+  const [selectedIds, setSelectedIds] = useState([])
+  const [deletedIds, setDeletedIds] = useState([])
 
   const rawCandidates = Array.isArray(candidates)
     ? candidates
@@ -136,21 +132,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       return []
     }
 
-    const nextCandidates = filterTier === 'all'
-      ? [...candidateRows]
-      : candidateRows.filter((candidate) => candidate.tier === filterTier)
-
-    if (sortBy === 'name') {
-      return nextCandidates.sort((a, b) => a.name.localeCompare(b.name))
-    }
-
-    if (sortBy === 'fit') {
-      const fitOrder = { Excellent: 0, Strong: 1, Good: 2, Consider: 3 }
-      return nextCandidates.sort((a, b) => (fitOrder[a.fit] || 4) - (fitOrder[b.fit] || 4))
-    }
-
-    return nextCandidates.sort((a, b) => b.score - a.score)
-  }, [candidateRows, filterTier, hasRenderableCandidates, sortBy])
+    return filterAndSortCandidates(candidateRows, {
+      searchText,
+      selectedSkills,
+      expRange,
+      matchRange,
+      sortBy,
+    })
+  }, [candidateRows, expRange, hasRenderableCandidates, matchRange, searchText, selectedSkills, sortBy])
 
   const selectedCandidates = filtered.filter((candidate) => selectedIds.includes(candidate._bulkKey))
   const allFilteredSelected = filtered.length > 0 && filtered.every((candidate) => selectedIds.includes(candidate._bulkKey))
@@ -169,9 +158,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       return
     }
 
-    setSelectedIds((currentSelected) => [
+    setSelectedIds((currentSelected) => ([
       ...new Set([...currentSelected, ...filtered.map((candidate) => candidate._bulkKey)])
-    ])
+    ]))
   }
 
   const toCSVValue = (value) => {
@@ -224,14 +213,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     setDeletedIds((current) => [...new Set([...current, ...deleteKeys])])
     setSelectedIds((current) => current.filter((id) => !deleteKeys.includes(id)))
   }
-    return filterAndSortCandidates(displayCandidates, {
-      searchText,
-      selectedSkills,
-      expRange,
-      matchRange,
-      sortBy,
-    })
-  }, [displayCandidates, expRange, hasRenderableCandidates, matchRange, searchText, selectedSkills, sortBy])
 
   const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
 
@@ -463,7 +444,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 </label>
               </div>
 
-              {/* Top Section */}
               <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
                 <div>
                   <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text)' }}>
