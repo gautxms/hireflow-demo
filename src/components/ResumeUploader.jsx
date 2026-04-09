@@ -53,6 +53,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [parseStatus, setParseStatus] = useState('')
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
   const [error, setError] = useState('')
+  const [jobDescriptions, setJobDescriptions] = useState([])
+  const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -64,6 +66,37 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       handleAuthRedirect()
     }
   }, [handleAuthRedirect, isAuthenticated])
+
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+
+    if (!token || !isAuthenticated) {
+      return
+    }
+
+    fetch(`${API_BASE_URL}/api/job-descriptions`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
+      .then(({ ok, payload }) => {
+        if (!ok) {
+          return
+        }
+
+        const items = Array.isArray(payload.items) ? payload.items : []
+        const eligible = items.filter((item) => item.status === 'active' || item.status === 'draft')
+        setJobDescriptions(eligible)
+
+        if (!selectedJobDescriptionId && eligible[0]?.id) {
+          setSelectedJobDescriptionId(eligible[0].id)
+        }
+      })
+      .catch(() => {
+        setJobDescriptions([])
+      })
+  }, [isAuthenticated])
 
   if (!isAuthenticated) {
     return null
@@ -153,6 +186,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     uploadedFiles.forEach(({ file }) => {
       formData.append('resumes', file)
     })
+    if (selectedJobDescriptionId) {
+      formData.append('jobDescriptionId', selectedJobDescriptionId)
+    }
 
     const response = await fetch(`${API_BASE_URL}/api/uploads`, {
       method: 'POST',
@@ -211,6 +247,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               filename: file.name,
               fileSize: file.size,
               mimeType: file.type,
+              jobDescriptionId: selectedJobDescriptionId || undefined,
             }),
           })
 
@@ -457,6 +494,31 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           >
             Select Files
           </button>
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--muted)' }}>
+            Select job description for this upload
+          </label>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              value={selectedJobDescriptionId}
+              onChange={(event) => setSelectedJobDescriptionId(event.target.value)}
+              style={{ minWidth: 280, border: '1px solid var(--border)', borderRadius: 8, background: '#111827', color: '#fff', padding: '0.6rem' }}
+            >
+              {jobDescriptions.length === 0 && (
+                <option value="">No active/draft JD found</option>
+              )}
+              {jobDescriptions.map((jd) => (
+                <option key={jd.id} value={jd.id}>
+                  {jd.title} ({jd.status})
+                </option>
+              ))}
+            </select>
+            <a href="/job-descriptions" style={{ color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
+              Manage job descriptions
+            </a>
+          </div>
         </div>
 
         {uploadedFiles.length > 0 && (

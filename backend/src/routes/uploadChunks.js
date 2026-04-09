@@ -23,7 +23,7 @@ const chunkUpload = multer({
 
 router.post('/init', requireAuth, async (req, res) => {
   try {
-    const { filename, fileSize, mimeType } = req.body || {}
+    const { filename, fileSize, mimeType, jobDescriptionId } = req.body || {}
 
     if (!filename || !fileSize) {
       return res.status(400).json({ error: 'filename and fileSize are required' })
@@ -44,6 +44,7 @@ router.post('/init', requireAuth, async (req, res) => {
       filename: sanitizeFilename(filename),
       fileSize: parsedSize,
       mimeType,
+      jobDescriptionId: jobDescriptionId || null,
     })
 
     return res.json(session)
