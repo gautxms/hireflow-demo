@@ -242,4 +242,16 @@ export async function logErrorToDatabase(source, error, context = null) {
      VALUES ($1, $2, $3, $4::jsonb)`,
     [source, safeMessage, error?.stack || null, JSON.stringify(context || {})],
   )
+
+  try {
+    const { triggerWebhook } = await import('../services/webhookService.js')
+    await triggerWebhook('error.occurred', {
+      source,
+      message: safeMessage,
+      context: context || {},
+      timestamp: new Date().toISOString(),
+    })
+  } catch (webhookError) {
+    console.error('[Webhooks] Failed to send error.occurred webhook:', webhookError?.message || webhookError)
+  }
 }

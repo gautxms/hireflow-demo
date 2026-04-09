@@ -21,6 +21,7 @@ import {
   verifyAndConsumeBackupCode,
   verifyTotpCode,
 } from '../services/twoFactor.js'
+import { triggerWebhook } from '../services/webhookService.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
@@ -175,6 +176,17 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
       console.log('[AUTH] Event tracked successfully')
     } catch (trackError) {
       console.error('[AUTH] Failed to track event:', trackError)
+    }
+
+    try {
+      await triggerWebhook('user.created', {
+        userId: user.id,
+        email: user.email,
+        company: user.company || '',
+        createdAt: user.created_at,
+      })
+    } catch (webhookError) {
+      console.error('[AUTH] Failed to send user.created webhook:', webhookError)
     }
 
     return res.status(201).json({

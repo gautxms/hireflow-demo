@@ -3,6 +3,7 @@ import express from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
 import { trackEvent } from '../services/analytics.js'
+import { triggerWebhook } from '../services/webhookService.js'
 
 const router = express.Router()
 
@@ -301,6 +302,17 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
             currency: payload?.data?.currency_code || payload?.data?.currency || null,
           },
         })
+
+        try {
+          await triggerWebhook('subscription.activated', {
+            userId,
+            subscriptionId: transactionSubscriptionId,
+            transactionId,
+            status: 'active',
+          })
+        } catch (webhookError) {
+          console.error('[Webhook] Failed to trigger subscription.activated webhook:', webhookError)
+        }
       }
 
       if (eventType === 'transaction.failed') {
