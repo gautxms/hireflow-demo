@@ -14,6 +14,7 @@ import passwordResetRoutes from './routes/passwordReset.js'
 import feedbackRoutes from './routes/feedback.js'
 import profileRoutes from './routes/profile.js'
 import subscriptionsRoutes from './routes/subscriptions.js'
+import candidatesRoutes from './routes/candidates.js'
 import jobDescriptionsRoutes from './routes/jobDescriptions.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
@@ -77,6 +78,7 @@ app.use('/api/results', resultsRoutes)
 app.use('/api/results/export', resultsExportRoutes)
 app.use('/api/profile', generalApiLimiterAuth, profileRoutes)
 app.use('/api/subscriptions', generalApiLimiterAuth, subscriptionsRoutes)
+app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
 app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, jobDescriptionsRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
