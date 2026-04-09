@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+import { sendEmail } from '../services/emailService.js'
 
 async function setJobState(jobId, fields) {
   const columns = Object.keys(fields)
@@ -15,6 +16,30 @@ async function setJobState(jobId, fields) {
      WHERE job_id = $1`,
     [String(jobId), ...values],
   )
+}
+
+
+
+async function sendParseCompleteNotification({ userId, resumeTitle, candidateCount }) {
+  try {
+    const userResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId])
+    const userEmail = userResult.rows[0]?.email
+
+    if (!userEmail) {
+      return
+    }
+
+    await sendEmail({
+      to: userEmail,
+      template: 'parse-complete',
+      data: {
+        candidateCount,
+        resumeTitle,
+      },
+    })
+  } catch (error) {
+    console.warn('[Queue] Failed to send parse complete notification email:', error.message)
+  }
 }
 
 async function runParse(job) {
@@ -84,6 +109,13 @@ async function runParse(job) {
     status: 'complete',
     progress: 100,
     result: parseResult,
+  })
+
+  const candidateCount = Array.isArray(parseResult.candidates) ? parseResult.candidates.length : 0
+  await sendParseCompleteNotification({
+    userId: job.data.userId,
+    resumeTitle: filename,
+    candidateCount,
   })
 
   await job.progress(100)

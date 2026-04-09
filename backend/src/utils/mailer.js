@@ -7,4 +7,5 @@ export {
   sendCancellationEmail,
   sendReengagementEmail,
   previewEmailTemplate,
+  sendEmail,
 } from '../services/emailService.js'

@@ -207,24 +207,53 @@ async function sendViaSendGridAPI({ to, subject, text, html, from }) {
   })
 }
 
-async function sendTemplateEmail({ to, subject, templateName, text, values }) {
-  const renderedHtml = await renderTemplate(templateName, values)
-  const from = values.companyName ? `noreply@hireflow.dev` : 'noreply@hireflow.dev'
 
-  // Try SendGrid API first (works on Railway without SMTP issues)
+function renderNotificationContent(template, data = {}) {
+  const safeResumeTitle = data.resumeTitle || 'your latest upload'
+  const candidateCount = Number.isFinite(Number(data.candidateCount)) ? Number(data.candidateCount) : 0
+
+  const templates = {
+    'parse-complete': {
+      subject: 'Your resume analysis is ready',
+      text: `Your resume analysis for "${safeResumeTitle}" is ready. We identified ${candidateCount} candidate${candidateCount === 1 ? '' : 's'}.`,
+      html: `<p>Your resume analysis for <strong>${safeResumeTitle}</strong> is ready.</p><p>We identified <strong>${candidateCount}</strong> candidate${candidateCount === 1 ? '' : 's'}.</p>`,
+    },
+    'new-feature': {
+      subject: 'We added job matching',
+      text: 'We added job matching to HireFlow. Open your dashboard to explore recommended roles.',
+      html: '<p>We added <strong>job matching</strong> to HireFlow.</p><p>Open your dashboard to explore recommended roles.</p>',
+    },
+    'subscription-renewal': {
+      subject: 'Subscription renews in 3 days',
+      text: 'Your HireFlow subscription renews in 3 days. Visit billing settings to review your plan details.',
+      html: '<p>Your HireFlow subscription renews in <strong>3 days</strong>.</p><p>Visit billing settings to review your plan details.</p>',
+    },
+    'admin-alert': {
+      subject: 'High error rate detected',
+      text: `High error rate detected${data.context ? `: ${data.context}` : '.'}`,
+      html: `<p><strong>High error rate detected</strong>${data.context ? `: ${data.context}` : '.'}</p>`,
+    },
+  }
+
+  return templates[template] || null
+}
+
+async function sendRawEmail({ to, subject, text, html }) {
   const sendGridConfig = getSendGridConfig()
   if (sendGridConfig) {
     const sent = await sendViaSendGridAPI({
       to,
       subject,
       text,
-      html: renderedHtml,
+      html,
       from: sendGridConfig.from,
     })
-    if (sent) return true
+
+    if (sent) {
+      return true
+    }
   }
 
-  // Fallback to SMTP
   const mailer = getTransporter()
   if (!mailer) {
     return false
@@ -236,14 +265,41 @@ async function sendTemplateEmail({ to, subject, templateName, text, values }) {
       to,
       subject,
       text,
-      html: renderedHtml,
+      html,
     })
 
     return true
   } catch (error) {
-    console.warn(`[EMAIL] Failed to send ${templateName} email:`, error.message)
+    console.warn('[EMAIL] Failed to send raw email:', error.message)
     return false
   }
+}
+
+async function sendTemplateEmail({ to, subject, templateName, text, values }) {
+  const renderedHtml = await renderTemplate(templateName, values)
+
+  return sendRawEmail({
+    to,
+    subject,
+    text,
+    html: renderedHtml,
+  })
+}
+
+
+export async function sendEmail({ to, template, data = {} }) {
+  const content = renderNotificationContent(template, data)
+
+  if (!content) {
+    throw new Error(`Unsupported email template: ${template}`)
+  }
+
+  return sendRawEmail({
+    to,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+  })
 }
 
 export function logEmailConfigStatus() {
