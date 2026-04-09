@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ShortlistManager from './ShortlistManager'
-
-const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-import { useMemo, useState } from 'react'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
+
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
 function parseSkills(skills) {
   if (Array.isArray(skills)) {
@@ -559,6 +558,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         onMatchFilter={setMatchRange}
         onSort={setSortBy}
       />
+      </div>
 
       <BulkActions selectedCount={selectedCandidates.length}>
         <button className="touch-target" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
