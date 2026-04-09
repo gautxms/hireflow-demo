@@ -12,6 +12,14 @@ function parseExperienceToYears(experience) {
     return 0
   }
 
+  if (Array.isArray(experience)) {
+    return experience.reduce((total, entry) => {
+      const duration = entry?.duration || ''
+      const match = String(duration).match(/(\d+(?:\.\d+)?)/)
+      return total + (match ? Number(match[1]) : 0)
+    }, 0)
+  }
+
   const match = String(experience).match(/(\d+(?:\.\d+)?)/)
   return match ? Number(match[1]) : 0
 }
@@ -67,6 +75,13 @@ export function getExperienceLevel(candidate) {
 }
 
 export function normalizeCandidate(candidate = {}) {
+  const experienceValue = Array.isArray(candidate.experience)
+    ? candidate.experience.map((entry) => entry?.duration).filter(Boolean).join(' | ')
+    : candidate.experience
+  const educationValue = Array.isArray(candidate.education)
+    ? candidate.education.map((entry) => `${entry?.degree || ''}${entry?.school ? `, ${entry.school}` : ''}`.trim()).filter(Boolean).join(' | ')
+    : candidate.education
+
   return {
     id: candidate.id || crypto.randomUUID(),
     name: candidate.name || 'Unknown Candidate',
@@ -78,12 +93,18 @@ export function normalizeCandidate(candidate = {}) {
     strengths: Array.isArray(candidate.pros) ? candidate.pros : Array.isArray(candidate.strengths) ? candidate.strengths : [],
     cons: Array.isArray(candidate.cons) ? candidate.cons : [],
     location: candidate.location || 'Unknown',
-    experience: candidate.experience || '0 years',
+    experience: experienceValue || '0 years',
     position: candidate.position || '',
-    education: candidate.education || '',
+    education: educationValue || '',
     fit: candidate.fit || '',
     tier: candidate.tier || 'consider',
-    uploadedAt: candidate.uploadedAt || candidate.uploadDate || candidate.created_at || candidate.createdAt || null,
+    certifications: Array.isArray(candidate.certifications) ? candidate.certifications : [],
+    languages: Array.isArray(candidate.languages) ? candidate.languages : [],
+    projects: Array.isArray(candidate.projects) ? candidate.projects : [],
+    githubProfile: candidate.githubProfile || '',
+    linkedinProfile: candidate.linkedinProfile || '',
+    achievements: Array.isArray(candidate.achievements) ? candidate.achievements : [],
+    confidenceScores: candidate.confidenceScores && typeof candidate.confidenceScores === 'object' ? candidate.confidenceScores : {},
   }
 }
 
