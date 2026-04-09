@@ -7,6 +7,8 @@ const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
 const MAX_FILE_SIZE = 100 * 1024 * 1024
 const CHUNK_SIZE = 5 * 1024 * 1024
 const MAX_CHUNK_RETRIES = 3
+const MAX_QUEUE_RETRIES = 3
+const BASE_QUEUE_RETRY_DELAY_MS = 5000
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -22,6 +24,26 @@ function isInfrastructureConfigError(message) {
     || normalizedMessage.includes('s3')
     || normalizedMessage.includes('credentials')
     || normalizedMessage.includes('access denied')
+}
+
+function formatMultiLineError(lines) {
+  return lines.filter(Boolean).join('\n')
+}
+
+function formatUploadError(message) {
+  return formatMultiLineError([
+    '❌ Unable to upload',
+    `Reason: ${message || 'Upload service unavailable'}`,
+    'Action: Contact support or try again later',
+  ])
+}
+
+function formatParseError(reason = 'File format not recognized') {
+  return formatMultiLineError([
+    '⚠️ Parse Failed',
+    `Reason: ${reason}`,
+    'Next: Try a different format (PDF/DOCX)',
+  ])
 }
 
 async function parseJsonSafe(response) {
@@ -53,6 +75,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [parseStatus, setParseStatus] = useState('')
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
   const [error, setError] = useState('')
+  const [jobDescriptions, setJobDescriptions] = useState([])
+  const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -64,6 +88,37 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       handleAuthRedirect()
     }
   }, [handleAuthRedirect, isAuthenticated])
+
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+
+    if (!token || !isAuthenticated) {
+      return
+    }
+
+    fetch(`${API_BASE_URL}/api/job-descriptions`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
+      .then(({ ok, payload }) => {
+        if (!ok) {
+          return
+        }
+
+        const items = Array.isArray(payload.items) ? payload.items : []
+        const eligible = items.filter((item) => item.status === 'active' || item.status === 'draft')
+        setJobDescriptions(eligible)
+
+        if (!selectedJobDescriptionId && eligible[0]?.id) {
+          setSelectedJobDescriptionId(eligible[0].id)
+        }
+      })
+      .catch(() => {
+        setJobDescriptions([])
+      })
+  }, [isAuthenticated])
 
   if (!isAuthenticated) {
     return null
@@ -153,6 +208,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     uploadedFiles.forEach(({ file }) => {
       formData.append('resumes', file)
     })
+    if (selectedJobDescriptionId) {
+      formData.append('jobDescriptionId', selectedJobDescriptionId)
+    }
 
     const response = await fetch(`${API_BASE_URL}/api/uploads`, {
       method: 'POST',
@@ -211,6 +269,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               filename: file.name,
               fileSize: file.size,
               mimeType: file.type,
+              jobDescriptionId: selectedJobDescriptionId || undefined,
             }),
           })
 
@@ -293,6 +352,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       const pollDelayMs = 2000
       const maxPollAttempts = 300
+      let queueRetryAttempt = 0
 
       for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
         const statusResponse = await fetch(`${API_BASE_URL}/api/uploads/${primaryJobId}/parse-status`, {
@@ -301,9 +361,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         })
 
         if (!statusResponse.ok) {
+          const isQueueBusy = [429, 503, 504].includes(statusResponse.status)
+          if (isQueueBusy && queueRetryAttempt < MAX_QUEUE_RETRIES) {
+            queueRetryAttempt += 1
+            const retryDelayMs = BASE_QUEUE_RETRY_DELAY_MS * queueRetryAttempt
+            setError(
+              formatMultiLineError([
+                `Queue is busy. Retrying in ${Math.round(retryDelayMs / 1000)} seconds...`,
+                `(attempt ${queueRetryAttempt}/${MAX_QUEUE_RETRIES})`,
+              ]),
+            )
+            await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
+            continue
+          }
           throw new Error(`Polling failed (${statusResponse.status})`)
         }
 
+        queueRetryAttempt = 0
+        setError('')
         const statusPayload = await statusResponse.json()
         setParseStatus(statusPayload.status || 'processing')
         setParseProgress(Number(statusPayload.progress || 0))
@@ -330,7 +405,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         }
 
         if (statusPayload.status === 'failed') {
-          throw new Error(statusPayload.error || 'Resume parsing failed')
+          throw new Error(statusPayload.error || 'File format not recognized')
         }
 
         await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
@@ -348,9 +423,15 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
       } else if (isInfrastructureConfigError(errorMessage)) {
-        setError('File upload is temporarily unavailable due to storage configuration. Please retry in a few minutes or contact support if this persists.')
+        setError(formatUploadError('AWS S3 not configured'))
+      } else if (
+        errorMessage.toLowerCase().includes('parse')
+        || errorMessage.toLowerCase().includes('no candidates')
+        || errorMessage.toLowerCase().includes('format')
+      ) {
+        setError(formatParseError('File format not recognized'))
       } else {
-        setError(`${errorMessage}. Please review your file(s) and retry.`)
+        setError(formatUploadError(errorMessage))
       }
     } finally {
       setIsAnalyzing(false)
@@ -459,6 +540,31 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </button>
         </div>
 
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--muted)' }}>
+            Select job description for this upload
+          </label>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              value={selectedJobDescriptionId}
+              onChange={(event) => setSelectedJobDescriptionId(event.target.value)}
+              style={{ minWidth: 280, border: '1px solid var(--border)', borderRadius: 8, background: '#111827', color: '#fff', padding: '0.6rem' }}
+            >
+              {jobDescriptions.length === 0 && (
+                <option value="">No active/draft JD found</option>
+              )}
+              {jobDescriptions.map((jd) => (
+                <option key={jd.id} value={jd.id}>
+                  {jd.title} ({jd.status})
+                </option>
+              ))}
+            </select>
+            <a href="/job-descriptions" style={{ color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
+              Manage job descriptions
+            </a>
+          </div>
+        </div>
+
         {uploadedFiles.length > 0 && (
           <div className="resume-file-list" style={{ marginBottom: '2rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '1rem' }}>
@@ -536,7 +642,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               padding: '1rem',
               borderRadius: '8px',
               marginBottom: '1.5rem',
-              textAlign: 'center',
+              textAlign: 'left',
+              whiteSpace: 'pre-line',
             }}
           >
             {error}

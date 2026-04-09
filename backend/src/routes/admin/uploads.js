@@ -398,7 +398,7 @@ router.get('/:uploadId', async (req, res) => {
   }
 })
 
-router.post('/:uploadId/retry', async (req, res) => {
+async function handleRetryUpload(req, res) {
   const { uploadId } = req.params
 
   try {
@@ -463,7 +463,10 @@ router.post('/:uploadId/retry', async (req, res) => {
     console.error('[Admin uploads] retry failed:', error)
     return res.status(500).json({ error: 'Unable to retry parsing for upload' })
   }
-})
+}
+
+router.get('/:uploadId/retry', handleRetryUpload)
+router.post('/:uploadId/retry', handleRetryUpload)
 
 router.get('/:uploadId/raw-text', async (req, res) => {
   const { uploadId } = req.params

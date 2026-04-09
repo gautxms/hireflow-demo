@@ -71,6 +71,7 @@ async function ensureUploadChunkTables() {
       scan_result JSONB,
       resume_id UUID REFERENCES resumes(id) ON DELETE SET NULL,
       parse_job_id TEXT,
+      job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL,
       expires_at TIMESTAMP NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -85,7 +86,11 @@ async function ensureUploadChunkTables() {
     ALTER TABLE resumes
       ADD COLUMN IF NOT EXISTS scan_status TEXT,
       ADD COLUMN IF NOT EXISTS scan_result JSONB,
-      ADD COLUMN IF NOT EXISTS file_sha256 TEXT;
+      ADD COLUMN IF NOT EXISTS file_sha256 TEXT,
+      ADD COLUMN IF NOT EXISTS job_description_id UUID;
+
+    ALTER TABLE upload_chunks
+      ADD COLUMN IF NOT EXISTS job_description_id UUID;
   `)
 
   uploadTablesReady = true
@@ -99,7 +104,7 @@ function buildChunkKey(uploadId, chunkIndex) {
   return `${buildPrefix(uploadId)}/chunks/${chunkIndex}`
 }
 
-export async function initChunkUpload({ userId, filename, fileSize, mimeType }) {
+export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null }) {
   ensureS3Configured()
   await ensureUploadChunkTables()
 
@@ -113,6 +118,22 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType }) 
 
   const totalChunks = Math.ceil(fileSize / CHUNK_SIZE_BYTES)
   const safeFilename = sanitizeFilename(filename)
+
+  if (jobDescriptionId) {
+    const jdResult = await pool.query(
+      `SELECT id
+       FROM job_descriptions
+       WHERE id = $1
+         AND user_id = $2
+         AND status <> 'archived'
+       LIMIT 1`,
+      [jobDescriptionId, userId],
+    )
+
+    if (!jdResult.rows[0]) {
+      throw new Error('Selected job description is invalid or archived')
+    }
+  }
 
   const existingResult = await pool.query(
     `SELECT upload_id, uploaded_chunks, total_chunks
@@ -141,10 +162,10 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType }) 
 
   await pool.query(
     `INSERT INTO upload_chunks
-      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, expires_at)
+      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, expires_at)
      VALUES
-      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', NOW() + INTERVAL '24 hours')`,
-    [uploadId, userId, safeFilename, fileSize, mimeType, totalChunks, [], prefix],
+      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, NOW() + INTERVAL '24 hours')`,
+    [uploadId, userId, safeFilename, fileSize, mimeType, totalChunks, [], prefix, jobDescriptionId],
   )
 
   return {
@@ -229,7 +250,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
   ensureS3Configured()
 
   const result = await pool.query(
-    `SELECT upload_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status
+    `SELECT upload_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id
      FROM upload_chunks
      WHERE upload_id = $1 AND user_id = $2
      LIMIT 1`,
@@ -293,10 +314,10 @@ export async function completeChunkUpload({ userId, uploadId }) {
   }
 
   const resumeInsertResult = await pool.query(
-    `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, updated_at)
-     VALUES ($1, $2, '', $3, $4, 'pending', NOW())
+    `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, job_description_id, updated_at)
+     VALUES ($1, $2, '', $3, $4, 'pending', $5, NOW())
      RETURNING id`,
-    [userId, row.filename, row.file_size, row.mime_type],
+    [userId, row.filename, row.file_size, row.mime_type, row.job_description_id],
   )
 
   const resumeId = resumeInsertResult.rows[0].id
@@ -308,6 +329,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
     mimeType: row.mime_type,
     fileSize: row.file_size,
     fileBufferBase64: assembledBuffer.toString('base64'),
+    jobDescriptionId: row.job_description_id,
   })
 
   await pool.query(

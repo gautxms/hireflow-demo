@@ -6,6 +6,105 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
+import CandidateFilters from './CandidateFilters'
+
+function parseSkills(skills) {
+  if (Array.isArray(skills)) {
+    return skills.map((skill) => String(skill || '').trim()).filter(Boolean)
+  }
+
+  return String(skills || '')
+    .split(',')
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+}
+
+function parseYears(experience) {
+  const match = String(experience || '').match(/(\d+(?:\.\d+)?)/)
+  return match ? Number(match[1]) : 0
+}
+
+function parseUploadDate(candidate) {
+  const value = candidate?.uploadDate || candidate?.uploadedAt || candidate?.created_at || candidate?.createdAt
+  const timestamp = Date.parse(String(value || ''))
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+function filterAndSortCandidates(candidates, filters) {
+  const {
+    searchText = '',
+    selectedSkills = [],
+    expRange = { min: '', max: '' },
+    matchRange = { min: '', max: '' },
+    sortBy = 'match_score',
+  } = filters || {}
+
+  const query = searchText.trim().toLowerCase()
+  const expMin = expRange?.min === '' ? null : Number(expRange?.min)
+  const expMax = expRange?.max === '' ? null : Number(expRange?.max)
+  const matchMin = matchRange?.min === '' ? null : Number(matchRange?.min)
+  const matchMax = matchRange?.max === '' ? null : Number(matchRange?.max)
+
+  const filtered = candidates.filter((candidate) => {
+    if (query) {
+      const searchable = `${candidate?.name || ''} ${candidate?.email || ''} ${candidate?.phone || ''}`.toLowerCase()
+      if (!searchable.includes(query)) {
+        return false
+      }
+    }
+
+    const candidateSkills = parseSkills(candidate?.skills).map((skill) => skill.toLowerCase())
+    if (selectedSkills.length > 0) {
+      const hasAllSelectedSkills = selectedSkills.every((skill) => candidateSkills.includes(String(skill).toLowerCase()))
+      if (!hasAllSelectedSkills) {
+        return false
+      }
+    }
+
+    const years = parseYears(candidate?.experience)
+    if (expMin !== null && years < expMin) {
+      return false
+    }
+
+    if (expMax !== null && years > expMax) {
+      return false
+    }
+
+    const score = Number(candidate?.score || 0)
+    if (matchMin !== null && score < matchMin) {
+      return false
+    }
+
+    if (matchMax !== null && score > matchMax) {
+      return false
+    }
+
+    return true
+  })
+
+  return [...filtered].sort((a, b) => {
+    if (sortBy === 'name') {
+      return String(a?.name || '').localeCompare(String(b?.name || ''))
+    }
+
+    if (sortBy === 'experience') {
+      return parseYears(b?.experience) - parseYears(a?.experience)
+    }
+
+    if (sortBy === 'upload_date') {
+      return parseUploadDate(b) - parseUploadDate(a)
+    }
+
+    return Number(b?.score || 0) - Number(a?.score || 0)
+  })
+}
+
+export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0 }) {
+  const [searchText, setSearchText] = useState('')
+  const [selectedSkills, setSelectedSkills] = useState([])
+  const [expRange, setExpRange] = useState({ min: '', max: '' })
+  const [matchRange, setMatchRange] = useState({ min: '', max: '' })
+  const [sortBy, setSortBy] = useState('match_score')
 
   const rawCandidates = Array.isArray(candidates)
     ? candidates
@@ -125,11 +224,21 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     setDeletedIds((current) => [...new Set([...current, ...deleteKeys])])
     setSelectedIds((current) => current.filter((id) => !deleteKeys.includes(id)))
   }
+    return filterAndSortCandidates(displayCandidates, {
+      searchText,
+      selectedSkills,
+      expRange,
+      matchRange,
+      sortBy,
+    })
+  }, [displayCandidates, expRange, hasRenderableCandidates, matchRange, searchText, selectedSkills, sortBy])
+
+  const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
 
   if (isLoading || isSharedLoading) {
     return (
       <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <button
             className="touch-target"
             onClick={onBack}
@@ -147,12 +256,38 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             ← Upload New Resumes
           </button>
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.75rem', fontFamily: 'var(--font-display)' }}>
-            Parsing in background
+            ⏳ Parsing resume...
           </h1>
           <p style={{ color: 'var(--muted)', marginBottom: '1rem' }}>
             We are processing resumes. This can take 1-5 minutes.
           </p>
-          <p style={{ color: 'var(--accent)' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+          <p style={{ color: 'var(--accent)', marginBottom: '1.5rem' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {skeletonCards.map((skeletonCard) => (
+              <div
+                key={skeletonCard}
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '12px',
+                  padding: '1.25rem',
+                  background: 'var(--card)',
+                  animation: 'pulseSkeleton 1.6s ease-in-out infinite',
+                }}
+              >
+                <div style={{ height: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '35%', marginBottom: '0.75rem' }} />
+                <div style={{ height: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '60%', marginBottom: '0.5rem' }} />
+                <div style={{ height: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '50%' }} />
+              </div>
+            ))}
+          </div>
+          <style>{`
+            @keyframes pulseSkeleton {
+              0% { opacity: 0.45; }
+              50% { opacity: 0.95; }
+              100% { opacity: 0.45; }
+            }
+          `}</style>
         </div>
       </div>
     )
@@ -188,10 +323,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   }
 
   const getScoreColor = (score) => {
-    if (score >= 90) return 'var(--accent-2)' // cyan
-    if (score >= 80) return 'var(--accent)' // lime
-    if (score >= 70) return '#f59e0b' // orange
-    return '#ef4444' // red
+    if (score >= 90) return 'var(--accent-2)'
+    if (score >= 80) return 'var(--accent)'
+    if (score >= 70) return '#f59e0b'
+    return '#ef4444'
   }
 
   const getTierBadge = (tier) => {
@@ -206,7 +341,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   return (
     <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      {/* Header */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
         <button
           className="touch-target"
@@ -232,51 +366,19 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </p>
       </div>
 
-      {/* Controls */}
-      <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort By</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="touch-target"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              color: 'var(--text)',
-              padding: '0.5rem 1rem',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="score">Score (High to Low)</option>
-            <option value="name">Name (A-Z)</option>
-            <option value="fit">Fit Quality</option>
-          </select>
-        </div>
-
-        <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Filter</label>
-          <select
-            value={filterTier}
-            onChange={(e) => setFilterTier(e.target.value)}
-            className="touch-target"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              color: 'var(--text)',
-              padding: '0.5rem 1rem',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="all">All Candidates</option>
-            <option value="top">Top Tier Only</option>
-            <option value="strong">Strong & Above</option>
-            <option value="consider">All Including Consider</option>
-          </select>
-        </div>
-      </div>
+      <CandidateFilters
+        candidates={displayCandidates}
+        searchText={searchText}
+        selectedSkills={selectedSkills}
+        expRange={expRange}
+        matchRange={matchRange}
+        sortBy={sortBy}
+        onSearch={setSearchText}
+        onSkillsFilter={setSelectedSkills}
+        onExperienceFilter={setExpRange}
+        onMatchFilter={setMatchRange}
+        onSort={setSortBy}
+      />
 
       <BulkActions selectedCount={selectedCandidates.length}>
         <button className="touch-target" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
@@ -316,8 +418,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   />
                 </td>
                 <td data-label="Candidate">{candidate.name}</td>
-                <td data-label="Fit">{candidate.fit}</td>
-                <td data-label="Score">{candidate.score}</td>
+                <td data-label="Fit">{candidate.matchScore?.fit || candidate.fit}</td>
+                <td data-label="Score">{candidate.matchScore?.score ?? candidate.score}</td>
                 <td data-label="Top skills">{Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3).join(', ') : String(candidate.skills || 'N/A')}</td>
               </tr>
             ))}
@@ -325,9 +427,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </table>
       </div>
 
-      {/* Candidates List */}
       <div className="candidate-results-list" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
-        {filtered.map(candidate => {
+        {filtered.map((candidate) => {
           const candidateSkills = Array.isArray(candidate.skills)
             ? candidate.skills
             : String(candidate.skills || '')
@@ -337,6 +438,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           const candidatePros = Array.isArray(candidate.pros) ? candidate.pros : []
           const candidateCons = Array.isArray(candidate.cons) ? candidate.cons : []
           const tier = getTierBadge(candidate.tier)
+
           return (
             <div
               className="candidate-result-card"
@@ -364,64 +466,79 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               {/* Top Section */}
               <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text)' }}>
                     {candidate.name}
-                  </h3>
-                  <p style={{ color: 'var(--muted)', marginBottom: '0.75rem' }}>
-                    {candidate.position} • {candidate.experience}
-                  </p>
-                  <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
-                    {candidate.education}
-                  </p>
+                  </h2>
+                  <p style={{ color: 'var(--muted)', marginBottom: '0.25rem' }}>📧 {candidate.email || 'No email provided'}</p>
+                  <p style={{ color: 'var(--muted)' }}>📍 {candidate.location || 'Unknown location'}</p>
                 </div>
 
                 <div style={{ textAlign: 'center' }}>
                   <div style={{
-                    width: '100px',
-                    height: '100px',
+                    width: '90px',
+                    height: '90px',
                     borderRadius: '50%',
-                    background: `radial-gradient(circle, ${getScoreColor(candidate.score)} 0%, transparent 70%)`,
+                    background: `conic-gradient(${getScoreColor(candidate.score)} ${candidate.score * 3.6}deg, rgba(255,255,255,0.1) 0deg)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: `3px solid ${getScoreColor(candidate.score)}`
+                    marginBottom: '0.5rem',
+                    position: 'relative'
                   }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '2rem', fontWeight: 'bold', color: getScoreColor(candidate.score) }}>
-                        {candidate.score}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>score</div>
+                    <div style={{
+                      width: '75px',
+                      height: '75px',
+                      borderRadius: '50%',
+                      background: 'var(--card)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.5rem',
+                      fontWeight: 'bold',
+                      color: getScoreColor(candidate.score)
+                    }}>
+                      {candidate.score}
                     </div>
                   </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Match Score</p>
                 </div>
 
-                <div style={{ textAlign: 'center' }}>
+                <div>
                   <div style={{
                     background: tier.bg,
                     color: tier.color,
-                    padding: '0.75rem 1rem',
-                    borderRadius: '6px',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '20px',
+                    fontSize: '0.8rem',
                     fontWeight: 'bold',
-                    fontSize: '0.9rem'
+                    textAlign: 'center',
+                    marginBottom: '0.75rem'
                   }}>
                     {tier.label}
                   </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Fit: {candidate.fit || 'N/A'}</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Experience: {candidate.experience || 'N/A'}</p>
                 </div>
               </div>
 
-              {/* Skills */}
               <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem' }}>Skills</h4>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {candidateSkills.map((skill, i) => (
+                <h3 style={{ fontSize: '1rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Summary</h3>
+                <p style={{ color: 'var(--text)', lineHeight: '1.6' }}>{candidate.summary || 'No summary available'}</p>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1rem', color: 'var(--muted)', marginBottom: '0.75rem' }}>Top Skills</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {candidateSkills.map((skill, idx) => (
                     <span
-                      key={i}
+                      key={idx}
                       style={{
-                        background: 'var(--card)',
-                        border: '1px solid var(--border)',
-                        padding: '0.4rem 0.8rem',
-                        borderRadius: '4px',
-                        fontSize: '0.85rem'
+                        background: 'rgba(90,255,184,0.1)',
+                        color: 'var(--accent-2)',
+                        padding: '0.25rem 0.75rem',
+                        borderRadius: '20px',
+                        fontSize: '0.85rem',
+                        border: '1px solid rgba(90,255,184,0.3)'
                       }}
                     >
                       {skill}
@@ -430,58 +547,28 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 </div>
               </div>
 
-              {/* Pros & Cons */}
-              <div className="candidate-pros-cons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+              <div className="candidate-evaluation-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                 <div>
-                  <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--accent-2)' }}>
-                    ✓ Strengths
-                  </h4>
-                  <ul style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '1.5rem' }}>
-                    {candidatePros.map((pro, i) => (
-                      <li key={i}>{pro}</li>
-                    ))}
+                  <h3 style={{ color: 'var(--accent-2)', fontSize: '1rem', marginBottom: '0.75rem' }}>✅ Strengths</h3>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text)' }}>
+                    {candidatePros.length > 0
+                      ? candidatePros.map((pro, idx) => (
+                        <li key={idx} style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>{pro}</li>
+                      ))
+                      : <li style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>No strengths listed.</li>}
                   </ul>
                 </div>
-                <div>
-                  <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem', color: '#f59e0b' }}>
-                    ⚠ Considerations
-                  </h4>
-                  <ul style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '1.5rem' }}>
-                    {candidateCons.map((con, i) => (
-                      <li key={i}>{con}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
 
-              {/* CTA */}
-              <div className="candidate-cta-row" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-                <button style={{
-                  minHeight: 44,
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  border: 'none',
-                  padding: '0.6rem 1.5rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}>
-                  Schedule Interview
-                </button>
-                <button style={{
-                  minHeight: 44,
-                  background: 'transparent',
-                  color: 'var(--accent)',
-                  border: '1px solid var(--accent)',
-                  padding: '0.6rem 1.5rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}>
-                  View Full Profile
-                </button>
+                <div>
+                  <h3 style={{ color: '#f59e0b', fontSize: '1rem', marginBottom: '0.75rem' }}>⚠️ Considerations</h3>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text)' }}>
+                    {candidateCons.length > 0
+                      ? candidateCons.map((con, idx) => (
+                        <li key={idx} style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>{con}</li>
+                      ))
+                      : <li style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>No concerns listed.</li>}
+                  </ul>
+                </div>
               </div>
             </div>
           )

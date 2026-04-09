@@ -71,6 +71,14 @@ function toCsv(sections) {
     .join('\n\n')
 }
 
+
+function parseRequestFilters(req) {
+  const { startDate, endDate, planType } = req.query
+  const range = normalizeDateRange(startDate, endDate)
+  const safePlanType = parsePlanType(planType)
+  return { start: range.start, end: range.end, planType: safePlanType }
+}
+
 async function loadAnalytics({ start, end, planType }) {
   const planFilter = planType === 'all' ? null : planType
 
@@ -334,6 +342,53 @@ async function loadAnalytics({ start, end, planType }) {
     generatedAt: new Date().toISOString(),
   }
 }
+
+
+router.get('/metrics', async (req, res) => {
+  try {
+    const payload = await loadAnalytics(parseRequestFilters(req))
+    return res.json({
+      filters: payload.filters,
+      kpis: payload.kpis,
+      conversionFunnel: payload.conversionFunnel,
+      planBreakdown: payload.planBreakdown,
+      parsingTrend: payload.parsingTrend,
+      generatedAt: payload.generatedAt,
+    })
+  } catch (error) {
+    console.error('[AdminAnalytics] Failed to load metrics:', error)
+    return res.status(500).json({ error: 'Unable to load admin analytics metrics' })
+  }
+})
+
+router.get('/revenue', async (req, res) => {
+  try {
+    const payload = await loadAnalytics(parseRequestFilters(req))
+    return res.json({
+      filters: payload.filters,
+      revenueTrend: payload.revenueTrend,
+      userGrowth: payload.userGrowth,
+      generatedAt: payload.generatedAt,
+    })
+  } catch (error) {
+    console.error('[AdminAnalytics] Failed to load revenue trend:', error)
+    return res.status(500).json({ error: 'Unable to load revenue analytics' })
+  }
+})
+
+router.get('/retention', async (req, res) => {
+  try {
+    const payload = await loadAnalytics(parseRequestFilters(req))
+    return res.json({
+      filters: payload.filters,
+      retentionCohorts: payload.retentionCohorts,
+      generatedAt: payload.generatedAt,
+    })
+  } catch (error) {
+    console.error('[AdminAnalytics] Failed to load retention analytics:', error)
+    return res.status(500).json({ error: 'Unable to load retention analytics' })
+  }
+})
 
 router.get('/', async (req, res) => {
   const { startDate, endDate, planType, export: exportType } = req.query
