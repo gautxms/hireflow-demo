@@ -125,10 +125,12 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     })
   }, [displayCandidates, expRange, hasRenderableCandidates, matchRange, searchText, selectedSkills, sortBy])
 
+  const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
+
   if (isLoading || isSharedLoading) {
     return (
       <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <button
             className="touch-target"
             onClick={onBack}
@@ -146,12 +148,38 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             ← Upload New Resumes
           </button>
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.75rem', fontFamily: 'var(--font-display)' }}>
-            Parsing in background
+            ⏳ Parsing resume...
           </h1>
           <p style={{ color: 'var(--muted)', marginBottom: '1rem' }}>
             We are processing resumes. This can take 1-5 minutes.
           </p>
-          <p style={{ color: 'var(--accent)' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+          <p style={{ color: 'var(--accent)', marginBottom: '1.5rem' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {skeletonCards.map((skeletonCard) => (
+              <div
+                key={skeletonCard}
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '12px',
+                  padding: '1.25rem',
+                  background: 'var(--card)',
+                  animation: 'pulseSkeleton 1.6s ease-in-out infinite',
+                }}
+              >
+                <div style={{ height: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '35%', marginBottom: '0.75rem' }} />
+                <div style={{ height: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '60%', marginBottom: '0.5rem' }} />
+                <div style={{ height: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '50%' }} />
+              </div>
+            ))}
+          </div>
+          <style>{`
+            @keyframes pulseSkeleton {
+              0% { opacity: 0.45; }
+              50% { opacity: 0.95; }
+              100% { opacity: 0.45; }
+            }
+          `}</style>
         </div>
       </div>
     )
