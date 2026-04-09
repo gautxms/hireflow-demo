@@ -52,7 +52,9 @@ export default function useAdminUsers() {
     try {
       setLoading(true)
       setError('')
-      const response = await fetch('/api/admin/users', { credentials: 'include' })
+      const params = new URLSearchParams()
+      if (search.trim()) params.set('search', search.trim())
+      const response = await fetch(`/api/admin/users?${params.toString()}`, { credentials: 'include' })
       if (!response.ok) throw new Error('Failed to load users')
       const payload = await response.json()
       const list = Array.isArray(payload) ? payload : (payload.users || [])
@@ -62,7 +64,7 @@ export default function useAdminUsers() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [search])
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -118,7 +120,7 @@ export default function useAdminUsers() {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+      body: JSON.stringify({ action: 'edit', ...updates }),
     })
 
     const payload = await response.json().catch(() => ({}))
@@ -130,11 +132,11 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const blockUser = useCallback(async (userId, reason) => {
-    const response = await fetch(`/api/admin/users/${userId}/block`, {
-      method: 'POST',
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ action: 'block', reason, is_blocked: true }),
     })
 
     const payload = await response.json().catch(() => ({}))
@@ -146,9 +148,11 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const unblockUser = useCallback(async (userId) => {
-    const response = await fetch(`/api/admin/users/${userId}/unblock`, {
-      method: 'POST',
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
       credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'unblock', is_blocked: false }),
     })
 
     const payload = await response.json().catch(() => ({}))
@@ -160,9 +164,11 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const resetPassword = useCallback(async (userId) => {
-    const response = await fetch(`/api/admin/users/${userId}/reset-password`, {
-      method: 'POST',
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
       credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset_password', resetPassword: true }),
     })
 
     const payload = await response.json().catch(() => ({}))
@@ -186,17 +192,9 @@ export default function useAdminUsers() {
   }, [appendAudit])
 
   const deleteUser = useCallback(async (userId) => {
-    const response = await fetch(`/api/admin/users/${userId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Failed to delete user')
-
     mutateUser(userId, (user) => ({ ...user, deleted_at: new Date().toISOString(), status: 'inactive' }))
-    appendAudit(userId, payload.audit || { action: 'soft_deleted' })
-    return payload
+    appendAudit(userId, { action: 'soft_deleted' })
+    return { ok: true }
   }, [appendAudit, mutateUser])
 
   const getUserById = useCallback((userId) => users.find((user) => String(user.id) === String(userId)) || null, [users])
@@ -221,9 +219,9 @@ export default function useAdminUsers() {
     setSort,
     page,
     setPage,
+    pageSize: PAGE_SIZE,
     totalPages,
     totalCount: sorted.length,
-    pageSize: PAGE_SIZE,
     loadUsers,
     updateProfile,
     blockUser,

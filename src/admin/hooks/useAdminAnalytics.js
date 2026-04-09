@@ -15,6 +15,15 @@ function getRangeDates(rangeKey) {
   return { startDate: toISODate(start), endDate: toISODate(end) }
 }
 
+async function fetchJson(url) {
+  const response = await fetch(url, { credentials: 'include' })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(payload.error || 'Failed to load admin analytics')
+  }
+  return payload
+}
+
 export default function useAdminAnalytics() {
   const defaults = useMemo(() => getRangeDates('90d'), [])
   const [range, setRange] = useState('90d')
@@ -33,13 +42,23 @@ export default function useAdminAnalytics() {
         endDate: currentFilters.endDate,
       })
 
-      const response = await fetch(`/api/admin/analytics?${params.toString()}`, { credentials: 'include' })
-      if (!response.ok) {
-        throw new Error('Failed to load admin analytics')
-      }
+      const [metrics, revenue, retention] = await Promise.all([
+        fetchJson(`/api/admin/analytics/metrics?${params.toString()}`),
+        fetchJson(`/api/admin/analytics/revenue?${params.toString()}`),
+        fetchJson(`/api/admin/analytics/retention?${params.toString()}`),
+      ])
 
-      const payload = await response.json()
-      setAnalytics(payload)
+      setAnalytics({
+        filters: metrics.filters || revenue.filters || retention.filters,
+        kpis: metrics.kpis || {},
+        conversionFunnel: metrics.conversionFunnel || {},
+        parsingTrend: metrics.parsingTrend || [],
+        planBreakdown: metrics.planBreakdown || [],
+        revenueTrend: revenue.revenueTrend || [],
+        userGrowth: revenue.userGrowth || [],
+        retentionCohorts: retention.retentionCohorts || [],
+        generatedAt: metrics.generatedAt || revenue.generatedAt || retention.generatedAt,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown analytics error')
     } finally {
