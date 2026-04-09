@@ -26,8 +26,8 @@ export function estimateExtractableText(fileBuffer) {
   }
 
   const raw = fileBuffer.toString('latin1')
-  const printableRuns = raw.match(/[A-Za-z0-9,.;:'"()\-\s]{4,}/g) || []
-  const text = printableRuns.join(' ').replace(/\s+/g, ' ').trim()
+  const printableRuns = raw.match(/[A-Za-z0-9@:/._?&=#,.;|+'"%()\-\s]{4,}/g) || []
+  const text = printableRuns.join(' ').replace(/[ \t]+/g, ' ').trim()
   const ratio = Math.min(1, text.length / Math.max(1, fileBuffer.length))
 
   return {
