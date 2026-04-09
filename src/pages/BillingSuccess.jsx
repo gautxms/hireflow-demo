@@ -135,7 +135,7 @@ export default function BillingSuccess() {
           color: '#a3a3a3',
           marginBottom: '20px',
         }}>
-          Redirecting to dashboard in {countdown} seconds...
+          Redirecting to resume uploader in {countdown} seconds...
         </p>
 
         <button
@@ -155,7 +155,7 @@ export default function BillingSuccess() {
           onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
           onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
         >
-          Go to Dashboard Now
+          Go to Resume Uploader
         </button>
 
         <style>{`
