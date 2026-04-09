@@ -98,31 +98,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [expRange, setExpRange] = useState({ min: '', max: '' })
   const [matchRange, setMatchRange] = useState({ min: '', max: '' })
   const [sortBy, setSortBy] = useState('match_score')
-import { useEffect, useMemo, useState } from 'react'
-import CandidateMatchScore from './CandidateMatchScore'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
-const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-
-function resolveSelectedJobDescription(payload) {
-  if (payload?.jobDescription && typeof payload.jobDescription === 'object') {
-    return payload.jobDescription
-  }
-
-  try {
-    const storedValue = localStorage.getItem('hireflow_selected_job_description')
-    if (!storedValue) return null
-    const parsed = JSON.parse(storedValue)
-    return parsed && typeof parsed === 'object' ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0 }) {
-  const [sortBy, setSortBy] = useState('score') // 'score', 'name', 'fit'
-  const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
-  const [matchCandidates, setMatchCandidates] = useState([])
 
   const rawCandidates = Array.isArray(candidates)
     ? candidates
@@ -135,66 +110,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const hasRenderableCandidates = Array.isArray(displayCandidates)
     && displayCandidates.length > 0
     && displayCandidates.every((candidate) => candidate && (Array.isArray(candidate.skills) || typeof candidate.skills === 'string'))
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchMatchScores() {
-      if (!hasRenderableCandidates) {
-        setMatchCandidates([])
-        return
-      }
-
-      const selectedJobDescription = resolveSelectedJobDescription(candidates)
-      const selectedJobDescriptionId = candidates?.jobDescriptionId || selectedJobDescription?.id || null
-
-      if (!selectedJobDescriptionId && !selectedJobDescription) {
-        setMatchCandidates(displayCandidates)
-        return
-      }
-
-      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-      if (!token) {
-        setMatchCandidates(displayCandidates)
-        return
-      }
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/candidates/match`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            jobDescriptionId: selectedJobDescriptionId,
-            jobDescription: selectedJobDescription || undefined,
-            candidates: displayCandidates,
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error(`Match API failed (${response.status})`)
-        }
-
-        const payload = await response.json()
-        if (!cancelled) {
-          setMatchCandidates(Array.isArray(payload.candidates) ? payload.candidates : displayCandidates)
-        }
-      } catch (error) {
-        console.warn('[CandidateResults] Unable to fetch match scores:', error)
-        if (!cancelled) {
-          setMatchCandidates(displayCandidates)
-        }
-      }
-    }
-
-    fetchMatchScores()
-
-    return () => {
-      cancelled = true
-    }
-  }, [candidates, displayCandidates, hasRenderableCandidates])
 
   const filtered = useMemo(() => {
     if (!hasRenderableCandidates) {
@@ -353,7 +268,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       </div>
 
       <div className="candidate-results-list" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
-        {filtered.map(candidate => {
+        {filtered.map((candidate) => {
           const candidateSkills = Array.isArray(candidate.skills)
             ? candidate.skills
             : String(candidate.skills || '')
@@ -363,7 +278,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           const candidatePros = Array.isArray(candidate.pros) ? candidate.pros : []
           const candidateCons = Array.isArray(candidate.cons) ? candidate.cons : []
           const tier = getTierBadge(candidate.tier)
-          const displayScore = Number(candidate.matchScore?.score ?? candidate.score ?? 0)
+
           return (
             <div
               className="candidate-result-card"
