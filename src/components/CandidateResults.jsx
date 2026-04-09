@@ -1,4 +1,11 @@
 import { useMemo, useState } from 'react'
+import BulkActions from './BulkActions'
+
+export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0 }) {
+  const [sortBy, setSortBy] = useState('score') // 'score', 'name', 'fit'
+  const [filterTier, setFilterTier] = useState('all') // 'all', 'top', 'strong', 'consider'
+  const [selectedIds, setSelectedIds] = useState([])
+  const [deletedIds, setDeletedIds] = useState([])
 import CandidateFilters from './CandidateFilters'
 
 function parseSkills(skills) {
@@ -111,11 +118,112 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     && displayCandidates.length > 0
     && displayCandidates.every((candidate) => candidate && (Array.isArray(candidate.skills) || typeof candidate.skills === 'string'))
 
+  const candidateRows = useMemo(() => {
+    if (!Array.isArray(displayCandidates)) {
+      return []
+    }
+
+    return displayCandidates
+      .map((candidate, index) => ({
+        ...candidate,
+        _bulkKey: String(candidate?.id ?? `${candidate?.name || 'candidate'}-${index}`)
+      }))
+      .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
+  }, [deletedIds, displayCandidates])
+
   const filtered = useMemo(() => {
     if (!hasRenderableCandidates) {
       return []
     }
 
+    const nextCandidates = filterTier === 'all'
+      ? [...candidateRows]
+      : candidateRows.filter((candidate) => candidate.tier === filterTier)
+
+    if (sortBy === 'name') {
+      return nextCandidates.sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    if (sortBy === 'fit') {
+      const fitOrder = { Excellent: 0, Strong: 1, Good: 2, Consider: 3 }
+      return nextCandidates.sort((a, b) => (fitOrder[a.fit] || 4) - (fitOrder[b.fit] || 4))
+    }
+
+    return nextCandidates.sort((a, b) => b.score - a.score)
+  }, [candidateRows, filterTier, hasRenderableCandidates, sortBy])
+
+  const selectedCandidates = filtered.filter((candidate) => selectedIds.includes(candidate._bulkKey))
+  const allFilteredSelected = filtered.length > 0 && filtered.every((candidate) => selectedIds.includes(candidate._bulkKey))
+
+  const toggleCandidateSelection = (candidateKey) => {
+    setSelectedIds((currentSelected) => (
+      currentSelected.includes(candidateKey)
+        ? currentSelected.filter((id) => id !== candidateKey)
+        : [...currentSelected, candidateKey]
+    ))
+  }
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((currentSelected) => currentSelected.filter((id) => !filtered.some((candidate) => candidate._bulkKey === id)))
+      return
+    }
+
+    setSelectedIds((currentSelected) => [
+      ...new Set([...currentSelected, ...filtered.map((candidate) => candidate._bulkKey)])
+    ])
+  }
+
+  const toCSVValue = (value) => {
+    const stringValue = String(value ?? '')
+    return `"${stringValue.replaceAll('"', '""')}"`
+  }
+
+  const exportCSV = (selected) => {
+    const rows = selected.map((candidate) => [
+      candidate.name,
+      candidate.fit,
+      candidate.score,
+      Array.isArray(candidate.skills) ? candidate.skills.join('|') : candidate.skills
+    ])
+
+    const header = ['Name', 'Fit', 'Score', 'Skills']
+    const csvContent = [header, ...rows].map((row) => row.map(toCSVValue).join(',')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `hireflow-candidates-${Date.now()}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const emailForm = (selected) => {
+    const recipients = selected.map((candidate) => candidate.email).filter(Boolean)
+    if (recipients.length === 0) {
+      alert('No candidate emails found. Please add emails before exporting to email.')
+      return
+    }
+    window.location.href = `mailto:${recipients.join(',')}?subject=HireFlow%20Feedback%20Form`
+  }
+
+  const addToShortlist = (selected) => {
+    const names = selected.map((candidate) => candidate.name).join(', ')
+    alert(`Added to shortlist: ${names}`)
+  }
+
+  const sendFeedbackForm = (selected) => {
+    alert(`Feedback form sent to ${selected.length} candidate(s).`)
+    emailForm(selected)
+  }
+
+  const deleteSelected = (selected) => {
+    const deleteKeys = selected.map((candidate) => candidate._bulkKey)
+    setDeletedIds((current) => [...new Set([...current, ...deleteKeys])])
+    setSelectedIds((current) => current.filter((id) => !deleteKeys.includes(id)))
+  }
     return filterAndSortCandidates(displayCandidates, {
       searchText,
       selectedSkills,
@@ -272,10 +380,26 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         onSort={setSortBy}
       />
 
+      <BulkActions selectedCount={selectedCandidates.length}>
+        <button className="touch-target" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
+        <button className="touch-target" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
+        <button className="touch-target" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
+        <button className="touch-target" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
+        <button className="touch-target" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
+      </BulkActions>
+
       <div className="candidate-results-table-wrapper">
         <table className="candidate-results-table">
           <thead>
             <tr>
+              <th>
+                <input
+                  checked={allFilteredSelected}
+                  onChange={toggleSelectAllFiltered}
+                  aria-label="Select all candidates"
+                  type="checkbox"
+                />
+              </th>
               <th>Candidate</th>
               <th>Fit</th>
               <th>Score</th>
@@ -284,7 +408,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           </thead>
           <tbody>
             {filtered.map((candidate) => (
-              <tr key={`summary-${candidate.id}`}>
+              <tr key={`summary-${candidate._bulkKey}`}>
+                <td data-label="Select">
+                  <input
+                    checked={selectedIds.includes(candidate._bulkKey)}
+                    onChange={() => toggleCandidateSelection(candidate._bulkKey)}
+                    aria-label={`Select ${candidate.name}`}
+                    type="checkbox"
+                  />
+                </td>
                 <td data-label="Candidate">{candidate.name}</td>
                 <td data-label="Fit">{candidate.matchScore?.fit || candidate.fit}</td>
                 <td data-label="Score">{candidate.matchScore?.score ?? candidate.score}</td>
@@ -310,7 +442,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           return (
             <div
               className="candidate-result-card"
-              key={candidate.id}
+              key={candidate._bulkKey}
               style={{
                 background: 'var(--card)',
                 border: '1px solid var(--border)',
@@ -319,6 +451,19 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 transition: 'all 0.3s'
               }}
             >
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <input
+                    checked={selectedIds.includes(candidate._bulkKey)}
+                    onChange={() => toggleCandidateSelection(candidate._bulkKey)}
+                    aria-label={`Select ${candidate.name}`}
+                    type="checkbox"
+                  />
+                  Select candidate
+                </label>
+              </div>
+
+              {/* Top Section */}
               <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
                 <div>
                   <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text)' }}>
