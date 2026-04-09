@@ -48,6 +48,7 @@ async function ensureResumeParseColumns() {
     ADD COLUMN IF NOT EXISTS scan_status TEXT,
     ADD COLUMN IF NOT EXISTS scan_result JSONB,
     ADD COLUMN IF NOT EXISTS file_sha256 TEXT,
+    ADD COLUMN IF NOT EXISTS job_description_id UUID,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
   `)
 }
@@ -82,6 +83,23 @@ router.post(
 
     try {
       await ensureResumeParseColumns()
+      const selectedJobDescriptionId = req.body.jobDescriptionId || null
+
+      if (selectedJobDescriptionId) {
+        const jdResult = await pool.query(
+          `SELECT id
+           FROM job_descriptions
+           WHERE id = $1
+             AND user_id = $2
+             AND status <> 'archived'
+           LIMIT 1`,
+          [selectedJobDescriptionId, req.userId],
+        )
+
+        if (!jdResult.rows[0]) {
+          return res.status(400).json({ error: 'Selected job description is invalid or archived' })
+        }
+      }
 
       const jobs = []
 
@@ -109,9 +127,10 @@ router.post(
              scan_status,
              scan_result,
              file_sha256,
+             job_description_id,
              updated_at
            )
-           VALUES ($1, $2, '', $3, $4, 'pending', $5, $6::jsonb, encode(digest(decode($7, 'base64'), 'sha256'), 'hex'), NOW())
+           VALUES ($1, $2, '', $3, $4, 'pending', $5, $6::jsonb, encode(digest(decode($7, 'base64'), 'sha256'), 'hex'), $8, NOW())
            RETURNING id`,
           [
             req.userId,
@@ -121,6 +140,7 @@ router.post(
             scanResult.status || 'clean',
             JSON.stringify(scanResult),
             fileBufferBase64,
+            selectedJobDescriptionId,
           ],
         )
 
@@ -133,6 +153,7 @@ router.post(
           mimeType: file.mimetype,
           fileSize: file.size,
           fileBufferBase64,
+          jobDescriptionId: selectedJobDescriptionId,
         })
 
         jobs.push({
