@@ -47,7 +47,7 @@ export default function RefundModal({ isOpen, subscription, details, adminId, on
       setSubmitting(true)
       setError('')
       const response = await fetch(`/api/admin/subscriptions/${subscription.id}/refund`, {
-        method: 'POST',
+        method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

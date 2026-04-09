@@ -24,6 +24,38 @@ function parseExperienceToYears(experience) {
   return match ? Number(match[1]) : 0
 }
 
+function parseUploadedAt(candidate = {}) {
+  const timestamp = Date.parse(String(candidate.uploadDate || candidate.uploadedAt || candidate.created_at || candidate.createdAt || ''))
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+function parseSkills(skills) {
+  if (Array.isArray(skills)) {
+    return skills
+      .map((skill) => String(skill || '').trim())
+      .filter(Boolean)
+  }
+
+  return String(skills || '')
+    .split(',')
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+}
+
+function parseSkillsFilter(rawSkills) {
+  if (Array.isArray(rawSkills)) {
+    return rawSkills
+      .flatMap((skillSet) => String(skillSet || '').split(','))
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+  }
+
+  return String(rawSkills || '')
+    .split(',')
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+}
+
 export function getSeniorityRank(candidate) {
   const years = parseExperienceToYears(candidate.experience)
 
@@ -54,9 +86,10 @@ export function normalizeCandidate(candidate = {}) {
     id: candidate.id || crypto.randomUUID(),
     name: candidate.name || 'Unknown Candidate',
     email: candidate.email || '',
+    phone: candidate.phone || '',
     score: Number(candidate.score || 0),
     summary: candidate.summary || '',
-    skills: Array.isArray(candidate.skills) ? candidate.skills : [],
+    skills: parseSkills(candidate.skills),
     strengths: Array.isArray(candidate.pros) ? candidate.pros : Array.isArray(candidate.strengths) ? candidate.strengths : [],
     cons: Array.isArray(candidate.cons) ? candidate.cons : [],
     location: candidate.location || 'Unknown',
@@ -75,13 +108,30 @@ export function normalizeCandidate(candidate = {}) {
   }
 }
 
-export function applyCandidateFilters(candidates, { scoreMin, scoreMax, location, level }) {
+export function applyCandidateFilters(candidates, {
+  scoreMin,
+  scoreMax,
+  location,
+  level,
+  search,
+  skills,
+  experienceMin,
+  experienceMax,
+  matchMin,
+  matchMax,
+}) {
+  const requestedSkills = parseSkillsFilter(skills).map((skill) => skill.toLowerCase())
+  const normalizedSearch = String(search || '').trim().toLowerCase()
+
   return candidates.filter((candidate) => {
-    if (scoreMin !== undefined && scoreMin !== null && scoreMin !== '' && candidate.score < Number(scoreMin)) {
+    const effectiveMinScore = matchMin ?? scoreMin
+    const effectiveMaxScore = matchMax ?? scoreMax
+
+    if (effectiveMinScore !== undefined && effectiveMinScore !== null && effectiveMinScore !== '' && candidate.score < Number(effectiveMinScore)) {
       return false
     }
 
-    if (scoreMax !== undefined && scoreMax !== null && scoreMax !== '' && candidate.score > Number(scoreMax)) {
+    if (effectiveMaxScore !== undefined && effectiveMaxScore !== null && effectiveMaxScore !== '' && candidate.score > Number(effectiveMaxScore)) {
       return false
     }
 
@@ -93,30 +143,61 @@ export function applyCandidateFilters(candidates, { scoreMin, scoreMax, location
       return false
     }
 
+    if (normalizedSearch) {
+      const searchable = `${candidate.name || ''} ${candidate.email || ''} ${candidate.phone || ''}`.toLowerCase()
+      if (!searchable.includes(normalizedSearch)) {
+        return false
+      }
+    }
+
+    if (requestedSkills.length > 0) {
+      const candidateSkills = parseSkills(candidate.skills).map((skill) => skill.toLowerCase())
+      const hasRequestedSkills = requestedSkills.every((skill) => candidateSkills.includes(skill))
+      if (!hasRequestedSkills) {
+        return false
+      }
+    }
+
+    const years = parseExperienceToYears(candidate.experience)
+
+    if (experienceMin !== undefined && experienceMin !== null && experienceMin !== '' && years < Number(experienceMin)) {
+      return false
+    }
+
+    if (experienceMax !== undefined && experienceMax !== null && experienceMax !== '' && years > Number(experienceMax)) {
+      return false
+    }
+
     return true
   })
 }
 
 export function sortCandidates(candidates, sortBy = 'score', sortOrder = 'desc') {
+  const normalizedSortBy = sortBy === 'match_score' ? 'score' : sortBy
+  const normalizedSortOrder = normalizedSortBy === 'name' ? 'asc' : sortOrder
   const sorted = [...candidates]
 
   sorted.sort((a, b) => {
-    if (sortBy === 'name') {
+    if (normalizedSortBy === 'name') {
       return a.name.localeCompare(b.name)
     }
 
-    if (sortBy === 'location') {
+    if (normalizedSortBy === 'location') {
       return a.location.localeCompare(b.location)
     }
 
-    if (sortBy === 'seniority') {
+    if (normalizedSortBy === 'seniority' || normalizedSortBy === 'experience') {
       return getSeniorityRank(a) - getSeniorityRank(b)
+    }
+
+    if (normalizedSortBy === 'upload_date' || normalizedSortBy === 'uploadDate') {
+      return parseUploadedAt(a) - parseUploadedAt(b)
     }
 
     return a.score - b.score
   })
 
-  if (sortOrder === 'desc') {
+  if (normalizedSortOrder === 'desc') {
     sorted.reverse()
   }
 
@@ -161,13 +242,30 @@ router.get('/', requireAuth, async (req, res) => {
       scoreMax,
       location,
       level,
+      search,
+      skills,
+      experienceMin,
+      experienceMax,
+      matchMin,
+      matchMax,
     } = req.query
 
     const safePageSize = Math.min(100, Math.max(1, Number(pageSize)))
     const safePage = Math.max(1, Number(page))
 
     const candidates = await getLatestCandidatesForUser(req.userId)
-    const filtered = applyCandidateFilters(candidates, { scoreMin, scoreMax, location, level })
+    const filtered = applyCandidateFilters(candidates, {
+      scoreMin,
+      scoreMax,
+      location,
+      level,
+      search,
+      skills,
+      experienceMin,
+      experienceMax,
+      matchMin,
+      matchMax,
+    })
     const sorted = sortCandidates(filtered, sortBy, sortOrder)
 
     const total = sorted.length
@@ -190,6 +288,12 @@ router.get('/', requireAuth, async (req, res) => {
         scoreMax: scoreMax ?? null,
         location: location ?? null,
         level: level ?? null,
+        search: search ?? null,
+        skills: skills ?? null,
+        experienceMin: experienceMin ?? null,
+        experienceMax: experienceMax ?? null,
+        matchMin: matchMin ?? null,
+        matchMax: matchMax ?? null,
       },
     })
   } catch (error) {

@@ -33,6 +33,7 @@ export default function AdminUsersPage() {
 
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [blockTarget, setBlockTarget] = useState(null)
+  const [actionFeedback, setActionFeedback] = useState('')
   const selectedUser = selectedUserId ? getUserById(selectedUserId) : null
 
   useEffect(() => {
@@ -68,6 +69,7 @@ export default function AdminUsersPage() {
       </div>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {actionFeedback ? <p className="text-sm text-emerald-700">{actionFeedback}</p> : null}
 
       <UsersTable
         users={users}
@@ -79,6 +81,8 @@ export default function AdminUsersPage() {
         onToggleBlock={(user) => {
           if (user.status === 'blocked') {
             void unblockUser(user.id)
+              .then(() => setActionFeedback(`Unblocked ${user.email}`))
+              .catch((err) => setActionFeedback(err.message))
             return
           }
           setBlockTarget(user)
@@ -111,6 +115,7 @@ export default function AdminUsersPage() {
         onClose={() => setBlockTarget(null)}
         onConfirm={async (reason) => {
           await blockUser(blockTarget.id, reason)
+          setActionFeedback(`Blocked ${blockTarget.email || 'user'}`)
           setBlockTarget(null)
         }}
       />

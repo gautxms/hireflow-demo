@@ -16,7 +16,7 @@ function toInt(value, fallback, { min = 1, max = 200 } = {}) {
   return Math.max(min, Math.min(max, parsed))
 }
 
-router.get('/errors', async (req, res) => {
+async function listErrorLogs(req, res) {
   const page = toInt(req.query.page, 1)
   const pageSize = toInt(req.query.pageSize, 20, { min: 5, max: 100 })
   const offset = (page - 1) * pageSize
@@ -87,7 +87,10 @@ router.get('/errors', async (req, res) => {
     console.error('[Admin logs] failed to fetch errors', error)
     return res.status(500).json({ error: 'Failed to fetch error logs' })
   }
-})
+}
+
+router.get('/', listErrorLogs)
+router.get('/errors', listErrorLogs)
 
 router.get('/errors/:id', async (req, res) => {
   try {

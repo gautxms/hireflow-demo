@@ -1,7 +1,9 @@
+import jwt from 'jsonwebtoken'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
-import { getFailedPaymentsForAdmin } from '../services/paymentRetry.js'
 import { getRateLimitStats } from '../middleware/rateLimiter.js'
+import { createPasswordResetToken, generateResetToken } from '../services/resetTokenService.js'
+import { sendPasswordResetEmail } from '../utils/mailer.js'
 
 const router = Router()
 
@@ -10,20 +12,263 @@ function getMonthStart(inputDate) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
 }
 
-router.get('/users', async (_req, res) => {
+function toIso(value) {
+  return value ? new Date(value).toISOString() : null
+}
+
+function getFrontendOrigin() {
+  return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+}
+
+function buildResetUrl(token) {
+  const url = new URL('/reset-password', getFrontendOrigin())
+  url.searchParams.set('token', token)
+  return url.toString()
+}
+
+async function ensureAdminUserColumns() {
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+  `)
+}
+
+router.get('/users', async (req, res) => {
+  const search = String(req.query.search || '').trim()
+
   try {
+    await ensureAdminUserColumns()
+
+    const params = [search ? `%${search}%` : '']
     const result = await pool.query(
-      `SELECT id, email, subscription_status, paddle_subscription_id, created_at
-       FROM users
-       ORDER BY created_at DESC`,
+      `SELECT u.id,
+              u.email,
+              u.company,
+              u.phone,
+              u.subscription_status,
+              u.paddle_subscription_id,
+              u.created_at,
+              u.deleted_at,
+              COALESCE(u.is_blocked, u.blocked, false) AS is_blocked
+       FROM users u
+       WHERE ($1 = '' OR u.email ILIKE $1 OR COALESCE(u.company, '') ILIKE $1)
+       ORDER BY u.created_at DESC`,
+      params,
     )
 
-    return res.json(result.rows)
-  } catch {
+    return res.json({
+      users: result.rows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        company: row.company,
+        phone: row.phone,
+        subscription_status: row.subscription_status,
+        created_at: toIso(row.created_at),
+        deleted_at: toIso(row.deleted_at),
+        is_blocked: Boolean(row.is_blocked),
+        status: row.deleted_at ? 'inactive' : (row.is_blocked ? 'blocked' : 'active'),
+      })),
+    })
+  } catch (error) {
+    console.error('[Admin users] list failed:', error)
     return res.status(500).json({ error: 'Internal server error' })
   }
 })
 
+router.get('/users/:id', async (req, res) => {
+  const { id } = req.params
+
+  try {
+    await ensureAdminUserColumns()
+
+    const userResult = await pool.query(
+      `SELECT u.id,
+              u.email,
+              u.company,
+              u.phone,
+              u.subscription_status,
+              u.created_at,
+              u.deleted_at,
+              COALESCE(u.is_blocked, u.blocked, false) AS is_blocked
+       FROM users u
+       WHERE u.id::text = $1
+       LIMIT 1`,
+      [id],
+    )
+
+    const user = userResult.rows[0]
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const auditResult = await pool.query(
+      `SELECT id, admin_id, action_type, details, created_at
+       FROM admin_actions
+       WHERE target_id = $1
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [id],
+    )
+
+    return res.json({
+      user: {
+        ...user,
+        created_at: toIso(user.created_at),
+        deleted_at: toIso(user.deleted_at),
+        is_blocked: Boolean(user.is_blocked),
+      },
+      auditTrail: auditResult.rows.map((row) => ({
+        id: row.id,
+        action: row.action_type,
+        actor: row.admin_id,
+        details: row.details || {},
+        created_at: toIso(row.created_at),
+      })),
+    })
+  } catch (error) {
+    console.error('[Admin users] detail failed:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.patch('/users/:id', async (req, res) => {
+  const { id } = req.params
+  const { action, reason, company, phone, email, is_blocked: isBlockedInput, resetPassword } = req.body || {}
+
+  try {
+    await ensureAdminUserColumns()
+
+    const userResult = await pool.query(
+      'SELECT id, email, company, phone, COALESCE(is_blocked, blocked, false) AS is_blocked FROM users WHERE id::text = $1 LIMIT 1',
+      [id],
+    )
+    const user = userResult.rows[0]
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const shouldBlock = action === 'block' || isBlockedInput === true
+    const shouldUnblock = action === 'unblock' || isBlockedInput === false
+    const shouldReset = action === 'reset_password' || resetPassword === true
+    const shouldEdit = action === 'edit' || company !== undefined || phone !== undefined || email !== undefined
+
+    let nextUser = { ...user }
+    let auditAction = 'user_updated'
+    let auditDetails = {}
+
+    if (shouldBlock || shouldUnblock) {
+      const nextBlocked = shouldBlock ? true : false
+      const updateResult = await pool.query(
+        `UPDATE users
+         SET blocked = $2,
+             is_blocked = $2
+         WHERE id::text = $1
+         RETURNING id, email, company, phone, COALESCE(is_blocked, blocked, false) AS is_blocked`,
+        [id, nextBlocked],
+      )
+      nextUser = updateResult.rows[0]
+      auditAction = nextBlocked ? 'user_blocked' : 'user_unblocked'
+      auditDetails = { reason: reason || null }
+    }
+
+    if (shouldEdit) {
+      const updateResult = await pool.query(
+        `UPDATE users
+         SET email = COALESCE($2, email),
+             company = COALESCE($3, company),
+             phone = COALESCE($4, phone)
+         WHERE id::text = $1
+         RETURNING id, email, company, phone, COALESCE(is_blocked, blocked, false) AS is_blocked`,
+        [id, email || null, company || null, phone || null],
+      )
+      nextUser = updateResult.rows[0]
+      auditAction = 'user_profile_updated'
+      auditDetails = { email: email || undefined, company: company || undefined, phone: phone || undefined }
+    }
+
+    if (shouldReset) {
+      const token = generateResetToken()
+      await createPasswordResetToken(user.id, token)
+      await sendPasswordResetEmail({
+        to: user.email,
+        firstName: user.email.split('@')[0],
+        resetUrl: buildResetUrl(token),
+      })
+      auditAction = 'user_password_reset_sent'
+      auditDetails = { via: 'admin' }
+    }
+
+    return res.json({
+      ok: true,
+      user: {
+        id: nextUser.id,
+        email: nextUser.email,
+        company: nextUser.company,
+        phone: nextUser.phone,
+        is_blocked: Boolean(nextUser.is_blocked),
+      },
+      audit: {
+        action: auditAction,
+        actor: req.admin?.id || 'admin',
+        details: auditDetails,
+        created_at: new Date().toISOString(),
+      },
+      message: shouldReset ? 'Password reset email sent' : 'User updated',
+    })
+  } catch (error) {
+    console.error('[Admin users] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update user' })
+  }
+})
+
+router.post('/users/:id/impersonate', async (req, res) => {
+  const { id } = req.params
+  const expiresInMinutes = Math.max(1, Math.min(60, Number(req.body?.expiresInMinutes || 15)))
+
+  try {
+    const userResult = await pool.query(
+      'SELECT id, email, company, phone, subscription_status, created_at, deleted_at FROM users WHERE id::text = $1 LIMIT 1',
+      [id],
+    )
+
+    const user = userResult.rows[0]
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const impersonationToken = jwt.sign(
+      {
+        userId: user.id,
+        user,
+        impersonatedByAdminId: req.admin?.id || null,
+        impersonation: true,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: `${expiresInMinutes}m` },
+    )
+
+    return res.json({
+      ok: true,
+      impersonationToken,
+      expiresInMinutes,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      audit: {
+        action: 'impersonation_token_created',
+        actor: req.admin?.id || 'admin',
+        details: { expiresInMinutes },
+      },
+    })
+  } catch (error) {
+    console.error('[Admin users] impersonation failed:', error)
+    return res.status(500).json({ error: 'Failed to impersonate user' })
+  }
+})
 
 router.get('/rate-limit-stats', (_req, res) => {
   return res.json(getRateLimitStats())
@@ -62,7 +307,7 @@ router.post('/usage-overrides', async (req, res) => {
   }
 })
 
-router.get('/actions', async (req, res) => {
+async function listAdminActions(req, res) {
   const limit = Math.max(1, Math.min(500, Number.parseInt(String(req.query.limit || '100'), 10) || 100))
   const adminId = req.query.adminId ? String(req.query.adminId) : null
   const actionType = req.query.actionType ? String(req.query.actionType) : null
@@ -107,7 +352,10 @@ router.get('/actions', async (req, res) => {
     console.error('[Admin] Failed to query admin actions:', error)
     return res.status(500).json({ error: 'Unable to query admin actions' })
   }
-})
+}
+
+router.get('/actions', listAdminActions)
+router.get('/audit-trail', listAdminActions)
 
 router.delete('/usage-overrides/:userId', async (req, res) => {
   const { userId } = req.params
