@@ -6,6 +6,7 @@ import adminUploadsRoutes from './routes/admin/uploads.js'
 import adminAnalyticsRoutes from './routes/admin/analytics.js'
 import adminHealthRoutes from './routes/admin/health.js'
 import adminLogsRoutes from './routes/admin/logs.js'
+import webhooksRoutes from './routes/webhooks.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
 
 app.use('/api/admin', requireAdminAuth, adminActionAuditMiddleware, adminRoutes)
@@ -15,5 +16,6 @@ app.use('/api/admin/uploads', requireAdminAuth, adminActionAuditMiddleware, admi
 app.use('/api/admin/analytics', requireAdminAuth, adminActionAuditMiddleware, adminAnalyticsRoutes)
 app.use('/api/admin/health', requireAdminAuth, adminActionAuditMiddleware, adminHealthRoutes)
 app.use('/api/admin/logs', requireAdminAuth, adminActionAuditMiddleware, adminLogsRoutes)
+app.use('/api/admin/webhooks', requireAdminAuth, adminActionAuditMiddleware, webhooksRoutes)
 
 export default app

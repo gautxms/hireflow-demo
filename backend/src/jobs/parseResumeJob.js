@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+import { triggerWebhook } from '../services/webhookService.js'
 
 async function setJobState(jobId, fields) {
   const columns = Object.keys(fields)
@@ -85,6 +86,18 @@ async function runParse(job) {
     progress: 100,
     result: parseResult,
   })
+
+  try {
+    await triggerWebhook('parse.completed', {
+      resumeId,
+      userId: job.data.userId || null,
+      candidates: parseResult?.candidates || [],
+      jobDescriptionId: parseResult?.jobDescriptionId || null,
+      matchScores: parseResult?.matchScores || null,
+    })
+  } catch (webhookError) {
+    console.error('[Webhooks] Failed to trigger parse.completed webhook:', webhookError)
+  }
 
   await job.progress(100)
   return parseResult

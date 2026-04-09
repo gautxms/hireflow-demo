@@ -8,6 +8,7 @@ import { logEmailConfigStatus } from './services/emailService.js'
 import { initializeJobQueue } from './services/jobQueue.js'
 import { registerParseResumeJobProcessor } from './jobs/parseResumeJob.js'
 import { startChunkUploadCleanupCron } from './services/fileUploadService.js'
+import { ensureWebhookTables } from './services/webhookService.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -37,6 +38,7 @@ async function start() {
     await runMigrations()
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
+    await ensureWebhookTables()
     await initializeJobQueue()
 
     logEmailConfigStatus()
