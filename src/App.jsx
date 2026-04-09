@@ -26,6 +26,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import AccountSettingsPage from './pages/AccountSettingsPage'
 import AccountPage from './pages/AccountPage'
+import JobDescriptionPage from './pages/JobDescriptionPage'
 import PublicFooter from './components/PublicFooter'
 import AdminLogsPage from './admin/pages/AdminLogsPage'
 import AdminHealthPage from './admin/pages/AdminHealthPage'
@@ -189,6 +190,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/billing') {
       return <BillingPage />
+    }
+
+    if (pathname === '/job-descriptions') {
+      if (!isAuthenticated) {
+        onRequireAuth('Please login to manage job descriptions.')
+        return null
+      }
+
+      return <JobDescriptionPage onRequireAuth={onRequireAuth} />
     }
 
     if (pathname === '/account/payment-method') {
@@ -448,6 +458,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                     style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                   >
                     Billing
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false)
+                      navigate('/job-descriptions')
+                    }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                  >
+                    Job descriptions
                   </button>
                   <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '6px 0' }} />
                   <button
