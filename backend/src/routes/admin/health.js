@@ -193,6 +193,89 @@ router.get('/', async (_req, res) => {
   })
 })
 
+
+router.get('/queue', async (_req, res) => {
+  try {
+    const [jobSummaryResult, jobTypeResult, failedJobsResult] = await Promise.all([
+      pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = 'failed')::int AS pending,
+           COUNT(*) FILTER (WHERE status = 'retrying')::int AS processing,
+           COUNT(*) FILTER (WHERE status = 'manual_required')::int AS failed,
+           COUNT(*) FILTER (WHERE status = 'succeeded')::int AS succeeded
+         FROM payment_attempts`,
+      ),
+      pool.query(
+        `SELECT
+           COALESCE(metadata ->> 'jobType', 'payment_retry') AS job_type,
+           ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) * 1000), 2) AS avg_processing_ms,
+           COUNT(*)::int AS total
+         FROM payment_attempts
+         GROUP BY job_type
+         ORDER BY total DESC`,
+      ),
+      pool.query(
+        `SELECT id, transaction_id, status, retry_count, last_error, updated_at
+         FROM payment_attempts
+         WHERE status IN ('failed', 'manual_required')
+         ORDER BY updated_at DESC
+         LIMIT 25`,
+      ),
+    ])
+
+    return res.json({
+      counts: {
+        pending: Number(jobSummaryResult.rows[0]?.pending || 0),
+        processing: Number(jobSummaryResult.rows[0]?.processing || 0),
+        failed: Number(jobSummaryResult.rows[0]?.failed || 0),
+        succeeded: Number(jobSummaryResult.rows[0]?.succeeded || 0),
+      },
+      avgProcessingTimeByType: jobTypeResult.rows.map((row) => ({
+        jobType: row.job_type,
+        avgProcessingMs: Number(row.avg_processing_ms || 0),
+        total: Number(row.total || 0),
+      })),
+      failedJobs: failedJobsResult.rows,
+    })
+  } catch (error) {
+    console.error('[Admin health] queue health failed', error)
+    return res.status(500).json({ error: 'Failed to fetch queue health' })
+  }
+})
+
+router.get('/database', async (_req, res) => {
+  try {
+    const pingStart = Date.now()
+    await pool.query('SELECT 1')
+
+    const [connResult, queryPerfResult] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS active_connections FROM pg_stat_activity WHERE state = 'active'`),
+      pool.query(
+        `SELECT ROUND(AVG((metadata ->> 'responseMs')::numeric), 2) AS avg_query_ms
+         FROM events
+         WHERE event_type = 'api.response'
+           AND timestamp >= NOW() - interval '15 minutes'
+           AND (metadata ->> 'responseMs') ~ '^[0-9]+(\.[0-9]+)?$'`,
+      ),
+    ])
+
+    return res.json({
+      connected: true,
+      latencyMs: Date.now() - pingStart,
+      avgQueryMs: Number(queryPerfResult.rows[0]?.avg_query_ms || 0),
+      activeConnections: Number(connResult.rows[0]?.active_connections || 0),
+    })
+  } catch (error) {
+    return res.status(500).json({
+      connected: false,
+      error: error.message,
+      latencyMs: null,
+      avgQueryMs: null,
+      activeConnections: 0,
+    })
+  }
+})
+
 router.post('/jobs/:id/retry', async (req, res) => {
   try {
     const result = await pool.query(
