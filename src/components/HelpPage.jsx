@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import BackButton from './BackButton'
 
-export default function HelpPage() {
+export default function HelpPage({ onBack }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('getting-started')
 
@@ -60,7 +60,7 @@ export default function HelpPage() {
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '3rem 2rem', textAlign: 'center' }}>
         <div style={{ marginBottom: '1rem' }}>
-          <BackButton />
+          <BackButton onBack={onBack} />
         </div>
 
         <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>

@@ -1,7 +1,21 @@
 import { useState } from 'react'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+
 export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
+  const [isScheduleFormOpen, setIsScheduleFormOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [formErrors, setFormErrors] = useState({})
+  const [scheduleDemoForm, setScheduleDemoForm] = useState({
+    name: '',
+    email: '',
+    company: '',
+    phone: '',
+    message: ''
+  })
 
   const teamMembers = [
     {
@@ -106,6 +120,77 @@ export default function AboutPage({ onBack }) {
     { year: '2025', event: 'Enterprise Launch', desc: 'API + custom integrations available.' },
     { year: '2025 Q2', event: 'IPO Goals', desc: 'Become the standard for AI hiring.' }
   ]
+
+  const handleDemoInputChange = (event) => {
+    const { name, value } = event.target
+    setScheduleDemoForm((prev) => ({ ...prev, [name]: value }))
+
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: '' }))
+    }
+  }
+
+  const validateDemoForm = () => {
+    const errors = {}
+
+    if (!scheduleDemoForm.name.trim()) {
+      errors.name = 'Full name is required'
+    }
+
+    if (!scheduleDemoForm.email.trim()) {
+      errors.email = 'Work email is required'
+    } else if (!scheduleDemoForm.email.includes('@')) {
+      errors.email = 'Please enter a valid email'
+    }
+
+    if (!scheduleDemoForm.company.trim()) {
+      errors.company = 'Company is required'
+    }
+
+    if (!scheduleDemoForm.message.trim()) {
+      errors.message = 'Please share what you need help with'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleScheduleDemoSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!validateDemoForm()) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inquiries/demo-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(scheduleDemoForm)
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to submit demo request')
+      }
+
+      setSubmitSuccess(true)
+      setScheduleDemoForm({ name: '', email: '', company: '', phone: '', message: '' })
+      setFormErrors({})
+      setTimeout(() => {
+        setIsScheduleFormOpen(false)
+        setSubmitSuccess(false)
+      }, 1500)
+    } catch {
+      setSubmitError('Unable to submit your request right now. Please try again shortly.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
@@ -413,19 +498,13 @@ export default function AboutPage({ onBack }) {
           Start using HireFlow today and transform your hiring process
         </p>
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-          <button style={{
-            background: 'var(--accent)',
-            color: 'var(--ink)',
-            border: 'none',
-            padding: '0.75rem 2rem',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            fontSize: '1rem'
-          }}>
-            Get Started Free
-          </button>
-          <button style={{
+          <button
+            onClick={() => {
+              setIsScheduleFormOpen(true)
+              setSubmitError('')
+              setSubmitSuccess(false)
+            }}
+            style={{
             background: 'transparent',
             color: 'var(--accent)',
             border: '1px solid var(--accent)',
@@ -434,11 +513,141 @@ export default function AboutPage({ onBack }) {
             fontWeight: 'bold',
             cursor: 'pointer',
             fontSize: '1rem'
-          }}>
+          }}
+          >
             Schedule Demo
           </button>
         </div>
       </div>
+
+      {isScheduleFormOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 300,
+          padding: '1rem'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '560px',
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '2rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'var(--font-display)' }}>Schedule a Demo</h3>
+              <button
+                onClick={() => setIsScheduleFormOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: '1.2rem', cursor: 'pointer' }}
+                aria-label="Close schedule demo form"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
+              Share your details and we’ll reach out to schedule a tailored walkthrough.
+            </p>
+
+            {submitSuccess && (
+              <p style={{ color: 'var(--accent-2)', marginBottom: '1rem' }}>
+                Thanks! Your request has been submitted successfully.
+              </p>
+            )}
+
+            {submitError && (
+              <p style={{ color: '#ef4444', marginBottom: '1rem' }}>
+                {submitError}
+              </p>
+            )}
+
+            <form onSubmit={handleScheduleDemoSubmit}>
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                <div>
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Full name *"
+                    value={scheduleDemoForm.name}
+                    onChange={handleDemoInputChange}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: formErrors.name ? '1px solid #ef4444' : '1px solid var(--border)', background: 'var(--ink-2)', color: 'var(--text)' }}
+                  />
+                  {formErrors.name && <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem' }}>{formErrors.name}</div>}
+                </div>
+
+                <div>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Work email *"
+                    value={scheduleDemoForm.email}
+                    onChange={handleDemoInputChange}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: formErrors.email ? '1px solid #ef4444' : '1px solid var(--border)', background: 'var(--ink-2)', color: 'var(--text)' }}
+                  />
+                  {formErrors.email && <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem' }}>{formErrors.email}</div>}
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    name="company"
+                    placeholder="Company *"
+                    value={scheduleDemoForm.company}
+                    onChange={handleDemoInputChange}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: formErrors.company ? '1px solid #ef4444' : '1px solid var(--border)', background: 'var(--ink-2)', color: 'var(--text)' }}
+                  />
+                  {formErrors.company && <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem' }}>{formErrors.company}</div>}
+                </div>
+
+                <input
+                  type="tel"
+                  name="phone"
+                  placeholder="Phone (optional)"
+                  value={scheduleDemoForm.phone}
+                  onChange={handleDemoInputChange}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--ink-2)', color: 'var(--text)' }}
+                />
+
+                <div>
+                  <textarea
+                    name="message"
+                    rows={4}
+                    placeholder="Tell us about your hiring goals *"
+                    value={scheduleDemoForm.message}
+                    onChange={handleDemoInputChange}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: formErrors.message ? '1px solid #ef4444' : '1px solid var(--border)', background: 'var(--ink-2)', color: 'var(--text)', resize: 'vertical' }}
+                  />
+                  {formErrors.message && <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem' }}>{formErrors.message}</div>}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                  marginTop: '1.25rem',
+                  width: '100%',
+                  background: 'var(--accent)',
+                  color: 'var(--ink)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.8rem 1rem',
+                  fontWeight: 'bold',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  opacity: isSubmitting ? 0.8 : 1
+                }}
+              >
+                {isSubmitting ? 'Submitting…' : 'Submit Demo Request'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
