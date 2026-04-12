@@ -198,6 +198,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
+      if (!isActiveSubscriber) {
+        navigate('/pricing?reason=upgrade_required')
+        return null
+      }
+
       return <JobDescriptionPage onRequireAuth={onRequireAuth} />
     }
 
@@ -293,6 +298,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         {currentPage === 'landing' && (
           <LandingPage
             onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
+            ctaLabel={isActiveSubscriber ? 'Analyze Resumes' : 'Try Free Demo'}
           />
         )}
 
@@ -459,16 +465,18 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                   >
                     Billing
                   </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false)
-                      navigate('/job-descriptions')
-                    }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
-                  >
-                    Job descriptions
-                  </button>
+                  {isActiveSubscriber && (
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        navigate('/job-descriptions')
+                      }}
+                      style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    >
+                      Job descriptions
+                    </button>
+                  )}
                   <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '6px 0' }} />
                   <button
                     role="menuitem"

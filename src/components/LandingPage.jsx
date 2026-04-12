@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import '../globals.css'
 
-export default function LandingPage({ onStartDemo }) {
+export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function LandingPage({ onStartDemo }) {
           </p>
           <div className="hero-cta">
             <button className="btn-primary" onClick={onStartDemo} style={{ fontSize: '1rem', padding: '0.75rem 2rem' }}>
-              Try Free Demo
+              {ctaLabel}
             </button>
             <button className="btn-ghost">Watch 2-min Demo</button>
           </div>

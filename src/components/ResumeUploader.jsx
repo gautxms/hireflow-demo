@@ -77,6 +77,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [error, setError] = useState('')
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
+  const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -559,9 +560,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 </option>
               ))}
             </select>
-            <a href="/job-descriptions" style={{ color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
-              Manage job descriptions
-            </a>
+            {isActiveSubscriber && (
+              <a href="/job-descriptions" style={{ color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
+                Manage job descriptions
+              </a>
+            )}
           </div>
         </div>
 
