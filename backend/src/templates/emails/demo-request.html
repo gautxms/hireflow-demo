@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="background:#111827;padding:20px;text-align:center;">
+                <img src="{{logoUrl}}" alt="{{companyName}}" style="max-height:40px;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <h1 style="margin:0 0 16px 0;font-size:24px;">New demo request</h1>
+                <p style="margin:0 0 16px 0;line-height:1.6;">A visitor submitted the About page schedule demo form.</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+                  <tr><td style="padding:12px 14px;background:#f9fafb;font-weight:600;width:180px;">Name</td><td style="padding:12px 14px;">{{requesterName}}</td></tr>
+                  <tr><td style="padding:12px 14px;background:#f9fafb;font-weight:600;">Email</td><td style="padding:12px 14px;"><a href="mailto:{{requesterEmail}}">{{requesterEmail}}</a></td></tr>
+                  <tr><td style="padding:12px 14px;background:#f9fafb;font-weight:600;">Company</td><td style="padding:12px 14px;">{{company}}</td></tr>
+                  <tr><td style="padding:12px 14px;background:#f9fafb;font-weight:600;">Phone</td><td style="padding:12px 14px;">{{phone}}</td></tr>
+                </table>
+                <h2 style="margin:20px 0 10px 0;font-size:18px;">Message</h2>
+                <p style="margin:0;line-height:1.6;white-space:pre-wrap;">{{message}}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 28px;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.6;">
+                © {{year}} {{companyName}}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

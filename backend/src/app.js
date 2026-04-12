@@ -17,6 +17,7 @@ import subscriptionsRoutes from './routes/subscriptions.js'
 import shortlistsRoutes from './routes/shortlists.js'
 import candidatesRoutes from './routes/candidates.js'
 import jobDescriptionsRoutes from './routes/jobDescriptions.js'
+import inquiriesRoutes from './routes/inquiries.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 
@@ -83,6 +84,7 @@ app.use('/api/subscriptions', generalApiLimiterAuth, subscriptionsRoutes)
 app.use('/api/shortlists', generalApiLimiterAuth, shortlistsRoutes)
 app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
 app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, jobDescriptionsRoutes)
+app.use('/api/inquiries', inquiriesRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })

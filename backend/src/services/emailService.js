@@ -389,3 +389,36 @@ export async function sendPasswordResetConfirmationEmail({ to, firstName }) {
     },
   })
 }
+
+export async function sendDemoRequestEmail({
+  requesterName,
+  requesterEmail,
+  company,
+  phone,
+  message,
+  to = 'hello@gfactai.com',
+}) {
+  const values = withDefaults({
+    to,
+    requesterName,
+    requesterEmail,
+    company,
+    phone: phone || 'Not provided',
+    message,
+  })
+
+  return sendTemplateEmail({
+    to,
+    subject: `New demo request from ${requesterName}`,
+    templateName: 'demo-request',
+    text: [
+      'New demo request submitted.',
+      `Name: ${requesterName}`,
+      `Email: ${requesterEmail}`,
+      `Company: ${company}`,
+      `Phone: ${phone || 'Not provided'}`,
+      `Message: ${message}`,
+    ].join('\n'),
+    values,
+  })
+}
