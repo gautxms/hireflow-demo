@@ -194,3 +194,48 @@ This is a demo/MVP project. For feature requests or bug reports, contact the tea
 - JWT is issued in an HTTP-only cookie (`token`) and also returned in response JSON.
 - Frontend currently stores token in `localStorage` as a temporary bridge for app-level auth state; migrate to cookie-only session checks for production hardening.
 - Frontend auth requests default to `http://localhost:4000` when `VITE_API_BASE_URL` is not set, which prevents the generic "Unable to connect" error when Vite proxy is unavailable.
+
+## Phase 1 NSE Dashboard (Local Monitoring)
+
+A read-only dashboard foundation has been added for the local-first NSE trading system in `frontend/src`.
+
+### Run backend + frontend locally
+
+```bash
+# terminal 1: backend
+npm run backend:dev
+# backend health endpoint: http://localhost:4000/health
+
+# terminal 2: frontend (Vite)
+npm run dev
+# app: http://localhost:5173
+```
+
+If needed, point frontend API calls to backend using:
+
+```bash
+export VITE_API_BASE_URL=http://localhost:4000
+npm run dev
+```
+
+### Phase 1 dashboard panels
+
+The dashboard page (`frontend/src/pages/Dashboard.tsx`) is organized into:
+- Summary cards (portfolio value/equity, cash, realized P&L, unrealized P&L, net P&L)
+- Open positions table
+- Recent trade/order activity table
+- System status card (backend, environment, trading mode, broker state)
+
+### Manual verification checklist
+
+1. Start backend and confirm `GET /health` returns success.
+2. Open frontend and navigate to the dashboard page integration route in your app shell.
+3. Verify summary cards populate from:
+   - `/api/v1/portfolio`
+   - `/api/v1/portfolio/cash`
+   - `/api/v1/costs/summary` (optional)
+4. Verify open positions table populates from `/api/v1/portfolio/positions`.
+5. Verify recent activity table shows newest rows first from `/api/v1/portfolio/trades` and `/api/v1/orders`.
+6. Verify system status card reflects `/health`, `/api/v1/system/config`, and `/api/v1/broker/status`.
+7. Confirm auto-refresh updates every ~12 seconds and manual refresh works.
+8. Simulate an endpoint failure and confirm old data remains visible while error messaging is shown.
