@@ -9,10 +9,11 @@ const blankState = {
   location: '',
   salaryMin: '',
   salaryMax: '',
+  salaryCurrency: 'USD',
   status: 'draft',
 }
 
-export default function JobDescriptionForm({ initialValue, onSubmit, onCancel, isSubmitting }) {
+export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting }) {
   const [formState, setFormState] = useState(blankState)
   const [jdFile, setJdFile] = useState(null)
 
@@ -27,6 +28,7 @@ export default function JobDescriptionForm({ initialValue, onSubmit, onCancel, i
         location: initialValue.location || '',
         salaryMin: initialValue.salaryMin ?? '',
         salaryMax: initialValue.salaryMax ?? '',
+        salaryCurrency: initialValue.salaryCurrency || 'USD',
         status: initialValue.status || 'draft',
       })
     } else {
@@ -34,7 +36,7 @@ export default function JobDescriptionForm({ initialValue, onSubmit, onCancel, i
     }
 
     setJdFile(null)
-  }, [initialValue])
+  }, [initialValue, resetToken])
 
   const handleChange = (field) => (event) => {
     setFormState((prev) => ({ ...prev, [field]: event.target.value }))
@@ -62,6 +64,14 @@ export default function JobDescriptionForm({ initialValue, onSubmit, onCancel, i
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}>
           <input type="number" min="0" placeholder="Experience years" value={formState.experienceYears} onChange={handleChange('experienceYears')} style={inputStyle} />
           <input placeholder="Location" value={formState.location} onChange={handleChange('location')} style={inputStyle} />
+          <select value={formState.salaryCurrency} onChange={handleChange('salaryCurrency')} style={inputStyle}>
+            <option value="USD">Salary currency (USD)</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="CAD">CAD</option>
+            <option value="AUD">AUD</option>
+            <option value="INR">INR</option>
+          </select>
           <input type="number" min="0" placeholder="Salary min" value={formState.salaryMin} onChange={handleChange('salaryMin')} style={inputStyle} />
           <input type="number" min="0" placeholder="Salary max" value={formState.salaryMax} onChange={handleChange('salaryMax')} style={inputStyle} />
         </div>

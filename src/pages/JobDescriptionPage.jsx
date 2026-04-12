@@ -8,6 +8,7 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 export default function JobDescriptionPage({ onRequireAuth }) {
   const [items, setItems] = useState([])
   const [activeItem, setActiveItem] = useState(null)
+  const [formResetToken, setFormResetToken] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -88,6 +89,9 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
       await fetchItems()
       setActiveItem(null)
+      if (!isEditing) {
+        setFormResetToken((prev) => prev + 1)
+      }
     } catch (requestError) {
       setError(requestError.message || 'Unable to save job description')
     } finally {
@@ -136,6 +140,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
       <JobDescriptionForm
         initialValue={activeItem}
+        resetToken={formResetToken}
         onSubmit={submitForm}
         onCancel={() => setActiveItem(null)}
         isSubmitting={isSubmitting}
