@@ -272,29 +272,45 @@ export default function HelpPage({ onBack }) {
 
           <div style={{ display: 'grid', gap: '1rem', marginBottom: '3rem' }}>
             {filteredArticles.map(article => (
-              <button
-                key={article.id}
-                onClick={() => openArticle(article)}
-                style={{
-                  background: 'var(--card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '1.5rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto',
-                  width: '100%',
-                  textAlign: 'left',
-                  color: 'var(--text)'
-                }}
-              >
-                <div>
-                  <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{article.title}</h3>
-                  <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>{article.desc}</p>
-                </div>
-                <div style={{ color: 'var(--accent)', fontSize: '1.2rem' }}>→</div>
-              </button>
+              <div key={article.id} style={{ display: 'grid', gap: '1rem' }}>
+                <button
+                  onClick={() => openArticle(article)}
+                  style={{
+                    background: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '1.5rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto',
+                    width: '100%',
+                    textAlign: 'left',
+                    color: 'var(--text)'
+                  }}
+                >
+                  <div>
+                    <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{article.title}</h3>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>{article.desc}</p>
+                  </div>
+                  <div style={{ color: 'var(--accent)', fontSize: '1.2rem' }}>→</div>
+                </button>
+
+                {selectedArticle?.id === article.id && (
+                  <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+                      {selectedArticle.title}
+                    </h3>
+                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                      {selectedArticle.content.map((paragraph, index) => (
+                        <p key={index} style={{ color: 'var(--muted)', lineHeight: '1.7', margin: 0 }}>
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
