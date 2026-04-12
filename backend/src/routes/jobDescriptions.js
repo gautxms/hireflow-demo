@@ -60,6 +60,7 @@ async function ensureSchema() {
       location TEXT,
       salary_min INTEGER,
       salary_max INTEGER,
+      salary_currency TEXT NOT NULL DEFAULT 'USD',
       file_url TEXT,
       status TEXT DEFAULT 'active' CHECK (status IN ('active', 'archived', 'draft')),
       created_at TIMESTAMP DEFAULT NOW(),
@@ -71,6 +72,9 @@ async function ensureSchema() {
 
     ALTER TABLE resumes
       ADD COLUMN IF NOT EXISTS job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL;
+
+    ALTER TABLE job_descriptions
+      ADD COLUMN IF NOT EXISTS salary_currency TEXT NOT NULL DEFAULT 'USD';
 
     CREATE INDEX IF NOT EXISTS idx_resumes_job_description_id ON resumes(job_description_id);
   `)
@@ -127,6 +131,7 @@ function mapRecord(row) {
     location: row.location,
     salaryMin: row.salary_min,
     salaryMax: row.salary_max,
+    salaryCurrency: row.salary_currency || 'USD',
     fileUrl: row.file_url,
     status: row.status,
     createdAt: row.created_at,
@@ -155,7 +160,7 @@ router.get('/', async (req, res) => {
        FROM job_descriptions
        WHERE user_id = $1
          AND ($2::boolean = true OR status <> 'archived')
-       ORDER BY updated_at DESC`,
+       ORDER BY updated_at ASC`,
       [req.userId, includeArchived],
     )
 
@@ -224,10 +229,11 @@ router.post('/', (req, res, next) => {
          location,
          salary_min,
          salary_max,
+         salary_currency,
          file_url,
          status,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())
+       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, NOW())
        RETURNING *`,
       [
         req.userId,
@@ -239,6 +245,7 @@ router.post('/', (req, res, next) => {
         req.body.location || null,
         toIntOrNull(req.body.salaryMin),
         toIntOrNull(req.body.salaryMax),
+        String(req.body.salaryCurrency || 'USD').trim().toUpperCase() || 'USD',
         fileUrl,
         status,
       ],
@@ -300,8 +307,9 @@ router.put('/:id', (req, res, next) => {
            location = $8,
            salary_min = $9,
            salary_max = $10,
-           file_url = $11,
-           status = $12,
+           salary_currency = $11,
+           file_url = $12,
+           status = $13,
            updated_at = NOW()
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
@@ -316,6 +324,9 @@ router.put('/:id', (req, res, next) => {
         req.body.location === undefined ? prev.location : req.body.location,
         req.body.salaryMin === undefined ? prev.salary_min : toIntOrNull(req.body.salaryMin),
         req.body.salaryMax === undefined ? prev.salary_max : toIntOrNull(req.body.salaryMax),
+        req.body.salaryCurrency === undefined
+          ? (prev.salary_currency || 'USD')
+          : (String(req.body.salaryCurrency || 'USD').trim().toUpperCase() || 'USD'),
         fileUrl,
         status,
       ],
@@ -390,10 +401,11 @@ router.post('/:id/duplicate', async (req, res) => {
         location,
         salary_min,
         salary_max,
+        salary_currency,
         file_url,
         status,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, 'draft', NOW())
+      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, 'draft', NOW())
       RETURNING *`,
       [
         req.userId,
@@ -405,6 +417,7 @@ router.post('/:id/duplicate', async (req, res) => {
         sourceRow.location,
         sourceRow.salary_min,
         sourceRow.salary_max,
+        sourceRow.salary_currency || 'USD',
         sourceRow.file_url,
       ],
     )

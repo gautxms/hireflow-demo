@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
   location TEXT,
   salary_min INTEGER,
   salary_max INTEGER,
+  salary_currency TEXT NOT NULL DEFAULT 'USD',
   file_url TEXT,
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'archived', 'draft')),
   created_at TIMESTAMP DEFAULT NOW(),
@@ -20,5 +21,8 @@ CREATE INDEX IF NOT EXISTS idx_job_descriptions_status ON job_descriptions(statu
 
 ALTER TABLE resumes
   ADD COLUMN IF NOT EXISTS job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL;
+
+ALTER TABLE job_descriptions
+  ADD COLUMN IF NOT EXISTS salary_currency TEXT NOT NULL DEFAULT 'USD';
 
 CREATE INDEX IF NOT EXISTS idx_resumes_job_description_id ON resumes(job_description_id);
