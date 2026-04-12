@@ -18,6 +18,9 @@ export default function JobDescriptionList({ items, onEdit, onDuplicate, onArchi
               <div style={{ color: 'var(--muted)', fontSize: '0.88rem' }}>
                 Status: <strong style={{ color: '#fff' }}>{item.status}</strong>
                 {item.skills?.length ? ` • Skills: ${item.skills.join(', ')}` : ''}
+                {(item.salaryMin !== null && item.salaryMin !== undefined) || (item.salaryMax !== null && item.salaryMax !== undefined)
+                  ? ` • Salary: ${item.salaryMin ?? '-'} - ${item.salaryMax ?? '-'} ${item.salaryCurrency || 'USD'}`
+                  : ''}
                 {item.fileUrl ? ` • File: ${item.fileUrl.split('/').pop()}` : ''}
               </div>
             </div>

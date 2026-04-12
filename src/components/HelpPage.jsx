@@ -313,6 +313,21 @@ export default function HelpPage({ onBack }) {
               </div>
             ))}
           </div>
+
+          {selectedArticle && (
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2rem' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+                {selectedArticle.title}
+              </h3>
+              <div style={{ display: 'grid', gap: '0.75rem' }}>
+                {selectedArticle.content.map((paragraph, index) => (
+                  <p key={index} style={{ color: 'var(--muted)', lineHeight: '1.7', margin: 0 }}>
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
