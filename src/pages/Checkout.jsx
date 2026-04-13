@@ -264,7 +264,6 @@ export default function Checkout({ onAuthSuccess }) {
           plan: selectedPlan,
         })
         
-        console.log('[DEBUG] Fetching URL:', checkoutApiUrl)
         const response = await fetch(checkoutApiUrl, {
           method: 'POST',
           headers: {
@@ -290,10 +289,8 @@ export default function Checkout({ onAuthSuccess }) {
         let payload
         try {
           const raw = await response.text()
-          console.log('[DEBUG] Raw response text:', raw)
           payload = JSON.parse(raw)
           console.log('[Checkout] Response payload:', payload)
-          console.log('[DEBUG] Full payload:', JSON.stringify(payload))
         } catch (parseErr) {
           console.error('[Checkout] Failed to parse JSON:', parseErr)
           throw new Error(`Invalid response from server: ${response.statusText}`)
@@ -312,10 +309,6 @@ export default function Checkout({ onAuthSuccess }) {
         // }
         // clientToken comes from environment variables for better security
         const { checkoutUrl, userEmail, clientToken: checkoutClientToken, paddleEnvironment } = payload
-        console.log('[DEBUG] userEmail value:', userEmail)
-        console.log('[DEBUG] userEmail type:', typeof userEmail)
-
-        console.log('[DEBUG] About to validate userEmail:', userEmail)
         if (!checkoutUrl) {
           console.error('[Checkout] Missing checkoutUrl in response:', payload)
           throw new Error('Checkout URL not provided by server')
