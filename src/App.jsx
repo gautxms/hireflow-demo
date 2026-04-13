@@ -31,6 +31,8 @@ import PublicFooter from './components/PublicFooter'
 import AdminLogsPage from './admin/pages/AdminLogsPage'
 import AdminHealthPage from './admin/pages/AdminHealthPage'
 import AdminAnalyticsPage from './admin/pages/AdminAnalyticsPage'
+import AdminLoginPage from './admin/pages/AdminLoginPage'
+import AdminSetup2FA from './admin/pages/AdminSetup2FA'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -224,6 +226,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/admin/analytics') {
       return <AdminAnalyticsPage />
+    }
+
+    if (pathname === '/admin/login') {
+      return <AdminLoginPage />
+    }
+
+    if (pathname === '/admin/setup-2fa') {
+      return <AdminSetup2FA />
     }
 
     if (!isAuthenticated && pathname === '/signup') {
