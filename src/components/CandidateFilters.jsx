@@ -17,13 +17,11 @@ export default function CandidateFilters({
   candidates = [],
   searchText = '',
   selectedSkills = [],
-  expRange = { min: '', max: '' },
-  matchRange = { min: '', max: '' },
-  sortBy = 'match_score',
+  expRange = { min: '0', max: '50' },
+  sortBy = 'name',
   onSearch,
   onSkillsFilter,
   onExperienceFilter,
-  onMatchFilter,
   onSort,
 }) {
   const allSkills = useMemo(() => {
@@ -35,6 +33,9 @@ export default function CandidateFilters({
 
     return [...skills].sort((a, b) => a.localeCompare(b))
   }, [candidates])
+
+  const experienceMin = Number(expRange?.min || 0)
+  const experienceMax = Number(expRange?.max || 50)
 
   const toggleSkill = (skill) => {
     const alreadySelected = selectedSkills.includes(skill)
@@ -68,51 +69,27 @@ export default function CandidateFilters({
 
       <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Experience range (years)</label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>
+            Experience years: {experienceMin} - {experienceMax}
+          </label>
+          <div style={{ display: 'grid', gap: '0.5rem' }}>
             <input
-              type="number"
+              type="range"
               min="0"
-              value={expRange?.min ?? ''}
-              onChange={(event) => onExperienceFilter?.({ ...expRange, min: event.target.value })}
-              placeholder="Min"
+              max="50"
+              step="1"
+              value={experienceMin}
+              onChange={(event) => onExperienceFilter?.({ min: event.target.value, max: String(Math.max(Number(event.target.value), experienceMax)) })}
               className="touch-target"
-              style={{ flex: 1, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.5rem', borderRadius: '6px' }}
             />
             <input
-              type="number"
+              type="range"
               min="0"
-              value={expRange?.max ?? ''}
-              onChange={(event) => onExperienceFilter?.({ ...expRange, max: event.target.value })}
-              placeholder="Max"
+              max="50"
+              step="1"
+              value={experienceMax}
+              onChange={(event) => onExperienceFilter?.({ min: String(Math.min(experienceMin, Number(event.target.value))), max: event.target.value })}
               className="touch-target"
-              style={{ flex: 1, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.5rem', borderRadius: '6px' }}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Match score range</label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={matchRange?.min ?? ''}
-              onChange={(event) => onMatchFilter?.({ ...matchRange, min: event.target.value })}
-              placeholder="Min"
-              className="touch-target"
-              style={{ flex: 1, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.5rem', borderRadius: '6px' }}
-            />
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={matchRange?.max ?? ''}
-              onChange={(event) => onMatchFilter?.({ ...matchRange, max: event.target.value })}
-              placeholder="Max"
-              className="touch-target"
-              style={{ flex: 1, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.5rem', borderRadius: '6px' }}
             />
           </div>
         </div>
@@ -126,7 +103,6 @@ export default function CandidateFilters({
             style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.5rem', borderRadius: '6px' }}
           >
             <option value="name">Name (A-Z)</option>
-            <option value="match_score">Match score (high-low)</option>
             <option value="experience">Experience (high-low)</option>
             <option value="upload_date">Upload date (newest)</option>
           </select>

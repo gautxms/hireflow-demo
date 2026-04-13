@@ -32,6 +32,10 @@ function parseSkills(skills) {
 }
 
 function parseYears(experience) {
+  if (typeof experience === 'number' && Number.isFinite(experience)) {
+    return experience
+  }
+
   const match = String(experience || '').match(/(\d+(?:\.\d+)?)/)
   return match ? Number(match[1]) : 0
 }
@@ -47,15 +51,12 @@ function filterAndSortCandidates(candidates, filters) {
     searchText = '',
     selectedSkills = [],
     expRange = { min: '', max: '' },
-    matchRange = { min: '', max: '' },
-    sortBy = 'match_score',
+    sortBy = 'name',
   } = filters || {}
 
   const query = searchText.trim().toLowerCase()
   const expMin = expRange?.min === '' ? null : Number(expRange?.min)
   const expMax = expRange?.max === '' ? null : Number(expRange?.max)
-  const matchMin = matchRange?.min === '' ? null : Number(matchRange?.min)
-  const matchMax = matchRange?.max === '' ? null : Number(matchRange?.max)
 
   const filtered = candidates.filter((candidate) => {
     if (query) {
@@ -67,27 +68,18 @@ function filterAndSortCandidates(candidates, filters) {
 
     const candidateSkills = parseSkills(candidate?.skills).map((skill) => skill.toLowerCase())
     if (selectedSkills.length > 0) {
-      const hasAllSelectedSkills = selectedSkills.every((skill) => candidateSkills.includes(String(skill).toLowerCase()))
-      if (!hasAllSelectedSkills) {
+      const hasAtLeastOneSkill = selectedSkills.some((skill) => candidateSkills.includes(String(skill).toLowerCase()))
+      if (!hasAtLeastOneSkill) {
         return false
       }
     }
 
-    const years = parseYears(candidate?.experience)
+    const years = parseYears(candidate?.experience_years ?? candidate?.experience)
     if (expMin !== null && years < expMin) {
       return false
     }
 
     if (expMax !== null && years > expMax) {
-      return false
-    }
-
-    const score = Number(candidate?.score || 0)
-    if (matchMin !== null && score < matchMin) {
-      return false
-    }
-
-    if (matchMax !== null && score > matchMax) {
       return false
     }
 
@@ -100,7 +92,7 @@ function filterAndSortCandidates(candidates, filters) {
     }
 
     if (sortBy === 'experience') {
-      return parseYears(b?.experience) - parseYears(a?.experience)
+      return parseYears(b?.experience_years ?? b?.experience) - parseYears(a?.experience_years ?? a?.experience)
     }
 
     if (sortBy === 'upload_date') {
@@ -114,9 +106,8 @@ function filterAndSortCandidates(candidates, filters) {
 export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0 }) {
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
-  const [expRange, setExpRange] = useState({ min: '', max: '' })
-  const [matchRange, setMatchRange] = useState({ min: '', max: '' })
-  const [sortBy, setSortBy] = useState('match_score')
+  const [expRange, setExpRange] = useState({ min: '0', max: '50' })
+  const [sortBy, setSortBy] = useState('name')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [resultsError, setResultsError] = useState('')
@@ -341,16 +332,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       searchText,
       selectedSkills,
       expRange,
-      matchRange,
       sortBy: normalizeSortBy(sortBy),
     })
-  }, [candidateRows, expRange, hasRenderableCandidates, matchRange, searchText, selectedSkills, sortBy])
+  }, [candidateRows, expRange, hasRenderableCandidates, searchText, selectedSkills, sortBy])
 
   const { rows: visibleCandidates, pagination } = useMemo(() => paginateCandidates(filtered, page, pageSize), [filtered, page, pageSize])
 
   useEffect(() => {
     setPage(1)
-  }, [searchText, selectedSkills, expRange.min, expRange.max, matchRange.min, matchRange.max, sortBy])
+  }, [searchText, selectedSkills, expRange.min, expRange.max, sortBy])
 
   useEffect(() => {
     setSelectedIds((current) => pruneSelection(current, filtered))
@@ -384,8 +374,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             skills: selectedSkills,
             experienceMin: expRange.min,
             experienceMax: expRange.max,
-            matchMin: matchRange.min,
-            matchMax: matchRange.max,
           },
         }),
       })
@@ -508,7 +496,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         headers: authHeaders(),
         body: JSON.stringify({
           candidates: filtered,
-          query: Object.fromEntries(buildResultsQueryParams({ searchText, selectedSkills, expRange, matchRange, sortBy, page, pageSize })),
+          query: Object.fromEntries(buildResultsQueryParams({ searchText, selectedSkills, expRange, sortBy, page, pageSize })),
         }),
       })
 
@@ -684,12 +672,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         searchText={searchText}
         selectedSkills={selectedSkills}
         expRange={expRange}
-        matchRange={matchRange}
         sortBy={sortBy}
         onSearch={setSearchText}
         onSkillsFilter={setSelectedSkills}
-        onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 60 }))}
-        onMatchFilter={(next) => setMatchRange(normalizeNumericRange(next, { min: 0, max: 100 }))}
+        onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 50 }))}
         onSort={(next) => setSortBy(normalizeSortBy(next))}
       />
 
