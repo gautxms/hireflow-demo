@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
+import { buildResultsQueryParams, normalizeNumericRange, normalizeSortBy, paginateCandidates } from './candidateResultsState'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -102,6 +103,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [expRange, setExpRange] = useState({ min: '', max: '' })
   const [matchRange, setMatchRange] = useState({ min: '', max: '' })
   const [sortBy, setSortBy] = useState('match_score')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [resultsError, setResultsError] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
 
@@ -295,12 +299,18 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       selectedSkills,
       expRange,
       matchRange,
-      sortBy,
+      sortBy: normalizeSortBy(sortBy),
     })
   }, [candidateRows, expRange, hasRenderableCandidates, matchRange, searchText, selectedSkills, sortBy])
 
-  const selectedCandidates = filtered.filter((candidate) => selectedIds.includes(candidate._bulkKey))
-  const allFilteredSelected = filtered.length > 0 && filtered.every((candidate) => selectedIds.includes(candidate._bulkKey))
+  const { rows: visibleCandidates, pagination } = useMemo(() => paginateCandidates(filtered, page, pageSize), [filtered, page, pageSize])
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchText, selectedSkills, expRange.min, expRange.max, matchRange.min, matchRange.max, sortBy])
+
+  const selectedCandidates = visibleCandidates.filter((candidate) => selectedIds.includes(candidate._bulkKey))
+  const allFilteredSelected = visibleCandidates.length > 0 && visibleCandidates.every((candidate) => selectedIds.includes(candidate._bulkKey))
 
   const toggleCandidateSelection = (candidateKey) => {
     setSelectedIds((currentSelected) => (
@@ -312,39 +322,55 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   const toggleSelectAllFiltered = () => {
     if (allFilteredSelected) {
-      setSelectedIds((currentSelected) => currentSelected.filter((id) => !filtered.some((candidate) => candidate._bulkKey === id)))
+      setSelectedIds((currentSelected) => currentSelected.filter((id) => !visibleCandidates.some((candidate) => candidate._bulkKey === id)))
       return
     }
 
     setSelectedIds((currentSelected) => ([
-      ...new Set([...currentSelected, ...filtered.map((candidate) => candidate._bulkKey)])
+      ...new Set([...currentSelected, ...visibleCandidates.map((candidate) => candidate._bulkKey)])
     ]))
   }
 
-  const toCSVValue = (value) => {
-    const stringValue = String(value ?? '')
-    return `"${stringValue.replaceAll('"', '""')}"`
-  }
+  const exportCSV = async (selected) => {
+    const effectiveRows = selected.length > 0 ? selected : filtered
 
-  const exportCSV = (selected) => {
-    const rows = selected.map((candidate) => [
-      candidate.name,
-      candidate.fit,
-      candidate.score,
-      Array.isArray(candidate.skills) ? candidate.skills.join('|') : candidate.skills
-    ])
+    try {
+      setResultsError('')
+      const response = await fetch('/api/results/export/csv', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          candidates: effectiveRows,
+          sortBy: normalizeSortBy(sortBy),
+          sortOrder: normalizeSortBy(sortBy) === 'name' ? 'asc' : 'desc',
+          filters: {
+            search: searchText,
+            skills: selectedSkills,
+            experienceMin: expRange.min,
+            experienceMax: expRange.max,
+            matchMin: matchRange.min,
+            matchMax: matchRange.max,
+          },
+        }),
+      })
 
-    const header = ['Name', 'Fit', 'Score', 'Skills']
-    const csvContent = [header, ...rows].map((row) => row.map(toCSVValue).join(',')).join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `hireflow-candidates-${Date.now()}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'Unable to export CSV')
+      }
+
+      const csvBlob = await response.blob()
+      const url = URL.createObjectURL(csvBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `hireflow-candidates-${Date.now()}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setResultsError(error.message || 'Unable to export CSV')
+    }
   }
 
   const emailForm = (selected) => {
@@ -370,6 +396,32 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     const deleteKeys = selected.map((candidate) => candidate._bulkKey)
     setDeletedIds((current) => [...new Set([...current, ...deleteKeys])])
     setSelectedIds((current) => current.filter((id) => !deleteKeys.includes(id)))
+  }
+
+  const createShareLink = async () => {
+    try {
+      setResultsError('')
+      const response = await fetch('/api/results/share', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          candidates: filtered,
+          query: Object.fromEntries(buildResultsQueryParams({ searchText, selectedSkills, expRange, matchRange, sortBy, page, pageSize })),
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to create share link')
+      }
+
+      const origin = window.location.origin
+      const shareUrl = `${origin}${payload.sharePath}`
+      await navigator.clipboard.writeText(shareUrl)
+      alert('Share link copied to clipboard.')
+    } catch (error) {
+      setResultsError(error.message || 'Unable to create share link')
+    }
   }
 
   const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
@@ -501,8 +553,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           Candidate Ranking
         </h1>
         <p style={{ color: 'var(--muted)' }}>
-          {filtered.length} candidates analyzed and ranked by fit
+          {pagination.total} candidates analyzed and ranked by fit
         </p>
+        {resultsError && <p style={{ color: '#ef4444' }}>{resultsError}</p>}
       </div>
 
       <ShortlistManager
@@ -523,28 +576,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         error={shortlistError}
       />
 
-      {/* Controls */}
-      <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort By</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="touch-target"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              color: 'var(--text)',
-              padding: '0.5rem 1rem',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="score">Score (High to Low)</option>
-            <option value="name">Name (A-Z)</option>
-            <option value="fit">Fit Quality</option>
-          </select>
-        </div>
       <CandidateFilters
         candidates={displayCandidates}
         searchText={searchText}
@@ -554,17 +585,17 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         sortBy={sortBy}
         onSearch={setSearchText}
         onSkillsFilter={setSelectedSkills}
-        onExperienceFilter={setExpRange}
-        onMatchFilter={setMatchRange}
-        onSort={setSortBy}
+        onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 60 }))}
+        onMatchFilter={(next) => setMatchRange(normalizeNumericRange(next, { min: 0, max: 100 }))}
+        onSort={(next) => setSortBy(normalizeSortBy(next))}
       />
-      </div>
 
       <BulkActions selectedCount={selectedCandidates.length}>
         <button className="touch-target" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
         <button className="touch-target" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
         <button className="touch-target" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
         <button className="touch-target" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
+        <button className="touch-target" onClick={createShareLink} type="button">🔗 Share View</button>
         <button className="touch-target" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
       </BulkActions>
 
@@ -587,7 +618,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             </tr>
           </thead>
           <tbody>
-            {filtered.map((candidate) => (
+            {visibleCandidates.map((candidate) => (
               <tr key={`summary-${candidate._bulkKey}`}>
                 <td data-label="Select">
                   <input
@@ -607,8 +638,25 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </table>
       </div>
 
+
+      {visibleCandidates.length === 0 && (
+        <div style={{ maxWidth: '1200px', margin: '0 auto 1rem', color: 'var(--muted)' }}>
+          No candidates match the current filters.
+        </div>
+      )}
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto 1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <button className="touch-target" type="button" disabled={pagination.page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button>
+        <span style={{ color: 'var(--muted)' }}>Page {pagination.page} of {pagination.totalPages}</span>
+        <button className="touch-target" type="button" disabled={!pagination.hasNextPage} onClick={() => setPage((current) => current + 1)}>Next</button>
+        <select className="touch-target" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+          <option value={10}>10 / page</option>
+          <option value={25}>25 / page</option>
+          <option value={50}>50 / page</option>
+        </select>
+      </div>
       <div className="candidate-results-list" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
-        {filtered.map((candidate) => {
+        {visibleCandidates.map((candidate) => {
           const candidateSkills = Array.isArray(candidate.skills)
             ? candidate.skills
             : String(candidate.skills || '')
