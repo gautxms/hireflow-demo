@@ -9,6 +9,7 @@ import { initializeJobQueue } from './services/jobQueue.js'
 import { registerParseResumeJobProcessor } from './jobs/parseResumeJob.js'
 import { startChunkUploadCleanupCron } from './services/fileUploadService.js'
 import { ensureWebhookTables } from './services/webhookService.js'
+import { ensureNotificationTables } from './services/notificationService.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -39,6 +40,7 @@ async function start() {
     await ensurePasswordResetTables()
     await ensurePaymentTrackingTables()
     await ensureWebhookTables()
+    await ensureNotificationTables()
     await initializeJobQueue()
 
     logEmailConfigStatus()
