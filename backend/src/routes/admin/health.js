@@ -50,6 +50,15 @@ function statusFromSignals({ dbOk, memoryPercent, cpuPercent }) {
   return 'green'
 }
 
+export function normalizeQueueCounts(row = {}) {
+  return {
+    pending: Number(row.pending || 0),
+    processing: Number(row.processing || 0),
+    failed: Number(row.failed || 0),
+    succeeded: Number(row.succeeded || 0),
+  }
+}
+
 router.get('/', async (_req, res) => {
   const startedAt = Date.now()
   let db = {
@@ -112,25 +121,27 @@ router.get('/', async (_req, res) => {
     ),
     pool.query(
       `SELECT
-         COUNT(*) FILTER (WHERE status = 'failed')::int AS pending,
-         COUNT(*) FILTER (WHERE status = 'retrying')::int AS processing,
-         COUNT(*) FILTER (WHERE status = 'manual_required')::int AS failed,
-         COUNT(*) FILTER (WHERE status = 'succeeded')::int AS succeeded
-       FROM payment_attempts`,
+         COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+         COUNT(*) FILTER (WHERE status IN ('processing', 'retrying'))::int AS processing,
+         COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+         COUNT(*) FILTER (WHERE status = 'complete')::int AS succeeded
+       FROM parse_jobs
+       WHERE created_at >= NOW() - interval '30 days'`,
     ),
     pool.query(
       `SELECT
-         COALESCE(metadata ->> 'jobType', 'payment_retry') AS job_type,
+         'resume_parse' AS job_type,
          ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) * 1000), 2) AS avg_processing_ms,
          COUNT(*)::int AS total
-       FROM payment_attempts
+       FROM parse_jobs
+       WHERE status = 'complete'
        GROUP BY job_type
        ORDER BY total DESC`,
     ),
     pool.query(
-      `SELECT id, transaction_id, status, retry_count, last_error, updated_at
-       FROM payment_attempts
-       WHERE status IN ('failed', 'manual_required')
+      `SELECT job_id AS id, resume_id, status, attempts AS retry_count, error_message AS last_error, updated_at
+       FROM parse_jobs
+       WHERE status = 'failed'
        ORDER BY updated_at DESC
        LIMIT 25`,
     ),
@@ -176,10 +187,7 @@ router.get('/', async (_req, res) => {
     },
     jobQueue: {
       counts: {
-        pending: Number(jobSummaryResult.rows[0]?.pending || 0),
-        processing: Number(jobSummaryResult.rows[0]?.processing || 0),
-        failed: Number(jobSummaryResult.rows[0]?.failed || 0),
-        succeeded: Number(jobSummaryResult.rows[0]?.succeeded || 0),
+        ...normalizeQueueCounts(jobSummaryResult.rows[0]),
       },
       avgProcessingTimeByType: jobTypeResult.rows.map((row) => ({
         jobType: row.job_type,
@@ -199,25 +207,27 @@ router.get('/queue', async (_req, res) => {
     const [jobSummaryResult, jobTypeResult, failedJobsResult] = await Promise.all([
       pool.query(
         `SELECT
-           COUNT(*) FILTER (WHERE status = 'failed')::int AS pending,
-           COUNT(*) FILTER (WHERE status = 'retrying')::int AS processing,
-           COUNT(*) FILTER (WHERE status = 'manual_required')::int AS failed,
-           COUNT(*) FILTER (WHERE status = 'succeeded')::int AS succeeded
-         FROM payment_attempts`,
+           COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+           COUNT(*) FILTER (WHERE status IN ('processing', 'retrying'))::int AS processing,
+           COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+           COUNT(*) FILTER (WHERE status = 'complete')::int AS succeeded
+         FROM parse_jobs
+         WHERE created_at >= NOW() - interval '30 days'`,
       ),
       pool.query(
         `SELECT
-           COALESCE(metadata ->> 'jobType', 'payment_retry') AS job_type,
+           'resume_parse' AS job_type,
            ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) * 1000), 2) AS avg_processing_ms,
            COUNT(*)::int AS total
-         FROM payment_attempts
+         FROM parse_jobs
+         WHERE status = 'complete'
          GROUP BY job_type
          ORDER BY total DESC`,
       ),
       pool.query(
-        `SELECT id, transaction_id, status, retry_count, last_error, updated_at
-         FROM payment_attempts
-         WHERE status IN ('failed', 'manual_required')
+        `SELECT job_id AS id, resume_id, status, attempts AS retry_count, error_message AS last_error, updated_at
+         FROM parse_jobs
+         WHERE status = 'failed'
          ORDER BY updated_at DESC
          LIMIT 25`,
       ),
@@ -225,10 +235,7 @@ router.get('/queue', async (_req, res) => {
 
     return res.json({
       counts: {
-        pending: Number(jobSummaryResult.rows[0]?.pending || 0),
-        processing: Number(jobSummaryResult.rows[0]?.processing || 0),
-        failed: Number(jobSummaryResult.rows[0]?.failed || 0),
-        succeeded: Number(jobSummaryResult.rows[0]?.succeeded || 0),
+        ...normalizeQueueCounts(jobSummaryResult.rows[0]),
       },
       avgProcessingTimeByType: jobTypeResult.rows.map((row) => ({
         jobType: row.job_type,

@@ -234,6 +234,14 @@ function scoreFieldConfidence(value, fallback = 0.4) {
   return fallback
 }
 
+function clampConfidence(value, min = 0, max = 100) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return min
+  }
+  return Math.min(max, Math.max(min, numeric))
+}
+
 function buildCandidateFromText(seed, text = '') {
   const sections = parseSections(text)
   const profiles = extractProfiles(text)
@@ -296,7 +304,11 @@ function buildCandidateFromText(seed, text = '') {
 
 function scoreTextConfidence(textLength, fileSize) {
   const density = textLength / Math.max(1, fileSize * 0.02)
-  return Math.max(10, Math.min(99, Math.round(density * 100)))
+  return clampConfidence(Math.round(density * 100), 10, 99)
+}
+
+export function shouldUseOcrFallback({ scannedPdf, extractionLength, aiConfidence }) {
+  return Boolean(scannedPdf || extractionLength === 0 || aiConfidence < 70)
 }
 
 export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer }) {
@@ -311,7 +323,11 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
     status: extraction.length > 0 ? 'success' : 'failed',
   }
 
-  const shouldRunOcr = scannedPdf || extraction.length === 0 || aiConfidence < 70
+  const shouldRunOcr = shouldUseOcrFallback({
+    scannedPdf,
+    extractionLength: extraction.length,
+    aiConfidence,
+  })
 
   if (!shouldRunOcr) {
     return {
@@ -331,22 +347,26 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   }
 
   const ocrAttempt = await runOcrWithCache({ fileBuffer, mimeType })
-  const overallConfidence = Math.max(aiConfidence, ocrAttempt.confidence)
+  const ocrConfidence = clampConfidence(ocrAttempt.confidence, 10, 99)
+  const ocrText = String(ocrAttempt.text || '').trim()
+  const useOcrText = ocrText.length > extraction.length && ocrConfidence >= aiConfidence
+  const selectedText = useOcrText ? ocrText : extraction.text
+  const overallConfidence = clampConfidence(Math.max(aiConfidence, ocrConfidence), 10, 99)
 
   return {
-    methodUsed: 'ocr-fallback',
+    methodUsed: useOcrText ? 'ocr-fallback' : 'ai-extraction',
     confidence: overallConfidence,
-    extractedTextLength: (ocrAttempt.text || '').length,
-    rawText: ocrAttempt.text,
-    candidates: [buildCandidateFromText(filename, ocrAttempt.text || extraction.text)],
+    extractedTextLength: selectedText.length,
+    rawText: selectedText,
+    candidates: [buildCandidateFromText(filename, selectedText)],
     attempts: [
       aiAttempt,
       {
         method: ocrAttempt.method,
         provider: ocrAttempt.provider,
-        confidence: ocrAttempt.confidence,
+        confidence: ocrConfidence,
         cacheHit: Boolean(ocrAttempt.cacheHit),
-        status: 'success',
+        status: ocrText ? 'success' : 'failed',
       },
     ],
     requiresManualCorrection: overallConfidence < 70,

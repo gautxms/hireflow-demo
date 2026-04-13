@@ -64,6 +64,23 @@ export async function getCachedJobResult(jobId) {
 }
 
 export async function enqueueParseJob({ resumeId, userId, filename, mimeType, fileSize, fileBufferBase64 }) {
+  const existing = await pool.query(
+    `SELECT job_id
+     FROM parse_jobs
+     WHERE resume_id = $1
+       AND status IN ('pending', 'processing', 'retrying')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [resumeId],
+  )
+
+  if (existing.rows[0]?.job_id) {
+    const existingJob = await parseQueue.getJob(String(existing.rows[0].job_id))
+    if (existingJob) {
+      return existingJob
+    }
+  }
+
   const job = await parseQueue.add(
     {
       resumeId,
@@ -74,6 +91,7 @@ export async function enqueueParseJob({ resumeId, userId, filename, mimeType, fi
       fileBufferBase64,
     },
     {
+      jobId: `resume:${resumeId}`,
       attempts: 3,
       backoff: {
         type: 'exponential',
@@ -90,7 +108,12 @@ export async function enqueueParseJob({ resumeId, userId, filename, mimeType, fi
 
   await pool.query(
     `INSERT INTO parse_jobs (job_id, resume_id, user_id, status, progress, attempts, expires_at)
-     VALUES ($1, $2, $3, 'pending', 0, 0, NOW() + INTERVAL '7 days')`,
+     VALUES ($1, $2, $3, 'pending', 0, 0, NOW() + INTERVAL '7 days')
+     ON CONFLICT (job_id)
+     DO UPDATE SET
+       resume_id = EXCLUDED.resume_id,
+       user_id = EXCLUDED.user_id,
+       updated_at = NOW()`,
     [String(job.id), resumeId, userId],
   )
 

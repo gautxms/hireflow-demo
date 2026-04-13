@@ -10,7 +10,7 @@ import {
 import { pool } from '../db/client.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 import { enqueueParseJob } from './jobQueue.js'
-import { scanFileBuffer } from './virusScanService.js'
+import { isScanResultSafe, scanFileBuffer } from './virusScanService.js'
 
 export const CHUNK_SIZE_BYTES = 5 * 1024 * 1024
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
@@ -102,6 +102,29 @@ function buildPrefix(uploadId) {
 
 function buildChunkKey(uploadId, chunkIndex) {
   return `${buildPrefix(uploadId)}/chunks/${chunkIndex}`
+}
+
+export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
+  if (!Array.isArray(uploadedChunks) || !Number.isInteger(totalChunks) || totalChunks <= 0) {
+    return false
+  }
+
+  if (uploadedChunks.length !== totalChunks) {
+    return false
+  }
+
+  const sorted = [...new Set(uploadedChunks.map((value) => Number(value)))].sort((a, b) => a - b)
+  if (sorted.length !== totalChunks) {
+    return false
+  }
+
+  for (let index = 0; index < totalChunks; index += 1) {
+    if (sorted[index] !== index) {
+      return false
+    }
+  }
+
+  return true
 }
 
 export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null }) {
@@ -201,6 +224,10 @@ export async function storeChunk({ userId, uploadId, chunkIndex, totalChunks, ch
     throw new Error('Chunk metadata mismatch')
   }
 
+  if (!Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= Number(totalChunks)) {
+    throw new Error('chunkIndex is out of range')
+  }
+
   await s3Client.send(new PutObjectCommand({
     Bucket: s3Bucket,
     Key: buildChunkKey(uploadId, chunkIndex),
@@ -250,7 +277,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
   ensureS3Configured()
 
   const result = await pool.query(
-    `SELECT upload_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id
+    `SELECT upload_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id, resume_id
      FROM upload_chunks
      WHERE upload_id = $1 AND user_id = $2
      LIMIT 1`,
@@ -270,7 +297,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
   const totalChunks = Number(row.total_chunks)
   const uploadedChunks = row.uploaded_chunks || []
 
-  if (uploadedChunks.length !== totalChunks) {
+  if (!hasCompleteChunkSet(uploadedChunks, totalChunks)) {
     throw new Error('Upload is incomplete. Missing chunks detected.')
   }
 
@@ -286,6 +313,17 @@ export async function completeChunkUpload({ userId, uploadId }) {
   }
 
   const assembledBuffer = Buffer.concat(chunkBuffers)
+  if (assembledBuffer.length !== Number(row.file_size)) {
+    await pool.query(
+      `UPDATE upload_chunks
+       SET status = 'failed',
+           updated_at = NOW()
+       WHERE upload_id = $1`,
+      [uploadId],
+    )
+    throw new Error('Upload assembly failed: reconstructed file size mismatch')
+  }
+
   const assembledHash = crypto.createHash('sha256').update(assembledBuffer).digest('hex')
   const assembledKey = `${buildPrefix(uploadId)}/assembled/${row.filename}`
 
@@ -298,32 +336,86 @@ export async function completeChunkUpload({ userId, uploadId }) {
 
   const scanResult = await scanFileBuffer(assembledBuffer, row.filename)
 
-  if (scanResult.malicious) {
+  if (!isScanResultSafe(scanResult)) {
     await pool.query(
       `UPDATE upload_chunks
        SET status = 'rejected',
-           scan_status = 'malicious',
-           scan_result = $2::jsonb,
-           assembled_sha256 = $3,
+           scan_status = $2,
+           scan_result = $3::jsonb,
+           assembled_sha256 = $4,
            updated_at = NOW()
        WHERE upload_id = $1`,
-      [uploadId, JSON.stringify(scanResult), assembledHash],
+      [uploadId, scanResult.status || 'error', JSON.stringify(scanResult), assembledHash],
     )
 
-    throw new Error('Upload rejected: malware detected in file scan')
+    const reason = scanResult.malicious
+      ? 'malware detected in file scan'
+      : `file scan returned ${scanResult.status || 'unknown'}`
+    throw new Error(`Upload rejected: ${reason}`)
   }
 
-  const resumeInsertResult = await pool.query(
-    `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, job_description_id, updated_at)
-     VALUES ($1, $2, '', $3, $4, 'pending', $5, NOW())
-     RETURNING id`,
-    [userId, row.filename, row.file_size, row.mime_type, row.job_description_id],
-  )
+  const client = await pool.connect()
+  let resumeId = row.resume_id || null
+  let finalizedUpload = null
+  try {
+    await client.query('BEGIN')
+    const freshStatus = await client.query(
+      `SELECT status, resume_id, parse_job_id
+       FROM upload_chunks
+       WHERE upload_id = $1
+       FOR UPDATE`,
+      [uploadId],
+    )
+    const current = freshStatus.rows[0]
+    if (!current || current.status !== 'uploading') {
+      throw new Error('Upload session is already finalized')
+    }
 
-  const resumeId = resumeInsertResult.rows[0].id
+    if (!resumeId) {
+      const resumeInsertResult = await client.query(
+        `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, job_description_id, updated_at)
+         VALUES ($1, $2, '', $3, $4, 'pending', $5, NOW())
+         RETURNING id`,
+        [userId, row.filename, row.file_size, row.mime_type, row.job_description_id],
+      )
+      resumeId = resumeInsertResult.rows[0].id
+    }
+
+    await client.query(
+      `UPDATE upload_chunks
+       SET status = 'completed',
+           scan_status = $2,
+           scan_result = $3::jsonb,
+           assembled_s3_key = $4,
+           assembled_sha256 = $5,
+           resume_id = $6,
+           parse_job_id = NULL,
+           updated_at = NOW()
+       WHERE upload_id = $1`,
+      [
+        uploadId,
+        scanResult.status || 'clean',
+        JSON.stringify(scanResult),
+        assembledKey,
+        assembledHash,
+        resumeId,
+      ],
+    )
+    await client.query('COMMIT')
+    finalizedUpload = {
+      resumeId,
+      scan: scanResult,
+      sha256: assembledHash,
+    }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 
   const parseJob = await enqueueParseJob({
-    resumeId,
+    resumeId: finalizedUpload.resumeId,
     userId,
     filename: row.filename,
     mimeType: row.mime_type,
@@ -334,24 +426,10 @@ export async function completeChunkUpload({ userId, uploadId }) {
 
   await pool.query(
     `UPDATE upload_chunks
-     SET status = 'completed',
-         scan_status = $2,
-         scan_result = $3::jsonb,
-         assembled_s3_key = $4,
-         assembled_sha256 = $5,
-         resume_id = $6,
-         parse_job_id = $7,
+     SET parse_job_id = $2,
          updated_at = NOW()
      WHERE upload_id = $1`,
-    [
-      uploadId,
-      scanResult.status || 'clean',
-      JSON.stringify(scanResult),
-      assembledKey,
-      assembledHash,
-      resumeId,
-      String(parseJob.id),
-    ],
+    [uploadId, String(parseJob.id)],
   )
 
   await deleteChunkObjects(uploadId, totalChunks)
@@ -359,10 +437,10 @@ export async function completeChunkUpload({ userId, uploadId }) {
   return {
     ok: true,
     uploadId,
-    resumeId,
+    resumeId: finalizedUpload.resumeId,
     jobId: String(parseJob.id),
-    scan: scanResult,
-    sha256: assembledHash,
+    scan: finalizedUpload.scan,
+    sha256: finalizedUpload.sha256,
   }
 }
 
