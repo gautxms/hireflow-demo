@@ -12,7 +12,7 @@ const PLAN_CONFIG = {
 const PADDLE_API_BASE_URL = process.env.PADDLE_API_BASE_URL || 'https://api.paddle.com'
 const PADDLE_API_VERSION = process.env.PADDLE_API_VERSION || '1'
 
-function money(cents, currency = 'USD') {
+export function money(cents, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
@@ -20,7 +20,7 @@ function money(cents, currency = 'USD') {
   }).format((Number(cents) || 0) / 100)
 }
 
-function isoOrNull(value) {
+export function isoOrNull(value) {
   if (!value) return null
   return new Date(value).toISOString()
 }

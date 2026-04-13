@@ -273,16 +273,12 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         throw new Error(payload.error || 'Unable to add candidate to shortlist')
       }
 
-      await Promise.all([
-        loadShortlists(),
-        loadShortlistDetails(selectedShortlistId),
-      ])
       return true
     } catch (error) {
       setShortlistError(error.message || 'Unable to add candidate to shortlist')
       return false
     }
-  }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
+  }, [authHeaders, selectedShortlistId])
 
   const removeCandidateFromShortlist = useCallback(async (resumeId) => {
     try {
@@ -436,6 +432,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     }
 
     if (successCount > 0) {
+      await Promise.all([
+        loadShortlists(),
+        loadShortlistDetails(selectedShortlistId),
+      ])
       alert(`Added ${successCount} candidate(s) to shortlist.`)
     }
   }

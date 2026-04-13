@@ -10,9 +10,11 @@ import { redactValue } from '../routes/admin/logs.js'
 
 test('chunk assembly validator rejects missing, duplicate, and out-of-order gaps', () => {
   assert.equal(hasCompleteChunkSet([0, 1, 2], 3), true)
+  assert.equal(hasCompleteChunkSet(['0', '1', '2'], 3), true)
   assert.equal(hasCompleteChunkSet([0, 2], 3), false)
   assert.equal(hasCompleteChunkSet([0, 1, 1], 3), false)
   assert.equal(hasCompleteChunkSet([1, 2, 3], 3), false)
+  assert.equal(hasCompleteChunkSet([0, 'abc', 2], 3), false)
 })
 
 test('virus scan safety classification enforces safe/unsafe states', () => {
