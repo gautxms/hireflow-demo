@@ -8,6 +8,7 @@ export default function ShortlistManager({
   onCreateShortlist,
   onChangeSort,
   onRefresh,
+  onRemoveCandidate,
   loading,
   error,
 }) {
@@ -113,7 +114,7 @@ export default function ShortlistManager({
 
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
             {(shortlistDetails?.candidates || []).map((candidate) => (
-              <div key={candidate.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', background: 'var(--ink)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.7rem 0.85rem' }}>
+              <div key={candidate.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '0.5rem', background: 'var(--ink)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.7rem 0.85rem' }}>
                 <div>
                   <div style={{ fontWeight: 600 }}>{candidate.filename || candidate.resume_id}</div>
                   <div style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{candidate.notes || 'No notes'}</div>
@@ -121,6 +122,13 @@ export default function ShortlistManager({
                 <div style={{ alignSelf: 'center', color: 'var(--accent)' }}>
                   {candidate.rating ? `${candidate.rating}/5` : 'Unrated'}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveCandidate(candidate.resume_id)}
+                  style={{ background: 'transparent', color: '#ef4444', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
+                >
+                  Remove
+                </button>
               </div>
             ))}
             {!shortlistDetails?.candidates?.length ? (

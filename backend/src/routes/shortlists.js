@@ -154,4 +154,33 @@ router.post('/:id/candidates', async (req, res) => {
   }
 })
 
+router.delete('/:id/candidates/:resumeId', async (req, res) => {
+  try {
+    const ownerCheck = await pool.query(
+      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [req.params.id, req.userId],
+    )
+
+    if (!ownerCheck.rows[0]) {
+      return res.status(404).json({ error: 'Shortlist not found' })
+    }
+
+    const result = await pool.query(
+      `DELETE FROM shortlist_candidates
+       WHERE shortlist_id = $1 AND resume_id = $2
+       RETURNING id`,
+      [req.params.id, req.params.resumeId],
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Candidate not found in shortlist' })
+    }
+
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[Shortlists] Failed to remove candidate from shortlist:', error)
+    return res.status(500).json({ error: 'Unable to remove candidate from shortlist' })
+  }
+})
+
 export default router

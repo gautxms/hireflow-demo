@@ -2,7 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
-import { buildResultsQueryParams, normalizeNumericRange, normalizeSortBy, paginateCandidates } from './candidateResultsState'
+import {
+  buildResultsQueryParams,
+  normalizeNumericRange,
+  normalizeSortBy,
+  paginateCandidates,
+  resolveCandidateResumeUuid,
+} from './candidateResultsState'
+import { applyOptimisticTagUpdate } from './candidateTagState'
+import {
+  computeAllVisibleSelected,
+  getSelectedCandidates,
+  pruneSelection,
+  toggleSelectAllVisible,
+  toggleSelection,
+} from './candidateSelectionState'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -115,6 +129,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [shortlistSort, setShortlistSort] = useState('rating_desc')
   const [shortlistLoading, setShortlistLoading] = useState(false)
   const [shortlistError, setShortlistError] = useState('')
+  const [tagDraft, setTagDraft] = useState('')
+  const [candidateTags, setCandidateTags] = useState({})
 
   const rawCandidates = Array.isArray(candidates)
     ? candidates
@@ -240,11 +256,12 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
       const derivedRating = Math.max(1, Math.min(5, Math.round(Number(candidate?.score || 0) / 20)))
 
+      const resumeId = candidate?.resumeId || candidate?.resume_id || candidate?.id
       const response = await fetch(`/api/shortlists/${selectedShortlistId}/candidates`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
-          resumeId: candidate?.id,
+          resumeId,
           notes: `Added from ranking: ${candidate?.name || 'Unknown candidate'}`,
           rating: derivedRating,
         }),
@@ -260,8 +277,38 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         loadShortlists(),
         loadShortlistDetails(selectedShortlistId),
       ])
+      return true
     } catch (error) {
       setShortlistError(error.message || 'Unable to add candidate to shortlist')
+      return false
+    }
+  }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
+
+  const removeCandidateFromShortlist = useCallback(async (resumeId) => {
+    try {
+      if (!selectedShortlistId || !resumeId) {
+        return
+      }
+
+      setShortlistLoading(true)
+      setShortlistError('')
+      const response = await fetch(`/api/shortlists/${selectedShortlistId}/candidates/${resumeId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to remove candidate from shortlist')
+      }
+
+      await Promise.all([
+        loadShortlists(),
+        loadShortlistDetails(selectedShortlistId),
+      ])
+    } catch (error) {
+      setShortlistError(error.message || 'Unable to remove candidate from shortlist')
+    } finally {
+      setShortlistLoading(false)
     }
   }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
 
@@ -309,26 +356,19 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     setPage(1)
   }, [searchText, selectedSkills, expRange.min, expRange.max, matchRange.min, matchRange.max, sortBy])
 
-  const selectedCandidates = visibleCandidates.filter((candidate) => selectedIds.includes(candidate._bulkKey))
-  const allFilteredSelected = visibleCandidates.length > 0 && visibleCandidates.every((candidate) => selectedIds.includes(candidate._bulkKey))
+  useEffect(() => {
+    setSelectedIds((current) => pruneSelection(current, filtered))
+  }, [filtered])
+
+  const selectedCandidates = getSelectedCandidates(filtered, selectedIds)
+  const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds)
 
   const toggleCandidateSelection = (candidateKey) => {
-    setSelectedIds((currentSelected) => (
-      currentSelected.includes(candidateKey)
-        ? currentSelected.filter((id) => id !== candidateKey)
-        : [...currentSelected, candidateKey]
-    ))
+    setSelectedIds((currentSelected) => toggleSelection(currentSelected, candidateKey))
   }
 
   const toggleSelectAllFiltered = () => {
-    if (allFilteredSelected) {
-      setSelectedIds((currentSelected) => currentSelected.filter((id) => !visibleCandidates.some((candidate) => candidate._bulkKey === id)))
-      return
-    }
-
-    setSelectedIds((currentSelected) => ([
-      ...new Set([...currentSelected, ...visibleCandidates.map((candidate) => candidate._bulkKey)])
-    ]))
+    setSelectedIds((currentSelected) => toggleSelectAllVisible(currentSelected, visibleCandidates))
   }
 
   const exportCSV = async (selected) => {
@@ -382,9 +422,22 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     window.location.href = `mailto:${recipients.join(',')}?subject=HireFlow%20Feedback%20Form`
   }
 
-  const addToShortlist = (selected) => {
-    const names = selected.map((candidate) => candidate.name).join(', ')
-    alert(`Added to shortlist: ${names}`)
+  const addToShortlist = async (selected) => {
+    if (selected.length === 0) {
+      return
+    }
+
+    let successCount = 0
+    for (const candidate of selected) {
+      const ok = await addCandidateToShortlist(candidate)
+      if (ok) {
+        successCount += 1
+      }
+    }
+
+    if (successCount > 0) {
+      alert(`Added ${successCount} candidate(s) to shortlist.`)
+    }
   }
 
   const sendFeedbackForm = (selected) => {
@@ -396,6 +449,55 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     const deleteKeys = selected.map((candidate) => candidate._bulkKey)
     setDeletedIds((current) => [...new Set([...current, ...deleteKeys])])
     setSelectedIds((current) => current.filter((id) => !deleteKeys.includes(id)))
+  }
+
+  const mutateSelectedTags = async (operation) => {
+    const tags = tagDraft.split(',').map((tag) => tag.trim()).filter(Boolean)
+    if (tags.length === 0 || selectedCandidates.length === 0) {
+      return
+    }
+
+    const selectedWithResume = selectedCandidates
+      .map((candidate) => ({
+        key: candidate._bulkKey,
+        resumeId: resolveCandidateResumeUuid(candidate),
+      }))
+      .filter((candidate) => Boolean(candidate.resumeId))
+
+    if (selectedWithResume.length === 0) {
+      setResultsError('No selected candidates have a resume ID available for tagging.')
+      return
+    }
+
+    const { next, rollback } = applyOptimisticTagUpdate(
+      candidateTags,
+      selectedWithResume.map((candidate) => candidate.key),
+      tags,
+      operation,
+    )
+    setCandidateTags(next)
+
+    try {
+      setResultsError('')
+      const response = await fetch('/api/candidates/tags/bulk', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          operation,
+          tags,
+          resumeIds: selectedWithResume.map((candidate) => candidate.resumeId),
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to update candidate tags')
+      }
+      setTagDraft('')
+    } catch (error) {
+      setCandidateTags(rollback)
+      setResultsError(error.message || 'Unable to update candidate tags')
+    }
   }
 
   const createShareLink = async () => {
@@ -572,6 +674,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           await loadShortlists()
           await loadShortlistDetails(selectedShortlistId)
         }}
+        onRemoveCandidate={removeCandidateFromShortlist}
         loading={shortlistLoading}
         error={shortlistError}
       />
@@ -597,6 +700,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         <button className="touch-target" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
         <button className="touch-target" onClick={createShareLink} type="button">🔗 Share View</button>
         <button className="touch-target" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
+        <input
+          className="touch-target"
+          value={tagDraft}
+          onChange={(event) => setTagDraft(event.target.value)}
+          placeholder="tag1, tag2"
+          style={{ minWidth: 160 }}
+        />
+        <button className="touch-target" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
+        <button className="touch-target" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
       </BulkActions>
 
       <div className="candidate-results-table-wrapper">
@@ -772,6 +884,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     </span>
                   ))}
                 </div>
+                {candidateTags[candidate._bulkKey]?.length > 0 ? (
+                  <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                    Tags: {candidateTags[candidate._bulkKey].join(', ')}
+                  </p>
+                ) : null}
               </div>
 
               <div className="candidate-evaluation-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
