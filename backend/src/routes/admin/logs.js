@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { pool } from '../../db/client.js'
 
 const router = Router()
+const SENSITIVE_KEY_PATTERN = /(password|token|secret|authorization|cookie|resume|raw|text|email|phone|ssn)/i
+const REDACTED = '[REDACTED]'
 
 function toIsoDate(value, fallback) {
   if (!value) return fallback
@@ -14,6 +16,30 @@ function toInt(value, fallback, { min = 1, max = 200 } = {}) {
   const parsed = Number.parseInt(String(value || ''), 10)
   if (Number.isNaN(parsed)) return fallback
   return Math.max(min, Math.min(max, parsed))
+}
+
+export function redactValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactValue(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => {
+        if (SENSITIVE_KEY_PATTERN.test(key)) {
+          return [key, REDACTED]
+        }
+        return [key, redactValue(entry)]
+      }),
+    )
+  }
+
+  if (typeof value === 'string') {
+    const withEmailRedacted = value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig, REDACTED)
+    return withEmailRedacted.length > 1000 ? `${withEmailRedacted.slice(0, 1000)}…` : withEmailRedacted
+  }
+
+  return value
 }
 
 async function listErrorLogs(req, res) {
@@ -73,9 +99,9 @@ async function listErrorLogs(req, res) {
       items: result.rows.map((row) => ({
         id: row.id,
         source: row.source,
-        message: row.message,
-        stack: row.stack,
-        context: row.context || {},
+        message: redactValue(row.message),
+        stack: redactValue(row.stack),
+        context: redactValue(row.context || {}),
         endpoint: row.endpoint,
         statusCode: row.status_code,
         resolved: row.resolved,
@@ -109,9 +135,9 @@ router.get('/errors/:id', async (req, res) => {
     return res.json({
       id: entry.id,
       source: entry.source,
-      message: entry.message,
-      stack: entry.stack,
-      context: entry.context || {},
+      message: redactValue(entry.message),
+      stack: redactValue(entry.stack),
+      context: redactValue(entry.context || {}),
       createdAt: entry.created_at,
     })
   } catch (error) {
@@ -185,10 +211,10 @@ router.get('/webhooks', async (req, res) => {
         id: row.id,
         eventType: row.event_type,
         status: row.status,
-        requestBody: row.payload,
+        requestBody: redactValue(row.payload),
         responseBody: {
           signatureValid: row.signature_valid,
-          errorMessage: row.error_message,
+          errorMessage: redactValue(row.error_message),
         },
         timestamp: row.created_at,
       })),

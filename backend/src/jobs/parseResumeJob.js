@@ -4,6 +4,10 @@ import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
 import { triggerWebhook } from '../services/webhookService.js'
 
+export function isTerminalJobFailure(job) {
+  return job.attemptsMade + 1 >= (job.opts.attempts || 1)
+}
+
 async function setJobState(jobId, fields) {
   const columns = Object.keys(fields)
   const values = Object.values(fields)
@@ -108,28 +112,33 @@ export function registerParseResumeJobProcessor() {
     try {
       return await runParse(job)
     } catch (error) {
-      await pool.query(
-        `UPDATE resumes
-         SET parse_status = 'failed',
-             parse_error = $2,
-             updated_at = NOW()
-         WHERE id = $1`,
-        [job.data.resumeId, error.message || 'Unknown parse error'],
-      )
+      const isTerminalFailure = isTerminalJobFailure(job)
+      if (isTerminalFailure) {
+        await pool.query(
+          `UPDATE resumes
+           SET parse_status = 'failed',
+               parse_error = $2,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [job.data.resumeId, error.message || 'Unknown parse error'],
+        )
+      }
 
       await setJobState(job.id, {
-        status: 'failed',
-        progress: 100,
+        status: isTerminalFailure ? 'failed' : 'retrying',
+        progress: isTerminalFailure ? 100 : Number(job.progress() || 0),
         error_message: error.message || 'Unknown parse error',
         attempts: job.attemptsMade + 1,
       })
 
-      await cacheJobResult(String(job.id), {
-        status: 'failed',
-        progress: 100,
-        result: null,
-        error: error.message || 'Unknown parse error',
-      })
+      if (isTerminalFailure) {
+        await cacheJobResult(String(job.id), {
+          status: 'failed',
+          progress: 100,
+          result: null,
+          error: error.message || 'Unknown parse error',
+        })
+      }
 
       throw error
     }

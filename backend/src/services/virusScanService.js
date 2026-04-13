@@ -154,3 +154,15 @@ export async function scanFileBuffer(fileBuffer, filename) {
     }
   }
 }
+
+export function isScanResultSafe(scanResult) {
+  if (!scanResult || typeof scanResult !== 'object') {
+    return false
+  }
+
+  if (scanResult.malicious) {
+    return false
+  }
+
+  return ['clean', 'skipped'].includes(scanResult.status)
+}
