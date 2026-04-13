@@ -225,6 +225,87 @@ router.patch('/users/:id', async (req, res) => {
   }
 })
 
+router.post('/users/:id/block', async (req, res) => {
+  const { id } = req.params
+  const { reason } = req.body || {}
+
+  try {
+    await ensureAdminUserColumns()
+    const result = await pool.query(
+      `UPDATE users
+       SET blocked = true,
+           is_blocked = true
+       WHERE id::text = $1
+       RETURNING id, email, company, phone, COALESCE(is_blocked, blocked, false) AS is_blocked`,
+      [id],
+    )
+
+    const user = result.rows[0]
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        company: user.company,
+        phone: user.phone,
+        is_blocked: Boolean(user.is_blocked),
+      },
+      audit: {
+        action: 'user_blocked',
+        actor: req.admin?.id || 'admin',
+        details: { reason: reason || null },
+        created_at: new Date().toISOString(),
+      },
+      message: 'User blocked',
+    })
+  } catch (error) {
+    console.error('[Admin users] block failed:', error)
+    return res.status(500).json({ error: 'Unable to block user' })
+  }
+})
+
+router.post('/users/:id/reset-password', async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const userResult = await pool.query(
+      'SELECT id, email FROM users WHERE id::text = $1 LIMIT 1',
+      [id],
+    )
+    const user = userResult.rows[0]
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const token = generateResetToken()
+    await createPasswordResetToken(user.id, token)
+    await sendPasswordResetEmail({
+      to: user.email,
+      firstName: user.email.split('@')[0],
+      resetUrl: buildResetUrl(token),
+    })
+
+    return res.json({
+      ok: true,
+      message: 'Password reset email sent',
+      audit: {
+        action: 'user_password_reset_sent',
+        actor: req.admin?.id || 'admin',
+        details: { via: 'admin' },
+        created_at: new Date().toISOString(),
+      },
+    })
+  } catch (error) {
+    console.error('[Admin users] reset password failed:', error)
+    return res.status(500).json({ error: 'Unable to send password reset' })
+  }
+})
+
 router.post('/users/:id/impersonate', async (req, res) => {
   const { id } = req.params
   const expiresInMinutes = Math.max(1, Math.min(60, Number(req.body?.expiresInMinutes || 15)))

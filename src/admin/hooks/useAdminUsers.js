@@ -48,11 +48,14 @@ export default function useAdminUsers() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const loadUsers = useCallback(async () => {
+  const loadUsers = useCallback(async ({ limit = PAGE_SIZE, offset = 0, status = 'all' } = {}) => {
     try {
       setLoading(true)
       setError('')
       const params = new URLSearchParams()
+      params.set('limit', String(limit))
+      params.set('offset', String(offset))
+      if (status && status !== 'all') params.set('status', status)
       if (search.trim()) params.set('search', search.trim())
       const response = await fetch(`/api/admin/users?${params.toString()}`, { credentials: 'include' })
       if (!response.ok) throw new Error('Failed to load users')
@@ -132,11 +135,11 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const blockUser = useCallback(async (userId, reason) => {
-    const response = await fetch(`/api/admin/users/${userId}`, {
-      method: 'PATCH',
+    const response = await fetch(`/api/admin/users/${userId}/block`, {
+      method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'block', reason, is_blocked: true }),
+      body: JSON.stringify({ reason }),
     })
 
     const payload = await response.json().catch(() => ({}))
@@ -164,11 +167,9 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const resetPassword = useCallback(async (userId) => {
-    const response = await fetch(`/api/admin/users/${userId}`, {
-      method: 'PATCH',
+    const response = await fetch(`/api/admin/users/${userId}/reset-password`, {
+      method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'reset_password', resetPassword: true }),
     })
 
     const payload = await response.json().catch(() => ({}))
@@ -198,6 +199,26 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const getUserById = useCallback((userId) => users.find((user) => String(user.id) === String(userId)) || null, [users])
+
+  const fetchUserById = useCallback(async (userId) => {
+    if (!userId) return null
+
+    const response = await fetch(`/api/admin/users/${userId}`, { credentials: 'include' })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload.error || 'Failed to load user')
+
+    if (payload.user) {
+      setUsers((current) => {
+        const normalized = normalizeUser({ ...payload.user, auditTrail: payload.auditTrail || [] })
+        const exists = current.some((item) => String(item.id) === String(normalized.id))
+        if (exists) return current.map((item) => (String(item.id) === String(normalized.id) ? normalized : item))
+        return [normalized, ...current]
+      })
+      return normalizeUser({ ...payload.user, auditTrail: payload.auditTrail || [] })
+    }
+
+    return null
+  }, [])
 
   return {
     users: paginated,
@@ -230,5 +251,6 @@ export default function useAdminUsers() {
     impersonateUser,
     deleteUser,
     getUserById,
+    fetchUserById,
   }
 }
