@@ -5,6 +5,13 @@ import { getCachedJobResult, parseQueue } from '../services/jobQueue.js'
 
 const router = Router()
 
+export function normalizeParseStatus(queueStatus, fallbackStatus) {
+  if (queueStatus === 'completed') return 'complete'
+  if (queueStatus === 'failed') return 'failed'
+  if (queueStatus === 'active') return 'processing'
+  return fallbackStatus
+}
+
 router.get('/:id/parse-status', requireAuth, async (req, res) => {
   const { id } = req.params
 
@@ -32,13 +39,7 @@ router.get('/:id/parse-status', requireAuth, async (req, res) => {
     const queueJob = await parseQueue.getJob(id)
 
     const status = queueJob ? await queueJob.getState() : jobRow.status
-    const normalizedStatus = status === 'completed'
-      ? 'complete'
-      : status === 'failed'
-        ? 'failed'
-        : status === 'active'
-          ? 'processing'
-          : jobRow.status
+    const normalizedStatus = normalizeParseStatus(status, jobRow.status)
 
     const responsePayload = {
       status: normalizedStatus,
