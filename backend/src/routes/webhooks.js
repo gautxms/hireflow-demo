@@ -50,6 +50,9 @@ router.delete('/:id', async (req, res) => {
     }
     return res.json({ ok: true, id: deleted.id })
   } catch (error) {
+    if ((error.message || '').toLowerCase().includes('invalid webhook id')) {
+      return res.status(400).json({ error: error.message })
+    }
     console.error('[Webhooks] Failed to remove webhook:', error)
     return res.status(500).json({ error: 'Failed to remove webhook' })
   }

@@ -18,6 +18,7 @@ import shortlistsRoutes from './routes/shortlists.js'
 import candidatesRoutes from './routes/candidates.js'
 import jobDescriptionsRoutes from './routes/jobDescriptions.js'
 import inquiriesRoutes from './routes/inquiries.js'
+import notificationsRoutes from './routes/notifications.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
@@ -86,6 +87,7 @@ app.use('/api/shortlists', generalApiLimiterAuth, shortlistsRoutes)
 app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
 app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, requireActiveSubscription, jobDescriptionsRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
+app.use('/api/notifications', requireAuth, generalApiLimiterAuth, notificationsRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })

@@ -390,6 +390,22 @@ export async function sendPasswordResetConfirmationEmail({ to, firstName }) {
   })
 }
 
+
+export async function sendDemoRequestConfirmationEmail({ to, requesterName }) {
+  const values = withDefaults({
+    to,
+    firstName: requesterName || undefined,
+    dashboardUrl: `${getAppUrl()}/about`,
+  })
+
+  return sendTemplateEmail({
+    to,
+    subject: 'We received your demo request',
+    templateName: 'welcome',
+    text: `Hi ${values.firstName}, thanks for requesting a demo. Our team will reach out shortly.`,
+    values,
+  })
+}
 export async function sendDemoRequestEmail({
   requesterName,
   requesterEmail,

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { parseDemoRequestError, validateDemoRequestForm } from './demoRequestValidation.js'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
@@ -131,32 +132,15 @@ export default function AboutPage({ onBack }) {
   }
 
   const validateDemoForm = () => {
-    const errors = {}
-
-    if (!scheduleDemoForm.name.trim()) {
-      errors.name = 'Full name is required'
-    }
-
-    if (!scheduleDemoForm.email.trim()) {
-      errors.email = 'Work email is required'
-    } else if (!scheduleDemoForm.email.includes('@')) {
-      errors.email = 'Please enter a valid email'
-    }
-
-    if (!scheduleDemoForm.company.trim()) {
-      errors.company = 'Company is required'
-    }
-
-    if (!scheduleDemoForm.message.trim()) {
-      errors.message = 'Please share what you need help with'
-    }
-
+    const errors = validateDemoRequestForm(scheduleDemoForm)
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
   const handleScheduleDemoSubmit = async (event) => {
     event.preventDefault()
+
+    if (isSubmitting) return
 
     if (!validateDemoForm()) {
       return
@@ -175,7 +159,8 @@ export default function AboutPage({ onBack }) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to submit demo request')
+        const message = await parseDemoRequestError(response)
+        throw new Error(message)
       }
 
       setSubmitSuccess(true)
@@ -185,8 +170,8 @@ export default function AboutPage({ onBack }) {
         setIsScheduleFormOpen(false)
         setSubmitSuccess(false)
       }, 1500)
-    } catch {
-      setSubmitError('Unable to submit your request right now. Please try again shortly.')
+    } catch (error) {
+      setSubmitError(error?.message || 'Unable to submit your request right now. Please try again shortly.')
     } finally {
       setIsSubmitting(false)
     }
@@ -197,6 +182,7 @@ export default function AboutPage({ onBack }) {
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem' }}>
         <button
+          type="button"
           onClick={onBack}
           style={{
             background: 'transparent',

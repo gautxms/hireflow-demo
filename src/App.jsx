@@ -226,7 +226,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/about') {
-      return <AboutPage onBack={() => navigate('/')} />
+      return <AboutPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
     if (pathname === '/terms') {

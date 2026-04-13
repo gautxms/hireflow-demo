@@ -32,6 +32,10 @@ function signPayload(secret, timestamp, body) {
   return crypto.createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''))
+}
+
 async function performDelivery({ webhook, eventType, payload, attempt = 1 }) {
   const timestamp = new Date().toISOString()
   const body = JSON.stringify({
@@ -201,6 +205,10 @@ export async function listWebhooks() {
 }
 
 export async function removeWebhook(id) {
+  if (!isUuid(id)) {
+    throw new Error('Invalid webhook id')
+  }
+
   const result = await pool.query(
     `DELETE FROM integration_webhooks
      WHERE id = $1
@@ -227,13 +235,17 @@ export async function triggerWebhook(eventType, payload) {
 
   const deliveries = []
   for (const webhook of result.rows) {
-    const log = await performDelivery({
-      webhook,
-      eventType,
-      payload,
-      attempt: 1,
-    })
-    deliveries.push(log)
+    try {
+      const log = await performDelivery({
+        webhook,
+        eventType,
+        payload,
+        attempt: 1,
+      })
+      deliveries.push(log)
+    } catch (error) {
+      console.error('[Webhooks] Delivery failed with unhandled error:', error?.message || error)
+    }
   }
 
   return deliveries
@@ -281,6 +293,10 @@ export async function listWebhookLogs({ page = 1, pageSize = 25 } = {}) {
 }
 
 export async function retryWebhookDelivery(logId) {
+  if (!isUuid(logId)) {
+    throw new Error('Invalid webhook log id')
+  }
+
   const result = await pool.query(
     `SELECT
        l.id,
@@ -308,6 +324,9 @@ export async function retryWebhookDelivery(logId) {
   }
 
   const nextAttempt = Number(entry.attempt || 1) + 1
+  if (nextAttempt > MAX_RETRY_ATTEMPTS) {
+    throw new Error('Maximum retry attempts exceeded')
+  }
 
   return performDelivery({
     webhook: {
@@ -322,6 +341,10 @@ export async function retryWebhookDelivery(logId) {
 }
 
 export async function testWebhook(id) {
+  if (!isUuid(id)) {
+    throw new Error('Invalid webhook id')
+  }
+
   const result = await pool.query(
     `SELECT id, url, secret, is_active
      FROM integration_webhooks
