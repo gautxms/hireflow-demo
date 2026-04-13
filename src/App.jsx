@@ -322,7 +322,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         {currentPage === 'landing' && (
           <LandingPage
             onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
-            ctaLabel={isActiveSubscriber ? 'Analyze Resumes' : 'Try Free Demo'}
+            ctaLabel={isActiveSubscriber ? 'Analyze Resumes' : 'View Plans'}
           />
         )}
 

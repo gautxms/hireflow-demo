@@ -19,6 +19,7 @@ import candidatesRoutes from './routes/candidates.js'
 import jobDescriptionsRoutes from './routes/jobDescriptions.js'
 import inquiriesRoutes from './routes/inquiries.js'
 import { requireAuth } from './middleware/authMiddleware.js'
+import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 
 const app = express()
@@ -83,7 +84,7 @@ app.use('/api/profile', generalApiLimiterAuth, profileRoutes)
 app.use('/api/subscriptions', generalApiLimiterAuth, subscriptionsRoutes)
 app.use('/api/shortlists', generalApiLimiterAuth, shortlistsRoutes)
 app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
-app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, jobDescriptionsRoutes)
+app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, requireActiveSubscription, jobDescriptionsRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {

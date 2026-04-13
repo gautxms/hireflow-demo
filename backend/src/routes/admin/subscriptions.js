@@ -97,7 +97,7 @@ router.get('/', async (req, res) => {
               last_invoice.billed_at AS latest_billed_at
        FROM users u
        LEFT JOIN LATERAL (
-         SELECT bi.amount_cents, bi.currency, bi.billed_at
+         SELECT bi.amount_cents, bi.currency, bi.billed_at, bi.paddle_transaction_id
          FROM billing_invoices bi
          WHERE bi.user_id = u.id
          ORDER BY bi.billed_at DESC
@@ -122,6 +122,7 @@ router.get('/', async (req, res) => {
         latestAmountCents: Number(row.latest_amount_cents || 0),
         latestCurrency: row.latest_currency || 'USD',
         latestBilledAt: toIso(row.latest_billed_at),
+        latestTransactionId: row.paddle_transaction_id || null,
       })),
     })
   } catch (error) {
