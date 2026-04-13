@@ -31,6 +31,7 @@ Set the following environment variables:
 - `AWS_S3_BUCKET`
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
+- `ANTHROPIC_API_KEY`
 
 Use start command:
 ```bash
