@@ -68,7 +68,8 @@ export default function AdminLoginPage() {
 
     try {
       await verifySecondFactor({ totpCode, backupCode })
-      await Promise.all([loadSessions(), loadAuditTrail()])
+      await Promise.all([loadSessions(), loadAuditTrail().catch(() => {})])
+      window.location.assign('/admin/analytics')
     } catch (requestError) {
       setStatus('')
       setError(requestError.message)

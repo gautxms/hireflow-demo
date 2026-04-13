@@ -13,6 +13,8 @@ import {
   createAdminSession,
   isIpAllowed,
   logAdminAction,
+  parseAdminToken,
+  revokeAdminSession,
   setAdminCookie,
 } from '../middleware/adminAuth.js'
 import {
@@ -521,6 +523,7 @@ router.post('/admin/login', loginLimiter, async (req, res) => {
     return res.json({
       ok: true,
       admin: { id: user.id, email: user.email },
+      usedBackupCode,
       sessionTimeoutSeconds: Math.floor((15 * 60 * 1000) / 1000),
       sessionExpiresAt: session.expiresAt,
       newIpDetected: Boolean(previousLoginIp && previousLoginIp !== String(req.ip || '').replace('::ffff:', '')),
@@ -585,7 +588,7 @@ router.post('/admin/2fa/verify', async (req, res) => {
 
   try {
     const decoded = jwt.verify(setupToken, process.env.JWT_SECRET)
-    if (!decoded?.admin_setup) {
+    if (!decoded?.admin_setup || Date.now() > Number(decoded.admin_setup_expires_at || 0)) {
       return res.status(401).json({ error: 'Invalid setup token' })
     }
 
@@ -634,7 +637,13 @@ router.post('/admin/2fa/verify', async (req, res) => {
   }
 })
 
-router.post('/admin/logout', (_req, res) => {
+router.post('/admin/logout', (req, res) => {
+  const parsed = parseAdminToken(req)
+
+  if (parsed?.decoded?.sid) {
+    revokeAdminSession(parsed.decoded.sid)
+  }
+
   clearAdminSession(res)
   res.clearCookie(ADMIN_COOKIE_NAME)
   return res.status(204).send()

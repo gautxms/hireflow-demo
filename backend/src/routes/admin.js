@@ -4,6 +4,7 @@ import { pool } from '../db/client.js'
 import { getRateLimitStats } from '../middleware/rateLimiter.js'
 import { createPasswordResetToken, generateResetToken } from '../services/resetTokenService.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
+import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdminCookie } from '../middleware/adminAuth.js'
 
 const router = Router()
 
@@ -337,22 +338,65 @@ async function listAdminActions(req, res) {
       params,
     )
 
+    const actions = result.rows.map((row) => ({
+      id: row.id,
+      adminId: row.admin_id,
+      actionType: row.action_type,
+      targetId: row.target_id,
+      details: row.details || {},
+      ipAddress: row.ip_address,
+      createdAt: row.created_at,
+    }))
+
     return res.json({
-      items: result.rows.map((row) => ({
-        id: row.id,
-        adminId: row.admin_id,
-        actionType: row.action_type,
-        targetId: row.target_id,
-        details: row.details || {},
-        ipAddress: row.ip_address,
-        createdAt: row.created_at,
-      })),
+      actions,
+      items: actions,
     })
   } catch (error) {
     console.error('[Admin] Failed to query admin actions:', error)
     return res.status(500).json({ error: 'Unable to query admin actions' })
   }
 }
+
+
+router.get('/sessions', (req, res) => {
+  const sessions = listAdminSessions(req.admin.id, req.admin.sessionId)
+  return res.json({ sessions })
+})
+
+router.post('/sessions/refresh', (req, res) => {
+  const refreshed = createAdminSession({
+    adminId: req.admin.id,
+    email: req.admin.email,
+    ipAddress: req.admin.loginIp || req.admin.ipAddress,
+    sessionId: req.admin.sessionId,
+  })
+
+  setAdminCookie(res, refreshed.token)
+  res.setHeader('X-Admin-Session-Expires-At', refreshed.expiresAt)
+
+  return res.status(200).json({
+    ok: true,
+    sessionTimeoutSeconds: refreshed.expiresInSeconds,
+    sessionExpiresAt: refreshed.expiresAt,
+  })
+})
+
+router.post('/sessions/logout-others', async (req, res) => {
+  const revokedCount = revokeOtherAdminSessions(req.admin.id, req.admin.sessionId)
+
+  try {
+    await pool.query(
+      `INSERT INTO admin_actions (admin_id, action_type, details, ip_address)
+       VALUES ($1, $2, $3::jsonb, $4)`,
+      [req.admin.id, 'admin_logout_other_sessions', JSON.stringify({ revokedCount }), req.admin.ipAddress],
+    )
+  } catch (error) {
+    console.error('[Admin sessions] failed to log logout-other-sessions:', error)
+  }
+
+  return res.status(200).json({ ok: true, revokedCount })
+})
 
 router.get('/actions', listAdminActions)
 router.get('/audit-trail', listAdminActions)
