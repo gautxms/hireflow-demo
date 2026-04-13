@@ -116,24 +116,27 @@ router.post('/:id/candidates', async (req, res) => {
   }
 
   try {
-    const ownerCheck = await pool.query(
-      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 LIMIT 1`,
-      [req.params.id, req.userId],
+    const ownershipAndResumeCheck = await pool.query(
+      `SELECT
+         EXISTS(
+           SELECT 1
+           FROM shortlists
+           WHERE id = $1 AND user_id = $2
+         ) AS shortlist_exists,
+         EXISTS(
+           SELECT 1
+           FROM resumes
+           WHERE id = $3 AND user_id = $2
+         ) AS resume_exists`,
+      [req.params.id, req.userId, resumeId],
     )
+    const checks = ownershipAndResumeCheck.rows[0] || {}
 
-    if (!ownerCheck.rows[0]) {
+    if (!checks.shortlist_exists) {
       return res.status(404).json({ error: 'Shortlist not found' })
     }
 
-    const resumeCheck = await pool.query(
-      `SELECT id
-       FROM resumes
-       WHERE id = $1 AND user_id = $2
-       LIMIT 1`,
-      [resumeId, req.userId],
-    )
-
-    if (!resumeCheck.rows[0]) {
+    if (!checks.resume_exists) {
       return res.status(404).json({ error: 'Resume not found for this user' })
     }
 

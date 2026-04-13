@@ -66,4 +66,5 @@ test('mapToSubscriptionStatus maps lifecycle events', () => {
   assert.equal(mapToSubscriptionStatus('subscription.created', { data: { status: 'trialing' } }), 'trialing')
   assert.equal(mapToSubscriptionStatus('transaction.completed', {}), 'active')
   assert.equal(mapToSubscriptionStatus('subscription.cancelled', {}), 'cancelled')
+  assert.equal(mapToSubscriptionStatus('customer.updated', {}), null)
 })

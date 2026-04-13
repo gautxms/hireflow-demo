@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import LandingPage from './components/LandingPage'
 import Pricing from './pages/Pricing'
 import ResumeUploader from './components/ResumeUploader'
@@ -16,23 +16,23 @@ import VerifyEmail from './pages/VerifyEmail'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
 import RefundPolicy from './pages/RefundPolicy'
-import BillingSuccess from './pages/BillingSuccess'
-import BillingCancel from './pages/BillingCancel'
-import BillingPage from './pages/BillingPage'
-import UpdatePaymentMethodPage from './pages/UpdatePaymentMethodPage'
-import Checkout from './pages/Checkout'
+const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
+const BillingCancel = lazy(() => import('./pages/BillingCancel'))
+const BillingPage = lazy(() => import('./pages/BillingPage'))
+const UpdatePaymentMethodPage = lazy(() => import('./pages/UpdatePaymentMethodPage'))
+const Checkout = lazy(() => import('./pages/Checkout'))
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
-import AccountSettingsPage from './pages/AccountSettingsPage'
-import AccountPage from './pages/AccountPage'
-import JobDescriptionPage from './pages/JobDescriptionPage'
+const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
+const AccountPage = lazy(() => import('./pages/AccountPage'))
+const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 import PublicFooter from './components/PublicFooter'
-import AdminLogsPage from './admin/pages/AdminLogsPage'
-import AdminHealthPage from './admin/pages/AdminHealthPage'
-import AdminAnalyticsPage from './admin/pages/AdminAnalyticsPage'
-import AdminLoginPage from './admin/pages/AdminLoginPage'
-import AdminSetup2FA from './admin/pages/AdminSetup2FA'
+const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
+const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
+const AdminAnalyticsPage = lazy(() => import('./admin/pages/AdminAnalyticsPage'))
+const AdminLoginPage = lazy(() => import('./admin/pages/AdminLoginPage'))
+const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -605,7 +605,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </div>
       </header>
       <main>
-        {getPageContent()}
+        <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--muted)' }}>Loading…</div>}>
+          {getPageContent()}
+        </Suspense>
       </main>
       <PublicFooter />
     </>

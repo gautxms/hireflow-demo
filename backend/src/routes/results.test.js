@@ -31,3 +31,17 @@ test('sortCandidates supports upload date and name modes', () => {
   const uploadSorted = sortCandidates(candidates, 'upload_date', 'desc')
   assert.deepEqual(uploadSorted.map((candidate) => candidate.name), ['Amy', 'Zoe'])
 })
+
+test('sortCandidates treats match_score as score and keeps name ascending', () => {
+  const candidates = [
+    normalizeCandidate({ name: 'Mia', score: 81 }),
+    normalizeCandidate({ name: 'Ava', score: 91 }),
+    normalizeCandidate({ name: 'Lia', score: 75 }),
+  ]
+
+  const matchSorted = sortCandidates(candidates, 'match_score', 'desc')
+  assert.deepEqual(matchSorted.map((candidate) => candidate.name), ['Ava', 'Mia', 'Lia'])
+
+  const forcedNameAsc = sortCandidates(candidates, 'name', 'desc')
+  assert.deepEqual(forcedNameAsc.map((candidate) => candidate.name), ['Ava', 'Lia', 'Mia'])
+})
