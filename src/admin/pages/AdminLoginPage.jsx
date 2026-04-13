@@ -15,6 +15,7 @@ export default function AdminLoginPage() {
     status,
     error,
     needsTwoFactor,
+    setupToken,
     activeSessions,
     setError,
     setStatus,
@@ -47,7 +48,7 @@ export default function AdminLoginPage() {
     try {
       const result = await loginWithPassword({ email, password })
 
-      if (!result.requiresTwoFactor) {
+      if (!result.requiresTwoFactor && !result.requiresTwoFactorSetup) {
         await Promise.all([loadSessions(), loadAuditTrail().catch(() => {})])
       }
     } catch (requestError) {
@@ -113,7 +114,7 @@ export default function AdminLoginPage() {
 
         <section>
           <h2>Setup 2FA</h2>
-          <a href="/admin/setup-2fa">Open 2FA setup wizard</a>
+          <a href={setupToken ? `/admin/setup-2fa?token=${encodeURIComponent(setupToken)}` : '/admin/setup-2fa'}>Open 2FA setup wizard</a>
         </section>
 
         <section>

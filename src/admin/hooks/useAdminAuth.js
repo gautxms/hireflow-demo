@@ -24,6 +24,9 @@ export default function useAdminAuth() {
   const [error, setError] = useState('')
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false)
   const [authChallengeId, setAuthChallengeId] = useState('')
+  const [pendingEmail, setPendingEmail] = useState('')
+  const [pendingPassword, setPendingPassword] = useState('')
+  const [setupToken, setSetupToken] = useState('')
   const [activeSessions, setActiveSessions] = useState([])
   const hasHandledExpiryRef = useRef(false)
 
@@ -61,8 +64,17 @@ export default function useAdminAuth() {
       throw new Error(extractError(payload, 'Login failed'))
     }
 
+    if (payload.requiresTwoFactorSetup) {
+      setSetupToken(payload.setupToken || '')
+      setNeedsTwoFactor(false)
+      setStatus('Two-factor setup is required before admin login.')
+      return { requiresTwoFactor: false, requiresTwoFactorSetup: true, setupToken: payload.setupToken || '' }
+    }
+
     setNeedsTwoFactor(Boolean(payload.requiresTwoFactor))
     setAuthChallengeId(payload.authChallengeId || '')
+    setPendingEmail(email)
+    setPendingPassword(password)
 
     if (payload.requiresTwoFactor) {
       setStatus('Enter your authenticator or backup code to continue.')
@@ -72,6 +84,9 @@ export default function useAdminAuth() {
     setSessionSecondsLeft(payload.sessionTimeoutSeconds || DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
     setStatus('Signed in.')
+    setSetupToken('')
+    setPendingEmail('')
+    setPendingPassword('')
     await loadSessions().catch(() => {})
     return { requiresTwoFactor: false }
   }, [loadSessions])
@@ -80,12 +95,13 @@ export default function useAdminAuth() {
     setError('')
     setStatus('Verifying 2FA code…')
 
-    const response = await fetch('/api/auth/admin/login/verify-2fa', {
+    const response = await fetch('/api/auth/admin/login', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        authChallengeId,
+        email: pendingEmail,
+        password: pendingPassword,
         totpCode: sanitizeCode(totpCode),
         backupCode: sanitizeCode(backupCode),
       }),
@@ -98,12 +114,14 @@ export default function useAdminAuth() {
 
     setNeedsTwoFactor(false)
     setAuthChallengeId('')
+    setPendingEmail('')
+    setPendingPassword('')
     setSessionSecondsLeft(payload.sessionTimeoutSeconds || DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
     setStatus(payload.usedBackupCode ? 'Signed in with one-time backup code.' : '2FA verified. Access granted.')
     await loadSessions().catch(() => {})
     return payload
-  }, [authChallengeId, loadSessions])
+  }, [loadSessions, pendingEmail, pendingPassword])
 
   const refreshActivity = useCallback(async () => {
     const response = await fetch('/api/admin/sessions/refresh', {
@@ -126,6 +144,9 @@ export default function useAdminAuth() {
 
     setNeedsTwoFactor(false)
     setAuthChallengeId('')
+    setPendingEmail('')
+    setPendingPassword('')
+    setSetupToken('')
     setActiveSessions([])
     setSessionSecondsLeft(DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
@@ -180,6 +201,7 @@ export default function useAdminAuth() {
     status,
     error,
     needsTwoFactor,
+    setupToken,
     activeSessions,
     setError,
     setStatus,
