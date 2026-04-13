@@ -42,22 +42,18 @@ export default function useAdminAnalytics() {
         endDate: currentFilters.endDate,
       })
 
-      const [metrics, revenue, retention] = await Promise.all([
-        fetchJson(`/api/admin/analytics/metrics?${params.toString()}`),
-        fetchJson(`/api/admin/analytics/revenue?${params.toString()}`),
-        fetchJson(`/api/admin/analytics/retention?${params.toString()}`),
-      ])
+      const payload = await fetchJson(`/api/admin/analytics?${params.toString()}`)
 
       setAnalytics({
-        filters: metrics.filters || revenue.filters || retention.filters,
-        kpis: metrics.kpis || {},
-        conversionFunnel: metrics.conversionFunnel || {},
-        parsingTrend: metrics.parsingTrend || [],
-        planBreakdown: metrics.planBreakdown || [],
-        revenueTrend: revenue.revenueTrend || [],
-        userGrowth: revenue.userGrowth || [],
-        retentionCohorts: retention.retentionCohorts || [],
-        generatedAt: metrics.generatedAt || revenue.generatedAt || retention.generatedAt,
+        filters: payload.filters,
+        kpis: payload.kpis || {},
+        conversionFunnel: payload.conversionFunnel || {},
+        parsingTrend: payload.parsingTrend || [],
+        planBreakdown: payload.planBreakdown || [],
+        revenueTrend: payload.revenueTrend || [],
+        userGrowth: payload.userGrowth || [],
+        retentionCohorts: payload.retentionCohorts || [],
+        generatedAt: payload.generatedAt,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown analytics error')

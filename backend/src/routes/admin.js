@@ -36,6 +36,16 @@ async function ensureAdminUserColumns() {
   `)
 }
 
+async function recordAdminAction({ adminId, actionType, targetId, details = {}, ipAddress = null }) {
+  if (!adminId || !actionType) return
+
+  await pool.query(
+    `INSERT INTO admin_actions (admin_id, action_type, target_id, details, ip_address)
+     VALUES ($1, $2, $3, $4::jsonb, $5)`,
+    [adminId, actionType, targetId || null, JSON.stringify(details || {}), ipAddress],
+  )
+}
+
 router.get('/users', async (req, res) => {
   const search = String(req.query.search || '').trim()
 
@@ -202,6 +212,14 @@ router.patch('/users/:id', async (req, res) => {
       auditDetails = { via: 'admin' }
     }
 
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: auditAction,
+      targetId: String(id),
+      details: auditDetails,
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
     return res.json({
       ok: true,
       user: {
@@ -222,6 +240,103 @@ router.patch('/users/:id', async (req, res) => {
   } catch (error) {
     console.error('[Admin users] update failed:', error)
     return res.status(500).json({ error: 'Unable to update user' })
+  }
+})
+
+router.post('/users/:id/block', async (req, res) => {
+  const { id } = req.params
+  const { reason } = req.body || {}
+
+  try {
+    await ensureAdminUserColumns()
+    const result = await pool.query(
+      `UPDATE users
+       SET blocked = true,
+           is_blocked = true
+       WHERE id::text = $1
+       RETURNING id, email, company, phone, COALESCE(is_blocked, blocked, false) AS is_blocked`,
+      [id],
+    )
+
+    const user = result.rows[0]
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'user_blocked',
+      targetId: String(id),
+      details: { reason: reason || null },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        company: user.company,
+        phone: user.phone,
+        is_blocked: Boolean(user.is_blocked),
+      },
+      audit: {
+        action: 'user_blocked',
+        actor: req.admin?.id || 'admin',
+        details: { reason: reason || null },
+        created_at: new Date().toISOString(),
+      },
+      message: 'User blocked',
+    })
+  } catch (error) {
+    console.error('[Admin users] block failed:', error)
+    return res.status(500).json({ error: 'Unable to block user' })
+  }
+})
+
+router.post('/users/:id/reset-password', async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const userResult = await pool.query(
+      'SELECT id, email FROM users WHERE id::text = $1 LIMIT 1',
+      [id],
+    )
+    const user = userResult.rows[0]
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const token = generateResetToken()
+    await createPasswordResetToken(user.id, token)
+    await sendPasswordResetEmail({
+      to: user.email,
+      firstName: user.email.split('@')[0],
+      resetUrl: buildResetUrl(token),
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'user_password_reset_sent',
+      targetId: String(id),
+      details: { via: 'admin' },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({
+      ok: true,
+      message: 'Password reset email sent',
+      audit: {
+        action: 'user_password_reset_sent',
+        actor: req.admin?.id || 'admin',
+        details: { via: 'admin' },
+        created_at: new Date().toISOString(),
+      },
+    })
+  } catch (error) {
+    console.error('[Admin users] reset password failed:', error)
+    return res.status(500).json({ error: 'Unable to send password reset' })
   }
 })
 
@@ -250,6 +365,14 @@ router.post('/users/:id/impersonate', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: `${expiresInMinutes}m` },
     )
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'impersonation_token_created',
+      targetId: String(id),
+      details: { expiresInMinutes },
+      ipAddress: req.admin?.ipAddress || null,
+    })
 
     return res.json({
       ok: true,
