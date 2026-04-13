@@ -82,7 +82,7 @@ function parseSkillsFilter(rawSkills) {
 }
 
 export function getSeniorityRank(candidate) {
-  const years = parseExperienceToYears(candidate.experience)
+  const years = parseExperienceToYears(candidate.experience_years ?? candidate.experience)
 
   if (years >= 8) return 4
   if (years >= 5) return 3
@@ -91,7 +91,7 @@ export function getSeniorityRank(candidate) {
 }
 
 export function getExperienceLevel(candidate) {
-  const years = parseExperienceToYears(candidate.experience)
+  const years = parseExperienceToYears(candidate.experience_years ?? candidate.experience)
 
   if (years >= 8) return 'lead'
   if (years >= 5) return 'senior'
@@ -119,6 +119,9 @@ export function normalizeCandidate(candidate = {}) {
     cons: Array.isArray(candidate.cons) ? candidate.cons : [],
     location: candidate.location || 'Unknown',
     experience: experienceValue || '0 years',
+    experience_years: Number.isFinite(Number(candidate.experience_years))
+      ? Number(candidate.experience_years)
+      : parseExperienceToYears(experienceValue || candidate.experience),
     position: candidate.position || '',
     education: educationValue || '',
     fit: candidate.fit || '',
@@ -177,13 +180,13 @@ export function applyCandidateFilters(candidates, {
 
     if (requestedSkills.length > 0) {
       const candidateSkills = parseSkills(candidate.skills).map((skill) => skill.toLowerCase())
-      const hasRequestedSkills = requestedSkills.every((skill) => candidateSkills.includes(skill))
+      const hasRequestedSkills = requestedSkills.some((skill) => candidateSkills.includes(skill))
       if (!hasRequestedSkills) {
         return false
       }
     }
 
-    const years = parseExperienceToYears(candidate.experience)
+    const years = parseExperienceToYears(candidate.experience_years ?? candidate.experience)
 
     if (experienceMin !== undefined && experienceMin !== null && experienceMin !== '' && years < Number(experienceMin)) {
       return false
