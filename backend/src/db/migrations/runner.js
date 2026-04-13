@@ -14,8 +14,8 @@ const migrationFiles = [
   '011-fix-subscription-and-payment-schema',
 ]
 
-async function ensureMigrationsTable() {
-  await pool.query(`
+async function ensureMigrationsTable(client) {
+  await client.query(`
     CREATE TABLE IF NOT EXISTS migrations (
       id SERIAL PRIMARY KEY,
       name TEXT UNIQUE NOT NULL,
@@ -27,38 +27,44 @@ async function ensureMigrationsTable() {
 export async function runMigrations() {
   console.log('[Migration] Starting database migrations...')
 
-  await ensureMigrationsTable()
-
-  await pool.query('SELECT pg_advisory_lock($1)', [293841])
+  const lockClient = await pool.connect()
 
   try {
-    for (const name of migrationFiles) {
-      const alreadyRun = await pool.query(
-        'SELECT 1 FROM migrations WHERE name = $1 LIMIT 1',
-        [name],
-      )
+    await ensureMigrationsTable(lockClient)
 
-      if (alreadyRun.rows.length > 0) {
-        console.log(`[Migration] ↷ ${name} (already applied)`)
-        continue
+    await lockClient.query('SELECT pg_advisory_lock($1)', [293841])
+
+    try {
+      for (const name of migrationFiles) {
+        const alreadyRun = await lockClient.query(
+          'SELECT 1 FROM migrations WHERE name = $1 LIMIT 1',
+          [name],
+        )
+
+        if (alreadyRun.rows.length > 0) {
+          console.log(`[Migration] ↷ ${name} (already applied)`)
+          continue
+        }
+
+        console.log(`[Migration] Running: ${name}`)
+        const migration = await import(`./${name}.js`)
+
+        try {
+          await lockClient.query('BEGIN')
+          await migration.up(lockClient)
+          await lockClient.query('INSERT INTO migrations (name) VALUES ($1)', [name])
+          await lockClient.query('COMMIT')
+          console.log(`[Migration] ✓ ${name}`)
+        } catch (error) {
+          await lockClient.query('ROLLBACK')
+          throw error
+        }
       }
-
-      console.log(`[Migration] Running: ${name}`)
-      const migration = await import(`./${name}.js`)
-
-      try {
-        await pool.query('BEGIN')
-        await migration.up(pool)
-        await pool.query('INSERT INTO migrations (name) VALUES ($1)', [name])
-        await pool.query('COMMIT')
-        console.log(`[Migration] ✓ ${name}`)
-      } catch (error) {
-        await pool.query('ROLLBACK')
-        throw error
-      }
+    } finally {
+      await lockClient.query('SELECT pg_advisory_unlock($1)', [293841])
     }
   } finally {
-    await pool.query('SELECT pg_advisory_unlock($1)', [293841])
+    lockClient.release()
   }
 
   console.log('[Migration] ✓ All migrations completed')
