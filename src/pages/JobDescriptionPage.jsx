@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import JobDescriptionForm from '../components/JobDescriptionForm'
 import JobDescriptionList from '../components/JobDescriptionList'
+import { serializeJobDescriptionForm } from '../components/jobDescriptionFormState'
+import { shouldResetAfterSave } from './jobDescriptionSubmissionState'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -58,7 +60,9 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     setError('')
 
     const formData = new FormData()
-    Object.entries(formValues).forEach(([key, value]) => {
+    const payloadValues = serializeJobDescriptionForm(formValues)
+
+    Object.entries(payloadValues).forEach(([key, value]) => {
       if (key === 'jdFile' && value instanceof File) {
         formData.append('jdFile', value)
         return
@@ -83,13 +87,13 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
       const payload = await response.json().catch(() => ({}))
 
-      if (!response.ok) {
+      if (!response.ok || !payload.item) {
         throw new Error(payload.error || 'Unable to save job description')
       }
 
       await fetchItems()
       setActiveItem(null)
-      if (!isEditing) {
+      if (shouldResetAfterSave({ isEditing, payload })) {
         setFormResetToken((prev) => prev + 1)
       }
     } catch (requestError) {

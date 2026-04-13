@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import BackButton from './BackButton'
+import {
+  filterHelpArticles,
+  parseHelpCenterLocation,
+  resolveVisibleSelection,
+  updateHelpCenterHistory,
+} from './helpCenterState'
 
-export default function HelpPage({ onBack }) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [activeCategory, setActiveCategory] = useState('getting-started')
-  const [selectedArticle, setSelectedArticle] = useState(null)
-
-  const articles = {
+const HELP_ARTICLES = {
     'getting-started': [
       {
         id: 1,
@@ -169,7 +170,7 @@ export default function HelpPage({ onBack }) {
     ]
   }
 
-  const categories = [
+const HELP_CATEGORIES = [
     { id: 'getting-started', name: 'Getting Started', icon: '🚀' },
     { id: 'uploading', name: 'Uploading Resumes', icon: '📄' },
     { id: 'analysis', name: 'Analysis & Scoring', icon: '⚙️' },
@@ -177,7 +178,7 @@ export default function HelpPage({ onBack }) {
     { id: 'billing', name: 'Billing & Plans', icon: '💳' }
   ]
 
-  const faqs = [
+const HELP_FAQS = [
     { q: 'How many resumes can I upload?', a: 'Depends on your plan. Starter: 50/month, Pro: 500/month, Enterprise: Unlimited' },
     { q: 'What file formats are supported?', a: 'We support PDF resumes. Attach as email or upload directly on the platform' },
     { q: 'How accurate is the AI scoring?', a: 'Our system has 94% accuracy. Results are constantly improving as we learn from your feedback' },
@@ -186,13 +187,31 @@ export default function HelpPage({ onBack }) {
     { q: 'Do you offer custom integrations?', a: 'Yes, contact our sales team for enterprise custom integrations' }
   ]
 
-  const filteredArticles = articles[activeCategory].filter(article =>
-    article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    article.desc.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+export default function HelpPage({ onBack }) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState('getting-started')
+  const [selectedArticleId, setSelectedArticleId] = useState(null)
+
+  useEffect(() => {
+    const syncStateFromUrl = () => {
+      const next = parseHelpCenterLocation(HELP_ARTICLES, 'getting-started', window.location.href)
+      setActiveCategory(next.activeCategory)
+      setSelectedArticleId(next.selectedArticleId)
+    }
+
+    syncStateFromUrl()
+    window.addEventListener('popstate', syncStateFromUrl)
+
+    return () => window.removeEventListener('popstate', syncStateFromUrl)
+  }, [])
+
+  const filteredArticles = useMemo(() => filterHelpArticles(HELP_ARTICLES[activeCategory], searchQuery), [activeCategory, searchQuery])
+  const visibleSelectedArticleId = resolveVisibleSelection(selectedArticleId, filteredArticles)
 
   const openArticle = (article) => {
-    setSelectedArticle(article)
+    const nextId = visibleSelectedArticleId === article.id ? null : article.id
+    setSelectedArticleId(nextId)
+    updateHelpCenterHistory(nextId, window.location.href)
   }
 
   return (
@@ -236,13 +255,15 @@ export default function HelpPage({ onBack }) {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '3rem 2rem', display: 'grid', gridTemplateColumns: '250px 1fr', gap: '3rem' }}>
         {/* Sidebar */}
         <div style={{ borderRight: '1px solid var(--border)', paddingRight: '2rem' }}>
-          {categories.map(cat => (
+          {HELP_CATEGORIES.map(cat => (
             <button
               key={cat.id}
               onClick={() => {
                 setActiveCategory(cat.id)
-                setSelectedArticle(null)
+                setSelectedArticleId(null)
+                updateHelpCenterHistory(null, window.location.href, { replace: true })
               }}
+              aria-pressed={activeCategory === cat.id}
               style={{
                 display: 'block',
                 width: '100%',
@@ -267,7 +288,7 @@ export default function HelpPage({ onBack }) {
         {/* Articles */}
         <div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>
-            {categories.find(c => c.id === activeCategory)?.name}
+            {HELP_CATEGORIES.find(c => c.id === activeCategory)?.name}
           </h2>
 
           <div style={{ display: 'grid', gap: '1rem', marginBottom: '3rem' }}>
@@ -275,6 +296,8 @@ export default function HelpPage({ onBack }) {
               <div key={article.id} style={{ display: 'grid', gap: '1rem' }}>
                 <button
                   onClick={() => openArticle(article)}
+                  aria-expanded={visibleSelectedArticleId === article.id}
+                  aria-controls={`help-article-${article.id}`}
                   style={{
                     background: 'var(--card)',
                     border: '1px solid var(--border)',
@@ -296,13 +319,13 @@ export default function HelpPage({ onBack }) {
                   <div style={{ color: 'var(--accent)', fontSize: '1.2rem' }}>→</div>
                 </button>
 
-                {selectedArticle?.id === article.id && (
-                  <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2rem' }}>
+                {visibleSelectedArticleId === article.id && (
+                  <div id={`help-article-${article.id}`} role="region" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2rem' }}>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-                      {selectedArticle.title}
+                      {article.title}
                     </h3>
                     <div style={{ display: 'grid', gap: '0.75rem' }}>
-                      {selectedArticle.content.map((paragraph, index) => (
+                      {article.content.map((paragraph, index) => (
                         <p key={index} style={{ color: 'var(--muted)', lineHeight: '1.7', margin: 0 }}>
                           {paragraph}
                         </p>
@@ -313,21 +336,6 @@ export default function HelpPage({ onBack }) {
               </div>
             ))}
           </div>
-
-          {selectedArticle && (
-            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2rem' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-                {selectedArticle.title}
-              </h3>
-              <div style={{ display: 'grid', gap: '0.75rem' }}>
-                {selectedArticle.content.map((paragraph, index) => (
-                  <p key={index} style={{ color: 'var(--muted)', lineHeight: '1.7', margin: 0 }}>
-                    {paragraph}
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -339,7 +347,7 @@ export default function HelpPage({ onBack }) {
           </h2>
 
           <div style={{ display: 'grid', gap: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
-            {faqs.map((faq, i) => (
+            {HELP_FAQS.map((faq, i) => (
               <div key={i} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.5rem' }}>
                 <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', color: 'var(--accent)' }}>
                   Q: {faq.q}

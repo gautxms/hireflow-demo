@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SUPPORTED_SALARY_CURRENCIES, serializeJobDescriptionForm, validateJobDescriptionForm } from './jobDescriptionFormState'
 
 const blankState = {
   title: '',
@@ -16,9 +17,11 @@ const blankState = {
 export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting }) {
   const [formState, setFormState] = useState(blankState)
   const [jdFile, setJdFile] = useState(null)
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (initialValue) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormState({
         title: initialValue.title || '',
         description: initialValue.description || '',
@@ -35,17 +38,34 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
       setFormState(blankState)
     }
 
+    setErrors({})
     setJdFile(null)
   }, [initialValue, resetToken])
 
   const handleChange = (field) => (event) => {
     setFormState((prev) => ({ ...prev, [field]: event.target.value }))
+    setErrors((prev) => {
+      if (!prev[field]) {
+        return prev
+      }
+
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    onSubmit({
-      ...formState,
+
+    const nextErrors = validateJobDescriptionForm(formState)
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      return
+    }
+
+    await onSubmit({
+      ...serializeJobDescriptionForm(formState),
       skills: formState.skills,
       jdFile,
     })
@@ -64,17 +84,17 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}>
           <input type="number" min="0" placeholder="Experience years" value={formState.experienceYears} onChange={handleChange('experienceYears')} style={inputStyle} />
           <input placeholder="Location" value={formState.location} onChange={handleChange('location')} style={inputStyle} />
-          <select value={formState.salaryCurrency} onChange={handleChange('salaryCurrency')} style={inputStyle}>
-            <option value="USD">Salary currency (USD)</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-            <option value="CAD">CAD</option>
-            <option value="AUD">AUD</option>
-            <option value="INR">INR</option>
+          <select aria-label="Salary currency" value={formState.salaryCurrency} onChange={handleChange('salaryCurrency')} style={inputStyle}>
+            {SUPPORTED_SALARY_CURRENCIES.map((currency) => (
+              <option key={currency} value={currency}>{currency}</option>
+            ))}
           </select>
           <input type="number" min="0" placeholder="Salary min" value={formState.salaryMin} onChange={handleChange('salaryMin')} style={inputStyle} />
           <input type="number" min="0" placeholder="Salary max" value={formState.salaryMax} onChange={handleChange('salaryMax')} style={inputStyle} />
         </div>
+
+        {errors.salaryCurrency && <p style={errorStyle}>{errors.salaryCurrency}</p>}
+        {errors.salaryMin && <p style={errorStyle}>{errors.salaryMin}</p>}
 
         <label style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
           Upload JD file (PDF/DOCX)
@@ -134,4 +154,10 @@ const secondaryButtonStyle = {
   borderRadius: 8,
   padding: '0.7rem 1rem',
   cursor: 'pointer',
+}
+
+const errorStyle = {
+  color: '#ef4444',
+  margin: 0,
+  fontSize: '0.9rem',
 }
