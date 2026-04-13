@@ -356,6 +356,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
 
   const client = await pool.connect()
   let resumeId = row.resume_id || null
+  let finalizedUpload = null
   try {
     await client.query('BEGIN')
     const freshStatus = await client.query(
@@ -380,16 +381,6 @@ export async function completeChunkUpload({ userId, uploadId }) {
       resumeId = resumeInsertResult.rows[0].id
     }
 
-    const parseJob = await enqueueParseJob({
-      resumeId,
-      userId,
-      filename: row.filename,
-      mimeType: row.mime_type,
-      fileSize: row.file_size,
-      fileBufferBase64: assembledBuffer.toString('base64'),
-      jobDescriptionId: row.job_description_id,
-    })
-
     await client.query(
       `UPDATE upload_chunks
        SET status = 'completed',
@@ -398,7 +389,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
            assembled_s3_key = $4,
            assembled_sha256 = $5,
            resume_id = $6,
-           parse_job_id = $7,
+           parse_job_id = NULL,
            updated_at = NOW()
        WHERE upload_id = $1`,
       [
@@ -408,18 +399,11 @@ export async function completeChunkUpload({ userId, uploadId }) {
         assembledKey,
         assembledHash,
         resumeId,
-        String(parseJob.id),
       ],
     )
     await client.query('COMMIT')
-
-    await deleteChunkObjects(uploadId, totalChunks)
-
-    return {
-      ok: true,
-      uploadId,
+    finalizedUpload = {
       resumeId,
-      jobId: String(parseJob.id),
       scan: scanResult,
       sha256: assembledHash,
     }
@@ -428,6 +412,35 @@ export async function completeChunkUpload({ userId, uploadId }) {
     throw error
   } finally {
     client.release()
+  }
+
+  const parseJob = await enqueueParseJob({
+    resumeId: finalizedUpload.resumeId,
+    userId,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    fileSize: row.file_size,
+    fileBufferBase64: assembledBuffer.toString('base64'),
+    jobDescriptionId: row.job_description_id,
+  })
+
+  await pool.query(
+    `UPDATE upload_chunks
+     SET parse_job_id = $2,
+         updated_at = NOW()
+     WHERE upload_id = $1`,
+    [uploadId, String(parseJob.id)],
+  )
+
+  await deleteChunkObjects(uploadId, totalChunks)
+
+  return {
+    ok: true,
+    uploadId,
+    resumeId: finalizedUpload.resumeId,
+    jobId: String(parseJob.id),
+    scan: finalizedUpload.scan,
+    sha256: finalizedUpload.sha256,
   }
 }
 
