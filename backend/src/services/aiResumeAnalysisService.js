@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { logErrorToDatabase } from '../db/client.js'
 
 const MODEL = process.env.ANTHROPIC_RESUME_MODEL || 'claude-3-5-sonnet-20241022'
 const client = new Anthropic({
@@ -8,6 +9,21 @@ const client = new Anthropic({
 const MIME_TYPE_MAP = {
   'application/pdf': 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword': 'application/msword',
+}
+
+let claudeTokensUsed = {
+  input: 0,
+  output: 0,
+  totalRequests: 0,
+}
+
+export function getClaudeTokenStats() {
+  return claudeTokensUsed
+}
+
+export function resetClaudeTokenStats() {
+  claudeTokensUsed = { input: 0, output: 0, totalRequests: 0 }
 }
 
 function extractJson(text = '') {
@@ -22,54 +38,81 @@ function extractJson(text = '') {
   return JSON.parse(payload)
 }
 
+async function trackTokens(usage = {}, resumeId = 'unknown') {
+  claudeTokensUsed.input += usage.input_tokens || 0
+  claudeTokensUsed.output += usage.output_tokens || 0
+  claudeTokensUsed.totalRequests += 1
+
+  const inputCost = ((usage.input_tokens || 0) / 1000) * 0.003
+  const outputCost = ((usage.output_tokens || 0) / 1000) * 0.015
+  const totalCost = inputCost + outputCost
+  const totalCostThisSession = (claudeTokensUsed.input / 1000) * 0.003 + (claudeTokensUsed.output / 1000) * 0.015
+
+  console.log('[Claude] Tokens:', {
+    resumeId,
+    input: usage.input_tokens || 0,
+    output: usage.output_tokens || 0,
+    estimatedCost: `$${totalCost.toFixed(4)}`,
+    totalCostThisSession: `$${totalCostThisSession.toFixed(4)}`,
+  })
+
+  await logErrorToDatabase(
+    'claude_token_usage',
+    new Error(`Resume ${resumeId}: ${usage.input_tokens || 0} input + ${usage.output_tokens || 0} output tokens`),
+    {
+      resumeId,
+      inputTokens: usage.input_tokens || 0,
+      outputTokens: usage.output_tokens || 0,
+      estimatedCost: totalCost,
+    },
+  ).catch(() => {})
+}
+
 export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename) {
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not configured')
+    throw new Error('ANTHROPIC_API_KEY not configured. Claude analysis unavailable.')
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
-  const prompt = `Analyze the attached resume (${filename || 'resume file'}) and return only valid JSON in this exact shape:\n{
+
+  const prompt = `Extract and analyze this resume. Return ONLY valid JSON (no markdown, no explanation):
+{
   "candidates": [{
-    "name": "string",
+    "name": "string (required)",
     "email": "string or null",
     "phone": "string or null",
     "location": "string or null",
     "summary": "2-3 sentence professional summary",
     "skills": ["skill1", "skill2"],
-    "experience": [
-      {
-        "title": "Job Title",
-        "company": "Company Name",
-        "duration": "date range or tenure",
-        "description": "key accomplishments"
-      }
-    ],
-    "education": [
-      {
-        "degree": "Degree",
-        "school": "Institution",
-        "graduation_year": 2020
-      }
-    ],
-    "certifications": ["cert1", "cert2"],
+    "experience": [{
+      "title": "Job Title",
+      "company": "Company",
+      "duration": "X years or dates",
+      "description": "Key accomplishments",
+      "startDate": "YYYY-MM",
+      "endDate": "YYYY-MM"
+    }],
+    "education": [{
+      "degree": "BS Computer Science",
+      "school": "University",
+      "graduation_year": 2020
+    }],
+    "certifications": ["cert1"],
     "languages": ["English"],
-    "projects": [
-      {
-        "name": "Project Name",
-        "description": "what was built",
-        "url": "https://..."
-      }
-    ],
+    "projects": [{
+      "name": "Project",
+      "description": "What built",
+      "url": "link"
+    }],
     "achievements": ["achievement1"],
     "confidence": {
-      "name": 0.0,
-      "email": 0.0,
-      "skills": 0.0,
-      "experience": 0.0
+      "name": 0.95,
+      "email": 0.85,
+      "skills": 0.88,
+      "experience": 0.90
     }
   }]
-}
-Do not include markdown, commentary, or extra keys.`
+}`
 
   try {
     const response = await client.messages.create({
@@ -97,9 +140,13 @@ Do not include markdown, commentary, or extra keys.`
       ],
     })
 
+    if (response.usage) {
+      await trackTokens(response.usage, filename)
+    }
+
     const textContent = (response.content || []).find((item) => item.type === 'text')
     if (!textContent || textContent.type !== 'text') {
-      throw new Error('Unexpected response format from Claude')
+      throw new Error('Unexpected Claude response format')
     }
 
     const result = extractJson(textContent.text)
@@ -109,7 +156,10 @@ Do not include markdown, commentary, or extra keys.`
 
     return result
   } catch (error) {
-    console.error('[AI Resume Analysis] Error:', error.message)
+    console.error('[Claude] Analysis failed:', {
+      error: error.message,
+      file: filename,
+    })
     throw error
   }
 }
