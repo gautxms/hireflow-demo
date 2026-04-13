@@ -3,14 +3,27 @@ import {
   createTransactionalNotification,
   listUserNotifications,
 } from '../services/notificationService.js'
+import { pool } from '../db/client.js'
 
 const router = Router()
 
-const ALLOWED_TYPES = new Set(['demo.request.submitted', 'demo.request.received'])
+const ALLOWED_TYPES = new Set(['demo.request.submitted'])
 
 function sanitizeString(value, maxLength = 512) {
   if (typeof value !== 'string') return ''
   return value.trim().slice(0, maxLength)
+}
+
+async function getUserEmail(userId) {
+  const result = await pool.query(
+    `SELECT email
+     FROM users
+     WHERE id = $1
+     LIMIT 1`,
+    [userId],
+  )
+
+  return result.rows[0]?.email || null
 }
 
 router.get('/', async (req, res) => {
@@ -32,7 +45,7 @@ router.get('/', async (req, res) => {
 
 router.post('/transactional', async (req, res) => {
   const type = sanitizeString(req.body?.type, 80)
-  const recipientEmail = sanitizeString(req.body?.recipientEmail, 255)
+  const recipientEmail = sanitizeString(req.body?.recipientEmail, 255).toLowerCase()
   const payload = typeof req.body?.payload === 'object' && req.body.payload ? req.body.payload : {}
   const headerIdempotencyKey = sanitizeString(req.headers['x-idempotency-key'], 128)
   const bodyIdempotencyKey = sanitizeString(req.body?.idempotencyKey, 128)
@@ -47,6 +60,15 @@ router.post('/transactional', async (req, res) => {
   }
 
   try {
+    const userEmail = await getUserEmail(req.userId)
+    if (!userEmail) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    if (userEmail.toLowerCase() !== recipientEmail) {
+      return res.status(403).json({ error: 'recipientEmail must match the authenticated user email' })
+    }
+
     const result = await createTransactionalNotification({
       userId: req.userId,
       type,

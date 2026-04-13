@@ -16,27 +16,51 @@ const deliveries = new Map()
 pool.query = async (queryText, params = []) => {
   const sql = String(queryText).trim()
 
-  if (sql.startsWith('SELECT id, status, idempotency_key, created_at') && sql.includes('FROM notification_deliveries')) {
-    const [idempotencyKey] = params
-    const entry = deliveries.get(idempotencyKey)
-    return { rowCount: entry ? 1 : 0, rows: entry ? [entry] : [] }
+  if (sql.startsWith('SELECT email') && sql.includes('FROM users')) {
+    const [userId] = params
+    if (userId === 123 || userId === 44) {
+      return { rowCount: 1, rows: [{ email: 'person@example.com' }] }
+    }
+    return { rowCount: 0, rows: [] }
   }
 
   if (sql.startsWith('INSERT INTO notification_deliveries')) {
-    const [userId, type, recipientEmail, idempotencyKey, status, errorMessage, metadataRaw] = params
+    const [userId, type, recipientEmail, idempotencyKey, metadataRaw] = params
+    if (deliveries.has(idempotencyKey)) {
+      return { rowCount: 0, rows: [] }
+    }
+
     const row = {
       id: `id-${deliveries.size + 1}`,
       user_id: userId,
       notification_type: type,
       recipient_email: recipientEmail,
       idempotency_key: idempotencyKey,
-      status,
-      error_message: errorMessage,
+      status: 'failed',
+      error_message: 'pending',
       metadata: JSON.parse(metadataRaw),
       created_at: new Date().toISOString(),
     }
     deliveries.set(idempotencyKey, row)
     return { rowCount: 1, rows: [row] }
+  }
+
+  if (sql.startsWith('UPDATE notification_deliveries')) {
+    const [id, status, errorMessage] = params
+    const entry = [...deliveries.values()].find((item) => item.id === id)
+    if (!entry) {
+      return { rowCount: 0, rows: [] }
+    }
+
+    entry.status = status
+    entry.error_message = errorMessage
+    return { rowCount: 1, rows: [entry] }
+  }
+
+  if (sql.startsWith('SELECT id, user_id, notification_type, recipient_email, idempotency_key, status')) {
+    const [idempotencyKey] = params
+    const entry = deliveries.get(idempotencyKey)
+    return { rowCount: entry ? 1 : 0, rows: entry ? [entry] : [] }
   }
 
   if (sql.startsWith('WITH scoped AS')) {
@@ -70,23 +94,32 @@ test('notification endpoints enforce auth and payload validation', async () => {
     const unauth = await fetch(`${url}/api/notifications/transactional`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'demo.request.submitted', recipientEmail: 'valid@example.com' }),
+      body: JSON.stringify({ type: 'demo.request.submitted', recipientEmail: 'person@example.com' }),
     })
     assert.equal(unauth.status, 401)
 
     const token = jwt.sign({ userId: 123 }, process.env.JWT_SECRET)
-    const badPayload = await fetch(`${url}/api/notifications/transactional`, {
+    const invalidType = await fetch(`${url}/api/notifications/transactional`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ type: 'nope', recipientEmail: 'not-an-email' }),
+      body: JSON.stringify({ type: 'nope', recipientEmail: 'person@example.com' }),
     })
 
-    assert.equal(badPayload.status, 400)
-    const body = await badPayload.json()
-    assert.match(body.error, /unsupported/i)
+    assert.equal(invalidType.status, 400)
+
+    const wrongRecipient = await fetch(`${url}/api/notifications/transactional`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ type: 'demo.request.submitted', recipientEmail: 'other@example.com' }),
+    })
+
+    assert.equal(wrongRecipient.status, 403)
   } finally {
     server.close()
   }

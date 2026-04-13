@@ -1,6 +1,9 @@
 import crypto from 'crypto'
 import { pool } from '../db/client.js'
-import { sendDemoRequestEmail } from './emailService.js'
+import {
+  sendDemoRequestConfirmationEmail,
+  sendDemoRequestEmail,
+} from './emailService.js'
 
 const SUPPORTED_TRANSACTIONAL_TYPES = new Set(['demo.request.submitted', 'demo.request.received'])
 
@@ -10,6 +13,57 @@ function normalizeIdempotencyKey(inputKey, fallbackSeed) {
     return raw.slice(0, 128)
   }
   return `auto:${crypto.createHash('sha256').update(String(fallbackSeed || '')).digest('hex')}`
+}
+
+async function fetchExistingDelivery(idempotencyKey) {
+  const existingResult = await pool.query(
+    `SELECT id, user_id, notification_type, recipient_email, idempotency_key, status, error_message, metadata, created_at
+     FROM notification_deliveries
+     WHERE idempotency_key = $1
+     LIMIT 1`,
+    [idempotencyKey],
+  )
+
+  return existingResult.rows[0] || null
+}
+
+async function reserveDelivery({ userId, type, recipientEmail, idempotencyKey, payload }) {
+  const insertResult = await pool.query(
+    `INSERT INTO notification_deliveries (
+       user_id,
+       notification_type,
+       recipient_email,
+       idempotency_key,
+       status,
+       error_message,
+       metadata
+     )
+     VALUES ($1, $2, $3, $4, 'failed', 'pending', $5::jsonb)
+     ON CONFLICT (idempotency_key) DO NOTHING
+     RETURNING id, user_id, notification_type, recipient_email, idempotency_key, status, error_message, metadata, created_at`,
+    [
+      userId,
+      type,
+      recipientEmail,
+      idempotencyKey,
+      JSON.stringify(payload || {}),
+    ],
+  )
+
+  return insertResult.rows[0] || null
+}
+
+async function finalizeDelivery({ id, status, errorMessage = null }) {
+  const result = await pool.query(
+    `UPDATE notification_deliveries
+     SET status = $2,
+         error_message = $3
+     WHERE id = $1
+     RETURNING id, user_id, notification_type, recipient_email, idempotency_key, status, error_message, metadata, created_at`,
+    [id, status, errorMessage],
+  )
+
+  return result.rows[0]
 }
 
 export async function ensureNotificationTables() {
@@ -52,19 +106,20 @@ export async function createTransactionalNotification({
     `${type}|${normalizedEmail}|${JSON.stringify(payload)}`,
   )
 
-  const existingResult = await pool.query(
-    `SELECT id, status, idempotency_key, created_at
-     FROM notification_deliveries
-     WHERE idempotency_key = $1
-     LIMIT 1`,
-    [effectiveIdempotencyKey],
-  )
+  const reserved = await reserveDelivery({
+    userId,
+    type,
+    recipientEmail: normalizedEmail,
+    idempotencyKey: effectiveIdempotencyKey,
+    payload,
+  })
 
-  if (existingResult.rowCount > 0) {
+  if (!reserved) {
+    const existing = await fetchExistingDelivery(effectiveIdempotencyKey)
     return {
       duplicate: true,
       idempotencyKey: effectiveIdempotencyKey,
-      delivery: existingResult.rows[0],
+      delivery: existing,
     }
   }
 
@@ -72,14 +127,26 @@ export async function createTransactionalNotification({
   let errorMessage = null
 
   try {
-    if (type === 'demo.request.submitted' || type === 'demo.request.received') {
+    if (type === 'demo.request.received') {
       const sent = await sendDemoRequestEmail({
         requesterName: payload.requesterName || 'there',
-        requesterEmail: normalizedEmail,
+        requesterEmail: payload.requesterEmail || normalizedEmail,
         company: payload.company || 'Unknown company',
         phone: payload.phone || '',
-        message: payload.message || 'Thanks for your demo request.',
+        message: payload.message || 'New demo request.',
         to: normalizedEmail,
+      })
+
+      if (!sent) {
+        status = 'failed'
+        errorMessage = 'Email transport is unavailable'
+      }
+    }
+
+    if (type === 'demo.request.submitted') {
+      const sent = await sendDemoRequestConfirmationEmail({
+        to: normalizedEmail,
+        requesterName: payload.requesterName || 'there',
       })
 
       if (!sent) {
@@ -92,33 +159,16 @@ export async function createTransactionalNotification({
     errorMessage = error?.message || 'Failed to send notification email'
   }
 
-  const insertResult = await pool.query(
-    `INSERT INTO notification_deliveries (
-       user_id,
-       notification_type,
-       recipient_email,
-       idempotency_key,
-       status,
-       error_message,
-       metadata
-     )
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-     RETURNING id, user_id, notification_type, recipient_email, idempotency_key, status, error_message, metadata, created_at`,
-    [
-      userId,
-      type,
-      normalizedEmail,
-      effectiveIdempotencyKey,
-      status,
-      errorMessage,
-      JSON.stringify(payload || {}),
-    ],
-  )
+  const delivery = await finalizeDelivery({
+    id: reserved.id,
+    status,
+    errorMessage,
+  })
 
   return {
     duplicate: false,
     idempotencyKey: effectiveIdempotencyKey,
-    delivery: insertResult.rows[0],
+    delivery,
   }
 }
 
