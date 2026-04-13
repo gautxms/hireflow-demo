@@ -359,13 +359,13 @@ async function listAdminActions(req, res) {
 }
 
 
-router.get('/sessions', (req, res) => {
-  const sessions = listAdminSessions(req.admin.id, req.admin.sessionId)
+router.get('/sessions', async (req, res) => {
+  const sessions = await listAdminSessions(req.admin.id, req.admin.sessionId)
   return res.json({ sessions })
 })
 
-router.post('/sessions/refresh', (req, res) => {
-  const refreshed = createAdminSession({
+router.post('/sessions/refresh', async (req, res) => {
+  const refreshed = await createAdminSession({
     adminId: req.admin.id,
     email: req.admin.email,
     ipAddress: req.admin.loginIp || req.admin.ipAddress,
@@ -383,7 +383,7 @@ router.post('/sessions/refresh', (req, res) => {
 })
 
 router.post('/sessions/logout-others', async (req, res) => {
-  const revokedCount = revokeOtherAdminSessions(req.admin.id, req.admin.sessionId)
+  const revokedCount = await revokeOtherAdminSessions(req.admin.id, req.admin.sessionId)
 
   try {
     await pool.query(

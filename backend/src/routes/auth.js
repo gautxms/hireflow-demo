@@ -490,7 +490,7 @@ router.post('/admin/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid 2FA code' })
     }
 
-    const session = createAdminSession({
+    const session = await createAdminSession({
       adminId: user.id,
       email: user.email,
       ipAddress: String(req.ip || '').replace('::ffff:', ''),
@@ -637,11 +637,11 @@ router.post('/admin/2fa/verify', async (req, res) => {
   }
 })
 
-router.post('/admin/logout', (req, res) => {
+router.post('/admin/logout', async (req, res) => {
   const parsed = parseAdminToken(req)
 
   if (parsed?.decoded?.sid) {
-    revokeAdminSession(parsed.decoded.sid)
+    await revokeAdminSession(parsed.decoded.sid)
   }
 
   clearAdminSession(res)
