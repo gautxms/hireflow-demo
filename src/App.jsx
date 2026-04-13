@@ -1,14 +1,14 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
-import LandingPage from './components/LandingPage'
-import Pricing from './pages/Pricing'
-import ResumeUploader from './components/ResumeUploader'
-import CandidateResults from './components/CandidateResults'
-import OperationsDashboard from './components/Dashboard'
-import SettingsPage from './components/SettingsPage'
-import HelpPage from './components/HelpPage'
-import AboutPage from './components/AboutPage'
-import DemoBookingPage from './components/DemoBookingPage'
-import ContactPage from './components/ContactPage'
+const LandingPage = lazy(() => import('./components/LandingPage'))
+const Pricing = lazy(() => import('./pages/Pricing'))
+const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
+const CandidateResults = lazy(() => import('./components/CandidateResults'))
+const OperationsDashboard = lazy(() => import('./components/Dashboard'))
+const SettingsPage = lazy(() => import('./components/SettingsPage'))
+const HelpPage = lazy(() => import('./components/HelpPage'))
+const AboutPage = lazy(() => import('./components/AboutPage'))
+const DemoBookingPage = lazy(() => import('./components/DemoBookingPage'))
+const ContactPage = lazy(() => import('./components/ContactPage'))
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
@@ -624,8 +624,6 @@ export default function App() {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
 
   useEffect(() => {
-    setToken(getStoredToken())
-
     const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY) || ''
     setToken(storedToken)
     setIsAuthInitialized(true)

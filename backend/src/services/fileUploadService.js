@@ -501,20 +501,25 @@ export async function cleanupExpiredChunkUploads() {
      LIMIT 100`,
   )
 
+  const expiredUploadIds = []
+
   for (const row of result.rows) {
     try {
       await deletePrefix(row.s3_prefix || buildPrefix(row.upload_id))
-
-      await pool.query(
-        `UPDATE upload_chunks
-         SET status = 'expired',
-             updated_at = NOW()
-         WHERE upload_id = $1`,
-        [row.upload_id],
-      )
+      expiredUploadIds.push(row.upload_id)
     } catch (error) {
       console.error('[ChunkUpload] Cleanup failed for upload', row.upload_id, error)
     }
+  }
+
+  if (expiredUploadIds.length > 0) {
+    await pool.query(
+      `UPDATE upload_chunks
+       SET status = 'expired',
+           updated_at = NOW()
+       WHERE upload_id = ANY($1::text[])`,
+      [expiredUploadIds],
+    )
   }
 
   return result.rowCount

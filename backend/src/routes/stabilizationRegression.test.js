@@ -4,6 +4,9 @@ import jwt from 'jsonwebtoken'
 
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { isoOrNull, money } from './subscriptions.js'
+import { normalizeParseStatus } from './parseStatus.js'
+import { getSupportedWebhookEvents } from '../services/webhookService.js'
+import { buildResultsQueryParams, normalizeNumericRange } from '../../../src/components/candidateResultsState.js'
 
 function createRes() {
   return {
@@ -58,9 +61,61 @@ test('auth middleware rejects missing token with 401', () => {
   assert.equal(res.payload?.error, 'Unauthorized')
 })
 
+test('auth middleware accepts cookie token when bearer is absent', () => {
+  const originalVerify = jwt.verify
+  jwt.verify = () => ({ userId: 7 })
+
+  const req = {
+    path: '/api/subscriptions/current',
+    headers: {},
+    cookies: { token: 'cookie-token' },
+  }
+  const res = createRes()
+  let nextCalled = false
+
+  requireAuth(req, res, () => {
+    nextCalled = true
+  })
+
+  assert.equal(nextCalled, true)
+  assert.equal(req.userId, 7)
+
+  jwt.verify = originalVerify
+})
+
 test('billing helpers normalize dates and money formatting', () => {
   assert.equal(money(9900), '$99.00')
   assert.equal(money('94800', 'USD'), '$948.00')
   assert.equal(isoOrNull(null), null)
   assert.equal(isoOrNull('2026-01-15T12:00:00Z'), '2026-01-15T12:00:00.000Z')
+})
+
+test('parse status normalization maps queue states to API-safe values', () => {
+  assert.equal(normalizeParseStatus('completed', 'queued'), 'complete')
+  assert.equal(normalizeParseStatus('failed', 'queued'), 'failed')
+  assert.equal(normalizeParseStatus('active', 'queued'), 'processing')
+  assert.equal(normalizeParseStatus('waiting', 'queued'), 'queued')
+})
+
+test('results query params clamp inverted numeric ranges for stable links', () => {
+  const matchRange = normalizeNumericRange({ min: '95', max: '70' }, { min: 0, max: 100 })
+  const params = buildResultsQueryParams({
+    matchRange,
+    sortBy: 'name',
+    page: 0,
+    pageSize: 500,
+  })
+
+  assert.equal(params.get('matchMin'), '70')
+  assert.equal(params.get('matchMax'), '95')
+  assert.equal(params.get('sortOrder'), 'asc')
+  assert.equal(params.get('page'), '1')
+  assert.equal(params.get('pageSize'), '100')
+})
+
+test('integration webhook catalog exposes stable supported events', () => {
+  const events = getSupportedWebhookEvents()
+  assert.equal(events.includes('*'), false)
+  assert.equal(events.includes('parse.completed'), true)
+  assert.equal(events.includes('subscription.activated'), true)
 })

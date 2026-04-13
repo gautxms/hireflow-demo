@@ -28,6 +28,17 @@ function toQueryString(filters, pagination) {
   return params.toString()
 }
 
+function toStatsQueryString(filters) {
+  const params = new URLSearchParams()
+
+  if (filters.status && filters.status !== 'all') params.set('status', filters.status)
+  if (filters.search.trim()) params.set('search', filters.search.trim())
+  if (filters.startDate) params.set('startDate', filters.startDate)
+  if (filters.endDate) params.set('endDate', filters.endDate)
+
+  return params.toString()
+}
+
 export function useAdminUploads() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION)
@@ -38,6 +49,7 @@ export function useAdminUploads() {
   const [error, setError] = useState('')
 
   const queryString = useMemo(() => toQueryString(filters, pagination), [filters, pagination])
+  const statsQueryString = useMemo(() => toStatsQueryString(filters), [filters])
 
   const loadUploads = useCallback(async () => {
     try {
@@ -63,7 +75,7 @@ export function useAdminUploads() {
     try {
       setLoadingStats(true)
       setError('')
-      const response = await fetch(`/api/admin/uploads/stats?${queryString}`, { credentials: 'include' })
+      const response = await fetch(`/api/admin/uploads/stats?${statsQueryString}`, { credentials: 'include' })
       const payload = await response.json()
 
       if (!response.ok) {
@@ -76,7 +88,7 @@ export function useAdminUploads() {
     } finally {
       setLoadingStats(false)
     }
-  }, [queryString])
+  }, [statsQueryString])
 
   useEffect(() => {
     void loadUploads()
