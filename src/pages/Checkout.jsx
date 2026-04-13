@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
+import { resolveCheckoutCloseState } from './checkoutState'
 
 const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
 const DEFAULT_PROD_API_BASE_URL = 'https://hireflow-backend-production.up.railway.app'
@@ -382,13 +383,16 @@ export default function Checkout({ onAuthSuccess }) {
           if (!isUnmounted) {
             setErrorMessage(`Payment failed: ${paddleErrorMessage}`)
             setShowRetry(true)
+            setStatus('opened')
           }
+          sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
           console.log('[Checkout] User can retry payment')
         }
 
         const handleCheckoutClosed = async () => {
           console.log('[Paddle] Checkout closed by user')
           setCheckoutOpen(false)
+          sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
 
           if (isPaymentFlowCompleted) {
             return
@@ -403,8 +407,9 @@ export default function Checkout({ onAuthSuccess }) {
 
           try {
             const { user, isActive } = await verifySubscriptionStatus(token)
+            const outcome = resolveCheckoutCloseState({ isActiveSubscription: isActive, verificationFailed: false })
 
-            if (isActive) {
+            if (outcome.nextStatus === 'success') {
               console.log('[Checkout] Payment succeeded despite popup close')
               isPaymentFlowCompleted = true
               setHasSuccessfulTransaction(true)
@@ -416,7 +421,7 @@ export default function Checkout({ onAuthSuccess }) {
                 state: {
                   transactionId: closedTransactionId,
                   plan: user?.subscription_plan || selectedPlan,
-                  message: 'Payment received! Your subscription is now active.',
+                  message: outcome.message,
                 },
               })
               return
@@ -424,15 +429,17 @@ export default function Checkout({ onAuthSuccess }) {
 
             if (!isUnmounted) {
               console.log('[Checkout] User closed without payment, showing retry option')
-              setShowRetry(true)
+              setShowRetry(outcome.shouldShowRetry)
               setStatus('opened')
-              setErrorMessage('Checkout closed before payment completed. You can retry checkout from this page.')
+              setRequiredAction(null)
+              setErrorMessage(outcome.message)
             }
           } catch {
             if (!isUnmounted) {
-              setShowRetry(true)
+              const outcome = resolveCheckoutCloseState({ isActiveSubscription: false, verificationFailed: true })
+              setShowRetry(outcome.shouldShowRetry)
               setStatus('opened')
-              setErrorMessage('Could not verify payment after closing checkout. Please retry checkout.')
+              setErrorMessage(outcome.message)
             }
           }
         }

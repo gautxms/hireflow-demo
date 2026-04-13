@@ -181,21 +181,23 @@ router.post('/:transactionId/retry', async (req, res) => {
       body: JSON.stringify({}),
     })
 
-    await pool.query(
-      `UPDATE payment_attempts
-       SET status = 'succeeded',
-           next_retry_at = NULL,
-           updated_at = NOW(),
-           metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
-       WHERE transaction_id = $1`,
-      [transactionId, JSON.stringify({ resolved_by: 'admin_retry', retried_at: new Date().toISOString() })],
-    )
+    if (!paddleResponse.skipped) {
+      await pool.query(
+        `UPDATE payment_attempts
+         SET status = 'succeeded',
+             next_retry_at = NULL,
+             updated_at = NOW(),
+             metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
+         WHERE transaction_id = $1`,
+        [transactionId, JSON.stringify({ resolved_by: 'admin_retry', retried_at: new Date().toISOString() })],
+      )
+    }
 
     return res.json({
       ok: true,
       message: paddleResponse.skipped
-        ? 'Retry recorded, but Paddle API key is missing so no external retry was sent.'
-        : 'Retry request sent to Paddle.',
+        ? 'Retry request not sent because Paddle API key is missing. Payment state was left unchanged.'
+        : 'Retry request sent to Paddle and payment attempt marked succeeded.',
       paddle: paddleResponse,
     })
   } catch (error) {
