@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+import { analyzeResumeWithAI } from '../services/aiResumeAnalysisService.js'
 import { triggerWebhook } from '../services/webhookService.js'
 
 export function isTerminalJobFailure(job) {
@@ -48,19 +49,37 @@ async function runParse(job) {
 
   const fileBuffer = Buffer.from(fileBufferBase64, 'base64')
 
-  const fallbackResult = await runParseWithOcrFallback({
-    filename,
-    mimeType,
-    fileSize,
-    fileBuffer,
-  })
+  let analysisResult
+
+  try {
+    analysisResult = await analyzeResumeWithAI(fileBufferBase64, mimeType, filename)
+  } catch (aiError) {
+    console.error('[Parse Job] AI analysis failed, using OCR fallback:', aiError.message)
+    analysisResult = await runParseWithOcrFallback({
+      filename,
+      mimeType,
+      fileSize,
+      fileBuffer,
+    })
+  }
+
+  const candidates = Array.isArray(analysisResult?.candidates)
+    ? analysisResult.candidates.map((candidate, index) => ({
+        id: candidate?.id || `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
+        ...candidate,
+        confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
+      }))
+    : []
 
   const parseResult = {
     filename,
     mimeType,
     fileSize,
-    parserVersion: 'bull-async-v2-ocr-fallback',
-    ...fallbackResult,
+    parserVersion: 'claude-resume-analysis-v1',
+    methodUsed: analysisResult?.methodUsed || 'anthropic-claude',
+    candidates,
+    ...analysisResult,
+    candidates,
   }
 
   const parseDurationMs = Date.now() - startedAt
