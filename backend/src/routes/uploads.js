@@ -113,8 +113,9 @@ router.post(
           })
         }
 
-        // Convert buffer once so it can be safely used in SQL and queue payloads.
+        // Convert buffer once so binary bytes are UTF-8 safe for SQL parameters.
         const fileBufferBase64 = file.buffer.toString('base64')
+        const scanResultJson = JSON.stringify(scanResult)
 
         const insertResult = await pool.query(
           `INSERT INTO resumes (
@@ -138,7 +139,7 @@ router.post(
             file.size,
             file.mimetype,
             scanResult.status || 'clean',
-            JSON.stringify(scanResult),
+            scanResultJson,
             fileBufferBase64,
             selectedJobDescriptionId,
           ],
