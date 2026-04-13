@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildResultsQueryParams, normalizeNumericRange, normalizeSortBy, paginateCandidates } from './candidateResultsState.js'
+import {
+  buildResultsQueryParams,
+  normalizeNumericRange,
+  normalizeSortBy,
+  paginateCandidates,
+  resolveCandidateResumeUuid,
+} from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
   assert.equal(normalizeSortBy('name'), 'name')
@@ -35,4 +41,11 @@ test('pagination clamps page and returns page metadata', () => {
 test('normalizeNumericRange swaps inverted bounds', () => {
   const range = normalizeNumericRange({ min: '90', max: '20' })
   assert.deepEqual(range, { min: '20', max: '90' })
+})
+
+test('resolveCandidateResumeUuid only returns valid UUID values', () => {
+  const resumeUuid = '8ac357c6-8872-4f0f-bf34-8ba8720faacd'
+  assert.equal(resolveCandidateResumeUuid({ resumeId: resumeUuid }), resumeUuid)
+  assert.equal(resolveCandidateResumeUuid({ id: 'parsed-1' }), null)
+  assert.equal(resolveCandidateResumeUuid({ resume_id: '123' }), null)
 })

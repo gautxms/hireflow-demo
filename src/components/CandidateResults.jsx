@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
-import { buildResultsQueryParams, normalizeNumericRange, normalizeSortBy, paginateCandidates } from './candidateResultsState'
+import {
+  buildResultsQueryParams,
+  normalizeNumericRange,
+  normalizeSortBy,
+  paginateCandidates,
+  resolveCandidateResumeUuid,
+} from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import {
   computeAllVisibleSelected,
@@ -454,7 +460,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     const selectedWithResume = selectedCandidates
       .map((candidate) => ({
         key: candidate._bulkKey,
-        resumeId: candidate?.resumeId || candidate?.resume_id || candidate?.id,
+        resumeId: resolveCandidateResumeUuid(candidate),
       }))
       .filter((candidate) => Boolean(candidate.resumeId))
 
