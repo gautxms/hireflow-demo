@@ -1,7 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MODEL = process.env.ANTHROPIC_RESUME_MODEL || 'claude-3-5-sonnet-20241022'
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 
 const MIME_TYPE_MAP = {
   'application/pdf': 'application/pdf',
@@ -26,27 +24,7 @@ export async function analyzeResumeWithAI(fileBufferBase64, mimeType, filename) 
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
-
-  try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2000,
-      temperature: 0,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: fileBufferBase64,
-              },
-            },
-            {
-              type: 'text',
-              text: `Analyze the attached resume (${filename || 'resume file'}) and return only valid JSON in this exact shape:\n{
+  const prompt = `Analyze the attached resume (${filename || 'resume file'}) and return only valid JSON in this exact shape:\n{
   "candidates": [{
     "name": "string",
     "email": "string or null",
@@ -87,12 +65,47 @@ export async function analyzeResumeWithAI(fileBufferBase64, mimeType, filename) 
     }
   }]
 }
-Do not include markdown, commentary, or extra keys.`,
-            },
-          ],
-        },
-      ],
+Do not include markdown, commentary, or extra keys.`
+
+  try {
+    const anthropicResponse = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 2000,
+        temperature: 0,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: fileBufferBase64,
+                },
+              },
+              {
+                type: 'text',
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      }),
     })
+    const response = await anthropicResponse.json()
+
+    if (!anthropicResponse.ok) {
+      const message = response?.error?.message || `Anthropic API error (${anthropicResponse.status})`
+      throw new Error(message)
+    }
 
     const textContent = (response.content || []).find((item) => item.type === 'text')
     if (!textContent || textContent.type !== 'text') {
