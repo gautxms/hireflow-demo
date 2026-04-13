@@ -44,6 +44,7 @@ export default function useAdminAuth() {
   const [activeSessions, setActiveSessions] = useState([])
   const [acceptedEula, setAcceptedEula] = useState(false)
   const [requiresEula, setRequiresEula] = useState(false)
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
   const hasHandledExpiryRef = useRef(false)
 
   const persistSession = useCallback((payload = {}) => {
@@ -60,11 +61,13 @@ export default function useAdminAuth() {
     }
 
     localStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify(sessionPayload))
+    setIsAdminAuthenticated(true)
   }, [])
 
   const clearSession = useCallback(() => {
     localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
     localStorage.removeItem('admin_id')
+    setIsAdminAuthenticated(false)
   }, [])
 
   const formattedTimer = useMemo(() => {
@@ -82,7 +85,9 @@ export default function useAdminAuth() {
       throw new Error(extractError(payload, 'Could not load active sessions'))
     }
 
-    setActiveSessions(payload.sessions || [])
+    const sessions = payload.sessions || []
+    setActiveSessions(sessions)
+    setIsAdminAuthenticated(sessions.length > 0)
   }, [])
 
   const loginWithPassword = useCallback(async ({ email, password }) => {
@@ -226,6 +231,10 @@ export default function useAdminAuth() {
   }, [loadSessions])
 
   useEffect(() => {
+    if (!isAdminAuthenticated) {
+      return undefined
+    }
+
     const tick = window.setInterval(() => {
       setSessionSecondsLeft((prev) => {
         const next = Math.max(0, prev - TIMER_TICK_SECONDS)
@@ -246,7 +255,37 @@ export default function useAdminAuth() {
     }, TIMER_TICK_SECONDS * 1000)
 
     return () => window.clearInterval(tick)
-  }, [logout])
+  }, [isAdminAuthenticated, logout])
+
+
+  useEffect(() => {
+    const rawSession = localStorage.getItem(ADMIN_SESSION_STORAGE_KEY)
+
+    if (!rawSession) {
+      return
+    }
+
+    try {
+      const parsedSession = JSON.parse(rawSession)
+      const timeoutSeconds = Number(parsedSession?.timeoutSeconds || DEFAULT_TIMEOUT_SECONDS)
+      const expiresAtMs = parsedSession?.expiresAt ? new Date(parsedSession.expiresAt).getTime() : 0
+      const secondsLeftFromExpiry = expiresAtMs > 0 ? Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000)) : timeoutSeconds
+
+      if (secondsLeftFromExpiry <= 0) {
+        clearSession()
+        return
+      }
+
+      setSessionSecondsLeft(secondsLeftFromExpiry)
+      setIsAdminAuthenticated(true)
+      hasHandledExpiryRef.current = false
+      void loadSessions().catch(() => {
+        clearSession()
+      })
+    } catch {
+      clearSession()
+    }
+  }, [clearSession, loadSessions])
 
   return {
     sessionSecondsLeft,
@@ -259,6 +298,7 @@ export default function useAdminAuth() {
     activeSessions,
     acceptedEula,
     requiresEula,
+    isAdminAuthenticated,
     setAcceptedEula,
     setError,
     setStatus,

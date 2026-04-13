@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { pool } from '../db/client.js'
 
@@ -64,69 +65,151 @@ function signAdminSessionToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '15m' })
 }
 
-export function createAdminSession({ adminId, email, ipAddress }) {
-  const now = Date.now()
+function normalizeIp(ipAddress) {
+  return String(ipAddress || '').replace('::ffff:', '')
+}
+
+async function upsertSession({ sessionId, adminId, email, ipAddress, now = Date.now() }) {
+  const expiresAt = new Date(now + ADMIN_SESSION_TIMEOUT_MS)
+
+  await pool.query(
+    `INSERT INTO admin_sessions (session_id, admin_id, email, ip_address, created_at, updated_at, expires_at)
+     VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0), to_timestamp($5 / 1000.0), $6)
+     ON CONFLICT (session_id)
+     DO UPDATE SET
+       admin_id = EXCLUDED.admin_id,
+       email = EXCLUDED.email,
+       ip_address = EXCLUDED.ip_address,
+       updated_at = EXCLUDED.updated_at,
+       expires_at = EXCLUDED.expires_at`,
+    [sessionId, adminId, email, ipAddress, now, expiresAt],
+  )
+
+  return expiresAt
+}
+
+async function cleanupExpiredSessions(now = Date.now()) {
+  await pool.query(
+    'DELETE FROM admin_sessions WHERE expires_at <= to_timestamp($1 / 1000.0)',
+    [now],
+  )
+}
+
+export async function createAdminSession({ adminId, email, ipAddress, sessionId = crypto.randomUUID(), now = Date.now() }) {
+  const normalizedIp = normalizeIp(ipAddress)
+
   const token = signAdminSessionToken({
     userId: adminId,
     isAdmin: true,
     twoFactorVerified: true,
     adminEmail: email,
-    loginIp: ipAddress,
+    loginIp: normalizedIp,
     lastActivityAt: now,
     iatMs: now,
+    sid: sessionId,
+  })
+
+  const expiresAtDate = await upsertSession({
+    sessionId,
+    adminId,
+    email,
+    ipAddress: normalizedIp,
+    now,
   })
 
   return {
     token,
+    sessionId,
     expiresInSeconds: Math.floor(ADMIN_SESSION_TIMEOUT_MS / 1000),
-    expiresAt: new Date(now + ADMIN_SESSION_TIMEOUT_MS).toISOString(),
+    expiresAt: expiresAtDate.toISOString(),
   }
 }
 
-export function requireAdminAuth(req, res, next) {
+export function parseAdminToken(req) {
   const token = getToken(req)
 
   if (!token) {
-    return res.status(401).json({ error: 'Admin authentication required' })
+    return { error: 'missing' }
   }
 
-  let decoded
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    return { token, decoded }
   } catch {
-    return res.status(401).json({ error: 'Invalid admin token' })
+    return { error: 'invalid' }
   }
+}
 
-  if (!decoded?.isAdmin || !decoded?.twoFactorVerified) {
-    return res.status(403).json({ error: 'Admin access requires verified 2FA' })
+export async function requireAdminAuth(req, res, next) {
+  try {
+    await cleanupExpiredSessions()
+
+    const parsed = parseAdminToken(req)
+
+    if (parsed.error === 'missing') {
+      return res.status(401).json({ error: 'Admin authentication required' })
+    }
+
+    if (parsed.error === 'invalid') {
+      return res.status(401).json({ error: 'Invalid admin token' })
+    }
+
+    const decoded = parsed.decoded
+    if (!decoded?.isAdmin || !decoded?.twoFactorVerified) {
+      return res.status(403).json({ error: 'Admin access requires verified 2FA' })
+    }
+
+    if (!decoded?.sid) {
+      res.clearCookie(ADMIN_COOKIE_NAME)
+      return res.status(401).json({ error: 'Admin session is no longer active' })
+    }
+
+    const activityTimestamp = Number(decoded.lastActivityAt || 0)
+    if (!activityTimestamp || Date.now() - activityTimestamp > ADMIN_SESSION_TIMEOUT_MS) {
+      await revokeAdminSession(decoded.sid)
+      res.clearCookie(ADMIN_COOKIE_NAME)
+      return res.status(401).json({ error: 'Admin session expired due to inactivity' })
+    }
+
+    const { rows } = await pool.query(
+      `SELECT session_id
+       FROM admin_sessions
+       WHERE session_id = $1
+         AND expires_at > NOW()`,
+      [decoded.sid],
+    )
+
+    if (!rows[0]) {
+      res.clearCookie(ADMIN_COOKIE_NAME)
+      return res.status(401).json({ error: 'Admin session is no longer active' })
+    }
+
+    if (!isIpAllowed(req.ip)) {
+      return res.status(403).json({ error: 'IP address is not on the admin allow list' })
+    }
+
+    req.admin = {
+      id: decoded.userId,
+      email: decoded.adminEmail,
+      ipAddress: normalizeIp(req.ip),
+      loginIp: decoded.loginIp,
+      sessionId: decoded.sid,
+    }
+
+    const refreshed = await createAdminSession({
+      adminId: decoded.userId,
+      email: decoded.adminEmail,
+      ipAddress: decoded.loginIp,
+      sessionId: decoded.sid,
+    })
+    setAdminCookie(res, refreshed.token)
+    res.setHeader('X-Admin-Session-Expires-At', refreshed.expiresAt)
+
+    return next()
+  } catch (error) {
+    console.error('[AdminAuth] requireAdminAuth failed:', error)
+    return res.status(500).json({ error: 'Unable to validate admin session' })
   }
-
-  const activityTimestamp = Number(decoded.lastActivityAt || 0)
-  if (!activityTimestamp || Date.now() - activityTimestamp > ADMIN_SESSION_TIMEOUT_MS) {
-    res.clearCookie(ADMIN_COOKIE_NAME)
-    return res.status(401).json({ error: 'Admin session expired due to inactivity' })
-  }
-
-  if (!isIpAllowed(req.ip)) {
-    return res.status(403).json({ error: 'IP address is not on the admin allow list' })
-  }
-
-  req.admin = {
-    id: decoded.userId,
-    email: decoded.adminEmail,
-    ipAddress: String(req.ip || '').replace('::ffff:', ''),
-    loginIp: decoded.loginIp,
-  }
-
-  const refreshed = createAdminSession({
-    adminId: decoded.userId,
-    email: decoded.adminEmail,
-    ipAddress: decoded.loginIp,
-  })
-  setAdminCookie(res, refreshed.token)
-  res.setHeader('X-Admin-Session-Expires-At', refreshed.expiresAt)
-
-  return next()
 }
 
 export async function logAdminAction({
@@ -170,6 +253,51 @@ export function adminActionAuditMiddleware(req, res, next) {
   })
 
   next()
+}
+
+export async function listAdminSessions(adminId, currentSessionId = null) {
+  await cleanupExpiredSessions()
+
+  const result = await pool.query(
+    `SELECT session_id, ip_address, created_at, updated_at, expires_at
+     FROM admin_sessions
+     WHERE admin_id = $1
+     ORDER BY updated_at DESC`,
+    [adminId],
+  )
+
+  return result.rows.map((session) => ({
+    id: session.session_id,
+    ipAddress: session.ip_address,
+    device: 'Browser session',
+    location: 'Unknown',
+    isCurrent: currentSessionId === session.session_id,
+    createdAt: new Date(session.created_at).toISOString(),
+    lastActivityAt: new Date(session.updated_at).toISOString(),
+    expiresAt: new Date(session.expires_at).toISOString(),
+  }))
+}
+
+export async function revokeAdminSession(sessionId) {
+  await pool.query('DELETE FROM admin_sessions WHERE session_id = $1', [sessionId])
+}
+
+export async function revokeOtherAdminSessions(adminId, currentSessionId = null) {
+  const params = [adminId]
+  let whereClause = 'admin_id = $1'
+
+  if (currentSessionId) {
+    whereClause += ' AND session_id <> $2'
+    params.push(currentSessionId)
+  }
+
+  const result = await pool.query(
+    `DELETE FROM admin_sessions
+     WHERE ${whereClause}`,
+    params,
+  )
+
+  return result.rowCount || 0
 }
 
 export function clearAdminSession(res) {

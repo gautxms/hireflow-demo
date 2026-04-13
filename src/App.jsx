@@ -216,15 +216,29 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <UpdatePaymentMethodPage />
     }
 
+    const hasStoredAdminSession = Boolean(localStorage.getItem('admin_session'))
+
     if (pathname === '/admin/logs') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
       return <AdminLogsPage />
     }
 
     if (pathname === '/admin/health') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
       return <AdminHealthPage />
     }
 
     if (pathname === '/admin/analytics') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
       return <AdminAnalyticsPage />
     }
 
@@ -232,7 +246,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <AdminLoginPage />
     }
 
-    if (pathname === '/admin/setup-2fa') {
+    if (pathname === '/admin/setup-2fa' || pathname === '/admin/setup') {
       return <AdminSetup2FA />
     }
 
