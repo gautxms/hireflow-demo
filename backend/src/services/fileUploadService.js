@@ -517,7 +517,7 @@ export async function cleanupExpiredChunkUploads() {
       `UPDATE upload_chunks
        SET status = 'expired',
            updated_at = NOW()
-       WHERE upload_id = ANY($1::text[])`,
+       WHERE upload_id = ANY($1::uuid[])`,
       [expiredUploadIds],
     )
   }
