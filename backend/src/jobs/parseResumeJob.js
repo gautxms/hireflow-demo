@@ -1,8 +1,9 @@
 import { Buffer } from 'buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
-import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+import { runParseWithOcrFallback, shouldUseOcrFallback } from './ocrFallbackJob.js'
 import { analyzeResumeWithAI } from '../services/aiResumeAnalysisService.js'
+import { estimateExtractableText, isLikelyScannedPdf } from '../services/ocrService.js'
 import { triggerWebhook } from '../services/webhookService.js'
 
 export function isTerminalJobFailure(job) {
@@ -50,9 +51,40 @@ async function runParse(job) {
   const fileBuffer = Buffer.from(fileBufferBase64, 'base64')
 
   let analysisResult
+  const extraction = estimateExtractableText(fileBuffer)
+  const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
 
   try {
-    analysisResult = await analyzeResumeWithAI(fileBufferBase64, mimeType, filename)
+    const aiResult = await analyzeResumeWithAI(fileBufferBase64, mimeType, filename)
+    const aiCandidates = Array.isArray(aiResult?.candidates) ? aiResult.candidates : []
+    const aiConfidenceValues = aiCandidates.flatMap((candidate) =>
+      Object.values(candidate?.confidenceScores || candidate?.confidence || {}),
+    )
+    const normalizedConfidenceValues = aiConfidenceValues
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value))
+      .map((value) => (value <= 1 ? value * 100 : value))
+    const averageAiConfidence = normalizedConfidenceValues.length
+      ? normalizedConfidenceValues.reduce((sum, value) => sum + value, 0) / normalizedConfidenceValues.length
+      : 0
+
+    const shouldRunFallback = shouldUseOcrFallback({
+      scannedPdf,
+      extractionLength: extraction.length,
+      aiConfidence: averageAiConfidence,
+    })
+
+    if (shouldRunFallback) {
+      console.warn('[Parse Job] AI parse quality is low, invoking OCR fallback safeguards')
+      analysisResult = await runParseWithOcrFallback({
+        filename,
+        mimeType,
+        fileSize,
+        fileBuffer,
+      })
+    } else {
+      analysisResult = aiResult
+    }
   } catch (aiError) {
     console.error('[Parse Job] AI analysis failed, using OCR fallback:', aiError.message)
     analysisResult = await runParseWithOcrFallback({
