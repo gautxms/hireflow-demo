@@ -7,6 +7,31 @@ const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const shareTokenStore = new Map()
 
+const ALLOWED_SORT_BY = new Set(['score', 'match_score', 'name', 'location', 'seniority', 'experience', 'upload_date', 'uploadDate'])
+const ALLOWED_SORT_ORDER = new Set(['asc', 'desc'])
+
+function sanitizeSortBy(value) {
+  const normalized = String(value || 'score')
+  return ALLOWED_SORT_BY.has(normalized) ? normalized : 'score'
+}
+
+function sanitizeSortOrder(value, sortBy) {
+  if (sortBy === 'name') {
+    return 'asc'
+  }
+
+  const normalized = String(value || 'desc').toLowerCase()
+  return ALLOWED_SORT_ORDER.has(normalized) ? normalized : 'desc'
+}
+
+function sanitizeQueryValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return null
+  }
+
+  return String(value)
+}
+
 function parseExperienceToYears(experience) {
   if (!experience) {
     return 0
@@ -251,7 +276,9 @@ router.get('/', requireAuth, async (req, res) => {
     } = req.query
 
     const safePageSize = Math.min(100, Math.max(1, Number(pageSize)))
-    const safePage = Math.max(1, Number(page))
+    const requestedPage = Math.max(1, Number(page))
+    const safeSortBy = sanitizeSortBy(sortBy)
+    const safeSortOrder = sanitizeSortOrder(sortOrder, safeSortBy)
 
     const candidates = await getLatestCandidatesForUser(req.userId)
     const filtered = applyCandidateFilters(candidates, {
@@ -266,10 +293,11 @@ router.get('/', requireAuth, async (req, res) => {
       matchMin,
       matchMax,
     })
-    const sorted = sortCandidates(filtered, sortBy, sortOrder)
+    const sorted = sortCandidates(filtered, safeSortBy, safeSortOrder)
 
     const total = sorted.length
     const totalPages = Math.max(1, Math.ceil(total / safePageSize))
+    const safePage = Math.min(requestedPage, totalPages)
     const offset = (safePage - 1) * safePageSize
     const rows = sorted.slice(offset, offset + safePageSize)
 
@@ -282,18 +310,18 @@ router.get('/', requireAuth, async (req, res) => {
         totalPages,
         hasNextPage: safePage < totalPages,
       },
-      sort: { sortBy, sortOrder },
+      sort: { sortBy: safeSortBy, sortOrder: safeSortOrder },
       filters: {
-        scoreMin: scoreMin ?? null,
-        scoreMax: scoreMax ?? null,
-        location: location ?? null,
-        level: level ?? null,
-        search: search ?? null,
-        skills: skills ?? null,
-        experienceMin: experienceMin ?? null,
-        experienceMax: experienceMax ?? null,
-        matchMin: matchMin ?? null,
-        matchMax: matchMax ?? null,
+        scoreMin: sanitizeQueryValue(scoreMin),
+        scoreMax: sanitizeQueryValue(scoreMax),
+        location: sanitizeQueryValue(location),
+        level: sanitizeQueryValue(level),
+        search: sanitizeQueryValue(search),
+        skills: sanitizeQueryValue(skills),
+        experienceMin: sanitizeQueryValue(experienceMin),
+        experienceMax: sanitizeQueryValue(experienceMax),
+        matchMin: sanitizeQueryValue(matchMin),
+        matchMax: sanitizeQueryValue(matchMax),
       },
     })
   } catch (error) {
@@ -313,6 +341,8 @@ router.post('/share', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'No candidates available to share' })
     }
 
+    const query = req.body?.query && typeof req.body.query === 'object' ? req.body.query : {}
+
     const shareToken = crypto.randomBytes(24).toString('base64url')
     const createdAt = Date.now()
     const expiresAt = createdAt + SHARE_LINK_TTL_MS
@@ -322,12 +352,14 @@ router.post('/share', requireAuth, async (req, res) => {
       createdAt,
       expiresAt,
       ownerUserId: req.userId,
+      query,
     })
 
     return res.status(201).json({
       shareToken,
       sharePath: `/results/${shareToken}`,
       expiresAt,
+      query,
     })
   } catch (error) {
     console.error('[Results] Failed to create share link:', error)
@@ -353,6 +385,7 @@ router.get('/shared/:shareToken', async (req, res) => {
     candidates: payload.candidates,
     readOnly: true,
     expiresAt: payload.expiresAt,
+    query: payload.query || {},
   })
 })
 
