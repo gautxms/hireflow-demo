@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import authRoutes from './routes/auth.js'
+import adminSetupRoutes from './routes/adminSetup.js'
 import paddleWebhookRoutes from './routes/paddleWebhook.js'
 import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
@@ -71,6 +72,7 @@ app.get('/health', (_req, res) => {
 app.use('/api', generalApiLimiterUnauth)
 
 app.use('/api/auth', authRoutes)
+app.use('/api/admin/setup', adminSetupRoutes)
 app.use('/api/auth', passwordResetRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
