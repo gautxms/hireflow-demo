@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const DEFAULT_TIMEOUT_SECONDS = 15 * 60
 const TIMER_TICK_SECONDS = 10
+const ADMIN_SESSION_STORAGE_KEY = 'admin_session'
 
 function sanitizeCode(value) {
   return String(value || '')
@@ -17,18 +18,54 @@ function extractError(payload, fallback) {
   return payload.error || payload.message || fallback
 }
 
+function toHelpfulMessage(message, fallback) {
+  const text = String(message || fallback || 'Request failed')
+
+  if (/invalid credentials/i.test(text)) {
+    return 'Incorrect email or password. Please try again.'
+  }
+
+  if (/invalid 2fa code/i.test(text)) {
+    return 'That code is invalid or expired. Try a fresh authenticator code or backup code.'
+  }
+
+  return text
+}
+
 export default function useAdminAuth() {
   const [sessionSecondsLeft, setSessionSecondsLeft] = useState(DEFAULT_TIMEOUT_SECONDS)
   const [warningVisible, setWarningVisible] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false)
-  const [authChallengeId, setAuthChallengeId] = useState('')
   const [pendingEmail, setPendingEmail] = useState('')
   const [pendingPassword, setPendingPassword] = useState('')
   const [setupToken, setSetupToken] = useState('')
   const [activeSessions, setActiveSessions] = useState([])
+  const [acceptedEula, setAcceptedEula] = useState(false)
+  const [requiresEula, setRequiresEula] = useState(false)
   const hasHandledExpiryRef = useRef(false)
+
+  const persistSession = useCallback((payload = {}) => {
+    const sessionPayload = {
+      adminId: payload?.admin?.id || null,
+      email: payload?.admin?.email || null,
+      expiresAt: payload?.sessionExpiresAt || null,
+      timeoutSeconds: payload?.sessionTimeoutSeconds || DEFAULT_TIMEOUT_SECONDS,
+      savedAt: new Date().toISOString(),
+    }
+
+    if (sessionPayload.adminId) {
+      localStorage.setItem('admin_id', String(sessionPayload.adminId))
+    }
+
+    localStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify(sessionPayload))
+  }, [])
+
+  const clearSession = useCallback(() => {
+    localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
+    localStorage.removeItem('admin_id')
+  }, [])
 
   const formattedTimer = useMemo(() => {
     const value = Math.max(0, Number(sessionSecondsLeft) || 0)
@@ -51,17 +88,32 @@ export default function useAdminAuth() {
   const loginWithPassword = useCallback(async ({ email, password }) => {
     setError('')
     setStatus('Checking credentials…')
+    setRequiresEula(false)
 
     const response = await fetch('/api/auth/admin/login', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, acceptedEula }),
     })
     const payload = await response.json().catch(() => ({}))
 
+    if (payload.requiresTwoFactor) {
+      setNeedsTwoFactor(true)
+      setPendingEmail(email)
+      setPendingPassword(password)
+      setStatus('Enter your authenticator or backup code to continue.')
+      return { requiresTwoFactor: true }
+    }
+
+    if (payload.requiresEula) {
+      setRequiresEula(true)
+      setStatus('Please accept the admin EULA to continue.')
+      return { requiresEula: true }
+    }
+
     if (!response.ok) {
-      throw new Error(extractError(payload, 'Login failed'))
+      throw new Error(toHelpfulMessage(extractError(payload, 'Login failed'), 'Login failed'))
     }
 
     if (payload.requiresTwoFactorSetup) {
@@ -72,7 +124,6 @@ export default function useAdminAuth() {
     }
 
     setNeedsTwoFactor(Boolean(payload.requiresTwoFactor))
-    setAuthChallengeId(payload.authChallengeId || '')
     setPendingEmail(email)
     setPendingPassword(password)
 
@@ -85,11 +136,13 @@ export default function useAdminAuth() {
     hasHandledExpiryRef.current = false
     setStatus('Signed in.')
     setSetupToken('')
+    setRequiresEula(false)
     setPendingEmail('')
     setPendingPassword('')
+    persistSession(payload)
     await loadSessions().catch(() => {})
     return { requiresTwoFactor: false }
-  }, [loadSessions])
+  }, [acceptedEula, loadSessions, persistSession])
 
   const verifySecondFactor = useCallback(async ({ totpCode, backupCode }) => {
     setError('')
@@ -109,19 +162,19 @@ export default function useAdminAuth() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      throw new Error(extractError(payload, '2FA verification failed'))
+      throw new Error(toHelpfulMessage(extractError(payload, '2FA verification failed'), '2FA verification failed'))
     }
 
     setNeedsTwoFactor(false)
-    setAuthChallengeId('')
     setPendingEmail('')
     setPendingPassword('')
     setSessionSecondsLeft(payload.sessionTimeoutSeconds || DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
     setStatus(payload.usedBackupCode ? 'Signed in with one-time backup code.' : '2FA verified. Access granted.')
+    persistSession(payload)
     await loadSessions().catch(() => {})
     return payload
-  }, [loadSessions, pendingEmail, pendingPassword])
+  }, [loadSessions, pendingEmail, pendingPassword, persistSession])
 
   const refreshActivity = useCallback(async () => {
     const response = await fetch('/api/admin/sessions/refresh', {
@@ -143,15 +196,16 @@ export default function useAdminAuth() {
     }).catch(() => {})
 
     setNeedsTwoFactor(false)
-    setAuthChallengeId('')
     setPendingEmail('')
     setPendingPassword('')
     setSetupToken('')
     setActiveSessions([])
+    setRequiresEula(false)
     setSessionSecondsLeft(DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
+    clearSession()
     setStatus(message)
-  }, [])
+  }, [clearSession])
 
   const logoutOtherSessions = useCallback(async () => {
     setError('')
@@ -203,6 +257,9 @@ export default function useAdminAuth() {
     needsTwoFactor,
     setupToken,
     activeSessions,
+    acceptedEula,
+    requiresEula,
+    setAcceptedEula,
     setError,
     setStatus,
     setWarningVisible,
