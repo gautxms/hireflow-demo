@@ -180,6 +180,27 @@ export async function ensurePaymentTrackingTables() {
   } catch (e) {
     // Table might already exist, continue
   }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS telemetry_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source TEXT NOT NULL,
+        payload JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `)
+  } catch (e) {
+    // Table might already exist, continue
+  }
+}
+
+export async function logTelemetryToDatabase(source, payload = {}) {
+  await pool.query(
+    `INSERT INTO telemetry_logs (source, payload)
+     VALUES ($1, $2::jsonb)`,
+    [source, JSON.stringify(payload || {})],
+  )
 }
 
 export async function logErrorToDatabase(source, error, context = null) {

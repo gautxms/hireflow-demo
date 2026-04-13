@@ -51,6 +51,7 @@ async function runParse(job) {
   const fileBuffer = Buffer.from(fileBufferBase64, 'base64')
 
   let analysisResult
+  let usedClaude = false
   const extraction = estimateExtractableText(fileBuffer)
   const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
 
@@ -83,9 +84,11 @@ async function runParse(job) {
         fileSize,
         fileBuffer,
       })
+      usedClaude = false
     } else {
       console.log('[Parse] Claude analysis successful')
       analysisResult = aiResult
+      usedClaude = true
     }
   } catch (aiError) {
     console.warn('[Parse] Claude failed, falling back to OCR:', aiError.message)
@@ -95,6 +98,7 @@ async function runParse(job) {
       fileSize,
       fileBuffer,
     })
+    usedClaude = false
   }
 
   const candidates = Array.isArray(analysisResult?.candidates)
@@ -109,8 +113,9 @@ async function runParse(job) {
     filename,
     mimeType,
     fileSize,
-    parserVersion: 'claude-resume-analysis-v1',
-    methodUsed: analysisResult?.methodUsed || 'anthropic-claude',
+    parserVersion: usedClaude ? 'claude-3.5-sonnet-hybrid' : 'ocr-fallback',
+    analyzerUsed: usedClaude ? 'Claude' : 'OCR',
+    methodUsed: analysisResult?.methodUsed || (usedClaude ? 'anthropic-claude' : 'ocr-fallback'),
     candidates,
     ...analysisResult,
     candidates,

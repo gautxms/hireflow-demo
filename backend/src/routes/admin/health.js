@@ -307,4 +307,34 @@ router.post('/jobs/:id/retry', async (req, res) => {
   }
 })
 
+
+router.get('/claude-usage', async (_req, res) => {
+  try {
+    const { getClaudeTokenStats } = await import('../../services/aiResumeAnalysisService.js')
+    const stats = getClaudeTokenStats()
+
+    const inputCost = (Number(stats.input || 0) / 1000) * 0.003
+    const outputCost = (Number(stats.output || 0) / 1000) * 0.015
+    const totalCost = inputCost + outputCost
+
+    return res.json({
+      service: 'claude-api',
+      status: process.env.ANTHROPIC_API_KEY ? 'enabled' : 'disabled',
+      tokens: {
+        input: Number(stats.input || 0),
+        output: Number(stats.output || 0),
+        totalRequests: Number(stats.totalRequests || 0),
+      },
+      cost: {
+        input: `$${inputCost.toFixed(4)}`,
+        output: `$${outputCost.toFixed(4)}`,
+        total: `$${totalCost.toFixed(4)}`,
+      },
+    })
+  } catch (error) {
+    console.error('[Admin health] Claude usage failed', error)
+    return res.status(500).json({ error: 'Failed to fetch Claude usage stats' })
+  }
+})
+
 export default router
