@@ -36,6 +36,16 @@ async function ensureAdminUserColumns() {
   `)
 }
 
+async function recordAdminAction({ adminId, actionType, targetId, details = {}, ipAddress = null }) {
+  if (!adminId || !actionType) return
+
+  await pool.query(
+    `INSERT INTO admin_actions (admin_id, action_type, target_id, details, ip_address)
+     VALUES ($1, $2, $3, $4::jsonb, $5)`,
+    [adminId, actionType, targetId || null, JSON.stringify(details || {}), ipAddress],
+  )
+}
+
 router.get('/users', async (req, res) => {
   const search = String(req.query.search || '').trim()
 
@@ -202,6 +212,14 @@ router.patch('/users/:id', async (req, res) => {
       auditDetails = { via: 'admin' }
     }
 
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: auditAction,
+      targetId: String(id),
+      details: auditDetails,
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
     return res.json({
       ok: true,
       user: {
@@ -244,6 +262,14 @@ router.post('/users/:id/block', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
     }
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'user_blocked',
+      targetId: String(id),
+      details: { reason: reason || null },
+      ipAddress: req.admin?.ipAddress || null,
+    })
 
     return res.json({
       ok: true,
@@ -290,6 +316,14 @@ router.post('/users/:id/reset-password', async (req, res) => {
       resetUrl: buildResetUrl(token),
     })
 
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'user_password_reset_sent',
+      targetId: String(id),
+      details: { via: 'admin' },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
     return res.json({
       ok: true,
       message: 'Password reset email sent',
@@ -331,6 +365,14 @@ router.post('/users/:id/impersonate', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: `${expiresInMinutes}m` },
     )
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'impersonation_token_created',
+      targetId: String(id),
+      details: { expiresInMinutes },
+      ipAddress: req.admin?.ipAddress || null,
+    })
 
     return res.json({
       ok: true,
