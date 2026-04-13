@@ -70,6 +70,9 @@ function navigate(pathname, options = {}) {
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
+  const [sharedResults, setSharedResults] = useState(null)
+  const [sharedResultsLoading, setSharedResultsLoading] = useState(false)
+  const [sharedResultsError, setSharedResultsError] = useState('')
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
@@ -105,6 +108,56 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
   }, [currentPage, isAuthenticated, onRequireAuth])
 
+
+  useEffect(() => {
+    const match = pathname.match(/^\/results\/([^/]+)$/)
+
+    if (!match) {
+      setSharedResults(null)
+      setSharedResultsError('')
+      setSharedResultsLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const shareToken = decodeURIComponent(match[1])
+
+    const loadSharedResults = async () => {
+      try {
+        setSharedResultsLoading(true)
+        setSharedResultsError('')
+
+        const response = await fetch(`/api/results/shared/${shareToken}`, {
+          signal: controller.signal,
+        })
+
+        const payload = await response.json().catch(() => ({}))
+
+        if (!response.ok) {
+          throw new Error(payload.error || 'Unable to load shared results')
+        }
+
+        setSharedResults(payload)
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          return
+        }
+        setSharedResults(null)
+        setSharedResultsError(error.message || 'Unable to load shared results')
+      } finally {
+        if (!controller.signal.aborted) {
+          setSharedResultsLoading(false)
+        }
+      }
+    }
+
+    loadSharedResults()
+
+    return () => {
+      controller.abort()
+    }
+  }, [pathname])
+
   useEffect(() => {
     if (!isProfileMenuOpen) {
       return undefined
@@ -136,6 +189,34 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
 
   const getPageContent = () => {
+    if (pathname.match(/^\/results\/[^/]+$/)) {
+      if (sharedResultsError) {
+        return (
+          <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', padding: '2rem' }}>
+            <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '1.5rem', maxWidth: '520px', width: '100%', color: '#fff' }}>
+              <h1 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.3rem' }}>Shared results unavailable</h1>
+              <p style={{ marginTop: 0, marginBottom: '1rem', color: 'rgba(255,255,255,0.8)' }}>{sharedResultsError}</p>
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 8, padding: '0.55rem 0.9rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Go to home
+              </button>
+            </div>
+          </main>
+        )
+      }
+
+      return (
+        <CandidateResults
+          candidates={sharedResults?.candidates || []}
+          onBack={() => navigate('/')}
+          isSharedLoading={sharedResultsLoading}
+        />
+      )
+    }
+
     if (pathname === '/pricing') {
       if (isAuthenticated && isActiveSubscriber) {
         navigate('/billing')
