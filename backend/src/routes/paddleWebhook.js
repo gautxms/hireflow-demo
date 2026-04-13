@@ -147,15 +147,15 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     const dedupeEventId = getEventDeduplicationId(payload, rawBody)
     const payloadHash = crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
 
-    const dedupeResult = await pool.query(
-      `INSERT INTO paddle_webhook_events (event_id, event_type, payload_hash)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (event_id) DO NOTHING
-       RETURNING event_id`,
-      [dedupeEventId, eventType || 'unknown', payloadHash],
+    const existingEventResult = await pool.query(
+      `SELECT event_id
+       FROM paddle_webhook_events
+       WHERE event_id = $1
+       LIMIT 1`,
+      [dedupeEventId],
     )
 
-    if (dedupeResult.rowCount === 0) {
+    if (existingEventResult.rowCount > 0) {
       return res.status(200).json({ received: true, duplicate: true })
     }
 
@@ -273,6 +273,13 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         },
       })
     }
+
+    await pool.query(
+      `INSERT INTO paddle_webhook_events (event_id, event_type, payload_hash)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (event_id) DO NOTHING`,
+      [dedupeEventId, eventType || 'unknown', payloadHash],
+    )
   } catch (error) {
     console.error('[Paddle webhook] failed to update subscription state', error)
     await logErrorToDatabase('paddle.webhook.processing_failed', error, { eventType, payload })
