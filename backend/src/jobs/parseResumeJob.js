@@ -2,7 +2,7 @@ import { Buffer } from 'buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { runParseWithOcrFallback, shouldUseOcrFallback } from './ocrFallbackJob.js'
-import { analyzeResumeWithAI } from '../services/aiResumeAnalysisService.js'
+import { analyzeResumeWithClaude } from '../services/aiResumeAnalysisService.js'
 import { estimateExtractableText, isLikelyScannedPdf } from '../services/ocrService.js'
 import { triggerWebhook } from '../services/webhookService.js'
 
@@ -55,7 +55,8 @@ async function runParse(job) {
   const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
 
   try {
-    const aiResult = await analyzeResumeWithAI(fileBufferBase64, mimeType, filename)
+    console.log('[Parse] Attempting Claude analysis...')
+    const aiResult = await analyzeResumeWithClaude(fileBufferBase64, mimeType, filename)
     const aiCandidates = Array.isArray(aiResult?.candidates) ? aiResult.candidates : []
     const aiConfidenceValues = aiCandidates.flatMap((candidate) =>
       Object.values(candidate?.confidenceScores || candidate?.confidence || {}),
@@ -83,10 +84,11 @@ async function runParse(job) {
         fileBuffer,
       })
     } else {
+      console.log('[Parse] Claude analysis successful')
       analysisResult = aiResult
     }
   } catch (aiError) {
-    console.error('[Parse Job] AI analysis failed, using OCR fallback:', aiError.message)
+    console.warn('[Parse] Claude failed, falling back to OCR:', aiError.message)
     analysisResult = await runParseWithOcrFallback({
       filename,
       mimeType,
