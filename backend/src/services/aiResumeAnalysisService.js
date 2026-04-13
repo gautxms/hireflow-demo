@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { logErrorToDatabase } from '../db/client.js'
+import { logTelemetryToDatabase } from '../db/client.js'
 
 const MODEL = process.env.ANTHROPIC_RESUME_MODEL || 'claude-3-5-sonnet-20241022'
 const client = new Anthropic({
@@ -56,16 +56,14 @@ async function trackTokens(usage = {}, resumeId = 'unknown') {
     totalCostThisSession: `$${totalCostThisSession.toFixed(4)}`,
   })
 
-  await logErrorToDatabase(
-    'claude_token_usage',
-    new Error(`Resume ${resumeId}: ${usage.input_tokens || 0} input + ${usage.output_tokens || 0} output tokens`),
-    {
-      resumeId,
-      inputTokens: usage.input_tokens || 0,
-      outputTokens: usage.output_tokens || 0,
-      estimatedCost: totalCost,
-    },
-  ).catch(() => {})
+  await logTelemetryToDatabase('claude.token_usage', {
+    resumeId,
+    inputTokens: usage.input_tokens || 0,
+    outputTokens: usage.output_tokens || 0,
+    estimatedCost: totalCost,
+    totalCostThisSession,
+    loggedAt: new Date().toISOString(),
+  }).catch(() => {})
 }
 
 export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename) {
