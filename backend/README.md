@@ -27,6 +27,10 @@ Set the following environment variables:
 - `PADDLE_MONTHLY_PRICE_ID`
 - `PADDLE_ANNUAL_PRICE_ID`
 - `APP_ORIGIN` (optional, defaults to `FRONTEND_ORIGIN`)
+- `AWS_REGION`
+- `AWS_S3_BUCKET`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
 
 Use start command:
 ```bash
@@ -34,6 +38,22 @@ node backend/src/index.js
 ```
 
 Render/Railway provide HTTPS at the edge; cookies are marked `secure` in production.
+
+
+### S3 setup for Railway production
+
+Chunked resume uploads require S3 credentials in Railway.
+
+1. Create an S3 bucket (for example `hireflow-resume-uploads`) in `us-east-1` with public access blocked.
+2. Create an IAM user (for example `hireflow-app`) with access to that bucket and generate an access key pair.
+3. In Railway → project → **Variables**, set:
+   - `AWS_REGION=us-east-1`
+   - `AWS_S3_BUCKET=hireflow-resume-uploads`
+   - `AWS_ACCESS_KEY_ID=<your key id>`
+   - `AWS_SECRET_ACCESS_KEY=<your secret>`
+
+Railway redeploys automatically after variable updates.
+
 
 
 ## Paddle webhook
