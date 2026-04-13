@@ -17,6 +17,9 @@ export default function AdminLoginPage() {
     needsTwoFactor,
     setupToken,
     activeSessions,
+    acceptedEula,
+    requiresEula,
+    setAcceptedEula,
     setError,
     setStatus,
     setWarningVisible,
@@ -50,6 +53,7 @@ export default function AdminLoginPage() {
 
       if (!result.requiresTwoFactor && !result.requiresTwoFactorSetup) {
         await Promise.all([loadSessions(), loadAuditTrail().catch(() => {})])
+        window.location.assign('/admin/analytics')
       }
     } catch (requestError) {
       setStatus('')
@@ -107,6 +111,11 @@ export default function AdminLoginPage() {
           <h2>Step 1: Credentials</h2>
           <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@company.com" required />
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" required />
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={acceptedEula} onChange={(event) => setAcceptedEula(event.target.checked)} />
+            <span>I accept the Admin EULA and acceptable-use policy.</span>
+          </label>
+          {requiresEula ? <small style={{ color: '#92400e' }}>EULA acceptance is required before first admin login.</small> : null}
           <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'}</button>
         </form>
 
