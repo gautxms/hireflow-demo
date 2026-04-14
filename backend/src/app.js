@@ -3,6 +3,7 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import authRoutes from './routes/auth.js'
 import adminSetupRoutes from './routes/adminSetup.js'
+import adminPasswordResetRoutes from './routes/adminPasswordReset.js'
 import paddleWebhookRoutes from './routes/paddleWebhook.js'
 import paddleCheckoutRoutes from './routes/paddleCheckout.js'
 import paymentsRoutes from './routes/payments.js'
@@ -73,6 +74,7 @@ app.use('/api', generalApiLimiterUnauth)
 
 app.use('/api/auth', authRoutes)
 app.use('/api/admin/setup', adminSetupRoutes)
+app.use('/api/admin/reset-password-temporary', adminPasswordResetRoutes)
 app.use('/api/auth', passwordResetRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
