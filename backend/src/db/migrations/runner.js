@@ -12,6 +12,7 @@ const migrationFiles = [
   '009-add-upload-chunks',
   '010-add-parse-jobs',
   '011-fix-subscription-and-payment-schema',
+  '012-add-admin-2fa-columns',
 ]
 
 async function ensureMigrationsTable(client) {

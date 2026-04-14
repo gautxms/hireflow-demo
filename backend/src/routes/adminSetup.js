@@ -1,12 +1,8 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import { pool } from '../db/client.js'
-import { isIpAllowed } from '../middleware/adminAuth.js'
 
 const router = Router()
-
-const VALID_SETUP_TOKEN = process.env.ADMIN_SETUP_TOKEN?.trim()
-const isSetupTokenConfigured = Boolean(VALID_SETUP_TOKEN)
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16)
@@ -19,23 +15,18 @@ async function adminExists() {
   return result.rows.length > 0
 }
 
+// POST /api/admin/setup
+// Body: { email, password, setupToken }
 router.post('/', async (req, res) => {
   const { email, password, setupToken } = req.body || {}
 
-  if (!isSetupTokenConfigured) {
-    return res.status(503).json({
-      error: 'Admin setup is disabled until ADMIN_SETUP_TOKEN is configured',
-    })
-  }
-
-  if (!isIpAllowed(req.ip)) {
-    return res.status(403).json({ error: 'IP address is not on the admin allow list' })
-  }
-
-  if (setupToken !== VALID_SETUP_TOKEN) {
+  // Verify setup token from environment
+  const validToken = process.env.ADMIN_SETUP_TOKEN
+  if (!validToken || setupToken !== validToken) {
     return res.status(401).json({ error: 'Invalid setup token' })
   }
 
+  // Validate input
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' })
   }
@@ -47,29 +38,37 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    // Check if admin already exists
     if (await adminExists()) {
       return res.status(403).json({
         error: 'Admin already exists. Setup is disabled.',
       })
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase()
-    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [normalizedEmail])
+    const normalizedEmail = email.toLowerCase().trim()
+
+    // Check if user exists
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [normalizedEmail]
+    )
 
     let userId
     if (existingUser.rows.length > 0) {
+      // Promote existing user to admin
       userId = existingUser.rows[0].id
       await pool.query(
         'UPDATE users SET is_admin = true, password_hash = $2 WHERE id = $1',
-        [userId, hashPassword(password)],
+        [userId, hashPassword(password)]
       )
       console.log('[Admin Setup] Promoted user to admin:', normalizedEmail)
     } else {
+      // Create new admin user
       const result = await pool.query(
         `INSERT INTO users (email, password_hash, is_admin, email_verified, created_at)
          VALUES ($1, $2, true, true, NOW())
          RETURNING id`,
-        [normalizedEmail, hashPassword(password)],
+        [normalizedEmail, hashPassword(password)]
       )
       userId = result.rows[0].id
       console.log('[Admin Setup] Created new admin user:', normalizedEmail)
@@ -86,6 +85,7 @@ router.post('/', async (req, res) => {
     console.error('[Admin Setup] Error:', error.message)
     return res.status(500).json({
       error: 'Setup failed. Check server logs.',
+      details: error.message,
     })
   }
 })
