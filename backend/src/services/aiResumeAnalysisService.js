@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { logTelemetryToDatabase } from '../db/client.js'
 
 const MODEL = process.env.ANTHROPIC_RESUME_MODEL || 'claude-3-5-sonnet-20241022'
+const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
@@ -38,6 +39,34 @@ function extractJson(text = '') {
   return JSON.parse(payload)
 }
 
+async function sendBudgetAlert({ currentCost, limit }) {
+  await logTelemetryToDatabase('claude.budget.alert', {
+    currentCost,
+    limit,
+    percentageUsed: limit > 0 ? Number(((currentCost / limit) * 100).toFixed(1)) : null,
+    loggedAt: new Date().toISOString(),
+  }).catch(() => {})
+}
+
+async function checkBudgetAlert(estimatedCost) {
+  if (MAX_MONTHLY_BUDGET <= 0) {
+    return
+  }
+
+  if (estimatedCost > MAX_MONTHLY_BUDGET * 0.8) {
+    console.warn('[Claude] Budget approaching limit:', {
+      estimated: estimatedCost,
+      limit: MAX_MONTHLY_BUDGET,
+      percentageUsed: ((estimatedCost / MAX_MONTHLY_BUDGET) * 100).toFixed(1),
+    })
+
+    await sendBudgetAlert({
+      currentCost: estimatedCost,
+      limit: MAX_MONTHLY_BUDGET,
+    }).catch(() => {})
+  }
+}
+
 async function trackTokens(usage = {}, resumeId = 'unknown') {
   claudeTokensUsed.input += usage.input_tokens || 0
   claudeTokensUsed.output += usage.output_tokens || 0
@@ -64,6 +93,8 @@ async function trackTokens(usage = {}, resumeId = 'unknown') {
     totalCostThisSession,
     loggedAt: new Date().toISOString(),
   }).catch(() => {})
+
+  await checkBudgetAlert(totalCostThisSession)
 }
 
 export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename) {
