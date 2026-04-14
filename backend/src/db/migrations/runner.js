@@ -13,6 +13,7 @@ const migrationFiles = [
   '010-add-parse-jobs',
   '011-fix-subscription-and-payment-schema',
   '012-add-admin-2fa-columns',
+  '013-fix-admin-email-verification',
 ]
 
 async function ensureMigrationsTable(client) {
