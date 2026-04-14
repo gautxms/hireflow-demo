@@ -5,7 +5,8 @@ import { isIpAllowed } from '../middleware/adminAuth.js'
 
 const router = Router()
 
-const VALID_SETUP_TOKEN = process.env.ADMIN_SETUP_TOKEN || 'admin-setup-change-me'
+const VALID_SETUP_TOKEN = process.env.ADMIN_SETUP_TOKEN?.trim()
+const isSetupTokenConfigured = Boolean(VALID_SETUP_TOKEN)
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16)
@@ -20,6 +21,12 @@ async function adminExists() {
 
 router.post('/', async (req, res) => {
   const { email, password, setupToken } = req.body || {}
+
+  if (!isSetupTokenConfigured) {
+    return res.status(503).json({
+      error: 'Admin setup is disabled until ADMIN_SETUP_TOKEN is configured',
+    })
+  }
 
   if (!isIpAllowed(req.ip)) {
     return res.status(403).json({ error: 'IP address is not on the admin allow list' })
