@@ -22,7 +22,6 @@ import candidatesRoutes from './routes/candidates.js'
 import jobDescriptionsRoutes from './routes/jobDescriptions.js'
 import inquiriesRoutes from './routes/inquiries.js'
 import notificationsRoutes from './routes/notifications.js'
-import adminSetupRoutes from './routes/adminSetup.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
@@ -79,7 +78,6 @@ app.use('/api/admin/setup', adminSetupRoutes)
 app.use('/api/admin/reset-password-temporary', adminPasswordResetRoutes)
 app.use('/api/admin/magic-link', adminMagicLinkRoutes)
 app.use('/api/auth', passwordResetRoutes)
-app.use('/api/admin/setup', adminSetupRoutes)
 app.use('/api/paddle', paddleCheckoutRoutes)
 app.use('/api/payments', requireAuth, generalApiLimiterAuth, paymentsRoutes)
 app.use('/api/uploads', parseStatusRoutes)
