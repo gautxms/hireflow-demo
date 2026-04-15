@@ -1,5 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
-
+import API_BASE from '../config/api'
 export default function SubscriptionCard({ user, token, onRefresh, subscription }) {
   const getStatusColor = (status) => {
     const colors = {
@@ -18,7 +17,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
     if (!window.confirm('Cancel subscription? You\'ll lose access after the current period.')) return
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/subscriptions/cancel`, {
+      const response = await fetch(`${API_BASE}/subscriptions/cancel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

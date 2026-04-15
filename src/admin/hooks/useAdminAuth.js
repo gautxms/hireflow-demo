@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import API_BASE from '../../config/api'
 
 const DEFAULT_TIMEOUT_SECONDS = 15 * 60
 const TIMER_TICK_SECONDS = 10
@@ -78,7 +79,7 @@ export default function useAdminAuth() {
   }, [sessionSecondsLeft])
 
   const loadSessions = useCallback(async () => {
-    const response = await fetch('/api/admin/sessions', { credentials: 'include' })
+    const response = await fetch(`${API_BASE}/admin/sessions`, { credentials: 'include' })
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
@@ -95,7 +96,7 @@ export default function useAdminAuth() {
     setStatus('Checking credentials…')
     setRequiresEula(false)
 
-    const response = await fetch('/api/auth/admin/login', {
+    const response = await fetch(`${API_BASE}/auth/admin/login`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -153,7 +154,7 @@ export default function useAdminAuth() {
     setError('')
     setStatus('Verifying 2FA code…')
 
-    const response = await fetch('/api/auth/admin/login', {
+    const response = await fetch(`${API_BASE}/auth/admin/login`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -182,7 +183,7 @@ export default function useAdminAuth() {
   }, [loadSessions, pendingEmail, pendingPassword, persistSession])
 
   const refreshActivity = useCallback(async () => {
-    const response = await fetch('/api/admin/sessions/refresh', {
+    const response = await fetch(`${API_BASE}/admin/sessions/refresh`, {
       method: 'POST',
       credentials: 'include',
     })
@@ -195,7 +196,7 @@ export default function useAdminAuth() {
   }, [])
 
   const logout = useCallback(async (message = 'Signed out.') => {
-    await fetch('/api/auth/admin/logout', {
+    await fetch(`${API_BASE}/auth/admin/logout`, {
       method: 'POST',
       credentials: 'include',
     }).catch(() => {})
@@ -216,7 +217,7 @@ export default function useAdminAuth() {
     setError('')
     setStatus('Logging out other sessions…')
 
-    const response = await fetch('/api/admin/sessions/logout-others', {
+    const response = await fetch(`${API_BASE}/admin/sessions/logout-others`, {
       method: 'POST',
       credentials: 'include',
     })

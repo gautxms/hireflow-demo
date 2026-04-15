@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
+import API_BASE from '../config/api'
 
-const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
-const DEFAULT_PROD_API_BASE_URL = 'https://hireflow-backend-production.up.railway.app'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
-function resolveApiBaseUrl() {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
-  }
-
-  return import.meta.env.PROD ? DEFAULT_PROD_API_BASE_URL : DEFAULT_DEV_API_BASE_URL
-}
-
-const API_BASE_URL = resolveApiBaseUrl()
 
 const CANCEL_REASONS = [
   'Too expensive',
@@ -61,8 +51,8 @@ export default function BillingPage() {
     try {
       setLoading(true)
       const [subRes, historyRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/subscriptions/current`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/api/subscriptions/history`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/subscriptions/current`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/subscriptions/history`, { headers: { Authorization: `Bearer ${token}` } }),
       ])
 
       const subPayload = await subRes.json()
@@ -96,7 +86,7 @@ export default function BillingPage() {
   }, [subscription, targetPlan])
 
   async function changePlan() {
-    const response = await fetch(`${API_BASE_URL}/api/subscriptions/change-plan`, {
+    const response = await fetch(`${API_BASE}/subscriptions/change-plan`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -116,7 +106,7 @@ export default function BillingPage() {
   }
 
   async function cancelSubscription() {
-    const response = await fetch(`${API_BASE_URL}/api/subscriptions/cancel`, {
+    const response = await fetch(`${API_BASE}/subscriptions/cancel`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -136,7 +126,7 @@ export default function BillingPage() {
   }
 
   async function downloadInvoice(invoiceId) {
-    const response = await fetch(`${API_BASE_URL}/api/subscriptions/invoices/${invoiceId}/download`, {
+    const response = await fetch(`${API_BASE}/subscriptions/invoices/${invoiceId}/download`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 

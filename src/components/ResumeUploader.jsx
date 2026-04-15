@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
+import API_BASE from '../config/api'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
 const MAX_FILE_SIZE = 100 * 1024 * 1024
@@ -97,7 +97,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       return
     }
 
-    fetch(`${API_BASE_URL}/api/job-descriptions`, {
+    fetch(`${API_BASE}/job-descriptions`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -184,7 +184,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       formData.append('chunkIndex', String(chunkIndex))
       formData.append('totalChunks', String(totalChunks))
 
-      const response = await fetch(`${API_BASE_URL}/api/uploads/chunks/${uploadId}/chunk`, {
+      const response = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -213,7 +213,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       formData.append('jobDescriptionId', selectedJobDescriptionId)
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/uploads`, {
+    const response = await fetch(`${API_BASE}/uploads`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
@@ -260,7 +260,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
           const fingerprint = getFileFingerprint(file)
 
-          const initResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/init`, {
+          const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -311,7 +311,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
           }
 
-          const completeResponse = await fetch(`${API_BASE_URL}/api/uploads/chunks/${uploadId}/complete`, {
+          const completeResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
           })
@@ -356,7 +356,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       let queueRetryAttempt = 0
 
       for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-        const statusResponse = await fetch(`${API_BASE_URL}/api/uploads/${primaryJobId}/parse-status`, {
+        const statusResponse = await fetch(`${API_BASE}/uploads/${primaryJobId}/parse-status`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
         })

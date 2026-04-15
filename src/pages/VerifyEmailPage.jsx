@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import BackButton from '../components/BackButton'
 import '../components/AuthPage.css'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import API_BASE from '../config/api'
 
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -36,7 +35,7 @@ export default function VerifyEmailPage({ onGoToLogin }) {
 
     async function verifyEmail() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
+        const response = await fetch(`${API_BASE}/auth/verify-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

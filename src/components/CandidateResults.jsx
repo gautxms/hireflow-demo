@@ -10,6 +10,7 @@ import {
   resolveCandidateResumeUuid,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
+import API_BASE from '../config/api'
 import {
   computeAllVisibleSelected,
   getSelectedCandidates,
@@ -148,7 +149,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       setShortlistLoading(true)
       setShortlistError('')
 
-      const response = await fetch('/api/shortlists', {
+      const response = await fetch(`${API_BASE}/shortlists`, {
         method: 'GET',
         headers: authHeaders(),
       })
@@ -189,7 +190,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       setShortlistLoading(true)
       setShortlistError('')
 
-      const response = await fetch(`/api/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
+      const response = await fetch(`${API_BASE}/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
         method: 'GET',
         headers: authHeaders(),
       })
@@ -213,7 +214,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       setShortlistLoading(true)
       setShortlistError('')
 
-      const response = await fetch('/api/shortlists', {
+      const response = await fetch(`${API_BASE}/shortlists`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ name, description }),
@@ -248,7 +249,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       const derivedRating = Math.max(1, Math.min(5, Math.round(Number(candidate?.score || 0) / 20)))
 
       const resumeId = candidate?.resumeId || candidate?.resume_id || candidate?.id
-      const response = await fetch(`/api/shortlists/${selectedShortlistId}/candidates`, {
+      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -279,7 +280,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
       setShortlistLoading(true)
       setShortlistError('')
-      const response = await fetch(`/api/shortlists/${selectedShortlistId}/candidates/${resumeId}`, {
+      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/${resumeId}`, {
         method: 'DELETE',
         headers: authHeaders(),
       })
@@ -362,7 +363,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
     try {
       setResultsError('')
-      const response = await fetch('/api/results/export/csv', {
+      const response = await fetch(`${API_BASE}/results/export/csv`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -467,7 +468,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
     try {
       setResultsError('')
-      const response = await fetch('/api/candidates/tags/bulk', {
+      const response = await fetch(`${API_BASE}/candidates/tags/bulk`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -491,7 +492,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const createShareLink = async () => {
     try {
       setResultsError('')
-      const response = await fetch('/api/results/share', {
+      const response = await fetch(`${API_BASE}/results/share`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({

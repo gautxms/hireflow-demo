@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import ErrorLogsTable from '../components/ErrorLogsTable'
 import WebhookAudit from '../components/WebhookAudit'
 import useAdminLogs from '../hooks/useAdminLogs'
+import API_BASE from '../../config/api'
 
 function ErrorRateChart({ items }) {
   const points = useMemo(() => {
@@ -77,7 +78,7 @@ export default function AdminLogsPage() {
   }
 
   const handleResolve = async (id) => {
-    await fetch(`/api/admin/logs/errors/${id}/resolve`, {
+    await fetch(`${API_BASE}/admin/logs/errors/${id}/resolve`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

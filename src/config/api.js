@@ -1,30 +1,39 @@
-// Determine API base URL based on environment
-const API_BASE = (() => {
-  const configuredApiBase = import.meta.env.VITE_API_BASE_URL
-  if (configuredApiBase) {
-    return configuredApiBase
+const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
+const DEFAULT_PROD_API_BASE_URL = '/api'
+
+function normalizeBaseUrl(url) {
+  const trimmed = String(url || '').trim()
+
+  if (!trimmed) {
+    return ''
   }
 
-  if (typeof window === 'undefined') {
-    // SSR context (not applicable here, but good practice)
-    return 'http://localhost:4000/api'
+  return trimmed === '/api' ? '/api' : trimmed.replace(/\/+$/, '')
+}
+
+function ensureApiPath(baseUrl) {
+  if (!baseUrl) {
+    return ''
   }
 
-  const hostname = window.location.hostname
-
-  // Production: use api.hireflow.dev
-  if (hostname === 'hireflow.dev' || hostname === 'www.hireflow.dev') {
-    return 'https://api.hireflow.dev/api'
+  if (baseUrl === '/api' || baseUrl.endsWith('/api')) {
+    return baseUrl
   }
 
-  // Development: use localhost
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:4000/api'
+  return `${baseUrl}/api`
+}
+
+function resolveApiBase() {
+  const configuredBase = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
+
+  if (configuredBase) {
+    return ensureApiPath(configuredBase)
   }
 
-  // Fallback for preview/staging and other unknown hosts.
-  // Use same-origin /api path so platform rewrites (e.g. Vercel) are respected.
-  return '/api'
-})()
+  const fallbackBase = import.meta.env.PROD ? DEFAULT_PROD_API_BASE_URL : DEFAULT_DEV_API_BASE_URL
+  return ensureApiPath(normalizeBaseUrl(fallbackBase))
+}
+
+const API_BASE = resolveApiBase()
 
 export default API_BASE

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import API_BASE from '../config/api'
 
 export default function ProfileCard({ user, token, onRefresh }) {
   const [editing, setEditing] = useState(false)
@@ -20,7 +19,7 @@ export default function ProfileCard({ user, token, onRefresh }) {
 
   const handleSave = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/me`, {
+      const response = await fetch(`${API_BASE}/profile/me`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import API_BASE from '../../config/api'
 
 function readToken() {
   const url = new URL(window.location.href)
@@ -29,7 +30,7 @@ export default function AdminSetup2FA() {
     setError('')
     setStatus('Generating QR code and backup codes…')
 
-    const response = await fetch('/api/auth/admin/2fa/setup', {
+    const response = await fetch(`${API_BASE}/auth/admin/2fa/setup`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -54,7 +55,7 @@ export default function AdminSetup2FA() {
     setError('')
     setStatus('Verifying authenticator code…')
 
-    const response = await fetch('/api/auth/admin/2fa/verify', {
+    const response = await fetch(`${API_BASE}/auth/admin/2fa/verify`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

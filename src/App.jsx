@@ -28,6 +28,7 @@ const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
 const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 import PublicFooter from './components/PublicFooter'
+import API_BASE from './config/api'
 const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
 const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
 const AdminAnalyticsPage = lazy(() => import('./admin/pages/AdminAnalyticsPage'))
@@ -127,7 +128,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         setSharedResultsLoading(true)
         setSharedResultsError('')
 
-        const response = await fetch(`/api/results/shared/${shareToken}`, {
+        const response = await fetch(`${API_BASE}/results/shared/${shareToken}`, {
           signal: controller.signal,
         })
 

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import API_BASE from '../config/api'
 
 export default function VerifyEmail() {
   const [status, setStatus] = useState('verifying') // 'verifying', 'success', 'error'
@@ -18,7 +17,7 @@ export default function VerifyEmail() {
     // Call backend to verify email
     const verifyEmail = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/verify-email?token=${encodeURIComponent(token)}`)
+        const response = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(token)}`)
 
         if (response.ok) {
           setStatus('success')

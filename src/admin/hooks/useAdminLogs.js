@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import API_BASE from '../../config/api'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -50,7 +51,7 @@ export default function useAdminLogs(initialFilters = {}) {
     setError('')
 
     try {
-      const response = await fetch(`/api/admin/logs/errors?${query}`, {
+      const response = await fetch(`${API_BASE}/admin/logs/errors?${query}`, {
         credentials: 'include',
       })
 
@@ -75,7 +76,7 @@ export default function useAdminLogs(initialFilters = {}) {
     setWebhookError('')
 
     try {
-      const response = await fetch(`/api/admin/logs/webhooks?page=${page}&pageSize=20`, {
+      const response = await fetch(`${API_BASE}/admin/logs/webhooks?page=${page}&pageSize=20`, {
         credentials: 'include',
       })
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import HealthStatus from '../components/HealthStatus'
+import API_BASE from '../../config/api'
 
 function MetricChart({ data, color, title, accessor }) {
   const points = useMemo(() => {
@@ -38,7 +39,7 @@ export default function AdminHealthPage() {
 
     const fetchHealth = async () => {
       try {
-        const response = await fetch('/api/admin/health', { credentials: 'include' })
+        const response = await fetch(`${API_BASE}/admin/health`, { credentials: 'include' })
         if (!response.ok) {
           throw new Error('Failed to load health status')
         }

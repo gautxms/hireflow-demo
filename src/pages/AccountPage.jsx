@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import ProfileCard from '../components/ProfileCard'
 import SubscriptionCard from '../components/SubscriptionCard'
 import BillingCard from '../components/BillingCard'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import API_BASE from '../config/api'
 
 export default function AccountPage({ token, user, onLogout, onUserProfileUpdate }) {
   const [loading, setLoading] = useState(true)
@@ -14,10 +13,10 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
   const fetchUserData = async () => {
     try {
       const [userResponse, subscriptionResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/auth/me`, {
+        fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API_BASE_URL}/api/subscriptions/current`, {
+        fetch(`${API_BASE}/subscriptions/current`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ])
@@ -57,7 +56,7 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
 
   const deleteAccount = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/delete-account`, {
+      const response = await fetch(`${API_BASE}/auth/delete-account`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
