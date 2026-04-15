@@ -57,6 +57,7 @@ function setAdminCookie(res, token) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    domain: process.env.ADMIN_COOKIE_DOMAIN || '.hireflow.dev',
     maxAge: ADMIN_SESSION_TIMEOUT_MS,
   })
 }
