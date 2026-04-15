@@ -1,5 +1,5 @@
 const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
-const DEFAULT_PROD_API_BASE_URL = 'https://hireflow-backend-production.up.railway.app'
+const DEFAULT_PROD_API_BASE_URL = '/api'
 
 function normalizeBaseUrl(url) {
   const trimmed = String(url || '').trim()
@@ -8,18 +8,30 @@ function normalizeBaseUrl(url) {
     return ''
   }
 
-  return trimmed.replace(/\/+$/, '')
+  return trimmed === '/api' ? '/api' : trimmed.replace(/\/+$/, '')
+}
+
+function ensureApiPath(baseUrl) {
+  if (!baseUrl) {
+    return ''
+  }
+
+  if (baseUrl === '/api' || baseUrl.endsWith('/api')) {
+    return baseUrl
+  }
+
+  return `${baseUrl}/api`
 }
 
 function resolveApiBase() {
   const configuredBase = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
   if (configuredBase) {
-    return configuredBase.endsWith('/api') ? configuredBase : `${configuredBase}/api`
+    return ensureApiPath(configuredBase)
   }
 
   const fallbackBase = import.meta.env.PROD ? DEFAULT_PROD_API_BASE_URL : DEFAULT_DEV_API_BASE_URL
-  return `${normalizeBaseUrl(fallbackBase)}/api`
+  return ensureApiPath(normalizeBaseUrl(fallbackBase))
 }
 
 const API_BASE = resolveApiBase()
