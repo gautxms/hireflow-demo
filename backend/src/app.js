@@ -32,9 +32,11 @@ app.set('trust proxy', 1)
 
 const vercelDomainSuffix = '.vercel.app'
 const defaultAllowedOrigins = [
+  'http://localhost:3000',
   'http://localhost:5173',
   'https://hireflow.dev',
   'https://www.hireflow.dev',
+  'https://api.hireflow.dev',
 ]
 
 const envAllowedOrigins = (process.env.FRONTEND_ORIGIN || '')
