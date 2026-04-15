@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './AuthPage.css'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import API_BASE from '../config/api'
 
 function formatCountdown(totalSeconds) {
   const seconds = Math.max(0, totalSeconds)
@@ -57,7 +56,7 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/resend-email-verification`, {
+      const response = await fetch(`${API_BASE}/auth/resend-email-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

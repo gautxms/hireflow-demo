@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import API_BASE from '../config/api'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
@@ -56,7 +56,7 @@ export default function AccountSettingsPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/me`, {
+      const response = await fetch(`${API_BASE}/profile/me`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const payload = await response.json()
@@ -88,7 +88,7 @@ export default function AccountSettingsPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/me`, {
+      const response = await fetch(`${API_BASE}/profile/me`, {
         method: 'PATCH',
         headers: authHeaders,
         body: JSON.stringify({ company, phone }),
@@ -116,7 +116,7 @@ export default function AccountSettingsPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/change-password`, {
+      const response = await fetch(`${API_BASE}/profile/change-password`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ oldPassword, newPassword, confirmPassword }),
@@ -138,7 +138,7 @@ export default function AccountSettingsPage() {
 
   const handleDownloadData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/export`, {
+      const response = await fetch(`${API_BASE}/profile/export`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const payload = await response.json()
@@ -168,7 +168,7 @@ export default function AccountSettingsPage() {
     if (!confirmed) return
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/me`, {
+      const response = await fetch(`${API_BASE}/profile/me`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })

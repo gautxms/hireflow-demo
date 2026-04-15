@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import API_BASE from '../../config/api'
 
 const DEFAULT_FILTERS = {
   status: 'all',
@@ -55,7 +56,7 @@ export function useAdminUploads() {
     try {
       setLoadingList(true)
       setError('')
-      const response = await fetch(`/api/admin/uploads?${queryString}`, { credentials: 'include' })
+      const response = await fetch(`${API_BASE}/admin/uploads?${queryString}`, { credentials: 'include' })
       const payload = await response.json()
 
       if (!response.ok) {
@@ -75,7 +76,7 @@ export function useAdminUploads() {
     try {
       setLoadingStats(true)
       setError('')
-      const response = await fetch(`/api/admin/uploads/stats?${statsQueryString}`, { credentials: 'include' })
+      const response = await fetch(`${API_BASE}/admin/uploads/stats?${statsQueryString}`, { credentials: 'include' })
       const payload = await response.json()
 
       if (!response.ok) {
@@ -117,7 +118,7 @@ export function useAdminUploads() {
     loadingStats,
     error,
     queryString,
-    exportCsvUrl: `/api/admin/uploads/export?${queryString}`,
+    exportCsvUrl: `${API_BASE}/admin/uploads/export?${queryString}`,
     setPage,
     setPageSize,
     updateFilters,
@@ -140,7 +141,7 @@ export function useAdminUploadDetails(uploadId) {
     try {
       setLoading(true)
       setError('')
-      const response = await fetch(`/api/admin/uploads/${uploadId}`, { credentials: 'include' })
+      const response = await fetch(`${API_BASE}/admin/uploads/${uploadId}`, { credentials: 'include' })
       const payload = await response.json()
 
       if (!response.ok) {
@@ -167,7 +168,7 @@ export function useAdminUploadDetails(uploadId) {
       setRetrying(true)
       setError('')
 
-      const response = await fetch(`/api/admin/uploads/${uploadId}/retry`, {
+      const response = await fetch(`${API_BASE}/admin/uploads/${uploadId}/retry`, {
         method: 'POST',
         credentials: 'include',
       })

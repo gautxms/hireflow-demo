@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import API_BASE from '../../config/api'
 
 const PAGE_SIZE = 50
 const SORTABLE_FIELDS = ['email', 'company', 'subscription_status', 'created_at']
@@ -57,7 +58,7 @@ export default function useAdminUsers() {
       params.set('offset', String(offset))
       if (status && status !== 'all') params.set('status', status)
       if (search.trim()) params.set('search', search.trim())
-      const response = await fetch(`/api/admin/users?${params.toString()}`, { credentials: 'include' })
+      const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, { credentials: 'include' })
       if (!response.ok) throw new Error('Failed to load users')
       const payload = await response.json()
       const list = Array.isArray(payload) ? payload : (payload.users || [])
@@ -119,7 +120,7 @@ export default function useAdminUsers() {
   }, [mutateUser])
 
   const updateProfile = useCallback(async (userId, updates) => {
-    const response = await fetch(`/api/admin/users/${userId}`, {
+    const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -135,7 +136,7 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const blockUser = useCallback(async (userId, reason) => {
-    const response = await fetch(`/api/admin/users/${userId}/block`, {
+    const response = await fetch(`${API_BASE}/admin/users/${userId}/block`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -151,7 +152,7 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const unblockUser = useCallback(async (userId) => {
-    const response = await fetch(`/api/admin/users/${userId}`, {
+    const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -167,7 +168,7 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const resetPassword = useCallback(async (userId) => {
-    const response = await fetch(`/api/admin/users/${userId}/reset-password`, {
+    const response = await fetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
       method: 'POST',
       credentials: 'include',
     })
@@ -179,7 +180,7 @@ export default function useAdminUsers() {
   }, [appendAudit])
 
   const impersonateUser = useCallback(async (userId) => {
-    const response = await fetch(`/api/admin/users/${userId}/impersonate`, {
+    const response = await fetch(`${API_BASE}/admin/users/${userId}/impersonate`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -203,7 +204,7 @@ export default function useAdminUsers() {
   const fetchUserById = useCallback(async (userId) => {
     if (!userId) return null
 
-    const response = await fetch(`/api/admin/users/${userId}`, { credentials: 'include' })
+    const response = await fetch(`${API_BASE}/admin/users/${userId}`, { credentials: 'include' })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(payload.error || 'Failed to load user')
 

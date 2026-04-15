@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import PaymentsList from '../components/PaymentsList'
+import API_BASE from '../../config/api'
 
 function money(cents = 0) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(cents) || 0) / 100)
@@ -23,7 +24,7 @@ export default function AdminPaymentsPage() {
     try {
       setLoading(true)
       setError('')
-      const response = await fetch('/api/admin/payments', { credentials: 'include' })
+      const response = await fetch(`${API_BASE}/admin/payments`, { credentials: 'include' })
       const payload = await response.json()
 
       if (!response.ok) {
@@ -45,7 +46,7 @@ export default function AdminPaymentsPage() {
   const retryFailedPayment = async (transactionId) => {
     try {
       setRetryingId(transactionId)
-      const response = await fetch(`/api/admin/payments/${transactionId}/retry`, {
+      const response = await fetch(`${API_BASE}/admin/payments/${transactionId}/retry`, {
         method: 'POST',
         credentials: 'include',
       })

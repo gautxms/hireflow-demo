@@ -1,3 +1,4 @@
+import API_BASE from '../../config/api'
 function statusStyles(status) {
   if (status === 'complete') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
   if (status === 'failed') return 'bg-rose-50 text-rose-700 border-rose-200'
@@ -39,7 +40,7 @@ export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) 
         <h1 className="text-2xl font-semibold text-slate-900">Upload Details</h1>
         <div className="flex flex-wrap gap-2">
           <a
-            href={`/api/admin/uploads/${upload.id}/raw-text`}
+            href={`${API_BASE}/admin/uploads/${upload.id}/raw-text`}
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             Download Raw Text

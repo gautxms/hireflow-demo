@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import API_BASE from '../config/api'
 
 const FEEDBACK_OPTIONS = [
   { type: 'helpful', label: '👍 Helpful' },
@@ -41,7 +42,7 @@ export default function CandidateCard({ candidate, rank }) {
       setSubmitState({ loading: true, success: '', error: '' })
       setFeedbackType(type)
 
-      const response = await fetch('/api/feedback', {
+      const response = await fetch(`${API_BASE}/feedback`, {
         method: 'POST',
         credentials: 'include',
         headers: {

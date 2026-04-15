@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import API_BASE from '../../config/api'
 
 const DEFAULT_FILTERS = {
   status: 'all',
@@ -44,7 +45,7 @@ export default function useAdminSubscriptions() {
     try {
       setLoading(true)
       setError('')
-      const response = await fetch('/api/admin/subscriptions', { credentials: 'include' })
+      const response = await fetch(`${API_BASE}/admin/subscriptions`, { credentials: 'include' })
       const payload = await response.json()
 
       if (!response.ok) {
@@ -65,7 +66,7 @@ export default function useAdminSubscriptions() {
     try {
       setDetailsLoading(true)
       setError('')
-      const response = await fetch(`/api/admin/subscriptions/${subscriptionId}`, { credentials: 'include' })
+      const response = await fetch(`${API_BASE}/admin/subscriptions/${subscriptionId}`, { credentials: 'include' })
       const payload = await response.json()
 
       if (!response.ok) {

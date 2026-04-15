@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import BackButton from '../components/BackButton'
 import '../components/AuthPage.css'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import API_BASE from '../config/api'
 
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -27,7 +26,7 @@ export default function ForgotPasswordPage({ onBackToLogin }) {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+      const response = await fetch(`${API_BASE}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

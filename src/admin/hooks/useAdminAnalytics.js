@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import API_BASE from '../../config/api'
 
 function toISODate(value) {
   return value.toISOString().slice(0, 10)
@@ -42,7 +43,7 @@ export default function useAdminAnalytics() {
         endDate: currentFilters.endDate,
       })
 
-      const payload = await fetchJson(`/api/admin/analytics?${params.toString()}`)
+      const payload = await fetchJson(`${API_BASE}/admin/analytics?${params.toString()}`)
 
       setAnalytics({
         filters: payload.filters,
@@ -85,7 +86,7 @@ export default function useAdminAnalytics() {
 
   const exportCsv = () => {
     const params = new URLSearchParams({ ...filters, export: 'csv' })
-    window.open(`/api/admin/analytics?${params.toString()}`, '_blank', 'noopener,noreferrer')
+    window.open(`${API_BASE}/admin/analytics?${params.toString()}`, '_blank', 'noopener,noreferrer')
   }
 
   return {

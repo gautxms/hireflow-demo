@@ -2,8 +2,8 @@ import { useState } from 'react'
 import DOMPurify from 'dompurify'
 import './AuthPage.css'
 import BackButton from './BackButton'
+import API_BASE from '../config/api'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const COMPANY_REGEX = /^[a-zA-Z0-9\-\s]*$/
@@ -78,7 +78,7 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+      const response = await fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

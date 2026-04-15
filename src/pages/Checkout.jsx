@@ -1,19 +1,9 @@
 import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
+import API_BASE from '../config/api'
 
-const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
-const DEFAULT_PROD_API_BASE_URL = 'https://hireflow-backend-production.up.railway.app'
 
-function resolveApiBaseUrl() {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
-  }
-
-  return import.meta.env.PROD ? DEFAULT_PROD_API_BASE_URL : DEFAULT_DEV_API_BASE_URL
-}
-
-const API_BASE_URL = resolveApiBaseUrl()
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
@@ -137,7 +127,7 @@ export default function Checkout({ onAuthSuccess }) {
 
     const verifySubscriptionStatus = async (token) => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        const response = await fetch(`${API_BASE}/auth/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -247,17 +237,17 @@ export default function Checkout({ onAuthSuccess }) {
           console.log('[Checkout] User not subscribed, opening checkout')
         }
         console.log('[Checkout] Starting embedded checkout with:', {
-          apiUrl: API_BASE_URL,
-          endpoint: `${API_BASE_URL}/api/paddle/checkout-url`,
+          apiUrl: API_BASE,
+          endpoint: `${API_BASE}/paddle/checkout-url`,
           plan: selectedPlan,
           tokenExists: !!token,
         })
 
         // Step 1: Get checkout data from backend
-        const checkoutApiUrl = `${API_BASE_URL}/api/paddle/checkout-url`
+        const checkoutApiUrl = `${API_BASE}/paddle/checkout-url`
         console.log('[Checkout] CALLING BACKEND:', {
           url: checkoutApiUrl,
-          apiBaseUrl: API_BASE_URL,
+          apiBaseUrl: API_BASE,
           isProd: import.meta.env.PROD,
           viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL,
           method: 'POST',
@@ -540,7 +530,7 @@ export default function Checkout({ onAuthSuccess }) {
 
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        const response = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         })
 

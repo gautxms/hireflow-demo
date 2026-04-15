@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { parseDemoRequestError, validateDemoRequestForm } from './demoRequestValidation.js'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import API_BASE from '../config/api'
 
 export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
@@ -150,7 +149,7 @@ export default function AboutPage({ onBack }) {
     setSubmitError('')
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/inquiries/demo-request`, {
+      const response = await fetch(`${API_BASE}/inquiries/demo-request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

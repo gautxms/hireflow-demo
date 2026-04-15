@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import TwoFactorForm from '../components/TwoFactorForm'
 import AuditTrailTable from '../components/AuditTrailTable'
 import useAdminAuth from '../hooks/useAdminAuth'
+import API_BASE from '../../config/api'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -34,7 +35,7 @@ export default function AdminLoginPage() {
   const currentSession = useMemo(() => activeSessions.find((session) => session.isCurrent), [activeSessions])
 
   const loadAuditTrail = useCallback(async () => {
-    const response = await fetch('/api/admin/actions?limit=200', { credentials: 'include' })
+    const response = await fetch(`${API_BASE}/admin/actions?limit=200`, { credentials: 'include' })
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {

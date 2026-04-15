@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import API_BASE from '../../config/api'
 
 const REFUND_REASONS = [
   { value: 'cancellation', label: 'Cancellation' },
@@ -46,7 +47,7 @@ export default function RefundModal({ isOpen, subscription, details, adminId, on
     try {
       setSubmitting(true)
       setError('')
-      const response = await fetch(`/api/admin/subscriptions/${subscription.id}/refund`, {
+      const response = await fetch(`${API_BASE}/admin/subscriptions/${subscription.id}/refund`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

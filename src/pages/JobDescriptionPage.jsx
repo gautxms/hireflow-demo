@@ -3,8 +3,8 @@ import JobDescriptionForm from '../components/JobDescriptionForm'
 import JobDescriptionList from '../components/JobDescriptionList'
 import { serializeJobDescriptionForm } from '../components/jobDescriptionFormState'
 import { shouldResetAfterSave } from './jobDescriptionSubmissionState'
+import API_BASE from '../config/api'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
 export default function JobDescriptionPage({ onRequireAuth }) {
@@ -26,7 +26,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     setError('')
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/job-descriptions?includeArchived=true`, {
+      const response = await fetch(`${API_BASE}/job-descriptions?includeArchived=true`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -75,8 +75,8 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
     const isEditing = Boolean(activeItem)
     const endpoint = isEditing
-      ? `${API_BASE_URL}/api/job-descriptions/${activeItem.id}`
-      : `${API_BASE_URL}/api/job-descriptions`
+      ? `${API_BASE}/job-descriptions/${activeItem.id}`
+      : `${API_BASE}/job-descriptions`
 
     try {
       const response = await fetch(endpoint, {
@@ -104,7 +104,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }
 
   const archiveItem = async (item) => {
-    await fetch(`${API_BASE_URL}/api/job-descriptions/${item.id}`, {
+    await fetch(`${API_BASE}/job-descriptions/${item.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -112,7 +112,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }
 
   const hardDeleteItem = async (item) => {
-    await fetch(`${API_BASE_URL}/api/job-descriptions/${item.id}?hardDelete=true`, {
+    await fetch(`${API_BASE}/job-descriptions/${item.id}?hardDelete=true`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -120,7 +120,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }
 
   const duplicateItem = async (item) => {
-    await fetch(`${API_BASE_URL}/api/job-descriptions/${item.id}/duplicate`, {
+    await fetch(`${API_BASE}/job-descriptions/${item.id}/duplicate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })

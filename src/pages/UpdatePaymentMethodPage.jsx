@@ -1,20 +1,10 @@
 import { useMemo, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
+import API_BASE from '../config/api'
 
-const DEFAULT_DEV_API_BASE_URL = 'http://localhost:4000'
-const DEFAULT_PROD_API_BASE_URL = 'https://hireflow-backend-production.up.railway.app'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
-function resolveApiBaseUrl() {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
-  }
-
-  return import.meta.env.PROD ? DEFAULT_PROD_API_BASE_URL : DEFAULT_DEV_API_BASE_URL
-}
-
-const API_BASE_URL = resolveApiBaseUrl()
 
 export default function UpdatePaymentMethodPage() {
   const [form, setForm] = useState({ cardNumber: '', expiryMonth: '', expiryYear: '', cvc: '' })
@@ -61,7 +51,7 @@ export default function UpdatePaymentMethodPage() {
 
     try {
       setSubmitting(true)
-      const response = await fetch(`${API_BASE_URL}/api/subscriptions/payment-method`, {
+      const response = await fetch(`${API_BASE}/subscriptions/payment-method`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
