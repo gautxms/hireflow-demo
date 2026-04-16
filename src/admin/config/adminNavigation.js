@@ -11,8 +11,12 @@ export const ADMIN_SECTIONS = [
 ]
 
 export function navigateAdmin(pathname) {
-  if (window.location.pathname !== pathname) {
-    window.history.pushState({}, '', pathname)
+  const nextUrl = new URL(pathname, window.location.origin)
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  const target = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+
+  if (current !== target) {
+    window.history.pushState({}, '', target)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }

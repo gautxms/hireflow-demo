@@ -46,6 +46,17 @@ function buildLogsLink(filters) {
   return `/admin/logs?${params.toString()}`
 }
 
+async function fetchJsonOrThrow(url, signal) {
+  const response = await fetch(url, { credentials: 'include', signal })
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(payload?.error || `Request failed (${response.status})`)
+  }
+
+  return payload
+}
+
 export default function AdminSummaryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -67,13 +78,13 @@ export default function AdminSummaryPage() {
         const last7UploadsParams = new URLSearchParams({ startDate: ranges.last7Start, endDate: ranges.last7End, status: 'failed' })
 
         const [todayAnalytics, last7Analytics, prev7Analytics, todayUploadStats, last7UploadStats, payments, health] = await Promise.all([
-          fetch(`${API_BASE}/admin/analytics?${todayAnalyticsParams.toString()}`, { credentials: 'include', signal: controller.signal }).then((response) => response.json()),
-          fetch(`${API_BASE}/admin/analytics?${last7AnalyticsParams.toString()}`, { credentials: 'include', signal: controller.signal }).then((response) => response.json()),
-          fetch(`${API_BASE}/admin/analytics?${prev7AnalyticsParams.toString()}`, { credentials: 'include', signal: controller.signal }).then((response) => response.json()),
-          fetch(`${API_BASE}/admin/uploads/stats?${todayUploadsParams.toString()}`, { credentials: 'include', signal: controller.signal }).then((response) => response.json()),
-          fetch(`${API_BASE}/admin/uploads/stats?${last7UploadsParams.toString()}`, { credentials: 'include', signal: controller.signal }).then((response) => response.json()),
-          fetch(`${API_BASE}/admin/payments`, { credentials: 'include', signal: controller.signal }).then((response) => response.json()),
-          fetch(`${API_BASE}/admin/health`, { credentials: 'include', signal: controller.signal }).then((response) => response.json()),
+          fetchJsonOrThrow(`${API_BASE}/admin/analytics?${todayAnalyticsParams.toString()}`, controller.signal),
+          fetchJsonOrThrow(`${API_BASE}/admin/analytics?${last7AnalyticsParams.toString()}`, controller.signal),
+          fetchJsonOrThrow(`${API_BASE}/admin/analytics?${prev7AnalyticsParams.toString()}`, controller.signal),
+          fetchJsonOrThrow(`${API_BASE}/admin/uploads/stats?${todayUploadsParams.toString()}`, controller.signal),
+          fetchJsonOrThrow(`${API_BASE}/admin/uploads/stats?${last7UploadsParams.toString()}`, controller.signal),
+          fetchJsonOrThrow(`${API_BASE}/admin/payments`, controller.signal),
+          fetchJsonOrThrow(`${API_BASE}/admin/health`, controller.signal),
         ])
 
         const paymentTransactions = payments.transactions || []
