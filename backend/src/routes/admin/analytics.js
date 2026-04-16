@@ -71,6 +71,23 @@ function toCsv(sections) {
     .join('\n\n')
 }
 
+function buildPriorityRecommendations(blockers = []) {
+  const recipes = {
+    admin_page_load_failed: 'Stabilize flaky admin pages: add retry affordances and investigate API dependencies for top failing routes.',
+    admin_auth_dropoff: 'Reduce admin auth friction: streamline credential + 2FA flow copy and tighten error guidance.',
+    admin_filter_used: 'Review frequently used filters and promote them to saved presets to reduce repeated manual filtering.',
+    admin_export_clicked: 'Validate export journey throughput and async feedback for large CSV generation so admins trust completion.',
+    admin_page_feedback_submitted: 'Audit negative page usefulness feedback and resolve route-specific pain points in UI copy and flow.',
+  }
+
+  return blockers.slice(0, 5).map((blocker, index) => ({
+    rank: index + 1,
+    blocker: blocker.event_type,
+    frequency: Number(blocker.frequency || 0),
+    recommendation: recipes[blocker.event_type] || 'Investigate this blocker with event-level metadata and route-specific user feedback.',
+  }))
+}
+
 
 function parseRequestFilters(req) {
   const { startDate, endDate, planType } = req.query
@@ -109,6 +126,8 @@ function buildFallbackAnalytics({ start, end, planType }) {
     planBreakdown: [],
     retentionCohorts: [],
     apiUsage: [],
+    uxBlockers: [],
+    uxWeeklyReport: null,
     feedbackSummary: { total_feedback: 0, helpful_count: 0, unhelpful_count: 0, flagged_count: 0 },
     feedbackTrend: [],
     feedbackExport: [],
@@ -132,6 +151,9 @@ async function loadAnalytics({ start, end, planType }) {
       feedbackSummaryResult,
       feedbackTrendResult,
       feedbackCommentsResult,
+      uxBlockersResult,
+      twoFactorRateResult,
+      adminFeedbackSummaryResult,
     ] = await Promise.all([
     pool.query(
       `WITH scoped_users AS (
@@ -335,8 +357,38 @@ async function loadAnalytics({ start, end, planType }) {
          created_at
        FROM candidate_feedback
        WHERE created_at::date BETWEEN $1::date AND $2::date
-       ORDER BY created_at DESC
-       LIMIT 2000`,
+      ORDER BY created_at DESC
+      LIMIT 2000`,
+      [start, end],
+    ),
+    pool.query(
+      `SELECT
+         event_type,
+         COUNT(*)::int AS frequency,
+         COALESCE(metadata ->> 'route', '/admin/unknown') AS route
+       FROM events
+       WHERE timestamp::date BETWEEN $1::date AND $2::date
+         AND event_type IN ('admin_page_load_failed', 'admin_auth_dropoff', 'admin_filter_used', 'admin_export_clicked', 'admin_page_feedback_submitted')
+       GROUP BY event_type, route
+       ORDER BY frequency DESC
+       LIMIT 20`,
+      [start, end],
+    ),
+    pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE event_type = 'admin_2fa_started')::int AS started,
+         COUNT(*) FILTER (WHERE event_type = 'admin_2fa_completed')::int AS completed
+       FROM events
+       WHERE timestamp::date BETWEEN $1::date AND $2::date`,
+      [start, end],
+    ),
+    pool.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE is_useful = true)::int AS useful,
+         COUNT(*) FILTER (WHERE is_useful = false)::int AS not_useful
+       FROM admin_page_feedback
+       WHERE created_at::date BETWEEN $1::date AND $2::date`,
       [start, end],
     ),
   ])
@@ -349,6 +401,12 @@ async function loadAnalytics({ start, end, planType }) {
 
     const conversion = conversionResult.rows[0] || { signups: 0, verified: 0, paid: 0 }
     const feedbackSummary = feedbackSummaryResult.rows[0] || { total_feedback: 0, helpful_count: 0, unhelpful_count: 0, flagged_count: 0 }
+    const uxBlockers = uxBlockersResult.rows || []
+    const twoFactorRate = twoFactorRateResult.rows[0] || { started: 0, completed: 0 }
+    const adminFeedbackSummary = adminFeedbackSummaryResult.rows[0] || { total: 0, useful: 0, not_useful: 0 }
+    const twoFactorCompletionRate = Number(twoFactorRate.started || 0) === 0
+      ? 0
+      : Number((((Number(twoFactorRate.completed || 0) / Number(twoFactorRate.started || 0)) * 100).toFixed(2)))
 
     return {
       filters: {
@@ -374,6 +432,23 @@ async function loadAnalytics({ start, end, planType }) {
       planBreakdown: planBreakdownResult.rows,
       retentionCohorts: retentionResult.rows,
       apiUsage: apiUsageResult.rows,
+      uxBlockers,
+      uxWeeklyReport: {
+        dateRange: {
+          startDate: start.toISOString().slice(0, 10),
+          endDate: end.toISOString().slice(0, 10),
+        },
+        topBlockers: uxBlockers.slice(0, 5),
+        twoFactorCompletionRate,
+        twoFactorStarted: Number(twoFactorRate.started || 0),
+        twoFactorCompleted: Number(twoFactorRate.completed || 0),
+        adminFeedbackSummary: {
+          total: Number(adminFeedbackSummary.total || 0),
+          useful: Number(adminFeedbackSummary.useful || 0),
+          notUseful: Number(adminFeedbackSummary.not_useful || 0),
+        },
+        nextSprintPriorities: buildPriorityRecommendations(uxBlockers),
+      },
       feedbackSummary: feedbackSummary,
       feedbackTrend: feedbackTrendResult.rows,
       feedbackExport: feedbackCommentsResult.rows,

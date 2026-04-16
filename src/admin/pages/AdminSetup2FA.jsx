@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
+import useAdminUxTracking from '../hooks/useAdminUxTracking'
 
 function readToken() {
   const url = new URL(window.location.href)
@@ -61,6 +62,7 @@ function isLikelyQrImage(value) {
 }
 
 export default function AdminSetup2FA() {
+  const { emitAdminEvent } = useAdminUxTracking()
   const [setupToken, setSetupToken] = useState(readToken())
   const [totpCode, setTotpCode] = useState('')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
@@ -90,6 +92,7 @@ export default function AdminSetup2FA() {
 
     if (!response.ok) {
       setStatus('')
+      void emitAdminEvent({ eventType: 'admin_page_load_failed', route: '/admin/setup-2fa', metadata: { reason: payload.error || 'setup_init_failed' } })
       setError(payload.error || 'Unable to initialize 2FA setup')
       return
     }
@@ -121,6 +124,7 @@ export default function AdminSetup2FA() {
 
     if (!response.ok) {
       setStatus('')
+      void emitAdminEvent({ eventType: 'admin_auth_dropoff', route: '/admin/setup-2fa', metadata: { step: '2fa_setup_verify', reason: payload.error || 'verification_failed' } })
       const rawMessage = String(payload.error || '').toLowerCase()
       if (rawMessage.includes('invalid totp code')) {
         setError('That code didn’t work. Wait for the next 6-digit code, then try again. If this keeps happening, check that your phone time is set to automatic.')
@@ -132,6 +136,7 @@ export default function AdminSetup2FA() {
 
     setTotpPeriodSeconds(Number(payload.totpPeriodSeconds) || 30)
     setStatus('2FA is enabled. Continue to admin login.')
+    void emitAdminEvent({ eventType: 'admin_2fa_completed', route: '/admin/setup-2fa', metadata: { source: 'setup_wizard' } })
   }
 
   useEffect(() => {
