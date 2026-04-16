@@ -18,6 +18,7 @@ function dateLabel(value) {
 }
 
 export default function AdminPaymentsPage() {
+  const statusFilter = new URLSearchParams(window.location.search).get('status') || 'all'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [retryingId, setRetryingId] = useState('')
@@ -40,6 +41,13 @@ export default function AdminPaymentsPage() {
     void loadData()
   }, [])
 
+  const filteredTransactions = (data.transactions || []).filter((transaction) => {
+    if (statusFilter === 'failed') {
+      return ['failed', 'past_due', 'unpaid'].includes(String(transaction.status || '').toLowerCase())
+    }
+    return true
+  })
+
   const retryFailedPayment = async (transactionId) => {
     try {
       setRetryingId(transactionId)
@@ -54,6 +62,7 @@ export default function AdminPaymentsPage() {
   return (
     <div className="space-y-6 p-6">
       <h1 className="text-2xl font-semibold text-slate-900">Admin payments & revenue</h1>
+      {statusFilter !== 'all' ? <p className="text-sm text-slate-600">Filtered by status: <strong>{statusFilter}</strong></p> : null}
       {error ? <StateAlert state={error} onRetry={() => void loadData()} /> : null}
 
       {data.revenueSummary ? (
@@ -64,7 +73,11 @@ export default function AdminPaymentsPage() {
         </div>
       ) : null}
 
-      <PaymentsList failedPayments={data.failedPayments} retryingId={retryingId} onRetry={retryFailedPayment} />
+      <PaymentsList
+        failedPayments={data.failedPayments}
+        retryingId={retryingId}
+        onRetry={retryFailedPayment}
+      />
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <h2 className="border-b border-slate-200 px-4 py-3 text-lg font-medium">Transactions</h2>
@@ -72,8 +85,8 @@ export default function AdminPaymentsPage() {
           <thead className="bg-slate-50 text-slate-600"><tr><th className="px-4 py-3">Transaction</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Billed at</th></tr></thead>
           {loading ? <TableSkeleton columns={5} rows={5} /> : (
             <tbody>
-              {(data.transactions || []).map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-4 py-3">{item.transactionId || item.invoiceNumber || item.id}</td><td className="px-4 py-3">{item.email || '—'}</td><td className="px-4 py-3 capitalize">{item.status || '—'}</td><td className="px-4 py-3">{money(item.amountCents)}</td><td className="px-4 py-3">{dateLabel(item.billedAt)}</td></tr>)}
-              {!data.transactions?.length ? <tr><td className="p-4" colSpan={5}><EmptyState title="No transactions" description="No transaction records are available for this range." /></td></tr> : null}
+              {filteredTransactions.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-4 py-3">{item.transactionId || item.invoiceNumber || item.id}</td><td className="px-4 py-3">{item.email || '—'}</td><td className="px-4 py-3 capitalize">{item.status || '—'}</td><td className="px-4 py-3">{money(item.amountCents)}</td><td className="px-4 py-3">{dateLabel(item.billedAt)}</td></tr>)}
+              {!filteredTransactions.length ? <tr><td className="p-4" colSpan={5}><EmptyState title="No transactions" description="No transaction records are available for this filter." /></td></tr> : null}
             </tbody>
           )}
         </table>

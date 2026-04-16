@@ -16,6 +16,16 @@ const DEFAULT_PAGINATION = {
   totalPages: 1,
 }
 
+function getInitialFiltersFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    status: params.get('status') || DEFAULT_FILTERS.status,
+    search: params.get('search') || DEFAULT_FILTERS.search,
+    startDate: params.get('startDate') || DEFAULT_FILTERS.startDate,
+    endDate: params.get('endDate') || DEFAULT_FILTERS.endDate,
+  }
+}
+
 function toQueryString(filters, pagination) {
   const params = new URLSearchParams({
     page: String(pagination.page),
@@ -42,7 +52,7 @@ function toStatsQueryString(filters) {
 }
 
 export function useAdminUploads() {
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState(() => getInitialFiltersFromUrl())
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION)
   const [uploads, setUploads] = useState([])
   const [stats, setStats] = useState(null)

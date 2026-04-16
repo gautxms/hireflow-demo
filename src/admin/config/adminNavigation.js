@@ -1,5 +1,6 @@
 export const ADMIN_SECTIONS = [
-  { key: 'overview', label: 'Overview', icon: '🏠', href: '/admin/overview' },
+  { key: 'summary', label: 'Summary', icon: '🏠', href: '/admin' },
+  { key: 'overview', label: 'Overview', icon: '🗺️', href: '/admin/overview' },
   { key: 'users', label: 'Users', icon: '👥', href: '/admin/users' },
   { key: 'billing', label: 'Billing', icon: '💳', href: '/admin/billing' },
   { key: 'uploads', label: 'Uploads', icon: '📤', href: '/admin/uploads' },
