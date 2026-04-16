@@ -4,6 +4,7 @@ import API_BASE from '../../config/api'
 const DEFAULT_TIMEOUT_SECONDS = 15 * 60
 const TIMER_TICK_SECONDS = 10
 const ADMIN_SESSION_STORAGE_KEY = 'admin_session'
+const DEFAULT_TOTP_PERIOD_SECONDS = 30
 
 function sanitizeCode(value) {
   return String(value || '')
@@ -42,8 +43,11 @@ export default function useAdminAuth() {
   const [pendingEmail, setPendingEmail] = useState('')
   const [pendingPassword, setPendingPassword] = useState('')
   const [setupToken, setSetupToken] = useState('')
+  const [setupTokenExpiresAt, setSetupTokenExpiresAt] = useState(null)
+  const [totpPeriodSeconds, setTotpPeriodSeconds] = useState(DEFAULT_TOTP_PERIOD_SECONDS)
   const [activeSessions, setActiveSessions] = useState([])
   const [acceptedEula, setAcceptedEula] = useState(false)
+  const [acceptedEulaForPendingLogin, setAcceptedEulaForPendingLogin] = useState(false)
   const [requiresEula, setRequiresEula] = useState(false)
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
   const hasHandledExpiryRef = useRef(false)
@@ -96,6 +100,8 @@ export default function useAdminAuth() {
     setStatus('Checking credentials…')
     setRequiresEula(false)
 
+    setAcceptedEulaForPendingLogin(Boolean(acceptedEula))
+
     const response = await fetch(`${API_BASE}/auth/admin/login`, {
       method: 'POST',
       credentials: 'include',
@@ -108,7 +114,8 @@ export default function useAdminAuth() {
       setNeedsTwoFactor(true)
       setPendingEmail(email)
       setPendingPassword(password)
-      setStatus('Enter your authenticator or backup code to continue.')
+      setStatus('Step 2 of 3: Enter a 2FA code or backup code to finish sign-in.')
+      setTotpPeriodSeconds(Number(payload.totpPeriodSeconds) || DEFAULT_TOTP_PERIOD_SECONDS)
       return { requiresTwoFactor: true }
     }
 
@@ -124,8 +131,9 @@ export default function useAdminAuth() {
 
     if (payload.requiresTwoFactorSetup) {
       setSetupToken(payload.setupToken || '')
+      setSetupTokenExpiresAt(payload.setupTokenExpiresAt || null)
       setNeedsTwoFactor(false)
-      setStatus('Two-factor setup is required before admin login.')
+      setStatus('Step 2 of 3: Two-factor setup is required before admin access.')
       return { requiresTwoFactor: false, requiresTwoFactorSetup: true, setupToken: payload.setupToken || '' }
     }
 
@@ -135,6 +143,7 @@ export default function useAdminAuth() {
 
     if (payload.requiresTwoFactor) {
       setStatus('Enter your authenticator or backup code to continue.')
+      setTotpPeriodSeconds(Number(payload.totpPeriodSeconds) || DEFAULT_TOTP_PERIOD_SECONDS)
       return { requiresTwoFactor: true }
     }
 
@@ -142,6 +151,7 @@ export default function useAdminAuth() {
     hasHandledExpiryRef.current = false
     setStatus('Signed in.')
     setSetupToken('')
+    setSetupTokenExpiresAt(null)
     setRequiresEula(false)
     setPendingEmail('')
     setPendingPassword('')
@@ -163,6 +173,7 @@ export default function useAdminAuth() {
         password: pendingPassword,
         totpCode: sanitizeCode(totpCode),
         backupCode: sanitizeCode(backupCode),
+        acceptedEula: acceptedEulaForPendingLogin,
       }),
     })
     const payload = await response.json().catch(() => ({}))
@@ -174,13 +185,15 @@ export default function useAdminAuth() {
     setNeedsTwoFactor(false)
     setPendingEmail('')
     setPendingPassword('')
+    setAcceptedEulaForPendingLogin(false)
     setSessionSecondsLeft(payload.sessionTimeoutSeconds || DEFAULT_TIMEOUT_SECONDS)
+    setTotpPeriodSeconds(Number(payload.totpPeriodSeconds) || DEFAULT_TOTP_PERIOD_SECONDS)
     hasHandledExpiryRef.current = false
     setStatus(payload.usedBackupCode ? 'Signed in with one-time backup code.' : '2FA verified. Access granted.')
     persistSession(payload)
     await loadSessions().catch(() => {})
     return payload
-  }, [loadSessions, pendingEmail, pendingPassword, persistSession])
+  }, [acceptedEulaForPendingLogin, loadSessions, pendingEmail, pendingPassword, persistSession])
 
   const refreshActivity = useCallback(async () => {
     const response = await fetch(`${API_BASE}/admin/sessions/refresh`, {
@@ -205,8 +218,10 @@ export default function useAdminAuth() {
     setPendingEmail('')
     setPendingPassword('')
     setSetupToken('')
+    setSetupTokenExpiresAt(null)
     setActiveSessions([])
     setRequiresEula(false)
+    setAcceptedEulaForPendingLogin(false)
     setSessionSecondsLeft(DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
     clearSession()
@@ -273,18 +288,26 @@ export default function useAdminAuth() {
       const secondsLeftFromExpiry = expiresAtMs > 0 ? Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000)) : timeoutSeconds
 
       if (secondsLeftFromExpiry <= 0) {
-        clearSession()
+        window.setTimeout(() => {
+          clearSession()
+        }, 0)
         return
       }
 
-      setSessionSecondsLeft(secondsLeftFromExpiry)
-      setIsAdminAuthenticated(true)
-      hasHandledExpiryRef.current = false
-      void loadSessions().catch(() => {
-        clearSession()
-      })
+      window.setTimeout(() => {
+        setSessionSecondsLeft(secondsLeftFromExpiry)
+        setIsAdminAuthenticated(true)
+        hasHandledExpiryRef.current = false
+      }, 0)
+      window.setTimeout(() => {
+        void loadSessions().catch(() => {
+          clearSession()
+        })
+      }, 0)
     } catch {
-      clearSession()
+      window.setTimeout(() => {
+        clearSession()
+      }, 0)
     }
   }, [clearSession, loadSessions])
 
@@ -296,6 +319,8 @@ export default function useAdminAuth() {
     error,
     needsTwoFactor,
     setupToken,
+    setupTokenExpiresAt,
+    totpPeriodSeconds,
     activeSessions,
     acceptedEula,
     requiresEula,
@@ -304,6 +329,8 @@ export default function useAdminAuth() {
     setError,
     setStatus,
     setWarningVisible,
+    setSetupToken,
+    setSetupTokenExpiresAt,
     loginWithPassword,
     verifySecondFactor,
     refreshActivity,
