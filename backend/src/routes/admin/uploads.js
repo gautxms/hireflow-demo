@@ -287,7 +287,7 @@ router.get('/stats', async (req, res) => {
           END
         ) AS file_type,
         COUNT(*)::INT AS count
-      FROM resumes
+      FROM resumes r
       ${whereClause}
       GROUP BY 1
       ORDER BY count DESC`,

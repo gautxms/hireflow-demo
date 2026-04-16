@@ -203,8 +203,8 @@ async function runParse(job) {
     parserVersion: usedClaude ? 'claude-3.5-sonnet-hybrid' : 'ocr-fallback',
     analyzerUsed: usedClaude ? 'Claude' : 'OCR',
     methodUsed: analysisResult?.methodUsed || (usedClaude ? 'anthropic-claude' : 'ocr-fallback'),
-    candidates,
     ...analysisResult,
+    candidates,
   }
 
   const parseDurationMs = Date.now() - startedAt
