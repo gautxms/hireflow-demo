@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
 import { navigateAdmin } from '../config/adminNavigation'
+import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
 
 function toDateOnly(value) {
   return value.toISOString().slice(0, 10)
@@ -46,17 +47,6 @@ function buildLogsLink(filters) {
   return `/admin/logs?${params.toString()}`
 }
 
-async function fetchJsonOrThrow(url, signal) {
-  const response = await fetch(url, { credentials: 'include', signal })
-  const payload = await response.json().catch(() => ({}))
-
-  if (!response.ok) {
-    throw new Error(payload?.error || `Request failed (${response.status})`)
-  }
-
-  return payload
-}
-
 export default function AdminSummaryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -78,13 +68,13 @@ export default function AdminSummaryPage() {
         const last7UploadsParams = new URLSearchParams({ startDate: ranges.last7Start, endDate: ranges.last7End, status: 'failed' })
 
         const [todayAnalytics, last7Analytics, prev7Analytics, todayUploadStats, last7UploadStats, payments, health] = await Promise.all([
-          fetchJsonOrThrow(`${API_BASE}/admin/analytics?${todayAnalyticsParams.toString()}`, controller.signal),
-          fetchJsonOrThrow(`${API_BASE}/admin/analytics?${last7AnalyticsParams.toString()}`, controller.signal),
-          fetchJsonOrThrow(`${API_BASE}/admin/analytics?${prev7AnalyticsParams.toString()}`, controller.signal),
-          fetchJsonOrThrow(`${API_BASE}/admin/uploads/stats?${todayUploadsParams.toString()}`, controller.signal),
-          fetchJsonOrThrow(`${API_BASE}/admin/uploads/stats?${last7UploadsParams.toString()}`, controller.signal),
-          fetchJsonOrThrow(`${API_BASE}/admin/payments`, controller.signal),
-          fetchJsonOrThrow(`${API_BASE}/admin/health`, controller.signal),
+          adminFetchJson(`${API_BASE}/admin/analytics?${todayAnalyticsParams.toString()}`, 'Failed to load admin analytics', { signal: controller.signal }),
+          adminFetchJson(`${API_BASE}/admin/analytics?${last7AnalyticsParams.toString()}`, 'Failed to load admin analytics', { signal: controller.signal }),
+          adminFetchJson(`${API_BASE}/admin/analytics?${prev7AnalyticsParams.toString()}`, 'Failed to load admin analytics', { signal: controller.signal }),
+          adminFetchJson(`${API_BASE}/admin/uploads/stats?${todayUploadsParams.toString()}`, 'Failed to load upload stats', { signal: controller.signal }),
+          adminFetchJson(`${API_BASE}/admin/uploads/stats?${last7UploadsParams.toString()}`, 'Failed to load upload stats', { signal: controller.signal }),
+          adminFetchJson(`${API_BASE}/admin/payments`, 'Failed to load payment admin data', { signal: controller.signal }),
+          adminFetchJson(`${API_BASE}/admin/health`, 'Failed to load admin health data', { signal: controller.signal }),
         ])
 
         const paymentTransactions = payments.transactions || []
@@ -126,7 +116,8 @@ export default function AdminSummaryPage() {
         })
       } catch (requestError) {
         if (requestError.name !== 'AbortError') {
-          setError('Unable to load admin summary data.')
+          const mapped = getMappedError(requestError)
+          setError(`${mapped.title}: ${mapped.cause}`)
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false)
