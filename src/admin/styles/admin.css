@@ -263,6 +263,14 @@
   display: none;
 }
 
+.admin-shell-v2__mobile-drawer {
+  display: none;
+}
+
+.admin-sidebar-overlay {
+  display: none;
+}
+
 @media (max-width: 960px) {
   .admin-shell-v2__sidebar {
     display: none;
@@ -310,6 +318,7 @@
   }
 
   .admin-shell-v2__mobile-drawer {
+    display: block;
     position: fixed;
     inset: 0;
     z-index: 35;
@@ -320,6 +329,21 @@
     inset: 0;
     border: 0;
     background: rgba(2, 6, 23, 0.45);
+  }
+
+  .admin-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    border: 0;
+    background: rgba(2, 6, 23, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 34;
+  }
+
+  .admin-sidebar-overlay--visible {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .admin-shell-v2__mobile-panel {
@@ -354,6 +378,15 @@
     background: var(--admin-primary);
     border-color: var(--admin-primary);
     color: #fff;
+  }
+}
+
+@media (min-width: 961px) {
+  .admin-shell-v2__mobile-drawer,
+  .admin-sidebar-overlay,
+  .admin-sidebar-overlay--visible {
+    display: none !important;
+    pointer-events: none !important;
   }
 }
 
