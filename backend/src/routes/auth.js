@@ -29,6 +29,7 @@ import { requireAuth } from '../middleware/auth.js'
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
 const ADMIN_SETUP_TOKEN_TTL_MS = 10 * 60 * 1000
+const TOTP_PERIOD_SECONDS = 30
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16)
@@ -63,6 +64,13 @@ function signAdminSetupToken(userId) {
     process.env.JWT_SECRET,
     { expiresIn: '10m' },
   )
+}
+
+function readSetupTokenState(setupToken) {
+  const decoded = jwt.verify(setupToken, process.env.JWT_SECRET)
+  const expiresAt = Number(decoded?.admin_setup_expires_at || 0)
+  const secondsRemaining = expiresAt > 0 ? Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)) : 0
+  return { decoded, expiresAt, secondsRemaining }
 }
 
 function hashVerificationToken(token) {
@@ -455,9 +463,12 @@ router.post('/admin/login', loginLimiter, async (req, res) => {
 
     if (!user.admin_two_factor_enabled || !user.admin_two_factor_secret_enc) {
       const setupToken = signAdminSetupToken(user.id)
+      const setupTokenState = readSetupTokenState(setupToken)
       return res.status(200).json({
         requiresTwoFactorSetup: true,
         setupToken,
+        setupTokenExpiresAt: setupTokenState.expiresAt,
+        setupTokenSecondsRemaining: setupTokenState.secondsRemaining,
       })
     }
 
@@ -465,7 +476,11 @@ router.post('/admin/login', loginLimiter, async (req, res) => {
     const hasBackupCode = typeof backupCode === 'string' && backupCode.trim().length > 0
 
     if (!hasTotpCode && !hasBackupCode) {
-      return res.status(401).json({ error: '2FA code is required', requiresTwoFactor: true })
+      return res.status(401).json({
+        error: '2FA code is required',
+        requiresTwoFactor: true,
+        totpPeriodSeconds: TOTP_PERIOD_SECONDS,
+      })
     }
 
     let usedBackupCode = false
@@ -524,6 +539,7 @@ router.post('/admin/login', loginLimiter, async (req, res) => {
       ok: true,
       admin: { id: user.id, email: user.email },
       usedBackupCode,
+      totpPeriodSeconds: TOTP_PERIOD_SECONDS,
       sessionTimeoutSeconds: Math.floor((15 * 60 * 1000) / 1000),
       sessionExpiresAt: session.expiresAt,
       newIpDetected: Boolean(previousLoginIp && previousLoginIp !== String(req.ip || '').replace('::ffff:', '')),
@@ -542,8 +558,9 @@ router.post('/admin/2fa/setup', async (req, res) => {
   }
 
   try {
-    const decoded = jwt.verify(setupToken, process.env.JWT_SECRET)
-    if (!decoded?.admin_setup || Date.now() > Number(decoded.admin_setup_expires_at || 0)) {
+    const setupTokenState = readSetupTokenState(setupToken)
+    const { decoded } = setupTokenState
+    if (!decoded?.admin_setup || setupTokenState.secondsRemaining <= 0) {
       return res.status(401).json({ error: 'Invalid or expired setup token' })
     }
 
@@ -570,6 +587,11 @@ router.post('/admin/2fa/setup', async (req, res) => {
 
     return res.json({
       setupToken,
+      setupTokenExpiresAt: setupTokenState.expiresAt,
+      setupTokenSecondsRemaining: setupTokenState.secondsRemaining,
+      totpPeriodSeconds: TOTP_PERIOD_SECONDS,
+      otpauthUrl: setupPayload.otpauthUrl,
+      manualEntryKey: setupPayload.secretBase32,
       qrCodeDataUrl,
       backupCodes: setupPayload.backupCodes,
       message: 'Save your backup codes securely before verification.',
@@ -587,8 +609,9 @@ router.post('/admin/2fa/verify', async (req, res) => {
   }
 
   try {
-    const decoded = jwt.verify(setupToken, process.env.JWT_SECRET)
-    if (!decoded?.admin_setup || Date.now() > Number(decoded.admin_setup_expires_at || 0)) {
+    const setupTokenState = readSetupTokenState(setupToken)
+    const { decoded } = setupTokenState
+    if (!decoded?.admin_setup || setupTokenState.secondsRemaining <= 0) {
       return res.status(401).json({ error: 'Invalid setup token' })
     }
 
@@ -631,7 +654,7 @@ router.post('/admin/2fa/verify', async (req, res) => {
       ipAddress: String(req.ip || '').replace('::ffff:', ''),
     })
 
-    return res.json({ ok: true })
+    return res.json({ ok: true, totpPeriodSeconds: TOTP_PERIOD_SECONDS })
   } catch {
     return res.status(401).json({ error: 'Invalid setup token' })
   }
