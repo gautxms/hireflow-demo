@@ -17,7 +17,7 @@ export default function RevenueChart({ data = [] }) {
   const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="ui-card p-4">
       <h2 className="text-lg font-medium text-slate-900">Revenue Trend (12 months)</h2>
       <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 h-72 w-full">
         <line x1={margin.left} y1={height - margin.bottom} x2={width - margin.right} y2={height - margin.bottom} stroke="#cbd5e1" />

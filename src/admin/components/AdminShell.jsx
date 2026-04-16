@@ -71,7 +71,7 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
           </div>
           <div className="admin-shell-v2__header-actions">
             <span>{formatSessionLabel()}</span>
-            <button type="button" onClick={onLogout}>Logout</button>
+            <button type="button" className="ui-btn" onClick={onLogout}>Logout</button>
           </div>
         </header>
 

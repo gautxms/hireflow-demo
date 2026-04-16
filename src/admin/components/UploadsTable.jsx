@@ -93,7 +93,7 @@ export default function UploadsTable({ uploads, loading, pagination, onPageChang
                 <td className="px-4 py-3">{formatSecondsFromMs(upload.parseDurationMs)}</td>
                 <td className="px-4 py-3">
                   <button
-                    className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className="ui-btn px-2 py-1 text-xs"
                     onClick={(event) => {
                       event.stopPropagation()
                       onOpenDetails(upload.id)

@@ -62,12 +62,12 @@ export default function AdminAnalyticsPage() {
           <p className="text-sm text-slate-500">Founder-facing metrics, cohorts, plan mix, and trend charts.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={refresh} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50">Refresh</button>
+          <button onClick={refresh} className="ui-btn">Refresh</button>
           <button onClick={exportCsv} className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500">Export CSV</button>
         </div>
       </header>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="ui-card p-4">
         <div className="flex flex-wrap gap-2">
           {[
             { key: '30d', label: '30d' },
@@ -94,11 +94,11 @@ export default function AdminAnalyticsPage() {
         </div>
       </section>
 
-      {loading ? <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-600">Loading analytics…</div> : null}
+      {loading ? <div className="ui-card p-4 text-slate-600">Loading analytics…</div> : null}
       {error ? <StateAlert state={error} onRetry={refresh} /> : null}
 
       {!loading && !error && !analytics ? (
-        <EmptyState title="No analytics data yet" description="No records match the selected date range. Try expanding the range and refresh." action={<button onClick={refresh} className="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm">Retry</button>} />
+        <EmptyState title="No analytics data yet" description="No records match the selected date range. Try expanding the range and refresh." action={<button onClick={refresh} className="mt-3 ui-btn">Retry</button>} />
       ) : null}
 
       {analytics && !error ? (
@@ -120,7 +120,7 @@ export default function AdminAnalyticsPage() {
           <div className="grid gap-4 xl:grid-cols-3">
             <ConversionFunnel signups={analytics.conversionFunnel?.signups} verified={analytics.conversionFunnel?.verified} paid={analytics.conversionFunnel?.paid} />
 
-            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="ui-card p-4">
               <h2 className="text-lg font-medium text-slate-900">Plan Breakdown</h2>
               <div className="mt-4 space-y-3">
                 {(analytics.planBreakdown || []).map((plan) => (
@@ -137,7 +137,7 @@ export default function AdminAnalyticsPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="ui-card p-4">
               <h2 className="text-lg font-medium text-slate-900">Parsing Stats</h2>
               <div className="mt-3 space-y-2 text-sm">
                 <p className="flex items-center justify-between"><span>Success Rate</span> <strong>{pct(analytics.kpis.parsingSuccessRate)}</strong></p>
@@ -148,7 +148,7 @@ export default function AdminAnalyticsPage() {
             </section>
           </div>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="ui-card p-4">
             <h2 className="text-lg font-medium text-slate-900">Retention Cohorts Heatmap</h2>
             <div className="mt-4 overflow-auto">
               <div className="grid min-w-[720px] grid-cols-[160px_repeat(10,minmax(0,1fr))] gap-2 text-xs">

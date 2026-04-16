@@ -11,7 +11,7 @@ export default function ConversionFunnel({ signups = 0, verified = 0, paid = 0 }
   ]
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="ui-card p-4">
       <h2 className="text-lg font-medium text-slate-900">Conversion Funnel</h2>
       <div className="mt-4 space-y-3">
         {steps.map((step, index) => {

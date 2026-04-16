@@ -22,7 +22,7 @@ export default function BlockUserModal({ isOpen, user, onClose, onConfirm }) {
         <p className="mt-1 text-sm text-slate-600">Add a reason for blocking {user.email}. This will be written to the audit trail.</p>
 
         <textarea
-          className="mt-4 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="mt-4 w-full ui-input"
           rows={4}
           placeholder="Reason for block"
           value={reason}
@@ -32,7 +32,7 @@ export default function BlockUserModal({ isOpen, user, onClose, onConfirm }) {
         {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
 
         <div className="mt-4 flex justify-end gap-2">
-          <button className="rounded-md border border-slate-300 px-3 py-2 text-sm" onClick={onClose}>Cancel</button>
+          <button className="ui-btn" onClick={onClose}>Cancel</button>
           <button
             className="rounded-md bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-50"
             disabled={submitting || !reason.trim()}

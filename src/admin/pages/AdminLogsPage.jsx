@@ -32,7 +32,7 @@ function ErrorRateChart({ items }) {
   const maxCount = Math.max(...points.map((item) => item.count), 1)
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section className="ui-card p-4">
       <h3 className="mb-3 text-lg font-medium">Error rate by endpoint</h3>
       {!points.length && <p className="text-sm text-slate-500">No data to visualize.</p>}
       {points.map((point) => (
@@ -145,16 +145,16 @@ export default function AdminLogsPage() {
         searchPlaceholder="Search error message"
         filterControls={(
           <>
-            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.endpoint} onChange={(event) => updateFilter({ endpoint: event.target.value })}>
+            <select className="ui-input" value={filters.endpoint} onChange={(event) => updateFilter({ endpoint: event.target.value })}>
               <option value="">All endpoints</option>
               {endpointOptions.map((endpoint) => <option key={endpoint} value={endpoint}>{endpoint}</option>)}
             </select>
-            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.statusCode} onChange={(event) => updateFilter({ statusCode: event.target.value })}>
+            <select className="ui-input" value={filters.statusCode} onChange={(event) => updateFilter({ statusCode: event.target.value })}>
               <option value="">All statuses</option>
               {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
-            <input type="date" className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.startDate} onChange={(event) => updateFilter({ startDate: event.target.value })} />
-            <input type="date" className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.endDate} onChange={(event) => updateFilter({ endDate: event.target.value })} />
+            <input type="date" className="ui-input" value={filters.startDate} onChange={(event) => updateFilter({ startDate: event.target.value })} />
+            <input type="date" className="ui-input" value={filters.endDate} onChange={(event) => updateFilter({ endDate: event.target.value })} />
           </>
         )}
         sort={{ field: sortField, direction: sortDirection || 'desc' }}
