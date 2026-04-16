@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import PaymentsList from '../components/PaymentsList'
 import StateAlert from '../components/StateAlert'
-import { EmptyState, TableSkeleton } from '../components/WidgetState'
+import { EmptyState } from '../components/WidgetState'
 import API_BASE from '../../config/api'
 import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
+import AdminDataTable from '../components/table/AdminDataTable'
+import useSharedTableState from '../hooks/useSharedTableState'
 
 function money(cents = 0) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(cents) || 0) / 100)
@@ -17,11 +19,25 @@ function dateLabel(value) {
   return value ? new Date(value).toLocaleString() : '—'
 }
 
+const COLUMN_PRESETS = [
+  { id: 'default', label: 'Default columns', columns: ['transactionId', 'email', 'status', 'amountCents', 'billedAt'] },
+  { id: 'failed', label: 'Failed payment ops', columns: ['transactionId', 'email', 'status', 'amountCents', 'billedAt'] },
+]
+
+const FILTER_PRESETS = [{ id: 'failed_today', label: 'Failed uploads today' }]
+
 export default function AdminPaymentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [retryingId, setRetryingId] = useState('')
   const [data, setData] = useState({ transactions: [], failedPayments: [], revenueSummary: null, auditTrail: [] })
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('all')
+  const [sort, setSort] = useState({ field: 'billedAt', direction: 'desc' })
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+
+  const { savedFilterChips, saveChip, removeChip, activePreset, setActivePreset } = useSharedTableState({ storageKey: 'admin-payments-table' })
 
   const loadData = async () => {
     try {
@@ -51,6 +67,35 @@ export default function AdminPaymentsPage() {
     }
   }
 
+  const filteredTransactions = useMemo(() => {
+    const normalized = search.toLowerCase()
+    const filtered = (data.transactions || []).filter((item) => {
+      const text = `${item.transactionId || item.invoiceNumber || item.id} ${item.email || ''}`.toLowerCase()
+      return (!normalized || text.includes(normalized)) && (status === 'all' || item.status === status)
+    })
+    const direction = sort.direction === 'asc' ? 1 : -1
+    filtered.sort((a, b) => {
+      const left = a[sort.field]
+      const right = b[sort.field]
+      if (sort.field === 'billedAt') return (new Date(left || 0).getTime() - new Date(right || 0).getTime()) * direction
+      return String(left || '').localeCompare(String(right || '')) * direction
+    })
+    return filtered
+  }, [data.transactions, search, sort.direction, sort.field, status])
+
+  const pageCount = Math.max(1, Math.ceil(filteredTransactions.length / pageSize))
+  const pagedTransactions = filteredTransactions.slice((page - 1) * pageSize, page * pageSize)
+
+  const visibleColumnKeys = useMemo(() => COLUMN_PRESETS.find((preset) => preset.id === activePreset)?.columns || COLUMN_PRESETS[0].columns, [activePreset])
+  const allColumns = useMemo(() => ([
+    { key: 'transactionId', label: 'Transaction', sortable: true, render: (row) => row.transactionId || row.invoiceNumber || row.id },
+    { key: 'email', label: 'Customer', sortable: true, render: (row) => row.email || '—' },
+    { key: 'status', label: 'Status', sortable: true, render: (row) => <span className="capitalize">{row.status || '—'}</span> },
+    { key: 'amountCents', label: 'Amount', sortable: true, render: (row) => money(row.amountCents) },
+    { key: 'billedAt', label: 'Billed at', sortable: true, render: (row) => dateLabel(row.billedAt) },
+  ]), [])
+  const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
+
   return (
     <div className="space-y-6 p-6">
       <h1 className="text-2xl font-semibold text-slate-900">Admin payments & revenue</h1>
@@ -66,18 +111,56 @@ export default function AdminPaymentsPage() {
 
       <PaymentsList failedPayments={data.failedPayments} retryingId={retryingId} onRetry={retryFailedPayment} />
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <h2 className="border-b border-slate-200 px-4 py-3 text-lg font-medium">Transactions</h2>
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-600"><tr><th className="px-4 py-3">Transaction</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Billed at</th></tr></thead>
-          {loading ? <TableSkeleton columns={5} rows={5} /> : (
-            <tbody>
-              {(data.transactions || []).map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-4 py-3">{item.transactionId || item.invoiceNumber || item.id}</td><td className="px-4 py-3">{item.email || '—'}</td><td className="px-4 py-3 capitalize">{item.status || '—'}</td><td className="px-4 py-3">{money(item.amountCents)}</td><td className="px-4 py-3">{dateLabel(item.billedAt)}</td></tr>)}
-              {!data.transactions?.length ? <tr><td className="p-4" colSpan={5}><EmptyState title="No transactions" description="No transaction records are available for this range." /></td></tr> : null}
-            </tbody>
-          )}
-        </table>
-      </div>
+      <AdminDataTable
+        title="Transactions"
+        subtitle="Unified search, sort, pagination, export, and row details."
+        columns={columns}
+        rows={pagedTransactions}
+        loading={loading}
+        rowKey={(row) => row.id}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search transaction or customer"
+        filterControls={(
+          <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="paid">Paid</option>
+            <option value="failed">Failed</option>
+            <option value="refunded">Refunded</option>
+          </select>
+        )}
+        sort={sort}
+        onSortChange={(field) => setSort((current) => ({ field, direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc' }))}
+        pagination={{ page, totalPages: pageCount, total: filteredTransactions.length, pageSize }}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        filterPresets={FILTER_PRESETS}
+        onApplyFilterPreset={(presetId) => {
+          if (presetId !== 'failed_today') return
+          setStatus('failed')
+        }}
+        savedFilterChips={savedFilterChips}
+        onSaveFilterChip={(label) => saveChip(label, { search, status })}
+        onApplySavedFilter={(chipId) => {
+          const chip = savedFilterChips.find((item) => item.id === chipId)
+          if (!chip) return
+          setSearch(chip.filters.search || '')
+          setStatus(chip.filters.status || 'all')
+        }}
+        onRemoveSavedFilter={removeChip}
+        columnPresets={COLUMN_PRESETS}
+        activePreset={activePreset}
+        onPresetChange={setActivePreset}
+        renderDetails={(item) => (
+          <div className="space-y-2 text-sm">
+            <p><strong>Transaction:</strong> {item.transactionId || item.invoiceNumber || item.id}</p>
+            <p><strong>Customer:</strong> {item.email || '—'}</p>
+            <p><strong>Status:</strong> {item.status || '—'}</p>
+            <p><strong>Amount:</strong> {money(item.amountCents)}</p>
+            <p><strong>Billed at:</strong> {dateLabel(item.billedAt)}</p>
+          </div>
+        )}
+      />
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="text-lg font-medium text-slate-900">Refund history</h2>

@@ -1,12 +1,35 @@
-import UploadsTable from '../components/UploadsTable'
+import { useMemo } from 'react'
 import StateAlert from '../components/StateAlert'
 import { EmptyState } from '../components/WidgetState'
+import AdminDataTable from '../components/table/AdminDataTable'
 import { useAdminUploads } from '../hooks/useAdminUploads'
+import useSharedTableState from '../hooks/useSharedTableState'
 
 const STATUS_OPTIONS = ['all', 'pending', 'processing', 'complete', 'failed']
 
-function formatSeconds(value) {
-  return `${Number(value || 0).toFixed(2)}s`
+const COLUMN_PRESETS = [
+  { id: 'default', label: 'Default columns', columns: ['fileName', 'userEmail', 'parseStatus', 'createdAt', 'parseDurationMs'] },
+  { id: 'failures', label: 'Failure triage', columns: ['fileName', 'userEmail', 'parseStatus', 'parseError', 'createdAt'] },
+]
+
+const FILTER_PRESETS = [
+  { id: 'failed_today', label: 'Failed uploads today' },
+]
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString() : '—'
+}
+
+function sortUploads(items, sort) {
+  const direction = sort.direction === 'asc' ? 1 : -1
+  return [...items].sort((a, b) => {
+    const left = a[sort.field]
+    const right = b[sort.field]
+    if (sort.field === 'createdAt') {
+      return (new Date(left || 0).getTime() - new Date(right || 0).getTime()) * direction
+    }
+    return String(left || '').localeCompare(String(right || '')) * direction
+  })
 }
 
 export default function AdminUploadsPage({ onOpenDetails }) {
@@ -25,112 +48,111 @@ export default function AdminUploadsPage({ onOpenDetails }) {
     reload,
   } = useAdminUploads()
 
+  const {
+    savedFilterChips,
+    saveChip,
+    removeChip,
+    activePreset,
+    setActivePreset,
+  } = useSharedTableState({ storageKey: 'admin-uploads-table' })
+
+  const [sortField, sortDirection] = (filters.sort || 'createdAt:desc').split(':')
+  const sortedUploads = useMemo(() => sortUploads(uploads, { field: sortField, direction: sortDirection || 'desc' }), [sortDirection, sortField, uploads])
+
   const openDetails = (uploadId) => {
     if (typeof onOpenDetails === 'function') {
       onOpenDetails(uploadId)
       return
     }
 
-    window.location.href = `/admin/uploads/${uploadId}`
+    window.location.assign(`/admin/uploads/${uploadId}`)
   }
+
+  const visibleColumnKeys = useMemo(() => COLUMN_PRESETS.find((preset) => preset.id === activePreset)?.columns || COLUMN_PRESETS[0].columns, [activePreset])
+  const allColumns = useMemo(() => ([
+    { key: 'fileName', label: 'File', sortable: true, render: (row) => row.fileName || row.filename || '—' },
+    { key: 'userEmail', label: 'Email', sortable: true, render: (row) => row.userEmail || '—' },
+    { key: 'parseStatus', label: 'Status', sortable: true, render: (row) => <span className="capitalize">{row.parseStatus || 'unknown'}</span> },
+    { key: 'parseError', label: 'Failure', sortable: true, render: (row) => row.parseError || '—' },
+    { key: 'createdAt', label: 'Created', sortable: true, render: (row) => formatDate(row.createdAt) },
+    { key: 'parseDurationMs', label: 'Parse ms', sortable: true, render: (row) => Number(row.parseDurationMs || 0).toLocaleString() },
+  ]), [])
+  const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">Admin Resume Upload Monitoring</h1>
-        <a
-          href={exportCsvUrl}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Export CSV Logs
-        </a>
-      </div>
+      <h1 className="text-2xl font-semibold text-slate-900">Admin Resume Upload Monitoring</h1>
 
       {loadingStats ? <p className="text-sm text-slate-500">Loading stats…</p> : null}
       {stats ? (
-        <>
-          <div className="grid gap-4 md:grid-cols-4">
-            <StatCard label="Total parses" value={stats.totalParses} />
-            <StatCard label="Success %" value={`${Number(stats.successRate || 0).toFixed(2)}%`} valueClassName="text-emerald-700" />
-            <StatCard label="Avg parse time" value={formatSeconds(stats.avgTimeSeconds)} />
-            <StatCard label="Failure count" value={stats.failures?.total || 0} valueClassName="text-rose-700" />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h2 className="text-lg font-medium text-slate-900">Failure breakdown</h2>
-              <ul className="mt-3 space-y-2 text-sm">
-                {(stats.failures?.breakdown || []).map((item) => (
-                  <li key={`${item.reason}-${item.sampleMessage || 'none'}`} className="flex justify-between rounded border border-slate-100 px-3 py-2">
-                    <span>{item.reason}</span>
-                    <span className="font-medium text-slate-700">{item.count}</span>
-                  </li>
-                ))}
-                {!stats.failures?.breakdown?.length ? <li className="text-slate-500">No failures in selected range.</li> : null}
-              </ul>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h2 className="text-lg font-medium text-slate-900">Format breakdown</h2>
-              <ul className="mt-3 space-y-2 text-sm">
-                {(stats.formatBreakdown || []).map((item) => (
-                  <li key={item.mimeType} className="flex justify-between rounded border border-slate-100 px-3 py-2">
-                    <span>{item.format}</span>
-                    <span className="font-medium text-slate-700">{item.count}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </>
-      ) : null}
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="grid gap-3 md:grid-cols-4">
-          <input
-            type="text"
-            placeholder="Search filename or email"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            value={filters.search}
-            onChange={(event) => updateFilters({ search: event.target.value })}
-          />
-          <select
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            value={filters.status}
-            onChange={(event) => updateFilters({ status: event.target.value })}
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-          <input
-            type="date"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            value={filters.startDate}
-            onChange={(event) => updateFilters({ startDate: event.target.value })}
-          />
-          <input
-            type="date"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            value={filters.endDate}
-            onChange={(event) => updateFilters({ endDate: event.target.value })}
-          />
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard label="Total parses" value={stats.totalParses} />
+          <StatCard label="Success %" value={`${Number(stats.successRate || 0).toFixed(2)}%`} valueClassName="text-emerald-700" />
+          <StatCard label="Avg parse time" value={`${Number(stats.avgTimeSeconds || 0).toFixed(2)}s`} />
+          <StatCard label="Failure count" value={stats.failures?.total || 0} valueClassName="text-rose-700" />
         </div>
-      </div>
+      ) : null}
 
       {error ? <StateAlert state={error} onRetry={() => void reload()} /> : null}
+      {!loadingList && !error && !uploads.length ? <EmptyState title="No uploads found" description="No upload records match the current filters." /> : null}
 
-      {!loadingList && !error && !uploads.length ? (
-        <EmptyState title="No uploads found" description="No upload records match the current filters." />
-      ) : null}
-
-      <UploadsTable
-        uploads={uploads}
+      <AdminDataTable
+        title="Uploads"
+        subtitle="Monitor parse status, failures, and retry candidates."
+        columns={columns}
+        rows={sortedUploads}
         loading={loadingList}
+        rowKey={(row) => row.id}
+        csvExportUrl={exportCsvUrl}
+        searchValue={filters.search}
+        onSearchChange={(value) => updateFilters({ search: value })}
+        searchPlaceholder="Search filename or email"
+        filterControls={(
+          <>
+            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.status} onChange={(event) => updateFilters({ status: event.target.value })}>
+              {STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+            <input type="date" className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.startDate} onChange={(event) => updateFilters({ startDate: event.target.value })} />
+            <input type="date" className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.endDate} onChange={(event) => updateFilters({ endDate: event.target.value })} />
+          </>
+        )}
+        sort={{ field: sortField, direction: sortDirection || 'desc' }}
+        onSortChange={(field) => {
+          const nextDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc'
+          updateFilters({ sort: `${field}:${nextDirection}` })
+        }}
         pagination={pagination}
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
-        onOpenDetails={openDetails}
+        filterPresets={FILTER_PRESETS}
+        onApplyFilterPreset={(presetId) => {
+          if (presetId !== 'failed_today') return
+          const today = new Date().toISOString().slice(0, 10)
+          updateFilters({ status: 'failed', startDate: today, endDate: today })
+        }}
+        savedFilterChips={savedFilterChips}
+        onSaveFilterChip={(label) => saveChip(label, filters)}
+        onApplySavedFilter={(chipId) => {
+          const chip = savedFilterChips.find((item) => item.id === chipId)
+          if (!chip) return
+          updateFilters(chip.filters)
+        }}
+        onRemoveSavedFilter={removeChip}
+        columnPresets={COLUMN_PRESETS}
+        activePreset={activePreset}
+        onPresetChange={setActivePreset}
+        renderDetails={(upload) => (
+          <div className="space-y-2 text-sm">
+            <p><strong>File:</strong> {upload.fileName || upload.filename || '—'}</p>
+            <p><strong>Email:</strong> {upload.userEmail || '—'}</p>
+            <p><strong>Status:</strong> {upload.parseStatus || '—'}</p>
+            <p><strong>Created:</strong> {formatDate(upload.createdAt)}</p>
+            <p><strong>Failure reason:</strong> {upload.parseError || '—'}</p>
+            <button type="button" className="mt-2 rounded-md border border-slate-300 px-3 py-1.5" onClick={() => openDetails(upload.id)}>
+              Open full upload details
+            </button>
+          </div>
+        )}
       />
     </div>
   )
