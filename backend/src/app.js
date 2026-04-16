@@ -22,8 +22,17 @@ import candidatesRoutes from './routes/candidates.js'
 import jobDescriptionsRoutes from './routes/jobDescriptions.js'
 import inquiriesRoutes from './routes/inquiries.js'
 import notificationsRoutes from './routes/notifications.js'
+import adminRoutes from './routes/admin.js'
+import adminSubscriptionsRoutes from './routes/admin/subscriptions.js'
+import adminPaymentsRoutes from './routes/admin/payments.js'
+import adminUploadsRoutes from './routes/admin/uploads.js'
+import adminAnalyticsRoutes from './routes/admin/analytics.js'
+import adminHealthRoutes from './routes/admin/health.js'
+import adminLogsRoutes from './routes/admin/logs.js'
+import webhooksRoutes from './routes/webhooks.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
+import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 
 const app = express()
@@ -94,6 +103,14 @@ app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
 app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, requireActiveSubscription, jobDescriptionsRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/notifications', requireAuth, generalApiLimiterAuth, notificationsRoutes)
+app.use('/api/admin', requireAdminAuth, adminActionAuditMiddleware, adminRoutes)
+app.use('/api/admin/subscriptions', requireAdminAuth, adminActionAuditMiddleware, adminSubscriptionsRoutes)
+app.use('/api/admin/payments', requireAdminAuth, adminActionAuditMiddleware, adminPaymentsRoutes)
+app.use('/api/admin/uploads', requireAdminAuth, adminActionAuditMiddleware, adminUploadsRoutes)
+app.use('/api/admin/analytics', requireAdminAuth, adminActionAuditMiddleware, adminAnalyticsRoutes)
+app.use('/api/admin/health', requireAdminAuth, adminActionAuditMiddleware, adminHealthRoutes)
+app.use('/api/admin/logs', requireAdminAuth, adminActionAuditMiddleware, adminLogsRoutes)
+app.use('/api/admin/webhooks', requireAdminAuth, adminActionAuditMiddleware, webhooksRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {
   res.json({ userId: req.userId })
