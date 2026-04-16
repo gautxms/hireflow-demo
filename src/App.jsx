@@ -33,6 +33,7 @@ const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
 const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
 const AdminAnalyticsPage = lazy(() => import('./admin/pages/AdminAnalyticsPage'))
 const AdminDashboard = lazy(() => import('./admin/pages/AdminDashboard'))
+const AdminSummaryPage = lazy(() => import('./admin/pages/AdminSummaryPage'))
 const AdminUsersPage = lazy(() => import('./admin/pages/AdminUsersPage'))
 const AdminSubscriptionsPage = lazy(() => import('./admin/pages/AdminSubscriptionsPage'))
 const AdminPaymentsPage = lazy(() => import('./admin/pages/AdminPaymentsPage'))
@@ -326,7 +327,21 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </AdminShell>
     )
 
-    if (pathname === '/admin' || pathname === '/admin/overview') {
+    if (pathname === '/admin') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'summary',
+        title: 'Summary',
+        subtitle: 'Live KPIs, operational alerts, and suggested next actions.',
+        purpose: 'Use this page to quickly compare today vs last 7 days, then jump to deeper views with filters preserved.',
+        breadcrumbs: ['Admin', 'Summary'],
+      }, <AdminSummaryPage />)
+    }
+
+    if (pathname === '/admin/overview') {
       if (!hasStoredAdminSession) {
         navigate('/admin/login')
         return null

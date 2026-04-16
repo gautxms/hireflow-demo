@@ -4,6 +4,19 @@ import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
 
 const DEFAULT_PAGE_SIZE = 20
 
+function getInitialFiltersFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    page: Number(params.get('page') || 1),
+    pageSize: Number(params.get('pageSize') || DEFAULT_PAGE_SIZE),
+    search: params.get('search') || '',
+    endpoint: params.get('endpoint') || '',
+    statusCode: params.get('statusCode') || '',
+    startDate: params.get('startDate') || '',
+    endDate: params.get('endDate') || '',
+  }
+}
+
 function toIsoOrEmpty(value) {
   if (!value) return ''
   const date = new Date(value)
@@ -20,16 +33,10 @@ export default function useAdminLogs(initialFilters = {}) {
   const [webhookLoading, setWebhookLoading] = useState(false)
   const [webhookError, setWebhookError] = useState(null)
 
-  const [filters, setFilters] = useState({
-    page: 1,
-    pageSize: DEFAULT_PAGE_SIZE,
-    search: '',
-    endpoint: '',
-    statusCode: '',
-    startDate: '',
-    endDate: '',
+  const [filters, setFilters] = useState(() => ({
+    ...getInitialFiltersFromUrl(),
     ...initialFilters,
-  })
+  }))
 
   const query = useMemo(() => {
     const params = new URLSearchParams()

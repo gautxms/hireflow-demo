@@ -5,6 +5,14 @@ import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
 const PAGE_SIZE = 50
 const SORTABLE_FIELDS = ['email', 'company', 'subscription_status', 'created_at']
 
+function getInitialUserFilters() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    search: params.get('search') || '',
+    statusFilter: params.get('status') || 'all',
+  }
+}
+
 function normalizeUser(user = {}) {
   return {
     id: user.id,
@@ -41,9 +49,10 @@ function sortUsers(users, sortBy, sortDirection) {
 }
 
 export default function useAdminUsers() {
+  const initialFilters = getInitialUserFilters()
   const [users, setUsers] = useState([])
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [search, setSearch] = useState(initialFilters.search)
+  const [statusFilter, setStatusFilter] = useState(initialFilters.statusFilter)
   const [sortBy, setSortBy] = useState('created_at')
   const [sortDirection, setSortDirection] = useState('desc')
   const [page, setPage] = useState(1)

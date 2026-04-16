@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
 
       if (!result.requiresTwoFactor && !result.requiresTwoFactorSetup) {
         await Promise.all([loadSessions(), loadAuditTrail().catch(() => {})])
-        window.location.assign('/admin/analytics')
+        window.location.assign('/admin')
       }
     } catch (requestError) {
       setStatus('')
@@ -70,7 +70,7 @@ export default function AdminLoginPage() {
     try {
       await verifySecondFactor({ totpCode, backupCode })
       await Promise.all([loadSessions(), loadAuditTrail().catch(() => {})])
-      window.location.assign('/admin/analytics')
+      window.location.assign('/admin')
     } catch (requestError) {
       setStatus('')
       setError(requestError.message)

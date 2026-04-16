@@ -55,8 +55,8 @@ export function mapAdminError({ status, code = '', message = '' } = {}) {
   }
 }
 
-export async function adminFetchJson(url) {
-  const response = await fetch(url, { credentials: 'include' })
+export async function adminFetchJson(url, _message, requestInit = {}) {
+  const response = await fetch(url, { ...requestInit, credentials: 'include' })
   const payload = await response.json().catch(() => ({}))
 
   if (!response.ok) {
