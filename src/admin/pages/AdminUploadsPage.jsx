@@ -8,8 +8,9 @@ import useSharedTableState from '../hooks/useSharedTableState'
 const STATUS_OPTIONS = ['all', 'pending', 'processing', 'complete', 'failed']
 
 const COLUMN_PRESETS = [
-  { id: 'default', label: 'Default columns', columns: ['fileName', 'userEmail', 'parseStatus', 'createdAt', 'parseDurationMs'] },
+  { id: 'default', label: 'Default columns', columns: ['fileName', 'userEmail', 'parseStatus', 'totalTokens', 'createdAt', 'parseDurationMs'] },
   { id: 'failures', label: 'Failure triage', columns: ['fileName', 'userEmail', 'parseStatus', 'parseError', 'createdAt'] },
+  { id: 'token_usage', label: 'Token usage', columns: ['fileName', 'userEmail', 'parseStatus', 'totalTokens', 'estimatedCostUsd', 'usageAvailable', 'createdAt'] },
 ]
 
 const FILTER_PRESETS = [
@@ -23,6 +24,15 @@ function formatDate(value) {
 function sortUploads(items, sort) {
   const direction = sort.direction === 'asc' ? 1 : -1
   return [...items].sort((a, b) => {
+    if (sort.field === 'totalTokens') {
+      return ((Number(a.tokenUsage?.totalTokens || 0) - Number(b.tokenUsage?.totalTokens || 0)) * direction)
+    }
+    if (sort.field === 'estimatedCostUsd') {
+      return ((Number(a.tokenUsage?.estimatedCostUsd || 0) - Number(b.tokenUsage?.estimatedCostUsd || 0)) * direction)
+    }
+    if (sort.field === 'usageAvailable') {
+      return (String(a.tokenUsage?.usageAvailable ?? '').localeCompare(String(b.tokenUsage?.usageAvailable ?? '')) * direction)
+    }
     const left = a[sort.field]
     const right = b[sort.field]
     if (sort.field === 'createdAt') {
@@ -74,6 +84,18 @@ export default function AdminUploadsPage({ onOpenDetails }) {
     { key: 'userEmail', label: 'Email', sortable: true, render: (row) => row.userEmail || '—' },
     { key: 'parseStatus', label: 'Status', sortable: true, render: (row) => <span className="capitalize">{row.parseStatus || 'unknown'}</span> },
     { key: 'parseError', label: 'Failure', sortable: true, render: (row) => row.parseError || '—' },
+    {
+      key: 'usageAvailable',
+      label: 'Usage',
+      sortable: true,
+      render: (row) => {
+        if (row.tokenUsage?.usageAvailable === true) return 'available'
+        if (row.tokenUsage?.usageAvailable === false) return 'missing'
+        return '—'
+      },
+    },
+    { key: 'totalTokens', label: 'Total tokens', sortable: true, render: (row) => row.tokenUsage?.totalTokens === null || row.tokenUsage?.totalTokens === undefined ? '—' : Number(row.tokenUsage.totalTokens).toLocaleString() },
+    { key: 'estimatedCostUsd', label: 'Est. cost', sortable: true, render: (row) => row.tokenUsage?.estimatedCostUsd === null || row.tokenUsage?.estimatedCostUsd === undefined ? '—' : `$${Number(row.tokenUsage.estimatedCostUsd).toFixed(4)}` },
     { key: 'createdAt', label: 'Created', sortable: true, render: (row) => formatDate(row.createdAt) },
     { key: 'parseDurationMs', label: 'Parse ms', sortable: true, render: (row) => Number(row.parseDurationMs || 0).toLocaleString() },
   ]), [])
@@ -88,8 +110,12 @@ export default function AdminUploadsPage({ onOpenDetails }) {
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="Total parses" value={stats.totalParses} />
           <StatCard label="Success %" value={`${Number(stats.successRate || 0).toFixed(2)}%`} valueClassName="text-emerald-700" />
+          <StatCard label="Total tokens" value={Number(stats.tokenUsage?.totalTokens || 0).toLocaleString()} />
+          <StatCard label="Avg tokens/resume" value={Number(stats.tokenUsage?.avgTokensPerResume || 0).toLocaleString()} />
+          <StatCard label="Token cost" value={`$${Number(stats.tokenUsage?.totalEstimatedCostUsd || 0).toFixed(4)}`} />
           <StatCard label="Avg parse time" value={`${Number(stats.avgTimeSeconds || 0).toFixed(2)}s`} />
           <StatCard label="Failure count" value={stats.failures?.total || 0} valueClassName="text-rose-700" />
+          <StatCard label="Usage missing" value={stats.tokenUsage?.usageUnavailableCount || 0} />
         </div>
       ) : null}
 
@@ -148,6 +174,9 @@ export default function AdminUploadsPage({ onOpenDetails }) {
             <p><strong>Status:</strong> {upload.parseStatus || '—'}</p>
             <p><strong>Created:</strong> {formatDate(upload.createdAt)}</p>
             <p><strong>Failure reason:</strong> {upload.parseError || '—'}</p>
+            <p><strong>Total tokens:</strong> {upload.tokenUsage?.totalTokens === null || upload.tokenUsage?.totalTokens === undefined ? '—' : Number(upload.tokenUsage.totalTokens).toLocaleString()}</p>
+            <p><strong>Estimated cost:</strong> {upload.tokenUsage?.estimatedCostUsd === null || upload.tokenUsage?.estimatedCostUsd === undefined ? '—' : `$${Number(upload.tokenUsage.estimatedCostUsd).toFixed(4)}`}</p>
+            {upload.tokenUsage?.usageAvailable === false ? <p><strong>Usage missing reason:</strong> {upload.tokenUsage?.unavailableReason || 'unknown'}</p> : null}
             <button type="button" className="ui-btn mt-2" onClick={() => openDetails(upload.id)}>
               Open full upload details
             </button>

@@ -76,6 +76,17 @@ function mapUploadRow(row) {
     rawText: row.raw_text || '',
     suspicious: suspiciousReasons.length > 0,
     suspiciousReasons,
+    tokenUsage: {
+      usageAvailable: row.usage_available === null || row.usage_available === undefined ? null : Boolean(row.usage_available),
+      unavailableReason: row.unavailable_reason || null,
+      provider: row.token_provider || null,
+      model: row.token_model || null,
+      inputTokens: row.input_tokens === null || row.input_tokens === undefined ? null : Number(row.input_tokens),
+      outputTokens: row.output_tokens === null || row.output_tokens === undefined ? null : Number(row.output_tokens),
+      totalTokens: row.total_tokens === null || row.total_tokens === undefined ? null : Number(row.total_tokens),
+      estimatedCostUsd: row.estimated_cost_usd === null || row.estimated_cost_usd === undefined ? null : Number(row.estimated_cost_usd),
+      capturedAt: toIso(row.token_captured_at),
+    },
   }
 }
 
@@ -90,6 +101,25 @@ async function ensureUploadMonitoringColumns() {
     ADD COLUMN IF NOT EXISTS parse_duration_ms INTEGER,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS retried_at TIMESTAMP;
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS resume_analysis_token_usage (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      resume_id UUID NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+      parse_job_id TEXT,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      job_description_id UUID,
+      provider TEXT NOT NULL DEFAULT 'anthropic',
+      model TEXT,
+      usage_available BOOLEAN NOT NULL DEFAULT false,
+      unavailable_reason TEXT,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      total_tokens INTEGER,
+      estimated_cost_usd NUMERIC(12, 6),
+      metadata JSONB,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
   `)
 }
 
@@ -159,9 +189,25 @@ router.get('/', async (req, res) => {
               r.parse_error,
               r.parse_duration_ms,
               r.created_at,
-              r.updated_at
+              r.updated_at,
+              token.usage_available,
+              token.unavailable_reason,
+              token.provider AS token_provider,
+              token.model AS token_model,
+              token.input_tokens,
+              token.output_tokens,
+              token.total_tokens,
+              token.estimated_cost_usd,
+              token.created_at AS token_captured_at
        FROM resumes r
        LEFT JOIN users u ON u.id = r.user_id
+       LEFT JOIN LATERAL (
+         SELECT *
+         FROM resume_analysis_token_usage t
+         WHERE t.resume_id = r.id
+         ORDER BY t.created_at DESC
+         LIMIT 1
+       ) token ON true
        ${whereClause}
        ORDER BY r.created_at DESC
        LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`,
@@ -191,12 +237,12 @@ router.get('/stats', async (req, res) => {
 
   if (startDate) {
     params.push(startDate)
-    where.push(`created_at >= $${params.length}::timestamp`)
+    where.push(`r.created_at >= $${params.length}::timestamp`)
   }
 
   if (endDate) {
     params.push(endDate)
-    where.push(`created_at <= $${params.length}::timestamp + INTERVAL '1 day'`)
+    where.push(`r.created_at <= $${params.length}::timestamp + INTERVAL '1 day'`)
   }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
@@ -213,8 +259,20 @@ router.get('/stats', async (req, res) => {
         COUNT(*) FILTER (
           WHERE COALESCE(parse_status, CASE WHEN COALESCE(raw_text, '') <> '' THEN 'complete' ELSE 'pending' END) = 'failed'
         )::INT AS failure_count,
-        AVG(COALESCE(parse_duration_ms, 0))::numeric(10,2) AS avg_duration_ms
-      FROM resumes
+        AVG(COALESCE(parse_duration_ms, 0))::numeric(10,2) AS avg_duration_ms,
+        COALESCE(SUM(token.total_tokens), 0)::bigint AS total_tokens,
+        ROUND(COALESCE(AVG(token.total_tokens), 0), 2) AS avg_tokens_per_resume,
+        ROUND(COALESCE(SUM(token.estimated_cost_usd), 0), 6) AS total_estimated_cost_usd,
+        COUNT(*) FILTER (WHERE token.usage_available = true)::INT AS usage_available_count,
+        COUNT(*) FILTER (WHERE token.usage_available = false)::INT AS usage_unavailable_count
+      FROM resumes r
+      LEFT JOIN LATERAL (
+        SELECT t.*
+        FROM resume_analysis_token_usage t
+        WHERE t.resume_id = r.id
+        ORDER BY t.created_at DESC
+        LIMIT 1
+      ) token ON true
       ${whereClause}`,
       params,
     )
@@ -229,7 +287,7 @@ router.get('/stats', async (req, res) => {
           END
         ) AS file_type,
         COUNT(*)::INT AS count
-      FROM resumes
+      FROM resumes r
       ${whereClause}
       GROUP BY 1
       ORDER BY count DESC`,
@@ -238,7 +296,7 @@ router.get('/stats', async (req, res) => {
 
     const failureResult = await pool.query(
       `SELECT parse_error, COUNT(*)::INT AS count
-       FROM resumes
+       FROM resumes r
        ${whereClause}${whereClause ? ' AND' : ' WHERE'} COALESCE(parse_status, '') = 'failed'
        GROUP BY parse_error
        ORDER BY count DESC`,
@@ -251,7 +309,20 @@ router.get('/stats', async (req, res) => {
               COUNT(*) FILTER (
                 WHERE COALESCE(parse_status, CASE WHEN COALESCE(raw_text, '') <> '' THEN 'complete' ELSE 'pending' END) = 'complete'
               )::INT AS success
-       FROM resumes
+       FROM resumes r
+       ${whereClause}
+       GROUP BY 1
+       ORDER BY day DESC
+       LIMIT 30`,
+      params,
+    )
+
+    const tokenTrendResult = await pool.query(
+      `SELECT DATE_TRUNC('day', t.created_at)::date AS day,
+              COALESCE(SUM(t.total_tokens), 0)::bigint AS total_tokens,
+              ROUND(COALESCE(SUM(t.estimated_cost_usd), 0), 6) AS estimated_cost_usd
+       FROM resume_analysis_token_usage t
+       JOIN resumes r ON r.id = t.resume_id
        ${whereClause}
        GROUP BY 1
        ORDER BY day DESC
@@ -267,6 +338,20 @@ router.get('/stats', async (req, res) => {
       totalParses: total,
       successRate: total > 0 ? Number(((successCount / total) * 100).toFixed(2)) : 0,
       avgTimeSeconds: Number((Number(summary.avg_duration_ms || 0) / 1000).toFixed(2)),
+      tokenUsage: {
+        totalTokens: Number(summary.total_tokens || 0),
+        avgTokensPerResume: Number(summary.avg_tokens_per_resume || 0),
+        totalEstimatedCostUsd: Number(summary.total_estimated_cost_usd || 0),
+        usageAvailableCount: Number(summary.usage_available_count || 0),
+        usageUnavailableCount: Number(summary.usage_unavailable_count || 0),
+        costTrend: tokenTrendResult.rows
+          .map((row) => ({
+            day: row.day,
+            totalTokens: Number(row.total_tokens || 0),
+            estimatedCostUsd: Number(row.estimated_cost_usd || 0),
+          }))
+          .reverse(),
+      },
       failures: {
         total: Number(summary.failure_count || 0),
         breakdown: failureResult.rows.map((row) => ({
@@ -302,17 +387,17 @@ router.get('/export', async (req, res) => {
 
   if (status && status !== 'all') {
     params.push(status)
-    where.push(`COALESCE(parse_status, CASE WHEN COALESCE(raw_text, '') <> '' THEN 'complete' ELSE 'pending' END) = $${params.length}`)
+    where.push(`COALESCE(r.parse_status, CASE WHEN COALESCE(r.raw_text, '') <> '' THEN 'complete' ELSE 'pending' END) = $${params.length}`)
   }
 
   if (startDate) {
     params.push(startDate)
-    where.push(`created_at >= $${params.length}::timestamp`)
+    where.push(`r.created_at >= $${params.length}::timestamp`)
   }
 
   if (endDate) {
     params.push(endDate)
-    where.push(`created_at <= $${params.length}::timestamp + INTERVAL '1 day'`)
+    where.push(`r.created_at <= $${params.length}::timestamp + INTERVAL '1 day'`)
   }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
@@ -321,15 +406,23 @@ router.get('/export', async (req, res) => {
     await ensureUploadMonitoringColumns()
 
     const result = await pool.query(
-      `SELECT id, filename, user_id, created_at, file_size, file_type, parse_status, parse_duration_ms, parse_error
-       FROM resumes
+      `SELECT r.id, r.filename, r.user_id, r.created_at, r.file_size, r.file_type, r.parse_status, r.parse_duration_ms, r.parse_error,
+              token.usage_available, token.unavailable_reason, token.input_tokens, token.output_tokens, token.total_tokens, token.estimated_cost_usd
+       FROM resumes r
+       LEFT JOIN LATERAL (
+         SELECT t.*
+         FROM resume_analysis_token_usage t
+         WHERE t.resume_id = r.id
+         ORDER BY t.created_at DESC
+         LIMIT 1
+       ) token ON true
        ${whereClause}
-       ORDER BY created_at DESC
+       ORDER BY r.created_at DESC
        LIMIT 5000`,
       params,
     )
 
-    const header = ['id', 'filename', 'user_id', 'created_at', 'file_size', 'file_type', 'parse_status', 'parse_duration_ms', 'parse_error']
+    const header = ['id', 'filename', 'user_id', 'created_at', 'file_size', 'file_type', 'parse_status', 'parse_duration_ms', 'parse_error', 'usage_available', 'usage_unavailable_reason', 'input_tokens', 'output_tokens', 'total_tokens', 'estimated_cost_usd']
     const csvRows = [header.join(',')]
 
     for (const row of result.rows) {
@@ -343,6 +436,12 @@ router.get('/export', async (req, res) => {
         normalizeStatus(row),
         Number(row.parse_duration_ms || 0),
         row.parse_error || '',
+        row.usage_available === null || row.usage_available === undefined ? '' : String(Boolean(row.usage_available)),
+        row.unavailable_reason || '',
+        row.input_tokens === null || row.input_tokens === undefined ? '' : Number(row.input_tokens),
+        row.output_tokens === null || row.output_tokens === undefined ? '' : Number(row.output_tokens),
+        row.total_tokens === null || row.total_tokens === undefined ? '' : Number(row.total_tokens),
+        row.estimated_cost_usd === null || row.estimated_cost_usd === undefined ? '' : Number(row.estimated_cost_usd),
       ].map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`)
 
       csvRows.push(values.join(','))
@@ -377,9 +476,25 @@ router.get('/:uploadId', async (req, res) => {
               r.parse_duration_ms,
               r.created_at,
               r.updated_at,
-              r.retried_at
+              r.retried_at,
+              token.usage_available,
+              token.unavailable_reason,
+              token.provider AS token_provider,
+              token.model AS token_model,
+              token.input_tokens,
+              token.output_tokens,
+              token.total_tokens,
+              token.estimated_cost_usd,
+              token.created_at AS token_captured_at
        FROM resumes r
        LEFT JOIN users u ON u.id = r.user_id
+       LEFT JOIN LATERAL (
+         SELECT t.*
+         FROM resume_analysis_token_usage t
+         WHERE t.resume_id = r.id
+         ORDER BY t.created_at DESC
+         LIMIT 1
+       ) token ON true
        WHERE r.id::text = $1
        LIMIT 1`,
       [uploadId],

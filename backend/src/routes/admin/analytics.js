@@ -131,6 +131,18 @@ function buildFallbackAnalytics({ start, end, planType }) {
     feedbackSummary: { total_feedback: 0, helpful_count: 0, unhelpful_count: 0, flagged_count: 0 },
     feedbackTrend: [],
     feedbackExport: [],
+    tokenUsageSummary: {
+      totalTokens: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      avgTokensPerAnalysis: 0,
+      totalEstimatedCostUsd: 0,
+      avgEstimatedCostUsd: 0,
+      usageAvailableCount: 0,
+      usageUnavailableCount: 0,
+    },
+    tokenUsageTrend: [],
+    tokenUsageUploads: [],
     generatedAt: new Date().toISOString(),
   }
 }
@@ -154,6 +166,9 @@ async function loadAnalytics({ start, end, planType }) {
       uxBlockersResult,
       twoFactorRateResult,
       adminFeedbackSummaryResult,
+      tokenUsageSummaryResult,
+      tokenUsageTrendResult,
+      tokenUsageUploadsResult,
     ] = await Promise.all([
     pool.query(
       `WITH scoped_users AS (
@@ -387,9 +402,68 @@ async function loadAnalytics({ start, end, planType }) {
          COUNT(*)::int AS total,
          COUNT(*) FILTER (WHERE is_useful = true)::int AS useful,
          COUNT(*) FILTER (WHERE is_useful = false)::int AS not_useful
-       FROM admin_page_feedback
-       WHERE created_at::date BETWEEN $1::date AND $2::date`,
+      FROM admin_page_feedback
+      WHERE created_at::date BETWEEN $1::date AND $2::date`,
       [start, end],
+    ),
+    pool.query(
+      `SELECT
+         COALESCE(SUM(t.total_tokens), 0)::bigint AS total_tokens,
+         COALESCE(SUM(t.input_tokens), 0)::bigint AS total_input_tokens,
+         COALESCE(SUM(t.output_tokens), 0)::bigint AS total_output_tokens,
+         ROUND(COALESCE(AVG(t.total_tokens), 0), 2) AS avg_tokens_per_analysis,
+         ROUND(COALESCE(SUM(t.estimated_cost_usd), 0), 6) AS total_estimated_cost_usd,
+         ROUND(COALESCE(AVG(t.estimated_cost_usd), 0), 6) AS avg_estimated_cost_usd,
+         COUNT(*) FILTER (WHERE t.usage_available = true)::int AS usage_available_count,
+         COUNT(*) FILTER (WHERE t.usage_available = false)::int AS usage_unavailable_count
+       FROM resume_analysis_token_usage t
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE t.created_at::date BETWEEN $1::date AND $2::date
+         AND ($3::text IS NULL OR u.subscription_plan = $3)`,
+      [start, end, planFilter],
+    ),
+    pool.query(
+      `WITH days AS (
+         SELECT generate_series($1::date, $2::date, interval '1 day')::date AS day
+       )
+       SELECT
+         d.day,
+         COALESCE(SUM(t.total_tokens), 0)::bigint AS total_tokens,
+         COALESCE(SUM(t.input_tokens), 0)::bigint AS input_tokens,
+         COALESCE(SUM(t.output_tokens), 0)::bigint AS output_tokens,
+         ROUND(COALESCE(SUM(t.estimated_cost_usd), 0), 6) AS estimated_cost_usd
+       FROM days d
+       LEFT JOIN resume_analysis_token_usage t ON t.created_at::date = d.day
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE ($3::text IS NULL OR u.subscription_plan = $3 OR t.user_id IS NULL)
+       GROUP BY d.day
+       ORDER BY d.day ASC`,
+      [start, end, planFilter],
+    ),
+    pool.query(
+      `SELECT
+         t.resume_id,
+         r.filename,
+         t.user_id,
+         u.email AS user_email,
+         t.parse_job_id,
+         t.provider,
+         t.model,
+         t.usage_available,
+         t.unavailable_reason,
+         t.input_tokens,
+         t.output_tokens,
+         t.total_tokens,
+         t.estimated_cost_usd,
+         t.created_at
+       FROM resume_analysis_token_usage t
+       LEFT JOIN resumes r ON r.id = t.resume_id
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE t.created_at::date BETWEEN $1::date AND $2::date
+         AND ($3::text IS NULL OR u.subscription_plan = $3)
+       ORDER BY t.created_at DESC
+       LIMIT 500`,
+      [start, end, planFilter],
     ),
   ])
 
@@ -404,6 +478,7 @@ async function loadAnalytics({ start, end, planType }) {
     const uxBlockers = uxBlockersResult.rows || []
     const twoFactorRate = twoFactorRateResult.rows[0] || { started: 0, completed: 0 }
     const adminFeedbackSummary = adminFeedbackSummaryResult.rows[0] || { total: 0, useful: 0, not_useful: 0 }
+    const tokenUsageSummary = tokenUsageSummaryResult.rows[0] || {}
     const twoFactorCompletionRate = Number(twoFactorRate.started || 0) === 0
       ? 0
       : Number((((Number(twoFactorRate.completed || 0) / Number(twoFactorRate.started || 0)) * 100).toFixed(2)))
@@ -452,6 +527,39 @@ async function loadAnalytics({ start, end, planType }) {
       feedbackSummary: feedbackSummary,
       feedbackTrend: feedbackTrendResult.rows,
       feedbackExport: feedbackCommentsResult.rows,
+      tokenUsageSummary: {
+        totalTokens: Number(tokenUsageSummary.total_tokens || 0),
+        totalInputTokens: Number(tokenUsageSummary.total_input_tokens || 0),
+        totalOutputTokens: Number(tokenUsageSummary.total_output_tokens || 0),
+        avgTokensPerAnalysis: Number(tokenUsageSummary.avg_tokens_per_analysis || 0),
+        totalEstimatedCostUsd: Number(tokenUsageSummary.total_estimated_cost_usd || 0),
+        avgEstimatedCostUsd: Number(tokenUsageSummary.avg_estimated_cost_usd || 0),
+        usageAvailableCount: Number(tokenUsageSummary.usage_available_count || 0),
+        usageUnavailableCount: Number(tokenUsageSummary.usage_unavailable_count || 0),
+      },
+      tokenUsageTrend: tokenUsageTrendResult.rows.map((row) => ({
+        day: row.day,
+        totalTokens: Number(row.total_tokens || 0),
+        inputTokens: Number(row.input_tokens || 0),
+        outputTokens: Number(row.output_tokens || 0),
+        estimatedCostUsd: Number(row.estimated_cost_usd || 0),
+      })),
+      tokenUsageUploads: tokenUsageUploadsResult.rows.map((row) => ({
+        resumeId: row.resume_id,
+        filename: row.filename,
+        userId: row.user_id,
+        userEmail: row.user_email,
+        parseJobId: row.parse_job_id,
+        provider: row.provider,
+        model: row.model,
+        usageAvailable: row.usage_available === null || row.usage_available === undefined ? null : Boolean(row.usage_available),
+        unavailableReason: row.unavailable_reason,
+        inputTokens: row.input_tokens === null || row.input_tokens === undefined ? null : Number(row.input_tokens),
+        outputTokens: row.output_tokens === null || row.output_tokens === undefined ? null : Number(row.output_tokens),
+        totalTokens: row.total_tokens === null || row.total_tokens === undefined ? null : Number(row.total_tokens),
+        estimatedCostUsd: row.estimated_cost_usd === null || row.estimated_cost_usd === undefined ? null : Number(row.estimated_cost_usd),
+        createdAt: row.created_at,
+      })),
       generatedAt: new Date().toISOString(),
     }
   } catch (error) {
@@ -474,6 +582,7 @@ router.get('/metrics', async (req, res) => {
       conversionFunnel: payload.conversionFunnel,
       planBreakdown: payload.planBreakdown,
       parsingTrend: payload.parsingTrend,
+      tokenUsageSummary: payload.tokenUsageSummary,
       generatedAt: payload.generatedAt,
     })
   } catch (error) {
@@ -511,6 +620,22 @@ router.get('/retention', async (req, res) => {
   }
 })
 
+router.get('/token-usage', async (req, res) => {
+  try {
+    const payload = await loadAnalytics(parseRequestFilters(req))
+    return res.json({
+      filters: payload.filters,
+      tokenUsageSummary: payload.tokenUsageSummary,
+      tokenUsageTrend: payload.tokenUsageTrend,
+      tokenUsageUploads: payload.tokenUsageUploads,
+      generatedAt: payload.generatedAt,
+    })
+  } catch (error) {
+    console.error('[AdminAnalytics] Failed to load token usage analytics:', error)
+    return res.status(500).json({ error: 'Unable to load token usage analytics' })
+  }
+})
+
 router.get('/', async (req, res) => {
   const { startDate, endDate, planType, export: exportType } = req.query
   const range = normalizeDateRange(startDate, endDate)
@@ -532,6 +657,9 @@ router.get('/', async (req, res) => {
         { title: 'feedback_summary', rows: [payload.feedbackSummary] },
         { title: 'feedback_trend', rows: payload.feedbackTrend },
         { title: 'feedback_export', rows: payload.feedbackExport },
+        { title: 'token_usage_summary', rows: [payload.tokenUsageSummary] },
+        { title: 'token_usage_trend', rows: payload.tokenUsageTrend },
+        { title: 'token_usage_uploads', rows: payload.tokenUsageUploads },
       ])
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')

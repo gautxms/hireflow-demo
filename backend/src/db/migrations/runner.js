@@ -15,6 +15,7 @@ const migrationFiles = [
   '012-add-admin-2fa-columns',
   '013-fix-admin-email-verification',
   '014-add-admin-ux-feedback',
+  '015-add-resume-analysis-token-usage',
 ]
 
 async function ensureMigrationsTable(client) {
