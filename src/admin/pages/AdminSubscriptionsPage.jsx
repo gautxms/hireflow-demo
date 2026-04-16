@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import RefundModal from '../components/RefundModal'
-import SubscriptionsTable from '../components/SubscriptionsTable'
 import useAdminSubscriptions from '../hooks/useAdminSubscriptions'
 import StateAlert from '../components/StateAlert'
+import AdminDataTable from '../components/table/AdminDataTable'
+import useSharedTableState from '../hooks/useSharedTableState'
 
 function dateLabel(value) {
   return value ? new Date(value).toLocaleString() : '—'
@@ -11,6 +12,15 @@ function dateLabel(value) {
 function formatCurrency(cents = 0) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(cents) || 0) / 100)
 }
+
+const COLUMN_PRESETS = [
+  { id: 'default', label: 'Default columns', columns: ['email', 'plan', 'status', 'renewalDate', 'amountCents'] },
+  { id: 'collections', label: 'Collections view', columns: ['email', 'status', 'renewalDate', 'nextBillingDate', 'amountCents'] },
+]
+
+const FILTER_PRESETS = [
+  { id: 'past_due_users', label: 'Past due users' },
+]
 
 export default function AdminSubscriptionsPage() {
   const [isRefundOpen, setIsRefundOpen] = useState(false)
@@ -36,101 +46,102 @@ export default function AdminSubscriptionsPage() {
     loadDetails,
   } = useAdminSubscriptions()
 
+  const {
+    savedFilterChips,
+    saveChip,
+    removeChip,
+    activePreset,
+    setActivePreset,
+  } = useSharedTableState({ storageKey: 'admin-subscriptions-table' })
+
   const adminId = useMemo(() => localStorage.getItem('admin_id') || 'founder_admin', [])
 
-  const currentSubscription = selectedDetails?.subscription
+  const visibleColumnKeys = useMemo(() => COLUMN_PRESETS.find((preset) => preset.id === activePreset)?.columns || COLUMN_PRESETS[0].columns, [activePreset])
+  const allColumns = useMemo(() => ([
+    { key: 'email', label: 'User email', sortable: true },
+    { key: 'plan', label: 'Plan', sortable: true, render: (row) => <span className="capitalize">{row.plan}</span> },
+    { key: 'status', label: 'Status', sortable: true, render: (row) => <span className="capitalize">{row.status}</span> },
+    { key: 'renewalDate', label: 'Renewal date', sortable: true, render: (row) => dateLabel(row.renewalDate) },
+    { key: 'nextBillingDate', label: 'Next billing', sortable: true, render: (row) => dateLabel(row.nextBillingDate) },
+    { key: 'amountCents', label: 'Amount', sortable: true, render: (row) => formatCurrency(row.amountCents) },
+  ]), [])
+  const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
 
   return (
     <div className="space-y-6 p-6">
       <h1 className="text-2xl font-semibold text-slate-900">Admin subscriptions</h1>
 
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4">
-        <select className="rounded-md border border-slate-300 px-3 py-2" value={filters.status} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}>
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="overdue">Overdue</option>
-        </select>
-
-        <select className="rounded-md border border-slate-300 px-3 py-2" value={filters.plan} onChange={(event) => setFilters((prev) => ({ ...prev, plan: event.target.value }))}>
-          <option value="all">All plans</option>
-          <option value="monthly">Monthly</option>
-          <option value="annual">Annual</option>
-        </select>
-
-        <select className="rounded-md border border-slate-300 px-3 py-2" value={String(pageSize)} onChange={(event) => setPageSize(Number(event.target.value))}>
-          <option value="10">10 per page</option>
-          <option value="25">25 per page</option>
-          <option value="50">50 per page</option>
-        </select>
-
-        <p className="self-center text-sm text-slate-500">{totalSubscriptions} matching subscriptions</p>
-      </div>
-
       {error ? <StateAlert state={error} onRetry={() => void refreshSubscriptions()} /> : null}
 
-      <SubscriptionsTable
-        subscriptions={subscriptions}
+      <AdminDataTable
+        title="Subscriptions"
+        subtitle={`${totalSubscriptions} matching subscriptions`}
+        columns={columns}
+        rows={subscriptions}
         loading={loading}
+        rowKey={(row) => row.id}
+        filterControls={(
+          <>
+            <select className="rounded-md border border-slate-300 px-3 py-2" value={filters.status} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}>
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="overdue">Overdue</option>
+            </select>
+            <select className="rounded-md border border-slate-300 px-3 py-2" value={filters.plan} onChange={(event) => setFilters((prev) => ({ ...prev, plan: event.target.value }))}>
+              <option value="all">All plans</option>
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </>
+        )}
         sort={sort}
-        onSortChange={setSort}
-        onView={(subscription) => void loadDetails(subscription.id)}
-        onRefund={(subscription) => {
-          setRefundTarget(subscription)
-          setIsRefundOpen(true)
-          if (selectedId !== subscription.id) {
-            void loadDetails(subscription.id)
-          }
+        onSortChange={(field) => setSort((current) => ({ field, direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc' }))}
+        pagination={{ page, totalPages: pageCount, total: totalSubscriptions, pageSize }}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        onRowClick={(row) => void loadDetails(row.id)}
+        filterPresets={FILTER_PRESETS}
+        onApplyFilterPreset={(presetId) => {
+          if (presetId !== 'past_due_users') return
+          setFilters((prev) => ({ ...prev, status: 'overdue' }))
         }}
+        savedFilterChips={savedFilterChips}
+        onSaveFilterChip={(label) => saveChip(label, filters)}
+        onApplySavedFilter={(chipId) => {
+          const chip = savedFilterChips.find((item) => item.id === chipId)
+          if (!chip) return
+          setFilters((prev) => ({ ...prev, ...chip.filters }))
+        }}
+        onRemoveSavedFilter={removeChip}
+        columnPresets={COLUMN_PRESETS}
+        activePreset={activePreset}
+        onPresetChange={setActivePreset}
+        renderDetails={(subscription) => (
+          <div className="space-y-3 text-sm">
+            {detailsLoading && selectedId === subscription.id ? <p className="text-slate-500">Loading details…</p> : null}
+            <p><strong>Email:</strong> {subscription.email}</p>
+            <p><strong>Status:</strong> <span className="capitalize">{subscription.status}</span></p>
+            <p><strong>Plan:</strong> <span className="capitalize">{subscription.plan}</span></p>
+            <p><strong>Renewal:</strong> {dateLabel(subscription.renewalDate)}</p>
+            <p><strong>Next billing:</strong> {dateLabel(subscription.nextBillingDate)}</p>
+            <p><strong>Amount:</strong> {formatCurrency(subscription.amountCents)}</p>
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-1.5"
+              onClick={() => {
+                setRefundTarget(subscription)
+                setIsRefundOpen(true)
+                if (selectedId !== subscription.id) {
+                  void loadDetails(subscription.id)
+                }
+              }}
+            >
+              Open refund flow
+            </button>
+          </div>
+        )}
       />
-
-      <div className="flex items-center justify-between text-sm text-slate-600">
-        <button type="button" className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>Previous</button>
-        <span>Page {page} of {pageCount}</span>
-        <button type="button" className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50" disabled={page >= pageCount} onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}>Next</button>
-      </div>
-
-      {detailsLoading ? <p className="text-sm text-slate-500">Loading subscription details…</p> : null}
-
-      {currentSubscription ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <section className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
-            <h2 className="text-lg font-medium text-slate-900">Subscription details</h2>
-            <dl className="mt-3 space-y-1 text-sm text-slate-700">
-              <div><dt className="inline text-slate-500">Email:</dt> <dd className="inline">{currentSubscription.email}</dd></div>
-              <div><dt className="inline text-slate-500">Status:</dt> <dd className="inline capitalize">{currentSubscription.status}</dd></div>
-              <div><dt className="inline text-slate-500">Plan:</dt> <dd className="inline capitalize">{currentSubscription.plan}</dd></div>
-              <div><dt className="inline text-slate-500">Started:</dt> <dd className="inline">{dateLabel(currentSubscription.startedAt)}</dd></div>
-              <div><dt className="inline text-slate-500">Renewal:</dt> <dd className="inline">{dateLabel(currentSubscription.renewalDate)}</dd></div>
-              <div><dt className="inline text-slate-500">Next billing:</dt> <dd className="inline">{dateLabel(currentSubscription.nextBillingDate)}</dd></div>
-            </dl>
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
-            <h2 className="text-lg font-medium text-slate-900">Full payment history</h2>
-            <ul className="mt-3 space-y-2 text-sm">
-              {(selectedDetails.transactions || []).map((item) => (
-                <li key={item.id} className="rounded border border-slate-100 p-2">
-                  {dateLabel(item.billedAt)} · {item.transactionId || item.invoiceNumber || item.id} · {formatCurrency(item.amountCents)} · {item.status}
-                </li>
-              ))}
-              {!selectedDetails.transactions?.length ? <li className="text-slate-500">No transactions found.</li> : null}
-            </ul>
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
-            <h2 className="text-lg font-medium text-slate-900">Refund audit trail</h2>
-            <ul className="mt-3 space-y-2 text-sm">
-              {(selectedDetails.refundAuditTrail || []).map((item) => (
-                <li key={item.id} className="rounded border border-slate-100 p-2">
-                  {dateLabel(item.createdAt)} · {item.reason} · {formatCurrency(item.amountCents)} · admin: {item.adminId}
-                </li>
-              ))}
-              {!selectedDetails.refundAuditTrail?.length ? <li className="text-slate-500">No refunds issued.</li> : null}
-            </ul>
-          </section>
-        </div>
-      ) : null}
 
       <RefundModal
         isOpen={isRefundOpen}
