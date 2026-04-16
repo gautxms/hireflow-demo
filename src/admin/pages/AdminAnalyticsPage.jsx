@@ -57,6 +57,8 @@ export default function AdminAnalyticsPage() {
     : (parsingTotals.failed / (parsingTotals.failed + parsingTotals.success)) * 100
 
   const retentionMax = Math.max(0, ...(analytics?.retentionCohorts || []).map((row) => Number(row.retained_users || 0)))
+  const kpis = analytics?.kpis || {}
+  const tokenUsageSummary = analytics?.tokenUsageSummary || {}
 
   return (
     <main className="admin-page">
@@ -108,12 +110,12 @@ export default function AdminAnalyticsPage() {
       {analytics && !error ? (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="MRR" value={money(analytics.kpis.mrr)} trend={getGrowthTrend(analytics.userGrowth, 'mau')} />
-            <MetricCard label="ARR" value={money(analytics.kpis.arr)} trend={getGrowthTrend(analytics.userGrowth, 'wau')} />
-            <MetricCard label="Churn Rate" value={pct(analytics.kpis.churnRate)} trend={-1 * getGrowthTrend(analytics.userGrowth, 'dau')} />
-            <MetricCard label="ARPU" value={money(analytics.kpis.arpu)} helper="Avg per paid user" />
-            <MetricCard label="Active Users" value={analytics.kpis.totalUsers} helper="All-time users" />
-            <MetricCard label="Forecast MRR" value={money(analytics.kpis.forecastNextMonthMrr || 0)} helper="Next month projection" />
+            <MetricCard label="MRR" value={money(kpis.mrr)} trend={getGrowthTrend(analytics.userGrowth, 'mau')} />
+            <MetricCard label="ARR" value={money(kpis.arr)} trend={getGrowthTrend(analytics.userGrowth, 'wau')} />
+            <MetricCard label="Churn Rate" value={pct(kpis.churnRate)} trend={-1 * getGrowthTrend(analytics.userGrowth, 'dau')} />
+            <MetricCard label="ARPU" value={money(kpis.arpu)} helper="Avg per paid user" />
+            <MetricCard label="Active Users" value={kpis.totalUsers || 0} helper="All-time users" />
+            <MetricCard label="Forecast MRR" value={money(kpis.forecastNextMonthMrr || 0)} helper="Next month projection" />
           </section>
 
           <div className="grid gap-4 xl:grid-cols-2">
@@ -144,7 +146,7 @@ export default function AdminAnalyticsPage() {
             <section className="ui-card p-4">
               <h2 className="text-lg font-medium text-slate-900">Parsing Stats</h2>
               <div className="mt-3 space-y-2 text-sm">
-                <p className="flex items-center justify-between"><span>Success Rate</span> <strong>{pct(analytics.kpis.parsingSuccessRate)}</strong></p>
+                <p className="flex items-center justify-between"><span>Success Rate</span> <strong>{pct(kpis.parsingSuccessRate)}</strong></p>
                 <p className="flex items-center justify-between"><span>Successful Parses</span> <strong>{parsingTotals.success}</strong></p>
                 <p className="flex items-center justify-between"><span>Failed Parses</span> <strong>{parsingTotals.failed}</strong></p>
                 <p className="flex items-center justify-between"><span>Failure Breakdown</span> <strong>{pct(parseFailRate)} fail</strong></p>
@@ -155,10 +157,10 @@ export default function AdminAnalyticsPage() {
           <section className="ui-card p-4">
             <h2 className="text-lg font-medium text-slate-900">AI Token Usage</h2>
             <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">
-              <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{number(analytics.tokenUsageSummary?.totalTokens)}</strong></p>
-              <p className="flex items-center justify-between"><span>Avg tokens / analysis</span> <strong>{number(analytics.tokenUsageSummary?.avgTokensPerAnalysis)}</strong></p>
-              <p className="flex items-center justify-between"><span>Total estimated cost</span> <strong>{money(analytics.tokenUsageSummary?.totalEstimatedCostUsd || 0)}</strong></p>
-              <p className="flex items-center justify-between"><span>Missing usage metadata</span> <strong>{number(analytics.tokenUsageSummary?.usageUnavailableCount)}</strong></p>
+              <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{number(tokenUsageSummary.totalTokens)}</strong></p>
+              <p className="flex items-center justify-between"><span>Avg tokens / analysis</span> <strong>{number(tokenUsageSummary.avgTokensPerAnalysis)}</strong></p>
+              <p className="flex items-center justify-between"><span>Total estimated cost</span> <strong>{money(tokenUsageSummary.totalEstimatedCostUsd || 0)}</strong></p>
+              <p className="flex items-center justify-between"><span>Missing usage metadata</span> <strong>{number(tokenUsageSummary.usageUnavailableCount)}</strong></p>
             </div>
             <div className="mt-4 overflow-auto">
               <table className="min-w-full text-sm">
