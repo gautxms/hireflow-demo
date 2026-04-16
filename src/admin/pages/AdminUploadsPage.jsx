@@ -8,8 +8,8 @@ import useSharedTableState from '../hooks/useSharedTableState'
 const STATUS_OPTIONS = ['all', 'pending', 'processing', 'complete', 'failed']
 
 const COLUMN_PRESETS = [
-  { id: 'default', label: 'Default columns', columns: ['fileName', 'email', 'status', 'createdAt', 'parseDurationMs'] },
-  { id: 'failures', label: 'Failure triage', columns: ['fileName', 'email', 'status', 'failureReason', 'createdAt'] },
+  { id: 'default', label: 'Default columns', columns: ['fileName', 'userEmail', 'parseStatus', 'createdAt', 'parseDurationMs'] },
+  { id: 'failures', label: 'Failure triage', columns: ['fileName', 'userEmail', 'parseStatus', 'parseError', 'createdAt'] },
 ]
 
 const FILTER_PRESETS = [
@@ -71,9 +71,9 @@ export default function AdminUploadsPage({ onOpenDetails }) {
   const visibleColumnKeys = useMemo(() => COLUMN_PRESETS.find((preset) => preset.id === activePreset)?.columns || COLUMN_PRESETS[0].columns, [activePreset])
   const allColumns = useMemo(() => ([
     { key: 'fileName', label: 'File', sortable: true, render: (row) => row.fileName || row.filename || '—' },
-    { key: 'email', label: 'Email', sortable: true, render: (row) => row.email || '—' },
-    { key: 'status', label: 'Status', sortable: true, render: (row) => <span className="capitalize">{row.status || 'unknown'}</span> },
-    { key: 'failureReason', label: 'Failure', sortable: true, render: (row) => row.failureReason || '—' },
+    { key: 'userEmail', label: 'Email', sortable: true, render: (row) => row.userEmail || '—' },
+    { key: 'parseStatus', label: 'Status', sortable: true, render: (row) => <span className="capitalize">{row.parseStatus || 'unknown'}</span> },
+    { key: 'parseError', label: 'Failure', sortable: true, render: (row) => row.parseError || '—' },
     { key: 'createdAt', label: 'Created', sortable: true, render: (row) => formatDate(row.createdAt) },
     { key: 'parseDurationMs', label: 'Parse ms', sortable: true, render: (row) => Number(row.parseDurationMs || 0).toLocaleString() },
   ]), [])
@@ -144,10 +144,10 @@ export default function AdminUploadsPage({ onOpenDetails }) {
         renderDetails={(upload) => (
           <div className="space-y-2 text-sm">
             <p><strong>File:</strong> {upload.fileName || upload.filename || '—'}</p>
-            <p><strong>Email:</strong> {upload.email || '—'}</p>
-            <p><strong>Status:</strong> {upload.status || '—'}</p>
+            <p><strong>Email:</strong> {upload.userEmail || '—'}</p>
+            <p><strong>Status:</strong> {upload.parseStatus || '—'}</p>
             <p><strong>Created:</strong> {formatDate(upload.createdAt)}</p>
-            <p><strong>Failure reason:</strong> {upload.failureReason || '—'}</p>
+            <p><strong>Failure reason:</strong> {upload.parseError || '—'}</p>
             <button type="button" className="mt-2 rounded-md border border-slate-300 px-3 py-1.5" onClick={() => openDetails(upload.id)}>
               Open full upload details
             </button>
