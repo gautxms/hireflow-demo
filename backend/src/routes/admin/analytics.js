@@ -79,22 +79,60 @@ function parseRequestFilters(req) {
   return { start: range.start, end: range.end, planType: safePlanType }
 }
 
+function isRecoverableAnalyticsSchemaError(error) {
+  const code = String(error?.code || '')
+  return code === '42P01' || code === '42703'
+}
+
+function buildFallbackAnalytics({ start, end, planType }) {
+  return {
+    filters: {
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+      planType,
+    },
+    kpis: {
+      totalUsers: 0,
+      mrr: 0,
+      arr: 0,
+      churnRate: 0,
+      arpu: 0,
+      parsingSuccessRate: 0,
+      forecastNextMonthMrr: 0,
+      conversionRate: 0,
+      feedbackCount: 0,
+    },
+    revenueTrend: [],
+    userGrowth: [],
+    conversionFunnel: { signups: 0, verified: 0, paid: 0 },
+    parsingTrend: [],
+    planBreakdown: [],
+    retentionCohorts: [],
+    apiUsage: [],
+    feedbackSummary: { total_feedback: 0, helpful_count: 0, unhelpful_count: 0, flagged_count: 0 },
+    feedbackTrend: [],
+    feedbackExport: [],
+    generatedAt: new Date().toISOString(),
+  }
+}
+
 async function loadAnalytics({ start, end, planType }) {
   const planFilter = planType === 'all' ? null : planType
 
-  const [
-    kpiResult,
-    growthResult,
-    revenueTrendResult,
-    conversionResult,
-    parsingResult,
-    planBreakdownResult,
-    retentionResult,
-    apiUsageResult,
-    feedbackSummaryResult,
-    feedbackTrendResult,
-    feedbackCommentsResult,
-  ] = await Promise.all([
+  try {
+    const [
+      kpiResult,
+      growthResult,
+      revenueTrendResult,
+      conversionResult,
+      parsingResult,
+      planBreakdownResult,
+      retentionResult,
+      apiUsageResult,
+      feedbackSummaryResult,
+      feedbackTrendResult,
+      feedbackCommentsResult,
+    ] = await Promise.all([
     pool.query(
       `WITH scoped_users AS (
          SELECT id, created_at, email_verified, subscription_plan, subscription_status, cancellation_effective_at
@@ -303,43 +341,51 @@ async function loadAnalytics({ start, end, planType }) {
     ),
   ])
 
-  const kpis = kpiResult.rows[0] || {}
-  const revenueTrend = revenueTrendResult.rows.map((row) => ({
-    month: row.month,
-    mrr: Number(row.mrr || 0),
-  }))
+    const kpis = kpiResult.rows[0] || {}
+    const revenueTrend = revenueTrendResult.rows.map((row) => ({
+      month: row.month,
+      mrr: Number(row.mrr || 0),
+    }))
 
-  const conversion = conversionResult.rows[0] || { signups: 0, verified: 0, paid: 0 }
-  const feedbackSummary = feedbackSummaryResult.rows[0] || { total_feedback: 0, helpful_count: 0, unhelpful_count: 0, flagged_count: 0 }
+    const conversion = conversionResult.rows[0] || { signups: 0, verified: 0, paid: 0 }
+    const feedbackSummary = feedbackSummaryResult.rows[0] || { total_feedback: 0, helpful_count: 0, unhelpful_count: 0, flagged_count: 0 }
 
-  return {
-    filters: {
-      startDate: start.toISOString().slice(0, 10),
-      endDate: end.toISOString().slice(0, 10),
-      planType,
-    },
-    kpis: {
-      totalUsers: Number(kpis.total_users || 0),
-      mrr: Number(kpis.mrr || 0),
-      arr: Number(kpis.arr || 0),
-      churnRate: Number(kpis.churn_rate || 0),
-      arpu: Number(kpis.arpu || 0),
-      parsingSuccessRate: Number(kpis.parsing_success_rate || 0),
-      forecastNextMonthMrr: forecastNextMonthMrr(revenueTrend),
-      conversionRate: Number(conversion.signups || 0) === 0 ? 0 : Number((((Number(conversion.paid || 0) / Number(conversion.signups || 0)) * 100).toFixed(2))),
-      feedbackCount: Number(feedbackSummary.total_feedback || 0),
-    },
-    revenueTrend,
-    userGrowth: growthResult.rows,
-    conversionFunnel: conversion,
-    parsingTrend: parsingResult.rows,
-    planBreakdown: planBreakdownResult.rows,
-    retentionCohorts: retentionResult.rows,
-    apiUsage: apiUsageResult.rows,
-    feedbackSummary: feedbackSummary,
-    feedbackTrend: feedbackTrendResult.rows,
-    feedbackExport: feedbackCommentsResult.rows,
-    generatedAt: new Date().toISOString(),
+    return {
+      filters: {
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10),
+        planType,
+      },
+      kpis: {
+        totalUsers: Number(kpis.total_users || 0),
+        mrr: Number(kpis.mrr || 0),
+        arr: Number(kpis.arr || 0),
+        churnRate: Number(kpis.churn_rate || 0),
+        arpu: Number(kpis.arpu || 0),
+        parsingSuccessRate: Number(kpis.parsing_success_rate || 0),
+        forecastNextMonthMrr: forecastNextMonthMrr(revenueTrend),
+        conversionRate: Number(conversion.signups || 0) === 0 ? 0 : Number((((Number(conversion.paid || 0) / Number(conversion.signups || 0)) * 100).toFixed(2))),
+        feedbackCount: Number(feedbackSummary.total_feedback || 0),
+      },
+      revenueTrend,
+      userGrowth: growthResult.rows,
+      conversionFunnel: conversion,
+      parsingTrend: parsingResult.rows,
+      planBreakdown: planBreakdownResult.rows,
+      retentionCohorts: retentionResult.rows,
+      apiUsage: apiUsageResult.rows,
+      feedbackSummary: feedbackSummary,
+      feedbackTrend: feedbackTrendResult.rows,
+      feedbackExport: feedbackCommentsResult.rows,
+      generatedAt: new Date().toISOString(),
+    }
+  } catch (error) {
+    if (isRecoverableAnalyticsSchemaError(error)) {
+      console.warn('[AdminAnalytics] Returning fallback analytics due to missing DB relation/column:', error.message)
+      return buildFallbackAnalytics({ start, end, planType })
+    }
+
+    throw error
   }
 }
 
