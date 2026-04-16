@@ -109,11 +109,11 @@ export default function AdminUploadsPage({ onOpenDetails }) {
         searchPlaceholder="Search filename or email"
         filterControls={(
           <>
-            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.status} onChange={(event) => updateFilters({ status: event.target.value })}>
+            <select className="ui-input" value={filters.status} onChange={(event) => updateFilters({ status: event.target.value })}>
               {STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
-            <input type="date" className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.startDate} onChange={(event) => updateFilters({ startDate: event.target.value })} />
-            <input type="date" className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={filters.endDate} onChange={(event) => updateFilters({ endDate: event.target.value })} />
+            <input type="date" className="ui-input" value={filters.startDate} onChange={(event) => updateFilters({ startDate: event.target.value })} />
+            <input type="date" className="ui-input" value={filters.endDate} onChange={(event) => updateFilters({ endDate: event.target.value })} />
           </>
         )}
         sort={{ field: sortField, direction: sortDirection || 'desc' }}
@@ -160,7 +160,7 @@ export default function AdminUploadsPage({ onOpenDetails }) {
 
 function StatCard({ label, value, valueClassName = 'text-slate-900' }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="ui-card p-4">
       <p className="text-sm text-slate-500">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${valueClassName}`}>{value}</p>
     </div>

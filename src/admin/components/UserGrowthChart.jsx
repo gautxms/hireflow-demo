@@ -4,7 +4,7 @@ export default function UserGrowthChart({ data = [] }) {
   const pct = (value) => Math.max(2, (Number(value || 0) / max) * 100)
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="ui-card p-4">
       <h2 className="text-lg font-medium text-slate-900">User Growth (DAU / WAU / MAU)</h2>
       <p className="mt-1 text-xs text-slate-500">Latest day: {new Date(latest.day).toLocaleDateString()}</p>
       <div className="mt-4 space-y-3">

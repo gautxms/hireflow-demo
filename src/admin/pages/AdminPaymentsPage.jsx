@@ -103,9 +103,9 @@ export default function AdminPaymentsPage() {
 
       {data.revenueSummary ? (
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">MRR: <strong>{moneyFromDollars(data.revenueSummary.mrr)}</strong></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4">ARR: <strong>{moneyFromDollars(data.revenueSummary.arr)}</strong></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4">Churn: <strong>{Number(data.revenueSummary.churnRate || 0).toFixed(2)}%</strong></div>
+          <div className="ui-card p-4">MRR: <strong>{moneyFromDollars(data.revenueSummary.mrr)}</strong></div>
+          <div className="ui-card p-4">ARR: <strong>{moneyFromDollars(data.revenueSummary.arr)}</strong></div>
+          <div className="ui-card p-4">Churn: <strong>{Number(data.revenueSummary.churnRate || 0).toFixed(2)}%</strong></div>
         </div>
       ) : null}
 
@@ -122,7 +122,7 @@ export default function AdminPaymentsPage() {
         onSearchChange={setSearch}
         searchPlaceholder="Search transaction or customer"
         filterControls={(
-          <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <select className="ui-input" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="all">All statuses</option>
             <option value="paid">Paid</option>
             <option value="failed">Failed</option>
@@ -162,7 +162,7 @@ export default function AdminPaymentsPage() {
         )}
       />
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="ui-card p-4">
         <h2 className="text-lg font-medium text-slate-900">Refund history</h2>
         <ul className="mt-3 space-y-2 text-sm">
           {(data.auditTrail || []).map((item) => <li key={item.id} className="rounded border border-slate-100 p-2">{dateLabel(item.createdAt)} · tx: {item.transactionId} · {item.reason} · {money(item.amountCents)} · admin: {item.adminId}</li>)}

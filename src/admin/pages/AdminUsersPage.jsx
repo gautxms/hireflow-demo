@@ -92,7 +92,7 @@ export default function AdminUsersPage() {
         onSearchChange={setSearch}
         searchPlaceholder="Search by email or company"
         filterControls={(
-          <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <select className="ui-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="all">All statuses</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>

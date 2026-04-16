@@ -41,12 +41,12 @@ export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) 
         <div className="flex flex-wrap gap-2">
           <a
             href={`${API_BASE}/admin/uploads/${upload.id}/raw-text`}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="ui-btn"
           >
             Download Raw Text
           </a>
           <button
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="ui-btn"
             onClick={downloadParseResult}
           >
             Download Parse Result
@@ -68,7 +68,7 @@ export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) 
         <InfoTile label="File size" value={bytes(upload.fileSize)} />
         <InfoTile label="File format" value={upload.format || upload.fileType} />
         <InfoTile label="Last retried" value={date(retriedAt)} />
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="ui-card p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Parse status</p>
           <p className="mt-2">
             <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles(upload.parseStatus)}`}>
@@ -79,14 +79,14 @@ export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) 
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <section className="ui-card p-4">
           <h2 className="text-lg font-medium text-slate-900">Parse Result</h2>
           <pre className="mt-3 max-h-80 overflow-auto rounded border border-slate-100 bg-slate-50 p-3 text-xs text-slate-800">
             {JSON.stringify(upload.parseResult || {}, null, 2)}
           </pre>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <section className="ui-card p-4">
           <h2 className="text-lg font-medium text-slate-900">Errors</h2>
           <div className="mt-3 rounded border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">
             {upload.parseError || 'No parse errors.'}
@@ -94,7 +94,7 @@ export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) 
         </section>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="ui-card p-4">
         <h2 className="text-lg font-medium text-slate-900">Extracted Text Preview</h2>
         <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded border border-slate-100 bg-slate-50 p-3 text-xs leading-relaxed text-slate-800">
           {upload.rawText || 'No extracted text available.'}
@@ -106,7 +106,7 @@ export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) 
 
 function InfoTile({ label, value }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="ui-card p-4">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-sm font-medium text-slate-900">{value || '—'}</p>
     </div>

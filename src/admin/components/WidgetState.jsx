@@ -1,5 +1,5 @@
 function SkeletonRow() {
-  return <div className="h-4 animate-pulse rounded bg-slate-200" />
+  return <div className="h-4 animate-pulse rounded bg-slate-300" />
 }
 
 export function TableSkeleton({ rows = 4, columns = 5 }) {
@@ -18,10 +18,10 @@ export function TableSkeleton({ rows = 4, columns = 5 }) {
 
 export function EmptyState({ title, description, action }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+    <div className="ui-card rounded-lg border-dashed bg-slate-50 p-5 text-center">
       <p className="text-3xl" aria-hidden>📭</p>
       <p className="mt-1 font-medium text-slate-800">{title}</p>
-      <p className="mt-1 text-sm text-slate-600">{description}</p>
+      <p className="mt-1 text-sm text-slate-700">{description}</p>
       {action || null}
     </div>
   )
