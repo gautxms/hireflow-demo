@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
+import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
 
 function toISODate(value) {
   return value.toISOString().slice(0, 10)
@@ -16,34 +17,21 @@ function getRangeDates(rangeKey) {
   return { startDate: toISODate(start), endDate: toISODate(end) }
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url, { credentials: 'include' })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw new Error(payload.error || 'Failed to load admin analytics')
-  }
-  return payload
-}
-
 export default function useAdminAnalytics() {
   const defaults = useMemo(() => getRangeDates('90d'), [])
   const [range, setRange] = useState('90d')
   const [filters, setFilters] = useState(defaults)
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
 
   const loadAnalytics = useCallback(async ({ silent = false, currentFilters = filters } = {}) => {
     try {
       if (!silent) setLoading(true)
-      setError('')
+      setError(null)
 
-      const params = new URLSearchParams({
-        startDate: currentFilters.startDate,
-        endDate: currentFilters.endDate,
-      })
-
-      const payload = await fetchJson(`${API_BASE}/admin/analytics?${params.toString()}`)
+      const params = new URLSearchParams({ startDate: currentFilters.startDate, endDate: currentFilters.endDate })
+      const payload = await adminFetchJson(`${API_BASE}/admin/analytics?${params.toString()}`, 'Failed to load admin analytics')
 
       setAnalytics({
         filters: payload.filters,
@@ -57,7 +45,7 @@ export default function useAdminAnalytics() {
         generatedAt: payload.generatedAt,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown analytics error')
+      setError(getMappedError(err, 'Analytics could not be loaded.'))
     } finally {
       if (!silent) setLoading(false)
     }
@@ -65,7 +53,6 @@ export default function useAdminAnalytics() {
 
   useEffect(() => {
     void loadAnalytics({ currentFilters: filters })
-
     const intervalId = window.setInterval(() => {
       void loadAnalytics({ silent: true, currentFilters: filters })
     }, 5 * 60 * 1000)
@@ -89,15 +76,5 @@ export default function useAdminAnalytics() {
     window.open(`${API_BASE}/admin/analytics?${params.toString()}`, '_blank', 'noopener,noreferrer')
   }
 
-  return {
-    analytics,
-    loading,
-    error,
-    filters,
-    range,
-    applyPreset,
-    updateCustomDate,
-    refresh: () => loadAnalytics({ currentFilters: filters }),
-    exportCsv,
-  }
+  return { analytics, loading, error, filters, range, applyPreset, updateCustomDate, refresh: () => loadAnalytics({ currentFilters: filters }), exportCsv }
 }

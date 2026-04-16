@@ -1,4 +1,6 @@
 import UploadsTable from '../components/UploadsTable'
+import StateAlert from '../components/StateAlert'
+import { EmptyState } from '../components/WidgetState'
 import { useAdminUploads } from '../hooks/useAdminUploads'
 
 const STATUS_OPTIONS = ['all', 'pending', 'processing', 'complete', 'failed']
@@ -20,6 +22,7 @@ export default function AdminUploadsPage({ onOpenDetails }) {
     setPage,
     setPageSize,
     updateFilters,
+    reload,
   } = useAdminUploads()
 
   const openDetails = (uploadId) => {
@@ -115,7 +118,11 @@ export default function AdminUploadsPage({ onOpenDetails }) {
         </div>
       </div>
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {error ? <StateAlert state={error} onRetry={() => void reload()} /> : null}
+
+      {!loadingList && !error && !uploads.length ? (
+        <EmptyState title="No uploads found" description="No upload records match the current filters." />
+      ) : null}
 
       <UploadsTable
         uploads={uploads}

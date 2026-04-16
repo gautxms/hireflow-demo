@@ -3,6 +3,7 @@ import ErrorLogsTable from '../components/ErrorLogsTable'
 import WebhookAudit from '../components/WebhookAudit'
 import useAdminLogs from '../hooks/useAdminLogs'
 import API_BASE from '../../config/api'
+import StateAlert from '../components/StateAlert'
 
 function ErrorRateChart({ items }) {
   const points = useMemo(() => {
@@ -109,7 +110,7 @@ export default function AdminLogsPage() {
         </div>
       </section>
 
-      {error && <p style={{ color: '#b91c1c' }}>{error}</p>}
+      {error ? <StateAlert state={error} onRetry={() => void refreshLogs()} /> : null}
       <ErrorLogsTable items={items} loading={loading} onResolve={handleResolve} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -122,7 +123,7 @@ export default function AdminLogsPage() {
       </div>
 
       <ErrorRateChart items={items} />
-      <WebhookAudit items={webhooks} loading={webhookLoading} error={webhookError} />
+      <WebhookAudit items={webhooks} loading={webhookLoading} error={webhookError} onRetry={() => void refreshWebhooks()} />
     </main>
   )
 }

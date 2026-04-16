@@ -3,6 +3,8 @@ import MetricCard from '../components/MetricCard'
 import RevenueChart from '../components/RevenueChart'
 import UserGrowthChart from '../components/UserGrowthChart'
 import useAdminAnalytics from '../hooks/useAdminAnalytics'
+import StateAlert from '../components/StateAlert'
+import { EmptyState } from '../components/WidgetState'
 
 function money(amount = 0) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(amount || 0))
@@ -92,10 +94,14 @@ export default function AdminAnalyticsPage() {
         </div>
       </section>
 
-      {loading ? <p className="text-slate-600">Loading analytics…</p> : null}
-      {error ? <p className="text-rose-600">{error}</p> : null}
+      {loading ? <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-600">Loading analytics…</div> : null}
+      {error ? <StateAlert state={error} onRetry={refresh} /> : null}
 
-      {analytics ? (
+      {!loading && !error && !analytics ? (
+        <EmptyState title="No analytics data yet" description="No records match the selected date range. Try expanding the range and refresh." action={<button onClick={refresh} className="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm">Retry</button>} />
+      ) : null}
+
+      {analytics && !error ? (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="MRR" value={money(analytics.kpis.mrr)} trend={getGrowthTrend(analytics.userGrowth, 'mau')} />

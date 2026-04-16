@@ -1,3 +1,5 @@
+import { EmptyState, TableSkeleton } from './WidgetState'
+
 function formatDate(value) {
   if (!value) return '—'
   return new Date(value).toLocaleString()
@@ -27,32 +29,24 @@ export default function UsersTable({ users, loading, sortBy, sortDirection, onSo
             <th className="px-4 py-3">Actions</th>
           </tr>
         </thead>
-        <tbody>
-          {loading ? (
-            <tr><td className="px-4 py-4 text-slate-500" colSpan={5}>Loading users…</td></tr>
-          ) : users.map((user) => (
-            <tr key={user.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => onSelectUser(user)}>
-              <td className="px-4 py-3">{user.email}</td>
-              <td className="px-4 py-3">{user.company || '—'}</td>
-              <td className="px-4 py-3">{user.subscription_status || '—'}</td>
-              <td className="px-4 py-3">{formatDate(user.created_at)}</td>
-              <td className="px-4 py-3">
-                <button
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium text-white ${user.status === 'blocked' ? 'bg-emerald-600' : 'bg-rose-600'}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onToggleBlock(user)
-                  }}
-                >
-                  {user.status === 'blocked' ? 'Unblock' : 'Block'}
-                </button>
-              </td>
-            </tr>
-          ))}
-          {!loading && !users.length ? (
-            <tr><td className="px-4 py-4 text-slate-500" colSpan={5}>No users found.</td></tr>
-          ) : null}
-        </tbody>
+        {loading ? <TableSkeleton columns={5} rows={5} /> : (
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => onSelectUser(user)}>
+                <td className="px-4 py-3">{user.email}</td>
+                <td className="px-4 py-3">{user.company || '—'}</td>
+                <td className="px-4 py-3">{user.subscription_status || '—'}</td>
+                <td className="px-4 py-3">{formatDate(user.created_at)}</td>
+                <td className="px-4 py-3">
+                  <button className={`rounded-md px-3 py-1.5 text-xs font-medium text-white ${user.status === 'blocked' ? 'bg-emerald-600' : 'bg-rose-600'}`} onClick={(event) => { event.stopPropagation(); onToggleBlock(user) }}>
+                    {user.status === 'blocked' ? 'Unblock' : 'Block'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!users.length ? <tr><td colSpan={5} className="p-4"><EmptyState title="No users found" description="Try a different search or status filter." /></td></tr> : null}
+          </tbody>
+        )}
       </table>
     </div>
   )

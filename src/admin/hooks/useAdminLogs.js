@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
+import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -15,9 +16,9 @@ export default function useAdminLogs(initialFilters = {}) {
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
   const [webhookLoading, setWebhookLoading] = useState(false)
-  const [webhookError, setWebhookError] = useState('')
+  const [webhookError, setWebhookError] = useState(null)
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -48,23 +49,15 @@ export default function useAdminLogs(initialFilters = {}) {
 
   const refreshLogs = useCallback(async () => {
     setLoading(true)
-    setError('')
+    setError(null)
 
     try {
-      const response = await fetch(`${API_BASE}/admin/logs/errors?${query}`, {
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch error logs')
-      }
-
-      const payload = await response.json()
+      const payload = await adminFetchJson(`${API_BASE}/admin/logs/errors?${query}`, 'Failed to fetch error logs')
       setItems(payload.items || [])
       setTotal(Number(payload.total || 0))
       setPages(Number(payload.pages || 1))
     } catch (fetchError) {
-      setError(fetchError.message || 'Failed to load logs')
+      setError(getMappedError(fetchError, 'Failed to load logs'))
       setItems([])
     } finally {
       setLoading(false)
@@ -73,21 +66,13 @@ export default function useAdminLogs(initialFilters = {}) {
 
   const refreshWebhooks = useCallback(async (page = 1) => {
     setWebhookLoading(true)
-    setWebhookError('')
+    setWebhookError(null)
 
     try {
-      const response = await fetch(`${API_BASE}/admin/logs/webhooks?page=${page}&pageSize=20`, {
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch webhook audit trail')
-      }
-
-      const payload = await response.json()
+      const payload = await adminFetchJson(`${API_BASE}/admin/logs/webhooks?page=${page}&pageSize=20`, 'Failed to fetch webhook audit trail')
       setWebhooks(payload.items || [])
     } catch (fetchError) {
-      setWebhookError(fetchError.message || 'Failed to load webhook history')
+      setWebhookError(getMappedError(fetchError, 'Failed to load webhook history'))
       setWebhooks([])
     } finally {
       setWebhookLoading(false)

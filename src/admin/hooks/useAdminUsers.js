@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
+import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
 
 const PAGE_SIZE = 50
 const SORTABLE_FIELDS = ['email', 'company', 'subscription_status', 'created_at']
@@ -47,24 +48,22 @@ export default function useAdminUsers() {
   const [sortDirection, setSortDirection] = useState('desc')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
 
   const loadUsers = useCallback(async ({ limit = PAGE_SIZE, offset = 0, status = 'all' } = {}) => {
     try {
       setLoading(true)
-      setError('')
+      setError(null)
       const params = new URLSearchParams()
       params.set('limit', String(limit))
       params.set('offset', String(offset))
       if (status && status !== 'all') params.set('status', status)
       if (search.trim()) params.set('search', search.trim())
-      const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, { credentials: 'include' })
-      if (!response.ok) throw new Error('Failed to load users')
-      const payload = await response.json()
+      const payload = await adminFetchJson(`${API_BASE}/admin/users?${params.toString()}`, 'Failed to load users')
       const list = Array.isArray(payload) ? payload : (payload.users || [])
       setUsers(list.map(normalizeUser))
     } catch (err) {
-      setError(err.message)
+      setError(getMappedError(err, 'Users could not be loaded.'))
     } finally {
       setLoading(false)
     }
