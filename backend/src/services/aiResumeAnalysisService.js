@@ -97,6 +97,43 @@ async function trackTokens(usage = {}, resumeId = 'unknown') {
   await checkBudgetAlert(totalCostThisSession)
 }
 
+function normalizeUsageMetrics(usage) {
+  if (!usage) {
+    return {
+      usageAvailable: false,
+      unavailableReason: 'provider_usage_missing',
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      estimatedCostUsd: null,
+    }
+  }
+
+  const inputTokens = Number(usage.input_tokens)
+  const outputTokens = Number(usage.output_tokens)
+  if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens)) {
+    return {
+      usageAvailable: false,
+      unavailableReason: 'provider_usage_invalid',
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      estimatedCostUsd: null,
+    }
+  }
+
+  const estimatedCostUsd = (inputTokens / 1000) * 0.003 + (outputTokens / 1000) * 0.015
+
+  return {
+    usageAvailable: true,
+    unavailableReason: null,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)),
+  }
+}
+
 export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY not configured. Claude analysis unavailable.')
@@ -169,7 +206,8 @@ export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filena
       ],
     })
 
-    if (response.usage) {
+    const tokenUsage = normalizeUsageMetrics(response.usage)
+    if (tokenUsage.usageAvailable) {
       await trackTokens(response.usage, filename)
     }
 
@@ -183,7 +221,12 @@ export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filena
       throw new Error('Claude response is missing candidates array')
     }
 
-    return result
+    return {
+      result,
+      tokenUsage,
+      provider: 'anthropic',
+      model: MODEL,
+    }
   } catch (error) {
     console.error('[Claude] Analysis failed:', {
       error: error.message,

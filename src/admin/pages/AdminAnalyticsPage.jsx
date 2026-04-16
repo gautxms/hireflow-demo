@@ -14,6 +14,10 @@ function pct(value = 0) {
   return `${Number(value || 0).toFixed(2)}%`
 }
 
+function number(value = 0) {
+  return Number(value || 0).toLocaleString()
+}
+
 function getGrowthTrend(series = [], key) {
   const first = Number(series[0]?.[key] || 0)
   const last = Number(series[series.length - 1]?.[key] || 0)
@@ -147,6 +151,40 @@ export default function AdminAnalyticsPage() {
               </div>
             </section>
           </div>
+
+          <section className="ui-card p-4">
+            <h2 className="text-lg font-medium text-slate-900">AI Token Usage</h2>
+            <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">
+              <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{number(analytics.tokenUsageSummary?.totalTokens)}</strong></p>
+              <p className="flex items-center justify-between"><span>Avg tokens / analysis</span> <strong>{number(analytics.tokenUsageSummary?.avgTokensPerAnalysis)}</strong></p>
+              <p className="flex items-center justify-between"><span>Total estimated cost</span> <strong>{money(analytics.tokenUsageSummary?.totalEstimatedCostUsd || 0)}</strong></p>
+              <p className="flex items-center justify-between"><span>Missing usage metadata</span> <strong>{number(analytics.tokenUsageSummary?.usageUnavailableCount)}</strong></p>
+            </div>
+            <div className="mt-4 overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500">
+                    <th className="py-2 pr-3">Day</th>
+                    <th className="py-2 pr-3">Total tokens</th>
+                    <th className="py-2 pr-3">Input</th>
+                    <th className="py-2 pr-3">Output</th>
+                    <th className="py-2">Estimated cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(analytics.tokenUsageTrend || []).slice(-14).map((row) => (
+                    <tr key={String(row.day)} className="border-t border-slate-100">
+                      <td className="py-2 pr-3">{new Date(row.day).toLocaleDateString()}</td>
+                      <td className="py-2 pr-3">{number(row.totalTokens)}</td>
+                      <td className="py-2 pr-3">{number(row.inputTokens)}</td>
+                      <td className="py-2 pr-3">{number(row.outputTokens)}</td>
+                      <td className="py-2">{money(row.estimatedCostUsd || 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
           <section className="ui-card p-4">
             <h2 className="text-lg font-medium text-slate-900">Retention Cohorts Heatmap</h2>

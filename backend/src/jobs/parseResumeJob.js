@@ -10,6 +10,59 @@ export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
 }
 
+function normalizeUnavailableReason(reason) {
+  const raw = String(reason || '').trim()
+  return raw ? raw.slice(0, 180) : 'unknown'
+}
+
+async function persistTokenUsageMetric({
+  resumeId,
+  parseJobId,
+  userId,
+  jobDescriptionId,
+  provider = 'anthropic',
+  model = null,
+  tokenUsage,
+  metadata = {},
+}) {
+  const usageAvailable = Boolean(tokenUsage?.usageAvailable)
+  const unavailableReason = usageAvailable ? null : normalizeUnavailableReason(tokenUsage?.unavailableReason)
+
+  await pool.query(
+    `INSERT INTO resume_analysis_token_usage (
+       resume_id,
+       parse_job_id,
+       user_id,
+       job_description_id,
+       provider,
+       model,
+       usage_available,
+       unavailable_reason,
+       input_tokens,
+       output_tokens,
+       total_tokens,
+       estimated_cost_usd,
+       metadata
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
+    [
+      resumeId,
+      parseJobId ? String(parseJobId) : null,
+      userId || null,
+      jobDescriptionId || null,
+      provider,
+      model,
+      usageAvailable,
+      unavailableReason,
+      usageAvailable ? Number(tokenUsage.inputTokens || 0) : null,
+      usageAvailable ? Number(tokenUsage.outputTokens || 0) : null,
+      usageAvailable ? Number(tokenUsage.totalTokens || 0) : null,
+      usageAvailable ? Number(tokenUsage.estimatedCostUsd || 0) : null,
+      JSON.stringify(metadata || {}),
+    ],
+  )
+}
+
 async function setJobState(jobId, fields) {
   const columns = Object.keys(fields)
   const values = Object.values(fields)
@@ -57,7 +110,24 @@ async function runParse(job) {
 
   try {
     console.log('[Parse] Attempting Claude analysis...')
-    const aiResult = await analyzeResumeWithClaude(fileBufferBase64, mimeType, filename)
+    const aiResponse = await analyzeResumeWithClaude(fileBufferBase64, mimeType, filename)
+    const aiResult = aiResponse?.result || {}
+    await persistTokenUsageMetric({
+      resumeId,
+      parseJobId: job.id,
+      userId: job.data.userId,
+      jobDescriptionId: job.data.jobDescriptionId || null,
+      provider: aiResponse?.provider || 'anthropic',
+      model: aiResponse?.model || null,
+      tokenUsage: aiResponse?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
+      metadata: {
+        source: 'claude_primary_parse',
+        filename,
+      },
+    }).catch((persistError) => {
+      console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
+    })
+
     const aiCandidates = Array.isArray(aiResult?.candidates) ? aiResult.candidates : []
     const aiConfidenceValues = aiCandidates.flatMap((candidate) =>
       Object.values(candidate?.confidenceScores || candidate?.confidence || {}),
@@ -91,6 +161,23 @@ async function runParse(job) {
       usedClaude = true
     }
   } catch (aiError) {
+    await persistTokenUsageMetric({
+      resumeId,
+      parseJobId: job.id,
+      userId: job.data.userId,
+      jobDescriptionId: job.data.jobDescriptionId || null,
+      tokenUsage: {
+        usageAvailable: false,
+        unavailableReason: `provider_request_failed:${normalizeUnavailableReason(aiError.message)}`,
+      },
+      metadata: {
+        source: 'claude_primary_parse',
+        filename,
+      },
+    }).catch((persistError) => {
+      console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
+    })
+
     console.warn('[Parse] Claude failed, falling back to OCR:', aiError.message)
     analysisResult = await runParseWithOcrFallback({
       filename,
@@ -118,7 +205,6 @@ async function runParse(job) {
     methodUsed: analysisResult?.methodUsed || (usedClaude ? 'anthropic-claude' : 'ocr-fallback'),
     candidates,
     ...analysisResult,
-    candidates,
   }
 
   const parseDurationMs = Date.now() - startedAt
