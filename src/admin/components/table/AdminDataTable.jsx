@@ -93,7 +93,7 @@ export default function AdminDataTable({
         {filterPresets.length ? (
           <div className="flex flex-wrap gap-2">
             {filterPresets.map((preset) => (
-              <button key={preset.id} type="button" className="ui-badge" onClick={() => onApplyFilterPreset?.(preset.id)}>
+              <button key={preset.id} type="button" className="ui-btn" onClick={() => onApplyFilterPreset?.(preset.id)}>
                 {preset.label}
               </button>
             ))}
@@ -114,8 +114,8 @@ export default function AdminDataTable({
             Save chip
           </button>
           {savedFilterChips.map((chip) => (
-            <span key={chip.id} className="ui-badge inline-flex items-center gap-1">
-              <button type="button" onClick={() => onApplySavedFilter?.(chip.id)}>{chip.label}</button>
+            <span key={chip.id} className="ui-chip">
+              <button type="button" className="ui-btn ui-btn--ghost px-2 py-1 text-xs" onClick={() => onApplySavedFilter?.(chip.id)}>{chip.label}</button>
               <button type="button" className="ui-btn px-2 py-0.5 text-xs" onClick={() => onRemoveSavedFilter?.(chip.id)} aria-label={`Remove ${chip.label} filter`}>×</button>
             </span>
           ))}

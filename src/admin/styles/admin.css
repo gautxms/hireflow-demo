@@ -1,4 +1,4 @@
-:root {
+.admin-shell-v2 {
   --admin-font: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --admin-bg: #f4f7fb;
   --admin-surface: #ffffff;
@@ -37,6 +37,7 @@
 }
 
 .admin-shell-v2 :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
   outline: 3px solid color-mix(in srgb, var(--admin-focus), transparent 65%);
   outline-offset: 2px;
 }
@@ -77,6 +78,33 @@
 
 .ui-btn--primary:hover {
   background: var(--admin-primary-strong);
+}
+
+
+.ui-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--admin-text-muted);
+}
+
+.ui-btn--ghost:hover {
+  background: var(--admin-surface-subtle);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+
+.ui-input::placeholder {
+  color: var(--admin-text-subtle);
+}
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  padding: 0.12rem 0.25rem 0.12rem 0.6rem;
+  background: var(--admin-surface-subtle);
 }
 
 .ui-input {
