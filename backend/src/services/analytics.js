@@ -14,6 +14,13 @@ const ALLOWED_EVENTS = new Set([
   'payment_fail',
   'cancellation',
   'feedback_submitted',
+  'admin_page_load_failed',
+  'admin_filter_used',
+  'admin_export_clicked',
+  'admin_auth_dropoff',
+  'admin_2fa_started',
+  'admin_2fa_completed',
+  'admin_page_feedback_submitted',
 ])
 
 const PII_FIELD_PATTERN = /(email|phone|name|ip|address|password|token)/i

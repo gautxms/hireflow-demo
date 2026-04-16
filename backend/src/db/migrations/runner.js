@@ -14,6 +14,7 @@ const migrationFiles = [
   '011-fix-subscription-and-payment-schema',
   '012-add-admin-2fa-columns',
   '013-fix-admin-email-verification',
+  '014-add-admin-ux-feedback',
 ]
 
 async function ensureMigrationsTable(client) {

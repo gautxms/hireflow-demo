@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import API_BASE from '../../config/api'
+import useAdminUxTracking from './useAdminUxTracking'
 
 const DEFAULT_TIMEOUT_SECONDS = 15 * 60
 const TIMER_TICK_SECONDS = 10
@@ -35,6 +36,7 @@ function toHelpfulMessage(message, fallback) {
 }
 
 export default function useAdminAuth() {
+  const { emitAdminEvent } = useAdminUxTracking()
   const [sessionSecondsLeft, setSessionSecondsLeft] = useState(DEFAULT_TIMEOUT_SECONDS)
   const [warningVisible, setWarningVisible] = useState(false)
   const [status, setStatus] = useState('')
@@ -111,6 +113,7 @@ export default function useAdminAuth() {
     const payload = await response.json().catch(() => ({}))
 
     if (payload.requiresTwoFactor) {
+      void emitAdminEvent({ eventType: 'admin_2fa_started', route: '/admin/login', metadata: { step: 'verification' } })
       setNeedsTwoFactor(true)
       setPendingEmail(email)
       setPendingPassword(password)
@@ -120,16 +123,19 @@ export default function useAdminAuth() {
     }
 
     if (payload.requiresEula) {
+      void emitAdminEvent({ eventType: 'admin_auth_dropoff', route: '/admin/login', metadata: { step: 'eula', reason: 'eula_not_accepted' } })
       setRequiresEula(true)
       setStatus('Please accept the admin EULA to continue.')
       return { requiresEula: true }
     }
 
     if (!response.ok) {
+      void emitAdminEvent({ eventType: 'admin_auth_dropoff', route: '/admin/login', metadata: { step: 'credentials', reason: extractError(payload, 'Login failed') } })
       throw new Error(toHelpfulMessage(extractError(payload, 'Login failed'), 'Login failed'))
     }
 
     if (payload.requiresTwoFactorSetup) {
+      void emitAdminEvent({ eventType: 'admin_2fa_started', route: '/admin/login', metadata: { step: 'setup_required' } })
       setSetupToken(payload.setupToken || '')
       setSetupTokenExpiresAt(payload.setupTokenExpiresAt || null)
       setNeedsTwoFactor(false)
@@ -158,7 +164,7 @@ export default function useAdminAuth() {
     persistSession(payload)
     await loadSessions().catch(() => {})
     return { requiresTwoFactor: false }
-  }, [acceptedEula, loadSessions, persistSession])
+  }, [acceptedEula, emitAdminEvent, loadSessions, persistSession])
 
   const verifySecondFactor = useCallback(async ({ totpCode, backupCode }) => {
     setError('')
@@ -179,6 +185,7 @@ export default function useAdminAuth() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
+      void emitAdminEvent({ eventType: 'admin_auth_dropoff', route: '/admin/login', metadata: { step: '2fa_verification', reason: extractError(payload, '2FA verification failed') } })
       throw new Error(toHelpfulMessage(extractError(payload, '2FA verification failed'), '2FA verification failed'))
     }
 
@@ -190,10 +197,11 @@ export default function useAdminAuth() {
     setTotpPeriodSeconds(Number(payload.totpPeriodSeconds) || DEFAULT_TOTP_PERIOD_SECONDS)
     hasHandledExpiryRef.current = false
     setStatus(payload.usedBackupCode ? 'Signed in with one-time backup code.' : '2FA verified. Access granted.')
+    void emitAdminEvent({ eventType: 'admin_2fa_completed', route: '/admin/login', metadata: { usedBackupCode: Boolean(payload.usedBackupCode) } })
     persistSession(payload)
     await loadSessions().catch(() => {})
     return payload
-  }, [acceptedEulaForPendingLogin, loadSessions, pendingEmail, pendingPassword, persistSession])
+  }, [acceptedEulaForPendingLogin, emitAdminEvent, loadSessions, pendingEmail, pendingPassword, persistSession])
 
   const refreshActivity = useCallback(async () => {
     const response = await fetch(`${API_BASE}/admin/sessions/refresh`, {

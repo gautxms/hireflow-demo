@@ -43,6 +43,7 @@ const AdminSecurityPage = lazy(() => import('./admin/pages/AdminSecurityPage'))
 const AdminLoginPage = lazy(() => import('./admin/pages/AdminLoginPage'))
 const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
 const AdminShell = lazy(() => import('./admin/components/AdminShell'))
+const AdminPageFeedbackWidget = lazy(() => import('./admin/components/AdminPageFeedbackWidget'))
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -323,6 +324,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     const renderAdminSection = (sectionProps, page) => (
       <AdminShell onLogout={logoutAdmin} {...sectionProps}>
         {page}
+        <AdminPageFeedbackWidget routeContext={pathname} />
       </AdminShell>
     )
 

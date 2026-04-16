@@ -178,6 +178,60 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
           </section>
+
+          <section className="ui-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-medium text-slate-900">Weekly UX Health (Founder Review)</h2>
+              <span className="text-xs text-slate-500">
+                {analytics.uxWeeklyReport?.dateRange?.startDate} → {analytics.uxWeeklyReport?.dateRange?.endDate}
+              </span>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="rounded border border-slate-200 p-3 text-sm">
+                <p className="text-slate-500">2FA completion rate</p>
+                <p className="text-xl font-semibold text-slate-900">{pct(analytics.uxWeeklyReport?.twoFactorCompletionRate || 0)}</p>
+                <p className="text-xs text-slate-500">{analytics.uxWeeklyReport?.twoFactorCompleted || 0}/{analytics.uxWeeklyReport?.twoFactorStarted || 0} completed</p>
+              </div>
+              <div className="rounded border border-slate-200 p-3 text-sm">
+                <p className="text-slate-500">Admin page feedback</p>
+                <p className="text-xl font-semibold text-slate-900">{analytics.uxWeeklyReport?.adminFeedbackSummary?.total || 0}</p>
+                <p className="text-xs text-slate-500">{analytics.uxWeeklyReport?.adminFeedbackSummary?.notUseful || 0} marked not useful</p>
+              </div>
+              <div className="rounded border border-slate-200 p-3 text-sm">
+                <p className="text-slate-500">Tracked blockers</p>
+                <p className="text-xl font-semibold text-slate-900">{analytics.uxBlockers?.length || 0}</p>
+                <p className="text-xs text-slate-500">By event frequency in selected window</p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Top blockers by frequency</h3>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {(analytics.uxWeeklyReport?.topBlockers || []).map((blocker, index) => (
+                    <li key={`${blocker.event_type}-${index}`} className="rounded border border-slate-200 p-2">
+                      <p className="font-medium text-slate-900">#{index + 1} {blocker.event_type}</p>
+                      <p className="text-slate-600">Route: {blocker.route}</p>
+                      <p className="text-slate-600">Frequency: {blocker.frequency}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Data-backed next sprint priorities</h3>
+                <ol className="mt-2 space-y-2 text-sm">
+                  {(analytics.uxWeeklyReport?.nextSprintPriorities || []).map((item) => (
+                    <li key={`${item.rank}-${item.blocker}`} className="rounded border border-indigo-100 bg-indigo-50/40 p-2">
+                      <p className="font-medium text-slate-900">{item.rank}. {item.blocker} ({item.frequency})</p>
+                      <p className="text-slate-700">{item.recommendation}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          </section>
         </>
       ) : null}
     </main>
