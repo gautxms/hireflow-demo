@@ -117,13 +117,31 @@ export function createTwoFactorSetup({ label, issuer = 'HireFlow Admin' }) {
 }
 
 export async function createQrCodeDataUrl(otpauthUrl) {
-  const query = new URLSearchParams({
-    size: '360x360',
-    ecc: 'M',
-    margin: '2',
-    data: otpauthUrl,
-  })
-  return `https://api.qrserver.com/v1/create-qr-code/?${query.toString()}`
+  if (!otpauthUrl) {
+    return null
+  }
+
+  const escaped = String(otpauthUrl)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360">
+  <rect width="100%" height="100%" fill="#fff"/>
+  <rect x="16" y="16" width="328" height="328" fill="none" stroke="#111827" stroke-width="4"/>
+  <text x="180" y="70" font-family="Arial, sans-serif" font-size="18" text-anchor="middle" fill="#111827">Authenticator setup</text>
+  <foreignObject x="32" y="96" width="296" height="232">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font: 12px/1.4 Arial, sans-serif; word-break: break-all; color: #111827;">
+      ${escaped}
+    </div>
+  </foreignObject>
+</svg>
+`.trim()
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 export function verifyTotpCode({ encryptedSecret, token }) {
