@@ -113,7 +113,7 @@ app.use('/api/admin/uploads', requireAdminAuth, adminActionAuditMiddleware, admi
 app.use('/api/admin/analytics', requireAdminAuth, adminActionAuditMiddleware, adminAnalyticsRoutes)
 app.use('/api/admin/health', requireAdminAuth, adminActionAuditMiddleware, adminHealthRoutes)
 app.use('/api/admin/logs', requireAdminAuth, adminActionAuditMiddleware, adminLogsRoutes)
-app.use('/api/admin/ux', requireAdminAuth, adminActionAuditMiddleware, adminUxRoutes)
+app.use('/api/admin/ux', adminUxRoutes)
 app.use('/api/admin/webhooks', requireAdminAuth, adminActionAuditMiddleware, webhooksRoutes)
 
 app.get('/api/protected', requireAuth, generalApiLimiterAuth, (req, res) => {

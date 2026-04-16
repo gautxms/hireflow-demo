@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../../db/client.js'
 import { trackEvent } from '../../services/analytics.js'
+import { adminActionAuditMiddleware, requireAdminAuth } from '../../middleware/adminAuth.js'
 
 const router = Router()
 
@@ -33,7 +34,7 @@ router.post('/events', async (req, res) => {
   return res.status(202).json({ ok: true })
 })
 
-router.post('/feedback', async (req, res) => {
+router.post('/feedback', requireAdminAuth, adminActionAuditMiddleware, async (req, res) => {
   const route = normalizeRoute(req.body?.route)
   const isUseful = req.body?.isUseful
   const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim().slice(0, 500) : ''
