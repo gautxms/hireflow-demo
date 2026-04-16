@@ -60,16 +60,17 @@ async function run() {
 
   const baseUrl = process.env.ADMIN_SMOKE_BASE_URL
   if (baseUrl) {
+    const normalizedBaseUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl.replace(/\/$/, '')}/api`
     const endpointChecks = [
       { path: '/auth/admin/login', method: 'POST', body: { email: 'smoke@example.com', password: 'invalid' } },
       { path: '/auth/admin/logout', method: 'POST' },
       { path: '/admin/sessions/refresh', method: 'POST' },
       { path: '/admin/uploads/export?page=1&pageSize=1', method: 'GET' },
-      { path: '/admin/analytics/export?range=30d', method: 'GET' },
+      { path: '/admin/analytics?startDate=2026-01-01&endDate=2026-01-30&export=csv', method: 'GET' },
     ]
 
     for (const check of endpointChecks) {
-      const url = new URL(check.path, baseUrl).toString()
+      const url = new URL(check.path, normalizedBaseUrl).toString()
       const response = await fetch(url, {
         method: check.method,
         headers: check.body ? { 'Content-Type': 'application/json' } : undefined,
@@ -78,7 +79,7 @@ async function run() {
       assert(response.status !== 404, `${check.method} ${check.path} returned 404 (route blocker regression).`)
     }
 
-    console.log(`✅ Live API smoke checks passed against ${baseUrl}`)
+    console.log(`✅ Live API smoke checks passed against ${normalizedBaseUrl}`)
   } else {
     console.log('ℹ️ Skipping live API checks (set ADMIN_SMOKE_BASE_URL to enable).')
   }
