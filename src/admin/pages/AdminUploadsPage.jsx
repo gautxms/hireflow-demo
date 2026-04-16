@@ -80,8 +80,8 @@ export default function AdminUploadsPage({ onOpenDetails }) {
   const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
 
   return (
-    <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Admin Resume Upload Monitoring</h1>
+    <div className="admin-page">
+      <h1 className="admin-page__title">Admin Resume Upload Monitoring</h1>
 
       {loadingStats ? <p className="text-sm text-slate-500">Loading stats…</p> : null}
       {stats ? (
@@ -148,7 +148,7 @@ export default function AdminUploadsPage({ onOpenDetails }) {
             <p><strong>Status:</strong> {upload.parseStatus || '—'}</p>
             <p><strong>Created:</strong> {formatDate(upload.createdAt)}</p>
             <p><strong>Failure reason:</strong> {upload.parseError || '—'}</p>
-            <button type="button" className="mt-2 rounded-md border border-slate-300 px-3 py-1.5" onClick={() => openDetails(upload.id)}>
+            <button type="button" className="ui-btn mt-2" onClick={() => openDetails(upload.id)}>
               Open full upload details
             </button>
           </div>

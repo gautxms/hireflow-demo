@@ -10,25 +10,19 @@ function formatBytes(value) {
   return `${size.toFixed(1)} ${units[idx]}`
 }
 
-function statusColor(status) {
-  if (status === 'red') return '#dc2626'
-  if (status === 'yellow') return '#f59e0b'
-  return '#16a34a'
-}
-
 export default function HealthStatus({ health, alerts }) {
   if (!health) return null
 
   const status = health.systemStatus || 'green'
 
   return (
-    <section style={{ border: `2px solid ${statusColor(status)}`, borderRadius: 12, padding: '1rem', background: '#fff' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0 }}>System health</h3>
-        <span style={{ color: statusColor(status), fontWeight: 700, textTransform: 'uppercase' }}>{status}</span>
+    <section className={`admin-health admin-health--${status}`}>
+      <div className="admin-health__header">
+        <h3 className="admin-section-title !mb-0">System health</h3>
+        <span className={`admin-health__status admin-health__status--${status}`}>{status}</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginTop: '1rem' }}>
+      <div className="admin-grid admin-grid--4 mt-4">
         <Stat label='DB connected' value={health.db?.connected ? 'Yes' : 'No'} />
         <Stat label='DB latency' value={`${health.db?.latencyMs || 0} ms`} />
         <Stat label='Memory usage' value={`${health.memory?.usagePercent || 0}%`} />
@@ -38,18 +32,11 @@ export default function HealthStatus({ health, alerts }) {
       </div>
 
       {alerts?.length > 0 && (
-        <div style={{ marginTop: '1rem', display: 'grid', gap: '0.5rem' }}>
+        <div className="mt-4 grid gap-2">
           {alerts.map((alert) => (
             <div
               key={alert.message}
-              style={{
-                borderRadius: 8,
-                padding: '0.6rem 0.75rem',
-                border: '1px solid',
-                borderColor: alert.severity === 'critical' ? '#fecaca' : '#fde68a',
-                background: alert.severity === 'critical' ? '#fef2f2' : '#fffbeb',
-                color: alert.severity === 'critical' ? '#991b1b' : '#92400e',
-              }}
+              className={`rounded-md border px-3 py-2 text-sm ${alert.severity === 'critical' ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
             >
               <strong>{alert.severity.toUpperCase()}:</strong> {alert.message}
             </div>
@@ -62,9 +49,9 @@ export default function HealthStatus({ health, alerts }) {
 
 function Stat({ label, value }) {
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.7rem' }}>
-      <div style={{ color: '#6b7280', fontSize: '0.82rem' }}>{label}</div>
-      <div style={{ fontWeight: 600, marginTop: '0.2rem' }}>{value}</div>
+    <div className="admin-stat-card">
+      <div className="admin-stat-card__label">{label}</div>
+      <div className="admin-stat-card__value">{value}</div>
     </div>
   )
 }

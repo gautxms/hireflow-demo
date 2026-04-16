@@ -11,19 +11,19 @@ function formatPayload(value) {
 
 export default function WebhookAudit({ items, loading, error, onRetry }) {
   return (
-    <section style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: '1rem' }}>
-      <h3 style={{ marginTop: 0 }}>Webhook audit trail</h3>
-      {loading ? <p style={{ color: '#6b7280' }}>Loading webhook events…</p> : null}
+    <section className="ui-card p-4">
+      <h3 className="admin-section-title">Webhook audit trail</h3>
+      {loading ? <p className="admin-note">Loading webhook events…</p> : null}
       {error ? <StateAlert state={error} onRetry={onRetry} /> : null}
       {!loading && !error && !items.length ? <EmptyState title="No webhook activity yet" description="Events will appear here once integrations start sending webhooks." /> : null}
 
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
+      <div className="admin-webhook-list">
         {items.map((event) => (
-          <details key={event.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.6rem 0.75rem' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+          <details key={event.id} className="admin-webhook-item">
+            <summary className="admin-webhook-summary">
               {event.eventType} • {event.status} • {new Date(event.timestamp).toLocaleString()}
             </summary>
-            <pre style={{ whiteSpace: 'pre-wrap', margin: '0.75rem 0 0 0', fontSize: '0.8rem' }}>{formatPayload(event.requestBody)}</pre>
+            <pre className="admin-pre">{formatPayload(event.requestBody)}</pre>
           </details>
         ))}
       </div>

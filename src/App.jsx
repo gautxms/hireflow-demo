@@ -382,7 +382,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         purpose: 'Use this page to monitor revenue, retry failed transactions, and resolve customer billing requests.',
         breadcrumbs: ['Admin', 'Billing'],
       }, (
-        <div>
+        <div className="admin-page">
           <AdminSubscriptionsPage />
           <AdminPaymentsPage />
         </div>

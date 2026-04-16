@@ -55,15 +55,15 @@ export default function AdminAnalyticsPage() {
   const retentionMax = Math.max(0, ...(analytics?.retentionCohorts || []).map((row) => Number(row.retained_users || 0)))
 
   return (
-    <main className="space-y-6 p-6">
+    <main className="admin-page">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Admin Analytics Dashboard</h1>
-          <p className="text-sm text-slate-500">Founder-facing metrics, cohorts, plan mix, and trend charts.</p>
+          <h1 className="admin-page__title">Admin Analytics Dashboard</h1>
+          <p className="admin-page__subtitle">Founder-facing metrics, cohorts, plan mix, and trend charts.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={refresh} className="ui-btn">Refresh</button>
-          <button onClick={exportCsv} className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500">Export CSV</button>
+          <button onClick={exportCsv} className="ui-btn ui-btn--primary">Export CSV</button>
         </div>
       </header>
 
@@ -78,7 +78,7 @@ export default function AdminAnalyticsPage() {
             <button
               key={option.key}
               onClick={() => applyPreset(option.key)}
-              className={`rounded-md px-3 py-1.5 text-sm ${range === option.key ? 'bg-slate-900 text-white' : 'border border-slate-300 hover:bg-slate-50'}`}
+              className={`ui-btn ${range === option.key ? 'ui-btn--primary' : ''}`}
             >
               {option.label}
             </button>
@@ -86,10 +86,10 @@ export default function AdminAnalyticsPage() {
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="text-sm text-slate-700">Start date
-            <input className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5" type="date" value={filters.startDate} onChange={(event) => updateCustomDate('startDate', event.target.value)} />
+            <input className="ui-input mt-1 w-full" type="date" value={filters.startDate} onChange={(event) => updateCustomDate('startDate', event.target.value)} />
           </label>
           <label className="text-sm text-slate-700">End date
-            <input className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5" type="date" value={filters.endDate} onChange={(event) => updateCustomDate('endDate', event.target.value)} />
+            <input className="ui-input mt-1 w-full" type="date" value={filters.endDate} onChange={(event) => updateCustomDate('endDate', event.target.value)} />
           </label>
         </div>
       </section>
