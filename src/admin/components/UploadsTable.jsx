@@ -1,3 +1,4 @@
+import { EmptyState, TableSkeleton } from './WidgetState'
 import { useMemo, useState } from 'react'
 
 function formatDate(value) {
@@ -71,9 +72,9 @@ export default function UploadsTable({ uploads, loading, pagination, onPageChang
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={6} className="px-4 py-4 text-slate-500">Loading uploads…</td></tr>
+            <TableSkeleton columns={6} rows={5} />
           ) : sortedUploads.length === 0 ? (
-            <tr><td colSpan={6} className="px-4 py-4 text-slate-500">No uploads found.</td></tr>
+            <tr><td colSpan={6} className="p-4"><EmptyState title="No uploads found" description="No upload records match these filters." /></td></tr>
           ) : (
             sortedUploads.map((upload) => (
               <tr

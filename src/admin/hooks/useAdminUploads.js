@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
+import { adminFetchJson, getMappedError } from '../utils/adminErrorState'
 
 const DEFAULT_FILTERS = {
   status: 'all',
@@ -47,7 +48,7 @@ export function useAdminUploads() {
   const [stats, setStats] = useState(null)
   const [loadingList, setLoadingList] = useState(true)
   const [loadingStats, setLoadingStats] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
 
   const queryString = useMemo(() => toQueryString(filters, pagination), [filters, pagination])
   const statsQueryString = useMemo(() => toStatsQueryString(filters), [filters])
@@ -55,18 +56,13 @@ export function useAdminUploads() {
   const loadUploads = useCallback(async () => {
     try {
       setLoadingList(true)
-      setError('')
-      const response = await fetch(`${API_BASE}/admin/uploads?${queryString}`, { credentials: 'include' })
-      const payload = await response.json()
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Failed to load uploads')
-      }
+      setError(null)
+      const payload = await adminFetchJson(`${API_BASE}/admin/uploads?${queryString}`, 'Failed to load uploads')
 
       setUploads(payload.uploads || [])
       setPagination((current) => ({ ...current, ...(payload.pagination || {}) }))
     } catch (err) {
-      setError(err.message)
+      setError(getMappedError(err, 'Uploads data could not be loaded.'))
     } finally {
       setLoadingList(false)
     }
@@ -75,17 +71,12 @@ export function useAdminUploads() {
   const loadStats = useCallback(async () => {
     try {
       setLoadingStats(true)
-      setError('')
-      const response = await fetch(`${API_BASE}/admin/uploads/stats?${statsQueryString}`, { credentials: 'include' })
-      const payload = await response.json()
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Failed to load upload stats')
-      }
+      setError(null)
+      const payload = await adminFetchJson(`${API_BASE}/admin/uploads/stats?${statsQueryString}`, 'Failed to load upload stats')
 
       setStats(payload)
     } catch (err) {
-      setError(err.message)
+      setError(getMappedError(err, 'Uploads data could not be loaded.'))
     } finally {
       setLoadingStats(false)
     }
@@ -131,7 +122,7 @@ export function useAdminUploads() {
 export function useAdminUploadDetails(uploadId) {
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
   const [upload, setUpload] = useState(null)
   const [retriedAt, setRetriedAt] = useState(null)
 
@@ -140,18 +131,13 @@ export function useAdminUploadDetails(uploadId) {
 
     try {
       setLoading(true)
-      setError('')
-      const response = await fetch(`${API_BASE}/admin/uploads/${uploadId}`, { credentials: 'include' })
-      const payload = await response.json()
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Failed to load upload details')
-      }
+      setError(null)
+      const payload = await adminFetchJson(`${API_BASE}/admin/uploads/${uploadId}`, 'Failed to load upload details')
 
       setUpload(payload.upload || null)
       setRetriedAt(payload.retriedAt || null)
     } catch (err) {
-      setError(err.message)
+      setError(getMappedError(err, 'Uploads data could not be loaded.'))
     } finally {
       setLoading(false)
     }
@@ -166,23 +152,17 @@ export function useAdminUploadDetails(uploadId) {
 
     try {
       setRetrying(true)
-      setError('')
+      setError(null)
 
-      const response = await fetch(`${API_BASE}/admin/uploads/${uploadId}/retry`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-      const payload = await response.json()
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Retry failed')
-      }
+      const response = await fetch(`${API_BASE}/admin/uploads/${uploadId}/retry`, { method: 'POST', credentials: 'include' })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error('Retry failed')
 
       await loadUpload()
       return payload
     } catch (err) {
-      setError(err.message)
-      return { ok: false, error: err.message }
+      setError(getMappedError(err, 'Uploads data could not be loaded.'))
+      return { ok: false, error: getMappedError(err, 'Retry failed.') }
     } finally {
       setRetrying(false)
     }

@@ -3,6 +3,8 @@ import BlockUserModal from '../components/BlockUserModal'
 import UserModal from '../components/UserModal'
 import UsersTable from '../components/UsersTable'
 import useAdminUsers from '../hooks/useAdminUsers'
+import StateAlert from '../components/StateAlert'
+import { getMappedError } from '../utils/adminErrorState'
 
 export default function AdminUsersPage() {
   const {
@@ -68,7 +70,7 @@ export default function AdminUsersPage() {
         <div className="text-sm text-slate-600">{totalCount} users · {pageSize} per page</div>
       </div>
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {error ? <StateAlert state={error} onRetry={() => void loadUsers()} /> : null}
       {actionFeedback ? <p className="text-sm text-emerald-700">{actionFeedback}</p> : null}
 
       <UsersTable
@@ -82,7 +84,7 @@ export default function AdminUsersPage() {
           if (user.status === 'blocked') {
             void unblockUser(user.id)
               .then(() => setActionFeedback(`Unblocked ${user.email}`))
-              .catch((err) => setActionFeedback(err.message))
+              .catch((err) => setActionFeedback(getMappedError(err, 'Unable to update user access.').title))
             return
           }
           setBlockTarget(user)

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import RefundModal from '../components/RefundModal'
 import SubscriptionsTable from '../components/SubscriptionsTable'
 import useAdminSubscriptions from '../hooks/useAdminSubscriptions'
+import StateAlert from '../components/StateAlert'
 
 function dateLabel(value) {
   return value ? new Date(value).toLocaleString() : '—'
@@ -66,7 +67,7 @@ export default function AdminSubscriptionsPage() {
         <p className="self-center text-sm text-slate-500">{totalSubscriptions} matching subscriptions</p>
       </div>
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {error ? <StateAlert state={error} onRetry={() => void refreshSubscriptions()} /> : null}
 
       <SubscriptionsTable
         subscriptions={subscriptions}

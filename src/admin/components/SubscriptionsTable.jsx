@@ -1,3 +1,4 @@
+import { EmptyState, TableSkeleton } from './WidgetState'
 function dateLabel(value) {
   return value ? new Date(value).toLocaleDateString() : '—'
 }
@@ -35,7 +36,7 @@ export default function SubscriptionsTable({ subscriptions, loading, sort, onSor
         </thead>
         <tbody>
           {loading ? (
-            <tr><td className="px-4 py-3 text-slate-500" colSpan={5}>Loading subscriptions…</td></tr>
+            <TableSkeleton columns={5} rows={5} />
           ) : subscriptions.map((subscription) => (
             <tr key={subscription.id} className="border-t border-slate-100">
               <td className="px-4 py-3">{subscription.email}</td>
@@ -56,7 +57,7 @@ export default function SubscriptionsTable({ subscriptions, loading, sort, onSor
           ))}
 
           {!loading && !subscriptions.length ? (
-            <tr><td className="px-4 py-3 text-slate-500" colSpan={5}>No subscriptions match these filters.</td></tr>
+            <tr><td className="p-4" colSpan={5}><EmptyState title="No subscriptions found" description="No subscriptions match these filters." /></td></tr>
           ) : null}
         </tbody>
       </table>
