@@ -10,13 +10,15 @@ const SECTIONS = [
 export default function AdminSidebar({ activeSection, onNavigate, mobileOpen, onClose }) {
   return (
     <>
-      <button
-        type="button"
-        className={`admin-sidebar-overlay ${mobileOpen ? 'admin-sidebar-overlay--visible' : ''}`}
-        aria-hidden={!mobileOpen}
-        tabIndex={mobileOpen ? 0 : -1}
-        onClick={onClose}
-      />
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="admin-sidebar-overlay admin-sidebar-overlay--visible"
+          aria-hidden={false}
+          tabIndex={0}
+          onClick={onClose}
+        />
+      ) : null}
 
       <aside className={`admin-sidebar dark:bg-slate-950 ${mobileOpen ? 'admin-sidebar--open' : ''}`}>
         <div className="admin-sidebar__brand dark:text-white">HireFlow Admin</div>

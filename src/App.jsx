@@ -322,7 +322,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const renderAdminSection = (sectionProps, page) => (
-      <AdminShell onLogout={logoutAdmin} {...sectionProps}>
+      <AdminShell key={pathname} onLogout={logoutAdmin} {...sectionProps}>
         {page}
         <AdminPageFeedbackWidget routeContext={pathname} />
       </AdminShell>
