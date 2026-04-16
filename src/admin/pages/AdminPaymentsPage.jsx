@@ -97,12 +97,12 @@ export default function AdminPaymentsPage() {
   const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
 
   return (
-    <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Admin payments & revenue</h1>
+    <div className="admin-page">
+      <h1 className="admin-page__title">Admin payments & revenue</h1>
       {error ? <StateAlert state={error} onRetry={() => void loadData()} /> : null}
 
       {data.revenueSummary ? (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="admin-grid admin-grid--3">
           <div className="ui-card p-4">MRR: <strong>{moneyFromDollars(data.revenueSummary.mrr)}</strong></div>
           <div className="ui-card p-4">ARR: <strong>{moneyFromDollars(data.revenueSummary.arr)}</strong></div>
           <div className="ui-card p-4">Churn: <strong>{Number(data.revenueSummary.churnRate || 0).toFixed(2)}%</strong></div>

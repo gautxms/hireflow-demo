@@ -75,8 +75,8 @@ export default function AdminUsersPage() {
   const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
 
   return (
-    <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Admin Users Management</h1>
+    <div className="admin-page">
+      <h1 className="admin-page__title">Admin Users Management</h1>
 
       {error ? <StateAlert state={error} onRetry={() => void loadUsers()} /> : null}
       {actionFeedback ? <p className="text-sm text-emerald-700">{actionFeedback}</p> : null}
@@ -129,8 +129,8 @@ export default function AdminUsersPage() {
             <p><strong>Status:</strong> <span className="capitalize">{user.status}</span></p>
             <p><strong>Joined:</strong> {formatDate(user.created_at)}</p>
             <div className="flex flex-wrap gap-2 pt-2">
-              <button type="button" className="rounded-md border border-slate-300 px-3 py-1.5" onClick={() => setSelectedUserId(user.id)}>Open full editor</button>
-              <button type="button" className="rounded-md border border-slate-300 px-3 py-1.5" onClick={() => {
+              <button type="button" className="ui-btn" onClick={() => setSelectedUserId(user.id)}>Open full editor</button>
+              <button type="button" className="ui-btn" onClick={() => {
                 if (user.status === 'blocked') {
                   void unblockUser(user.id)
                     .then(() => setActionFeedback(`Unblocked ${user.email}`))

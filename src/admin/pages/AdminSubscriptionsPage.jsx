@@ -68,8 +68,8 @@ export default function AdminSubscriptionsPage() {
   const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
 
   return (
-    <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Admin subscriptions</h1>
+    <div className="admin-page">
+      <h1 className="admin-page__title">Admin subscriptions</h1>
 
       {error ? <StateAlert state={error} onRetry={() => void refreshSubscriptions()} /> : null}
 
@@ -82,13 +82,13 @@ export default function AdminSubscriptionsPage() {
         rowKey={(row) => row.id}
         filterControls={(
           <>
-            <select className="rounded-md border border-slate-300 px-3 py-2" value={filters.status} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}>
+            <select className="ui-input" value={filters.status} onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}>
               <option value="all">All statuses</option>
               <option value="active">Active</option>
               <option value="cancelled">Cancelled</option>
               <option value="overdue">Overdue</option>
             </select>
-            <select className="rounded-md border border-slate-300 px-3 py-2" value={filters.plan} onChange={(event) => setFilters((prev) => ({ ...prev, plan: event.target.value }))}>
+            <select className="ui-input" value={filters.plan} onChange={(event) => setFilters((prev) => ({ ...prev, plan: event.target.value }))}>
               <option value="all">All plans</option>
               <option value="monthly">Monthly</option>
               <option value="annual">Annual</option>
@@ -128,7 +128,7 @@ export default function AdminSubscriptionsPage() {
             <p><strong>Amount:</strong> {formatCurrency(subscription.amountCents)}</p>
             <button
               type="button"
-              className="rounded-md border border-slate-300 px-3 py-1.5"
+              className="ui-btn"
               onClick={() => {
                 setRefundTarget(subscription)
                 setIsRefundOpen(true)

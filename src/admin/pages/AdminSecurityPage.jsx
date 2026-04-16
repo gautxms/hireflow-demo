@@ -2,7 +2,7 @@ import { navigateAdmin } from '../config/adminNavigation'
 
 export default function AdminSecurityPage() {
   return (
-    <div className="space-y-4 p-6">
+    <div className="admin-page">
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-slate-900">Session controls</h2>
         <p className="mt-1 text-sm text-slate-600">Manage admin authentication settings and quickly access the sign-in controls.</p>

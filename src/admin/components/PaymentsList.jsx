@@ -10,14 +10,14 @@ function formatDate(value) {
 
 export default function PaymentsList({ failedPayments, retryingId, onRetry }) {
   return (
-    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+    <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-4">
       <h2 className="text-lg font-medium text-amber-900">Failed payments</h2>
       <ul className="mt-3 space-y-2 text-sm">
         {(failedPayments || []).map((payment) => (
           <li key={payment.id} className="rounded border border-amber-200 bg-white p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p><strong>{payment.transactionId}</strong> · {payment.customerEmail || 'Unknown customer'} · {formatCurrency(payment.amount)} · {payment.status}</p>
-              <button type="button" className="rounded-md bg-indigo-600 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onRetry(payment.transactionId)} disabled={retryingId === payment.transactionId}>
+              <button type="button" className="ui-btn ui-btn--primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onRetry(payment.transactionId)} disabled={retryingId === payment.transactionId}>
                 {retryingId === payment.transactionId ? 'Retrying…' : 'Retry payment'}
               </button>
             </div>

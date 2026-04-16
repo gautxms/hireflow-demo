@@ -129,8 +129,8 @@ export default function AdminLogsPage() {
   const columns = allColumns.filter((column) => visibleColumnKeys.includes(column.key))
 
   return (
-    <main className="mx-auto grid max-w-7xl gap-4 p-5">
-      <h1 className="text-2xl font-semibold text-slate-900">Admin error logs</h1>
+    <main className="admin-page">
+      <h1 className="admin-page__title">Admin error logs</h1>
 
       {error ? <StateAlert state={error} onRetry={() => void refreshLogs()} /> : null}
       <AdminDataTable
@@ -190,7 +190,7 @@ export default function AdminLogsPage() {
             <p><strong>Message:</strong> {row.message || '—'}</p>
             <p><strong>Created:</strong> {dateLabel(row.createdAt)}</p>
             <pre className="max-h-64 overflow-auto rounded-md bg-slate-100 p-3 text-xs">{row.stack || 'No stack trace'}</pre>
-            {!row.resolved ? <button type="button" className="rounded-md border border-slate-300 px-3 py-1.5" onClick={() => void handleResolve(row.id)}>Mark resolved</button> : null}
+            {!row.resolved ? <button type="button" className="ui-btn" onClick={() => void handleResolve(row.id)}>Mark resolved</button> : null}
           </div>
         )}
       />
