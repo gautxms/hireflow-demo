@@ -309,7 +309,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     const hasStoredAdminSession = Boolean(localStorage.getItem('admin_session'))
 
-    const logoutAdmin = () => {
+    const logoutAdmin = async () => {
+      await fetch(`${API_BASE}/auth/admin/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      }).catch(() => {})
+
       localStorage.removeItem('admin_session')
       localStorage.removeItem('admin_id')
       navigate('/admin/login')
