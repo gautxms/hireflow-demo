@@ -117,8 +117,13 @@ export function createTwoFactorSetup({ label, issuer = 'HireFlow Admin' }) {
 }
 
 export async function createQrCodeDataUrl(otpauthUrl) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360"><rect width="100%" height="100%" fill="white"/><text x="16" y="24" font-size="13" font-family="monospace">Scan in Google Authenticator</text><text x="16" y="48" font-size="10" font-family="monospace">${otpauthUrl.slice(0, 220)}</text></svg>`
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+  const query = new URLSearchParams({
+    size: '360x360',
+    ecc: 'M',
+    margin: '2',
+    data: otpauthUrl,
+  })
+  return `https://api.qrserver.com/v1/create-qr-code/?${query.toString()}`
 }
 
 export function verifyTotpCode({ encryptedSecret, token }) {

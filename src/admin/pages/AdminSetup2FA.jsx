@@ -39,6 +39,27 @@ function formatSeconds(seconds) {
   return `${minutes}:${remainder}`
 }
 
+function parseOtpauthDetails(otpauthUrl) {
+  if (!otpauthUrl) return null
+  try {
+    const parsed = new URL(otpauthUrl)
+    if (parsed.protocol !== 'otpauth:') return null
+    const rawLabel = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''))
+    const [issuerFromLabel, accountName] = rawLabel.includes(':') ? rawLabel.split(':') : ['', rawLabel]
+    const issuer = parsed.searchParams.get('issuer') || issuerFromLabel || 'HireFlow Admin'
+    return {
+      issuer,
+      accountName: accountName || 'Admin account',
+    }
+  } catch {
+    return null
+  }
+}
+
+function isLikelyQrImage(value) {
+  return /^data:image\//.test(String(value || '')) || /^https?:\/\//.test(String(value || ''))
+}
+
 export default function AdminSetup2FA() {
   const [setupToken, setSetupToken] = useState(readToken())
   const [totpCode, setTotpCode] = useState('')
@@ -51,6 +72,7 @@ export default function AdminSetup2FA() {
   const [clockTick, setClockTick] = useState(() => Date.now())
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const [qrLoadState, setQrLoadState] = useState('idle')
 
   const canVerify = useMemo(() => setupToken.trim().length > 0 && totpCode.trim().length >= 6, [setupToken, totpCode])
 
@@ -73,7 +95,9 @@ export default function AdminSetup2FA() {
     }
 
     const incomingCodes = Array.isArray(payload.backupCodes) ? payload.backupCodes.slice(0, 10) : []
-    setQrCodeDataUrl(payload.qrCodeDataUrl || '')
+    const nextQrCode = payload.qrCodeDataUrl || ''
+    setQrCodeDataUrl(nextQrCode)
+    setQrLoadState(nextQrCode && isLikelyQrImage(nextQrCode) ? 'loading' : 'error')
     setOtpauthUrl(payload.otpauthUrl || '')
     setManualEntryKey(payload.manualEntryKey || '')
     setBackupCodes(incomingCodes)
@@ -97,7 +121,12 @@ export default function AdminSetup2FA() {
 
     if (!response.ok) {
       setStatus('')
-      setError(payload.error || 'Verification failed')
+      const rawMessage = String(payload.error || '').toLowerCase()
+      if (rawMessage.includes('invalid totp code')) {
+        setError('That code didn’t work. Wait for the next 6-digit code, then try again. If this keeps happening, check that your phone time is set to automatic.')
+      } else {
+        setError(payload.error || 'Verification failed')
+      }
       return
     }
 
@@ -128,6 +157,8 @@ export default function AdminSetup2FA() {
     return 'Progress: 2/3 (verify authenticator)'
   }, [backupCodes.length, status])
 
+  const otpDetails = useMemo(() => parseOtpauthDetails(otpauthUrl), [otpauthUrl])
+
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
       <h1>Admin 2FA Setup Wizard</h1>
@@ -151,10 +182,30 @@ export default function AdminSetup2FA() {
       {qrCodeDataUrl ? (
         <section style={{ marginTop: 16 }}>
           <h2>Scan in authenticator app</h2>
-          <img src={qrCodeDataUrl} alt="Admin TOTP QR code" style={{ width: 220, height: 220 }} />
+          {qrLoadState === 'error' ? (
+            <p style={{ color: '#92400e', marginBottom: 8 }}>
+              We couldn’t display a scannable QR image right now. Use the manual setup key below or refresh and try again.
+            </p>
+          ) : null}
+          <img
+            src={qrCodeDataUrl}
+            alt="Admin TOTP QR code"
+            style={{ width: 220, height: 220, border: '1px solid #cbd5e1', borderRadius: 8, padding: 4, background: '#fff' }}
+            onLoad={() => setQrLoadState('ready')}
+            onError={() => setQrLoadState('error')}
+          />
+          {otpDetails ? (
+            <p style={{ marginTop: 8 }}>
+              <strong>Issuer:</strong> {otpDetails.issuer}<br />
+              <strong>Account:</strong> {otpDetails.accountName}
+            </p>
+          ) : null}
           {manualEntryKey ? (
             <>
-              <p><strong>Manual setup key:</strong> <code>{manualEntryKey}</code></p>
+              <p>
+                <strong>Manual setup key:</strong>{' '}
+                <code style={{ userSelect: 'all' }}>{manualEntryKey}</code>
+              </p>
               <button type="button" onClick={() => navigator.clipboard.writeText(manualEntryKey).catch(() => {})}>Copy setup key</button>
             </>
           ) : null}
@@ -183,7 +234,17 @@ export default function AdminSetup2FA() {
       <form onSubmit={verifyCode} style={{ marginTop: 16, display: 'grid', gap: 8 }}>
         <label htmlFor="totpCode">Verification code</label>
         <small style={{ color: '#334155' }}>Current code window expires in {totpWindowSecondsLeft}s.</small>
-        <input id="totpCode" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} placeholder="123456" />
+        <input
+          id="totpCode"
+          value={totpCode}
+          onChange={(event) => setTotpCode(event.target.value.replace(/[^\d]/g, '').slice(0, 6))}
+          placeholder="123456"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+        />
+        <small style={{ color: '#475569' }}>
+          If a code fails, wait for the timer to reset and enter the next one. Make sure your phone time is set automatically.
+        </small>
         <button type="submit" disabled={!canVerify}>Verify and enable 2FA</button>
         <small style={{ color: '#475569' }}>
           Lost access to your authenticator? Go back to <a href="/admin/login">admin login</a> and complete sign-in with a backup code.
