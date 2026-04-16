@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ADMIN_SECTIONS, navigateAdmin } from '../config/adminNavigation'
 import '../styles/admin.css'
+
+const MOBILE_BREAKPOINT_PX = 960
 
 function formatSessionLabel() {
   const raw = localStorage.getItem('admin_session')
@@ -29,6 +31,13 @@ function formatSessionLabel() {
 
 export default function AdminShell({ sectionKey, title, subtitle, purpose, breadcrumbs = [], children, onLogout }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+
+    return window.innerWidth <= MOBILE_BREAKPOINT_PX
+  })
   const primaryMobileItems = ADMIN_SECTIONS.slice(0, 4)
 
   const currentSection = useMemo(
@@ -40,6 +49,25 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
     setMobileNavOpen(false)
     navigateAdmin(href)
   }
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= MOBILE_BREAKPOINT_PX
+
+      setIsMobileViewport(mobile)
+
+      if (!mobile) {
+        setMobileNavOpen(false)
+      }
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   return (
     <div className="admin-shell-v2">
@@ -90,23 +118,25 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
         <footer className="admin-shell-v2__footer">HireFlow admin console</footer>
       </div>
 
-      <nav className="admin-shell-v2__mobile-tabs" aria-label="Admin quick navigation">
-        {primaryMobileItems.map((item) => {
-          const active = item.key === sectionKey
-          return (
-            <button key={item.key} type="button" className={`admin-shell-v2__mobile-tab ${active ? 'is-active' : ''}`} onClick={() => go(item.href)} aria-current={active ? 'page' : undefined}>
-              <span aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          )
-        })}
-        <button type="button" className="admin-shell-v2__mobile-tab" onClick={() => setMobileNavOpen(true)}>
-          <span aria-hidden="true">☰</span>
-          <span>More</span>
-        </button>
-      </nav>
+      {isMobileViewport ? (
+        <nav className="admin-shell-v2__mobile-tabs" aria-label="Admin quick navigation">
+          {primaryMobileItems.map((item) => {
+            const active = item.key === sectionKey
+            return (
+              <button key={item.key} type="button" className={`admin-shell-v2__mobile-tab ${active ? 'is-active' : ''}`} onClick={() => go(item.href)} aria-current={active ? 'page' : undefined}>
+                <span aria-hidden="true">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+          <button type="button" className="admin-shell-v2__mobile-tab" onClick={() => setMobileNavOpen(true)}>
+            <span aria-hidden="true">☰</span>
+            <span>More</span>
+          </button>
+        </nav>
+      ) : null}
 
-      {mobileNavOpen ? (
+      {isMobileViewport && mobileNavOpen ? (
         <div className="admin-shell-v2__mobile-drawer" role="dialog" aria-modal="true" aria-label="More admin sections">
           <button type="button" className="admin-shell-v2__mobile-backdrop" onClick={() => setMobileNavOpen(false)} aria-label="Close menu" />
           <div className="admin-shell-v2__mobile-panel">

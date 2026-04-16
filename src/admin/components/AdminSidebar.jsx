@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 const SECTIONS = [
   { key: 'users', label: 'Users', icon: '👥' },
   { key: 'subscriptions', label: 'Subscriptions', icon: '💳' },
@@ -8,9 +10,32 @@ const SECTIONS = [
 ]
 
 export default function AdminSidebar({ activeSection, onNavigate, mobileOpen, onClose }) {
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+
+    return window.innerWidth <= 960
+  })
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileViewport(window.innerWidth <= 960)
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  const shouldRenderOverlay = isMobileViewport && mobileOpen
+
   return (
     <>
-      {mobileOpen ? (
+      {shouldRenderOverlay ? (
         <button
           type="button"
           className="admin-sidebar-overlay admin-sidebar-overlay--visible"
