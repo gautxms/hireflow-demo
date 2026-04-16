@@ -32,8 +32,17 @@ import API_BASE from './config/api'
 const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
 const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
 const AdminAnalyticsPage = lazy(() => import('./admin/pages/AdminAnalyticsPage'))
+const AdminDashboard = lazy(() => import('./admin/pages/AdminDashboard'))
+const AdminUsersPage = lazy(() => import('./admin/pages/AdminUsersPage'))
+const AdminSubscriptionsPage = lazy(() => import('./admin/pages/AdminSubscriptionsPage'))
+const AdminPaymentsPage = lazy(() => import('./admin/pages/AdminPaymentsPage'))
+const AdminUploadsPage = lazy(() => import('./admin/pages/AdminUploadsPage'))
+const AdminUploadDetailsPage = lazy(() => import('./admin/pages/AdminUploadDetailsPage'))
+const AdminUserDetailsPage = lazy(() => import('./admin/pages/AdminUserDetailsPage'))
+const AdminSecurityPage = lazy(() => import('./admin/pages/AdminSecurityPage'))
 const AdminLoginPage = lazy(() => import('./admin/pages/AdminLoginPage'))
 const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
+const AdminShell = lazy(() => import('./admin/components/AdminShell'))
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -300,12 +309,119 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     const hasStoredAdminSession = Boolean(localStorage.getItem('admin_session'))
 
+    const logoutAdmin = () => {
+      localStorage.removeItem('admin_session')
+      localStorage.removeItem('admin_id')
+      navigate('/admin/login')
+    }
+
+    const renderAdminSection = (sectionProps, page) => (
+      <AdminShell onLogout={logoutAdmin} {...sectionProps}>
+        {page}
+      </AdminShell>
+    )
+
+    if (pathname === '/admin' || pathname === '/admin/overview') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'overview',
+        title: 'Overview',
+        subtitle: 'Your map of every admin area in one place.',
+        purpose: 'Use this page to understand the information architecture and move into each operational section.',
+        breadcrumbs: ['Admin', 'Overview'],
+      }, <AdminDashboard />)
+    }
+
+    if (pathname === '/admin/users') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'users',
+        title: 'Users',
+        subtitle: 'Manage account access, status, and profile integrity.',
+        purpose: 'Use this page to search users, inspect account details, and take support or safety actions.',
+        breadcrumbs: ['Admin', 'Users'],
+      }, <AdminUsersPage />)
+    }
+
+    if (pathname.startsWith('/admin/users/')) {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'users',
+        title: 'User details',
+        subtitle: 'Focused user view for account-level interventions.',
+        purpose: 'Use this page to review one user and perform profile, password, access, or moderation actions.',
+        breadcrumbs: ['Admin', 'Users', 'User details'],
+      }, <AdminUserDetailsPage />)
+    }
+
+    if (pathname === '/admin/billing') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'billing',
+        title: 'Billing',
+        subtitle: 'Subscriptions, payments, and refunds in one workflow.',
+        purpose: 'Use this page to monitor revenue, retry failed transactions, and resolve customer billing requests.',
+        breadcrumbs: ['Admin', 'Billing'],
+      }, (
+        <div>
+          <AdminSubscriptionsPage />
+          <AdminPaymentsPage />
+        </div>
+      ))
+    }
+
+    if (pathname === '/admin/uploads') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'uploads',
+        title: 'Uploads',
+        subtitle: 'Track resume processing performance and exceptions.',
+        purpose: 'Use this page to audit parsing outcomes, isolate failures, and open individual upload details.',
+        breadcrumbs: ['Admin', 'Uploads'],
+      }, <AdminUploadsPage />)
+    }
+
+    if (pathname.startsWith('/admin/uploads/')) {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'uploads',
+        title: 'Upload details',
+        subtitle: 'Single-upload diagnostics and retry operations.',
+        purpose: 'Use this page to inspect a specific upload artifact and re-run parsing when recovery is needed.',
+        breadcrumbs: ['Admin', 'Uploads', 'Upload details'],
+      }, <AdminUploadDetailsPage />)
+    }
+
     if (pathname === '/admin/logs') {
       if (!hasStoredAdminSession) {
         navigate('/admin/login')
         return null
       }
-      return <AdminLogsPage />
+      return renderAdminSection({
+        sectionKey: 'logs',
+        title: 'Logs',
+        subtitle: 'Investigate application errors and webhook events.',
+        purpose: 'Use this page to triage incidents, identify patterns, and mark issues as resolved.',
+        breadcrumbs: ['Admin', 'Logs'],
+      }, <AdminLogsPage />)
     }
 
     if (pathname === '/admin/health') {
@@ -313,7 +429,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         navigate('/admin/login')
         return null
       }
-      return <AdminHealthPage />
+      return renderAdminSection({
+        sectionKey: 'health',
+        title: 'Health',
+        subtitle: 'Live status of infrastructure and API reliability.',
+        purpose: 'Use this page to monitor system health signals and spot degradation before users are impacted.',
+        breadcrumbs: ['Admin', 'Health'],
+      }, <AdminHealthPage />)
     }
 
     if (pathname === '/admin/analytics') {
@@ -321,7 +443,27 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         navigate('/admin/login')
         return null
       }
-      return <AdminAnalyticsPage />
+      return renderAdminSection({
+        sectionKey: 'analytics',
+        title: 'Analytics',
+        subtitle: 'Business and product performance trends.',
+        purpose: 'Use this page to understand growth, retention, conversion, and revenue momentum.',
+        breadcrumbs: ['Admin', 'Analytics'],
+      }, <AdminAnalyticsPage />)
+    }
+
+    if (pathname === '/admin/security') {
+      if (!hasStoredAdminSession) {
+        navigate('/admin/login')
+        return null
+      }
+      return renderAdminSection({
+        sectionKey: 'security',
+        title: 'Security',
+        subtitle: 'Authentication posture and admin access controls.',
+        purpose: 'Use this page to access session controls, 2FA setup, and operational security reminders.',
+        breadcrumbs: ['Admin', 'Security'],
+      }, <AdminSecurityPage />)
     }
 
     if (pathname === '/admin/login') {
