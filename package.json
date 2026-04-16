@@ -15,6 +15,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "qa:admin-smoke": "node scripts/admin-smoke-checks.mjs",
     "preview": "vite preview",
     "backend:dev": "node --watch backend/src/index.js",
     "backend:start": "node backend/src/index.js",
