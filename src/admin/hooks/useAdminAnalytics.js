@@ -26,6 +26,13 @@ export default function useAdminAnalytics() {
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [dataMode, setDataMode] = useState({
+    limited: false,
+    reason: null,
+    diagnostics: null,
+    unavailableSections: [],
+    canRetry: false,
+  })
 
   const loadAnalytics = useCallback(async ({ silent = false, currentFilters = filters } = {}) => {
     try {
@@ -34,6 +41,24 @@ export default function useAdminAnalytics() {
 
       const params = new URLSearchParams({ startDate: currentFilters.startDate, endDate: currentFilters.endDate })
       const payload = await adminFetchJson(`${API_BASE}/admin/analytics?${params.toString()}`, 'Failed to load admin analytics')
+      const sectionKeys = [
+        'kpis',
+        'conversionFunnel',
+        'parsingTrend',
+        'planBreakdown',
+        'revenueTrend',
+        'userGrowth',
+        'retentionCohorts',
+        'tokenUsageSummary',
+        'tokenUsageTrend',
+        'tokenUsageUploads',
+        'uxBlockers',
+        'uxWeeklyReport',
+      ]
+      const inferredUnavailable = sectionKeys.filter((key) => payload?.[key] === undefined || payload?.[key] === null)
+      const serverDataMode = payload?.dataMode || {}
+      const unavailableSections = Array.from(new Set([...(serverDataMode.unavailableSections || []), ...inferredUnavailable]))
+      const limited = Boolean(serverDataMode.limited) || unavailableSections.length > 0
 
       setAnalytics({
         filters: payload.filters,
@@ -51,6 +76,13 @@ export default function useAdminAnalytics() {
         uxWeeklyReport: payload.uxWeeklyReport || null,
         generatedAt: payload.generatedAt,
       })
+      setDataMode({
+        limited,
+        reason: serverDataMode.reason || (limited ? 'partial_payload' : null),
+        diagnostics: serverDataMode.diagnostics || (limited ? 'Some analytics sections are unavailable from the API response.' : null),
+        unavailableSections,
+        canRetry: serverDataMode.canRetry !== undefined ? Boolean(serverDataMode.canRetry) : limited,
+      })
     } catch (err) {
       void emitAdminEvent({
         eventType: 'admin_page_load_failed',
@@ -58,6 +90,13 @@ export default function useAdminAnalytics() {
         metadata: { reason: err?.message || 'unknown', source: 'analytics_load' },
       })
       setError(getMappedError(err, 'Analytics could not be loaded.'))
+      setDataMode({
+        limited: false,
+        reason: null,
+        diagnostics: null,
+        unavailableSections: [],
+        canRetry: false,
+      })
     } finally {
       if (!silent) setLoading(false)
     }
@@ -91,5 +130,16 @@ export default function useAdminAnalytics() {
     window.open(`${API_BASE}/admin/analytics?${params.toString()}`, '_blank', 'noopener,noreferrer')
   }
 
-  return { analytics, loading, error, filters, range, applyPreset, updateCustomDate, refresh: () => loadAnalytics({ currentFilters: filters }), exportCsv }
+  return {
+    analytics,
+    loading,
+    error,
+    filters,
+    range,
+    applyPreset,
+    updateCustomDate,
+    refresh: () => loadAnalytics({ currentFilters: filters }),
+    exportCsv,
+    dataMode,
+  }
 }
