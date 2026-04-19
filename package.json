@@ -19,7 +19,8 @@
     "preview": "vite preview",
     "backend:dev": "node --watch backend/src/index.js",
     "backend:start": "node backend/src/index.js",
-    "start": "node ./backend/src/index.js"
+    "start": "node ./backend/src/index.js",
+    "qa:admin-visual-baseline": "node scripts/verify-admin-visual-baseline.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
