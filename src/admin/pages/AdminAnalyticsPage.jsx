@@ -203,9 +203,12 @@ export default function AdminAnalyticsPage() {
             <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">
               <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{number(tokenUsageSummary.totalTokens)}</strong></p>
               <p className="flex items-center justify-between"><span>Avg tokens / analysis</span> <strong>{number(tokenUsageSummary.avgTokensPerAnalysis)}</strong></p>
-              <p className="flex items-center justify-between"><span>Total estimated cost</span> <strong>{money(tokenUsageSummary.totalEstimatedCostUsd || 0)}</strong></p>
-              <p className="flex items-center justify-between"><span>Missing usage metadata</span> <strong>{number(tokenUsageSummary.usageUnavailableCount)}</strong></p>
-            </div>
+                <p className="flex items-center justify-between"><span>Total estimated cost</span> <strong>{money(tokenUsageSummary.totalEstimatedCostUsd || 0)}</strong></p>
+                <p className="flex items-center justify-between"><span>Missing usage metadata</span> <strong>{number(tokenUsageSummary.usageUnavailableCount)}</strong></p>
+              </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Estimated token cost trend by day is shown below; missing provider metadata is labeled in per-upload records.
+            </p>
             <div className="mt-4 overflow-auto">
               <table className="min-w-full text-sm">
                 <thead>
@@ -227,6 +230,45 @@ export default function AdminAnalyticsPage() {
                       <td className="py-2">{money(row.estimatedCostUsd || 0)}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="ui-card p-4">
+            <h2 className="text-lg font-medium text-slate-900">Per-upload Token Usage (latest 25)</h2>
+            <div className="mt-3 overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500">
+                    <th className="py-2 pr-3">Captured</th>
+                    <th className="py-2 pr-3">Filename</th>
+                    <th className="py-2 pr-3">User</th>
+                    <th className="py-2 pr-3">Provider</th>
+                    <th className="py-2 pr-3">Model</th>
+                    <th className="py-2 pr-3">Total tokens</th>
+                    <th className="py-2 pr-3">Est. cost</th>
+                    <th className="py-2">Usage note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(analytics.tokenUsageUploads || []).slice(0, 25).map((row, index) => (
+                    <tr key={`${row.resumeId || 'resume'}-${row.createdAt || index}`} className="border-t border-slate-100">
+                      <td className="py-2 pr-3">{new Date(row.createdAt).toLocaleString()}</td>
+                      <td className="py-2 pr-3">{row.filename || row.resumeId || '—'}</td>
+                      <td className="py-2 pr-3">{row.userEmail || row.userId || '—'}</td>
+                      <td className="py-2 pr-3">{row.provider || '—'}</td>
+                      <td className="py-2 pr-3">{row.model || '—'}</td>
+                      <td className="py-2 pr-3">{number(row.totalTokens)}</td>
+                      <td className="py-2 pr-3">{money(row.estimatedCostUsd || 0)}</td>
+                      <td className="py-2">{row.usageAvailable ? 'usage available' : `usage missing: ${row.unavailableReason || 'unknown'}`}</td>
+                    </tr>
+                  ))}
+                  {(!analytics.tokenUsageUploads || analytics.tokenUsageUploads.length === 0) ? (
+                    <tr className="border-t border-slate-100">
+                      <td className="py-3 text-slate-500" colSpan={8}>No token usage records in this range.</td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>

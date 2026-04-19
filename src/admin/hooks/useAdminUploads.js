@@ -124,6 +124,8 @@ export function useAdminUploadDetails(uploadId) {
   const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState(null)
   const [upload, setUpload] = useState(null)
+  const [tokenUsageHistory, setTokenUsageHistory] = useState([])
+  const [tokenUsageSummary, setTokenUsageSummary] = useState(null)
   const [retriedAt, setRetriedAt] = useState(null)
 
   const loadUpload = useCallback(async () => {
@@ -135,6 +137,8 @@ export function useAdminUploadDetails(uploadId) {
       const payload = await adminFetchJson(`${API_BASE}/admin/uploads/${uploadId}`, 'Failed to load upload details')
 
       setUpload(payload.upload || null)
+      setTokenUsageHistory(payload.tokenUsageHistory || [])
+      setTokenUsageSummary(payload.tokenUsageSummary || null)
       setRetriedAt(payload.retriedAt || null)
     } catch (err) {
       setError(getMappedError(err, 'Uploads data could not be loaded.'))
@@ -173,6 +177,8 @@ export function useAdminUploadDetails(uploadId) {
     retrying,
     error,
     upload,
+    tokenUsageHistory,
+    tokenUsageSummary,
     retriedAt,
     retryParsing,
     reload: loadUpload,

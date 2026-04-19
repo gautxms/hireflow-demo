@@ -18,7 +18,17 @@ function date(value) {
   return value ? new Date(value).toLocaleString() : '—'
 }
 
-export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) {
+function formatToken(value) {
+  if (value === null || value === undefined) return '—'
+  return Number(value).toLocaleString()
+}
+
+function formatMoney(value) {
+  if (value === null || value === undefined) return '—'
+  return `$${Number(value).toFixed(6)}`
+}
+
+export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsageSummary, retriedAt, onRetry, retrying }) {
   if (!upload) return null
 
   const downloadParseResult = () => {
@@ -77,6 +87,52 @@ export default function UploadPreview({ upload, retriedAt, onRetry, retrying }) 
           </p>
         </div>
       </div>
+
+      <section className="ui-card p-4">
+        <h2 className="text-lg font-medium text-slate-900">Token Usage</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">
+          <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{formatToken(tokenUsageSummary?.totalTokens)}</strong></p>
+          <p className="flex items-center justify-between"><span>Avg tokens / run</span> <strong>{formatToken(tokenUsageSummary?.avgTokensPerRun)}</strong></p>
+          <p className="flex items-center justify-between"><span>Total estimated cost</span> <strong>{formatMoney(tokenUsageSummary?.totalEstimatedCostUsd)}</strong></p>
+          <p className="flex items-center justify-between"><span>Missing usage metadata</span> <strong>{formatToken(tokenUsageSummary?.unavailableRuns)}</strong></p>
+        </div>
+        <div className="mt-4 overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="py-2 pr-3">Captured</th>
+                <th className="py-2 pr-3">Provider</th>
+                <th className="py-2 pr-3">Model</th>
+                <th className="py-2 pr-3">Input</th>
+                <th className="py-2 pr-3">Output</th>
+                <th className="py-2 pr-3">Total</th>
+                <th className="py-2 pr-3">Est. cost</th>
+                <th className="py-2">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tokenUsageHistory.length === 0 ? (
+                <tr className="border-t border-slate-100">
+                  <td className="py-3 text-slate-500" colSpan={8}>No token usage records for this upload yet.</td>
+                </tr>
+              ) : tokenUsageHistory.map((entry) => (
+                <tr key={entry.id} className="border-t border-slate-100">
+                  <td className="py-2 pr-3">{date(entry.createdAt)}</td>
+                  <td className="py-2 pr-3">{entry.provider || '—'}</td>
+                  <td className="py-2 pr-3">{entry.model || '—'}</td>
+                  <td className="py-2 pr-3">{formatToken(entry.inputTokens)}</td>
+                  <td className="py-2 pr-3">{formatToken(entry.outputTokens)}</td>
+                  <td className="py-2 pr-3">{formatToken(entry.totalTokens)}</td>
+                  <td className="py-2 pr-3">{formatMoney(entry.estimatedCostUsd)}</td>
+                  <td className="py-2">
+                    {entry.usageAvailable ? 'usage available' : `usage missing: ${entry.unavailableReason || 'unknown'}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="ui-card p-4">

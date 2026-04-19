@@ -15,6 +15,34 @@ function normalizeUnavailableReason(reason) {
   return raw ? raw.slice(0, 180) : 'unknown'
 }
 
+let tokenUsageTableEnsured = false
+
+async function ensureTokenUsageTable() {
+  if (tokenUsageTableEnsured) return
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS resume_analysis_token_usage (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      resume_id UUID NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+      parse_job_id TEXT,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      job_description_id UUID,
+      provider TEXT NOT NULL DEFAULT 'anthropic',
+      model TEXT,
+      usage_available BOOLEAN NOT NULL DEFAULT false,
+      unavailable_reason TEXT,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      total_tokens INTEGER,
+      estimated_cost_usd NUMERIC(12, 6),
+      metadata JSONB,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `)
+
+  tokenUsageTableEnsured = true
+}
+
 async function persistTokenUsageMetric({
   resumeId,
   parseJobId,
@@ -25,6 +53,8 @@ async function persistTokenUsageMetric({
   tokenUsage,
   metadata = {},
 }) {
+  await ensureTokenUsageTable()
+
   const usageAvailable = Boolean(tokenUsage?.usageAvailable)
   const unavailableReason = usageAvailable ? null : normalizeUnavailableReason(tokenUsage?.unavailableReason)
 

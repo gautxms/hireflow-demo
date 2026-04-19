@@ -407,7 +407,7 @@ router.get('/export', async (req, res) => {
 
     const result = await pool.query(
       `SELECT r.id, r.filename, r.user_id, r.created_at, r.file_size, r.file_type, r.parse_status, r.parse_duration_ms, r.parse_error,
-              token.usage_available, token.unavailable_reason, token.input_tokens, token.output_tokens, token.total_tokens, token.estimated_cost_usd
+              token.provider, token.model, token.usage_available, token.unavailable_reason, token.input_tokens, token.output_tokens, token.total_tokens, token.estimated_cost_usd
        FROM resumes r
        LEFT JOIN LATERAL (
          SELECT t.*
@@ -422,7 +422,7 @@ router.get('/export', async (req, res) => {
       params,
     )
 
-    const header = ['id', 'filename', 'user_id', 'created_at', 'file_size', 'file_type', 'parse_status', 'parse_duration_ms', 'parse_error', 'usage_available', 'usage_unavailable_reason', 'input_tokens', 'output_tokens', 'total_tokens', 'estimated_cost_usd']
+    const header = ['id', 'filename', 'user_id', 'created_at', 'file_size', 'file_type', 'parse_status', 'parse_duration_ms', 'parse_error', 'usage_provider', 'usage_model', 'usage_available', 'usage_unavailable_reason', 'input_tokens', 'output_tokens', 'total_tokens', 'estimated_cost_usd']
     const csvRows = [header.join(',')]
 
     for (const row of result.rows) {
@@ -436,6 +436,8 @@ router.get('/export', async (req, res) => {
         normalizeStatus(row),
         Number(row.parse_duration_ms || 0),
         row.parse_error || '',
+        row.provider || '',
+        row.model || '',
         row.usage_available === null || row.usage_available === undefined ? '' : String(Boolean(row.usage_available)),
         row.unavailable_reason || '',
         row.input_tokens === null || row.input_tokens === undefined ? '' : Number(row.input_tokens),
@@ -506,7 +508,75 @@ router.get('/:uploadId', async (req, res) => {
       return res.status(404).json({ error: 'Upload not found' })
     }
 
-    return res.json({ upload: mapUploadRow(row), retriedAt: toIso(row.retried_at) })
+    const tokenHistoryResult = await pool.query(
+      `SELECT
+         id,
+         parse_job_id,
+         provider,
+         model,
+         usage_available,
+         unavailable_reason,
+         input_tokens,
+         output_tokens,
+         total_tokens,
+         estimated_cost_usd,
+         metadata,
+         created_at
+       FROM resume_analysis_token_usage
+       WHERE resume_id = $1
+       ORDER BY created_at DESC
+       LIMIT 25`,
+      [row.id],
+    )
+
+    const tokenUsageHistory = tokenHistoryResult.rows.map((usageRow) => ({
+      id: usageRow.id,
+      parseJobId: usageRow.parse_job_id,
+      provider: usageRow.provider || null,
+      model: usageRow.model || null,
+      usageAvailable: usageRow.usage_available === null || usageRow.usage_available === undefined ? null : Boolean(usageRow.usage_available),
+      unavailableReason: usageRow.unavailable_reason || null,
+      inputTokens: usageRow.input_tokens === null || usageRow.input_tokens === undefined ? null : Number(usageRow.input_tokens),
+      outputTokens: usageRow.output_tokens === null || usageRow.output_tokens === undefined ? null : Number(usageRow.output_tokens),
+      totalTokens: usageRow.total_tokens === null || usageRow.total_tokens === undefined ? null : Number(usageRow.total_tokens),
+      estimatedCostUsd: usageRow.estimated_cost_usd === null || usageRow.estimated_cost_usd === undefined ? null : Number(usageRow.estimated_cost_usd),
+      metadata: usageRow.metadata || {},
+      createdAt: toIso(usageRow.created_at),
+    }))
+
+    const tokenUsageSummary = tokenUsageHistory.reduce((acc, usage) => {
+      if (usage.usageAvailable) {
+        acc.availableRuns += 1
+        acc.totalInputTokens += Number(usage.inputTokens || 0)
+        acc.totalOutputTokens += Number(usage.outputTokens || 0)
+        acc.totalTokens += Number(usage.totalTokens || 0)
+        acc.totalEstimatedCostUsd += Number(usage.estimatedCostUsd || 0)
+      } else {
+        acc.unavailableRuns += 1
+      }
+      return acc
+    }, {
+      runs: tokenUsageHistory.length,
+      availableRuns: 0,
+      unavailableRuns: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalTokens: 0,
+      totalEstimatedCostUsd: 0,
+    })
+
+    return res.json({
+      upload: mapUploadRow(row),
+      retriedAt: toIso(row.retried_at),
+      tokenUsageHistory,
+      tokenUsageSummary: {
+        ...tokenUsageSummary,
+        avgTokensPerRun: tokenUsageSummary.availableRuns > 0
+          ? Number((tokenUsageSummary.totalTokens / tokenUsageSummary.availableRuns).toFixed(2))
+          : 0,
+        totalEstimatedCostUsd: Number(tokenUsageSummary.totalEstimatedCostUsd.toFixed(6)),
+      },
+    })
   } catch (error) {
     console.error('[Admin uploads] details failed:', error)
     return res.status(500).json({ error: 'Unable to load upload details' })
