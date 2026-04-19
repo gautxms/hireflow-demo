@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
 import useAdminUxTracking from '../hooks/useAdminUxTracking'
+import { Alert, Card, FormRow, SectionHeader } from '../components/primitives/AdminPrimitives'
 
 function readToken() {
   const url = new URL(window.location.href)
@@ -165,99 +166,98 @@ export default function AdminSetup2FA() {
   const otpDetails = useMemo(() => parseOtpauthDetails(otpauthUrl), [otpauthUrl])
 
   return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-      <h1>Admin 2FA Setup Wizard</h1>
-      <p>{setupProgress}</p>
-      <p>What to do next: use your setup token, generate backup codes, verify a TOTP code, then return to admin login.</p>
+    <main className="admin-page">
+      <SectionHeader
+        title="Admin 2FA Setup Wizard"
+        subtitle="Use your setup token, generate backup codes, verify a TOTP code, then return to admin login."
+        eyebrow={setupProgress}
+      />
 
-      <div style={{ display: 'grid', gap: 10 }}>
-        <label htmlFor="setupToken">Setup token</label>
-        <input id="setupToken" value={setupToken} onChange={(event) => {
-          const incomingToken = event.target.value
-          setSetupToken(incomingToken)
-          setSetupTokenExpiresAt(decodeSetupTokenExpiry(incomingToken))
-        }} />
-        <small style={{ color: setupTokenSecondsLeft > 0 ? '#334155' : '#b91c1c' }}>
-          Setup token expires in {formatSeconds(setupTokenSecondsLeft)}.
-        </small>
-        <button type="button" onClick={beginSetup}>Generate QR + backup codes</button>
-        <a href="/admin/login">Regenerate setup token from login</a>
-      </div>
+      <Card className="admin-flow">
+        <FormRow
+          label="Setup token"
+          htmlFor="setupToken"
+          hint={`Setup token expires in ${formatSeconds(setupTokenSecondsLeft)}.`}
+        >
+          <input
+            className="ui-input"
+            id="setupToken"
+            value={setupToken}
+            onChange={(event) => {
+              const incomingToken = event.target.value
+              setSetupToken(incomingToken)
+              setSetupTokenExpiresAt(decodeSetupTokenExpiry(incomingToken))
+            }}
+          />
+        </FormRow>
+
+        <div className="admin-flow__actions">
+          <button type="button" className="ui-btn ui-btn--primary" onClick={beginSetup}>Generate QR + backup codes</button>
+          <a className="ui-btn" href="/admin/login">Regenerate setup token from login</a>
+        </div>
+      </Card>
 
       {qrCodeDataUrl ? (
-        <section style={{ marginTop: 16 }}>
-          <h2>Scan in authenticator app</h2>
+        <Card className="admin-flow">
+          <SectionHeader title="Scan in authenticator app" />
           {qrLoadState === 'error' ? (
-            <p style={{ color: '#92400e', marginBottom: 8 }}>
+            <Alert tone="warning">
               We couldn’t display a scannable QR image right now. Use the manual setup key below or refresh and try again.
-            </p>
+            </Alert>
           ) : null}
           <img
             src={qrCodeDataUrl}
             alt="Admin TOTP QR code"
-            style={{ width: 220, height: 220, border: '1px solid #cbd5e1', borderRadius: 8, padding: 4, background: '#fff' }}
+            className="admin-qr"
             onLoad={() => setQrLoadState('ready')}
             onError={() => setQrLoadState('error')}
           />
-          {otpDetails ? (
-            <p style={{ marginTop: 8 }}>
-              <strong>Issuer:</strong> {otpDetails.issuer}<br />
-              <strong>Account:</strong> {otpDetails.accountName}
-            </p>
-          ) : null}
+          {otpDetails ? <p className="admin-note"><strong>Issuer:</strong> {otpDetails.issuer} · <strong>Account:</strong> {otpDetails.accountName}</p> : null}
+
           {manualEntryKey ? (
-            <>
-              <p>
-                <strong>Manual setup key:</strong>{' '}
-                <code style={{ userSelect: 'all' }}>{manualEntryKey}</code>
-              </p>
-              <button type="button" onClick={() => navigator.clipboard.writeText(manualEntryKey).catch(() => {})}>Copy setup key</button>
-            </>
+            <div className="admin-flow">
+              <p><strong>Manual setup key:</strong> <code>{manualEntryKey}</code></p>
+              <button type="button" className="ui-btn" onClick={() => navigator.clipboard.writeText(manualEntryKey).catch(() => {})}>Copy setup key</button>
+            </div>
           ) : null}
-          {otpauthUrl ? (
-            <p>
-              <a href={otpauthUrl}>Open authenticator link</a>
-            </p>
-          ) : null}
-        </section>
+
+          {otpauthUrl ? <a href={otpauthUrl}>Open authenticator link</a> : null}
+        </Card>
       ) : null}
 
       {backupCodes.length > 0 ? (
-        <section style={{ marginTop: 16 }}>
-          <h2>Backup codes (10 total, one-time use)</h2>
-          <p><strong>Print these down</strong> and keep them offline.</p>
-          <ul>
+        <Card className="admin-flow">
+          <SectionHeader title="Backup codes" subtitle="10 total, one-time use. Save these offline before continuing." />
+          <ul className="admin-code-list">
             {backupCodes.map((code) => <li key={code}><code>{code}</code></li>)}
           </ul>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={() => downloadBackupCodes(backupCodes)}>Download backup codes</button>
-            <button type="button" onClick={() => window.print()}>Print backup codes</button>
+          <div className="admin-flow__actions">
+            <button type="button" className="ui-btn" onClick={() => downloadBackupCodes(backupCodes)}>Download backup codes</button>
+            <button type="button" className="ui-btn" onClick={() => window.print()}>Print backup codes</button>
           </div>
-        </section>
+        </Card>
       ) : null}
 
-      <form onSubmit={verifyCode} style={{ marginTop: 16, display: 'grid', gap: 8 }}>
-        <label htmlFor="totpCode">Verification code</label>
-        <small style={{ color: '#334155' }}>Current code window expires in {totpWindowSecondsLeft}s.</small>
-        <input
-          id="totpCode"
-          value={totpCode}
-          onChange={(event) => setTotpCode(event.target.value.replace(/[^\d]/g, '').slice(0, 6))}
-          placeholder="123456"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-        />
-        <small style={{ color: '#475569' }}>
-          If a code fails, wait for the timer to reset and enter the next one. Make sure your phone time is set automatically.
-        </small>
-        <button type="submit" disabled={!canVerify}>Verify and enable 2FA</button>
-        <small style={{ color: '#475569' }}>
-          Lost access to your authenticator? Go back to <a href="/admin/login">admin login</a> and complete sign-in with a backup code.
-        </small>
-      </form>
+      <Card as="form" onSubmit={verifyCode} className="admin-flow">
+        <SectionHeader title="Verify authenticator code" />
+        <FormRow label="Verification code" htmlFor="totpCode" hint={`Current code window expires in ${totpWindowSecondsLeft}s.`}>
+          <input
+            className="ui-input"
+            id="totpCode"
+            value={totpCode}
+            onChange={(event) => setTotpCode(event.target.value.replace(/[^\d]/g, '').slice(0, 6))}
+            placeholder="123456"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+          />
+        </FormRow>
+        <p className="admin-note">If a code fails, wait for the timer to reset and enter the next one. Make sure your phone time is set automatically.</p>
+        <button type="submit" className="ui-btn ui-btn--primary" disabled={!canVerify}>Verify and enable 2FA</button>
+        <p className="admin-note">Lost access to your authenticator? Go back to <a href="/admin/login">admin login</a> and complete sign-in with a backup code.</p>
+      </Card>
 
-      {status ? <p style={{ color: '#0369a1' }}>{status}</p> : null}
-      {error ? <p style={{ color: '#b91c1c' }}>{error}</p> : null}
+      {status ? <Alert tone="info">{status}</Alert> : null}
+      {error ? <Alert tone="error">{error}</Alert> : null}
     </main>
   )
 }
