@@ -18,6 +18,11 @@
   --muted: #7070a0;
   --font-display: 'Syne', sans-serif;
   --font-body: 'DM Sans', sans-serif;
+  --color-bg-primary: var(--ink);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
+  --font-family-base: var(--font-body);
+  --font-family-display: var(--font-display);
 }
 
 html {
@@ -25,9 +30,9 @@ html {
 }
 
 body {
-  background: var(--ink);
-  color: var(--text);
-  font-family: var(--font-body);
+  background: var(--color-bg-primary, var(--ink));
+  color: var(--color-text-primary, var(--text));
+  font-family: var(--font-family-base, var(--font-body));
   font-size: var(--type-body-size);
   line-height: var(--type-body-line-height);
   overflow-x: hidden;
@@ -122,6 +127,7 @@ nav {
 }
 
 .nav-logo {
+  font-family: var(--font-family-display, var(--font-display));
   font-weight: 800;
   font-size: 1.25rem;
   letter-spacing: -0.03em;
@@ -140,7 +146,7 @@ nav {
 
 .nav-links a {
   text-decoration: none;
-  color: var(--muted);
+  color: var(--color-text-secondary, var(--muted));
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
@@ -154,7 +160,7 @@ nav {
 
 .nav-links button {
   text-decoration: none;
-  color: var(--muted);
+  color: var(--color-text-secondary, var(--muted));
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
@@ -176,10 +182,10 @@ nav {
 .btn-ghost {
   background: none;
   border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--color-text-primary, var(--text));
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
-  font-family: var(--font-body);
+  font-family: var(--font-family-base, var(--font-body));
   font-size: var(--type-button-size);
   font-weight: var(--type-button-weight);
   line-height: var(--type-button-line-height);
@@ -197,7 +203,7 @@ nav {
   border: none;
   padding: 0.55rem 1.35rem;
   border-radius: 6px;
-  font-family: var(--font-body);
+  font-family: var(--font-family-base, var(--font-body));
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
   line-height: var(--type-button-line-height);
@@ -267,6 +273,7 @@ nav {
 }
 
 .hero h1 {
+  font-family: var(--font-family-display, var(--font-display));
   font-weight: var(--type-h1-weight);
   font-size: var(--type-h1-size);
   line-height: var(--type-h1-line-height);
@@ -323,6 +330,7 @@ nav {
 }
 
 .feature-card h3 {
+  font-family: var(--font-family-display, var(--font-display));
   font-weight: var(--type-h3-weight);
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line-height);
