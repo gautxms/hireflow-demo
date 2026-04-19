@@ -606,7 +606,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   return (
     <>
-      <header className="site-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, zIndex: 200 }}>
+      <header className="site-header">
         <a
           href="/"
           onClick={(event) => {
@@ -614,10 +614,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             setIsMobileNavOpen(false)
             navigate('/')
           }}
-          className="logo"
-          style={{ color: '#fff', textDecoration: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '1.2rem', padding: 0, height: 'auto' }}
+          className="site-logo"
         >
-          Hire<span style={{ color: 'var(--accent)' }}>Flow</span>
+          Hire<span>Flow</span>
         </a>
         <button
           type="button"
@@ -625,21 +624,20 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           aria-label="Toggle main navigation"
           aria-expanded={isMobileNavOpen}
           onClick={() => setIsMobileNavOpen((open) => !open)}
-          style={{ background: 'transparent', border: '1px solid var(--border)', color: '#fff', borderRadius: 8, display: 'none' }}
         >
           ☰
         </button>
         <div className={`nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
-          <button onClick={handleFeaturesClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Features</button>
+          <button type="button" className="site-nav-button" onClick={handleFeaturesClick}>Features</button>
           {canViewUpgradePricing && (
-            <button onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>
+            <button type="button" className="site-nav-button" onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }}>
               {isAuthenticated ? 'Upgrade' : 'Pricing'}
             </button>
           )}
-          <button onClick={handleAboutClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>About</button>
-          <button onClick={handleHelpClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Help</button>
+          <button type="button" className="site-nav-button" onClick={handleAboutClick}>About</button>
+          <button type="button" className="site-nav-button" onClick={handleHelpClick}>Help</button>
         </div>
-        <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`} style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
           {isAuthenticated ? (
             <div style={{ position: 'relative' }} ref={profileMenuRef}>
               <button
@@ -725,8 +723,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             </div>
           ) : (
             <>
-              <button onClick={() => { setIsMobileNavOpen(false); navigate('/login') }} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'transparent', color: '#fff', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>Login</button>
-              <button onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }} style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontWeight: 600 }}>Sign up</button>
+              <button type="button" className="btn-ghost" onClick={() => { setIsMobileNavOpen(false); navigate('/login') }}>Login</button>
+              <button type="button" className="btn-primary" onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }}>Sign up</button>
             </>
           )}
         </div>

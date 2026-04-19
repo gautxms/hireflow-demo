@@ -4,14 +4,16 @@
   --admin-font: var(--font-family-base);
   --admin-display-font: var(--font-family-display);
   --admin-bg: var(--color-bg-primary);
-  --admin-surface: var(--color-bg-secondary);
+  --admin-surface: var(--color-bg-elevated);
   --admin-surface-subtle: var(--color-bg-secondary);
-  --admin-surface-strong: var(--color-bg-secondary);
+  --admin-surface-strong: var(--color-bg-elevated);
   --admin-border: var(--color-border);
   --admin-border-strong: var(--color-border);
   --admin-text: var(--color-text-primary);
   --admin-text-muted: var(--color-text-secondary);
   --admin-text-subtle: var(--color-text-nav);
+  --admin-nav-text: var(--color-text-nav);
+  --admin-nav-active: var(--color-accent-green);
   --admin-primary: var(--color-accent-green);
   --admin-primary-strong: var(--color-accent-green-hover);
   --admin-danger: var(--color-error);
@@ -154,7 +156,7 @@
 .admin-shell-v2__sidebar {
   width: 260px;
   border-right: 1px solid var(--admin-border);
-  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
+  background: linear-gradient(180deg, var(--admin-surface) 0%, var(--admin-bg) 100%);
   color: var(--admin-text);
   padding: 1rem 0.75rem;
   position: sticky;
@@ -183,23 +185,28 @@
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: var(--admin-text-muted);
+  color: var(--admin-nav-text);
   padding: 0.65rem 0.75rem;
   text-align: left;
   display: flex;
+  align-items: center;
   gap: 0.6rem;
   cursor: pointer;
+  font-weight: 500;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
 }
 
 .admin-shell-v2__nav-item:hover,
 .admin-shell-v2__mobile-panel-item:hover {
-  background: var(--color-white-alpha-08);
+  background: var(--color-accent-alpha-08);
+  border-color: var(--color-accent-alpha-15);
+  color: var(--admin-nav-active);
 }
 
 .admin-shell-v2__nav-item.is-active {
-  background: var(--admin-primary);
-  border-color: color-mix(in srgb, var(--admin-primary), var(--color-text-primary) 10%);
-  color: var(--color-bg-primary);
+  background: var(--color-accent-alpha-08);
+  border-color: var(--admin-nav-active);
+  color: var(--admin-nav-active);
   font-weight: 700;
 }
 
@@ -240,7 +247,7 @@
 .admin-shell-v2__subtitle,
 .admin-shell-v2__purpose {
   margin: 0.25rem 0 0;
-  color: var(--admin-text-muted);
+  color: var(--admin-text-subtle);
   font-size: 0.93rem;
   max-width: 80ch;
 }
@@ -293,6 +300,20 @@
 }
 
 @media (max-width: 960px) {
+  .admin-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 180ms ease;
+  }
+
+  .admin-sidebar--open {
+    transform: translateX(0);
+  }
+
   .admin-shell-v2__sidebar {
     display: none;
   }
@@ -323,18 +344,26 @@
   }
 
   .admin-shell-v2__mobile-tab {
-    border: 0;
+    border: 1px solid transparent;
     background: transparent;
     padding: 0.55rem 0.2rem 0.6rem;
     font-size: 0.73rem;
-    color: var(--admin-text-subtle);
+    color: var(--admin-nav-text);
     display: grid;
     justify-items: center;
     gap: 0.2rem;
+    transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+  }
+
+  .admin-shell-v2__mobile-tab:hover {
+    color: var(--admin-nav-active);
+    background: var(--color-accent-alpha-08);
   }
 
   .admin-shell-v2__mobile-tab.is-active {
-    color: var(--admin-primary);
+    color: var(--admin-nav-active);
+    background: var(--color-accent-alpha-08);
+    border-color: var(--admin-nav-active);
     font-weight: 700;
   }
 
@@ -389,18 +418,76 @@
   .admin-shell-v2__mobile-panel-item {
     border: 1px solid var(--admin-border);
     background: transparent;
-    color: inherit;
+    color: var(--admin-nav-text);
     border-radius: 10px;
     padding: 0.65rem 0.75rem;
     display: flex;
+    align-items: center;
     gap: 0.55rem;
+    transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
   }
 
   .admin-shell-v2__mobile-panel-item.is-active {
-    background: var(--admin-primary);
-    border-color: var(--admin-primary);
-    color: var(--color-bg-primary);
+    background: var(--color-accent-alpha-08);
+    border-color: var(--admin-nav-active);
+    color: var(--admin-nav-active);
   }
+}
+
+.admin-sidebar {
+  width: 260px;
+  border-right: 1px solid var(--admin-border);
+  background: linear-gradient(180deg, var(--admin-surface) 0%, var(--admin-bg) 100%);
+  color: var(--admin-text);
+  padding: 1rem 0.75rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.admin-sidebar__brand {
+  font-family: var(--admin-display-font);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 0.6rem;
+  margin-bottom: 0.65rem;
+}
+
+.admin-sidebar__nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-sidebar__item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--admin-nav-text);
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+
+.admin-sidebar__item:hover {
+  color: var(--admin-nav-active);
+  background: var(--color-accent-alpha-08);
+  border-color: var(--color-accent-alpha-15);
+}
+
+.admin-sidebar__item--active {
+  color: var(--admin-nav-active);
+  border-color: var(--admin-nav-active);
+  background: var(--color-accent-alpha-08);
+  font-weight: 700;
 }
 
 @media (min-width: 961px) {

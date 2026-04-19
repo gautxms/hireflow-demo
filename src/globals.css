@@ -51,35 +51,46 @@ nav {
 
 .nav-links {
   display: flex;
-  gap: 2.5rem;
+  align-items: center;
+  gap: 1.5rem;
   list-style: none;
 }
 
-.nav-links a {
+.nav-links a,
+.nav-links button,
+.site-nav-button {
   text-decoration: none;
-  color: var(--color-text-secondary);
+  color: var(--color-text-nav);
   font-size: 0.9rem;
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: 0.02em;
-  transition: color 0.2s;
+  line-height: 1.2;
+  transition: color 0.2s ease;
 }
 
-.nav-links a:hover {
-  color: var(--color-text-primary);
-}
-
-.nav-links button {
-  text-decoration: none;
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  transition: color 0.2s;
+.nav-links button,
+.site-nav-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
   padding: 0;
 }
 
-.nav-links button:hover {
-  color: var(--color-text-primary);
+.nav-links :is(a, button):hover,
+.nav-links :is(a, button)[aria-current='page'],
+.site-nav-button:hover,
+.site-nav-button[aria-current='page'] {
+  color: var(--color-accent-green);
+}
+
+.nav-links :is(a, button):focus-visible,
+.site-nav-button:focus-visible,
+.mobile-nav-toggle:focus-visible,
+.btn-ghost:focus-visible,
+.btn-primary:focus-visible,
+.site-auth-actions button:focus-visible {
+  outline: 2px solid var(--color-accent-green);
+  outline-offset: 2px;
 }
 
 .nav-cta {
@@ -89,19 +100,22 @@ nav {
 }
 
 .btn-ghost {
-  background: none;
+  background: transparent;
   border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
+  color: var(--color-text-nav);
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
   font-family: var(--font-family-base);
+  font-weight: 600;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
+  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
 }
 
 .btn-ghost:hover {
-  border-color: var(--color-white-alpha-20);
+  border-color: var(--color-accent-green);
+  color: var(--color-accent-green);
+  background: var(--color-accent-alpha-08);
 }
 
 .btn-primary {
@@ -111,15 +125,64 @@ nav {
   padding: 0.55rem 1.35rem;
   border-radius: 6px;
   font-family: var(--font-family-base);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.15s;
+  transition: background-color 0.2s ease, transform 0.15s ease;
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
+  background: var(--color-accent-green-hover);
   transform: translateY(-1px);
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
+.site-logo {
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-family: var(--font-family-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 1.2rem;
+  padding: 0;
+  height: auto;
+}
+
+.site-logo span {
+  color: var(--color-accent-green);
+}
+
+.site-auth-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.site-auth-actions .btn-primary,
+.site-auth-actions .btn-ghost {
+  min-height: 36px;
+  padding: 0.5rem 0.8rem;
+}
+
+.mobile-nav-toggle {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  display: none;
 }
 
 /* ---- HERO ---- */
@@ -331,8 +394,6 @@ footer {
   }
 
   .site-header {
-    position: sticky;
-    top: 0;
     flex-wrap: wrap;
   }
 
