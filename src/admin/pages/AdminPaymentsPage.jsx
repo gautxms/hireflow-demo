@@ -98,7 +98,6 @@ export default function AdminPaymentsPage() {
 
   return (
     <div className="admin-page">
-      <h1 className="admin-page__title">Admin payments & revenue</h1>
       {error ? <StateAlert state={error} onRetry={() => void loadData()} /> : null}
 
       {data.revenueSummary ? (

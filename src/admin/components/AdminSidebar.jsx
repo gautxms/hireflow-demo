@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react'
+import { ADMIN_SECTIONS } from '../config/adminNavigation'
 
-const SECTIONS = [
-  { key: 'users', label: 'Users', icon: '👥' },
-  { key: 'subscriptions', label: 'Subscriptions', icon: '💳' },
-  { key: 'uploads', label: 'Uploads', icon: '📤' },
-  { key: 'analytics', label: 'Analytics', icon: '📊' },
-  { key: 'logs', label: 'Logs', icon: '📜' },
-  { key: 'health', label: 'Health', icon: '🩺' },
-]
+const SECTIONS = ADMIN_SECTIONS
 
 export default function AdminSidebar({ activeSection, onNavigate, mobileOpen, onClose }) {
   const [isMobileViewport, setIsMobileViewport] = useState(() => {

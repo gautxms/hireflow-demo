@@ -103,7 +103,6 @@ export default function AdminUploadsPage({ onOpenDetails }) {
 
   return (
     <div className="admin-page">
-      <h1 className="admin-page__title">Admin Resume Upload Monitoring</h1>
 
       {loadingStats ? <p className="text-sm text-slate-500">Loading stats…</p> : null}
       {stats ? (
