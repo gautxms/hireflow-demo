@@ -42,4 +42,12 @@ for (const route of REQUIRED_ROUTES) {
   assert(routeSet.has(route), `Missing required snapshot route: ${route}`)
 }
 
+assert(typeof baseline.screenshotEvidence === 'object' && baseline.screenshotEvidence, 'Baseline screenshotEvidence metadata is required.')
+assert(baseline.screenshotEvidence.beforeAfterRequired === true, 'beforeAfterRequired must be true in screenshotEvidence.')
+assert(Array.isArray(baseline.screenshotEvidence.requiredViewports), 'screenshotEvidence.requiredViewports must be an array.')
+for (const viewport of REQUIRED_VIEWPORTS) {
+  assert(baseline.screenshotEvidence.requiredViewports.includes(viewport), `screenshotEvidence.requiredViewports missing: ${viewport}`)
+}
+assert(Array.isArray(baseline.screenshotEvidence.baselineUpdateProcess) && baseline.screenshotEvidence.baselineUpdateProcess.length >= 3, 'screenshotEvidence.baselineUpdateProcess must include baseline update steps.')
+
 console.log(`✅ Admin visual baseline looks complete: ${baseline.snapshotMatrix.length} snapshots, ${baseline.viewports.length} viewports.`)

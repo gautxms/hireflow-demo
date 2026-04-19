@@ -1,0 +1,29 @@
+name: style-token-compliance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  style-token-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Style-token compliance scan
+        run: npm run lint:style-tokens
