@@ -1,0 +1,65 @@
+.route-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+}
+
+.route-state--shared-error {
+  min-height: 70vh;
+}
+
+.route-state--email-verified {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+}
+
+.route-state-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  max-width: 520px;
+  width: 100%;
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.route-state-card--verified {
+  max-width: 420px;
+  text-align: center;
+}
+
+.route-state-card__check {
+  font-size: 60px;
+  color: var(--color-success);
+  margin-bottom: var(--spacing-base);
+}
+
+.route-state-card__title {
+  margin-top: 0;
+  margin-bottom: var(--spacing-sm);
+  font-size: 1.3rem;
+  font-weight: var(--font-weight-semibold);
+}
+
+.route-state-card__title--verified {
+  font-size: 24px;
+}
+
+.route-state-card__message {
+  margin-top: 0;
+  margin-bottom: var(--spacing-base);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.route-state-card__action {
+  border: none;
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 20px;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
