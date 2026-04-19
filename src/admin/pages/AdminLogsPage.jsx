@@ -3,7 +3,7 @@ import WebhookAudit from '../components/WebhookAudit'
 import useAdminLogs from '../hooks/useAdminLogs'
 import API_BASE from '../../config/api'
 import StateAlert from '../components/StateAlert'
-import AdminDataTable from '../components/table/AdminDataTable'
+import { Card, DataTable, SectionHeader } from '../components/primitives/AdminPrimitives'
 import useSharedTableState from '../hooks/useSharedTableState'
 
 const COLUMN_PRESETS = [
@@ -32,21 +32,21 @@ function ErrorRateChart({ items }) {
   const maxCount = Math.max(...points.map((item) => item.count), 1)
 
   return (
-    <section className="ui-card p-4">
-      <h3 className="mb-3 text-lg font-medium">Error rate by endpoint</h3>
-      {!points.length && <p className="text-sm text-slate-500">No data to visualize.</p>}
+    <Card>
+      <SectionHeader title="Error rate by endpoint" subtitle="Top endpoints by error volume across current filters." />
+      {!points.length ? <p className="admin-note">No data to visualize.</p> : null}
       {points.map((point) => (
         <div key={point.endpoint} className="mb-3">
           <div className="mb-1 flex justify-between text-sm">
             <span>{point.endpoint}</span>
             <strong>{point.count}</strong>
           </div>
-          <div className="h-2 rounded bg-slate-100">
-            <div className="h-2 rounded bg-rose-500" style={{ width: `${(point.count / maxCount) * 100}%` }} />
+          <div className="admin-bar-track">
+            <div className="admin-bar-fill" style={{ width: `${(point.count / maxCount) * 100}%` }} />
           </div>
         </div>
       ))}
-    </section>
+    </Card>
   )
 }
 
@@ -133,7 +133,7 @@ export default function AdminLogsPage() {
       <h1 className="admin-page__title">Admin error logs</h1>
 
       {error ? <StateAlert state={error} onRetry={() => void refreshLogs()} /> : null}
-      <AdminDataTable
+      <DataTable
         title="Application Errors"
         subtitle="Search, filter, and inspect stack traces across error events."
         columns={columns}

@@ -3,6 +3,7 @@ import TwoFactorForm from '../components/TwoFactorForm'
 import AuditTrailTable from '../components/AuditTrailTable'
 import useAdminAuth from '../hooks/useAdminAuth'
 import API_BASE from '../../config/api'
+import { Alert, Card, FormRow, SectionHeader } from '../components/primitives/AdminPrimitives'
 
 function formatSeconds(seconds) {
   const safeValue = Math.max(0, Number(seconds) || 0)
@@ -140,91 +141,89 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main style={{ maxWidth: 960, margin: '0 auto', padding: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <div>
-          <h1>Admin Security Login</h1>
-          <p>{loginProgress}</p>
-        </div>
-
-        <div style={{ textAlign: 'right' }}>
+    <main className="admin-page">
+      <header className="admin-flow__header">
+        <SectionHeader title="Admin Security Login" eyebrow={loginProgress} />
+        <div className="admin-flow__status">
           <div><strong>Session timer:</strong> {formattedTimer}</div>
           <small>Updates every 10 seconds</small>
         </div>
       </header>
 
       {warningVisible ? (
-        <div style={{ marginTop: 12, padding: 10, border: '1px solid #f59e0b', borderRadius: 8, background: '#fef3c7' }}>
+        <Alert tone="warning">
           <strong>Session timeout warning:</strong> you will be logged out after 15 minutes of inactivity.
-          <p style={{ margin: '6px 0 0 0' }}>What to do next: click “Stay signed in” to refresh the timer, or finish your current auth step immediately.</p>
-          <div style={{ marginTop: 8 }}>
-            <button type="button" onClick={() => refreshActivity()}>Stay signed in</button>
-            <button type="button" onClick={() => setWarningVisible(false)} style={{ marginLeft: 8 }}>Dismiss</button>
+          <p className="mt-1">What to do next: click “Stay signed in” to refresh the timer, or finish your current auth step immediately.</p>
+          <div className="admin-flow__actions mt-2">
+            <button type="button" className="ui-btn" onClick={() => refreshActivity()}>Stay signed in</button>
+            <button type="button" className="ui-btn" onClick={() => setWarningVisible(false)}>Dismiss</button>
           </div>
-        </div>
+        </Alert>
       ) : null}
 
-      <section style={{ marginTop: 16, display: 'grid', gap: 12 }}>
-        <form onSubmit={handlePasswordLogin} style={{ display: 'grid', gap: 10 }}>
-          <h2>Step 1: Credentials</h2>
-          <p style={{ margin: 0, color: '#475569' }}>What to do next: enter admin credentials, accept the EULA, and continue.</p>
-          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@company.com" required />
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" required />
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <section className="admin-flow">
+        <Card as="form" onSubmit={handlePasswordLogin} className="admin-flow">
+          <SectionHeader title="Step 1: Credentials" subtitle="Enter admin credentials, accept the EULA, and continue." />
+          <FormRow label="Email" htmlFor="admin-email">
+            <input className="ui-input" id="admin-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@company.com" required />
+          </FormRow>
+          <FormRow label="Password" htmlFor="admin-password">
+            <input className="ui-input" id="admin-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" required />
+          </FormRow>
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={acceptedEula} onChange={(event) => setAcceptedEula(event.target.checked)} />
             <span>I accept the Admin EULA and acceptable-use policy.</span>
           </label>
-          {requiresEula ? <small style={{ color: '#92400e' }}>EULA acceptance is required before first admin login.</small> : null}
-          <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'}</button>
-        </form>
+          {requiresEula ? <Alert tone="warning">EULA acceptance is required before first admin login.</Alert> : null}
+          <button type="submit" className="ui-btn ui-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Continue'}</button>
+        </Card>
 
         {needsTwoFactor ? <TwoFactorForm onVerify={handleSecondFactor} isSubmitting={isSubmitting} totpPeriodSeconds={totpPeriodSeconds} /> : null}
 
-        <section>
-          <h2>2FA setup recovery</h2>
-          <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
-            What to do next: open setup, generate backup codes, verify a TOTP code, then return here to sign in.
-          </p>
+        <Card className="admin-flow">
+          <SectionHeader title="2FA setup recovery" subtitle="Open setup, generate backup codes, verify a TOTP code, then return here to sign in." />
           {setupToken ? (
-            <p style={{ margin: '0 0 8px 0', color: setupTokenSecondsLeft > 0 ? '#334155' : '#b91c1c' }}>
-              Setup token expires in <strong>{formatSeconds(setupTokenSecondsLeft)}</strong>.
-            </p>
+            <p className="admin-note">Setup token expires in <strong>{formatSeconds(setupTokenSecondsLeft)}</strong>.</p>
           ) : (
-            <p style={{ margin: '0 0 8px 0', color: '#334155' }}>
-              No setup token yet. Use Step 1 first to generate a setup token.
-            </p>
+            <p className="admin-note">No setup token yet. Use Step 1 first to generate a setup token.</p>
           )}
-          <a href={setupToken ? `/admin/setup-2fa?token=${encodeURIComponent(setupToken)}` : '/admin/setup-2fa'}>Open 2FA setup wizard</a>
-          <button type="button" onClick={regenerateSetupToken} disabled={isSubmitting} style={{ marginLeft: 8 }}>
-            Regenerate setup token
-          </button>
-          <button type="button" onClick={() => {
-            setSetupToken('')
-            setSetupTokenExpiresAt(null)
-          }} style={{ marginLeft: 8 }}>
-            Clear setup token
-          </button>
-        </section>
+          <div className="admin-flow__actions">
+            <a className="ui-btn" href={setupToken ? `/admin/setup-2fa?token=${encodeURIComponent(setupToken)}` : '/admin/setup-2fa'}>Open 2FA setup wizard</a>
+            <button type="button" className="ui-btn" onClick={regenerateSetupToken} disabled={isSubmitting}>Regenerate setup token</button>
+            <button
+              type="button"
+              className="ui-btn"
+              onClick={() => {
+                setSetupToken('')
+                setSetupTokenExpiresAt(null)
+              }}
+            >
+              Clear setup token
+            </button>
+          </div>
+        </Card>
 
-        <section>
-          <h2>Session manager</h2>
-          <p>Current session: {currentSession?.device || 'Unknown device'} · {currentSession?.ipAddress || 'Unknown IP'}</p>
-          <button type="button" onClick={() => logoutOtherSessions().catch((requestError) => setError(requestError.message))}>Logout other devices</button>
-          <button type="button" onClick={() => logout()} style={{ marginLeft: 8 }}>Logout</button>
-          <ul>
+        <Card className="admin-flow">
+          <SectionHeader title="Session manager" />
+          <p className="admin-note">Current session: {currentSession?.device || 'Unknown device'} · {currentSession?.ipAddress || 'Unknown IP'}</p>
+          <div className="admin-flow__actions">
+            <button type="button" className="ui-btn" onClick={() => logoutOtherSessions().catch((requestError) => setError(requestError.message))}>Logout other devices</button>
+            <button type="button" className="ui-btn" onClick={() => logout()}>Logout</button>
+          </div>
+          <ul className="admin-code-list">
             {activeSessions.map((session) => (
               <li key={session.id}>
                 {session.device || 'Unknown'} · {session.ipAddress || 'Unknown IP'} · {session.location || 'Unknown location'} {session.isCurrent ? '(current)' : ''}
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       </section>
 
       <AuditTrailTable records={auditTrail} />
 
-      {status ? <p style={{ color: '#0369a1' }}>{status}</p> : null}
-      {error ? <p style={{ color: '#b91c1c' }}>{error}</p> : null}
+      {status ? <Alert tone="info">{status}</Alert> : null}
+      {error ? <Alert tone="error">{error}</Alert> : null}
     </main>
   )
 }
