@@ -1,32 +1,34 @@
+@import '../../styles/variables.css';
+
 .admin-shell-v2 {
-  --admin-font: 'DM Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --admin-display-font: 'Syne', 'DM Sans', sans-serif;
-  --admin-bg: #0a0a0f;
-  --admin-surface: #0f0f1a;
-  --admin-surface-subtle: #15151f;
-  --admin-surface-strong: #161628;
-  --admin-border: rgba(255, 255, 255, 0.1);
-  --admin-border-strong: rgba(255, 255, 255, 0.2);
-  --admin-text: #e8e8f0;
-  --admin-text-muted: #c4c4da;
-  --admin-text-subtle: #8b8ba9;
-  --admin-primary: #e8ff5a;
-  --admin-primary-strong: #d7f23b;
-  --admin-danger: #f87171;
-  --admin-danger-subtle: rgba(248, 113, 113, 0.15);
-  --admin-danger-border: rgba(248, 113, 113, 0.35);
-  --admin-warning-subtle: rgba(251, 191, 36, 0.12);
-  --admin-warning-border: rgba(251, 191, 36, 0.35);
-  --admin-warning-text: #fcd34d;
-  --admin-success-subtle: rgba(74, 222, 128, 0.12);
-  --admin-success-border: rgba(74, 222, 128, 0.35);
-  --admin-success-text: #86efac;
-  --admin-focus: #5affb8;
+  --admin-font: var(--font-family-base);
+  --admin-display-font: var(--font-family-display);
+  --admin-bg: var(--color-bg-primary);
+  --admin-surface: var(--color-bg-secondary);
+  --admin-surface-subtle: var(--color-bg-secondary);
+  --admin-surface-strong: var(--color-bg-secondary);
+  --admin-border: var(--color-border);
+  --admin-border-strong: var(--color-border);
+  --admin-text: var(--color-text-primary);
+  --admin-text-muted: var(--color-text-secondary);
+  --admin-text-subtle: var(--color-text-nav);
+  --admin-primary: var(--color-accent-green);
+  --admin-primary-strong: var(--color-accent-green-hover);
+  --admin-danger: var(--color-error);
+  --admin-danger-subtle: var(--color-danger-alpha-15);
+  --admin-danger-border: var(--color-danger-alpha-35);
+  --admin-warning-subtle: var(--color-warning-alpha-12);
+  --admin-warning-border: var(--color-warning-alpha-35);
+  --admin-warning-text: var(--color-warning-text);
+  --admin-success-subtle: var(--color-success-alpha-12);
+  --admin-success-border: var(--color-success-alpha-35);
+  --admin-success-text: var(--color-success-text);
+  --admin-focus: var(--color-accent-green);
   --admin-content-max: 1280px;
-  --admin-radius-sm: 8px;
-  --admin-radius-md: 12px;
-  --admin-radius-lg: 16px;
-  --admin-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 32px rgba(0, 0, 0, 0.22);
+  --admin-radius-sm: var(--radius-md);
+  --admin-radius-md: var(--radius-lg);
+  --admin-radius-lg: var(--radius-lg);
+  --admin-shadow: var(--shadow-md);
   --admin-shell-gutter: clamp(1rem, 2vw, 1.6rem);
   --admin-section-gap: clamp(1rem, 1.6vw, 1.5rem);
 }
@@ -60,7 +62,7 @@
 
 .ui-btn {
   border: 1px solid var(--admin-border-strong);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-white-alpha-03);
   color: var(--admin-text);
   border-radius: var(--admin-radius-sm);
   padding: 0.5rem 0.8rem;
@@ -71,7 +73,7 @@
 }
 
 .ui-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-white-alpha-08);
 }
 
 .ui-btn:disabled {
@@ -82,7 +84,7 @@
 .ui-btn--primary {
   background: var(--admin-primary);
   border-color: var(--admin-primary);
-  color: #0a0a0f;
+  color: var(--color-bg-primary);
 }
 
 .ui-btn--primary:hover {
@@ -113,7 +115,7 @@
   border: 1px solid var(--admin-border);
   border-radius: 999px;
   padding: 0.12rem 0.25rem 0.12rem 0.6rem;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-white-alpha-04);
 }
 
 .ui-input {
@@ -122,14 +124,14 @@
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   color: var(--admin-text);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-white-alpha-03);
 }
 
 .ui-badge {
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--admin-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-white-alpha-04);
   color: var(--admin-text-muted);
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
@@ -139,9 +141,9 @@
 
 .ui-toast {
   border-radius: var(--admin-radius-md);
-  border: 1px solid #fecaca;
+  border: 1px solid var(--admin-danger-border);
   background: var(--admin-danger-subtle);
-  color: #7f1d1d;
+  color: var(--color-error);
   padding: 1rem;
 }
 
@@ -152,7 +154,7 @@
 .admin-shell-v2__sidebar {
   width: 260px;
   border-right: 1px solid var(--admin-border);
-  background: linear-gradient(180deg, #121221 0%, #0f0f1a 100%);
+  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
   color: var(--admin-text);
   padding: 1rem 0.75rem;
   position: sticky;
@@ -191,13 +193,13 @@
 
 .admin-shell-v2__nav-item:hover,
 .admin-shell-v2__mobile-panel-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-white-alpha-08);
 }
 
 .admin-shell-v2__nav-item.is-active {
   background: var(--admin-primary);
-  border-color: color-mix(in srgb, var(--admin-primary), #ffffff 10%);
-  color: #0a0a0f;
+  border-color: color-mix(in srgb, var(--admin-primary), var(--color-text-primary) 10%);
+  color: var(--color-bg-primary);
   font-weight: 700;
 }
 
@@ -397,7 +399,7 @@
   .admin-shell-v2__mobile-panel-item.is-active {
     background: var(--admin-primary);
     border-color: var(--admin-primary);
-    color: #0a0a0f;
+    color: var(--color-bg-primary);
   }
 }
 
@@ -460,7 +462,7 @@
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-sm);
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-white-alpha-03);
 }
 
 .admin-stat-card__label {
@@ -498,7 +500,7 @@
   border: 2px solid var(--admin-border);
   border-radius: var(--admin-radius-md);
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-white-alpha-03);
 }
 
 .admin-health--green {
@@ -549,7 +551,7 @@
 }
 
 .admin-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-white-alpha-03);
 }
 
 .admin-shell-v2 .text-slate-950,
@@ -564,7 +566,7 @@
 .admin-shell-v2 .bg-slate-50,
 .admin-shell-v2 .bg-slate-100,
 .admin-shell-v2 .bg-white {
-  background: rgba(255, 255, 255, 0.03) !important;
+  background: var(--color-white-alpha-03) !important;
 }
 
 .admin-shell-v2 .border-slate-100,
@@ -755,7 +757,7 @@
 .admin-bar-track {
   height: 0.5rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-white-alpha-08);
   overflow: hidden;
 }
 
