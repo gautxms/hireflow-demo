@@ -39,8 +39,8 @@ export default function AdminSidebar({ activeSection, onNavigate, mobileOpen, on
         />
       ) : null}
 
-      <aside className={`admin-sidebar dark:bg-slate-950 ${mobileOpen ? 'admin-sidebar--open' : ''}`}>
-        <div className="admin-sidebar__brand dark:text-white">HireFlow Admin</div>
+      <aside className={`admin-sidebar ${mobileOpen ? 'admin-sidebar--open' : ''}`}>
+        <div className="admin-sidebar__brand">HireFlow Admin</div>
 
         <nav aria-label="Admin sections">
           <ul className="admin-sidebar__nav">
