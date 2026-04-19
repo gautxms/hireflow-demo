@@ -23,6 +23,11 @@
   --color-text-secondary: var(--muted);
   --font-family-base: var(--font-body);
   --font-family-display: var(--font-display);
+  --theme-bg-primary: var(--color-bg-primary, var(--ink));
+  --theme-text-primary: var(--color-text-primary, var(--text));
+  --theme-text-secondary: var(--color-text-secondary, var(--muted));
+  --theme-font-base: var(--font-family-base, var(--font-body));
+  --theme-font-display: var(--font-family-display, var(--font-display));
 }
 
 html {
@@ -30,9 +35,9 @@ html {
 }
 
 body {
-  background: var(--color-bg-primary, var(--ink));
-  color: var(--color-text-primary, var(--text));
-  font-family: var(--font-family-base, var(--font-body));
+  background: var(--theme-bg-primary);
+  color: var(--theme-text-primary);
+  font-family: var(--theme-font-base);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line-height);
   overflow-x: hidden;
@@ -127,7 +132,7 @@ nav {
 }
 
 .nav-logo {
-  font-family: var(--font-family-display, var(--font-display));
+  font-family: var(--theme-font-display);
   font-weight: 800;
   font-size: 1.25rem;
   letter-spacing: -0.03em;
@@ -146,7 +151,7 @@ nav {
 
 .nav-links a {
   text-decoration: none;
-  color: var(--color-text-secondary, var(--muted));
+  color: var(--theme-text-secondary);
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
@@ -160,7 +165,7 @@ nav {
 
 .nav-links button {
   text-decoration: none;
-  color: var(--color-text-secondary, var(--muted));
+  color: var(--theme-text-secondary);
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
@@ -182,10 +187,10 @@ nav {
 .btn-ghost {
   background: none;
   border: 1px solid var(--border);
-  color: var(--color-text-primary, var(--text));
+  color: var(--theme-text-primary);
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
-  font-family: var(--font-family-base, var(--font-body));
+  font-family: var(--theme-font-base);
   font-size: var(--type-button-size);
   font-weight: var(--type-button-weight);
   line-height: var(--type-button-line-height);
@@ -203,7 +208,7 @@ nav {
   border: none;
   padding: 0.55rem 1.35rem;
   border-radius: 6px;
-  font-family: var(--font-family-base, var(--font-body));
+  font-family: var(--theme-font-base);
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
   line-height: var(--type-button-line-height);
@@ -273,7 +278,7 @@ nav {
 }
 
 .hero h1 {
-  font-family: var(--font-family-display, var(--font-display));
+  font-family: var(--theme-font-display);
   font-weight: var(--type-h1-weight);
   font-size: var(--type-h1-size);
   line-height: var(--type-h1-line-height);
@@ -330,7 +335,7 @@ nav {
 }
 
 .feature-card h3 {
-  font-family: var(--font-family-display, var(--font-display));
+  font-family: var(--theme-font-display);
   font-weight: var(--type-h3-weight);
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line-height);
