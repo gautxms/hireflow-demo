@@ -42,7 +42,7 @@ This validates baseline metadata is populated and includes:
 If you have a running backend:
 
 ```bash
-ADMIN_SMOKE_BASE_URL=http://localhost:4000 npm run qa:admin-smoke
+ADMIN_SMOKE_BASE_URL=http://localhost:4000 ADMIN_SMOKE_ADMIN_TOKEN=<admin-jwt> npm run qa:admin-smoke
 ```
 
 The script sends lightweight requests to key admin endpoints (auth/session + each admin tab API) and fails if any return `404`.
@@ -151,7 +151,7 @@ Per release:
 - **Auth chain drift (EULA/2FA/session/logout)**
   - Guarded by static checks on admin auth hook and login page controls.
 - **Admin tab API route regressions**
-  - Guarded by optional live endpoint smoke checks that assert non-404 for key UI-backed routes.
+  - Guarded by optional live endpoint smoke checks with an admin bearer token so protected routes fail on missing/invalid paths (not just auth middleware).
 - **Screenshot baseline drift**
   - Guarded by baseline manifest validation and release review metadata.
 
@@ -167,5 +167,5 @@ npm run qa:admin-visual-baseline
 Optionally add a staging job with backend enabled:
 
 ```bash
-ADMIN_SMOKE_BASE_URL=https://<staging-api-host> npm run qa:admin-smoke
+ADMIN_SMOKE_BASE_URL=https://<staging-api-host> ADMIN_SMOKE_ADMIN_TOKEN=<admin-jwt> npm run qa:admin-smoke
 ```

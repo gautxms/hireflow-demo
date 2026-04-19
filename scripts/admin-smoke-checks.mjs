@@ -23,19 +23,19 @@ const ADMIN_UI_ENDPOINT_SMOKE_CHECKS = [
   { path: '/auth/admin/login', method: 'POST', body: { email: 'smoke@example.com', password: 'invalid' }, area: 'login' },
   { path: '/auth/admin/2fa/setup', method: 'POST', body: { token: 'invalid-token' }, area: '2fa setup' },
   { path: '/auth/admin/2fa/verify', method: 'POST', body: { token: 'invalid-token', code: '000000' }, area: '2fa verify' },
-  { path: '/admin/sessions', method: 'GET', area: 'session timer' },
-  { path: '/admin/sessions/refresh', method: 'POST', area: 'session refresh' },
-  { path: '/auth/admin/logout', method: 'POST', area: 'logout' },
-  { path: '/admin/users?limit=1&page=1', method: 'GET', area: 'users tab' },
-  { path: '/admin/subscriptions?limit=1&page=1', method: 'GET', area: 'billing tab - subscriptions' },
-  { path: '/admin/payments?limit=1&page=1', method: 'GET', area: 'billing tab - payments' },
-  { path: '/admin/uploads?limit=1&page=1', method: 'GET', area: 'uploads tab' },
-  { path: '/admin/uploads/export?page=1&pageSize=1', method: 'GET', area: 'uploads csv export' },
-  { path: '/admin/analytics?startDate=2026-01-01&endDate=2026-01-30', method: 'GET', area: 'analytics tab' },
-  { path: '/admin/analytics/metrics?startDate=2026-01-01&endDate=2026-01-30', method: 'GET', area: 'analytics metrics' },
-  { path: '/admin/logs?limit=1&page=1', method: 'GET', area: 'logs tab' },
-  { path: '/admin/health', method: 'GET', area: 'health tab' },
-  { path: '/admin/actions?limit=1', method: 'GET', area: 'security tab audit events' },
+  { path: '/admin/sessions', method: 'GET', area: 'session timer', requiresAdminAuth: true },
+  { path: '/admin/sessions/refresh', method: 'POST', area: 'session refresh', requiresAdminAuth: true },
+  { path: '/auth/admin/logout', method: 'POST', area: 'logout', requiresAdminAuth: true },
+  { path: '/admin/users?limit=1&page=1', method: 'GET', area: 'users tab', requiresAdminAuth: true },
+  { path: '/admin/subscriptions?limit=1&page=1', method: 'GET', area: 'billing tab - subscriptions', requiresAdminAuth: true },
+  { path: '/admin/payments?limit=1&page=1', method: 'GET', area: 'billing tab - payments', requiresAdminAuth: true },
+  { path: '/admin/uploads?limit=1&page=1', method: 'GET', area: 'uploads tab', requiresAdminAuth: true },
+  { path: '/admin/uploads/export?page=1&pageSize=1', method: 'GET', area: 'uploads csv export', requiresAdminAuth: true },
+  { path: '/admin/analytics?startDate=2026-01-01&endDate=2026-01-30', method: 'GET', area: 'analytics tab', requiresAdminAuth: true },
+  { path: '/admin/analytics/metrics?startDate=2026-01-01&endDate=2026-01-30', method: 'GET', area: 'analytics metrics', requiresAdminAuth: true },
+  { path: '/admin/logs?limit=1&page=1', method: 'GET', area: 'logs tab', requiresAdminAuth: true },
+  { path: '/admin/health', method: 'GET', area: 'health tab', requiresAdminAuth: true },
+  { path: '/admin/actions?limit=1', method: 'GET', area: 'security tab audit events', requiresAdminAuth: true },
 ]
 
 async function run() {
@@ -84,20 +84,44 @@ async function run() {
   const baseUrl = process.env.ADMIN_SMOKE_BASE_URL
   if (baseUrl) {
     const normalizedBaseUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl.replace(/\/$/, '')}/api`
+    const adminSmokeToken = process.env.ADMIN_SMOKE_ADMIN_TOKEN
+
+    const authProtectedChecks = ADMIN_UI_ENDPOINT_SMOKE_CHECKS.filter((check) => check.requiresAdminAuth)
+    if (authProtectedChecks.length > 0) {
+      assert(
+        Boolean(adminSmokeToken),
+        'Live API checks require ADMIN_SMOKE_ADMIN_TOKEN so admin routes fail on missing endpoints instead of passing with 401/403.',
+      )
+    }
 
     for (const check of ADMIN_UI_ENDPOINT_SMOKE_CHECKS) {
       const url = new URL(check.path, normalizedBaseUrl).toString()
+      const headers = {}
+      if (check.body) {
+        headers['Content-Type'] = 'application/json'
+      }
+      if (check.requiresAdminAuth) {
+        headers.Authorization = `Bearer ${adminSmokeToken}`
+      }
+
       const response = await fetch(url, {
         method: check.method,
-        headers: check.body ? { 'Content-Type': 'application/json' } : undefined,
+        headers: Object.keys(headers).length ? headers : undefined,
         body: check.body ? JSON.stringify(check.body) : undefined,
       })
+
       assert(response.status !== 404, `${check.method} ${check.path} (${check.area}) returned 404 (route blocker regression).`)
+      if (check.requiresAdminAuth) {
+        assert(
+          response.status !== 401 && response.status !== 403,
+          `${check.method} ${check.path} (${check.area}) returned ${response.status}; verify ADMIN_SMOKE_ADMIN_TOKEN is valid for admin route coverage checks.`,
+        )
+      }
     }
 
     console.log(`✅ Live API smoke checks passed against ${normalizedBaseUrl} (${ADMIN_UI_ENDPOINT_SMOKE_CHECKS.length} routes).`)
   } else {
-    console.log('ℹ️ Skipping live API checks (set ADMIN_SMOKE_BASE_URL to enable).')
+    console.log('ℹ️ Skipping live API checks (set ADMIN_SMOKE_BASE_URL + ADMIN_SMOKE_ADMIN_TOKEN to enable).')
   }
 
   console.log(`✅ Admin smoke checks passed for ${navHrefs.length} admin navigation routes.`)
