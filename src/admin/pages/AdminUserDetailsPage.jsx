@@ -30,9 +30,9 @@ export default function AdminUserDetailsPage({ userId: userIdProp }) {
     void loadUsers()
   }, [loadUsers])
 
-  if (loading) return <div className="p-6 text-sm text-slate-500">Loading user…</div>
-  if (error) return <div className="p-6 text-sm text-rose-600">{error}</div>
-  if (!user) return <div className="p-6 text-sm text-slate-600">User not found.</div>
+  if (loading) return <div className="admin-page"><div className="text-sm">Loading user…</div></div>
+  if (error) return <div className="admin-page"><div className="text-sm text-rose-500">{error}</div></div>
+  if (!user) return <div className="admin-page"><div className="text-sm">User not found.</div></div>
 
   return (
     <>
