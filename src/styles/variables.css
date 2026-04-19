@@ -1,0 +1,85 @@
+:root {
+  /* Color tokens */
+  --color-bg-primary: #0a0a0a;
+  --color-bg-secondary: #1a1a1f;
+  --color-accent-green: #b8ff00;
+  --color-accent-green-hover: #a8ee00;
+  --color-accent-green-active: #98dc00;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #7a7a8d;
+  --color-text-nav: #9999aa;
+  --color-text-muted: #888899;
+  --color-border: #2a2a2f;
+  --color-success: #10b981;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  --color-warning-text: #fcd34d;
+  --color-success-text: #86efac;
+
+  /* Shared alpha/utility colors */
+  --color-black: #000000;
+  --color-bg-elevated: #121212;
+  --color-bg-overlay-80: rgba(10, 10, 10, 0.8);
+  --color-white-alpha-03: rgba(255, 255, 255, 0.03);
+  --color-white-alpha-04: rgba(255, 255, 255, 0.04);
+  --color-white-alpha-08: rgba(255, 255, 255, 0.08);
+  --color-white-alpha-10: rgba(255, 255, 255, 0.1);
+  --color-white-alpha-20: rgba(255, 255, 255, 0.2);
+  --color-accent-alpha-02: rgba(184, 255, 0, 0.02);
+  --color-accent-alpha-06: rgba(184, 255, 0, 0.06);
+  --color-accent-alpha-08: rgba(184, 255, 0, 0.08);
+  --color-accent-alpha-10: rgba(184, 255, 0, 0.1);
+  --color-accent-alpha-15: rgba(184, 255, 0, 0.15);
+  --color-danger-alpha-15: rgba(239, 68, 68, 0.15);
+  --color-danger-alpha-35: rgba(239, 68, 68, 0.35);
+  --color-warning-alpha-12: rgba(251, 191, 36, 0.12);
+  --color-warning-alpha-35: rgba(251, 191, 36, 0.35);
+  --color-success-alpha-12: rgba(16, 185, 129, 0.12);
+  --color-success-alpha-35: rgba(16, 185, 129, 0.35);
+
+  /* Typography */
+  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-family-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* Layout */
+  --content-max-width: 1280px;
+
+  /* Legacy aliases (backward compatibility during token migration) */
+  --ink: var(--color-bg-primary);
+  --ink-2: var(--color-bg-secondary);
+  --text: var(--color-text-primary);
+  --muted: var(--color-text-secondary);
+  --border: var(--color-border);
+  --card: var(--color-bg-secondary);
+  --accent: var(--color-accent-green);
+  --accent-2: var(--color-accent-green-hover);
+  --font-body: var(--font-family-base);
+  --font-display: var(--font-family-display);
+}
