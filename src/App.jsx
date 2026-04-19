@@ -29,6 +29,7 @@ const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 import PublicFooter from './components/PublicFooter'
 import API_BASE from './config/api'
+import './styles/app-route-states.css'
 const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
 const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
 const AdminAnalyticsPage = lazy(() => import('./admin/pages/AdminAnalyticsPage'))
@@ -204,14 +205,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     if (pathname.match(/^\/results\/[^/]+$/)) {
       if (sharedResultsError) {
         return (
-          <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', padding: '2rem' }}>
-            <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '1.5rem', maxWidth: '520px', width: '100%', color: '#fff' }}>
-              <h1 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.3rem' }}>Shared results unavailable</h1>
-              <p style={{ marginTop: 0, marginBottom: '1rem', color: 'rgba(255,255,255,0.8)' }}>{sharedResultsError}</p>
+          <main className="route-state route-state--shared-error">
+            <div className="route-state-card">
+              <h1 className="route-state-card__title">Shared results unavailable</h1>
+              <p className="route-state-card__message">{sharedResultsError}</p>
               <button
                 type="button"
                 onClick={() => navigate('/')}
-                style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 8, padding: '0.55rem 0.9rem', fontWeight: 600, cursor: 'pointer' }}
+                className="route-state-card__action"
               >
                 Go to home
               </button>
@@ -499,24 +500,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/verify-email/success') {
       return (
-        <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
-          <div style={{ background: 'white', padding: '40px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '400px' }}>
-            <div style={{ fontSize: '60px', color: '#22c55e', marginBottom: '20px' }}>✓</div>
-            <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '10px' }}>Email verified!</h1>
-            <p style={{ fontSize: '16px', color: '#333', marginBottom: '30px', lineHeight: '1.6' }}>
+        <main className="route-state route-state--email-verified">
+          <div className="route-state-card route-state-card--verified">
+            <div className="route-state-card__check">✓</div>
+            <h1 className="route-state-card__title route-state-card__title--verified">Email verified!</h1>
+            <p className="route-state-card__message route-state-card__message--verified">
               Your email has been successfully verified. You can now log in to your account.
             </p>
             <button
               onClick={() => navigate('/login')}
-              style={{
-                background: 'var(--accent)',
-                color: '#111',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '10px 20px',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
+              className="route-state-card__action"
             >
               Go to login
             </button>
