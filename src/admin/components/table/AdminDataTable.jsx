@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { EmptyState, TableSkeleton } from '../WidgetState'
 
 function SortIndicator({ active, direction }) {
-  if (!active) return <span className="text-slate-300">↕</span>
+  if (!active) return <span style={{ color: 'var(--admin-text-subtle)' }}>↕</span>
   return <span>{direction === 'asc' ? '↑' : '↓'}</span>
 }
 
@@ -122,9 +122,9 @@ export default function AdminDataTable({
         </div>
       </header>
 
-      <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
-        <table className="min-w-full text-left text-sm text-slate-800">
-          <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700">
+      <div className="admin-table-surface">
+        <table className="admin-table text-left text-sm">
+          <thead className="sticky top-0 z-10">
             <tr>
               {columns.map((column) => (
                 <th key={column.key} className="px-4 py-3 font-medium" style={column.width ? { width: column.width } : undefined}>
@@ -148,11 +148,11 @@ export default function AdminDataTable({
             {!loading && visibleRows.map((row) => (
               <tr
                 key={rowKey(row)}
-                className="cursor-pointer border-t border-slate-200 transition hover:bg-slate-50"
+                className="cursor-pointer transition"
                 onClick={() => { onRowClick?.(row); if (renderDetails) setSelectedRow(row) }}
               >
                 {columns.map((column) => (
-                  <td key={`${rowKey(row)}-${column.key}`} className="px-4 py-3 align-top text-slate-800">
+                  <td key={`${rowKey(row)}-${column.key}`} className="px-4 py-3 align-top">
                     {column.render ? column.render(row) : row[column.key]}
                   </td>
                 ))}

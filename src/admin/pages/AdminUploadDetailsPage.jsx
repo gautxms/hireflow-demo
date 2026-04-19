@@ -13,11 +13,11 @@ export default function AdminUploadDetailsPage({ uploadId: uploadIdProp }) {
   const uploadId = useMemo(() => uploadIdProp || inferUploadIdFromPath(), [uploadIdProp])
   const { loading, retrying, error, upload, retriedAt, retryParsing, reload } = useAdminUploadDetails(uploadId)
 
-  if (loading) return <div className="p-6 text-sm text-slate-600">Loading upload details…</div>
-  if (!upload) return <div className="p-6">{error ? <StateAlert state={error} onRetry={() => void reload()} /> : <EmptyState title="Upload not found" description="This upload may have been removed or is unavailable." />}</div>
+  if (loading) return <div className="admin-page"><div className="text-sm">Loading upload details…</div></div>
+  if (!upload) return <div className="admin-page">{error ? <StateAlert state={error} onRetry={() => void reload()} /> : <EmptyState title="Upload not found" description="This upload may have been removed or is unavailable." />}</div>
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="admin-page">
       {error ? <StateAlert state={error} onRetry={() => void reload()} /> : null}
       <UploadPreview
         upload={upload}
