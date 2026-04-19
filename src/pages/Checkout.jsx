@@ -629,12 +629,11 @@ export default function Checkout({ onAuthSuccess }) {
         <button
           type="button"
           onClick={() => window.history.back()}
+          className="type-button"
           style={{
             background: 'transparent',
             color: '#CCFF00',
             border: 'none',
-            fontSize: '14px',
-            fontWeight: '600',
             cursor: 'pointer',
             marginBottom: '40px',
             display: 'flex',
@@ -645,11 +644,11 @@ export default function Checkout({ onAuthSuccess }) {
           ← Back to Home
         </button>
 
-        <h1 style={{ fontSize: 'clamp(2rem, 6vw, 48px)', fontWeight: '700', marginBottom: '12px' }}>
+        <h1 className="type-h1" style={{ marginBottom: '12px' }}>
           Checkout
         </h1>
 
-        <p style={{ color: '#a3a3a3', fontSize: '16px', marginBottom: '40px' }}>
+        <p className="type-body" style={{ color: '#a3a3a3', marginBottom: '40px' }}>
           You selected the <strong style={{ color: '#CCFF00' }}>{selectedPlan}</strong> subscription.
         </p>
 
@@ -664,23 +663,22 @@ export default function Checkout({ onAuthSuccess }) {
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
               <span style={{ fontSize: '24px' }}>⚡</span>
               <div>
-                <h3 style={{ color: '#CCFF00', fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>
+                <h3 className="type-h3" style={{ color: '#CCFF00', marginBottom: '8px' }}>
                   Reactivate Your Subscription
                 </h3>
-                <p style={{ color: '#a3a3a3', fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+                <p className="type-small" style={{ color: '#a3a3a3', marginBottom: '16px' }}>
                   Your subscription was cancelled. Reactivate now to regain access to resume analysis and full features.
                 </p>
                 <button
                   type="button"
                   onClick={handleReactivateSubscription}
+                  className="type-button"
                   style={{
                     background: '#CCFF00',
                     color: '#000000',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '12px 24px',
-                    fontSize: '14px',
-                    fontWeight: '700',
                     cursor: 'pointer',
                     transition: 'opacity 0.2s',
                   }}
@@ -699,7 +697,7 @@ export default function Checkout({ onAuthSuccess }) {
             <p style={{ margin: 0, color: '#a3a3a3' }}>
               Your previous payment needs attention. Please update your payment method from the billing portal.
             </p>
-            <a href="/billing" style={{ color: '#CCFF00', fontWeight: 700, marginTop: '10px', display: 'inline-block' }}>Open billing portal</a>
+            <a href="/billing" className="type-nav" style={{ color: '#CCFF00', marginTop: '10px', display: 'inline-block' }}>Open billing portal</a>
           </div>
         )}
 
@@ -718,7 +716,7 @@ export default function Checkout({ onAuthSuccess }) {
                 )}
               </p>
             )}
-            {!!successMessage && <p style={{ margin: 0, color: '#CCFF00', fontWeight: 600 }}>{successMessage}</p>}
+            {!!successMessage && <p className="type-small" style={{ margin: 0, color: '#CCFF00', fontWeight: 600 }}>{successMessage}</p>}
             {!errorMessage && <p style={{ margin: '8px 0 0', color: '#a3a3a3' }}>{getStatusMessage()}</p>}
           </div>
         )}
@@ -744,7 +742,7 @@ export default function Checkout({ onAuthSuccess }) {
         )}
 
         {status === 'opened' && transactionId && (
-          <p style={{ color: '#a3a3a3', fontSize: '12px', marginTop: '12px' }}>
+          <p className="type-small" style={{ color: '#a3a3a3', marginTop: '12px' }}>
             Transaction reference: {transactionId}
           </p>
         )}
@@ -763,6 +761,7 @@ export default function Checkout({ onAuthSuccess }) {
                 setRequiredAction(null)
               }
             }}
+            className="type-button"
             style={{
               marginTop: '16px',
               background: '#CCFF00',
@@ -770,7 +769,6 @@ export default function Checkout({ onAuthSuccess }) {
               border: 'none',
               borderRadius: '6px',
               padding: '12px 24px',
-              fontWeight: 700,
               cursor: 'pointer',
             }}
           >

@@ -47,20 +47,20 @@ export default function VerifyEmail() {
         {status === 'verifying' && (
           <>
             <div style={styles.spinner} />
-            <p style={styles.text}>{message}</p>
+            <p className="type-body" style={styles.text}>{message}</p>
           </>
         )}
         {status === 'success' && (
           <>
             <div style={styles.checkmark}>✓</div>
-            <p style={styles.text}>{message}</p>
+            <p className="type-body" style={styles.text}>{message}</p>
           </>
         )}
         {status === 'error' && (
           <>
             <div style={styles.errorIcon}>✗</div>
-            <p style={styles.text}>{message}</p>
-            <a href="/signup" style={styles.link}>Try signing up again</a>
+            <p className="type-body" style={styles.text}>{message}</p>
+            <a href="/signup" className="type-button" style={styles.link}>Try signing up again</a>
           </>
         )}
       </div>
@@ -104,14 +104,11 @@ const styles = {
     marginBottom: '20px'
   },
   text: {
-    fontSize: '16px',
     color: '#333',
     marginBottom: '20px',
-    lineHeight: '1.6'
   },
   link: {
     color: '#0f172a',
     textDecoration: 'none',
-    fontWeight: '600'
   }
 }

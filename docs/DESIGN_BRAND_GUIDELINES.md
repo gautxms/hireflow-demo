@@ -169,6 +169,22 @@ from weeks to days, eliminate bias, and make data-driven decisions.
 | Nav | Navigation | 14px | 500 | #9999aa | 1.4 |
 | Button | CTA Text | 14-16px | 600 | varies | 1.4 |
 
+### 2.5 Typography Token Enforcement (Lint Guidance)
+
+- Do **not** declare `fontFamily` directly in JSX inline styles.
+- Prefer shared typography classes/tokens (`.type-h1`, `.type-h2`, `.type-h3`, `.type-body`, `.type-small`, `.type-nav`, `.type-button`).
+- ESLint enforcement pattern:
+
+```js
+'no-restricted-syntax': [
+  'error',
+  {
+    selector: "JSXAttribute[name.name='style'] Property[key.name='fontFamily']",
+    message: 'Use typography tokens/classes instead of inline fontFamily declarations.',
+  },
+]
+```
+
 ---
 
 ## 3. COMPONENT STYLING
