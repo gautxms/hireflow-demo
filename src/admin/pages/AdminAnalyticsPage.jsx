@@ -79,11 +79,7 @@ export default function AdminAnalyticsPage() {
 
   return (
     <main className="admin-page">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="admin-page__title">Admin Analytics Dashboard</h1>
-          <p className="admin-page__subtitle">Founder-facing metrics, cohorts, plan mix, and trend charts.</p>
-        </div>
+      <header className="flex flex-wrap items-start justify-end gap-2">
         <div className="flex gap-2">
           <button onClick={refresh} className="ui-btn">Refresh</button>
           <button onClick={exportCsv} className="ui-btn ui-btn--primary">Export CSV</button>

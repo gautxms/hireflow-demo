@@ -81,8 +81,6 @@ export default function AdminHealthPage() {
 
   return (
     <main className="admin-page">
-      <h1 className="admin-page__title">Admin system health</h1>
-      <p className="admin-page__subtitle">Real-time service status refreshes every 10 seconds.</p>
 
       {criticalAlert && (
         <div className="admin-alert admin-alert--critical">

@@ -76,7 +76,6 @@ export default function AdminUsersPage() {
 
   return (
     <div className="admin-page">
-      <h1 className="admin-page__title">Admin Users Management</h1>
 
       {error ? <StateAlert state={error} onRetry={() => void loadUsers()} /> : null}
       {actionFeedback ? <p className="text-sm text-emerald-700">{actionFeedback}</p> : null}

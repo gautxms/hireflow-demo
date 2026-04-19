@@ -44,6 +44,7 @@ const AdminLoginPage = lazy(() => import('./admin/pages/AdminLoginPage'))
 const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
 const AdminShell = lazy(() => import('./admin/components/AdminShell'))
 const AdminPageFeedbackWidget = lazy(() => import('./admin/components/AdminPageFeedbackWidget'))
+const AdminRouteFallback = lazy(() => import('./admin/components/AdminRouteFallback'))
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -308,7 +309,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <UpdatePaymentMethodPage />
     }
 
+    const isAdminPath = pathname.startsWith('/admin')
     const hasStoredAdminSession = Boolean(localStorage.getItem('admin_session'))
+
+    if (pathname === '/admin/login') {
+      return <AdminLoginPage />
+    }
+
+    if (pathname === '/admin/setup-2fa' || pathname === '/admin/setup') {
+      return <AdminSetup2FA />
+    }
 
     const logoutAdmin = async () => {
       await fetch(`${API_BASE}/auth/admin/logout`, {
@@ -328,11 +338,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </AdminShell>
     )
 
+    if (isAdminPath && !hasStoredAdminSession) {
+      navigate('/admin/login')
+      return null
+    }
+
     if (pathname === '/admin' || pathname === '/admin/overview') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'overview',
         title: 'Overview',
@@ -343,10 +354,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/admin/users') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'users',
         title: 'Users',
@@ -357,10 +364,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname.startsWith('/admin/users/')) {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'users',
         title: 'User details',
@@ -371,10 +374,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/admin/billing') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'billing',
         title: 'Billing',
@@ -390,10 +389,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/admin/uploads') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'uploads',
         title: 'Uploads',
@@ -404,10 +399,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname.startsWith('/admin/uploads/')) {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'uploads',
         title: 'Upload details',
@@ -418,10 +409,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/admin/logs') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'logs',
         title: 'Logs',
@@ -432,10 +419,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/admin/health') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'health',
         title: 'Health',
@@ -446,10 +429,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/admin/analytics') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'analytics',
         title: 'Analytics',
@@ -460,10 +439,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname === '/admin/security') {
-      if (!hasStoredAdminSession) {
-        navigate('/admin/login')
-        return null
-      }
       return renderAdminSection({
         sectionKey: 'security',
         title: 'Security',
@@ -473,12 +448,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminSecurityPage />)
     }
 
-    if (pathname === '/admin/login') {
-      return <AdminLoginPage />
-    }
-
-    if (pathname === '/admin/setup-2fa' || pathname === '/admin/setup') {
-      return <AdminSetup2FA />
+    if (isAdminPath) {
+      return renderAdminSection({
+        sectionKey: 'overview',
+        title: 'Section not found',
+        subtitle: 'This admin route is not available in the current release.',
+        purpose: 'Use the action below to return to a supported area.',
+        breadcrumbs: ['Admin', 'Not found'],
+      }, <AdminRouteFallback title="Section unavailable" description="The requested section is unavailable or still in progress." />)
     }
 
     if (!isAuthenticated && pathname === '/signup') {

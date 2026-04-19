@@ -69,7 +69,6 @@ export default function AdminSubscriptionsPage() {
 
   return (
     <div className="admin-page">
-      <h1 className="admin-page__title">Admin subscriptions</h1>
 
       {error ? <StateAlert state={error} onRetry={() => void refreshSubscriptions()} /> : null}
 
