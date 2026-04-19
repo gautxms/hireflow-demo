@@ -19,6 +19,25 @@ function regexEscape(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+const ADMIN_UI_ENDPOINT_SMOKE_CHECKS = [
+  { path: '/auth/admin/login', method: 'POST', body: { email: 'smoke@example.com', password: 'invalid' }, area: 'login' },
+  { path: '/auth/admin/2fa/setup', method: 'POST', body: { token: 'invalid-token' }, area: '2fa setup' },
+  { path: '/auth/admin/2fa/verify', method: 'POST', body: { token: 'invalid-token', code: '000000' }, area: '2fa verify' },
+  { path: '/admin/sessions', method: 'GET', area: 'session timer' },
+  { path: '/admin/sessions/refresh', method: 'POST', area: 'session refresh' },
+  { path: '/auth/admin/logout', method: 'POST', area: 'logout' },
+  { path: '/admin/users?limit=1&page=1', method: 'GET', area: 'users tab' },
+  { path: '/admin/subscriptions?limit=1&page=1', method: 'GET', area: 'billing tab - subscriptions' },
+  { path: '/admin/payments?limit=1&page=1', method: 'GET', area: 'billing tab - payments' },
+  { path: '/admin/uploads?limit=1&page=1', method: 'GET', area: 'uploads tab' },
+  { path: '/admin/uploads/export?page=1&pageSize=1', method: 'GET', area: 'uploads csv export' },
+  { path: '/admin/analytics?startDate=2026-01-01&endDate=2026-01-30', method: 'GET', area: 'analytics tab' },
+  { path: '/admin/analytics/metrics?startDate=2026-01-01&endDate=2026-01-30', method: 'GET', area: 'analytics metrics' },
+  { path: '/admin/logs?limit=1&page=1', method: 'GET', area: 'logs tab' },
+  { path: '/admin/health', method: 'GET', area: 'health tab' },
+  { path: '/admin/actions?limit=1', method: 'GET', area: 'security tab audit events' },
+]
+
 async function run() {
   const appSource = read('src/App.jsx')
   const navigationSource = read('src/admin/config/adminNavigation.js')
@@ -27,6 +46,7 @@ async function run() {
   const analyticsSource = read('src/admin/pages/AdminAnalyticsPage.jsx')
   const uploadsSource = read('src/admin/pages/AdminUploadsPage.jsx')
   const uploadsHookSource = read('src/admin/hooks/useAdminUploads.js')
+  const loginPageSource = read('src/admin/pages/AdminLoginPage.jsx')
 
   const navHrefs = [...navigationSource.matchAll(/href:\s*'([^']+)'/g)].map((match) => match[1])
   assert(navHrefs.length > 0, 'No admin navigation routes were found in adminNavigation.js')
@@ -49,7 +69,10 @@ async function run() {
   }
   assert(/acceptedEula/.test(authSource), 'EULA gating state is missing in useAdminAuth.')
   assert(/needsTwoFactor/.test(authSource), '2FA gating state is missing in useAdminAuth.')
+  assert(/sessionSecondsLeft/.test(authSource), 'Session timer state is missing in useAdminAuth.')
   assert(/localStorage\.removeItem\(ADMIN_SESSION_STORAGE_KEY\)/.test(authSource), 'Admin session clear is missing from useAdminAuth (auth regression risk).')
+    assert(loginPageSource.includes('Session timer:') && loginPageSource.includes('{formattedTimer}'), 'Admin login page is missing the visible session timer.')
+  assert(/onClick=\{\(\) => logout\(\)\}/.test(loginPageSource), 'Admin login page is missing the explicit logout control.')
 
   assert(/const kpis = analytics\?\.kpis \|\| \{\}/.test(analyticsSource), 'Analytics KPIs are not normalized with a fallback object (partial data can crash widgets).')
   assert(/const tokenUsageSummary = analytics\?\.tokenUsageSummary \|\| \{\}/.test(analyticsSource), 'Token usage summary is not normalized with a fallback object in analytics page.')
@@ -61,25 +84,18 @@ async function run() {
   const baseUrl = process.env.ADMIN_SMOKE_BASE_URL
   if (baseUrl) {
     const normalizedBaseUrl = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl.replace(/\/$/, '')}/api`
-    const endpointChecks = [
-      { path: '/auth/admin/login', method: 'POST', body: { email: 'smoke@example.com', password: 'invalid' } },
-      { path: '/auth/admin/logout', method: 'POST' },
-      { path: '/admin/sessions/refresh', method: 'POST' },
-      { path: '/admin/uploads/export?page=1&pageSize=1', method: 'GET' },
-      { path: '/admin/analytics?startDate=2026-01-01&endDate=2026-01-30&export=csv', method: 'GET' },
-    ]
 
-    for (const check of endpointChecks) {
+    for (const check of ADMIN_UI_ENDPOINT_SMOKE_CHECKS) {
       const url = new URL(check.path, normalizedBaseUrl).toString()
       const response = await fetch(url, {
         method: check.method,
         headers: check.body ? { 'Content-Type': 'application/json' } : undefined,
         body: check.body ? JSON.stringify(check.body) : undefined,
       })
-      assert(response.status !== 404, `${check.method} ${check.path} returned 404 (route blocker regression).`)
+      assert(response.status !== 404, `${check.method} ${check.path} (${check.area}) returned 404 (route blocker regression).`)
     }
 
-    console.log(`✅ Live API smoke checks passed against ${normalizedBaseUrl}`)
+    console.log(`✅ Live API smoke checks passed against ${normalizedBaseUrl} (${ADMIN_UI_ENDPOINT_SMOKE_CHECKS.length} routes).`)
   } else {
     console.log('ℹ️ Skipping live API checks (set ADMIN_SMOKE_BASE_URL to enable).')
   }
