@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import './styles/variables.css';
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -6,40 +7,16 @@
   padding: 0;
 }
 
-:root {
-  --ink: #0a0a0f;
-  --ink-2: #1a1a2e;
-  --surface: #0f0f1a;
-  --card: #15151f;
-  --border: rgba(255,255,255,0.07);
-  --accent: #e8ff5a;
-  --accent-2: #5affb8;
-  --text: #e8e8f0;
-  --muted: #7070a0;
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
-  --color-bg-primary: var(--ink);
-  --color-text-primary: var(--text);
-  --color-text-secondary: var(--muted);
-  --font-family-base: var(--font-body);
-  --font-family-display: var(--font-display);
-  --theme-bg-primary: var(--color-bg-primary, var(--ink));
-  --theme-text-primary: var(--color-text-primary, var(--text));
-  --theme-text-secondary: var(--color-text-secondary, var(--muted));
-  --theme-font-base: var(--font-family-base, var(--font-body));
-  --theme-font-display: var(--font-family-display, var(--font-display));
-}
-
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  background: var(--theme-bg-primary);
-  color: var(--theme-text-primary);
-  font-family: var(--theme-font-base);
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line-height);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--type-body-size, 16px);
+  line-height: var(--type-body-line-height, 1.6);
   overflow-x: hidden;
 }
 
@@ -127,20 +104,20 @@ nav {
   padding: 1.25rem 4rem;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  background: rgba(10,10,15,0.8);
-  border-bottom: 1px solid var(--border);
+  background: var(--color-bg-overlay-80);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .nav-logo {
-  font-family: var(--theme-font-display);
+  font-family: var(--font-family-display);
   font-weight: 800;
   font-size: 1.25rem;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .nav-logo span {
-  color: var(--accent);
+  color: var(--color-accent-green);
 }
 
 .nav-links {
@@ -151,7 +128,7 @@ nav {
 
 .nav-links a {
   text-decoration: none;
-  color: var(--theme-text-secondary);
+  color: var(--color-text-secondary);
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
@@ -160,12 +137,12 @@ nav {
 }
 
 .nav-links a:hover {
-  color: var(--text);
+  color: var(--color-text-primary);
 }
 
 .nav-links button {
   text-decoration: none;
-  color: var(--theme-text-secondary);
+  color: var(--color-text-secondary);
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
@@ -175,7 +152,7 @@ nav {
 }
 
 .nav-links button:hover {
-  color: var(--text);
+  color: var(--color-text-primary);
 }
 
 .nav-cta {
@@ -186,11 +163,11 @@ nav {
 
 .btn-ghost {
   background: none;
-  border: 1px solid var(--border);
-  color: var(--theme-text-primary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
-  font-family: var(--theme-font-base);
+  font-family: var(--font-family-base);
   font-size: var(--type-button-size);
   font-weight: var(--type-button-weight);
   line-height: var(--type-button-line-height);
@@ -199,16 +176,16 @@ nav {
 }
 
 .btn-ghost:hover {
-  border-color: rgba(255,255,255,0.25);
+  border-color: var(--color-white-alpha-20);
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: var(--ink);
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
   border: none;
   padding: 0.55rem 1.35rem;
   border-radius: 6px;
-  font-family: var(--theme-font-base);
+  font-family: var(--font-family-base);
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
   line-height: var(--type-button-line-height);
@@ -236,8 +213,8 @@ nav {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    linear-gradient(var(--color-white-alpha-03) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-white-alpha-03) 1px, transparent 1px);
   background-size: 60px 60px;
   mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
 }
@@ -250,7 +227,7 @@ nav {
   transform: translateX(-50%);
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(232,255,90,0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--color-accent-alpha-08) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -260,7 +237,7 @@ nav {
   right: 5%;
   width: 300px;
   height: 300px;
-  background: radial-gradient(circle, rgba(90,255,184,0.06) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--color-accent-alpha-06) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
   animation: float 6s ease-in-out infinite;
@@ -278,7 +255,7 @@ nav {
 }
 
 .hero h1 {
-  font-family: var(--theme-font-display);
+  font-family: var(--font-family-display);
   font-weight: var(--type-h1-weight);
   font-size: var(--type-h1-size);
   line-height: var(--type-h1-line-height);
@@ -287,7 +264,7 @@ nav {
 }
 
 .gradient {
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+  background: linear-gradient(90deg, var(--color-accent-green) 0%, var(--color-accent-green-hover) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -296,7 +273,7 @@ nav {
 .hero p {
   font-size: 1.125rem;
   line-height: 1.7;
-  color: var(--muted);
+  color: var(--color-text-secondary);
   margin-bottom: 2.5rem;
   max-width: 600px;
 }
@@ -310,7 +287,7 @@ nav {
 /* ---- FEATURES ---- */
 .features {
   padding: 6rem 4rem;
-  background: var(--ink-2);
+  background: var(--color-bg-secondary);
 }
 
 .features-grid {
@@ -323,37 +300,37 @@ nav {
 
 .feature-card {
   padding: 2rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: var(--card);
+  background: var(--color-bg-secondary);
   transition: all 0.3s ease;
 }
 
 .feature-card:hover {
-  border-color: var(--accent);
-  background: rgba(232,255,90,0.02);
+  border-color: var(--color-accent-green);
+  background: var(--color-accent-alpha-02);
 }
 
 .feature-card h3 {
-  font-family: var(--theme-font-display);
+  font-family: var(--font-family-display);
   font-weight: var(--type-h3-weight);
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line-height);
   margin-bottom: 1rem;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .feature-card p {
-  color: var(--muted);
+  color: var(--color-text-secondary);
   font-size: 0.95rem;
 }
 
 /* ---- FOOTER ---- */
 footer {
   padding: 3rem 4rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
   text-align: center;
-  color: var(--muted);
+  color: var(--color-text-secondary);
   font-size: 0.875rem;
 }
 
@@ -380,8 +357,8 @@ footer {
 .candidate-results-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -390,16 +367,16 @@ footer {
 .candidate-results-table td {
   padding: 0.85rem 1rem;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
   font-size: 0.95rem;
 }
 
 .candidate-results-table th {
-  color: var(--text);
+  color: var(--color-text-primary);
 }
 
 .candidate-results-table td {
-  color: var(--muted);
+  color: var(--color-text-secondary);
 }
 
 .candidate-results-table tr:last-child td {
@@ -458,7 +435,7 @@ footer {
     width: 100%;
     text-align: left;
     padding: 0.65rem 0.75rem !important;
-    border: 1px solid var(--border) !important;
+    border: 1px solid var(--color-border) !important;
     border-radius: 8px;
   }
 
@@ -474,9 +451,9 @@ footer {
     min-width: 44px;
     min-height: 44px;
     border-radius: 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--color-border);
     background: transparent;
-    color: var(--text);
+    color: var(--color-text-primary);
   }
 
   .landing-mobile-cta {
@@ -576,7 +553,7 @@ footer {
   }
 
   .candidate-results-table tr {
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--color-border);
     padding: 0.5rem 0;
   }
 
@@ -587,7 +564,7 @@ footer {
 
   .candidate-results-table td::before {
     content: attr(data-label) ": ";
-    color: var(--text);
+    color: var(--color-text-primary);
     font-weight: 600;
   }
 
