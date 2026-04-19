@@ -102,6 +102,25 @@ function isRecoverableAnalyticsSchemaError(error) {
 }
 
 function buildFallbackAnalytics({ start, end, planType }) {
+  const unavailableSections = [
+    'kpis',
+    'revenueTrend',
+    'userGrowth',
+    'conversionFunnel',
+    'parsingTrend',
+    'planBreakdown',
+    'retentionCohorts',
+    'apiUsage',
+    'uxBlockers',
+    'uxWeeklyReport',
+    'feedbackSummary',
+    'feedbackTrend',
+    'feedbackExport',
+    'tokenUsageSummary',
+    'tokenUsageTrend',
+    'tokenUsageUploads',
+  ]
+
   return {
     filters: {
       startDate: start.toISOString().slice(0, 10),
@@ -143,6 +162,13 @@ function buildFallbackAnalytics({ start, end, planType }) {
     },
     tokenUsageTrend: [],
     tokenUsageUploads: [],
+    dataMode: {
+      limited: true,
+      reason: 'schema_fallback',
+      unavailableSections,
+      diagnostics: 'Analytics is running in fallback mode because one or more database tables/columns are missing. Apply migrations, then retry.',
+      canRetry: true,
+    },
     generatedAt: new Date().toISOString(),
   }
 }
@@ -560,6 +586,13 @@ async function loadAnalytics({ start, end, planType }) {
         estimatedCostUsd: row.estimated_cost_usd === null || row.estimated_cost_usd === undefined ? null : Number(row.estimated_cost_usd),
         createdAt: row.created_at,
       })),
+      dataMode: {
+        limited: false,
+        reason: null,
+        unavailableSections: [],
+        diagnostics: null,
+        canRetry: false,
+      },
       generatedAt: new Date().toISOString(),
     }
   } catch (error) {

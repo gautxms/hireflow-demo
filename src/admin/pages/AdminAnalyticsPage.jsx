@@ -44,6 +44,7 @@ export default function AdminAnalyticsPage() {
     updateCustomDate,
     refresh,
     exportCsv,
+    dataMode,
   } = useAdminAnalytics()
 
   const parsingTotals = analytics?.parsingTrend?.reduce((acc, row) => {
@@ -59,6 +60,22 @@ export default function AdminAnalyticsPage() {
   const retentionMax = Math.max(0, ...(analytics?.retentionCohorts || []).map((row) => Number(row.retained_users || 0)))
   const kpis = analytics?.kpis || {}
   const tokenUsageSummary = analytics?.tokenUsageSummary || {}
+  const unavailable = new Set(dataMode?.unavailableSections || [])
+  const sectionState = (key, hasRows = false) => {
+    if (unavailable.has(key)) {
+      return { tone: 'text-amber-700 bg-amber-50 border-amber-200', label: 'Unavailable in limited mode' }
+    }
+    if (!hasRows) {
+      return { tone: 'text-slate-600 bg-slate-50 border-slate-200', label: 'No records in selected date range' }
+    }
+    return { tone: 'text-emerald-700 bg-emerald-50 border-emerald-200', label: 'Data loaded' }
+  }
+  const revenueState = sectionState('revenueTrend', (analytics?.revenueTrend || []).length > 0)
+  const growthState = sectionState('userGrowth', (analytics?.userGrowth || []).length > 0)
+  const planState = sectionState('planBreakdown', (analytics?.planBreakdown || []).length > 0)
+  const tokenTrendState = sectionState('tokenUsageTrend', (analytics?.tokenUsageTrend || []).length > 0)
+  const retentionState = sectionState('retentionCohorts', (analytics?.retentionCohorts || []).length > 0)
+  const uxState = sectionState('uxWeeklyReport', Boolean(analytics?.uxWeeklyReport))
 
   return (
     <main className="admin-page">
@@ -102,6 +119,25 @@ export default function AdminAnalyticsPage() {
 
       {loading ? <div className="ui-card p-4 text-slate-600">Loading analytics…</div> : null}
       {error ? <StateAlert state={error} onRetry={refresh} /> : null}
+      {!error && analytics && dataMode?.limited ? (
+        <section className="ui-card border border-amber-300 bg-amber-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-amber-900">Limited data mode</h2>
+              <p className="mt-1 text-sm text-amber-800">
+                Some analytics sections are unavailable. Zeroes in unavailable widgets are placeholders, not real counts.
+              </p>
+              {dataMode?.diagnostics ? <p className="mt-2 text-xs text-amber-700">Diagnostics: {dataMode.diagnostics}</p> : null}
+              {dataMode?.unavailableSections?.length ? (
+                <p className="mt-2 text-xs text-amber-700">
+                  Unavailable sections: {dataMode.unavailableSections.join(', ')}
+                </p>
+              ) : null}
+            </div>
+            {dataMode?.canRetry ? <button onClick={refresh} className="ui-btn">Retry diagnostics</button> : null}
+          </div>
+        </section>
+      ) : null}
 
       {!loading && !error && !analytics ? (
         <EmptyState title="No analytics data yet" description="No records match the selected date range. Try expanding the range and refresh." action={<button onClick={refresh} className="mt-3 ui-btn">Retry</button>} />
@@ -119,8 +155,14 @@ export default function AdminAnalyticsPage() {
           </section>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <RevenueChart data={analytics.revenueTrend || []} />
-            <UserGrowthChart data={analytics.userGrowth || []} />
+            <section>
+              <RevenueChart data={analytics.revenueTrend || []} />
+              <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${revenueState.tone}`}>{revenueState.label}</p>
+            </section>
+            <section>
+              <UserGrowthChart data={analytics.userGrowth || []} />
+              <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${growthState.tone}`}>{growthState.label}</p>
+            </section>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-3">
@@ -128,6 +170,7 @@ export default function AdminAnalyticsPage() {
 
             <section className="ui-card p-4">
               <h2 className="text-lg font-medium text-slate-900">Plan Breakdown</h2>
+              <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${planState.tone}`}>{planState.label}</p>
               <div className="mt-4 space-y-3">
                 {(analytics.planBreakdown || []).map((plan) => (
                   <div key={plan.plan}>
@@ -156,6 +199,7 @@ export default function AdminAnalyticsPage() {
 
           <section className="ui-card p-4">
             <h2 className="text-lg font-medium text-slate-900">AI Token Usage</h2>
+            <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${tokenTrendState.tone}`}>{tokenTrendState.label}</p>
             <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">
               <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{number(tokenUsageSummary.totalTokens)}</strong></p>
               <p className="flex items-center justify-between"><span>Avg tokens / analysis</span> <strong>{number(tokenUsageSummary.avgTokensPerAnalysis)}</strong></p>
@@ -190,6 +234,7 @@ export default function AdminAnalyticsPage() {
 
           <section className="ui-card p-4">
             <h2 className="text-lg font-medium text-slate-900">Retention Cohorts Heatmap</h2>
+            <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${retentionState.tone}`}>{retentionState.label}</p>
             <div className="mt-4 overflow-auto">
               <div className="grid min-w-[720px] grid-cols-[160px_repeat(10,minmax(0,1fr))] gap-2 text-xs">
                 <div className="font-medium text-slate-500">Cohort</div>
@@ -226,6 +271,7 @@ export default function AdminAnalyticsPage() {
                 {analytics.uxWeeklyReport?.dateRange?.startDate} → {analytics.uxWeeklyReport?.dateRange?.endDate}
               </span>
             </div>
+            <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${uxState.tone}`}>{uxState.label}</p>
 
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <div className="rounded border border-slate-200 p-3 text-sm">
