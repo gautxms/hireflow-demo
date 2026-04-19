@@ -22,8 +22,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: ESLint
-        run: npm run lint
-
       - name: Style-token compliance scan
         run: npm run lint:style-tokens
