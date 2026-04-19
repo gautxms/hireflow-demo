@@ -1,6 +1,6 @@
 .admin-shell-v2 {
   --admin-font: 'DM Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --admin-display-font: 'DM Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --admin-display-font: 'Syne', 'DM Sans', sans-serif;
   --admin-bg: #0a0a0f;
   --admin-surface: #0f0f1a;
   --admin-surface-subtle: #15151f;

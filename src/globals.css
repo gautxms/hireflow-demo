@@ -18,6 +18,22 @@
   --muted: #7070a0;
   --font-display: 'Syne', sans-serif;
   --font-body: 'DM Sans', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
+  overflow-x: hidden;
+}
+
+:root {
   --type-h1-size: clamp(2.75rem, 6vw, 5rem);
   --type-h1-weight: 700;
   --type-h1-line-height: 1.2;
@@ -40,19 +56,6 @@
   --type-button-size-lg: 16px;
   --type-button-weight: 600;
   --type-button-line-height: 1.4;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  background: var(--ink);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line-height);
-  overflow-x: hidden;
 }
 
 .type-h1 {
