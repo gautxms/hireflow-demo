@@ -259,10 +259,10 @@ export default function SettingsPage({ onBack }) {
                       {app.status === 'Connected' ? 'Integration is active' : 'Not yet connected'}
                     </p>
                   </div>
-                  <button style={{
-                    background: app.status === 'Connected' ? 'transparent' : 'var(--color-accent-green)',
-                    color: app.status === 'Connected' ? color : 'var(--color-bg-primary)',
-                    border: app.status === 'Connected' ? `1px solid ${color}` : 'none',
+                  <button className={`settings-app-status ${app.status === 'Connected' ? 'settings-app-status--connected' : 'settings-app-status--disconnected'}`} style={{
+                    // visual status styles moved to class variants (settings-app-status--*)
+                    // visual status styles moved to class variants (settings-app-status--*)
+                    // visual status styles moved to class variants (settings-app-status--*)
                     padding: '0.6rem 1.5rem',
                     borderRadius: '6px',
                     fontWeight: 'bold',
