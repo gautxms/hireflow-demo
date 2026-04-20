@@ -5,20 +5,20 @@ export default function UserGrowthChart({ data = [] }) {
 
   return (
     <section className="ui-card p-4">
-      <h2 className="text-lg font-medium text-slate-900">User Growth (DAU / WAU / MAU)</h2>
-      <p className="mt-1 text-xs text-slate-500">Latest day: {new Date(latest.day).toLocaleDateString()}</p>
+      <h2 className="text-lg font-medium text-admin-strong">User Growth (DAU / WAU / MAU)</h2>
+      <p className="mt-1 text-xs text-admin-muted">Latest day: {new Date(latest.day).toLocaleDateString()}</p>
       <div className="mt-4 space-y-3">
         <div>
           <div className="mb-1 flex items-center justify-between text-sm"><span>DAU</span><strong>{latest.dau || 0}</strong></div>
-          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${pct(latest.dau)}%`, background: 'var(--admin-chart-series-dau)' }} /></div>
+          <div className="h-4 rounded bg-admin-subtle"><div className="h-full rounded" style={{ width: `${pct(latest.dau)}%`, background: 'var(--admin-chart-series-dau)' }} /></div>
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm"><span>WAU</span><strong>{latest.wau || 0}</strong></div>
-          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${pct(latest.wau)}%`, background: 'var(--admin-chart-series-wau)' }} /></div>
+          <div className="h-4 rounded bg-admin-subtle"><div className="h-full rounded" style={{ width: `${pct(latest.wau)}%`, background: 'var(--admin-chart-series-wau)' }} /></div>
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm"><span>MAU</span><strong>{latest.mau || 0}</strong></div>
-          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${pct(latest.mau)}%`, background: 'var(--admin-chart-series-mau)' }} /></div>
+          <div className="h-4 rounded bg-admin-subtle"><div className="h-full rounded" style={{ width: `${pct(latest.mau)}%`, background: 'var(--admin-chart-series-mau)' }} /></div>
         </div>
       </div>
     </section>

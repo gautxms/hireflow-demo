@@ -188,7 +188,7 @@ export default function AdminLogsPage() {
             <p><strong>Status:</strong> {row.statusCode || '—'}</p>
             <p><strong>Message:</strong> {row.message || '—'}</p>
             <p><strong>Created:</strong> {dateLabel(row.createdAt)}</p>
-            <pre className="max-h-64 overflow-auto rounded-md bg-slate-100 p-3 text-xs">{row.stack || 'No stack trace'}</pre>
+            <pre className="max-h-64 overflow-auto rounded-md bg-admin-subtle p-3 text-xs">{row.stack || 'No stack trace'}</pre>
             {!row.resolved ? <button type="button" className="ui-btn" onClick={() => void handleResolve(row.id)}>Mark resolved</button> : null}
           </div>
         )}

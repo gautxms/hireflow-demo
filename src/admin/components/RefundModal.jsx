@@ -76,8 +76,8 @@ export default function RefundModal({ isOpen, subscription, details, adminId, on
   return (
     <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Issue refund">
       <div className="ui-card ui-card--card-spacing ui-modal__dialog w-full max-w-lg">
-        <h2 className="text-xl font-semibold text-slate-900">Issue refund</h2>
-        <p className="mt-1 text-sm text-slate-600">{subscription.email} · {subscription.plan} plan</p>
+        <h2 className="text-xl font-semibold text-admin-strong">Issue refund</h2>
+        <p className="mt-1 text-sm text-admin-body">{subscription.email} · {subscription.plan} plan</p>
 
         <div className="mt-4 space-y-4">
           <label className="block">
@@ -97,7 +97,7 @@ export default function RefundModal({ isOpen, subscription, details, adminId, on
               value={amountCents}
               onChange={(event) => setAmountCents(Number(event.target.value || 0))}
             />
-            <span className="mt-1 block text-xs text-slate-500">{asMoney(amountCents)}</span>
+            <span className="mt-1 block text-xs text-admin-muted">{asMoney(amountCents)}</span>
           </label>
 
           <p className={`admin-inline-alert ${outsidePolicy ? 'admin-inline-alert--error' : 'admin-inline-alert--warning'} text-xs`}>

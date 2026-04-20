@@ -18,7 +18,7 @@ export default function RevenueChart({ data = [] }) {
 
   return (
     <section className="ui-card p-4">
-      <h2 className="text-lg font-medium text-slate-900">Revenue Trend (12 months)</h2>
+      <h2 className="text-lg font-medium text-admin-strong">Revenue Trend (12 months)</h2>
       <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 h-72 w-full">
         <line x1={margin.left} y1={height - margin.bottom} x2={width - margin.right} y2={height - margin.bottom} stroke="var(--admin-chart-axis)" />
         <line x1={margin.left} y1={margin.top} x2={margin.left} y2={height - margin.bottom} stroke="var(--admin-chart-axis)" />

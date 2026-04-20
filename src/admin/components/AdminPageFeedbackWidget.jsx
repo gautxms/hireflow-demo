@@ -40,8 +40,8 @@ export default function AdminPageFeedbackWidget({ routeContext }) {
 
   return (
     <section className="ui-card mt-5 p-4" >
-      <h2 className="text-base font-semibold text-slate-900">Was this page useful?</h2>
-      <p className="mt-1 text-sm text-slate-600">Feedback is tied to <code>{routeContext}</code> for weekly UX triage.</p>
+      <h2 className="text-base font-semibold text-admin-strong">Was this page useful?</h2>
+      <p className="mt-1 text-sm text-admin-body">Feedback is tied to <code>{routeContext}</code> for weekly UX triage.</p>
       <form className="mt-3 space-y-3" onSubmit={onSubmit}>
         <div className="flex gap-2">
           <button type="button" className={`ui-btn ${choice === true ? 'ui-btn--primary' : ''}`} onClick={() => setChoice(true)}>Yes</button>

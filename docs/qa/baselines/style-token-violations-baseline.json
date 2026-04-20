@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-20T11:59:18.456Z",
+  "generatedAt": "2026-04-20T19:35:51.071Z",
   "approvedExceptions": [
     {
       "exceptionId": "BGX-004",
@@ -192,50 +192,6 @@
     {
       "exceptionId": "BGX-004",
       "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:290:inline-style-non-runtime-forbidden:backgroundColor: cohortColor(retained | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:645:hardcoded-color-forbidden:border: '1px solid rgba(255"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:646:hardcoded-color-forbidden:background: '#111827'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:647:hardcoded-color-forbidden:color: '#fff'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:663:hardcoded-color-forbidden:background: '#171723'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:664:hardcoded-color-forbidden:border: '1px solid rgba(255"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:666:hardcoded-color-forbidden:boxShadow: '0 10px 24px rgba(0"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:677:hardcoded-color-forbidden:color: '#fff'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:687:hardcoded-color-forbidden:color: '#fff'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:698:hardcoded-color-forbidden:color: '#fff'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:703:hardcoded-color-forbidden:background: 'rgba(255"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/App.jsx:710:hardcoded-color-forbidden:color: '#b91c1c'"
     },
     {
       "exceptionId": "BGX-004",
@@ -751,787 +707,359 @@
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:524:inline-style-non-runtime-forbidden:background: 'var(--color-bg-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:714:inline-style-non-runtime-forbidden:marginBottom: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:524:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:715:inline-style-non-runtime-forbidden:alignItems: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:524:inline-style-non-runtime-forbidden:fontFamily: 'var(--font-body)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:715:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:524:inline-style-non-runtime-forbidden:padding: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:715:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:524:inline-style-runtime-value-required:minHeight: '100vh' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:715:inline-style-non-runtime-forbidden:fontSize: '0.9rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:525:inline-style-non-runtime-forbidden:margin: '0 auto' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:715:inline-style-non-runtime-forbidden:gap: '0.4rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:525:inline-style-runtime-value-required:maxWidth: '900px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:726:inline-style-non-runtime-forbidden:alignItems: 'start' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:530:inline-style-non-runtime-forbidden:background: 'transparent' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:726:inline-style-non-runtime-forbidden:display: 'grid' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:531:inline-style-non-runtime-forbidden:border: '1px solid var(--border)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:726:inline-style-non-runtime-forbidden:gap: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:532:inline-style-non-runtime-forbidden:color: 'var(--color-accent-green)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:726:inline-style-non-runtime-forbidden:gridTemplateColumns: '1fr auto auto' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:533:inline-style-non-runtime-forbidden:padding: '0.5rem 1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:726:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:534:inline-style-non-runtime-forbidden:borderRadius: '4px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:728:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:535:inline-style-non-runtime-forbidden:cursor: 'pointer' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:728:inline-style-non-runtime-forbidden:fontSize: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:536:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:728:inline-style-non-runtime-forbidden:fontWeight: 'bold' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:537:inline-style-non-runtime-forbidden:fontSize: '0.9rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:728:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:542:inline-style-non-runtime-forbidden:fontFamily: 'var(--font-display)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:731:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:542:inline-style-non-runtime-forbidden:fontSize: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:731:inline-style-non-runtime-forbidden:marginBottom: '0.25rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:542:inline-style-non-runtime-forbidden:fontWeight: 'bold' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:732:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:542:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:735:inline-style-non-runtime-forbidden:textAlign: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:545:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:737:inline-style-runtime-value-required:width: '90px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:545:inline-style-non-runtime-forbidden:marginBottom: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:738:inline-style-runtime-value-required:height: '90px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:548:inline-style-non-runtime-forbidden:color: 'var(--color-accent-green)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:739:inline-style-non-runtime-forbidden:borderRadius: '50%' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:548:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:740:inline-style-non-runtime-forbidden:background: `conic-gradient(${scoreState.chartColor | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:550:inline-style-non-runtime-forbidden:display: 'grid' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:741:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:550:inline-style-non-runtime-forbidden:gap: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:742:inline-style-non-runtime-forbidden:alignItems: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:555:inline-style-non-runtime-forbidden:border: '1px solid var(--border)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:743:inline-style-non-runtime-forbidden:justifyContent: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:556:inline-style-non-runtime-forbidden:borderRadius: '12px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:744:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:557:inline-style-non-runtime-forbidden:padding: '1.25rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:745:inline-style-non-runtime-forbidden:position: 'relative' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:558:inline-style-non-runtime-forbidden:background: 'var(--card)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:748:inline-style-runtime-value-required:width: '75px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:559:inline-style-non-runtime-forbidden:animation: 'pulseSkeleton var(--motion-duration-loop-base) var(--motion-ease-emphasized) infinite' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:749:inline-style-runtime-value-required:height: '75px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:562:hardcoded-color-forbidden:background: 'rgba(255"
+      "fingerprint": "src/components/CandidateResults.jsx:750:inline-style-non-runtime-forbidden:borderRadius: '50%' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:562:inline-style-non-runtime-forbidden:background: 'rgba(255 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:751:inline-style-non-runtime-forbidden:background: 'var(--card)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:562:inline-style-non-runtime-forbidden:borderRadius: '8px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:752:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:562:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:753:inline-style-non-runtime-forbidden:alignItems: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:562:inline-style-runtime-value-required:height: '16px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:754:inline-style-non-runtime-forbidden:justifyContent: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:562:inline-style-runtime-value-required:width: '35%' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:755:inline-style-non-runtime-forbidden:fontSize: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:563:hardcoded-color-forbidden:background: 'rgba(255"
+      "fingerprint": "src/components/CandidateResults.jsx:756:inline-style-non-runtime-forbidden:fontWeight: 'bold' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:563:inline-style-non-runtime-forbidden:background: 'rgba(255 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:757:inline-style-non-runtime-forbidden:color: scoreState.chartColor | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:563:inline-style-non-runtime-forbidden:borderRadius: '8px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:762:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:563:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:762:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:563:inline-style-runtime-value-required:height: '12px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:769:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:563:inline-style-runtime-value-required:width: '60%' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:769:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:564:hardcoded-color-forbidden:background: 'rgba(255"
+      "fingerprint": "src/components/CandidateResults.jsx:770:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:564:inline-style-non-runtime-forbidden:background: 'rgba(255 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:770:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:564:inline-style-non-runtime-forbidden:borderRadius: '8px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:774:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:564:inline-style-runtime-value-required:height: '12px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:775:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:564:inline-style-runtime-value-required:width: '50%' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:775:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:582:inline-style-non-runtime-forbidden:background: 'var(--color-bg-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:775:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:582:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:776:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:582:inline-style-non-runtime-forbidden:fontFamily: 'var(--font-body)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:776:inline-style-non-runtime-forbidden:lineHeight: '1.6' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:582:inline-style-non-runtime-forbidden:padding: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:779:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:582:inline-style-runtime-value-required:minHeight: '100vh' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:780:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:583:inline-style-non-runtime-forbidden:margin: '0 auto' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:780:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:583:inline-style-runtime-value-required:maxWidth: '900px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:780:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:588:inline-style-non-runtime-forbidden:background: 'transparent' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:781:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:589:inline-style-non-runtime-forbidden:border: '1px solid var(--border)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:781:inline-style-non-runtime-forbidden:flexWrap: 'wrap' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:590:inline-style-non-runtime-forbidden:color: 'var(--color-accent-green)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:781:inline-style-non-runtime-forbidden:gap: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:591:inline-style-non-runtime-forbidden:padding: '0.5rem 1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:786:inline-style-non-runtime-forbidden:background: 'var(--color-accent-alpha-08)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:592:inline-style-non-runtime-forbidden:borderRadius: '4px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:787:inline-style-non-runtime-forbidden:color: 'var(--color-accent-green)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:593:inline-style-non-runtime-forbidden:cursor: 'pointer' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:788:inline-style-non-runtime-forbidden:padding: '0.25rem 0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:594:inline-style-non-runtime-forbidden:marginBottom: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:789:inline-style-non-runtime-forbidden:borderRadius: '20px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:595:inline-style-non-runtime-forbidden:fontSize: '0.9rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:790:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:600:inline-style-non-runtime-forbidden:fontFamily: 'var(--font-display)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:791:inline-style-non-runtime-forbidden:border: '1px solid var(--color-accent-alpha-15)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:600:inline-style-non-runtime-forbidden:fontSize: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:799:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:600:inline-style-non-runtime-forbidden:fontWeight: 'bold' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:799:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:600:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:799:inline-style-non-runtime-forbidden:marginTop: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:603:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:805:inline-style-non-runtime-forbidden:display: 'grid' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:610:inline-style-non-runtime-forbidden:background: 'var(--color-bg-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:805:inline-style-non-runtime-forbidden:gap: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:610:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:805:inline-style-non-runtime-forbidden:gridTemplateColumns: '1fr 1fr' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:610:inline-style-non-runtime-forbidden:fontFamily: 'var(--font-body)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:807:inline-style-non-runtime-forbidden:color: 'var(--color-success-text)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:610:inline-style-non-runtime-forbidden:padding: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:807:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:610:inline-style-runtime-value-required:minHeight: '100vh' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:807:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:611:inline-style-non-runtime-forbidden:margin: '0 auto' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:808:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:611:inline-style-non-runtime-forbidden:marginBottom: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:808:inline-style-non-runtime-forbidden:margin: 0 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:611:inline-style-runtime-value-required:maxWidth: '1200px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
+      "fingerprint": "src/components/CandidateResults.jsx:808:inline-style-non-runtime-forbidden:paddingLeft: '1.2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:616:inline-style-non-runtime-forbidden:background: 'transparent' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:811:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:617:inline-style-non-runtime-forbidden:border: '1px solid var(--border)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:811:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:618:inline-style-non-runtime-forbidden:color: 'var(--color-accent-green)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:813:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:619:inline-style-non-runtime-forbidden:padding: '0.5rem 1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:813:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:620:inline-style-non-runtime-forbidden:borderRadius: '4px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:818:inline-style-non-runtime-forbidden:color: 'var(--color-warning-text)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:621:inline-style-non-runtime-forbidden:cursor: 'pointer' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:818:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:622:inline-style-non-runtime-forbidden:marginBottom: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:818:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:623:inline-style-non-runtime-forbidden:fontSize: '0.9rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:819:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:628:inline-style-non-runtime-forbidden:fontFamily: 'var(--font-display)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:819:inline-style-non-runtime-forbidden:margin: 0 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:628:inline-style-non-runtime-forbidden:fontSize: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:819:inline-style-non-runtime-forbidden:paddingLeft: '1.2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:628:inline-style-non-runtime-forbidden:fontWeight: 'bold' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:822:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:628:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:822:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:631:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:824:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:634:inline-style-non-runtime-forbidden:color: 'var(--color-error)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:680:inline-style-runtime-value-required:minWidth: 160 | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:727:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:727:inline-style-non-runtime-forbidden:margin: '0 auto 1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:727:inline-style-runtime-value-required:maxWidth: '1200px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:732:inline-style-non-runtime-forbidden:alignItems: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:732:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:732:inline-style-non-runtime-forbidden:gap: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:732:inline-style-non-runtime-forbidden:margin: '0 auto 1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:732:inline-style-runtime-value-required:maxWidth: '1200px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:734:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:742:inline-style-non-runtime-forbidden:display: 'grid' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:742:inline-style-non-runtime-forbidden:gap: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:742:inline-style-non-runtime-forbidden:margin: '0 auto' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:742:inline-style-runtime-value-required:maxWidth: '1200px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:760:inline-style-non-runtime-forbidden:marginBottom: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:761:inline-style-non-runtime-forbidden:alignItems: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:761:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:761:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:761:inline-style-non-runtime-forbidden:fontSize: '0.9rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:761:inline-style-non-runtime-forbidden:gap: '0.4rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:772:inline-style-non-runtime-forbidden:alignItems: 'start' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:772:inline-style-non-runtime-forbidden:display: 'grid' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:772:inline-style-non-runtime-forbidden:gap: '2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:772:inline-style-non-runtime-forbidden:gridTemplateColumns: '1fr auto auto' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:772:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:774:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:774:inline-style-non-runtime-forbidden:fontSize: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:774:inline-style-non-runtime-forbidden:fontWeight: 'bold' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:774:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:777:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:777:inline-style-non-runtime-forbidden:marginBottom: '0.25rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:778:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:781:inline-style-non-runtime-forbidden:textAlign: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:783:inline-style-runtime-value-required:width: '90px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:784:inline-style-runtime-value-required:height: '90px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:785:inline-style-non-runtime-forbidden:borderRadius: '50%' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:786:inline-style-non-runtime-forbidden:background: `conic-gradient(${scoreState.chartColor | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:787:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:788:inline-style-non-runtime-forbidden:alignItems: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:789:inline-style-non-runtime-forbidden:justifyContent: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:790:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:791:inline-style-non-runtime-forbidden:position: 'relative' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:794:inline-style-runtime-value-required:width: '75px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:795:inline-style-runtime-value-required:height: '75px' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:796:inline-style-non-runtime-forbidden:borderRadius: '50%' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:797:inline-style-non-runtime-forbidden:background: 'var(--card)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:798:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:799:inline-style-non-runtime-forbidden:alignItems: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:800:inline-style-non-runtime-forbidden:justifyContent: 'center' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:801:inline-style-non-runtime-forbidden:fontSize: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:802:inline-style-non-runtime-forbidden:fontWeight: 'bold' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:803:inline-style-non-runtime-forbidden:color: scoreState.chartColor | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:808:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:808:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:815:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:815:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:816:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:816:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:820:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:821:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:821:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:821:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:822:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:822:inline-style-non-runtime-forbidden:lineHeight: '1.6' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:825:inline-style-non-runtime-forbidden:marginBottom: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:826:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:826:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:826:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:827:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:827:inline-style-non-runtime-forbidden:flexWrap: 'wrap' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:827:inline-style-non-runtime-forbidden:gap: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:832:inline-style-non-runtime-forbidden:background: 'var(--color-accent-alpha-08)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:833:inline-style-non-runtime-forbidden:color: 'var(--color-accent-green)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:834:inline-style-non-runtime-forbidden:padding: '0.25rem 0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:835:inline-style-non-runtime-forbidden:borderRadius: '20px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:836:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:837:inline-style-non-runtime-forbidden:border: '1px solid var(--color-accent-alpha-15)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:845:inline-style-non-runtime-forbidden:color: 'var(--color-text-secondary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:845:inline-style-non-runtime-forbidden:fontSize: '0.85rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:845:inline-style-non-runtime-forbidden:marginTop: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:851:inline-style-non-runtime-forbidden:display: 'grid' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:851:inline-style-non-runtime-forbidden:gap: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:851:inline-style-non-runtime-forbidden:gridTemplateColumns: '1fr 1fr' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:853:inline-style-non-runtime-forbidden:color: 'var(--color-success-text)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:853:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:853:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:854:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:854:inline-style-non-runtime-forbidden:margin: 0 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:854:inline-style-non-runtime-forbidden:paddingLeft: '1.2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:857:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:857:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:859:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:859:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:864:inline-style-non-runtime-forbidden:color: 'var(--color-warning-text)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:864:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:864:inline-style-non-runtime-forbidden:marginBottom: '0.75rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:865:inline-style-non-runtime-forbidden:color: 'var(--color-text-primary)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:865:inline-style-non-runtime-forbidden:margin: 0 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:865:inline-style-non-runtime-forbidden:paddingLeft: '1.2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:868:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:868:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:870:inline-style-non-runtime-forbidden:lineHeight: '1.5' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:870:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:876:inline-style-non-runtime-forbidden:display: 'flex' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:876:inline-style-non-runtime-forbidden:flexWrap: 'wrap' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:876:inline-style-non-runtime-forbidden:gap: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/CandidateResults.jsx:876:inline-style-non-runtime-forbidden:marginTop: '1.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+      "fingerprint": "src/components/CandidateResults.jsx:824:inline-style-non-runtime-forbidden:marginBottom: '0.5rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
@@ -2240,14 +1768,6 @@
     {
       "exceptionId": "BGX-004",
       "fingerprint": "src/components/JobDescriptionList.jsx:4:inline-style-non-runtime-forbidden:padding: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/LandingPage.jsx:76:inline-style-non-runtime-forbidden:fontSize: '1rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/LandingPage.jsx:76:inline-style-non-runtime-forbidden:padding: '0.75rem 2rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
@@ -5392,102 +4912,6 @@
     {
       "exceptionId": "BGX-004",
       "fingerprint": "src/components/SubscriptionCard.jsx:124:inline-style-non-runtime-forbidden:fontSize: '14px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:139:inline-style-runtime-value-required:width: '100%' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:140:inline-style-non-runtime-forbidden:padding: '12px 20px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:141:hardcoded-color-forbidden:background: 'rgba(239"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:141:inline-style-non-runtime-forbidden:background: 'rgba(239 | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:142:hardcoded-color-forbidden:color: '#ef4444'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:142:inline-style-non-runtime-forbidden:color: '#ef4444' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:143:hardcoded-color-forbidden:border: '1px solid #ef4444'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:143:inline-style-non-runtime-forbidden:border: '1px solid #ef4444' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:144:inline-style-non-runtime-forbidden:borderRadius: '6px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:145:inline-style-non-runtime-forbidden:cursor: 'pointer' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:146:inline-style-non-runtime-forbidden:fontWeight: '600' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:147:inline-style-non-runtime-forbidden:fontSize: '14px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:148:inline-style-non-runtime-forbidden:transition: 'all var(--motion-duration-base) var(--motion-ease-standard)' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:169:inline-style-runtime-value-required:width: '100%' | fix: replace static literal with data-driven expression (e.g. width: `${pct}%`) or move to className."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:170:inline-style-non-runtime-forbidden:padding: '12px 20px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:171:hardcoded-color-forbidden:background: '#CCFF00'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:171:inline-style-non-runtime-forbidden:background: '#CCFF00' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:172:hardcoded-color-forbidden:color: '#000000'"
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:172:inline-style-non-runtime-forbidden:color: '#000000' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:173:inline-style-non-runtime-forbidden:border: 'none' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:174:inline-style-non-runtime-forbidden:borderRadius: '6px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:175:inline-style-non-runtime-forbidden:cursor: 'pointer' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:176:inline-style-non-runtime-forbidden:fontWeight: '600' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
-    },
-    {
-      "exceptionId": "BGX-004",
-      "fingerprint": "src/components/SubscriptionCard.jsx:177:inline-style-non-runtime-forbidden:fontSize: '14px' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
     },
     {
       "exceptionId": "BGX-004",
