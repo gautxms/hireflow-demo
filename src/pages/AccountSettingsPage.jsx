@@ -16,8 +16,8 @@ function Toast({ type, message }) {
         right: 16,
         padding: '0.75rem 1rem',
         borderRadius: 8,
-        color: '#fff',
-        background: type === 'error' ? '#b91c1c' : '#166534',
+        color: 'var(--color-text-primary)',
+        background: type === 'error' ? 'var(--color-error)' : 'var(--color-success)',
         zIndex: 50,
       }}
     >
@@ -194,12 +194,12 @@ export default function AccountSettingsPage() {
   }
 
   return (
-    <main style={{ maxWidth: 860, margin: '0 auto', padding: '2rem 1rem 3rem', color: 'var(--text)' }}>
+    <main style={{ maxWidth: 860, margin: '0 auto', padding: '2rem 1rem 3rem', color: 'var(--color-text-primary)' }}>
       <Toast type={toast.type} message={toast.message} />
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', marginBottom: '0.5rem' }}>Account Settings</h1>
-      <p style={{ color: 'var(--muted)', marginBottom: '1.75rem' }}>Manage your profile and security settings.</p>
+      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.75rem' }}>Manage your profile and security settings.</p>
 
-      <section style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', padding: '1.2rem', marginBottom: '1rem' }}>
+      <section style={{ border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-bg-secondary)', padding: '1.2rem', marginBottom: '1rem' }}>
         <h2 style={{ marginTop: 0 }}>Profile</h2>
         <form onSubmit={handleProfileSave} style={{ display: 'grid', gap: '0.9rem' }}>
           <label>
@@ -218,17 +218,17 @@ export default function AccountSettingsPage() {
             Subscription Status (read-only)
             <input value={profile.subscription_status || 'inactive'} disabled style={{ width: '100%', marginTop: 6, opacity: 0.7 }} />
           </label>
-          <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+          <div style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
             To change subscription, visit <a href="/pricing">Billing</a>.
           </div>
-          <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+          <div style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
             Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
           </div>
           <button type="submit" style={{ width: 'fit-content' }}>Save profile</button>
         </form>
       </section>
 
-      <section style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', padding: '1.2rem', marginBottom: '1rem' }}>
+      <section style={{ border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-bg-secondary)', padding: '1.2rem', marginBottom: '1rem' }}>
         <h2 style={{ marginTop: 0 }}>Change Password</h2>
         <form onSubmit={handlePasswordChange} style={{ display: 'grid', gap: '0.9rem' }}>
           <input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} placeholder="Old password" required />
@@ -238,14 +238,14 @@ export default function AccountSettingsPage() {
         </form>
       </section>
 
-      <section style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', padding: '1.2rem' }}>
+      <section style={{ border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-bg-secondary)', padding: '1.2rem' }}>
         <h2 style={{ marginTop: 0 }}>Privacy & Data</h2>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={handleDownloadData}>Download personal data (JSON)</button>
-          <button onClick={handleDeleteAccount} style={{ background: '#dc2626', color: '#fff' }}>Delete account</button>
+          <button onClick={handleDeleteAccount} style={{ background: 'var(--color-error)', color: 'var(--color-text-primary)' }}>Delete account</button>
         </div>
         {profile.deletion_scheduled_for && (
-          <p style={{ marginTop: 12, color: '#fca5a5' }}>
+          <p style={{ marginTop: 12, color: 'var(--color-error)' }}>
             Deletion scheduled for: {new Date(profile.deletion_scheduled_for).toLocaleString()}
           </p>
         )}

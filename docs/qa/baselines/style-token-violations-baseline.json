@@ -1,4 +1,1069 @@
 {
-  "generatedAt": "2026-04-20T00:00:00.000Z",
-  "approvedExceptions": []
+  "generatedAt": "2026-04-20T10:25:45.651Z",
+  "approvedExceptions": [
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:645:hardcoded-color-forbidden:border: '1px solid rgba(255"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:646:hardcoded-color-forbidden:background: '#111827'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:647:hardcoded-color-forbidden:color: '#fff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:663:hardcoded-color-forbidden:background: '#171723'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:664:hardcoded-color-forbidden:border: '1px solid rgba(255"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:666:hardcoded-color-forbidden:boxShadow: '0 10px 24px rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:677:hardcoded-color-forbidden:color: '#fff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:687:hardcoded-color-forbidden:color: '#fff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:698:hardcoded-color-forbidden:color: '#fff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:703:hardcoded-color-forbidden:background: 'rgba(255"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:710:hardcoded-color-forbidden:color: '#b91c1c'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/App.jsx:726:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/AuditTrailTable.jsx:51:hardcoded-color-forbidden:color: '#475569'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/AuditTrailTable.jsx:84:hardcoded-color-forbidden:color: '#64748b'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/ErrorLogsTable.jsx:26:hardcoded-color-forbidden:border: '1px solid #e5e7eb'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/ErrorLogsTable.jsx:40:hardcoded-color-forbidden:background: isExpanded ? '#f9fafb' : 'transparent'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/ErrorLogsTable.jsx:42:hardcoded-color-forbidden:color: '#059669'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/ErrorLogsTable.jsx:44:hardcoded-color-forbidden:background: '#0f172a'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/ErrorLogsTable.jsx:44:hardcoded-color-forbidden:color: '#e2e8f0'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/TwoFactorForm.jsx:47:hardcoded-color-forbidden:color: '#475569'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/TwoFactorForm.jsx:50:hardcoded-color-forbidden:color: '#334155'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/TwoFactorForm.jsx:76:hardcoded-color-forbidden:color: '#475569'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:107:legacy-token-alias-forbidden:color: var(--text)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:113:legacy-token-alias-forbidden:border-color: var(--accent)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:130:legacy-token-alias-forbidden:color: var(--text)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:159:legacy-token-alias-forbidden:background: linear-gradient(90deg, var(--accent), var(--accent-2))"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:160:legacy-token-alias-forbidden:color: var(--ink)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:175:legacy-token-alias-forbidden:color: var(--muted)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:190:legacy-token-alias-forbidden:color: var(--accent)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:3:legacy-token-alias-forbidden:background: var(--ink)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:72:legacy-token-alias-forbidden:color: var(--accent)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/AuthPage.css:83:legacy-token-alias-forbidden:color: var(--muted)"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BackButton.jsx:38:hardcoded-color-forbidden:border: '1px solid rgba(255"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BackButton.jsx:40:hardcoded-color-forbidden:color: '#d6ff4b'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:15:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:28:hardcoded-color-forbidden:color: '#a3a3a3'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:46:hardcoded-color-forbidden:background: '#CCFF00'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:47:hardcoded-color-forbidden:color: '#000000'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:5:hardcoded-color-forbidden:background: '#1a1a1a'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:6:hardcoded-color-forbidden:border: '1px solid #333333'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:73:hardcoded-color-forbidden:background: '#333333'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:74:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BillingCard.jsx:75:hardcoded-color-forbidden:border: '1px solid #555555'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/BulkActions.jsx:20:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:103:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:113:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:115:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:125:hardcoded-color-forbidden:background: active ? 'rgba(90"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:127:legacy-token-alias-forbidden:color: active ? 'var(--accent-2)' : 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:52:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:63:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:72:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateFilters.jsx:98:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:524:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:524:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:532:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:545:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:548:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:562:hardcoded-color-forbidden:background: 'rgba(255"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:563:hardcoded-color-forbidden:background: 'rgba(255"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:564:hardcoded-color-forbidden:background: 'rgba(255"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:582:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:582:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:590:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:603:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:610:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:610:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:618:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:631:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:727:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:734:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:761:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:774:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:777:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:778:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:808:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:815:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:816:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:821:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:822:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:826:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:833:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:845:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:854:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/CandidateResults.jsx:865:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:103:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:114:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:140:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:143:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:144:legacy-token-alias-forbidden:color: 'var(--accent-2)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:147:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:151:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:152:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:155:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:178:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:180:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:188:hardcoded-color-forbidden:background: 'rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:190:legacy-token-alias-forbidden:background: task.progress === 100 ? 'var(--accent-2)' : 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:196:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:219:hardcoded-color-forbidden:background: item.status === 'IN_PROGRESS' ? 'rgba(232"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:220:legacy-token-alias-forbidden:border: item.status === 'IN_PROGRESS' ? '1px solid var(--accent)' : '1px solid var(--border)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:225:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:226:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:233:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:92:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:92:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/Dashboard.jsx:97:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/JobDescriptionForm.jsx:109:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/JobDescriptionForm.jsx:99:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/JobDescriptionList.jsx:17:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/JobDescriptionList.jsx:18:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/JobDescriptionList.jsx:19:hardcoded-color-forbidden:color: '#fff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/JobDescriptionList.jsx:4:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/LoginPage.jsx:76:hardcoded-color-forbidden:color: '#9ca3af'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/LoginPage.jsx:80:hardcoded-color-forbidden:color: '#9ca3af'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:109:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:116:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:125:legacy-token-alias-forbidden:background: plan.highlighted ? 'var(--accent)' : 'transparent'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:126:legacy-token-alias-forbidden:color: plan.highlighted ? 'var(--ink)' : 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:127:legacy-token-alias-forbidden:border: plan.highlighted ? 'none' : '2px solid var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:141:legacy-token-alias-forbidden:color: 'var(--accent-2)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:142:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:152:legacy-token-alias-forbidden:background: 'var(--ink-2)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:166:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:177:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:182:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:183:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:62:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:62:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:68:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:80:legacy-token-alias-forbidden:border: plan.highlighted ? '2px solid var(--accent)' : '1px solid var(--border)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:83:hardcoded-color-forbidden:background: plan.highlighted ? 'rgba(232"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:95:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PricingPage.jsx:96:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PrivacyPage.jsx:8:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PrivacyPage.jsx:8:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:101:hardcoded-color-forbidden:color: '#a3a3a3'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:109:hardcoded-color-forbidden:color: user?.company ? '#ffffff' : '#666666'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:116:hardcoded-color-forbidden:color: '#a3a3a3'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:124:hardcoded-color-forbidden:color: user?.phone ? '#ffffff' : '#666666'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:130:hardcoded-color-forbidden:background: '#CCFF00'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:131:hardcoded-color-forbidden:color: '#000000'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:161:hardcoded-color-forbidden:background: '#0a0a0a'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:162:hardcoded-color-forbidden:border: '1px solid #333333'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:164:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:177:hardcoded-color-forbidden:background: '#0a0a0a'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:178:hardcoded-color-forbidden:border: '1px solid #333333'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:180:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:190:hardcoded-color-forbidden:background: '#CCFF00'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:191:hardcoded-color-forbidden:color: '#000000'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:206:hardcoded-color-forbidden:background: '#333333'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:207:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:54:hardcoded-color-forbidden:background: '#1a1a1a'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:55:hardcoded-color-forbidden:border: '1px solid #333333'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:64:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:75:hardcoded-color-forbidden:color: messageType === 'success' ? '#22c55e' : '#ef4444'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:86:hardcoded-color-forbidden:color: '#a3a3a3'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ProfileCard.jsx:94:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PublicFooter.jsx:6:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PublicFooter.jsx:7:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PublicFooter.jsx:8:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/PublicFooter.jsx:9:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:451:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:451:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:460:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:474:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:483:hardcoded-color-forbidden:background: 'rgba(251"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:484:hardcoded-color-forbidden:border: '1px solid #fbbf24'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:485:hardcoded-color-forbidden:color: '#f59e0b'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:501:legacy-token-alias-forbidden:border: isDragging ? '2px solid var(--accent)' : '2px dashed var(--border)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:505:hardcoded-color-forbidden:background: isDragging ? 'rgba(232"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:515:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:531:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:532:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:545:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:552:hardcoded-color-forbidden:background: '#111827'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:552:hardcoded-color-forbidden:color: '#fff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:564:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:595:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:606:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:623:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:631:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:642:hardcoded-color-forbidden:background: 'rgba(239"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:643:hardcoded-color-forbidden:border: '1px solid #ef4444'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:644:hardcoded-color-forbidden:color: '#ef4444'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:657:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:668:legacy-token-alias-forbidden:background: uploadedFiles.length === 0 ? 'var(--muted)' : 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ResumeUploader.jsx:669:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:106:hardcoded-color-forbidden:background: 'rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:109:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:116:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:125:hardcoded-color-forbidden:background: 'rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:128:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:157:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:158:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:15:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:15:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:190:hardcoded-color-forbidden:background: 'rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:197:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:198:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:205:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:218:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:219:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:23:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:258:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:263:legacy-token-alias-forbidden:background: app.status === 'Connected' ? 'transparent' : 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:264:legacy-token-alias-forbidden:color: app.status === 'Connected' ? color : 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:290:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:295:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:309:hardcoded-color-forbidden:background: 'rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:315:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:335:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:336:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:349:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:353:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:354:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:368:hardcoded-color-forbidden:background: 'rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:370:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:375:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:50:hardcoded-color-forbidden:background: activeTab === tab ? 'rgba(232"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:51:legacy-token-alias-forbidden:border: activeTab === tab ? '1px solid var(--accent)' : '1px solid transparent'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:52:legacy-token-alias-forbidden:color: activeTab === tab ? 'var(--accent)' : 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:78:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:87:hardcoded-color-forbidden:background: 'rgba(0"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:90:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SettingsPage.jsx:97:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:101:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:105:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:105:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:117:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:120:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:122:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:128:hardcoded-color-forbidden:color: '#ef4444'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:135:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:140:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:45:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:56:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:56:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:62:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:62:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:67:legacy-token-alias-forbidden:background: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:67:legacy-token-alias-forbidden:color: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:73:hardcoded-color-forbidden:color: '#ef4444'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:81:legacy-token-alias-forbidden:background: list.id === selectedShortlistId ? 'var(--accent)' : 'transparent'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:82:legacy-token-alias-forbidden:color: list.id === selectedShortlistId ? 'var(--ink)' : 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/ShortlistManager.jsx:99:legacy-token-alias-forbidden:color: 'var(--muted)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:101:hardcoded-color-forbidden:color: '#a3a3a3'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:109:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:116:hardcoded-color-forbidden:color: '#a3a3a3'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:124:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:141:hardcoded-color-forbidden:background: 'rgba(239"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:142:hardcoded-color-forbidden:color: '#ef4444'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:143:hardcoded-color-forbidden:border: '1px solid #ef4444'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:171:hardcoded-color-forbidden:background: '#CCFF00'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:172:hardcoded-color-forbidden:color: '#000000'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:47:hardcoded-color-forbidden:background: '#1a1a1a'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:48:hardcoded-color-forbidden:border: '1px solid #333333'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:57:hardcoded-color-forbidden:color: '#ffffff'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/SubscriptionCard.jsx:72:hardcoded-color-forbidden:color: '#a3a3a3'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/TermsPage.jsx:8:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/TermsPage.jsx:8:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/pages/RefundPolicy.jsx:26:legacy-token-alias-forbidden:color: 'var(--accent)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/pages/RefundPolicy.jsx:8:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/pages/RefundPolicy.jsx:8:legacy-token-alias-forbidden:color: 'var(--text)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/pages/Terms.jsx:39:legacy-token-alias-forbidden:background: 'var(--ink)'"
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/pages/Terms.jsx:39:legacy-token-alias-forbidden:color: 'var(--text)'"
+    }
+  ]
 }
