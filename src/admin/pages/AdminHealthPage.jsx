@@ -103,7 +103,7 @@ export default function AdminHealthPage() {
         <h3 className="admin-section-title">API endpoint health</h3>
         <div className="grid gap-2">
           {(health?.apiHealth || []).map((endpoint) => (
-            <div key={endpoint.endpoint} className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-slate-100 pb-2 text-sm">
+            <div key={endpoint.endpoint} className="admin-endpoint-row grid grid-cols-[1fr_auto_auto] gap-4 pb-2 text-sm">
               <span>{endpoint.endpoint}</span>
               <span>{endpoint.hits} hits</span>
               <span>{endpoint.avgResponseMs} ms avg</span>

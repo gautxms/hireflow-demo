@@ -942,6 +942,18 @@
   background: var(--admin-surface);
 }
 
+.admin-skeleton-row {
+  background: var(--color-white-alpha-20);
+}
+
+.admin-table-row {
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-endpoint-row {
+  border-bottom: 1px solid var(--admin-border);
+}
+
 .admin-text-success {
   color: var(--admin-success-text);
 }

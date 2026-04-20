@@ -7,7 +7,7 @@ function formatSeconds(seconds) {
 
 export default function AdminHeader({ sessionRemaining, onToggleSidebar, onLogout, profileName = 'Admin User' }) {
   return (
-    <header className="admin-header dark:bg-slate-900 dark:text-slate-100">
+    <header className="admin-header">
       <button type="button" className="admin-header__menu" onClick={onToggleSidebar} aria-label="Toggle sidebar">☰</button>
 
       <div className="admin-header__title-wrap">
