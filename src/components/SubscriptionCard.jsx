@@ -134,27 +134,8 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
 
       {hasSubscription && status === 'active' && (
         <button
+          className="hf-btn subscription-card__cta subscription-card__cta--cancel"
           onClick={handleCancelSubscription}
-          style={{
-            width: '100%',
-            padding: '12px 20px',
-            background: 'rgba(239, 68, 68, 0.2)',
-            color: '#ef4444',
-            border: '1px solid #ef4444',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            fontSize: '14px',
-            transition: 'all var(--motion-duration-base) var(--motion-ease-standard)',
-          }}
-          onMouseEnter={(event) => {
-            event.target.style.background = '#ef4444'
-            event.target.style.color = '#ffffff'
-          }}
-          onMouseLeave={(event) => {
-            event.target.style.background = 'rgba(239, 68, 68, 0.2)'
-            event.target.style.color = '#ef4444'
-          }}
         >
           Cancel Subscription
         </button>
@@ -162,19 +143,9 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
 
       {status === 'cancelled' && (
         <button
+          className="hf-btn subscription-card__cta subscription-card__cta--primary"
           onClick={() => {
             window.location.href = '/checkout'
-          }}
-          style={{
-            width: '100%',
-            padding: '12px 20px',
-            background: '#CCFF00',
-            color: '#000000',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            fontSize: '14px',
           }}
         >
           Reactivate Subscription
