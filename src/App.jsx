@@ -577,7 +577,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/verify-email/success' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     setIsMobileNavOpen(false)
@@ -636,22 +635,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </div>
         <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
           {isAuthenticated ? (
-            <div style={{ position: 'relative' }} ref={profileMenuRef}>
+            <div className="site-profile-menu" ref={profileMenuRef}>
               <button
                 onClick={() => setIsProfileMenuOpen((open) => !open)}
                 aria-haspopup="menu"
                 aria-expanded={isProfileMenuOpen}
                 aria-label="Open user menu"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: '50%',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: '#111827',
-                  color: '#fff',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                className="site-profile-menu__trigger"
               >
                 {profileInitial}
               </button>
@@ -659,18 +649,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
               {isProfileMenuOpen && (
                 <div
                   role="menu"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    right: 0,
-                    minWidth: 180,
-                    background: '#171723',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 8,
-                    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
-                    padding: 6,
-                    zIndex: 20,
-                  }}
+                  className="site-profile-menu__popover"
                 >
                   <button
                     role="menuitem"
@@ -678,7 +657,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/account')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    className="site-profile-menu__item"
                   >
                     Account
                   </button>
@@ -688,7 +667,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/billing')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    className="site-profile-menu__item"
                   >
                     Billing
                   </button>
@@ -699,19 +678,19 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                         setIsProfileMenuOpen(false)
                         navigate('/job-descriptions')
                       }}
-                      style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                      className="site-profile-menu__item"
                     >
                       Job descriptions
                     </button>
                   )}
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '6px 0' }} />
+                  <div className="site-profile-menu__divider" />
                   <button
                     role="menuitem"
                     onClick={() => {
                       setIsProfileMenuOpen(false)
                       onLogout()
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: '#b91c1c' }}
+                    className="site-profile-menu__item site-profile-menu__item--logout"
                   >
                     Log out
                   </button>
@@ -727,7 +706,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </div>
       </header>
       <main>
-        <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>Loading…</div>}>
+        <Suspense fallback={<div className="route-loading-fallback">Loading…</div>}>
           {getPageContent()}
         </Suspense>
       </main>
