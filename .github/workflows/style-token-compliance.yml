@@ -27,3 +27,6 @@ jobs:
 
       - name: Primitive composition scan
         run: npm run lint:primitives
+
+      - name: Primitive visual regression baseline contract
+        run: npm run qa:primitive-visual-baseline

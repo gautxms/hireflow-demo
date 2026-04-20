@@ -52,6 +52,7 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] `npm run lint`
 - [ ] `npm run lint:style-tokens`
 - [ ] `npm run lint:primitives`
+- [ ] `npm run qa:primitive-visual-baseline`
 
 ## 5) Token migration gate (required before merge)
 
@@ -64,8 +65,9 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 ## 6) Baseline update process (required when visuals change)
 
 1. Capture before/after screenshots for impacted route(s) at desktop and mobile widths.
-2. Update `docs/qa/baselines/admin-visual-baseline.json` release metadata.
-3. Run `npm run qa:admin-visual-baseline`.
-4. If intentional token-compliance deltas were introduced, update the style scan baseline with:
+2. Update `docs/qa/baselines/admin-visual-baseline.json` and/or `docs/qa/baselines/primitive-visual-regression-baseline.json` release metadata.
+3. Run `npm run qa:admin-visual-baseline` and `npm run qa:primitive-visual-baseline`.
+4. If primitive visual baseline changed, require reviewer sign-off from Design Systems and QA in the PR before merge.
+5. If intentional token-compliance deltas were introduced, update the style scan baseline with:
    - `npm run lint:style-tokens:baseline`
-5. Include a short “Visual QA + Baseline Updates” section in the PR description.
+6. Include a short “Visual QA + Baseline Updates” section in the PR description.
