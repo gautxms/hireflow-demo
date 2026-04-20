@@ -646,9 +646,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                   width: 34,
                   height: 34,
                   borderRadius: '50%',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: '#111827',
-                  color: '#fff',
+                  border: '1px solid var(--color-white-alpha-20)',
+                  background: 'var(--color-bg-elevated)',
+                  color: 'var(--color-text-primary)',
                   fontWeight: 600,
                   cursor: 'pointer',
                 }}
@@ -664,10 +664,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                     top: 'calc(100% + 8px)',
                     right: 0,
                     minWidth: 180,
-                    background: '#171723',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'var(--color-bg-secondary)',
+                    border: '1px solid var(--color-white-alpha-10)',
                     borderRadius: 8,
-                    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
+                    boxShadow: 'var(--shadow-overlay)',
                     padding: 6,
                     zIndex: 20,
                   }}
@@ -678,7 +678,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/account')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: 'var(--color-text-primary)', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                   >
                     Account
                   </button>
@@ -688,7 +688,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/billing')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: 'var(--color-text-primary)', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                   >
                     Billing
                   </button>
@@ -699,19 +699,19 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                         setIsProfileMenuOpen(false)
                         navigate('/job-descriptions')
                       }}
-                      style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                      style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: 'var(--color-text-primary)', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
                     >
                       Job descriptions
                     </button>
                   )}
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '6px 0' }} />
+                  <div style={{ height: 1, background: 'var(--color-white-alpha-10)', margin: '6px 0' }} />
                   <button
                     role="menuitem"
                     onClick={() => {
                       setIsProfileMenuOpen(false)
                       onLogout()
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: '#b91c1c' }}
+                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: 'var(--color-error)' }}
                   >
                     Log out
                   </button>
