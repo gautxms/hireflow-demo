@@ -71,16 +71,9 @@
   /* Layout */
   --content-max-width: 1280px;
 
-  /* Legacy aliases (DEPRECATION-ONLY).
-     Removal target release: v1.4.0 (or earlier once migration gate is clean). */
-  --ink: var(--color-bg-primary);
-  --ink-2: var(--color-bg-secondary);
-  --text: var(--color-text-primary);
-  --muted: var(--color-text-secondary);
+  /* Compatibility aliases */
   --border: var(--color-border);
   --card: var(--color-bg-secondary);
-  --accent: var(--color-accent-green);
-  --accent-2: var(--color-accent-green-hover);
   --font-body: var(--font-family-base);
   --font-display: var(--font-family-display);
 }

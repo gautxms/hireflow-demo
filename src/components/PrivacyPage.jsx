@@ -5,7 +5,7 @@ export default function PrivacyPage() {
   usePageSeo('HireFlow Privacy Policy', 'Learn how HireFlow collects, uses, and protects personal information processed on our hiring platform.')
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '4rem 1.5rem', lineHeight: 1.7 }}>
         <div style={{ marginBottom: '1.25rem' }}>
           <BackButton />

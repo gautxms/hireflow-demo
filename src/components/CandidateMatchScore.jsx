@@ -20,7 +20,7 @@ export default function CandidateMatchScore({ matchScore }) {
       <p className={`mb-2 text-base ${scoreState.accentText}`}>
         📊 Match: <strong>{score}%</strong> ({fit || scoreState.label})
       </p>
-      <ul className="m-0 list-disc pl-5 leading-relaxed text-[var(--muted)]">
+      <ul className="m-0 list-disc pl-5 leading-relaxed text-[var(--color-text-secondary)]">
         <li>
           {requiredSkills.matched === requiredSkills.total ? '✓' : '✗'} {requiredSkills.matched ?? 0}/{requiredSkills.total ?? 0} required skills{matchedSkillsLabel}
         </li>

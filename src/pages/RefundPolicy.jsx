@@ -5,7 +5,7 @@ export default function RefundPolicy() {
   usePageSeo('Refund Policy – Hireflow', 'Read Hireflow’s refund policy, including trial terms, non-refundable payments after conversion, and billing support contact information.')
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '3rem 1.25rem', lineHeight: 1.75 }}>
         <div style={{ marginBottom: '1.25rem' }}>
           <BackButton />
@@ -23,7 +23,7 @@ export default function RefundPolicy() {
           </p>
           <p>
             If you believe you were charged in error, please contact us at{' '}
-            <a href="mailto:hello@gfactai.com" style={{ color: 'var(--accent)' }}>hello@gfactai.com</a>.
+            <a href="mailto:hello@gfactai.com" style={{ color: 'var(--color-accent-green)' }}>hello@gfactai.com</a>.
           </p>
           <p>
             This policy complies with Paddle’s merchant and billing requirements.

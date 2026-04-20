@@ -62,15 +62,15 @@ export default function CandidateCard({ candidate, rank }) {
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-6">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--ink-2)]">
-            <span className="text-lg font-bold text-[var(--text)]">#{rank}</span>
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--color-bg-secondary)]">
+            <span className="text-lg font-bold text-[var(--color-text-primary)]">#{rank}</span>
           </div>
 
           <div className="min-w-0 flex-1">
-            <h3 className="mb-1 truncate text-xl font-bold text-[var(--text)] sm:text-2xl">
+            <h3 className="mb-1 truncate text-xl font-bold text-[var(--color-text-primary)] sm:text-2xl">
               {candidate.name}
             </h3>
-            <p className="truncate text-sm text-[var(--muted)] sm:text-base">{candidate.experience}</p>
+            <p className="truncate text-sm text-[var(--color-text-secondary)] sm:text-base">{candidate.experience}</p>
           </div>
         </div>
 
@@ -84,7 +84,7 @@ export default function CandidateCard({ candidate, rank }) {
           </div>
         </div>
 
-        <div className="ml-2 shrink-0 text-xl text-[var(--muted)]">
+        <div className="ml-2 shrink-0 text-xl text-[var(--color-text-secondary)]">
           {isExpanded ? '▼' : '▶'}
         </div>
       </div>
@@ -92,17 +92,17 @@ export default function CandidateCard({ candidate, rank }) {
       {isExpanded && (
         <div className="space-y-6 border-t border-[var(--border)] bg-[var(--color-white-alpha-03)] p-6 sm:p-8">
           <div>
-            <h4 className="mb-3 text-base font-bold text-[var(--text)] sm:text-lg">🤖 AI Assessment</h4>
-            <p className="text-sm leading-relaxed text-[var(--text)] sm:text-base">{candidate.summary}</p>
+            <h4 className="mb-3 text-base font-bold text-[var(--color-text-primary)] sm:text-lg">🤖 AI Assessment</h4>
+            <p className="text-sm leading-relaxed text-[var(--color-text-primary)] sm:text-base">{candidate.summary}</p>
           </div>
 
           <div>
-            <h4 className="mb-3 text-base font-bold text-[var(--text)] sm:text-lg">💻 Key Skills</h4>
+            <h4 className="mb-3 text-base font-bold text-[var(--color-text-primary)] sm:text-lg">💻 Key Skills</h4>
             <div className="flex flex-wrap gap-2">
               {candidate.skills.map((skill) => (
                 <span
                   key={skill}
-                  className="rounded-full border border-[color:var(--color-accent-alpha-15)] bg-[var(--color-accent-alpha-08)] px-4 py-2 text-sm font-semibold text-[var(--accent)]"
+                  className="rounded-full border border-[color:var(--color-accent-alpha-15)] bg-[var(--color-accent-alpha-08)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-green)]"
                 >
                   {skill}
                 </span>
@@ -115,7 +115,7 @@ export default function CandidateCard({ candidate, rank }) {
               <h4 className="mb-3 text-base font-bold text-[var(--color-success-text)]">✓ Strengths</h4>
               <ul className="space-y-2">
                 {candidate.pros.map((pro, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-sm text-[var(--text)]">
+                  <li key={idx} className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
                     <span className="shrink-0 font-bold text-[var(--color-success)]">✓</span>
                     <span>{pro}</span>
                   </li>
@@ -126,7 +126,7 @@ export default function CandidateCard({ candidate, rank }) {
               <h4 className="mb-3 text-base font-bold text-[var(--color-warning-text)]">⚠ Considerations</h4>
               <ul className="space-y-2">
                 {candidate.cons.map((con, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-sm text-[var(--text)]">
+                  <li key={idx} className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
                     <span className="shrink-0 font-bold text-[var(--color-warning-text)]">⚠</span>
                     <span>{con}</span>
                   </li>
@@ -136,7 +136,7 @@ export default function CandidateCard({ candidate, rank }) {
           </div>
 
           <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--card)] p-4">
-            <h4 className="mb-3 text-base font-bold text-[var(--text)]">🧠 Improve Ranking Quality</h4>
+            <h4 className="mb-3 text-base font-bold text-[var(--color-text-primary)]">🧠 Improve Ranking Quality</h4>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {FEEDBACK_OPTIONS.map((option) => (
                 <button
@@ -144,20 +144,20 @@ export default function CandidateCard({ candidate, rank }) {
                   type="button"
                   onClick={() => submitFeedback(option.type)}
                   disabled={submitState.loading}
-                  className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm font-semibold transition ${feedbackType === option.type ? 'border-[var(--accent)] bg-[var(--color-accent-alpha-08)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)]'} disabled:cursor-not-allowed disabled:opacity-60`}
+                  className={`rounded-[var(--radius-md)] border px-3 py-2 text-sm font-semibold transition ${feedbackType === option.type ? 'border-[var(--color-accent-green)] bg-[var(--color-accent-alpha-08)] text-[var(--color-accent-green)]' : 'border-[var(--border)] text-[var(--color-text-primary)] hover:border-[var(--color-accent-green)]'} disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {option.label}
                 </button>
               ))}
             </div>
-            <label className="mt-3 block text-sm text-[var(--muted)]">
+            <label className="mt-3 block text-sm text-[var(--color-text-secondary)]">
               Optional comment
               <textarea
                 value={comment}
                 onChange={(event) => setComment(event.target.value.slice(0, 1000))}
                 rows={3}
                 placeholder="What looked right or wrong?"
-                className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--ink-2)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent-green)] focus:outline-none"
               />
             </label>
             {submitState.success ? <p className="mt-2 text-sm text-[var(--color-success-text)]">{submitState.success}</p> : null}
@@ -165,10 +165,10 @@ export default function CandidateCard({ candidate, rank }) {
           </div>
 
           <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row">
-            <button className="flex-1 rounded-[var(--radius-md)] bg-[var(--accent)] px-6 py-3 font-bold text-[var(--ink)] transition hover:brightness-95">
+            <button className="flex-1 rounded-[var(--radius-md)] bg-[var(--color-accent-green)] px-6 py-3 font-bold text-[var(--color-bg-primary)] transition hover:brightness-95">
               Schedule Interview
             </button>
-            <button className="rounded-[var(--radius-md)] border border-[var(--accent)] px-6 py-3 font-bold text-[var(--accent)] transition hover:bg-[var(--color-accent-alpha-08)]">
+            <button className="rounded-[var(--radius-md)] border border-[var(--color-accent-green)] px-6 py-3 font-bold text-[var(--color-accent-green)] transition hover:bg-[var(--color-accent-alpha-08)]">
               View Resume
             </button>
           </div>

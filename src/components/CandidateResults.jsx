@@ -521,7 +521,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   if (isLoading || isSharedLoading) {
     return (
-      <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      <div className="candidate-results-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <button
             className="touch-target"
@@ -529,7 +529,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',
-              color: 'var(--accent)',
+              color: 'var(--color-accent-green)',
               padding: '0.5rem 1rem',
               borderRadius: '4px',
               cursor: 'pointer',
@@ -542,10 +542,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.75rem', fontFamily: 'var(--font-display)' }}>
             ⏳ Parsing resume...
           </h1>
-          <p style={{ color: 'var(--muted)', marginBottom: '1rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
             We are processing resumes. This can take 1-5 minutes.
           </p>
-          <p style={{ color: 'var(--accent)', marginBottom: '1.5rem' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+          <p style={{ color: 'var(--color-accent-green)', marginBottom: '1.5rem' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
 
           <div style={{ display: 'grid', gap: '1rem' }}>
             {skeletonCards.map((skeletonCard) => (
@@ -579,7 +579,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   if (!hasRenderableCandidates) {
     return (
-      <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+      <div className="candidate-results-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <button
             className="touch-target"
@@ -587,7 +587,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',
-              color: 'var(--accent)',
+              color: 'var(--color-accent-green)',
               padding: '0.5rem 1rem',
               borderRadius: '4px',
               cursor: 'pointer',
@@ -600,14 +600,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>
             Candidate Ranking
           </h1>
-          <p style={{ color: 'var(--muted)' }}>Please upload resumes before viewing analysis.</p>
+          <p style={{ color: 'var(--color-text-secondary)' }}>Please upload resumes before viewing analysis.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+    <div className="candidate-results-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
         <button
           className="touch-target"
@@ -615,7 +615,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           style={{
             background: 'transparent',
             border: '1px solid var(--border)',
-            color: 'var(--accent)',
+            color: 'var(--color-accent-green)',
             padding: '0.5rem 1rem',
             borderRadius: '4px',
             cursor: 'pointer',
@@ -628,7 +628,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>
           Candidate Ranking
         </h1>
-        <p style={{ color: 'var(--muted)' }}>
+        <p style={{ color: 'var(--color-text-secondary)' }}>
           {pagination.total} candidates analyzed and ranked by fit
         </p>
         {resultsError && <p style={{ color: 'var(--color-error)' }}>{resultsError}</p>}
@@ -724,14 +724,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
 
       {visibleCandidates.length === 0 && (
-        <div style={{ maxWidth: '1200px', margin: '0 auto 1rem', color: 'var(--muted)' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto 1rem', color: 'var(--color-text-secondary)' }}>
           No candidates match the current filters.
         </div>
       )}
 
       <div style={{ maxWidth: '1200px', margin: '0 auto 1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
         <button className="touch-target" type="button" disabled={pagination.page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button>
-        <span style={{ color: 'var(--muted)' }}>Page {pagination.page} of {pagination.totalPages}</span>
+        <span style={{ color: 'var(--color-text-secondary)' }}>Page {pagination.page} of {pagination.totalPages}</span>
         <button className="touch-target" type="button" disabled={!pagination.hasNextPage} onClick={() => setPage((current) => current + 1)}>Next</button>
         <select className="touch-target" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
           <option value={10}>10 / page</option>
@@ -758,7 +758,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               key={candidate._bulkKey}
             >
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <input
                     checked={selectedIds.includes(candidate._bulkKey)}
                     onChange={() => toggleCandidateSelection(candidate._bulkKey)}
@@ -771,11 +771,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
               <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--text)' }}>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--color-text-primary)' }}>
                     {candidate.name}
                   </h2>
-                  <p style={{ color: 'var(--muted)', marginBottom: '0.25rem' }}>📧 {candidate.email || 'No email provided'}</p>
-                  <p style={{ color: 'var(--muted)' }}>📍 {candidate.location || 'Unknown location'}</p>
+                  <p style={{ color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>📧 {candidate.email || 'No email provided'}</p>
+                  <p style={{ color: 'var(--color-text-secondary)' }}>📍 {candidate.location || 'Unknown location'}</p>
                 </div>
 
                 <div style={{ textAlign: 'center' }}>
@@ -805,32 +805,32 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                       {candidate.score}
                     </div>
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Match Score</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Match Score</p>
                 </div>
 
                 <div>
                   <div className={`mb-3 rounded-full border px-4 py-2 text-center text-xs font-bold ${tierState.badgeClass}`}>
                     {`${tierState.icon} ${tierState.label.toUpperCase()}`}
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Fit: {candidate.fit || 'N/A'}</p>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Experience: {candidate.experience || 'N/A'}</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Fit: {candidate.fit || 'N/A'}</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Experience: {candidate.experience || 'N/A'}</p>
                 </div>
               </div>
 
               <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '1rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Summary</h3>
-                <p style={{ color: 'var(--text)', lineHeight: '1.6' }}>{candidate.summary || 'No summary available'}</p>
+                <h3 style={{ fontSize: '1rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>Summary</h3>
+                <p style={{ color: 'var(--color-text-primary)', lineHeight: '1.6' }}>{candidate.summary || 'No summary available'}</p>
               </div>
 
               <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '1rem', color: 'var(--muted)', marginBottom: '0.75rem' }}>Top Skills</h3>
+                <h3 style={{ fontSize: '1rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem' }}>Top Skills</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                   {candidateSkills.map((skill, idx) => (
                     <span
                       key={idx}
                       style={{
                         background: 'var(--color-accent-alpha-08)',
-                        color: 'var(--accent)',
+                        color: 'var(--color-accent-green)',
                         padding: '0.25rem 0.75rem',
                         borderRadius: '20px',
                         fontSize: '0.85rem',
@@ -842,7 +842,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   ))}
                 </div>
                 {candidateTags[candidate._bulkKey]?.length > 0 ? (
-                  <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                  <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem', marginTop: '0.5rem' }}>
                     Tags: {candidateTags[candidate._bulkKey].join(', ')}
                   </p>
                 ) : null}
@@ -851,7 +851,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               <div className="candidate-evaluation-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                 <div>
                   <h3 style={{ color: 'var(--color-success-text)', fontSize: '1rem', marginBottom: '0.75rem' }}>✅ Strengths</h3>
-                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text)' }}>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--color-text-primary)' }}>
                     {candidatePros.length > 0
                       ? candidatePros.map((pro, idx) => (
                         <li key={idx} style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>{pro}</li>
@@ -862,7 +862,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
                 <div>
                   <h3 style={{ color: 'var(--color-warning-text)', fontSize: '1rem', marginBottom: '0.75rem' }}>⚠️ Considerations</h3>
-                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text)' }}>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--color-text-primary)' }}>
                     {candidateCons.length > 0
                       ? candidateCons.map((con, idx) => (
                         <li key={idx} style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>{con}</li>
@@ -874,15 +874,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
               {/* CTA */}
               <div className="candidate-cta-row" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <button className="min-h-11 rounded-[var(--radius-sm)] bg-[var(--accent)] px-6 py-2.5 text-sm font-bold text-[var(--ink)] transition hover:brightness-95">
+                <button className="min-h-11 rounded-[var(--radius-sm)] bg-[var(--color-accent-green)] px-6 py-2.5 text-sm font-bold text-[var(--color-bg-primary)] transition hover:brightness-95">
                   Schedule Interview
                 </button>
-                <button className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--accent)] px-6 py-2.5 text-sm font-bold text-[var(--accent)] transition hover:bg-[var(--color-accent-alpha-08)]">
+                <button className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--color-accent-green)] px-6 py-2.5 text-sm font-bold text-[var(--color-accent-green)] transition hover:bg-[var(--color-accent-alpha-08)]">
                   View Full Profile
                 </button>
                 <button
                   onClick={() => addCandidateToShortlist(candidate)}
-                  className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--accent)] px-6 py-2.5 text-sm font-bold text-[var(--accent)] transition hover:bg-[var(--color-accent-alpha-08)]"
+                  className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--color-accent-green)] px-6 py-2.5 text-sm font-bold text-[var(--color-accent-green)] transition hover:bg-[var(--color-accent-alpha-08)]"
                 >
                   Add to shortlist
                 </button>

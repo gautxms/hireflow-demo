@@ -35,13 +35,13 @@ function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur bg-black/70 border-b border-white/10 px-16 py-5 flex justify-between items-center">
       <div className="font-display font-extrabold text-xl text-white">
-        Hire<span className="text-[var(--accent)]">Flow</span>
+        Hire<span className="text-[var(--color-accent-green)]">Flow</span>
       </div>
       <div className="flex gap-3">
         <button className="border border-white/20 px-4 py-2 rounded text-sm">
           Log in
         </button>
-        <button className="bg-[var(--accent)] text-black px-4 py-2 rounded text-sm font-medium">
+        <button className="bg-[var(--color-accent-green)] text-black px-4 py-2 rounded text-sm font-medium">
           Start Free →
         </button>
       </div>
@@ -54,24 +54,24 @@ function Hero() {
   return (
     <section className="min-h-screen flex items-center px-16 pt-32 relative overflow-hidden">
       <div className="max-w-5xl">
-        <div className="inline-flex items-center gap-2 mb-8 px-4 py-1 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)] text-xs uppercase">
-          <span className="w-2 h-2 bg-[var(--accent)] rounded-full animate-pulse"></span>
+        <div className="inline-flex items-center gap-2 mb-8 px-4 py-1 rounded-full border border-[var(--color-accent-green)]/30 bg-[var(--color-accent-green)]/10 text-[var(--color-accent-green)] text-xs uppercase">
+          <span className="w-2 h-2 bg-[var(--color-accent-green)] rounded-full animate-pulse"></span>
           Powered by AI
         </div>
 
         <h1 className="font-display text-6xl font-extrabold leading-none mb-6">
           Hire your next <br />
-          <span className="text-[var(--accent)]">great employee</span> <br />
+          <span className="text-[var(--color-accent-green)]">great employee</span> <br />
           in 2 hours.
         </h1>
 
-        <p className="text-lg text-[var(--muted)] max-w-xl mb-10">
+        <p className="text-lg text-[var(--color-text-secondary)] max-w-xl mb-10">
           Stop wasting 20+ hours per hire. HireFlow automates resume screening,
           AI interviews, and candidate ranking.
         </p>
 
         <div className="flex gap-4">
-          <button className="bg-[var(--accent)] text-black px-6 py-3 rounded-lg font-medium">
+          <button className="bg-[var(--color-accent-green)] text-black px-6 py-3 rounded-lg font-medium">
             Get Started Free →
           </button>
           <button className="border border-white/20 px-6 py-3 rounded-lg">
@@ -112,11 +112,11 @@ function HowItWorks() {
             key={s.title}
             className="reveal bg-[var(--card)] p-8 rounded-2xl border border-[var(--border)]"
           >
-            <div className="text-[var(--accent)] text-3xl font-bold mb-4">
+            <div className="text-[var(--color-accent-green)] text-3xl font-bold mb-4">
               {i + 1}
             </div>
             <h3 className="font-display text-xl mb-3">{s.title}</h3>
-            <p className="text-[var(--muted)]">{s.desc}</p>
+            <p className="text-[var(--color-text-secondary)]">{s.desc}</p>
           </div>
         ))}
       </div>
@@ -147,7 +147,7 @@ function Features() {
             key={f}
             className="reveal bg-[var(--card)] p-6 rounded-xl border border-[var(--border)]"
           >
-            <span className="text-[var(--accent)]">✓</span>
+            <span className="text-[var(--color-accent-green)]">✓</span>
             <p className="mt-3">{f}</p>
           </div>
         ))}
@@ -167,12 +167,12 @@ function Pricing() {
       <div className="max-w-xl mx-auto bg-[var(--card)] p-10 rounded-2xl border border-[var(--border)] text-center">
         <h3 className="font-display text-2xl mb-4">Starter</h3>
         <p className="text-5xl font-bold mb-6">
-          $49<span className="text-lg text-[var(--muted)]">/mo</span>
+          $49<span className="text-lg text-[var(--color-text-secondary)]">/mo</span>
         </p>
-        <p className="text-[var(--muted)] mb-8">
+        <p className="text-[var(--color-text-secondary)] mb-8">
           Perfect for early-stage teams hiring fast.
         </p>
-        <button className="bg-[var(--accent)] text-black px-8 py-3 rounded-lg font-medium">
+        <button className="bg-[var(--color-accent-green)] text-black px-8 py-3 rounded-lg font-medium">
           Start Free Trial →
         </button>
       </div>
@@ -187,10 +187,10 @@ function FinalCTA() {
       <h2 className="font-display text-5xl font-bold mb-6">
         Start hiring better today
       </h2>
-      <p className="text-[var(--muted)] mb-10">
+      <p className="text-[var(--color-text-secondary)] mb-10">
         Join teams who hire smarter with HireFlow.
       </p>
-      <button className="bg-[var(--accent)] text-black px-10 py-4 rounded-xl font-medium text-lg">
+      <button className="bg-[var(--color-accent-green)] text-black px-10 py-4 rounded-xl font-medium text-lg">
         Get Started Free →
       </button>
     </section>
@@ -200,9 +200,9 @@ function FinalCTA() {
 /* ---------------- FOOTER ---------------- */
 function Footer() {
   return (
-    <footer className="border-t border-white/10 px-16 py-10 flex justify-between text-sm text-[var(--muted)]">
+    <footer className="border-t border-white/10 px-16 py-10 flex justify-between text-sm text-[var(--color-text-secondary)]">
       <div className="font-display font-bold">
-        Hire<span className="text-[var(--accent)]">Flow</span>
+        Hire<span className="text-[var(--color-accent-green)]">Flow</span>
       </div>
       <p>© 2025 HireFlow. All rights reserved.</p>
     </footer>
