@@ -17,8 +17,8 @@ export default function UserModal({ user, onClose, onSave, onBlock, onUnblock, o
   if (!user) return null
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--color-bg-overlay-80)] p-4">
-      <div className="ui-card max-h-[90vh] w-full max-w-3xl overflow-auto p-6">
+    <div className="ui-modal" role="dialog" aria-modal="true" aria-label="User details">
+      <div className="ui-card ui-card--card-spacing ui-modal__dialog max-h-[90vh] w-full max-w-3xl overflow-auto">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">User details</h2>
