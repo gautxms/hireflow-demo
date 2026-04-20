@@ -261,8 +261,8 @@ export default function SettingsPage({ onBack }) {
                   </div>
                   <button style={{
                     background: app.status === 'Connected' ? 'transparent' : 'var(--color-accent-green)',
-                    color: app.status === 'Connected' ? color : 'var(--color-bg-primary)',
-                    border: app.status === 'Connected' ? `1px solid ${color}` : 'none',
+                    color: app.status === 'Connected' ? app.color : 'var(--color-bg-primary)',
+                    border: app.status === 'Connected' ? `1px solid ${app.color}` : 'none',
                     padding: '0.6rem 1.5rem',
                     borderRadius: '6px',
                     fontWeight: 'bold',
