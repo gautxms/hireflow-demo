@@ -44,7 +44,14 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] `npm run lint`
 - [ ] `npm run lint:style-tokens`
 
-## 4) Baseline update process (required when visuals change)
+## 4) Token migration gate (required before merge)
+
+- [ ] `npm run lint:style-tokens` passes with **0 new violations**.
+- [ ] Any allowed token violation is explicitly listed in `docs/qa/baselines/style-token-violations-baseline.json` with an active Exception ID from `docs/BRAND_GUIDELINE_EXCEPTIONS.md`.
+- [ ] No new usage of legacy aliases (`--ink`, `--accent`, `--text`, `--muted`) in JSX inline styles or CSS.
+- [ ] If this PR is part of a phased migration, confirm this gate remains green to prevent regressions/conflicts in later phases.
+
+## 5) Baseline update process (required when visuals change)
 
 1. Capture before/after screenshots for impacted route(s) at desktop and mobile widths.
 2. Update `docs/qa/baselines/admin-visual-baseline.json` release metadata.
