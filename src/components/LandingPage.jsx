@@ -73,7 +73,7 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
             eliminate bias, and make data-driven decisions. Finally, a recruiting tool built for modern teams.
           </p>
           <div className="hero-cta">
-            <button className="btn-primary" onClick={onStartDemo} style={{ fontSize: '1rem', padding: '0.75rem 2rem' }}>
+            <button className="btn-primary" onClick={onStartDemo}>
               {ctaLabel}
             </button>
             <button className="btn-ghost">Watch 2-min Demo</button>

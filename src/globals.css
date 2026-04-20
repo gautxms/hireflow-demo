@@ -61,12 +61,14 @@ nav {
 .nav-links button,
 .site-nav-button {
   text-decoration: none;
-  color: var(--color-text-nav);
+  color: var(--color-text-secondary);
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   letter-spacing: var(--type-nav-tracking);
   line-height: var(--type-nav-line-height);
-  transition: color var(--motion-duration-base) var(--motion-ease-standard);
+  transition: var(--motion-transition-color);
 }
 
 .nav-links button,
@@ -82,6 +84,7 @@ nav {
 .site-nav-button:hover,
 .site-nav-button[aria-current='page'] {
   color: var(--color-accent-green);
+  background: var(--color-accent-alpha-06);
 }
 
 .nav-links :is(a, button):focus-visible,
@@ -106,9 +109,9 @@ nav {
 .btn-ghost {
   background: transparent;
   border: 1px solid var(--color-border);
-  color: var(--color-text-nav);
-  padding: 0.5rem 1.25rem;
-  border-radius: 6px;
+  color: var(--color-text-primary);
+  padding: 0.8125rem 1.75rem;
+  border-radius: var(--radius-interactive);
   font-family: var(--font-family-base);
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
@@ -124,12 +127,17 @@ nav {
   background: var(--color-accent-alpha-08);
 }
 
+.btn-ghost:active {
+  border-color: var(--color-accent-green-active);
+  color: var(--color-accent-green-active);
+}
+
 .btn-primary {
   background: var(--color-accent-green);
   color: var(--color-bg-primary);
   border: none;
-  padding: 0.55rem 1.35rem;
-  border-radius: 6px;
+  padding: 0.875rem 1.75rem;
+  border-radius: var(--radius-interactive);
   font-family: var(--font-family-base);
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
@@ -144,6 +152,16 @@ nav {
 .btn-primary:hover {
   background: var(--color-accent-green-hover);
   transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  background: var(--color-accent-green-active);
+}
+
+.btn-primary:disabled,
+.btn-ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .site-header {
@@ -179,12 +197,6 @@ nav {
   justify-content: flex-end;
   align-items: center;
   gap: 0.65rem;
-}
-
-.site-auth-actions .btn-primary,
-.site-auth-actions .btn-ghost {
-  min-height: 36px;
-  padding: 0.5rem 0.8rem;
 }
 
 .site-profile-menu {
