@@ -86,7 +86,7 @@ export default function UpdatePaymentMethodPage() {
         <p className="billing-shell__subtitle">Enter your card details below. Your account will remain on the billing page after this update.</p>
 
         <form onSubmit={handleSubmit} className="billing-shell__form">
-          <label htmlFor="card-number">Card Number</label>
+          <label htmlFor="card-number" className="billing-shell__label">Card Number</label>
           <input
             id="card-number"
             className="billing-shell__input"
@@ -96,17 +96,17 @@ export default function UpdatePaymentMethodPage() {
           />
 
           <div className="billing-shell__form-grid">
-            <div>
-              <label htmlFor="expiry-month">Month</label>
-              <input id="expiry-month" value={form.expiryMonth} onChange={(event) => setForm((prev) => ({ ...prev, expiryMonth: event.target.value }))} placeholder="MM" />
+            <div className="billing-shell__field">
+              <label htmlFor="expiry-month" className="billing-shell__label">Month</label>
+              <input id="expiry-month" className="billing-shell__input" value={form.expiryMonth} onChange={(event) => setForm((prev) => ({ ...prev, expiryMonth: event.target.value }))} placeholder="MM" />
             </div>
-            <div>
-              <label htmlFor="expiry-year">Year</label>
-              <input id="expiry-year" value={form.expiryYear} onChange={(event) => setForm((prev) => ({ ...prev, expiryYear: event.target.value }))} placeholder="YYYY" />
+            <div className="billing-shell__field">
+              <label htmlFor="expiry-year" className="billing-shell__label">Year</label>
+              <input id="expiry-year" className="billing-shell__input" value={form.expiryYear} onChange={(event) => setForm((prev) => ({ ...prev, expiryYear: event.target.value }))} placeholder="YYYY" />
             </div>
-            <div>
-              <label htmlFor="cvc">CVC</label>
-              <input id="cvc" value={form.cvc} onChange={(event) => setForm((prev) => ({ ...prev, cvc: event.target.value }))} placeholder="CVC" />
+            <div className="billing-shell__field">
+              <label htmlFor="cvc" className="billing-shell__label">CVC</label>
+              <input id="cvc" className="billing-shell__input" value={form.cvc} onChange={(event) => setForm((prev) => ({ ...prev, cvc: event.target.value }))} placeholder="CVC" />
             </div>
           </div>
 

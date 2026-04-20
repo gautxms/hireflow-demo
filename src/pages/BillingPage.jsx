@@ -189,10 +189,10 @@ export default function BillingPage() {
               <table className="billing-page__table">
                 <thead>
                   <tr>
-                    <th align="left">Date</th>
-                    <th align="left">Amount</th>
-                    <th align="left">Status</th>
-                    <th align="left">Invoice</th>
+                    <th className="billing-page__table-head">Date</th>
+                    <th className="billing-page__table-head">Amount</th>
+                    <th className="billing-page__table-head">Status</th>
+                    <th className="billing-page__table-head">Invoice</th>
                   </tr>
                 </thead>
                 <tbody>

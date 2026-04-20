@@ -626,7 +626,7 @@ export default function Checkout({ onAuthSuccess }) {
           <button
             type="button"
             onClick={() => window.history.back()}
-            className="checkout-page__back-button"
+            className="hf-btn hf-btn--secondary checkout-page__back-button"
           >
             ← Back to Home
           </button>
