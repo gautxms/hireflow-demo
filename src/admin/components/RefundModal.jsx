@@ -74,8 +74,8 @@ export default function RefundModal({ isOpen, subscription, details, adminId, on
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-bg-overlay-80)] p-4">
-      <div className="ui-card w-full max-w-lg p-6">
+    <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Issue refund">
+      <div className="ui-card ui-card--card-spacing ui-modal__dialog w-full max-w-lg">
         <h2 className="text-xl font-semibold text-slate-900">Issue refund</h2>
         <p className="mt-1 text-sm text-slate-600">{subscription.email} · {subscription.plan} plan</p>
 

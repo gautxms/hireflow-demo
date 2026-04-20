@@ -10,8 +10,8 @@ function DetailsDrawer({ title, row, onClose, renderDetails }) {
   if (!row) return null
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/45" role="dialog" aria-modal="true" aria-label={`${title} details`}>
-      <div className="ui-card h-full w-full max-w-xl overflow-y-auto p-5">
+    <div className="ui-modal ui-modal--end" role="dialog" aria-modal="true" aria-label={`${title} details`}>
+      <div className="ui-card ui-card--card-spacing ui-modal__dialog h-full w-full max-w-xl overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900">{title} details</h3>
           <button type="button" className="ui-btn" onClick={onClose}>Close</button>

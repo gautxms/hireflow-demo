@@ -16,8 +16,8 @@ export default function BlockUserModal({ isOpen, user, onClose, onConfirm }) {
   if (!isOpen || !user) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-bg-overlay-80)] p-4">
-      <div className="ui-card w-full max-w-md p-5">
+    <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Block user">
+      <div className="ui-card ui-card--card-spacing ui-modal__dialog w-full max-w-md">
         <h2 className="text-lg font-semibold text-slate-900">Block user</h2>
         <p className="mt-1 text-sm text-slate-600">Add a reason for blocking {user.email}. This will be written to the audit trail.</p>
 
