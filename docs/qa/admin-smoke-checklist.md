@@ -34,7 +34,14 @@ The style-token scan fails when **new** JSX style violations are introduced for:
 - hardcoded color literals (`#hex`, `rgb()`, `hsl()`),
 - hardcoded font-family values,
 - legacy alias token usage (`--ink`, `--accent`, `--text`, etc.),
-- non-tokenized inline background gradients.
+- non-tokenized inline background gradients,
+- inline style usage in `src/pages`, `src/components`, `src/admin` that is not runtime width/height/position data.
+
+Inline style guardrail details:
+- Allowed inline properties (without exception): `width`, `minWidth`, `maxWidth`, `height`, `minHeight`, `maxHeight`, `top`, `right`, `bottom`, `left`.
+- Allowed inline values must be runtime/data-driven expressions (for example template literals with `${...}` or computed expressions), not static literals.
+- Approved exceptions must include an allowlist marker comment near the style block: `inline-style-allow runtime-dimension`.
+- Violation output includes file and line plus a suggested fix.
 
 Baseline file for known violations:
 `docs/qa/baselines/style-token-violations-baseline.json`.
