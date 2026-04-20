@@ -13,8 +13,77 @@ const CRITICAL_DIRS = [
 ]
 const JSX_FILE = /\.(jsx|tsx)$/
 
-const CLASSNAME_PATTERN = /className\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|\{`([^`]*)`\})/g
 const PROHIBITED_UTILITY_PATTERN = /\b(?:text|bg|border)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/i
+
+function extractClassNameAssignments(content) {
+  const assignments = []
+  const marker = /className\s*=\s*/g
+
+  for (const match of content.matchAll(marker)) {
+    let cursor = (match.index ?? 0) + match[0].length
+    while (cursor < content.length && /\s/.test(content[cursor])) cursor += 1
+    if (cursor >= content.length) continue
+
+    const startIndex = match.index ?? 0
+    const delimiter = content[cursor]
+
+    if (delimiter === '"' || delimiter === "'") {
+      const closing = content.indexOf(delimiter, cursor + 1)
+      if (closing === -1) continue
+      assignments.push({ rawValue: content.slice(cursor + 1, closing), index: startIndex })
+      continue
+    }
+
+    if (delimiter !== '{') continue
+
+    let depth = 0
+    let inSingleQuote = false
+    let inDoubleQuote = false
+    let inTemplate = false
+    let escaped = false
+
+    for (let i = cursor; i < content.length; i += 1) {
+      const char = content[i]
+
+      if (escaped) {
+        escaped = false
+        continue
+      }
+
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+
+      if (char === "'" && !inDoubleQuote && !inTemplate) {
+        inSingleQuote = !inSingleQuote
+        continue
+      }
+      if (char === '"' && !inSingleQuote && !inTemplate) {
+        inDoubleQuote = !inDoubleQuote
+        continue
+      }
+      if (char === '`' && !inSingleQuote && !inDoubleQuote) {
+        inTemplate = !inTemplate
+        continue
+      }
+
+      if (inSingleQuote || inDoubleQuote || inTemplate) continue
+
+      if (char === '{') {
+        depth += 1
+      } else if (char === '}') {
+        depth -= 1
+        if (depth === 0) {
+          assignments.push({ rawValue: content.slice(cursor + 1, i), index: startIndex })
+          break
+        }
+      }
+    }
+  }
+
+  return assignments
+}
 
 function walk(dir, output = []) {
   if (!fs.existsSync(dir)) return output
@@ -49,14 +118,14 @@ function findViolations(filePath) {
   const content = fs.readFileSync(filePath, 'utf8')
   const findings = []
 
-  for (const match of content.matchAll(CLASSNAME_PATTERN)) {
-    const classValue = match[1] ?? match[2] ?? match[3] ?? ''
+  for (const assignment of extractClassNameAssignments(content)) {
+    const classValue = assignment.rawValue
     if (!PROHIBITED_UTILITY_PATTERN.test(classValue)) continue
 
-    const badToken = classValue.split(/\s+/).find((token) => PROHIBITED_UTILITY_PATTERN.test(token))
+    const badToken = classValue.match(PROHIBITED_UTILITY_PATTERN)?.[0] || 'unknown-token'
     findings.push(createFinding({
       filePath: relative,
-      line: getLine(content, match.index ?? 0),
+      line: getLine(content, assignment.index),
       detail: `className contains prohibited utility token \"${badToken}\"`,
     }))
   }
