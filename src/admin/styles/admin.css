@@ -80,8 +80,8 @@
 .ui-card {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-surface);
-  background: var(--admin-surface-subtle);
-  box-shadow: var(--admin-shadow-elevated);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-surface);
 }
 
 .ui-card--card-spacing {
@@ -155,7 +155,26 @@
   font-size: var(--type-small-size);
   line-height: var(--type-small-line-height);
   color: var(--admin-text);
-  background: var(--color-white-alpha-03);
+  background: var(--admin-surface-subtle);
+  transition: var(--motion-transition-color);
+}
+
+.ui-input:hover {
+  background: var(--admin-surface);
+  border-color: var(--admin-primary);
+}
+
+.ui-input:focus-visible {
+  border-color: var(--admin-focus);
+}
+
+.ui-input:active {
+  border-color: var(--admin-primary-strong);
+}
+
+.ui-input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .ui-badge {
@@ -675,7 +694,7 @@
   overflow: auto;
   border-radius: var(--admin-radius-surface);
   border: 1px solid var(--admin-border);
-  background: var(--color-white-alpha-03);
+  background: var(--admin-surface);
   box-shadow: var(--admin-shadow-surface);
 }
 

@@ -357,11 +357,13 @@ nav {
 }
 
 .feature-card {
-  padding: 2rem;
+  padding: var(--spacing-card);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-bg-secondary);
+  border-radius: var(--radius-surface);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-surface);
   transition:
+    box-shadow var(--motion-duration-slow) var(--motion-ease-standard),
     border-color var(--motion-duration-slow) var(--motion-ease-standard),
     background-color var(--motion-duration-slow) var(--motion-ease-standard);
 }
@@ -385,8 +387,9 @@ nav {
 }
 
 .feature-card:hover {
-  border-color: var(--color-accent-green);
-  background: var(--color-accent-alpha-02);
+  border-color: var(--color-accent-alpha-15);
+  background: var(--color-bg-secondary);
+  box-shadow: var(--shadow-elevated);
 }
 
 .feature-card h3 {
@@ -433,9 +436,10 @@ footer {
 .candidate-results-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-surface);
   overflow: hidden;
 }
 

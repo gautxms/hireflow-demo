@@ -93,10 +93,11 @@
 }
 
 .public-card {
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-surface);
+  padding: var(--spacing-card);
 }
 
 .public-card-title {
@@ -132,10 +133,11 @@
 }
 
 .public-form {
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-surface);
+  padding: var(--spacing-card);
 }
 
 .public-form-grid {
@@ -162,14 +164,40 @@
 .public-form-field textarea,
 .public-form-search {
   width: 100%;
-  background: var(--color-white-alpha-04);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-interactive);
   color: var(--color-text-primary);
   font-family: var(--font-family-base);
   padding: 0.75rem;
   font-size: var(--type-body-size);
   line-height: var(--type-body-line-height);
+  transition: var(--motion-transition-color);
+}
+
+.public-form-field :is(input, select, textarea):hover,
+.public-form-search:hover {
+  border-color: var(--color-accent-alpha-15);
+  background: var(--color-bg-elevated);
+}
+
+.public-form-field :is(input, select, textarea):focus-visible,
+.public-form-search:focus-visible {
+  border-color: var(--color-focus-ring);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--color-focus-ring-inner);
+}
+
+.public-form-field :is(input, select, textarea):active,
+.public-form-search:active {
+  border-color: var(--color-accent-green-active);
+}
+
+.public-form-field :is(input, select, textarea):disabled,
+.public-form-search:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .public-form-field textarea {
