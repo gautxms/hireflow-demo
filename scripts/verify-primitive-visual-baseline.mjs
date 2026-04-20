@@ -4,6 +4,15 @@ import path from 'node:path'
 
 const BASELINE_FILE = 'docs/qa/baselines/primitive-visual-regression-baseline.json'
 const REQUIRED_COMPONENTS = ['button', 'input', 'card', 'alert', 'table-shell', 'modal-shell', 'badge']
+const REQUIRED_COMPONENT_VARIANTS = {
+  alert: ['inline'],
+  badge: ['neutral', 'status'],
+  button: ['destructive', 'ghost', 'primary'],
+  card: ['default'],
+  input: ['default'],
+  'modal-shell': ['centered', 'end'],
+  'table-shell': ['default'],
+}
 const REQUIRED_STATES = ['default', 'hover', 'focus', 'active', 'disabled']
 const REQUIRED_CONTEXTS = ['success', 'warning', 'error', 'info']
 const REQUIRED_VIEWPORTS = ['desktop', 'mobile']
@@ -42,11 +51,25 @@ for (const variant of baseline.componentVariants) {
   assert(Array.isArray(variant.contexts), `contexts array is required for ${variant.component}/${variant.variant}`)
   assert(hasAllValues(variant.states, REQUIRED_STATES), `Missing required states for ${variant.component}/${variant.variant}`)
   assert(hasAllValues(variant.contexts, REQUIRED_CONTEXTS), `Missing required contexts for ${variant.component}/${variant.variant}`)
-  variantKeys.add(`${variant.component}:${variant.variant}`)
+  const variantKey = `${variant.component}:${variant.variant}`
+  assert(!variantKeys.has(variantKey), `Duplicate component variant found: ${variant.component}/${variant.variant}`)
+  variantKeys.add(variantKey)
 }
+
 
 const coveredComponents = new Set(baseline.componentVariants.map((variant) => variant.component))
 assert(hasAllValues([...coveredComponents], REQUIRED_COMPONENTS), `Missing required components in componentVariants: ${REQUIRED_COMPONENTS.join(', ')}`)
+
+for (const component of REQUIRED_COMPONENTS) {
+  const presentVariants = baseline.componentVariants
+    .filter((variant) => variant.component === component)
+    .map((variant) => variant.variant)
+  const requiredVariants = REQUIRED_COMPONENT_VARIANTS[component] ?? []
+  assert(
+    hasAllValues(presentVariants, requiredVariants),
+    `Missing required variants for ${component}: ${requiredVariants.join(', ')}`,
+  )
+}
 
 let previousId = ''
 const seenIds = new Set()
