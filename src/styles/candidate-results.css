@@ -117,6 +117,177 @@
   gap: 1.5rem;
 }
 
+.candidate-result-card__selector-wrap {
+  margin-bottom: 1rem;
+}
+
+.candidate-result-card__selector-label {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.candidate-result-card__top-section {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  align-items: start;
+}
+
+.candidate-result-card__name {
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-bold);
+  margin-bottom: 0.5rem;
+  color: var(--color-text-primary);
+}
+
+.candidate-result-card__meta {
+  color: var(--color-text-secondary);
+}
+
+.candidate-result-card__meta--spaced {
+  margin-bottom: 0.25rem;
+}
+
+.candidate-result-card__score-block {
+  text-align: center;
+}
+
+.candidate-result-card__score-ring {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  position: relative;
+  border: 8px solid var(--color-border);
+}
+
+.candidate-result-card__score-ring--strong {
+  border-color: var(--color-success);
+}
+
+.candidate-result-card__score-ring--good {
+  border-color: var(--color-accent-green);
+}
+
+.candidate-result-card__score-ring--consider {
+  border-color: var(--color-warning-text);
+}
+
+.candidate-result-card__score-ring--low {
+  border-color: var(--color-error);
+}
+
+.candidate-result-card__score-core {
+  width: 75px;
+  height: 75px;
+  border-radius: 50%;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.candidate-result-card__score-core--strong {
+  color: var(--color-success);
+}
+
+.candidate-result-card__score-core--good {
+  color: var(--color-accent-green);
+}
+
+.candidate-result-card__score-core--consider {
+  color: var(--color-warning-text);
+}
+
+.candidate-result-card__score-core--low {
+  color: var(--color-error);
+}
+
+.candidate-result-card__caption {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.candidate-result-card__section {
+  margin-bottom: 1.5rem;
+}
+
+.candidate-result-card__section-heading {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.candidate-result-card__section-heading--summary {
+  margin-bottom: 0.5rem;
+}
+
+.candidate-result-card__summary {
+  color: var(--color-text-primary);
+  line-height: 1.6;
+}
+
+.candidate-result-card__skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.candidate-result-card__skill-tag {
+  background: var(--color-accent-alpha-08);
+  color: var(--color-accent-green);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  border: 1px solid var(--color-accent-alpha-15);
+}
+
+.candidate-result-card__tags {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.candidate-result-card__evaluation-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.candidate-result-card__evaluation-title {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.candidate-result-card__evaluation-title--strength {
+  color: var(--color-success-text);
+}
+
+.candidate-result-card__evaluation-title--consideration {
+  color: var(--color-warning-text);
+}
+
+.candidate-result-card__evaluation-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--color-text-primary);
+}
+
+.candidate-result-card__evaluation-item {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
 @keyframes pulseSkeleton {
   0% { opacity: 0.45; }
   50% { opacity: 0.95; }
