@@ -71,3 +71,11 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 5. If intentional token-compliance deltas were introduced, update the style scan baseline with:
    - `npm run lint:style-tokens:baseline`
 6. Include a short “Visual QA + Baseline Updates” section in the PR description.
+
+## 7) Preview-to-production visual verification (PH6-T2)
+
+- [ ] Follow `docs/qa/preview-to-production-visual-verification.md` end-to-end.
+- [ ] Validate PR Preview URL first, then re-validate production after merge.
+- [ ] Verify production deployment commit SHA matches merged PR commit SHA.
+- [ ] Confirm Vercel serves `dist` from root project build config (no subdirectory mismatch).
+- [ ] Attach desktop + mobile screenshots for Hero and key routes in preview and production.
