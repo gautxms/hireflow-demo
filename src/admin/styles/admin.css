@@ -93,7 +93,8 @@
   background: var(--color-white-alpha-03);
   color: var(--admin-text);
   border-radius: var(--admin-radius-interactive);
-  padding: calc(var(--admin-spacing-inline) * 0.625) var(--admin-spacing-stack);
+  padding: 0.8125rem 1.75rem;
+  font-family: var(--admin-font);
   font-size: var(--type-button-size);
   line-height: var(--type-button-line-height);
   font-weight: var(--type-button-weight);
