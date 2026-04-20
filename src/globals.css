@@ -164,6 +164,28 @@ nav {
   cursor: not-allowed;
 }
 
+.settings-app-status {
+  padding: 0.6rem 1.5rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--type-small-size);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--type-small-line-height);
+  cursor: pointer;
+  transition: var(--motion-transition-color);
+}
+
+.settings-app-status--connected {
+  --settings-app-status-bg: transparent;
+  --settings-app-status-color: var(--color-success-text);
+  --settings-app-status-border: 1px solid var(--color-success-alpha-35);
+}
+
+.settings-app-status--disconnected {
+  --settings-app-status-bg: var(--color-accent-green);
+  --settings-app-status-color: var(--color-bg-primary);
+  --settings-app-status-border: 1px solid transparent;
+}
+
 .site-header {
   display: flex;
   align-items: center;
