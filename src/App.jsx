@@ -636,22 +636,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </div>
         <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
           {isAuthenticated ? (
-            <div style={{ position: 'relative' }} ref={profileMenuRef}>
+            <div className="profile-menu-wrapper" ref={profileMenuRef}>
               <button
                 onClick={() => setIsProfileMenuOpen((open) => !open)}
                 aria-haspopup="menu"
                 aria-expanded={isProfileMenuOpen}
                 aria-label="Open user menu"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: '50%',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: '#111827',
-                  color: '#fff',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                className="profile-menu-trigger"
               >
                 {profileInitial}
               </button>
@@ -659,18 +650,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
               {isProfileMenuOpen && (
                 <div
                   role="menu"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    right: 0,
-                    minWidth: 180,
-                    background: '#171723',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 8,
-                    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
-                    padding: 6,
-                    zIndex: 20,
-                  }}
+                  className="profile-menu"
                 >
                   <button
                     role="menuitem"
@@ -678,7 +658,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/account')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    className="profile-menu-item"
                   >
                     Account
                   </button>
@@ -688,7 +668,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       setIsProfileMenuOpen(false)
                       navigate('/billing')
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                    className="profile-menu-item"
                   >
                     Billing
                   </button>
@@ -699,19 +679,19 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                         setIsProfileMenuOpen(false)
                         navigate('/job-descriptions')
                       }}
-                      style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                      className="profile-menu-item"
                     >
                       Job descriptions
                     </button>
                   )}
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '6px 0' }} />
+                  <div className="profile-menu-divider" />
                   <button
                     role="menuitem"
                     onClick={() => {
                       setIsProfileMenuOpen(false)
                       onLogout()
                     }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: '#b91c1c' }}
+                    className="profile-menu-item profile-menu-item--danger"
                   >
                     Log out
                   </button>
