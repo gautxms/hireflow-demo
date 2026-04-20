@@ -64,3 +64,29 @@
   margin-bottom: var(--spacing-base);
   line-height: 1.6;
 }
+
+.subscription-card__cta {
+  width: 100%;
+}
+
+.subscription-card__cta--primary {
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+  border-color: var(--color-accent-green);
+}
+
+.subscription-card__cta--primary:hover {
+  background: var(--color-accent-green-hover);
+  border-color: var(--color-accent-green-hover);
+}
+
+.subscription-card__cta--cancel {
+  background: var(--color-danger-alpha-15);
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.subscription-card__cta--cancel:hover {
+  background: var(--color-error);
+  color: var(--color-text-primary);
+}
