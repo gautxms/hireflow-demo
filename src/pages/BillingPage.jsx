@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
+import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import '../styles/billing.css'
 import '../styles/checkout.css'
@@ -148,9 +149,11 @@ export default function BillingPage() {
   if (loading) {
     return (
       <main className="route-state billing-page">
-        <div className="route-state-card">
-          <h1 className="route-state-card__title">Loading billing dashboard…</h1>
-        </div>
+        <StatePattern
+          kind="loading"
+          title="Loading billing dashboard…"
+          description="Fetching your subscription, payment method, and invoice history."
+        />
       </main>
     )
   }
@@ -162,7 +165,7 @@ export default function BillingPage() {
         <h1 className="billing-page__title">Subscription Management</h1>
         <p className="billing-page__subtitle">View plans, upcoming charges, and invoice history.</p>
 
-        {error ? <p className="billing-page__error">{error}</p> : null}
+        {error ? <StatePattern kind="error" compact title="Billing data unavailable" description={error} /> : null}
 
         {subscription ? (
           <>
@@ -197,7 +200,7 @@ export default function BillingPage() {
                 </thead>
                 <tbody>
                   {history.length === 0 ? (
-                    <tr><td colSpan={4} className="billing-page__table-cell--empty">No invoices yet.</td></tr>
+                    <tr><td colSpan={4} className="billing-page__table-cell--empty"><StatePattern kind="empty" compact title="No invoices yet" description="Invoices will appear after your first successful billing cycle." /></td></tr>
                   ) : history.map((row) => (
                     <tr key={row.id}>
                       <td className="billing-page__table-cell--pad">{new Date(row.date).toLocaleDateString()}</td>

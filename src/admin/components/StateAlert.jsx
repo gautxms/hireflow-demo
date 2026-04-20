@@ -1,17 +1,25 @@
+import StatePattern from '../../components/state/StatePattern'
+
 export default function StateAlert({ state, onRetry }) {
   if (!state) return null
 
+  const summary = [
+    state.cause ? `Cause: ${state.cause}` : null,
+    state.impact ? `Impact: ${state.impact}` : null,
+    state.nextAction ? `Next action: ${state.nextAction}` : null,
+  ].filter(Boolean).join(' ')
+
   return (
-    <div className="ui-toast text-sm">
-      <p className="ui-toast__title">{state.title}</p>
-      <p className="mt-1"><strong>Cause:</strong> {state.cause}</p>
-      <p className="mt-1"><strong>Impact:</strong> {state.impact}</p>
-      <p className="mt-1"><strong>Next action:</strong> {state.nextAction}</p>
-      {state.canRetry && onRetry ? (
-        <button type="button" onClick={onRetry} className="ui-btn ui-btn--primary mt-3">
+    <StatePattern
+      kind="error"
+      compact
+      title={state.title || 'Something went wrong'}
+      description={summary}
+      action={state.canRetry && onRetry ? (
+        <button type="button" onClick={onRetry} className="ui-btn ui-btn--primary">
           Retry
         </button>
       ) : null}
-    </div>
+    />
   )
 }

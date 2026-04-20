@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import ProfileCard from '../components/ProfileCard'
 import SubscriptionCard from '../components/SubscriptionCard'
 import BillingCard from '../components/BillingCard'
+import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import '../styles/account.css'
 import '../styles/checkout.css'
@@ -77,10 +78,11 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
   if (loading) {
     return (
       <div className="account-page__loading route-state">
-        <div className="route-state-card">
-          <h1 className="route-state-card__title">Loading account…</h1>
-          <p className="route-state-card__message">Please wait while we load your profile and billing details.</p>
-        </div>
+        <StatePattern
+          kind="loading"
+          title="Loading account…"
+          description="Please wait while we load your profile and billing details."
+        />
       </div>
     )
   }
@@ -88,10 +90,11 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
   if (error) {
     return (
       <div className="account-page__error route-state route-state--shared-error">
-        <div className="route-state-card">
-          <h1 className="route-state-card__title">Account unavailable</h1>
-          <p className="route-state-card__message">Error: {error}</p>
-        </div>
+        <StatePattern
+          kind="error"
+          title="Account unavailable"
+          description={`Error: ${error}`}
+        />
       </div>
     )
   }

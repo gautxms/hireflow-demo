@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import HealthStatus from '../components/HealthStatus'
 import API_BASE from '../../config/api'
+import StatePattern from '../../components/state/StatePattern'
 
 function MetricChart({ data, color, title, accessor }) {
   const points = useMemo(() => {
@@ -88,8 +89,8 @@ export default function AdminHealthPage() {
         </div>
       )}
 
-      {loading && <p className="admin-note">Loading health data…</p>}
-      {error && <p className="admin-inline-alert admin-inline-alert--error">{error}</p>}
+      {loading ? <StatePattern kind="loading" compact title="Loading health data…" description="Checking infrastructure health and endpoint signals." /> : null}
+      {error ? <StatePattern kind="error" compact title="Health status degraded" description={error} /> : null}
 
       <HealthStatus health={health} alerts={health?.alerts || []} />
 
