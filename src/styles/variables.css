@@ -37,6 +37,9 @@
   --color-warning-alpha-35: rgba(251, 191, 36, 0.35);
   --color-success-alpha-12: rgba(16, 185, 129, 0.12);
   --color-success-alpha-35: rgba(16, 185, 129, 0.35);
+  --color-info-alpha-16: rgba(59, 130, 246, 0.16);
+  --color-focus-ring: var(--color-accent-green);
+  --color-focus-ring-inner: var(--color-bg-primary);
 
   /* Typography */
   --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;

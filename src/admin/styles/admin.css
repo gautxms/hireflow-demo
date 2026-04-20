@@ -26,7 +26,7 @@
   --admin-success-border: var(--color-success-alpha-35);
   --admin-success-text: var(--color-success-text);
   --admin-info-text: var(--color-info);
-  --admin-info-subtle: color-mix(in srgb, var(--color-info), transparent 88%);
+  --admin-info-subtle: var(--color-info-alpha-16);
   --admin-info-border: color-mix(in srgb, var(--color-info), transparent 60%);
   --admin-health-green: var(--color-success-text);
   --admin-health-yellow: var(--color-warning-text);
@@ -41,7 +41,7 @@
   --admin-chart-series-cpu: var(--admin-primary);
   --admin-chart-cohort-base: var(--color-info);
   --admin-chart-cohort-empty: var(--admin-surface);
-  --admin-focus: var(--color-accent-green);
+  --admin-focus: var(--color-focus-ring);
   --admin-content-max: 1280px;
   --admin-spacing-inline: var(--spacing-inline);
   --admin-spacing-stack: var(--spacing-stack);
@@ -72,8 +72,9 @@
 }
 
 .admin-shell-v2 :is(button, a, input, select, textarea):focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--admin-focus), transparent 65%);
+  outline: 2px solid var(--admin-focus);
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--color-focus-ring-inner);
 }
 
 .ui-card {

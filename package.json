@@ -22,7 +22,8 @@
     "start": "node ./backend/src/index.js",
     "qa:admin-visual-baseline": "node scripts/verify-admin-visual-baseline.mjs",
     "lint:style-tokens": "node scripts/check-style-token-compliance.mjs",
-    "lint:style-tokens:baseline": "node scripts/check-style-token-compliance.mjs --write-baseline"
+    "lint:style-tokens:baseline": "node scripts/check-style-token-compliance.mjs --write-baseline",
+    "qa:contrast-a11y": "node scripts/audit-accessibility-contrast.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
