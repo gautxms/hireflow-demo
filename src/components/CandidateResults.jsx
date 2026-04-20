@@ -20,6 +20,7 @@ import {
   toggleSelectAllVisible,
   toggleSelection,
 } from './candidateSelectionState'
+import '../styles/candidate-results.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -521,57 +522,31 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   if (isLoading || isSharedLoading) {
     return (
-      <div className="candidate-results-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <div className="candidate-results-page candidate-results-page--state">
+        <div className="candidate-results-page__state-wrap">
           <button
-            className="touch-target"
+            className="touch-target candidate-results-page__back-button"
             onClick={onBack}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              color: 'var(--color-accent-green)',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginBottom: '1.5rem',
-              fontSize: '0.9rem',
-            }}
           >
             ← Upload New Resumes
           </button>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.75rem', fontFamily: 'var(--font-display)' }}>
+          <h1 className="candidate-results-page__state-title">
             ⏳ Parsing resume...
           </h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
+          <p className="candidate-results-page__state-copy">
             We are processing resumes. This can take 1-5 minutes.
           </p>
-          <p style={{ color: 'var(--color-accent-green)', marginBottom: '1.5rem' }}>Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+          <p className="candidate-results-page__progress">Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
 
-          <div style={{ display: 'grid', gap: '1rem' }}>
+          <div className="candidate-results-page__skeleton-grid">
             {skeletonCards.map((skeletonCard) => (
-              <div
-                key={skeletonCard}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: '12px',
-                  padding: '1.25rem',
-                  background: 'var(--card)',
-                  animation: 'pulseSkeleton var(--motion-duration-loop-base) var(--motion-ease-emphasized) infinite',
-                }}
-              >
-                <div style={{ height: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '35%', marginBottom: '0.75rem' }} />
-                <div style={{ height: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '60%', marginBottom: '0.5rem' }} />
-                <div style={{ height: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '50%' }} />
+              <div key={skeletonCard} className="candidate-results-page__skeleton-card">
+                <div className="candidate-results-page__skeleton-line candidate-results-page__skeleton-line--lg" />
+                <div className="candidate-results-page__skeleton-line candidate-results-page__skeleton-line--md" />
+                <div className="candidate-results-page__skeleton-line candidate-results-page__skeleton-line--sm" />
               </div>
             ))}
           </div>
-          <style>{`
-            @keyframes pulseSkeleton {
-              0% { opacity: 0.45; }
-              50% { opacity: 0.95; }
-              100% { opacity: 0.45; }
-            }
-          `}</style>
         </div>
       </div>
     )
@@ -579,59 +554,39 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   if (!hasRenderableCandidates) {
     return (
-      <div className="candidate-results-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <div className="candidate-results-page candidate-results-page--state">
+        <div className="candidate-results-page__state-wrap">
           <button
-            className="touch-target"
+            className="touch-target candidate-results-page__back-button"
             onClick={onBack}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              color: 'var(--color-accent-green)',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginBottom: '1rem',
-              fontSize: '0.9rem'
-            }}
           >
             ← Upload New Resumes
           </button>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>
+          <h1 className="candidate-results-page__state-title candidate-results-page__state-title--compact">
             Candidate Ranking
           </h1>
-          <p style={{ color: 'var(--color-text-secondary)' }}>Please upload resumes before viewing analysis.</p>
+          <p className="candidate-results-page__state-copy">Please upload resumes before viewing analysis.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="candidate-results-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
+    <div className="candidate-results-page">
+      <div className="candidate-results-page__header">
         <button
-          className="touch-target"
+          className="touch-target candidate-results-page__back-button"
           onClick={onBack}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: 'var(--color-accent-green)',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginBottom: '1rem',
-            fontSize: '0.9rem'
-          }}
         >
           ← Upload New Resumes
         </button>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>
+        <h1 className="candidate-results-page__state-title candidate-results-page__state-title--compact">
           Candidate Ranking
         </h1>
-        <p style={{ color: 'var(--color-text-secondary)' }}>
+        <p className="candidate-results-page__state-copy">
           {pagination.total} candidates analyzed and ranked by fit
         </p>
-        {resultsError && <p style={{ color: 'var(--color-error)' }}>{resultsError}</p>}
+        {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
 
       <ShortlistManager
@@ -673,11 +628,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         <button className="touch-target" onClick={createShareLink} type="button">🔗 Share View</button>
         <button className="touch-target" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
         <input
-          className="touch-target"
+          className="touch-target candidate-results-page__tag-input"
           value={tagDraft}
           onChange={(event) => setTagDraft(event.target.value)}
           placeholder="tag1, tag2"
-          style={{ minWidth: 160 }}
         />
         <button className="touch-target" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
         <button className="touch-target" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
@@ -724,14 +678,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
 
       {visibleCandidates.length === 0 && (
-        <div style={{ maxWidth: '1200px', margin: '0 auto 1rem', color: 'var(--color-text-secondary)' }}>
+        <div className="candidate-results-page__empty-note">
           No candidates match the current filters.
         </div>
       )}
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto 1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+      <div className="candidate-results-page__pagination">
         <button className="touch-target" type="button" disabled={pagination.page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button>
-        <span style={{ color: 'var(--color-text-secondary)' }}>Page {pagination.page} of {pagination.totalPages}</span>
+        <span className="candidate-results-page__pagination-label">Page {pagination.page} of {pagination.totalPages}</span>
         <button className="touch-target" type="button" disabled={!pagination.hasNextPage} onClick={() => setPage((current) => current + 1)}>Next</button>
         <select className="touch-target" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
           <option value={10}>10 / page</option>
@@ -739,7 +693,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           <option value={50}>50 / page</option>
         </select>
       </div>
-      <div className="candidate-results-list" style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gap: '1.5rem' }}>
+      <div className="candidate-results-list candidate-results-list--cards">
         {visibleCandidates.map((candidate) => {
           const candidateSkills = Array.isArray(candidate.skills)
             ? candidate.skills
