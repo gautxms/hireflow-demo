@@ -104,7 +104,7 @@ export default function AdminUploadsPage({ onOpenDetails }) {
   return (
     <div className="admin-page">
 
-      {loadingStats ? <p className="text-sm text-slate-500">Loading stats…</p> : null}
+      {loadingStats ? <p className="text-sm text-admin-muted">Loading stats…</p> : null}
       {stats ? (
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="Total parses" value={stats.totalParses} />
@@ -189,7 +189,7 @@ export default function AdminUploadsPage({ onOpenDetails }) {
 function StatCard({ label, value, valueClassName = 'text-[var(--admin-text)]' }) {
   return (
     <div className="ui-card p-4">
-      <p className="text-sm text-slate-500">{label}</p>
+      <p className="text-sm text-admin-muted">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${valueClassName}`}>{value}</p>
     </div>
   )

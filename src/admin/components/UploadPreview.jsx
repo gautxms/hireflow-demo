@@ -1,9 +1,9 @@
 import API_BASE from '../../config/api'
 function statusStyles(status) {
-  if (status === 'complete') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-  if (status === 'failed') return 'bg-rose-50 text-rose-700 border-rose-200'
-  if (status === 'processing') return 'bg-amber-50 text-amber-700 border-amber-200'
-  return 'bg-slate-100 text-slate-700 border-slate-200'
+  if (status === 'complete') return 'bg-admin-success-subtle text-admin-success border-admin-success'
+  if (status === 'failed') return 'bg-admin-danger-subtle text-admin-danger border-admin-danger'
+  if (status === 'processing') return 'bg-admin-warning-subtle text-admin-warning border-admin-warning'
+  return 'bg-admin-subtle text-admin-body border-admin'
 }
 
 function bytes(value) {
@@ -47,7 +47,7 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900">Upload Details</h1>
+        <h1 className="text-2xl font-semibold text-admin-strong">Upload Details</h1>
         <div className="flex flex-wrap gap-2">
           <a
             href={`${API_BASE}/admin/uploads/${upload.id}/raw-text`}
@@ -62,7 +62,7 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
             Download Parse Result
           </button>
           <button
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-admin-primary px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             onClick={onRetry}
             disabled={retrying}
           >
@@ -79,7 +79,7 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
         <InfoTile label="File format" value={upload.format || upload.fileType} />
         <InfoTile label="Last retried" value={date(retriedAt)} />
         <div className="ui-card p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Parse status</p>
+          <p className="text-xs uppercase tracking-wide text-admin-muted">Parse status</p>
           <p className="mt-2">
             <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles(upload.parseStatus)}`}>
               {upload.parseStatus}
@@ -89,7 +89,7 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
       </div>
 
       <section className="ui-card p-4">
-        <h2 className="text-lg font-medium text-slate-900">Token Usage</h2>
+        <h2 className="text-lg font-medium text-admin-strong">Token Usage</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">
           <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{formatToken(tokenUsageSummary?.totalTokens)}</strong></p>
           <p className="flex items-center justify-between"><span>Avg tokens / run</span> <strong>{formatToken(tokenUsageSummary?.avgTokensPerRun)}</strong></p>
@@ -99,7 +99,7 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
         <div className="mt-4 overflow-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500">
+              <tr className="text-left text-admin-muted">
                 <th className="py-2 pr-3">Captured</th>
                 <th className="py-2 pr-3">Provider</th>
                 <th className="py-2 pr-3">Model</th>
@@ -112,11 +112,11 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
             </thead>
             <tbody>
               {tokenUsageHistory.length === 0 ? (
-                <tr className="border-t border-slate-100">
-                  <td className="py-3 text-slate-500" colSpan={8}>No token usage records for this upload yet.</td>
+                <tr className="border-t border-admin">
+                  <td className="py-3 text-admin-muted" colSpan={8}>No token usage records for this upload yet.</td>
                 </tr>
               ) : tokenUsageHistory.map((entry) => (
-                <tr key={entry.id} className="border-t border-slate-100">
+                <tr key={entry.id} className="border-t border-admin">
                   <td className="py-2 pr-3">{date(entry.createdAt)}</td>
                   <td className="py-2 pr-3">{entry.provider || '—'}</td>
                   <td className="py-2 pr-3">{entry.model || '—'}</td>
@@ -136,23 +136,23 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="ui-card p-4">
-          <h2 className="text-lg font-medium text-slate-900">Parse Result</h2>
-          <pre className="mt-3 max-h-80 overflow-auto rounded border border-slate-100 bg-slate-50 p-3 text-xs text-slate-800">
+          <h2 className="text-lg font-medium text-admin-strong">Parse Result</h2>
+          <pre className="mt-3 max-h-80 overflow-auto rounded border border-admin bg-admin-subtle p-3 text-xs text-admin-title">
             {JSON.stringify(upload.parseResult || {}, null, 2)}
           </pre>
         </section>
 
         <section className="ui-card p-4">
-          <h2 className="text-lg font-medium text-slate-900">Errors</h2>
-          <div className="mt-3 rounded border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">
+          <h2 className="text-lg font-medium text-admin-strong">Errors</h2>
+          <div className="mt-3 rounded border border-admin-danger bg-admin-danger-subtle p-3 text-sm text-admin-danger">
             {upload.parseError || 'No parse errors.'}
           </div>
         </section>
       </div>
 
       <section className="ui-card p-4">
-        <h2 className="text-lg font-medium text-slate-900">Extracted Text Preview</h2>
-        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded border border-slate-100 bg-slate-50 p-3 text-xs leading-relaxed text-slate-800">
+        <h2 className="text-lg font-medium text-admin-strong">Extracted Text Preview</h2>
+        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded border border-admin bg-admin-subtle p-3 text-xs leading-relaxed text-admin-title">
           {upload.rawText || 'No extracted text available.'}
         </pre>
       </section>
@@ -163,8 +163,8 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
 function InfoTile({ label, value }) {
   return (
     <div className="ui-card p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-slate-900">{value || '—'}</p>
+      <p className="text-xs uppercase tracking-wide text-admin-muted">{label}</p>
+      <p className="mt-2 text-sm font-medium text-admin-strong">{value || '—'}</p>
     </div>
   )
 }

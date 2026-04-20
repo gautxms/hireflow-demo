@@ -2,7 +2,7 @@
 
 .admin-shell-v2 {
   --admin-font: var(--font-family-base);
-  --admin-display-font: var(--font-family-display);
+  --admin-display-font: var(--font-family-base);
   --admin-bg: var(--color-bg-primary);
   --admin-surface: var(--color-bg-elevated);
   --admin-surface-subtle: var(--color-bg-secondary);
@@ -655,7 +655,7 @@
 .admin-alert--critical {
   border-color: var(--admin-danger-border);
   background: var(--admin-danger-subtle);
-  color: #fecaca;
+  color: var(--admin-danger);
 }
 
 .admin-health {
@@ -666,15 +666,15 @@
 }
 
 .admin-health--green {
-  border-color: #22c55e;
+  border-color: var(--admin-health-green);
 }
 
 .admin-health--yellow {
-  border-color: #f59e0b;
+  border-color: var(--admin-health-yellow);
 }
 
 .admin-health--red {
-  border-color: #ef4444;
+  border-color: var(--admin-health-red);
 }
 
 .admin-health__header {
@@ -737,6 +737,31 @@
 .admin-shell-v2 .border-slate-300 {
   border-color: var(--admin-border) !important;
 }
+
+.admin-shell-v2 .text-admin-strong { color: var(--admin-text) !important; }
+.admin-shell-v2 .text-admin-title { color: var(--admin-text) !important; }
+.admin-shell-v2 .text-admin-body { color: var(--admin-text-muted) !important; }
+.admin-shell-v2 .text-admin-muted { color: var(--admin-text-subtle) !important; }
+.admin-shell-v2 .text-admin-success { color: var(--admin-success-text) !important; }
+.admin-shell-v2 .text-admin-danger { color: var(--admin-danger) !important; }
+.admin-shell-v2 .text-admin-warning { color: var(--admin-warning-text) !important; }
+.admin-shell-v2 .text-admin-warning-strong { color: var(--admin-warning-text) !important; }
+
+.admin-shell-v2 .bg-admin-subtle { background: var(--admin-surface-subtle) !important; }
+.admin-shell-v2 .bg-admin-success-subtle { background: var(--admin-success-subtle) !important; }
+.admin-shell-v2 .bg-admin-danger-subtle { background: var(--admin-danger-subtle) !important; }
+.admin-shell-v2 .bg-admin-warning-subtle { background: var(--admin-warning-subtle) !important; }
+.admin-shell-v2 .bg-admin-info-subtle { background: var(--admin-info-subtle) !important; }
+.admin-shell-v2 .bg-admin-primary { background: var(--admin-primary) !important; }
+.admin-shell-v2 .bg-admin-series-primary { background: var(--admin-chart-series-mau) !important; }
+.admin-shell-v2 .bg-admin-series-info { background: var(--admin-chart-series-dau) !important; }
+.admin-shell-v2 .bg-admin-series-success { background: var(--admin-chart-series-wau) !important; }
+
+.admin-shell-v2 .border-admin { border-color: var(--admin-border) !important; }
+.admin-shell-v2 .border-admin-success { border-color: var(--admin-success-border) !important; }
+.admin-shell-v2 .border-admin-danger { border-color: var(--admin-danger-border) !important; }
+.admin-shell-v2 .border-admin-warning { border-color: var(--admin-warning-border) !important; }
+.admin-shell-v2 .border-admin-info { border-color: var(--admin-info-border) !important; }
 
 .admin-health__status--green { color: var(--admin-health-green); }
 .admin-health__status--yellow { color: var(--admin-health-yellow); }

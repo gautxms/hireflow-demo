@@ -3,11 +3,11 @@ export default function MetricCard({ label, value, helper = '', trend = null }) 
 
   return (
     <article className="ui-card p-4">
-      <p className="text-sm text-slate-700">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
+      <p className="text-sm text-admin-body">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-admin-strong">{value}</p>
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className={`text-sm ${trend === null ? 'admin-note' : trend >= 0 ? 'admin-text-success' : 'admin-text-danger'}`}>{trendLabel}</span>
-        {helper ? <span className="text-right text-xs text-slate-700">{helper}</span> : null}
+        {helper ? <span className="text-right text-xs text-admin-body">{helper}</span> : null}
       </div>
     </article>
   )

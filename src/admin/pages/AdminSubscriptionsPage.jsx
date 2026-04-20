@@ -118,7 +118,7 @@ export default function AdminSubscriptionsPage() {
         onPresetChange={setActivePreset}
         renderDetails={(subscription) => (
           <div className="space-y-3 text-sm">
-            {detailsLoading && selectedId === subscription.id ? <p className="text-slate-500">Loading details…</p> : null}
+            {detailsLoading && selectedId === subscription.id ? <p className="text-admin-muted">Loading details…</p> : null}
             <p><strong>Email:</strong> {subscription.email}</p>
             <p><strong>Status:</strong> <span className="capitalize">{subscription.status}</span></p>
             <p><strong>Plan:</strong> <span className="capitalize">{subscription.plan}</span></p>
