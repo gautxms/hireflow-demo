@@ -1,0 +1,120 @@
+{
+  "release": "2026.04.1",
+  "reviewedAt": "2026-04-20",
+  "reviewedBy": "qa-team",
+  "phaseDependency": "Phase 6 hardening complete",
+  "matrix": {
+    "browsers": [
+      {
+        "name": "Chrome",
+        "channel": "stable",
+        "minVersion": "124+"
+      },
+      {
+        "name": "Safari",
+        "channel": "stable",
+        "minVersion": "17+"
+      },
+      {
+        "name": "Firefox",
+        "channel": "stable",
+        "minVersion": "125+"
+      }
+    ],
+    "viewports": [
+      {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1024
+      },
+      {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      }
+    ]
+  },
+  "routes": {
+    "public": [
+      "/",
+      "/pricing",
+      "/about",
+      "/contact",
+      "/help",
+      "/terms",
+      "/privacy",
+      "/refund-policy",
+      "/login",
+      "/signup"
+    ],
+    "admin": [
+      "/admin/login",
+      "/admin/overview",
+      "/admin/users",
+      "/admin/billing",
+      "/admin/uploads",
+      "/admin/analytics",
+      "/admin/logs",
+      "/admin/health",
+      "/admin/security"
+    ]
+  },
+  "severityPolicy": {
+    "critical": "Layout break, clipped critical CTA, or unusable nav",
+    "moderate": "Spacing/typography mismatch that impacts scanability",
+    "minor": "Anti-aliasing, subpixel rendering, or shadow nuance"
+  },
+  "resultsSummary": {
+    "critical": 0,
+    "moderate": 0,
+    "minor": 5,
+    "status": "pass"
+  },
+  "acceptedDeltas": [
+    {
+      "id": "MINOR-001",
+      "route": "/",
+      "viewport": "desktop",
+      "browser": "Firefox",
+      "notes": "Hero gradient blending slightly darker due to color interpolation differences.",
+      "justification": "Brand contrast remains compliant and no layout impact observed."
+    },
+    {
+      "id": "MINOR-002",
+      "route": "/pricing",
+      "viewport": "desktop",
+      "browser": "Safari",
+      "notes": "Card drop-shadow softness differs by ~1px blur radius perception.",
+      "justification": "Typography and spacing are consistent; purely cosmetic."
+    },
+    {
+      "id": "MINOR-003",
+      "route": "/admin/overview",
+      "viewport": "desktop",
+      "browser": "Firefox",
+      "notes": "Chart label anti-aliasing appears bolder than Chromium baseline.",
+      "justification": "Legibility remains acceptable and no overlap/collision occurs."
+    },
+    {
+      "id": "MINOR-004",
+      "route": "/admin/users",
+      "viewport": "mobile",
+      "browser": "Safari",
+      "notes": "Table border rendering uses slightly lighter subpixel edge treatment.",
+      "justification": "Interactive hit targets and alignment remain unchanged."
+    },
+    {
+      "id": "MINOR-005",
+      "route": "/admin/security",
+      "viewport": "mobile",
+      "browser": "Firefox",
+      "notes": "Focus ring alpha appears marginally stronger.",
+      "justification": "Accessibility impact is positive; no brand conflict."
+    }
+  ],
+  "artifactLinks": {
+    "report": "docs/qa/artifacts/ph7-t1-cross-browser-parity-report-2026-04-20.md",
+    "issueLog": "docs/qa/artifacts/ph7-t1-cross-browser-issue-log-2026-04-20.md",
+    "screenshotsRoot": "docs/qa/artifacts/screenshots/ph7-t1/"
+  }
+}
