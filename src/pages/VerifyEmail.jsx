@@ -90,7 +90,7 @@ const styles = {
     border: '4px solid #e5e7eb',
     borderTop: '4px solid #0f172a',
     borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
+    animation: 'spin calc(var(--motion-duration-base) * 5) linear infinite',
     margin: '0 auto 20px'
   },
   checkmark: {

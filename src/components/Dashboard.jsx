@@ -190,7 +190,7 @@ export default function Dashboard({ onNavigate }) {
                   background: task.progress === 100 ? 'var(--color-accent-green-hover)' : 'var(--color-accent-green)',
                   height: '100%',
                   width: `${task.progress}%`,
-                  transition: 'width 0.3s ease'
+                  transition: 'width var(--motion-duration-slow) var(--motion-ease-standard)'
                 }} />
               </div>
               <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>

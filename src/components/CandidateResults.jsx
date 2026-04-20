@@ -556,7 +556,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   borderRadius: '12px',
                   padding: '1.25rem',
                   background: 'var(--card)',
-                  animation: 'pulseSkeleton 1.6s ease-in-out infinite',
+                  animation: 'pulseSkeleton var(--motion-duration-loop-base) var(--motion-ease-emphasized) infinite',
                 }}
               >
                 <div style={{ height: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', width: '35%', marginBottom: '0.75rem' }} />

@@ -503,7 +503,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             padding: '3rem',
             textAlign: 'center',
             background: isDragging ? 'rgba(232,255,90,0.05)' : 'var(--card)',
-            transition: 'all 0.3s',
+            transition: 'all var(--motion-duration-slow) var(--motion-ease-standard)',
             cursor: 'pointer',
             marginBottom: '2rem',
           }}
@@ -629,7 +629,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                   width: `${uploadPercent}%`,
                   height: '100%',
                   background: 'var(--color-accent-green)',
-                  transition: 'width 0.2s ease',
+                  transition: 'width var(--motion-duration-base) var(--motion-ease-standard)',
                 }}
               />
             </div>

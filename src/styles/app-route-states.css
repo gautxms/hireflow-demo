@@ -23,6 +23,7 @@
   width: 100%;
   color: var(--color-text-primary);
   box-shadow: var(--shadow-md);
+  transition: var(--motion-transition-emphasis);
 }
 
 .route-state-card--verified {
@@ -62,4 +63,16 @@
   padding: 10px 20px;
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
+  transition: var(--motion-transition-color);
+}
+
+.route-state-card__action:hover {
+  background: var(--color-accent-green-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-state-card,
+  .route-state-card__action {
+    transition: none;
+  }
 }

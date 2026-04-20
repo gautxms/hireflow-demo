@@ -136,6 +136,25 @@
   --shadow-elevated: var(--shadow-md);
   --shadow-overlay: var(--shadow-xl);
 
+  /* Motion */
+  --motion-duration-instant: 0ms;
+  --motion-duration-fast: 140ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-slow: 300ms;
+  --motion-duration-emphasized: 600ms;
+  --motion-duration-loop-base: 2s;
+  --motion-duration-loop-slow: 6s;
+  --motion-ease-standard: ease;
+  --motion-ease-emphasized: ease-in-out;
+  --motion-transition-color:
+    color var(--motion-duration-base) var(--motion-ease-standard),
+    border-color var(--motion-duration-base) var(--motion-ease-standard),
+    background-color var(--motion-duration-base) var(--motion-ease-standard);
+  --motion-transition-emphasis:
+    transform var(--motion-duration-slow) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-slow) var(--motion-ease-standard);
+  --motion-transition-drawer: transform var(--motion-duration-base) var(--motion-ease-standard);
+
   /* Layout */
   --content-max-width: 1280px;
 
