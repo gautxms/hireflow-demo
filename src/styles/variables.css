@@ -46,6 +46,55 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
+  /* Semantic typography contract */
+  --type-display-size: clamp(3rem, 8vw, 5rem);
+  --type-display-line-height: 1.1;
+  --type-display-weight: var(--font-weight-bold);
+  --type-display-tracking: -0.02em;
+  --type-display: var(--type-display-weight) var(--type-display-size) / var(--type-display-line-height) var(--font-family-display);
+
+  --type-h1-size: clamp(2.2rem, 4vw, 3rem);
+  --type-h1-line-height: 1.15;
+  --type-h1-weight: var(--font-weight-bold);
+  --type-h1-tracking: -0.015em;
+  --type-h1: var(--type-h1-weight) var(--type-h1-size) / var(--type-h1-line-height) var(--font-family-display);
+
+  --type-h2-size: clamp(1.625rem, 2.3vw, 2rem);
+  --type-h2-line-height: 1.2;
+  --type-h2-weight: var(--font-weight-bold);
+  --type-h2-tracking: -0.012em;
+  --type-h2: var(--type-h2-weight) var(--type-h2-size) / var(--type-h2-line-height) var(--font-family-display);
+
+  --type-h3-size: 1.1rem;
+  --type-h3-line-height: 1.35;
+  --type-h3-weight: var(--font-weight-semibold);
+  --type-h3-tracking: -0.006em;
+  --type-h3: var(--type-h3-weight) var(--type-h3-size) / var(--type-h3-line-height) var(--font-family-display);
+
+  --type-body-size: 1rem;
+  --type-body-line-height: 1.6;
+  --type-body-weight: var(--font-weight-regular);
+  --type-body-tracking: 0;
+  --type-body: var(--type-body-weight) var(--type-body-size) / var(--type-body-line-height) var(--font-family-base);
+
+  --type-small-size: 0.875rem;
+  --type-small-line-height: 1.45;
+  --type-small-weight: var(--font-weight-medium);
+  --type-small-tracking: 0.01em;
+  --type-small: var(--type-small-weight) var(--type-small-size) / var(--type-small-line-height) var(--font-family-base);
+
+  --type-nav-size: 0.9rem;
+  --type-nav-line-height: 1.2;
+  --type-nav-weight: var(--font-weight-medium);
+  --type-nav-tracking: 0.02em;
+  --type-nav: var(--type-nav-weight) var(--type-nav-size) / var(--type-nav-line-height) var(--font-family-base);
+
+  --type-button-size: 0.9375rem;
+  --type-button-line-height: 1.2;
+  --type-button-weight: var(--font-weight-semibold);
+  --type-button-tracking: 0.01em;
+  --type-button: var(--type-button-weight) var(--type-button-size) / var(--type-button-line-height) var(--font-family-base);
+
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;

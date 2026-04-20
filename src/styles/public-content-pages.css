@@ -20,8 +20,10 @@
   border-radius: var(--radius-xs);
   padding: 0.5rem 1rem;
   cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--type-button-size);
+  line-height: var(--type-button-line-height);
+  font-weight: var(--type-button-weight);
+  letter-spacing: var(--type-button-tracking);
 }
 
 .public-page-main {
@@ -37,9 +39,10 @@
 
 .public-page-title {
   font-family: var(--font-family-display);
-  font-size: clamp(2.2rem, 4vw, 3rem);
-  line-height: 1.15;
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line-height);
+  font-weight: var(--type-h1-weight);
+  letter-spacing: var(--type-h1-tracking);
   margin-bottom: 1rem;
 }
 
@@ -47,8 +50,8 @@
   max-width: 700px;
   margin: 0 auto;
   color: var(--color-text-secondary);
-  font-size: 1.0625rem;
-  line-height: 1.75;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
 }
 
 .public-section {
@@ -62,8 +65,10 @@
 
 .public-section-title {
   font-family: var(--font-family-display);
-  font-size: clamp(1.625rem, 2.3vw, 2rem);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line-height);
+  font-weight: var(--type-h2-weight);
+  letter-spacing: var(--type-h2-tracking);
   margin-bottom: 2rem;
 }
 
@@ -95,28 +100,33 @@
 }
 
 .public-card-title {
-  font-size: 1.1rem;
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line-height);
+  font-weight: var(--type-h3-weight);
+  letter-spacing: var(--type-h3-tracking);
   margin-bottom: 0.5rem;
 }
 
 .public-copy,
 .public-card-copy {
   color: var(--color-text-secondary);
-  line-height: 1.7;
-  font-size: 1rem;
+  line-height: var(--type-body-line-height);
+  font-size: var(--type-body-size);
 }
 
 .public-card-copy {
-  font-size: 0.9375rem;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
 }
 
 .public-pill {
   display: inline-flex;
   padding: 0.35rem 0.7rem;
   border-radius: var(--radius-xs);
-  font-size: 0.8rem;
-  font-weight: var(--font-weight-medium);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
+  font-weight: var(--type-small-weight);
+  letter-spacing: var(--type-small-tracking);
   background: var(--color-accent-alpha-15);
   color: var(--color-accent-green);
 }
@@ -140,8 +150,10 @@
 .public-form-field label {
   display: block;
   color: var(--color-text-secondary);
-  font-size: 0.875rem;
-  font-weight: var(--font-weight-medium);
+  font-size: var(--type-nav-size);
+  line-height: var(--type-nav-line-height);
+  font-weight: var(--type-nav-weight);
+  letter-spacing: var(--type-nav-tracking);
   margin-bottom: 0.5rem;
 }
 
@@ -156,7 +168,8 @@
   color: var(--color-text-primary);
   font-family: var(--font-family-base);
   padding: 0.75rem;
-  font-size: 0.95rem;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
 }
 
 .public-form-field textarea {
@@ -172,7 +185,8 @@
 .public-form-error {
   margin-top: 0.35rem;
   color: var(--color-error);
-  font-size: 0.8rem;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
 }
 
 .status-message {
@@ -180,7 +194,8 @@
   border: 1px solid;
   padding: 1rem;
   margin-bottom: 1rem;
-  font-size: 0.925rem;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
 }
 
 .status-message--success {
@@ -225,8 +240,10 @@
 .public-btn-primary,
 .public-btn-secondary {
   border-radius: var(--radius-sm);
-  font-weight: var(--font-weight-semibold);
-  font-size: 0.9375rem;
+  font-weight: var(--type-button-weight);
+  font-size: var(--type-button-size);
+  line-height: var(--type-button-line-height);
+  letter-spacing: var(--type-button-tracking);
   padding: 0.72rem 1.4rem;
   cursor: pointer;
 }
@@ -249,8 +266,10 @@
 }
 
 .public-nav-text {
-  font-size: 0.875rem;
-  font-weight: var(--font-weight-medium);
+  font-size: var(--type-nav-size);
+  line-height: var(--type-nav-line-height);
+  font-weight: var(--type-nav-weight);
+  letter-spacing: var(--type-nav-tracking);
 }
 
 @media (max-width: 900px) {
