@@ -10,6 +10,7 @@
 
 ## QA + checks
 
+- [ ] If primitive visual baselines changed, Design Systems + QA reviewer sign-off is explicitly requested and granted.
 - [ ] `npm run lint`
 - [ ] `npm run lint:style-tokens`
 - [ ] `npm run lint:primitives`

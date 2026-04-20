@@ -25,7 +25,8 @@
     "lint:style-tokens:baseline": "node scripts/check-style-token-compliance.mjs --write-baseline",
     "qa:contrast-a11y": "node scripts/audit-accessibility-contrast.mjs",
     "lint:primitives": "node scripts/check-primitive-composition.mjs",
-    "lint:primitives:baseline": "node scripts/check-primitive-composition.mjs --write-baseline"
+    "lint:primitives:baseline": "node scripts/check-primitive-composition.mjs --write-baseline",
+    "qa:primitive-visual-baseline": "node scripts/verify-primitive-visual-baseline.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
