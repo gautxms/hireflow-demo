@@ -37,21 +37,29 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] Variant states (hover/active/focus/disabled) consume tokenized values, not hardcoded values.
 - [ ] New admin styles are documented in `docs/qa/admin-smoke-checklist.md` acceptance criteria.
 
-## 3) Required automated checks (merge gate)
+## 3) Primitive composition policy gate
+
+### Primitive composition policy
+- [ ] New major UI in scoped public/admin folders composes from approved primitives by default.
+- [ ] No new ad-hoc palette/surface utility bypass patterns introduced in critical directories.
+- [ ] Any primitive bypass is documented with a valid `PCX-###` exception and design approval in `docs/PRIMITIVE_COMPOSITION_EXCEPTIONS.md`.
+
+## 4) Required automated checks (merge gate)
 
 - [ ] `npm run qa:admin-smoke`
 - [ ] `npm run qa:admin-visual-baseline`
 - [ ] `npm run lint`
 - [ ] `npm run lint:style-tokens`
+- [ ] `npm run lint:primitives`
 
-## 4) Token migration gate (required before merge)
+## 5) Token migration gate (required before merge)
 
 - [ ] `npm run lint:style-tokens` passes with **0 new violations**.
 - [ ] Any allowed token violation is explicitly listed in `docs/qa/baselines/style-token-violations-baseline.json` with an active Exception ID from `docs/BRAND_GUIDELINE_EXCEPTIONS.md`.
 - [ ] No legacy alias usage exists in JSX inline styles or CSS (`--ink*`, `--accent*`, `--text`, `--muted`).
 - [ ] If this PR is part of a phased migration, confirm this gate remains green to prevent regressions/conflicts in later phases.
 
-## 5) Baseline update process (required when visuals change)
+## 6) Baseline update process (required when visuals change)
 
 1. Capture before/after screenshots for impacted route(s) at desktop and mobile widths.
 2. Update `docs/qa/baselines/admin-visual-baseline.json` release metadata.

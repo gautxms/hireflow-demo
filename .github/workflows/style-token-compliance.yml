@@ -24,3 +24,6 @@ jobs:
 
       - name: Style-token compliance scan
         run: npm run lint:style-tokens
+
+      - name: Primitive composition scan
+        run: npm run lint:primitives
