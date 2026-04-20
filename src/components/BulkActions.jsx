@@ -17,7 +17,7 @@ export default function BulkActions({ selectedCount, children }) {
         justifyContent: 'space-between'
       }}
     >
-      <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.95rem' }}>
+      <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '0.95rem' }}>
         {hasSelection ? `${selectedCount} selected` : 'Select candidates to run bulk actions'}
       </p>
 

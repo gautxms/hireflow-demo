@@ -42,7 +42,7 @@ export default function ShortlistManager({
         <button
           onClick={onRefresh}
           className="touch-target"
-          style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--accent)', borderRadius: '6px', padding: '0.4rem 0.75rem', cursor: 'pointer' }}
+          style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--color-accent-green)', borderRadius: '6px', padding: '0.4rem 0.75rem', cursor: 'pointer' }}
         >
           Refresh
         </button>
@@ -53,18 +53,18 @@ export default function ShortlistManager({
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="New shortlist name"
-          style={{ background: 'var(--ink)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.6rem 0.75rem' }}
+          style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.6rem 0.75rem' }}
         />
         <input
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="Description (optional)"
-          style={{ background: 'var(--ink)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.6rem 0.75rem' }}
+          style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.6rem 0.75rem' }}
         />
         <button
           type="submit"
           disabled={loading}
-          style={{ minHeight: 44, background: 'var(--accent)', color: 'var(--ink)', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', padding: '0 1rem' }}
+          style={{ minHeight: 44, background: 'var(--color-accent-green)', color: 'var(--color-bg-primary)', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', padding: '0 1rem' }}
         >
           Create
         </button>
@@ -78,8 +78,8 @@ export default function ShortlistManager({
             key={list.id}
             onClick={() => onSelectShortlist(list.id)}
             style={{
-              background: list.id === selectedShortlistId ? 'var(--accent)' : 'transparent',
-              color: list.id === selectedShortlistId ? 'var(--ink)' : 'var(--text)',
+              background: list.id === selectedShortlistId ? 'var(--color-accent-green)' : 'transparent',
+              color: list.id === selectedShortlistId ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
               border: '1px solid var(--border)',
               borderRadius: '999px',
               padding: '0.35rem 0.8rem',
@@ -96,13 +96,13 @@ export default function ShortlistManager({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
             <div>
               <h3 style={{ margin: '0 0 0.35rem 0' }}>{selectedShortlist.name}</h3>
-              <p style={{ margin: 0, color: 'var(--muted)' }}>{selectedShortlist.description || 'No description provided'}</p>
+              <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{selectedShortlist.description || 'No description provided'}</p>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--muted)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)' }}>
               Sort
               <select
                 onChange={(event) => onChangeSort(event.target.value)}
-                style={{ background: 'var(--ink)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', padding: '0.4rem 0.5rem' }}
+                style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.4rem 0.5rem' }}
               >
                 <option value="rating_desc">Rating (High to Low)</option>
                 <option value="rating_asc">Rating (Low to High)</option>
@@ -114,12 +114,12 @@ export default function ShortlistManager({
 
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
             {(shortlistDetails?.candidates || []).map((candidate) => (
-              <div key={candidate.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '0.5rem', background: 'var(--ink)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.7rem 0.85rem' }}>
+              <div key={candidate.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '0.5rem', background: 'var(--color-bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.7rem 0.85rem' }}>
                 <div>
                   <div style={{ fontWeight: 600 }}>{candidate.filename || candidate.resume_id}</div>
-                  <div style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{candidate.notes || 'No notes'}</div>
+                  <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.86rem' }}>{candidate.notes || 'No notes'}</div>
                 </div>
-                <div style={{ alignSelf: 'center', color: 'var(--accent)' }}>
+                <div style={{ alignSelf: 'center', color: 'var(--color-accent-green)' }}>
                   {candidate.rating ? `${candidate.rating}/5` : 'Unrated'}
                 </div>
                 <button
@@ -132,12 +132,12 @@ export default function ShortlistManager({
               </div>
             ))}
             {!shortlistDetails?.candidates?.length ? (
-              <p style={{ margin: 0, color: 'var(--muted)' }}>No candidates in this shortlist yet.</p>
+              <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>No candidates in this shortlist yet.</p>
             ) : null}
           </div>
         </div>
       ) : (
-        <p style={{ margin: 0, color: 'var(--muted)' }}>Create a shortlist or select one to view candidates.</p>
+        <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Create a shortlist or select one to view candidates.</p>
       )}
     </section>
   )

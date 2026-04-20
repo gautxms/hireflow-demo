@@ -13,7 +13,7 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] No hardcoded color literals in JSX `style={{ ... }}` blocks.
 - [ ] No hardcoded font stacks in JSX `style={{ ... }}` blocks.
 - [ ] Color and font styling in JSX use canonical tokens from `src/styles/variables.css`.
-- [ ] No legacy alias tokens (`--ink`, `--accent`, `--text`, `--muted`, etc.) are introduced.
+- [ ] Zero legacy alias token usage (`--ink*`, `--accent*`, `--text`, `--muted`) in `src/`.
 
 ### Visual QA evidence
 - [ ] Before/after screenshots attached for any visual-impact change.
@@ -48,7 +48,7 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 
 - [ ] `npm run lint:style-tokens` passes with **0 new violations**.
 - [ ] Any allowed token violation is explicitly listed in `docs/qa/baselines/style-token-violations-baseline.json` with an active Exception ID from `docs/BRAND_GUIDELINE_EXCEPTIONS.md`.
-- [ ] No new usage of legacy aliases (`--ink`, `--accent`, `--text`, `--muted`) in JSX inline styles or CSS.
+- [ ] No legacy alias usage exists in JSX inline styles or CSS (`--ink*`, `--accent*`, `--text`, `--muted`).
 - [ ] If this PR is part of a phased migration, confirm this gate remains green to prevent regressions/conflicts in later phases.
 
 ## 5) Baseline update process (required when visuals change)

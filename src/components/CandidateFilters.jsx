@@ -49,7 +49,7 @@ export default function CandidateFilters({
   return (
     <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'grid', gap: '1rem' }}>
       <div>
-        <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Search</label>
+        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Search</label>
         <input
           type="text"
           value={searchText}
@@ -60,7 +60,7 @@ export default function CandidateFilters({
             width: '100%',
             background: 'var(--card)',
             border: '1px solid var(--border)',
-            color: 'var(--text)',
+            color: 'var(--color-text-primary)',
             padding: '0.5rem 0.75rem',
             borderRadius: '6px',
           }}
@@ -69,7 +69,7 @@ export default function CandidateFilters({
 
       <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>
+          <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>
             Experience years: {experienceMin} - {experienceMax}
           </label>
           <div style={{ display: 'grid', gap: '0.5rem' }}>
@@ -95,12 +95,12 @@ export default function CandidateFilters({
         </div>
 
         <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort by</label>
+          <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort by</label>
           <select
             value={sortBy}
             onChange={(event) => onSort?.(event.target.value)}
             className="touch-target"
-            style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.5rem', borderRadius: '6px' }}
+            style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', padding: '0.5rem', borderRadius: '6px' }}
           >
             <option value="name">Name (A-Z)</option>
             <option value="experience">Experience (high-low)</option>
@@ -110,9 +110,9 @@ export default function CandidateFilters({
       </div>
 
       <div>
-        <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Skills</label>
+        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Skills</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-          {allSkills.length === 0 && <span style={{ color: 'var(--muted)' }}>No skills available</span>}
+          {allSkills.length === 0 && <span style={{ color: 'var(--color-text-secondary)' }}>No skills available</span>}
           {allSkills.map((skill) => {
             const active = selectedSkills.includes(skill)
             return (
@@ -124,7 +124,7 @@ export default function CandidateFilters({
                 style={{
                   background: active ? 'rgba(90,255,184,0.2)' : 'var(--card)',
                   border: '1px solid var(--border)',
-                  color: active ? 'var(--accent-2)' : 'var(--text)',
+                  color: active ? 'var(--color-accent-green-hover)' : 'var(--color-text-primary)',
                   borderRadius: '999px',
                   padding: '0.35rem 0.8rem',
                   cursor: 'pointer',

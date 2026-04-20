@@ -20,6 +20,8 @@ const KEY_VALUE_PATTERN = /([a-zA-Z][a-zA-Z0-9]*)\s*:\s*([^,}\n]+|`[^`]*`|'[^']*
 const CSS_DECLARATION_PATTERN = /(^|\n)\s*([a-zA-Z-]+)\s*:\s*([^;\n]+);/g
 
 const VARIABLES_CSS_RELATIVE = 'src/styles/variables.css'
+const NON_BASELINABLE_RULES = new Set(['legacy-token-alias-forbidden'])
+
 
 function walk(dir, files = []) {
   if (!fs.existsSync(dir)) return files
@@ -202,11 +204,11 @@ function main() {
   const validApprovedEntries = baseline.approvedExceptions.filter((entry) => approvedIds.has(entry.exceptionId))
   const droppedEntryCount = baseline.approvedExceptions.length - validApprovedEntries.length
   const baselineSet = new Set(validApprovedEntries.map((entry) => entry.fingerprint))
-  const newFindings = findings.filter((finding) => !baselineSet.has(finding.fingerprint))
+  const newFindings = findings.filter((finding) => NON_BASELINABLE_RULES.has(finding.rule) || !baselineSet.has(finding.fingerprint))
 
   if (shouldWriteBaseline) {
     const approvedMatches = findings
-      .filter((finding) => baselineSet.has(finding.fingerprint))
+      .filter((finding) => !NON_BASELINABLE_RULES.has(finding.rule) && baselineSet.has(finding.fingerprint))
       .map((finding) => {
         const matched = validApprovedEntries.find((entry) => entry.fingerprint === finding.fingerprint)
         return { exceptionId: matched.exceptionId, fingerprint: finding.fingerprint }
@@ -214,6 +216,10 @@ function main() {
 
     writeBaseline(approvedMatches)
     console.log(`✅ Wrote baseline with ${approvedMatches.length} approved exception finding(s) to ${path.relative(ROOT, BASELINE_FILE)}.`)
+    const nonBaselinableCount = findings.filter((finding) => NON_BASELINABLE_RULES.has(finding.rule)).length
+    if (nonBaselinableCount > 0) {
+      console.log(`ℹ️ Skipped ${nonBaselinableCount} non-baselinable finding(s): ${Array.from(NON_BASELINABLE_RULES).join(', ')}.`)
+    }
     if (droppedEntryCount > 0) {
       console.log(`ℹ️ Dropped ${droppedEntryCount} unapproved baseline entries (missing/invalid exception IDs).`)
     }

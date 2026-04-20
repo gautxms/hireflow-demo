@@ -1,7 +1,7 @@
 export default function JobDescriptionList({ items, onEdit, onDuplicate, onArchive, onDelete }) {
   if (!items.length) {
     return (
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', color: 'var(--muted)' }}>
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', color: 'var(--color-text-secondary)' }}>
         No job descriptions yet.
       </div>
     )
@@ -14,8 +14,8 @@ export default function JobDescriptionList({ items, onEdit, onDuplicate, onArchi
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
             <div>
               <h3 style={{ margin: 0 }}>{item.title}</h3>
-              <p style={{ margin: '0.4rem 0', color: 'var(--muted)' }}>{item.description || 'No description yet.'}</p>
-              <div style={{ color: 'var(--muted)', fontSize: '0.88rem' }}>
+              <p style={{ margin: '0.4rem 0', color: 'var(--color-text-secondary)' }}>{item.description || 'No description yet.'}</p>
+              <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem' }}>
                 Status: <strong style={{ color: '#fff' }}>{item.status}</strong>
                 {item.skills?.length ? ` • Skills: ${item.skills.join(', ')}` : ''}
                 {(item.salaryMin !== null && item.salaryMin !== undefined) || (item.salaryMax !== null && item.salaryMax !== undefined)

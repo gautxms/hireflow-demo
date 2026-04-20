@@ -2,6 +2,8 @@
 
 This project uses a **single source of truth** for visual tokens in `src/styles/variables.css`.
 
+Legacy alias tokens (`--ink`, `--accent`, `--text`, `--muted`, and related variants) have been fully removed and are not allowed.
+
 ## Canonical token groups
 
 - **Backgrounds:** `--color-bg-primary`, `--color-bg-secondary`
@@ -14,7 +16,7 @@ This project uses a **single source of truth** for visual tokens in `src/styles/
 ## Enforcement rules
 
 1. Do not define alternate theme roots in feature stylesheets.
-2. Do not introduce legacy aliases such as `--ink`, `--accent`, `--accent-2`, or standalone admin color roots.
+2. Use canonical token names only; legacy aliases are removed and blocked by style-token compliance checks.
 3. Prefer tokenized utility alpha colors from `variables.css` instead of hardcoded `rgba(...)` values.
 4. Forbidden hardcoded core palette values in component styles:
    - `#0a0a0a`, `#1a1a1f`, `#b8ff00`, `#a8ee00`, `#ffffff`, `#7a7a8d`, `#9999aa`, `#2a2a2f`

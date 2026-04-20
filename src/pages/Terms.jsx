@@ -36,7 +36,7 @@ export default function Terms() {
   usePageSeo('HireFlow Terms of Service', 'Review the HireFlow Terms of Service for using our resume screening platform and related features.')
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '3rem 1.25rem', lineHeight: 1.75 }}>
         <div style={{ marginBottom: '1.25rem' }}>
           <BackButton />

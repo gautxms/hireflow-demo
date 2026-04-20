@@ -448,7 +448,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     : 0
 
   return (
-    <div className="resume-uploader-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+    <div className="resume-uploader-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
       <div className="resume-uploader-header" style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
         {onBack && (
           <button
@@ -457,7 +457,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',
-              color: 'var(--accent)',
+              color: 'var(--color-accent-green)',
               padding: '0.5rem 1rem',
               borderRadius: '4px',
               cursor: 'pointer',
@@ -471,7 +471,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
           Upload Resumes
         </h1>
-        <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem' }}>
           Upload one or multiple resumes. Our AI will analyze and rank candidates automatically.
         </p>
       </div>
@@ -498,7 +498,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           style={{
-            border: isDragging ? '2px solid var(--accent)' : '2px dashed var(--border)',
+            border: isDragging ? '2px solid var(--color-accent-green)' : '2px dashed var(--border)',
             borderRadius: '12px',
             padding: '3rem',
             textAlign: 'center',
@@ -512,7 +512,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
             Drop resumes here
           </h3>
-          <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
             or click to select files (PDF or DOCX, up to 100MB each)
           </p>
           <input
@@ -528,8 +528,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             type="button"
             onClick={handleFileSelect}
             style={{
-              background: 'var(--accent)',
-              color: 'var(--ink)',
+              background: 'var(--color-accent-green)',
+              color: 'var(--color-bg-primary)',
               border: 'none',
               padding: '0.75rem 2rem',
               borderRadius: '6px',
@@ -542,7 +542,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--muted)' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--color-text-secondary)' }}>
             Select job description for this upload
           </label>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -561,7 +561,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               ))}
             </select>
             {isActiveSubscriber && (
-              <a href="/job-descriptions" style={{ color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
+              <a href="/job-descriptions" style={{ color: 'var(--color-accent-green)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
                 Manage job descriptions
               </a>
             )}
@@ -592,7 +592,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                     <span style={{ fontSize: '1.5rem' }}>📄</span>
                     <div>
                       <div style={{ fontWeight: 'bold' }}>{f.name}</div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
                         {(f.size / 1024 / 1024).toFixed(2)} MB
                       </div>
                     </div>
@@ -603,7 +603,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                     style={{
                       background: 'transparent',
                       border: '1px solid var(--border)',
-                      color: 'var(--muted)',
+                      color: 'var(--color-text-secondary)',
                       padding: '0.5rem 1rem',
                       borderRadius: '4px',
                       cursor: 'pointer',
@@ -620,7 +620,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
         {isAnalyzing && uploadProgress.total > 0 && (
           <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ color: 'var(--muted)', textAlign: 'center', marginBottom: '0.5rem' }}>
+            <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: '0.5rem' }}>
               Upload progress: {uploadPercent}% ({uploadProgress.completed}/{uploadProgress.total} chunks)
             </p>
             <div style={{ height: '10px', borderRadius: '999px', background: 'var(--border)', overflow: 'hidden' }}>
@@ -628,7 +628,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 style={{
                   width: `${uploadPercent}%`,
                   height: '100%',
-                  background: 'var(--accent)',
+                  background: 'var(--color-accent-green)',
                   transition: 'width 0.2s ease',
                 }}
               />
@@ -654,7 +654,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         )}
 
         {isAnalyzing && parseStatus && (
-          <p style={{ color: 'var(--muted)', textAlign: 'center', marginBottom: '1rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: '1rem' }}>
             Parsing status: {parseStatus} ({parseProgress}%)
           </p>
         )}
@@ -665,8 +665,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             onClick={handleAnalyze}
             disabled={uploadedFiles.length === 0 || isAnalyzing}
             style={{
-              background: uploadedFiles.length === 0 ? 'var(--muted)' : 'var(--accent)',
-              color: 'var(--ink)',
+              background: uploadedFiles.length === 0 ? 'var(--color-text-secondary)' : 'var(--color-accent-green)',
+              color: 'var(--color-bg-primary)',
               border: 'none',
               padding: '1rem 3rem',
               borderRadius: '6px',
