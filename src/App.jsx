@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import StatePattern from './components/state/StatePattern'
 const LandingPage = lazy(() => import('./components/LandingPage'))
 const Pricing = lazy(() => import('./pages/Pricing'))
 const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
@@ -206,17 +207,20 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       if (sharedResultsError) {
         return (
           <main className="route-state route-state--shared-error">
-            <div className="route-state-card">
-              <h1 className="route-state-card__title">Shared results unavailable</h1>
-              <p className="route-state-card__message">{sharedResultsError}</p>
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="route-state-card__action"
-              >
-                Go to home
-              </button>
-            </div>
+            <StatePattern
+              kind="error"
+              title="Shared results unavailable"
+              description={sharedResultsError}
+              action={(
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="route-state-card__action"
+                >
+                  Go to home
+                </button>
+              )}
+            />
           </main>
         )
       }
@@ -501,19 +505,19 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     if (pathname === '/verify-email/success') {
       return (
         <main className="route-state route-state--email-verified">
-          <div className="route-state-card route-state-card--verified">
-            <div className="route-state-card__check">✓</div>
-            <h1 className="route-state-card__title route-state-card__title--verified">Email verified!</h1>
-            <p className="route-state-card__message route-state-card__message--verified">
-              Your email has been successfully verified. You can now log in to your account.
-            </p>
-            <button
-              onClick={() => navigate('/login')}
-              className="route-state-card__action"
-            >
-              Go to login
-            </button>
-          </div>
+          <StatePattern
+            kind="success"
+            title="Email verified!"
+            description="Your email has been successfully verified. You can now log in to your account."
+            action={(
+              <button
+                onClick={() => navigate('/login')}
+                className="route-state-card__action"
+              >
+                Go to login
+              </button>
+            )}
+          />
         </main>
       )
     }

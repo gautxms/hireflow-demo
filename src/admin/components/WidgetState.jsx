@@ -1,3 +1,5 @@
+import StatePattern from '../../components/state/StatePattern'
+
 function SkeletonRow() {
   return <div className="h-4 animate-pulse rounded bg-slate-300" />
 }
@@ -16,13 +18,16 @@ export function TableSkeleton({ rows = 4, columns = 5 }) {
   )
 }
 
-export function EmptyState({ title, description, action }) {
+export function EmptyState({ title, description, action, illustration }) {
   return (
-    <div className="ui-card rounded-lg border-dashed bg-slate-50 p-5 text-center">
-      <p className="text-3xl" aria-hidden>📭</p>
-      <p className="mt-1 font-medium text-slate-800">{title}</p>
-      <p className="mt-1 text-sm text-slate-700">{description}</p>
-      {action || null}
-    </div>
+    <StatePattern
+      kind="empty"
+      compact
+      title={title}
+      description={description}
+      action={action}
+      illustration={illustration}
+      className="text-left"
+    />
   )
 }
