@@ -14,6 +14,7 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] No hardcoded font stacks in JSX `style={{ ... }}` blocks.
 - [ ] Color and font styling in JSX use canonical tokens from `src/styles/variables.css`.
 - [ ] Zero legacy alias token usage (`--ink*`, `--accent*`, `--text`, `--muted`) in `src/`.
+- [ ] In `src/pages`, `src/components`, and `src/admin`, inline styles are runtime-only width/height/position values, data-driven, and explicitly allowlisted via `inline-style-allow` marker when retained.
 
 ### Visual QA evidence
 - [ ] Before/after screenshots attached for any visual-impact change.
@@ -49,6 +50,7 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] `npm run lint:style-tokens` passes with **0 new violations**.
 - [ ] Any allowed token violation is explicitly listed in `docs/qa/baselines/style-token-violations-baseline.json` with an active Exception ID from `docs/BRAND_GUIDELINE_EXCEPTIONS.md`.
 - [ ] No legacy alias usage exists in JSX inline styles or CSS (`--ink*`, `--accent*`, `--text`, `--muted`).
+- [ ] No new inline-style guardrail findings (`inline-style-non-runtime-forbidden`, `inline-style-runtime-value-required`) are introduced.
 - [ ] If this PR is part of a phased migration, confirm this gate remains green to prevent regressions/conflicts in later phases.
 
 ## 5) Baseline update process (required when visuals change)

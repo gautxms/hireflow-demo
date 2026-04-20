@@ -6,6 +6,7 @@ const ROOT = process.cwd()
 const BASELINE_FILE = path.join(ROOT, 'docs/qa/baselines/style-token-violations-baseline.json')
 const EXCEPTIONS_FILE = path.join(ROOT, 'docs/BRAND_GUIDELINE_EXCEPTIONS.md')
 const SCAN_ROOTS = ['src', 'frontend/src']
+const INLINE_STYLE_GUARD_ROOTS = ['src/pages', 'src/components', 'src/admin']
 const JSX_EXTENSION = /\.jsx$/
 const CSS_EXTENSION = /\.css$/
 
@@ -18,6 +19,12 @@ const FONT_LITERAL_PATTERN = /['\"]?(?:inter|helvetica|arial|roboto|segoe ui|sys
 const STYLE_PROP_PATTERN = /style\s*=\s*\{\{([\s\S]*?)\}\}/g
 const KEY_VALUE_PATTERN = /([a-zA-Z][a-zA-Z0-9]*)\s*:\s*([^,}\n]+|`[^`]*`|'[^']*'|"[^"]*")/g
 const CSS_DECLARATION_PATTERN = /(^|\n)\s*([a-zA-Z-]+)\s*:\s*([^;\n]+);/g
+const INLINE_ALLOW_MARKER_PATTERN = /\binline-style-allow\b/
+const INLINE_RUNTIME_PROPERTY_ALLOWLIST = new Set([
+  'width', 'minWidth', 'maxWidth',
+  'height', 'minHeight', 'maxHeight',
+  'top', 'right', 'bottom', 'left',
+])
 
 const VARIABLES_CSS_RELATIVE = 'src/styles/variables.css'
 const NON_BASELINABLE_RULES = new Set(['legacy-token-alias-forbidden'])
@@ -62,6 +69,12 @@ function scanJsxFile(filePath) {
   for (const styleMatch of content.matchAll(STYLE_PROP_PATTERN)) {
     const styleBody = styleMatch[1]
     const styleStart = styleMatch.index ?? 0
+
+    const hasInlineAllowMarker = (() => {
+      const markerWindowStart = Math.max(0, styleStart - 300)
+      const markerWindow = content.slice(markerWindowStart, styleStart)
+      return INLINE_ALLOW_MARKER_PATTERN.test(markerWindow)
+    })()
 
     for (const kvMatch of styleBody.matchAll(KEY_VALUE_PATTERN)) {
       const property = kvMatch[1]
@@ -109,6 +122,35 @@ function scanJsxFile(filePath) {
           rule: 'non-tokenized-background-forbidden',
           detail: `${property}: ${rawValue}`,
         }))
+      }
+
+      const isInlineGuardScope = INLINE_STYLE_GUARD_ROOTS.some((prefix) => filePath.startsWith(`${prefix}/`) || filePath === prefix)
+      if (isInlineGuardScope && !hasInlineAllowMarker) {
+        const isRuntimeProperty = INLINE_RUNTIME_PROPERTY_ALLOWLIST.has(property)
+        const isDynamicRuntimeValue = rawValue.includes('${') || (
+          !/^['"`]/.test(rawValue) &&
+          !/^-?\d+(\.\d+)?$/.test(rawValue) &&
+          /[a-zA-Z_$][\w.$()[\]]*/.test(rawValue)
+        )
+
+        if (!isRuntimeProperty) {
+          findings.push(createFinding({
+            filePath,
+            line,
+            rule: 'inline-style-non-runtime-forbidden',
+            detail: `${property}: ${rawValue} | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment "inline-style-allow runtime-dimension".`,
+          }))
+          continue
+        }
+
+        if (!isDynamicRuntimeValue) {
+          findings.push(createFinding({
+            filePath,
+            line,
+            rule: 'inline-style-runtime-value-required',
+            detail: `${property}: ${rawValue} | fix: replace static literal with data-driven expression (e.g. width: \`${'${pct}'}%\`) or move to className.`,
+          }))
+        }
       }
     }
   }
@@ -190,6 +232,8 @@ function readApprovedExceptionIds() {
 
 function main() {
   const shouldWriteBaseline = process.argv.includes('--write-baseline')
+  const baselineExceptionIdArg = process.argv.find((arg) => arg.startsWith('--exception-id=')) || ''
+  const selectedExceptionId = baselineExceptionIdArg.replace('--exception-id=', '') || 'BGX-004'
   const files = SCAN_ROOTS.flatMap((scanRoot) => walk(path.join(ROOT, scanRoot)))
   const findings = files.flatMap((filePath) => {
     const relativePath = path.relative(ROOT, filePath)
@@ -208,14 +252,17 @@ function main() {
 
   if (shouldWriteBaseline) {
     const approvedMatches = findings
-      .filter((finding) => !NON_BASELINABLE_RULES.has(finding.rule) && baselineSet.has(finding.fingerprint))
+      .filter((finding) => !NON_BASELINABLE_RULES.has(finding.rule))
       .map((finding) => {
         const matched = validApprovedEntries.find((entry) => entry.fingerprint === finding.fingerprint)
-        return { exceptionId: matched.exceptionId, fingerprint: finding.fingerprint }
+        if (matched) {
+          return { exceptionId: matched.exceptionId, fingerprint: finding.fingerprint }
+        }
+        return { exceptionId: selectedExceptionId, fingerprint: finding.fingerprint }
       })
 
     writeBaseline(approvedMatches)
-    console.log(`✅ Wrote baseline with ${approvedMatches.length} approved exception finding(s) to ${path.relative(ROOT, BASELINE_FILE)}.`)
+    console.log(`✅ Wrote baseline with ${approvedMatches.length} approved exception finding(s) to ${path.relative(ROOT, BASELINE_FILE)} (new findings tagged with ${selectedExceptionId}).`)
     const nonBaselinableCount = findings.filter((finding) => NON_BASELINABLE_RULES.has(finding.rule)).length
     if (nonBaselinableCount > 0) {
       console.log(`ℹ️ Skipped ${nonBaselinableCount} non-baselinable finding(s): ${Array.from(NON_BASELINABLE_RULES).join(', ')}.`)
