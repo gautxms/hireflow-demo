@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-20T11:45:17.178Z",
+  "generatedAt": "2026-04-20T11:59:18.456Z",
   "approvedExceptions": [
     {
       "exceptionId": "BGX-004",
@@ -124,6 +124,10 @@
     {
       "exceptionId": "BGX-004",
       "fingerprint": "src/admin/components/ErrorLogsTable.jsx:44:inline-style-non-runtime-forbidden:whiteSpace: 'pre-wrap' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/admin/components/ErrorLogsTable.jsx:44:inline-style-unparseable-forbidden:style={{...}} contains spread/computed entries | fix: move to className/tokenized CSS or add adjacent marker comment \"inline-style-allow runtime-dimension\" for approved runtime-only usage."
     },
     {
       "exceptionId": "BGX-004",
@@ -2064,6 +2068,10 @@
     {
       "exceptionId": "BGX-004",
       "fingerprint": "src/components/JobDescriptionForm.jsx:111:inline-style-non-runtime-forbidden:marginTop: '0.4rem' | fix: move to className/tokenized CSS. If runtime-only dimension/position is required, add marker comment \"inline-style-allow runtime-dimension\"."
+    },
+    {
+      "exceptionId": "BGX-004",
+      "fingerprint": "src/components/JobDescriptionForm.jsx:111:inline-style-unparseable-forbidden:style={{...}} contains spread/computed entries | fix: move to className/tokenized CSS or add adjacent marker comment \"inline-style-allow runtime-dimension\" for approved runtime-only usage."
     },
     {
       "exceptionId": "BGX-004",

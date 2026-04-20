@@ -20,6 +20,7 @@ const STYLE_PROP_PATTERN = /style\s*=\s*\{\{([\s\S]*?)\}\}/g
 const KEY_VALUE_PATTERN = /([a-zA-Z][a-zA-Z0-9]*)\s*:\s*([^,}\n]+|`[^`]*`|'[^']*'|"[^"]*")/g
 const CSS_DECLARATION_PATTERN = /(^|\n)\s*([a-zA-Z-]+)\s*:\s*([^;\n]+);/g
 const INLINE_ALLOW_MARKER_PATTERN = /\binline-style-allow\b/
+const INLINE_STYLE_SPREAD_OR_COMPUTED_PATTERN = /\.\.\.\s*[a-zA-Z_$[{(]|\[[^\]]+\]\s*:/
 const INLINE_RUNTIME_PROPERTY_ALLOWLIST = new Set([
   'width', 'minWidth', 'maxWidth',
   'height', 'minHeight', 'maxHeight',
@@ -62,21 +63,43 @@ function createFinding({ filePath, line, rule, detail }) {
   }
 }
 
+function hasInlineAllowMarkerForBlock(content, styleStart) {
+  const currentLineStart = content.lastIndexOf('\n', Math.max(0, styleStart - 1)) + 1
+  const sameLinePrefix = content.slice(currentLineStart, styleStart)
+  if (INLINE_ALLOW_MARKER_PATTERN.test(sameLinePrefix)) return true
+
+  const priorLines = content.slice(0, currentLineStart).split('\n')
+  while (priorLines.length > 0 && priorLines[priorLines.length - 1].trim() === '') {
+    priorLines.pop()
+  }
+
+  const previousNonEmptyLine = priorLines[priorLines.length - 1] || ''
+  return INLINE_ALLOW_MARKER_PATTERN.test(previousNonEmptyLine)
+}
+
 function scanJsxFile(filePath) {
   const findings = []
   const content = fs.readFileSync(filePath, 'utf8')
+  const isInlineGuardScope = INLINE_STYLE_GUARD_ROOTS.some((prefix) => filePath.startsWith(`${prefix}/`) || filePath === prefix)
 
   for (const styleMatch of content.matchAll(STYLE_PROP_PATTERN)) {
     const styleBody = styleMatch[1]
     const styleStart = styleMatch.index ?? 0
+    const styleLine = lineNumberFromIndex(content, styleStart)
+    const hasInlineAllowMarker = hasInlineAllowMarkerForBlock(content, styleStart)
+    const keyValueMatches = [...styleBody.matchAll(KEY_VALUE_PATTERN)]
+    const hasSpreadOrComputedEntries = INLINE_STYLE_SPREAD_OR_COMPUTED_PATTERN.test(styleBody)
 
-    const hasInlineAllowMarker = (() => {
-      const markerWindowStart = Math.max(0, styleStart - 300)
-      const markerWindow = content.slice(markerWindowStart, styleStart)
-      return INLINE_ALLOW_MARKER_PATTERN.test(markerWindow)
-    })()
+    if (isInlineGuardScope && !hasInlineAllowMarker && (keyValueMatches.length === 0 || hasSpreadOrComputedEntries)) {
+      findings.push(createFinding({
+        filePath,
+        line: styleLine,
+        rule: 'inline-style-unparseable-forbidden',
+        detail: `style={{...}} contains ${keyValueMatches.length === 0 ? 'no parseable key/value pairs' : 'spread/computed entries'} | fix: move to className/tokenized CSS or add adjacent marker comment "inline-style-allow runtime-dimension" for approved runtime-only usage.`,
+      }))
+    }
 
-    for (const kvMatch of styleBody.matchAll(KEY_VALUE_PATTERN)) {
+    for (const kvMatch of keyValueMatches) {
       const property = kvMatch[1]
       const rawValue = normalizeValue(kvMatch[2])
       const kvStart = styleStart + (kvMatch.index ?? 0)
@@ -124,7 +147,6 @@ function scanJsxFile(filePath) {
         }))
       }
 
-      const isInlineGuardScope = INLINE_STYLE_GUARD_ROOTS.some((prefix) => filePath.startsWith(`${prefix}/`) || filePath === prefix)
       if (isInlineGuardScope && !hasInlineAllowMarker) {
         const isRuntimeProperty = INLINE_RUNTIME_PROPERTY_ALLOWLIST.has(property)
         const isDynamicRuntimeValue = rawValue.includes('${') || (
