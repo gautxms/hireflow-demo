@@ -4,21 +4,22 @@ import path from 'node:path'
 
 const ROOT = process.cwd()
 const BASELINE_FILE = path.join(ROOT, 'docs/qa/baselines/style-token-violations-baseline.json')
+const EXCEPTIONS_FILE = path.join(ROOT, 'docs/BRAND_GUIDELINE_EXCEPTIONS.md')
 const SCAN_ROOTS = ['src', 'frontend/src']
 const JSX_EXTENSION = /\.jsx$/
+const CSS_EXTENSION = /\.css$/
 
 const TOKENIZED_PATTERN = /var\(--[a-z0-9-]+\)/i
-const LEGACY_TOKEN_PATTERN = /var\(--(?:ink(?:-2)?|text|muted|border|card|accent(?:-2)?|font-(?:body|display))\)/i
+const LEGACY_ALIAS_PATTERN = /--(?:ink|accent|text|muted)\b/i
+const LEGACY_TOKEN_PATTERN = /var\(--(?:ink|accent|text|muted)\)/i
 const HARD_COLOR_PATTERN = /#(?:[0-9a-fA-F]{3,8})\b|rgba?\(|hsla?\(/i
 const FONT_LITERAL_PATTERN = /['\"]?(?:inter|helvetica|arial|roboto|segoe ui|system-ui|sans-serif|serif|monospace)['\"]?/i
 
 const STYLE_PROP_PATTERN = /style\s*=\s*\{\{([\s\S]*?)\}\}/g
 const KEY_VALUE_PATTERN = /([a-zA-Z][a-zA-Z0-9]*)\s*:\s*([^,}\n]+|`[^`]*`|'[^']*'|"[^"]*")/g
+const CSS_DECLARATION_PATTERN = /(^|\n)\s*([a-zA-Z-]+)\s*:\s*([^;\n]+);/g
 
-const COLOR_KEYS = new Set([
-  'color', 'background', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor',
-  'boxShadow', 'fill', 'stroke', 'caretColor'
-])
+const VARIABLES_CSS_RELATIVE = 'src/styles/variables.css'
 
 function walk(dir, files = []) {
   if (!fs.existsSync(dir)) return files
@@ -27,7 +28,7 @@ function walk(dir, files = []) {
     if (item.isDirectory()) {
       if (item.name === 'node_modules' || item.name === 'dist') continue
       walk(fullPath, files)
-    } else if (JSX_EXTENSION.test(item.name)) {
+    } else if (JSX_EXTENSION.test(item.name) || CSS_EXTENSION.test(item.name)) {
       files.push(fullPath)
     }
   }
@@ -52,7 +53,7 @@ function createFinding({ filePath, line, rule, detail }) {
   }
 }
 
-function scanFile(filePath) {
+function scanJsxFile(filePath) {
   const findings = []
   const content = fs.readFileSync(filePath, 'utf8')
 
@@ -78,12 +79,7 @@ function scanFile(filePath) {
         }
       }
 
-      const isColorProperty = COLOR_KEYS.has(property)
-      const hasHardColor = HARD_COLOR_PATTERN.test(rawValue)
-      const hasToken = TOKENIZED_PATTERN.test(rawValue)
-      const hasLegacyToken = LEGACY_TOKEN_PATTERN.test(rawValue)
-
-      if (hasLegacyToken) {
+      if (LEGACY_ALIAS_PATTERN.test(rawValue)) {
         findings.push(createFinding({
           filePath,
           line,
@@ -92,7 +88,10 @@ function scanFile(filePath) {
         }))
       }
 
-      if (isColorProperty && hasHardColor && !hasToken) {
+      const hasHardColor = HARD_COLOR_PATTERN.test(rawValue)
+      const hasToken = TOKENIZED_PATTERN.test(rawValue)
+
+      if (hasHardColor && !hasToken) {
         findings.push(createFinding({
           filePath,
           line,
@@ -115,46 +114,127 @@ function scanFile(filePath) {
   return findings
 }
 
-function readBaseline() {
-  if (!fs.existsSync(BASELINE_FILE)) {
-    return { generatedAt: null, fingerprints: [] }
+function scanCssFile(filePath) {
+  const findings = []
+  const content = fs.readFileSync(filePath, 'utf8')
+  const isVariablesFile = filePath === VARIABLES_CSS_RELATIVE
+
+  for (const declMatch of content.matchAll(CSS_DECLARATION_PATTERN)) {
+    const property = declMatch[2]
+    const rawValue = normalizeValue(declMatch[3])
+    const line = lineNumberFromIndex(content, declMatch.index ?? 0)
+
+    if (LEGACY_TOKEN_PATTERN.test(rawValue)) {
+      findings.push(createFinding({
+        filePath,
+        line,
+        rule: 'legacy-token-alias-forbidden',
+        detail: `${property}: ${rawValue}`,
+      }))
+    }
+
+    const isLegacyAliasDeclaration = property.startsWith('--') && LEGACY_ALIAS_PATTERN.test(property)
+    if (isLegacyAliasDeclaration && !isVariablesFile) {
+      findings.push(createFinding({
+        filePath,
+        line,
+        rule: 'legacy-token-alias-forbidden',
+        detail: `${property}: ${rawValue}`,
+      }))
+    }
   }
-  return JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'))
+
+  return findings
 }
 
-function writeBaseline(fingerprints) {
+function readBaseline() {
+  if (!fs.existsSync(BASELINE_FILE)) {
+    return { generatedAt: null, approvedExceptions: [] }
+  }
+  const parsed = JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'))
+
+  if (Array.isArray(parsed.fingerprints)) {
+    return {
+      generatedAt: parsed.generatedAt || null,
+      approvedExceptions: parsed.fingerprints.map((fingerprint) => ({ exceptionId: 'UNTRACKED', fingerprint })),
+    }
+  }
+
+  return {
+    generatedAt: parsed.generatedAt || null,
+    approvedExceptions: Array.isArray(parsed.approvedExceptions) ? parsed.approvedExceptions : [],
+  }
+}
+
+function writeBaseline(approvedExceptions) {
   const payload = {
     generatedAt: new Date().toISOString(),
-    fingerprints: Array.from(new Set(fingerprints)).sort(),
+    approvedExceptions: approvedExceptions
+      .map((entry) => ({
+        exceptionId: entry.exceptionId,
+        fingerprint: entry.fingerprint,
+      }))
+      .sort((a, b) => a.fingerprint.localeCompare(b.fingerprint)),
   }
+
   fs.writeFileSync(BASELINE_FILE, `${JSON.stringify(payload, null, 2)}\n`)
+}
+
+function readApprovedExceptionIds() {
+  if (!fs.existsSync(EXCEPTIONS_FILE)) return new Set()
+  const content = fs.readFileSync(EXCEPTIONS_FILE, 'utf8')
+  return new Set(Array.from(content.matchAll(/\b(BGX-\d+)\b/g)).map((m) => m[1]))
 }
 
 function main() {
   const shouldWriteBaseline = process.argv.includes('--write-baseline')
   const files = SCAN_ROOTS.flatMap((scanRoot) => walk(path.join(ROOT, scanRoot)))
-  const findings = files.flatMap((filePath) => scanFile(path.relative(ROOT, filePath)))
-
-  if (shouldWriteBaseline) {
-    writeBaseline(findings.map((finding) => finding.fingerprint))
-    console.log(`✅ Wrote baseline with ${findings.length} known findings to ${path.relative(ROOT, BASELINE_FILE)}.`)
-    return
-  }
+  const findings = files.flatMap((filePath) => {
+    const relativePath = path.relative(ROOT, filePath)
+    if (JSX_EXTENSION.test(filePath)) return scanJsxFile(relativePath)
+    if (CSS_EXTENSION.test(filePath)) return scanCssFile(relativePath)
+    return []
+  })
 
   const baseline = readBaseline()
-  const baselineSet = new Set(baseline.fingerprints || [])
+  const approvedIds = readApprovedExceptionIds()
+
+  const validApprovedEntries = baseline.approvedExceptions.filter((entry) => approvedIds.has(entry.exceptionId))
+  const droppedEntryCount = baseline.approvedExceptions.length - validApprovedEntries.length
+  const baselineSet = new Set(validApprovedEntries.map((entry) => entry.fingerprint))
   const newFindings = findings.filter((finding) => !baselineSet.has(finding.fingerprint))
+
+  if (shouldWriteBaseline) {
+    const approvedMatches = findings
+      .filter((finding) => baselineSet.has(finding.fingerprint))
+      .map((finding) => {
+        const matched = validApprovedEntries.find((entry) => entry.fingerprint === finding.fingerprint)
+        return { exceptionId: matched.exceptionId, fingerprint: finding.fingerprint }
+      })
+
+    writeBaseline(approvedMatches)
+    console.log(`✅ Wrote baseline with ${approvedMatches.length} approved exception finding(s) to ${path.relative(ROOT, BASELINE_FILE)}.`)
+    if (droppedEntryCount > 0) {
+      console.log(`ℹ️ Dropped ${droppedEntryCount} unapproved baseline entries (missing/invalid exception IDs).`)
+    }
+    return
+  }
 
   if (newFindings.length > 0) {
     console.error('❌ New style-token compliance violations found:')
     for (const finding of newFindings) {
       console.error(`- ${finding.filePath}:${finding.line} [${finding.rule}] ${finding.detail}`)
     }
-    console.error(`\nIf intentional, refresh baseline with: node scripts/check-style-token-compliance.mjs --write-baseline`)
+    console.error('\nOnly explicitly approved exceptions from docs/BRAND_GUIDELINE_EXCEPTIONS.md may be baselined.')
+    console.error('Update docs/qa/baselines/style-token-violations-baseline.json with { exceptionId, fingerprint } entries as needed.')
     process.exit(1)
   }
 
-  console.log(`✅ Style-token scan passed. ${findings.length} known baseline finding(s), 0 new.`)
+  if (droppedEntryCount > 0) {
+    console.log(`⚠️ Ignored ${droppedEntryCount} baseline entries because they are not linked to approved exception IDs.`)
+  }
+
+  console.log(`✅ Style-token scan passed. ${findings.length} finding(s), ${baselineSet.size} approved baseline exception(s), 0 new.`)
 }
 
 main()

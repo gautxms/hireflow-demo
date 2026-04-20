@@ -71,7 +71,8 @@
   /* Layout */
   --content-max-width: 1280px;
 
-  /* Legacy aliases (backward compatibility during token migration) */
+  /* Legacy aliases (DEPRECATION-ONLY).
+     Removal target release: v1.4.0 (or earlier once migration gate is clean). */
   --ink: var(--color-bg-primary);
   --ink-2: var(--color-bg-secondary);
   --text: var(--color-text-primary);
