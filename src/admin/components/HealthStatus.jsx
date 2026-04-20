@@ -36,7 +36,7 @@ export default function HealthStatus({ health, alerts }) {
           {alerts.map((alert) => (
             <div
               key={alert.message}
-              className={`rounded-md border px-3 py-2 text-sm ${alert.severity === 'critical' ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
+              className={`admin-inline-alert px-3 py-2 text-sm ${alert.severity === 'critical' ? 'admin-inline-alert--error' : 'admin-inline-alert--warning'}`}
             >
               <strong>{alert.severity.toUpperCase()}:</strong> {alert.message}
             </div>

@@ -718,6 +718,22 @@
   border-color: var(--admin-border) !important;
 }
 
+.admin-text-muted {
+  color: var(--admin-text-muted);
+}
+
+.admin-skeleton {
+  background: var(--admin-border);
+}
+
+.admin-border-top {
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-border-bottom {
+  border-bottom: 1px solid var(--admin-border);
+}
+
 .admin-health__status--green { color: var(--admin-health-green); }
 .admin-health__status--yellow { color: var(--admin-health-yellow); }
 .admin-health__status--red { color: var(--admin-health-red); }

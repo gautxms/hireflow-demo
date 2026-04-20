@@ -1,14 +1,14 @@
 import StatePattern from '../../components/state/StatePattern'
 
 function SkeletonRow() {
-  return <div className="h-4 animate-pulse rounded bg-slate-300" />
+  return <div className="admin-skeleton h-4 animate-pulse rounded" />
 }
 
 export function TableSkeleton({ rows = 4, columns = 5 }) {
   return (
     <tbody>
       {Array.from({ length: rows }, (_, idx) => (
-        <tr key={idx} className="border-t border-slate-100">
+        <tr key={idx} className="admin-border-top">
           {Array.from({ length: columns }, (_, colIdx) => (
             <td key={colIdx} className="px-4 py-3"><SkeletonRow /></td>
           ))}
