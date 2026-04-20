@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Icon } from './Icon'
 
 const OFFICES = [
   { city: 'San Francisco', address: '123 Tech Street', state: 'San Francisco, CA 94103', phone: '+1 (555) 123-4567', hours: 'Mon-Fri: 9am-6pm PT' },
@@ -13,10 +14,10 @@ export default function ContactPage({ onBack }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const contactMethods = [
-    { icon: '📧', title: 'Email', description: 'Best for detailed inquiries', value: 'hello@hireflow.dev' },
-    { icon: '📞', title: 'Phone', description: 'Call us during business hours', value: '+1 (555) 123-4567' },
-    { icon: '📍', title: 'Office', description: 'Visit us in San Francisco', value: '123 Tech Street, SF, CA 94103' },
-    { icon: '💬', title: 'Live Chat', description: 'Instant support (9am-6pm EST)', value: 'Start Chat' }
+    { icon: 'mail', title: 'Email', description: 'Best for detailed inquiries', value: 'hello@hireflow.dev' },
+    { icon: 'phone', title: 'Phone', description: 'Call us during business hours', value: '+1 (555) 123-4567' },
+    { icon: 'mapPin', title: 'Office', description: 'Visit us in San Francisco', value: '123 Tech Street, SF, CA 94103' },
+    { icon: 'chat', title: 'Live Chat', description: 'Instant support (9am-6pm EST)', value: 'Start Chat' }
   ]
 
   const faqItems = [
@@ -75,7 +76,7 @@ export default function ContactPage({ onBack }) {
           <div className="public-feature-grid">
             {contactMethods.map((method) => (
               <article key={method.title} className="public-card contact-center-card">
-                <div className="contact-icon">{method.icon}</div>
+                <Icon name={method.icon} size="xl" tone="accent" className="contact-icon" />
                 <h3 className="public-card-title">{method.title}</h3>
                 <p className="public-card-copy">{method.description}</p>
                 <div className="status-message status-message--info contact-method-value">{method.value}</div>
@@ -143,7 +144,7 @@ export default function ContactPage({ onBack }) {
           <div className="public-feature-grid">
             {OFFICES.map((office) => (
               <article key={office.city} className="public-card">
-                <h3 className="public-card-title contact-accent-title">📍 {office.city}</h3>
+                <h3 className="public-card-title contact-accent-title contact-office-heading"><Icon name="mapPin" size="sm" tone="accent" />{office.city}</h3>
                 <p className="public-card-copy">{office.address}<br />{office.state}</p>
                 <p className="public-card-copy"><strong>Phone:</strong> {office.phone}<br /><strong>Hours:</strong> {office.hours}</p>
               </article>

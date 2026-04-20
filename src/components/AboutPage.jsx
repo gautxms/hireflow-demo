@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { parseDemoRequestError, validateDemoRequestForm } from './demoRequestValidation.js'
 import API_BASE from '../config/api'
+import { Icon } from './Icon'
 
 export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
@@ -20,12 +21,12 @@ export default function AboutPage({ onBack }) {
 
   const stats = [{ number: '10K+', label: 'Resumes Analyzed' }, { number: '94%', label: 'Accuracy Rate' }, { number: '45%', label: 'Time Saved for Recruiters' }, { number: '500+', label: 'Companies Using HireFlow' }]
   const values = [
-    { icon: '🎯', title: 'User-Centric', description: 'Everything we build starts with understanding real recruiting pain points.' },
-    { icon: '🔬', title: 'AI-Powered', description: 'Advanced machine learning that learns and improves with every hire.' },
-    { icon: '📊', title: 'Transparent', description: 'You always know how we scored candidates and can customize the rules.' },
-    { icon: '🚀', title: 'Fast', description: 'From resume to ranked candidates in minutes, not days.' },
-    { icon: '🤝', title: 'Trustworthy', description: 'Enterprise-grade security and compliance. Your data is safe with us.' },
-    { icon: '🌱', title: 'Bias-Aware', description: 'Built to reduce bias and promote diversity in hiring.' }
+    { icon: 'target', title: 'User-Centric', description: 'Everything we build starts with understanding real recruiting pain points.' },
+    { icon: 'microscope', title: 'AI-Powered', description: 'Advanced machine learning that learns and improves with every hire.' },
+    { icon: 'chart', title: 'Transparent', description: 'You always know how we scored candidates and can customize the rules.' },
+    { icon: 'rocket', title: 'Fast', description: 'From resume to ranked candidates in minutes, not days.' },
+    { icon: 'shield', title: 'Trustworthy', description: 'Enterprise-grade security and compliance. Your data is safe with us.' },
+    { icon: 'sprout', title: 'Bias-Aware', description: 'Built to reduce bias and promote diversity in hiring.' }
   ]
   const testimonials = [
     { quote: 'HireFlow cut our screening time by 60%. We now focus on the best candidates instead of manual review.', author: 'Jane Smith', company: 'TechCorp', role: 'Head of Recruiting' },
@@ -82,7 +83,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-section public-section-alt"><div className="public-page-main"><h2 className="public-section-title center">By The Numbers</h2><div className="public-feature-grid">{stats.map((stat) => <article key={stat.label} className="public-card contact-center-card"><div className="public-page-title contact-accent-title">{stat.number}</div><p className="public-card-copy">{stat.label}</p></article>)}</div></div></section>
 
-      <section className="public-section public-page-main"><h2 className="public-section-title center">Our Values</h2><div className="public-feature-grid">{values.map((value) => <article key={value.title} className="public-card"><div className="contact-icon">{value.icon}</div><h3 className="public-card-title">{value.title}</h3><p className="public-card-copy">{value.description}</p></article>)}</div></section>
+      <section className="public-section public-page-main"><h2 className="public-section-title center">Our Values</h2><div className="public-feature-grid">{values.map((value) => <article key={value.title} className="public-card"><Icon name={value.icon} size="xl" tone="accent" className="contact-icon" /><h3 className="public-card-title">{value.title}</h3><p className="public-card-copy">{value.description}</p></article>)}</div></section>
 
       <section className="public-section public-section-alt"><div className="public-page-main"><h2 className="public-section-title center">Meet the Team</h2><div className="public-feature-grid">{teamMembers.map((member) => <article key={member.id} className={`public-card about-team-card ${selectedTeamMember?.id === member.id ? 'active' : ''}`} onClick={() => setSelectedTeamMember(member)}><div className="about-team-avatar">{member.image}</div><h3 className="public-card-title">{member.name}</h3><p className="public-card-copy contact-accent-title">{member.title}</p>{selectedTeamMember?.id === member.id && <div className="about-team-meta"><p className="public-card-copy">{member.bio}</p><div className="about-pill-list">{member.expertise.map((skill) => <span key={skill} className="public-pill">{skill}</span>)}</div></div>}</article>)}</div><p className="public-copy center">Click a team member to learn more</p></div></section>
 

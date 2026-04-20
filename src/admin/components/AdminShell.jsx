@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ADMIN_SECTIONS, navigateAdmin } from '../config/adminNavigation'
+import { Icon } from '../../components/Icon'
 import '../styles/admin.css'
 
 const MOBILE_BREAKPOINT_PX = 960
@@ -80,7 +81,7 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
               return (
                 <li key={item.key}>
                   <button type="button" className={`admin-shell-v2__nav-item ${active ? 'is-active' : ''}`} onClick={() => go(item.href)} aria-current={active ? 'page' : undefined}>
-                    <span aria-hidden="true">{item.icon}</span>
+                    <Icon name={item.icon} size="sm" tone="current" />
                     <span>{item.label}</span>
                   </button>
                 </li>
@@ -124,13 +125,13 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
             const active = item.key === sectionKey
             return (
               <button key={item.key} type="button" className={`admin-shell-v2__mobile-tab ${active ? 'is-active' : ''}`} onClick={() => go(item.href)} aria-current={active ? 'page' : undefined}>
-                <span aria-hidden="true">{item.icon}</span>
+                <Icon name={item.icon} size="sm" tone="current" />
                 <span>{item.label}</span>
               </button>
             )
           })}
           <button type="button" className="admin-shell-v2__mobile-tab" onClick={() => setMobileNavOpen(true)}>
-            <span aria-hidden="true">☰</span>
+            <Icon name="menu" size="sm" tone="current" />
             <span>More</span>
           </button>
         </nav>
@@ -145,7 +146,7 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
               const active = item.key === sectionKey
               return (
                 <button key={item.key} type="button" className={`admin-shell-v2__mobile-panel-item ${active ? 'is-active' : ''}`} onClick={() => go(item.href)}>
-                  <span>{item.icon}</span>
+                  <Icon name={item.icon} size="sm" tone="current" />
                   <span>{item.label}</span>
                 </button>
               )

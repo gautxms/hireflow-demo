@@ -281,11 +281,12 @@
 
 .help-layout { display: grid; grid-template-columns: 250px 1fr; gap: 2rem; }
 .help-sidebar { border-right: 1px solid var(--color-border); padding-right: 1.25rem; }
-.help-category-btn { display:block; width:100%; text-align:left; padding:0.75rem 1rem; border-radius:var(--radius-sm); border:1px solid transparent; background:transparent; color:var(--color-text-secondary); cursor:pointer; margin-bottom:0.5rem; }
+.help-category-btn { display:flex; align-items:center; gap:0.5rem; width:100%; text-align:left; padding:0.75rem 1rem; border-radius:var(--radius-sm); border:1px solid transparent; background:transparent; color:var(--color-text-secondary); cursor:pointer; margin-bottom:0.5rem; }
 .help-category-btn.active { color: var(--color-accent-green); border-color: var(--color-accent-green); background: var(--color-accent-alpha-10); }
 .help-article-trigger { width:100%; text-align:left; display:grid; grid-template-columns:1fr auto; gap:1rem; }
 .help-search-wrap { text-align:center; }
-.help-search-wrap .public-form-search { max-width: 600px; }
+ .help-search-wrap .public-form-search { max-width: 600px; }
+.help-category-icon { display:inline-flex; }
 
 .demo-stepper { display:flex; align-items:center; justify-content:center; gap:0.75rem; margin-bottom:2rem; flex-wrap:wrap; }
 .demo-step { display:flex; align-items:center; gap:0.5rem; color:var(--color-text-secondary); }
@@ -319,7 +320,8 @@
 }
 
 .contact-center-card { text-align:center; }
-.contact-icon { font-size:2.25rem; margin-bottom:0.75rem; }
+.contact-icon { margin-bottom:0.75rem; }
+.contact-office-heading { display:flex; align-items:center; gap:0.35rem; }
 .contact-method-value { margin-top:1rem; }
 .contact-accent-title { color: var(--color-accent-green); }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import BackButton from './BackButton'
 import { filterHelpArticles, parseHelpCenterLocation, resolveVisibleSelection, updateHelpCenterHistory } from './helpCenterState'
+import { Icon } from './Icon'
 
 const HELP_ARTICLES = {
   'getting-started': [
@@ -31,11 +32,11 @@ const HELP_ARTICLES = {
 }
 
 const HELP_CATEGORIES = [
-  { id: 'getting-started', name: 'Getting Started', icon: '🚀' },
-  { id: 'uploading', name: 'Uploading Resumes', icon: '📄' },
-  { id: 'analysis', name: 'Analysis & Scoring', icon: '⚙️' },
-  { id: 'integrations', name: 'Integrations', icon: '🔗' },
-  { id: 'billing', name: 'Billing & Plans', icon: '💳' }
+  { id: 'getting-started', name: 'Getting Started', icon: 'rocket' },
+  { id: 'uploading', name: 'Uploading Resumes', icon: 'file' },
+  { id: 'analysis', name: 'Analysis & Scoring', icon: 'settings' },
+  { id: 'integrations', name: 'Integrations', icon: 'link' },
+  { id: 'billing', name: 'Billing & Plans', icon: 'creditCard' }
 ]
 
 const HELP_FAQS = [
@@ -99,7 +100,7 @@ export default function HelpPage({ onBack }) {
                 aria-pressed={activeCategory === cat.id}
                 className={`help-category-btn ${activeCategory === cat.id ? 'active' : ''}`}
               >
-                <span>{cat.icon}</span> {cat.name}
+                <span className="help-category-icon"><Icon name={cat.icon} size="sm" tone="current" /></span>{cat.name}
               </button>
             ))}
           </aside>
