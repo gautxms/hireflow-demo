@@ -25,6 +25,22 @@
   --admin-success-subtle: var(--color-success-alpha-12);
   --admin-success-border: var(--color-success-alpha-35);
   --admin-success-text: var(--color-success-text);
+  --admin-info-text: var(--color-info);
+  --admin-info-subtle: color-mix(in srgb, var(--color-info), transparent 88%);
+  --admin-info-border: color-mix(in srgb, var(--color-info), transparent 60%);
+  --admin-health-green: var(--color-success-text);
+  --admin-health-yellow: var(--color-warning-text);
+  --admin-health-red: var(--admin-danger);
+  --admin-chart-axis: var(--admin-border);
+  --admin-chart-axis-label: var(--admin-text-muted);
+  --admin-chart-series-revenue: var(--color-info);
+  --admin-chart-series-dau: var(--color-info);
+  --admin-chart-series-wau: var(--color-success);
+  --admin-chart-series-mau: var(--admin-primary);
+  --admin-chart-series-memory: var(--color-info);
+  --admin-chart-series-cpu: var(--admin-primary);
+  --admin-chart-cohort-base: var(--color-info);
+  --admin-chart-cohort-empty: var(--admin-surface);
   --admin-focus: var(--color-accent-green);
   --admin-content-max: 1280px;
   --admin-radius-sm: var(--radius-md);
@@ -50,7 +66,6 @@
 }
 
 .admin-shell-v2 :is(button, a, input, select, textarea):focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.35);
   outline: 3px solid color-mix(in srgb, var(--admin-focus), transparent 65%);
   outline-offset: 2px;
 }
@@ -662,9 +677,9 @@
   border-color: var(--admin-border) !important;
 }
 
-.admin-health__status--green { color: #16a34a; }
-.admin-health__status--yellow { color: #b45309; }
-.admin-health__status--red { color: #b91c1c; }
+.admin-health__status--green { color: var(--admin-health-green); }
+.admin-health__status--yellow { color: var(--admin-health-yellow); }
+.admin-health__status--red { color: var(--admin-health-red); }
 
 .admin-note {
   color: var(--admin-text-muted);
@@ -771,9 +786,9 @@
 }
 
 .admin-inline-alert--info {
-  border-color: color-mix(in srgb, var(--admin-focus), transparent 55%);
-  background: rgba(56, 189, 248, 0.12);
-  color: #bae6fd;
+  border-color: var(--admin-info-border);
+  background: var(--admin-info-subtle);
+  color: var(--admin-info-text);
 }
 
 .admin-inline-alert--success {
@@ -791,7 +806,7 @@
 .admin-inline-alert--error {
   border-color: var(--admin-danger-border);
   background: var(--admin-danger-subtle);
-  color: #fecaca;
+  color: var(--admin-danger);
 }
 
 .admin-flow {
@@ -851,7 +866,19 @@
 .admin-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: #f43f5e;
+  background: var(--admin-danger);
+}
+
+.admin-chart-surface {
+  background: var(--admin-surface);
+}
+
+.admin-text-success {
+  color: var(--admin-success-text);
+}
+
+.admin-text-danger {
+  color: var(--admin-danger);
 }
 
 @media (max-width: 720px) {

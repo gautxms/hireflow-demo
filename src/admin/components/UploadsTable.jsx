@@ -11,10 +11,10 @@ function formatSecondsFromMs(value) {
 }
 
 function statusStyles(status) {
-  if (status === 'complete') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-  if (status === 'failed') return 'bg-rose-50 text-rose-700 border-rose-200'
-  if (status === 'processing') return 'bg-amber-50 text-amber-700 border-amber-200'
-  return 'bg-slate-100 text-slate-700 border-slate-200'
+  if (status === 'complete') return 'admin-inline-alert--success'
+  if (status === 'failed') return 'admin-inline-alert--error'
+  if (status === 'processing') return 'admin-inline-alert--warning'
+  return 'admin-inline-alert--info'
 }
 
 export default function UploadsTable({ uploads, loading, pagination, onPageChange, onPageSizeChange, onOpenDetails }) {
@@ -58,9 +58,9 @@ export default function UploadsTable({ uploads, loading, pagination, onPageChang
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-50 text-slate-600">
+    <div className="admin-table-surface overflow-hidden">
+      <table className="admin-table text-left text-sm">
+        <thead className="">
           <tr>
             <th className="px-4 py-3"><button className="font-medium" onClick={() => changeSort('filename')}>Filename</button></th>
             <th className="px-4 py-3"><button className="font-medium" onClick={() => changeSort('userEmail')}>User Email</button></th>
@@ -79,13 +79,13 @@ export default function UploadsTable({ uploads, loading, pagination, onPageChang
             sortedUploads.map((upload) => (
               <tr
                 key={upload.id}
-                className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
+                className="cursor-pointer  hover:bg-[var(--color-white-alpha-03)]"
                 onClick={() => onOpenDetails(upload.id)}
               >
                 <td className="px-4 py-3">{upload.filename}</td>
                 <td className="px-4 py-3">{upload.userEmail || `User #${upload.userId}`}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles(upload.parseStatus)}`}>
+                  <span className={`admin-inline-alert inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles(upload.parseStatus)}`}>
                     {upload.parseStatus}
                   </span>
                 </td>
@@ -108,29 +108,29 @@ export default function UploadsTable({ uploads, loading, pagination, onPageChang
         </tbody>
       </table>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm">
-        <p className="text-slate-600">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--admin-border)] px-4 py-3 text-sm">
+        <p className="text-[var(--admin-text-muted)]">
           Page {pagination.page} of {pagination.totalPages} · {pagination.total} uploads
         </p>
         <div className="flex items-center gap-2">
-          <label htmlFor="pageSize" className="text-slate-600">Rows</label>
+          <label htmlFor="pageSize" className="text-[var(--admin-text-muted)]">Rows</label>
           <select
             id="pageSize"
-            className="rounded border border-slate-300 px-2 py-1"
+            className="ui-input"
             value={pagination.pageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
           >
             {[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}
           </select>
           <button
-            className="rounded border border-slate-300 px-2 py-1 disabled:opacity-50"
+            className="ui-btn ui-btn--ghost px-2 py-1 disabled:opacity-50"
             disabled={pagination.page <= 1}
             onClick={() => onPageChange(pagination.page - 1)}
           >
             Previous
           </button>
           <button
-            className="rounded border border-slate-300 px-2 py-1 disabled:opacity-50"
+            className="ui-btn ui-btn--ghost px-2 py-1 disabled:opacity-50"
             disabled={pagination.page >= pagination.totalPages}
             onClick={() => onPageChange(pagination.page + 1)}
           >

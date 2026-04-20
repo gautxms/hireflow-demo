@@ -26,11 +26,9 @@ function getGrowthTrend(series = [], key) {
 }
 
 function cohortColor(value, maxValue) {
-  if (!value) return '#f1f5f9'
+  if (!value) return 'var(--admin-chart-cohort-empty)'
   const ratio = Math.min(1, value / Math.max(1, maxValue))
-  const blue = Math.round(245 - (ratio * 120))
-  const green = Math.round(248 - (ratio * 90))
-  return `rgb(99, ${green}, ${blue})`
+  return `color-mix(in srgb, var(--admin-chart-cohort-base) ${Math.round(ratio * 100)}%, var(--admin-chart-cohort-empty))`
 }
 
 export default function AdminAnalyticsPage() {
@@ -63,12 +61,12 @@ export default function AdminAnalyticsPage() {
   const unavailable = new Set(dataMode?.unavailableSections || [])
   const sectionState = (key, hasRows = false) => {
     if (unavailable.has(key)) {
-      return { tone: 'text-amber-700 bg-amber-50 border-amber-200', label: 'Unavailable in limited mode' }
+      return { tone: 'warning', label: 'Unavailable in limited mode' }
     }
     if (!hasRows) {
-      return { tone: 'text-slate-600 bg-slate-50 border-slate-200', label: 'No records in selected date range' }
+      return { tone: 'info', label: 'No records in selected date range' }
     }
-    return { tone: 'text-emerald-700 bg-emerald-50 border-emerald-200', label: 'Data loaded' }
+    return { tone: 'success', label: 'Data loaded' }
   }
   const revenueState = sectionState('revenueTrend', (analytics?.revenueTrend || []).length > 0)
   const growthState = sectionState('userGrowth', (analytics?.userGrowth || []).length > 0)
@@ -153,11 +151,11 @@ export default function AdminAnalyticsPage() {
           <div className="grid gap-4 xl:grid-cols-2">
             <section>
               <RevenueChart data={analytics.revenueTrend || []} />
-              <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${revenueState.tone}`}>{revenueState.label}</p>
+              <p className={`admin-inline-alert admin-inline-alert--${revenueState.tone} mt-2 inline-flex px-2 py-1 text-xs`}>{revenueState.label}</p>
             </section>
             <section>
               <UserGrowthChart data={analytics.userGrowth || []} />
-              <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${growthState.tone}`}>{growthState.label}</p>
+              <p className={`admin-inline-alert admin-inline-alert--${growthState.tone} mt-2 inline-flex px-2 py-1 text-xs`}>{growthState.label}</p>
             </section>
           </div>
 
@@ -166,7 +164,7 @@ export default function AdminAnalyticsPage() {
 
             <section className="ui-card p-4">
               <h2 className="text-lg font-medium text-slate-900">Plan Breakdown</h2>
-              <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${planState.tone}`}>{planState.label}</p>
+              <p className={`admin-inline-alert admin-inline-alert--${planState.tone} mt-2 inline-flex px-2 py-1 text-xs`}>{planState.label}</p>
               <div className="mt-4 space-y-3">
                 {(analytics.planBreakdown || []).map((plan) => (
                   <div key={plan.plan}>
@@ -175,7 +173,7 @@ export default function AdminAnalyticsPage() {
                       <strong>{plan.users} users ({pct(plan.user_pct)})</strong>
                     </div>
                     <div className="h-4 rounded bg-slate-100">
-                      <div className="h-full rounded bg-indigo-500" style={{ width: `${Math.max(3, Number(plan.user_pct || 0))}%` }} />
+                      <div className="h-full rounded" style={{ width: `${Math.max(3, Number(plan.user_pct || 0))}%`, background: 'var(--admin-chart-series-revenue)' }} />
                     </div>
                   </div>
                 ))}
@@ -195,7 +193,7 @@ export default function AdminAnalyticsPage() {
 
           <section className="ui-card p-4">
             <h2 className="text-lg font-medium text-slate-900">AI Token Usage</h2>
-            <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${tokenTrendState.tone}`}>{tokenTrendState.label}</p>
+            <p className={`admin-inline-alert admin-inline-alert--${tokenTrendState.tone} mt-2 inline-flex px-2 py-1 text-xs`}>{tokenTrendState.label}</p>
             <div className="mt-3 grid gap-3 md:grid-cols-4 text-sm">
               <p className="flex items-center justify-between"><span>Total tokens</span> <strong>{number(tokenUsageSummary.totalTokens)}</strong></p>
               <p className="flex items-center justify-between"><span>Avg tokens / analysis</span> <strong>{number(tokenUsageSummary.avgTokensPerAnalysis)}</strong></p>
@@ -272,7 +270,7 @@ export default function AdminAnalyticsPage() {
 
           <section className="ui-card p-4">
             <h2 className="text-lg font-medium text-slate-900">Retention Cohorts Heatmap</h2>
-            <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${retentionState.tone}`}>{retentionState.label}</p>
+            <p className={`admin-inline-alert admin-inline-alert--${retentionState.tone} mt-2 inline-flex px-2 py-1 text-xs`}>{retentionState.label}</p>
             <div className="mt-4 overflow-auto">
               <div className="grid min-w-[720px] grid-cols-[160px_repeat(10,minmax(0,1fr))] gap-2 text-xs">
                 <div className="font-medium text-slate-500">Cohort</div>
@@ -309,7 +307,7 @@ export default function AdminAnalyticsPage() {
                 {analytics.uxWeeklyReport?.dateRange?.startDate} → {analytics.uxWeeklyReport?.dateRange?.endDate}
               </span>
             </div>
-            <p className={`mt-2 inline-flex rounded border px-2 py-1 text-xs ${uxState.tone}`}>{uxState.label}</p>
+            <p className={`admin-inline-alert admin-inline-alert--${uxState.tone} mt-2 inline-flex px-2 py-1 text-xs`}>{uxState.label}</p>
 
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <div className="rounded border border-slate-200 p-3 text-sm">

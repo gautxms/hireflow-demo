@@ -20,15 +20,15 @@ export default function RevenueChart({ data = [] }) {
     <section className="ui-card p-4">
       <h2 className="text-lg font-medium text-slate-900">Revenue Trend (12 months)</h2>
       <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 h-72 w-full">
-        <line x1={margin.left} y1={height - margin.bottom} x2={width - margin.right} y2={height - margin.bottom} stroke="#cbd5e1" />
-        <line x1={margin.left} y1={margin.top} x2={margin.left} y2={height - margin.bottom} stroke="#cbd5e1" />
-        <path d={path} fill="none" stroke="#4f46e5" strokeWidth="3" />
+        <line x1={margin.left} y1={height - margin.bottom} x2={width - margin.right} y2={height - margin.bottom} stroke="var(--admin-chart-axis)" />
+        <line x1={margin.left} y1={margin.top} x2={margin.left} y2={height - margin.bottom} stroke="var(--admin-chart-axis)" />
+        <path d={path} fill="none" stroke="var(--admin-chart-series-revenue)" strokeWidth="3" />
         {points.map((point) => (
           <g key={point.month}>
-            <circle cx={point.x} cy={point.y} r="4" fill="#4f46e5">
+            <circle cx={point.x} cy={point.y} r="4" fill="var(--admin-chart-series-revenue)">
               <title>{`${new Date(point.month).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}: ${money(point.mrr)}`}</title>
             </circle>
-            <text x={point.x} y={height - 14} textAnchor="middle" fontSize="10" fill="#64748b">
+            <text x={point.x} y={height - 14} textAnchor="middle" fontSize="10" fill="var(--admin-chart-axis-label)">
               {new Date(point.month).toLocaleDateString(undefined, { month: 'short' })}
             </text>
           </g>
