@@ -84,11 +84,19 @@ nav {
 .site-nav-button:hover,
 .site-nav-button[aria-current='page'] {
   color: var(--color-accent-green);
-  background: var(--color-accent-alpha-06);
+  background: transparent;
 }
 
 .nav-links :is(a, button):focus-visible,
-.site-nav-button:focus-visible,
+.site-nav-button:focus-visible {
+  outline: none;
+  box-shadow: none;
+  color: var(--color-accent-green);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
 .mobile-nav-toggle:focus-visible,
 .btn-ghost:focus-visible,
 .btn-primary:focus-visible,
@@ -354,7 +362,11 @@ nav {
 }
 
 .hero-headline-line--accent {
-  background: linear-gradient(90deg, var(--color-accent-green) 0%, var(--color-accent-green-hover) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--color-hero-accent-start) 0%,
+    var(--color-hero-accent-end) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -445,6 +457,19 @@ footer {
   text-align: center;
   color: var(--color-text-secondary);
   font-size: 0.875rem;
+}
+
+.public-footer__link {
+  color: var(--color-accent-green);
+  text-decoration: none;
+  transition: var(--motion-transition-color);
+}
+
+.public-footer__link:hover,
+.public-footer__link:focus-visible {
+  color: var(--color-accent-green-hover);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 .page-content {
