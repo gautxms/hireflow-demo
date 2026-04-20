@@ -1,0 +1,481 @@
+{
+  "generatedAt": "2026-04-20T11:53:23.513Z",
+  "approvedExceptions": [
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/AdminHeader.jsx:10:primitive-bypass-utility:className contains prohibited utility token \"dark:bg-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/AdminPageFeedbackWidget.jsx:43:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/AdminPageFeedbackWidget.jsx:44:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/AdminRouteFallback.jsx:7:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/AdminRouteFallback.jsx:8:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/BlockUserModal.jsx:21:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/BlockUserModal.jsx:22:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/ConversionFunnel.jsx:15:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/ConversionFunnel.jsx:25:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/ConversionFunnel.jsx:27:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/ConversionFunnel.jsx:30:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/HealthStatus.jsx:39:primitive-bypass-utility:className contains prohibited utility token \"'border-rose-200\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/MetricCard.jsx:10:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/MetricCard.jsx:6:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/MetricCard.jsx:7:primitive-bypass-utility:className contains prohibited utility token \"text-slate-950\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/MetricCard.jsx:9:primitive-bypass-utility:className contains prohibited utility token \"'text-slate-600'\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/RefundModal.jsx:100:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/RefundModal.jsx:79:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/RefundModal.jsx:80:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/RevenueChart.jsx:21:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/table/AdminDataTable.jsx:16:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/table/AdminDataTable.jsx:166:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/table/AdminDataTable.jsx:67:primitive-bypass-utility:className contains prohibited utility token \"text-slate-950\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/table/AdminDataTable.jsx:68:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:102:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:115:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:116:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:119:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:139:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:140:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:146:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:147:primitive-bypass-utility:className contains prohibited utility token \"border-rose-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:154:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:155:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:166:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:167:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:50:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:65:primitive-bypass-utility:className contains prohibited utility token \"bg-indigo-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:82:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UploadPreview.jsx:92:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserGrowthChart.jsx:13:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserGrowthChart.jsx:17:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserGrowthChart.jsx:21:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserGrowthChart.jsx:8:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserGrowthChart.jsx:9:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:127:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:131:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:132:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:133:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:136:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:24:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:25:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:32:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:36:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/UserModal.jsx:41:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/WidgetState.jsx:2:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-300\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/WidgetState.jsx:21:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-50\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/WidgetState.jsx:23:primitive-bypass-utility:className contains prohibited utility token \"text-slate-800\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/WidgetState.jsx:24:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/components/WidgetState.jsx:9:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:105:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:108:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:114:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:117:primitive-bypass-utility:className contains prohibited utility token \"border-amber-300\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:120:primitive-bypass-utility:className contains prohibited utility token \"text-amber-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:121:primitive-bypass-utility:className contains prohibited utility token \"text-amber-800\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:124:primitive-bypass-utility:className contains prohibited utility token \"text-amber-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:126:primitive-bypass-utility:className contains prohibited utility token \"text-amber-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:166:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:175:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:184:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:195:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:203:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:209:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:219:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:233:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:237:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:250:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:262:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:263:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:272:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:276:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:277:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:282:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-50\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:289:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:305:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:306:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:313:primitive-bypass-utility:className contains prohibited utility token \"border-slate-200\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:314:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:315:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:316:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:318:primitive-bypass-utility:className contains prohibited utility token \"border-slate-200\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:319:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:320:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:321:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:323:primitive-bypass-utility:className contains prohibited utility token \"border-slate-200\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:324:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:325:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:326:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:332:primitive-bypass-utility:className contains prohibited utility token \"text-slate-800\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:335:primitive-bypass-utility:className contains prohibited utility token \"border-slate-200\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:336:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:337:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:338:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:345:primitive-bypass-utility:className contains prohibited utility token \"text-slate-800\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:348:primitive-bypass-utility:className contains prohibited utility token \"border-indigo-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:349:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminAnalyticsPage.jsx:350:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminHealthPage.jsx:105:primitive-bypass-utility:className contains prohibited utility token \"border-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminLogsPage.jsx:191:primitive-bypass-utility:className contains prohibited utility token \"bg-slate-100\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminSecurityPage.jsx:20:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminSecurityPage.jsx:21:primitive-bypass-utility:className contains prohibited utility token \"text-slate-700\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminSecurityPage.jsx:7:primitive-bypass-utility:className contains prohibited utility token \"text-slate-900\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminSecurityPage.jsx:8:primitive-bypass-utility:className contains prohibited utility token \"text-slate-600\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminSubscriptionsPage.jsx:121:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminUploadsPage.jsx:107:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminUploadsPage.jsx:192:primitive-bypass-utility:className contains prohibited utility token \"text-slate-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminUserDetailsPage.jsx:34:primitive-bypass-utility:className contains prohibited utility token \"text-rose-500\""
+    },
+    {
+      "exceptionId": "PCX-001",
+      "fingerprint": "src/admin/pages/AdminUsersPage.jsx:81:primitive-bypass-utility:className contains prohibited utility token \"text-emerald-700\""
+    }
+  ]
+}

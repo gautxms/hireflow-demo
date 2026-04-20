@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . && npm run lint:primitives",
     "qa:admin-smoke": "node scripts/admin-smoke-checks.mjs",
     "preview": "vite preview",
     "backend:dev": "node --watch backend/src/index.js",
@@ -23,7 +23,9 @@
     "qa:admin-visual-baseline": "node scripts/verify-admin-visual-baseline.mjs",
     "lint:style-tokens": "node scripts/check-style-token-compliance.mjs",
     "lint:style-tokens:baseline": "node scripts/check-style-token-compliance.mjs --write-baseline",
-    "qa:contrast-a11y": "node scripts/audit-accessibility-contrast.mjs"
+    "qa:contrast-a11y": "node scripts/audit-accessibility-contrast.mjs",
+    "lint:primitives": "node scripts/check-primitive-composition.mjs",
+    "lint:primitives:baseline": "node scripts/check-primitive-composition.mjs --write-baseline"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
