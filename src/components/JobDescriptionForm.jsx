@@ -118,7 +118,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
 
       <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem' }}>
         <button type="submit" disabled={isSubmitting} style={primaryButtonStyle}>
-          {isSubmitting ? 'Saving...' : (initialValue ? 'Save changes' : 'Create JD')}
+          {isSubmitting ? 'Saving…' : (initialValue ? 'Save changes' : 'Create job description')}
         </button>
         {onCancel && (
           <button type="button" onClick={onCancel} style={secondaryButtonStyle}>Cancel</button>

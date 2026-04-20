@@ -69,3 +69,12 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 4. If intentional token-compliance deltas were introduced, update the style scan baseline with:
    - `npm run lint:style-tokens:baseline`
 5. Include a short “Visual QA + Baseline Updates” section in the PR description.
+
+## 7) Microcopy consistency gate (required for new/changed UI strings)
+
+- [ ] New and changed UI copy follows `docs/MICROCOPY_STYLE_GUIDE.md` (tone, tense, punctuation, sentence case).
+- [ ] Reviewer ran the copy lint pass from `docs/qa/copy-lint-guidance.md`.
+- [ ] CTA labels use canonical verb patterns (for example `Log in`, `Sign up`, `Save changes`).
+- [ ] Error strings use consistent action-oriented phrasing (for example `Unable to + action`).
+- [ ] Empty states and success messages are consistent for equivalent states/actions across public and admin routes.
+- [ ] PR description includes a short “Microcopy QA” note listing audited routes/components.

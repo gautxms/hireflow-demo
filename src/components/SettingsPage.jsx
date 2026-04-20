@@ -163,7 +163,7 @@ export default function SettingsPage({ onBack }) {
                   cursor: 'pointer'
                 }}
               >
-                {saved ? '✓ Saved' : 'Save Changes'}
+                {saved ? '✓ Saved' : 'Save changes'}
               </button>
             </div>
           )}

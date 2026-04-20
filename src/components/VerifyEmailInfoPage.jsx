@@ -44,12 +44,12 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
     const normalizedEmail = resendEmail.trim().toLowerCase()
 
     if (!normalizedEmail) {
-      setError('Please enter the email used during signup')
+      setError('Enter the email address you used when you signed up.')
       return
     }
 
     if (cooldownSeconds > 0) {
-      setError(`Please wait ${countdownLabel} before trying again`)
+      setError(`Please wait ${countdownLabel} before trying again.`)
       return
     }
 
@@ -70,7 +70,7 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
 
         if (response.status === 429 && retryAfterSeconds > 0) {
           setCooldownSeconds(retryAfterSeconds)
-          setError(`Please wait ${formatCountdown(retryAfterSeconds)} before resending`)
+          setError(`Please wait ${formatCountdown(retryAfterSeconds)} before resending.`)
           return
         }
 
@@ -80,9 +80,9 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
 
       const nextCooldownSeconds = Number(payload?.retryAfterSeconds || 60)
       setCooldownSeconds(nextCooldownSeconds)
-      setStatusMessage(payload?.message || 'Email sent! Check your inbox')
+      setStatusMessage(payload?.message || 'Verification email sent. Check your inbox.')
     } catch {
-      setError('Unable to connect to auth server. Check backend URL / CORS settings.')
+      setError('Unable to connect to the auth server. Check the backend URL and CORS settings.')
     } finally {
       setIsSubmitting(false)
     }
@@ -116,7 +116,7 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
             disabled={isSubmitting || cooldownSeconds > 0}
           >
             {isSubmitting
-              ? 'Sending...'
+              ? 'Sending…'
               : cooldownSeconds > 0
                 ? `Resend available in ${countdownLabel}`
                 : 'Resend verification email'}
@@ -125,11 +125,11 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
           {statusMessage && <p className="auth-success">{statusMessage}</p>}
           {error && <p className="auth-error">{error}</p>}
 
-          <p className="auth-subtitle auth-help-text">If you don't see email, check spam folder.</p>
+          <p className="auth-subtitle auth-help-text">If you do not see the email, check your spam folder.</p>
         </div>
 
         <p className="auth-switch">
-          <button className="auth-link" type="button" onClick={onBackToLogin}>Back to Login</button>
+          <button className="auth-link" type="button" onClick={onBackToLogin}>Back to log in</button>
         </p>
       </section>
     </main>
