@@ -71,4 +71,13 @@
   /* Layout */
   --content-max-width: 1280px;
 
+  /*
+   * Compatibility aliases
+   * Keep these until all component-level inline styles are migrated.
+   */
+  --card: var(--color-bg-secondary);
+  --border: var(--color-border);
+  --font-body: var(--font-family-base);
+  --font-display: var(--font-family-display);
+
 }
