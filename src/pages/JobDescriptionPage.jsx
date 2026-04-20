@@ -131,7 +131,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     <section style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem 1rem' }}>
       <header style={{ marginBottom: '1rem' }}>
         <h1 style={{ marginBottom: '0.35rem' }}>Job Descriptions</h1>
-        <p style={{ margin: 0, color: 'var(--muted)' }}>
+        <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
           Upload/paste job descriptions, keep drafts, and choose an active JD for resume screening.
         </p>
       </header>
@@ -151,7 +151,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
       />
 
       {isLoading ? (
-        <p style={{ color: 'var(--muted)' }}>Loading job descriptions...</p>
+        <p style={{ color: 'var(--color-text-secondary)' }}>Loading job descriptions...</p>
       ) : (
         <JobDescriptionList
           items={items}

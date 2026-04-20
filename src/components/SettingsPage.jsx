@@ -12,7 +12,7 @@ export default function SettingsPage({ onBack }) {
   }
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
+    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
       {/* Header */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
         <button
@@ -20,7 +20,7 @@ export default function SettingsPage({ onBack }) {
           style={{
             background: 'transparent',
             border: '1px solid var(--border)',
-            color: 'var(--accent)',
+            color: 'var(--color-accent-green)',
             padding: '0.5rem 1rem',
             borderRadius: '4px',
             cursor: 'pointer',
@@ -48,8 +48,8 @@ export default function SettingsPage({ onBack }) {
                 width: '100%',
                 textAlign: 'left',
                 background: activeTab === tab ? 'rgba(232,255,90,0.1)' : 'transparent',
-                border: activeTab === tab ? '1px solid var(--accent)' : '1px solid transparent',
-                color: activeTab === tab ? 'var(--accent)' : 'var(--muted)',
+                border: activeTab === tab ? '1px solid var(--color-accent-green)' : '1px solid transparent',
+                color: activeTab === tab ? 'var(--color-accent-green)' : 'var(--color-text-secondary)',
                 padding: '0.75rem 1rem',
                 borderRadius: '6px',
                 marginBottom: '0.5rem',
@@ -75,7 +75,7 @@ export default function SettingsPage({ onBack }) {
                 <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Profile Information</h3>
                 <div style={{ display: 'grid', gap: '1.5rem' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
                       Full Name
                     </label>
                     <input
@@ -87,14 +87,14 @@ export default function SettingsPage({ onBack }) {
                         background: 'rgba(0,0,0,0.3)',
                         border: '1px solid var(--border)',
                         borderRadius: '6px',
-                        color: 'var(--text)',
+                        color: 'var(--color-text-primary)',
                         fontFamily: 'var(--font-body)'
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
                       Email
                     </label>
                     <input
@@ -106,14 +106,14 @@ export default function SettingsPage({ onBack }) {
                         background: 'rgba(0,0,0,0.3)',
                         border: '1px solid var(--border)',
                         borderRadius: '6px',
-                        color: 'var(--text)',
+                        color: 'var(--color-text-primary)',
                         fontFamily: 'var(--font-body)'
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
                       Company
                     </label>
                     <input
@@ -125,7 +125,7 @@ export default function SettingsPage({ onBack }) {
                         background: 'rgba(0,0,0,0.3)',
                         border: '1px solid var(--border)',
                         borderRadius: '6px',
-                        color: 'var(--text)',
+                        color: 'var(--color-text-primary)',
                         fontFamily: 'var(--font-body)'
                       }}
                     />
@@ -154,8 +154,8 @@ export default function SettingsPage({ onBack }) {
               <button
                 onClick={handleSave}
                 style={{
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
+                  background: 'var(--color-accent-green)',
+                  color: 'var(--color-bg-primary)',
                   border: 'none',
                   padding: '0.75rem 2rem',
                   borderRadius: '6px',
@@ -194,15 +194,15 @@ export default function SettingsPage({ onBack }) {
                     >
                       <div>
                         <div style={{ fontWeight: 'bold' }}>{member.name}</div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>{member.email}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>{member.email}</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem' }}>
                           {member.role} • {member.status}
                         </div>
                       </div>
                       <button style={{
                         background: 'transparent',
                         border: '1px solid var(--border)',
-                        color: 'var(--muted)',
+                        color: 'var(--color-text-secondary)',
                         padding: '0.5rem 1rem',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -215,8 +215,8 @@ export default function SettingsPage({ onBack }) {
                 </div>
 
                 <button style={{
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
+                  background: 'var(--color-accent-green)',
+                  color: 'var(--color-bg-primary)',
                   border: 'none',
                   padding: '0.75rem 2rem',
                   borderRadius: '6px',
@@ -235,10 +235,10 @@ export default function SettingsPage({ onBack }) {
               <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Connected Apps</h2>
 
               {[
-                { name: 'Slack', status: 'Connected', color: 'var(--accent-2)' },
-                { name: 'Gmail', status: 'Connected', color: 'var(--accent-2)' },
-                { name: 'Microsoft Teams', status: 'Not Connected', color: 'var(--muted)' },
-                { name: 'Greenhouse', status: 'Not Connected', color: 'var(--muted)' }
+                { name: 'Slack', status: 'Connected', color: 'var(--color-accent-green-hover)' },
+                { name: 'Gmail', status: 'Connected', color: 'var(--color-accent-green-hover)' },
+                { name: 'Microsoft Teams', status: 'Not Connected', color: 'var(--color-text-secondary)' },
+                { name: 'Greenhouse', status: 'Not Connected', color: 'var(--color-text-secondary)' }
               ].map((app, i) => (
                 <div
                   key={i}
@@ -255,13 +255,13 @@ export default function SettingsPage({ onBack }) {
                 >
                   <div>
                     <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{app.name}</h3>
-                    <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+                    <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
                       {app.status === 'Connected' ? 'Integration is active' : 'Not yet connected'}
                     </p>
                   </div>
                   <button style={{
-                    background: app.status === 'Connected' ? 'transparent' : 'var(--accent)',
-                    color: app.status === 'Connected' ? color : 'var(--ink)',
+                    background: app.status === 'Connected' ? 'transparent' : 'var(--color-accent-green)',
+                    color: app.status === 'Connected' ? color : 'var(--color-bg-primary)',
                     border: app.status === 'Connected' ? `1px solid ${color}` : 'none',
                     padding: '0.6rem 1.5rem',
                     borderRadius: '6px',
@@ -287,12 +287,12 @@ export default function SettingsPage({ onBack }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto' }}>
                     <div>
                       <div style={{ fontWeight: 'bold' }}>Pro Plan</div>
-                      <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>$299/month</div>
+                      <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>$299/month</div>
                     </div>
                     <button style={{
                       background: 'transparent',
                       border: '1px solid var(--border)',
-                      color: 'var(--muted)',
+                      color: 'var(--color-text-secondary)',
                       padding: '0.5rem 1.5rem',
                       borderRadius: '4px',
                       cursor: 'pointer'
@@ -312,7 +312,7 @@ export default function SettingsPage({ onBack }) {
                   <button style={{
                     background: 'transparent',
                     border: '1px solid var(--border)',
-                    color: 'var(--muted)',
+                    color: 'var(--color-text-secondary)',
                     padding: '0.5rem 1.5rem',
                     borderRadius: '4px',
                     cursor: 'pointer'
@@ -332,8 +332,8 @@ export default function SettingsPage({ onBack }) {
               <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
                 <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Password</h3>
                 <button style={{
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
+                  background: 'var(--color-accent-green)',
+                  color: 'var(--color-bg-primary)',
                   border: 'none',
                   padding: '0.75rem 2rem',
                   borderRadius: '6px',
@@ -346,12 +346,12 @@ export default function SettingsPage({ onBack }) {
 
               <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
                 <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Two-Factor Authentication</h3>
-                <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
+                <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
                   Protect your account with two-factor authentication
                 </p>
                 <button style={{
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
+                  background: 'var(--color-accent-green)',
+                  color: 'var(--color-bg-primary)',
                   border: 'none',
                   padding: '0.75rem 2rem',
                   borderRadius: '6px',
@@ -367,12 +367,12 @@ export default function SettingsPage({ onBack }) {
                 <div style={{ marginBottom: '1rem' }}>
                   <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
                     <div style={{ fontWeight: 'bold' }}>Chrome on Mac</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Last active 5 minutes ago</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Last active 5 minutes ago</div>
                   </div>
                   <button style={{
                     background: 'transparent',
                     border: '1px solid var(--border)',
-                    color: 'var(--muted)',
+                    color: 'var(--color-text-secondary)',
                     padding: '0.5rem 1.5rem',
                     borderRadius: '4px',
                     cursor: 'pointer',

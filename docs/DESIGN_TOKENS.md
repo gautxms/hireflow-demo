@@ -14,9 +14,14 @@ This project uses a **single source of truth** for visual tokens in `src/styles/
 ## Enforcement rules
 
 1. Do not define alternate theme roots in feature stylesheets.
-2. Do not introduce legacy aliases such as `--ink`, `--accent`, `--accent-2`, or standalone admin color roots.
+2. Legacy aliases are fully removed. Never use `--ink*`, `--accent*`, `--text`, or `--muted`; use canonical `--color-*` tokens only.
 3. Prefer tokenized utility alpha colors from `variables.css` instead of hardcoded `rgba(...)` values.
 4. Forbidden hardcoded core palette values in component styles:
    - `#0a0a0a`, `#1a1a1f`, `#b8ff00`, `#a8ee00`, `#ffffff`, `#7a7a8d`, `#9999aa`, `#2a2a2f`
 
 When adding new styles, extend `src/styles/variables.css` first, then consume those variables.
+
+
+## Migration status
+
+Phase 0-5 token migration is complete. Legacy alias tokens are prohibited and enforced by `npm run lint:style-tokens`.

@@ -1,7 +1,7 @@
 .auth-shell {
   min-height: 100vh;
   padding: 80px 2rem 2rem;
-  background: var(--ink);
+  background: var(--color-bg-primary);
   position: relative;
   overflow: hidden;
 }
@@ -70,7 +70,7 @@
 }
 
 .auth-brand span {
-  color: var(--accent);
+  color: var(--color-accent-green);
 }
 
 .auth-title {
@@ -81,7 +81,7 @@
 }
 
 .auth-subtitle {
-  color: var(--muted);
+  color: var(--color-text-secondary);
   margin-bottom: 1.5rem;
 }
 
@@ -105,13 +105,13 @@
   border-radius: 10px;
   padding: 0.72rem 0.8rem;
   background: rgba(15, 15, 26, 0.85);
-  color: var(--text);
+  color: var(--color-text-primary);
   font-size: 0.95rem;
 }
 
 .auth-input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--color-accent-green);
   box-shadow: 0 0 0 2px rgba(232,255,90,0.2);
 }
 
@@ -128,7 +128,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(15, 15, 26, 0.85);
-  color: var(--text);
+  color: var(--color-text-primary);
   padding: 0.72rem 0.8rem;
   cursor: pointer;
 }
@@ -157,8 +157,8 @@
 
 .auth-submit {
   margin-top: 0.5rem;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  color: var(--ink);
+  background: linear-gradient(90deg, var(--color-accent-green), var(--color-accent-green-hover));
+  color: var(--color-bg-primary);
   border: 0;
   border-radius: 10px;
   font-weight: 700;
@@ -173,12 +173,12 @@
 
 .auth-switch {
   margin-top: 1rem;
-  color: var(--muted);
+  color: var(--color-text-secondary);
   font-size: 0.92rem;
 }
 
 .auth-link {
-  color: var(--accent-2);
+  color: var(--color-accent-green-hover);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -188,6 +188,6 @@
 
 .auth-prompt {
   margin-bottom: 1rem;
-  color: var(--accent);
+  color: var(--color-accent-green);
   font-size: 0.92rem;
 }

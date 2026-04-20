@@ -194,10 +194,10 @@ export default function AccountSettingsPage() {
   }
 
   return (
-    <main style={{ maxWidth: 860, margin: '0 auto', padding: '2rem 1rem 3rem', color: 'var(--text)' }}>
+    <main style={{ maxWidth: 860, margin: '0 auto', padding: '2rem 1rem 3rem', color: 'var(--color-text-primary)' }}>
       <Toast type={toast.type} message={toast.message} />
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', marginBottom: '0.5rem' }}>Account Settings</h1>
-      <p style={{ color: 'var(--muted)', marginBottom: '1.75rem' }}>Manage your profile and security settings.</p>
+      <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.75rem' }}>Manage your profile and security settings.</p>
 
       <section style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', padding: '1.2rem', marginBottom: '1rem' }}>
         <h2 style={{ marginTop: 0 }}>Profile</h2>
@@ -218,10 +218,10 @@ export default function AccountSettingsPage() {
             Subscription Status (read-only)
             <input value={profile.subscription_status || 'inactive'} disabled style={{ width: '100%', marginTop: 6, opacity: 0.7 }} />
           </label>
-          <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
             To change subscription, visit <a href="/pricing">Billing</a>.
           </div>
-          <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
             Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
           </div>
           <button type="submit" style={{ width: 'fit-content' }}>Save profile</button>

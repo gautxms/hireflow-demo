@@ -10,8 +10,8 @@ const JSX_EXTENSION = /\.jsx$/
 const CSS_EXTENSION = /\.css$/
 
 const TOKENIZED_PATTERN = /var\(--[a-z0-9-]+\)/i
-const LEGACY_ALIAS_PATTERN = /--(?:ink|accent|text|muted)\b/i
-const LEGACY_TOKEN_PATTERN = /var\(--(?:ink|accent|text|muted)\)/i
+const LEGACY_ALIAS_PATTERN = /--(?:ink(?:-[a-z0-9-]+)?|accent(?:-[a-z0-9-]+)?|text|muted)\b/i
+const LEGACY_TOKEN_PATTERN = /var\(--(?:ink(?:-[a-z0-9-]+)?|accent(?:-[a-z0-9-]+)?|text|muted)\)/i
 const HARD_COLOR_PATTERN = /#(?:[0-9a-fA-F]{3,8})\b|rgba?\(|hsla?\(/i
 const FONT_LITERAL_PATTERN = /['\"]?(?:inter|helvetica|arial|roboto|segoe ui|system-ui|sans-serif|serif|monospace)['\"]?/i
 

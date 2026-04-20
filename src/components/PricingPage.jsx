@@ -59,13 +59,13 @@ export default function PricingPage() {
   ]
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '4rem 2rem', textAlign: 'center' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
           Simple, Transparent Pricing
         </h1>
-        <p style={{ fontSize: '1.1rem', color: 'var(--muted)', maxWidth: '600px', margin: '0 auto' }}>
+        <p style={{ fontSize: '1.1rem', color: 'var(--color-text-secondary)', maxWidth: '600px', margin: '0 auto' }}>
           Choose the plan that fits your hiring needs. Scale up anytime.
         </p>
       </div>
@@ -77,7 +77,7 @@ export default function PricingPage() {
             <div
               key={plan.id}
               style={{
-                border: plan.highlighted ? '2px solid var(--accent)' : '1px solid var(--border)',
+                border: plan.highlighted ? '2px solid var(--color-accent-green)' : '1px solid var(--border)',
                 borderRadius: '12px',
                 padding: '2.5rem',
                 background: plan.highlighted ? 'rgba(232,255,90,0.05)' : 'var(--card)',
@@ -92,8 +92,8 @@ export default function PricingPage() {
                   top: '-12px',
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
+                  background: 'var(--color-accent-green)',
+                  color: 'var(--color-bg-primary)',
                   padding: '0.5rem 1rem',
                   borderRadius: '4px',
                   fontSize: '0.85rem',
@@ -106,14 +106,14 @@ export default function PricingPage() {
               <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
                 {plan.name}
               </h3>
-              <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+              <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
                 {plan.description}
               </p>
 
               <div style={{ marginBottom: '2rem' }}>
                 <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>
                   {plan.price}
-                  <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{plan.period}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{plan.period}</span>
                 </div>
               </div>
 
@@ -122,9 +122,9 @@ export default function PricingPage() {
                   width: '100%',
                   padding: '0.75rem',
                   marginBottom: '2rem',
-                  background: plan.highlighted ? 'var(--accent)' : 'transparent',
-                  color: plan.highlighted ? 'var(--ink)' : 'var(--accent)',
-                  border: plan.highlighted ? 'none' : '2px solid var(--accent)',
+                  background: plan.highlighted ? 'var(--color-accent-green)' : 'transparent',
+                  color: plan.highlighted ? 'var(--color-bg-primary)' : 'var(--color-accent-green)',
+                  border: plan.highlighted ? 'none' : '2px solid var(--color-accent-green)',
                   borderRadius: '6px',
                   fontWeight: 'bold',
                   cursor: 'pointer',
@@ -138,8 +138,8 @@ export default function PricingPage() {
               <div style={{ display: 'grid', gap: '1rem' }}>
                 {plan.features.map((feature, i) => (
                   <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                    <span style={{ color: 'var(--accent-2)', marginTop: '2px' }}>✓</span>
-                    <span style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>{feature}</span>
+                    <span style={{ color: 'var(--color-accent-green-hover)', marginTop: '2px' }}>✓</span>
+                    <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>{feature}</span>
                   </div>
                 ))}
               </div>
@@ -149,7 +149,7 @@ export default function PricingPage() {
       </div>
 
       {/* FAQ Section */}
-      <div style={{ padding: '4rem 2rem', borderTop: '1px solid var(--border)', background: 'var(--ink-2)' }}>
+      <div style={{ padding: '4rem 2rem', borderTop: '1px solid var(--border)', background: 'var(--color-bg-secondary)' }}>
         <h2 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '3rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
           Frequently Asked Questions
         </h2>
@@ -163,7 +163,7 @@ export default function PricingPage() {
           ].map((item, i) => (
             <div key={i} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1.5rem' }}>
               <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>{item.q}</h4>
-              <p style={{ color: 'var(--muted)', lineHeight: '1.6' }}>{item.a}</p>
+              <p style={{ color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>{item.a}</p>
             </div>
           ))}
         </div>
@@ -174,13 +174,13 @@ export default function PricingPage() {
         <h2 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
           Ready to hire smarter?
         </h2>
-        <p style={{ color: 'var(--muted)', marginBottom: '2rem', fontSize: '1.1rem' }}>
+        <p style={{ color: 'var(--color-text-secondary)', marginBottom: '2rem', fontSize: '1.1rem' }}>
           Start your free trial today. No credit card required.
         </p>
         <button
           style={{
-            background: 'var(--accent)',
-            color: 'var(--ink)',
+            background: 'var(--color-accent-green)',
+            color: 'var(--color-bg-primary)',
             border: 'none',
             padding: '0.75rem 2rem',
             borderRadius: '6px',
