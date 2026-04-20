@@ -1,26 +1,26 @@
-const ICON_SIZE_TOKENS = {
-  xs: 'var(--icon-size-xs)',
-  sm: 'var(--icon-size-sm)',
-  md: 'var(--icon-size-md)',
-  lg: 'var(--icon-size-lg)',
-  xl: 'var(--icon-size-xl)',
+const ICON_SIZE_CLASSNAMES = {
+  xs: 'hf-icon--size-xs',
+  sm: 'hf-icon--size-sm',
+  md: 'hf-icon--size-md',
+  lg: 'hf-icon--size-lg',
+  xl: 'hf-icon--size-xl',
 }
 
-const ICON_STROKE_TOKENS = {
-  thin: 'var(--icon-stroke-thin)',
-  regular: 'var(--icon-stroke-regular)',
-  bold: 'var(--icon-stroke-bold)',
+const ICON_STROKE_CLASSNAMES = {
+  thin: 'hf-icon--stroke-thin',
+  regular: 'hf-icon--stroke-regular',
+  bold: 'hf-icon--stroke-bold',
 }
 
-const ICON_TONE_TOKENS = {
-  default: 'var(--icon-color-default)',
-  muted: 'var(--icon-color-muted)',
-  accent: 'var(--icon-color-accent)',
-  info: 'var(--icon-color-info)',
-  success: 'var(--icon-color-success)',
-  warning: 'var(--icon-color-warning)',
-  danger: 'var(--icon-color-danger)',
-  current: 'currentColor',
+const ICON_TONE_CLASSNAMES = {
+  default: 'hf-icon--tone-default',
+  muted: 'hf-icon--tone-muted',
+  accent: 'hf-icon--tone-accent',
+  info: 'hf-icon--tone-info',
+  success: 'hf-icon--tone-success',
+  warning: 'hf-icon--tone-warning',
+  danger: 'hf-icon--tone-danger',
+  current: 'hf-icon--tone-current',
 }
 
 const ICON_PATHS = {
@@ -161,16 +161,12 @@ export function Icon({
   }
 
   const ariaProps = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': 'true' }
+  const sizeClassName = ICON_SIZE_CLASSNAMES[size] || ICON_SIZE_CLASSNAMES.md
+  const strokeClassName = ICON_STROKE_CLASSNAMES[stroke] || ICON_STROKE_CLASSNAMES.regular
+  const toneClassName = ICON_TONE_CLASSNAMES[tone] || ICON_TONE_CLASSNAMES.current
 
   return (
-    <span
-      className={`hf-icon ${className}`.trim()}
-      style={{
-        '--hf-icon-size': ICON_SIZE_TOKENS[size] || ICON_SIZE_TOKENS.md,
-        '--hf-icon-stroke': ICON_STROKE_TOKENS[stroke] || ICON_STROKE_TOKENS.regular,
-        '--hf-icon-color': ICON_TONE_TOKENS[tone] || ICON_TONE_TOKENS.current,
-      }}
-    >
+    <span className={`hf-icon ${sizeClassName} ${strokeClassName} ${toneClassName} ${className}`.trim()}>
       <svg
         {...ariaProps}
         viewBox="0 0 24 24"
