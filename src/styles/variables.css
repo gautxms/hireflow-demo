@@ -1,15 +1,15 @@
 :root {
   /* Color tokens */
   --color-bg-primary: #0a0a0a;
-  --color-bg-secondary: #1a1a1f;
-  --color-accent-green: #b8ff00;
-  --color-accent-green-hover: #a8ee00;
-  --color-accent-green-active: #98dc00;
+  --color-bg-secondary: #111111;
+  --color-accent-green: #c8ff00;
+  --color-accent-green-hover: #b8ee00;
+  --color-accent-green-active: #a8dc00;
   --color-text-primary: #ffffff;
-  --color-text-secondary: #7a7a8d;
-  --color-text-nav: #9999aa;
-  --color-text-muted: #888899;
-  --color-border: #2a2a2f;
+  --color-text-secondary: #aaaaaa;
+  --color-text-nav: #888888;
+  --color-text-muted: #888888;
+  --color-border: #1e1e1e;
   --color-success: #10b981;
   --color-error: #ef4444;
   --color-info: #3b82f6;
@@ -26,11 +26,11 @@
   --color-white-alpha-08: rgba(255, 255, 255, 0.08);
   --color-white-alpha-10: rgba(255, 255, 255, 0.1);
   --color-white-alpha-20: rgba(255, 255, 255, 0.2);
-  --color-accent-alpha-02: rgba(184, 255, 0, 0.02);
-  --color-accent-alpha-06: rgba(184, 255, 0, 0.06);
-  --color-accent-alpha-08: rgba(184, 255, 0, 0.08);
-  --color-accent-alpha-10: rgba(184, 255, 0, 0.1);
-  --color-accent-alpha-15: rgba(184, 255, 0, 0.15);
+  --color-accent-alpha-02: rgba(200, 255, 0, 0.02);
+  --color-accent-alpha-06: rgba(200, 255, 0, 0.06);
+  --color-accent-alpha-08: rgba(200, 255, 0, 0.08);
+  --color-accent-alpha-10: rgba(200, 255, 0, 0.1);
+  --color-accent-alpha-15: rgba(200, 255, 0, 0.15);
   --color-danger-alpha-15: rgba(239, 68, 68, 0.15);
   --color-danger-alpha-35: rgba(239, 68, 68, 0.35);
   --color-warning-alpha-12: rgba(251, 191, 36, 0.12);
