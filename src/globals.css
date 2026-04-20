@@ -302,15 +302,17 @@ nav {
   position: relative;
   z-index: 10;
   max-width: 800px;
+  display: grid;
+  justify-items: start;
 }
 
 .hero-headline {
   font-family: var(--font-family-display);
-  font-weight: var(--type-display-weight);
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line-height);
-  letter-spacing: var(--type-display-tracking);
-  margin-bottom: 1.5rem;
+  font-weight: 800;
+  font-size: clamp(72px, 11vw, 120px);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  margin: 0;
 }
 
 .hero-headline-line {
@@ -325,10 +327,11 @@ nav {
 }
 
 .hero p {
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line-height);
+  margin-top: clamp(1.1rem, 2.1vw, 1.6rem);
+  font-size: clamp(1.02rem, 0.98rem + 0.22vw, 1.16rem);
+  line-height: 1.58;
   color: var(--color-text-secondary);
-  margin-bottom: 2.5rem;
+  margin-bottom: clamp(1.65rem, 3.6vw, 2.5rem);
   max-width: 600px;
 }
 
@@ -336,6 +339,7 @@ nav {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
+  margin-top: clamp(0.15rem, 0.4vw, 0.35rem);
 }
 
 /* ---- FEATURES ---- */
@@ -660,9 +664,5 @@ footer {
   .hero {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
-  }
-
-  .hero-headline {
-    font-size: 2.1rem;
   }
 }
