@@ -74,43 +74,43 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    background: '#f9fafb'
+    background: 'var(--color-bg-primary)'
   },
   card: {
-    background: 'white',
+    background: 'var(--color-bg-elevated)',
     padding: '40px',
     borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    boxShadow: 'var(--shadow-surface)',
     textAlign: 'center',
     maxWidth: '400px'
   },
   spinner: {
     width: '50px',
     height: '50px',
-    border: '4px solid #e5e7eb',
-    borderTop: '4px solid #0f172a',
+    border: '4px solid var(--color-border)',
+    borderTop: '4px solid var(--color-text-primary)',
     borderRadius: '50%',
     animation: 'spin calc(var(--motion-duration-base) * 5) linear infinite',
     margin: '0 auto 20px'
   },
   checkmark: {
     fontSize: '60px',
-    color: '#22c55e',
+    color: 'var(--color-success-text)',
     marginBottom: '20px'
   },
   errorIcon: {
     fontSize: '60px',
-    color: '#ef4444',
+    color: 'var(--color-error)',
     marginBottom: '20px'
   },
   text: {
     fontSize: '16px',
-    color: '#333',
+    color: 'var(--color-text-secondary)',
     marginBottom: '20px',
     lineHeight: '1.6'
   },
   link: {
-    color: '#0f172a',
+    color: 'var(--color-text-primary)',
     textDecoration: 'none',
     fontWeight: '600'
   }

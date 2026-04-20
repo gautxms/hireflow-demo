@@ -80,7 +80,7 @@ export default function PricingPage() {
                 border: plan.highlighted ? '2px solid var(--color-accent-green)' : '1px solid var(--border)',
                 borderRadius: '12px',
                 padding: '2.5rem',
-                background: plan.highlighted ? 'rgba(232,255,90,0.05)' : 'var(--card)',
+                background: plan.highlighted ? 'var(--color-accent-alpha-08)' : 'var(--card)',
                 position: 'relative',
                 transform: plan.highlighted ? 'scale(1.05)' : 'scale(1)',
                 transition: 'transform var(--motion-duration-slow) var(--motion-ease-standard)'

@@ -47,7 +47,7 @@ export default function SettingsPage({ onBack }) {
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
-                background: activeTab === tab ? 'rgba(232,255,90,0.1)' : 'transparent',
+                background: activeTab === tab ? 'var(--color-accent-alpha-10)' : 'transparent',
                 border: activeTab === tab ? '1px solid var(--color-accent-green)' : '1px solid transparent',
                 color: activeTab === tab ? 'var(--color-accent-green)' : 'var(--color-text-secondary)',
                 padding: '0.75rem 1rem',
@@ -84,7 +84,7 @@ export default function SettingsPage({ onBack }) {
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        background: 'rgba(0,0,0,0.3)',
+                        background: 'var(--color-bg-secondary)',
                         border: '1px solid var(--border)',
                         borderRadius: '6px',
                         color: 'var(--color-text-primary)',
@@ -103,7 +103,7 @@ export default function SettingsPage({ onBack }) {
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        background: 'rgba(0,0,0,0.3)',
+                        background: 'var(--color-bg-secondary)',
                         border: '1px solid var(--border)',
                         borderRadius: '6px',
                         color: 'var(--color-text-primary)',
@@ -122,7 +122,7 @@ export default function SettingsPage({ onBack }) {
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        background: 'rgba(0,0,0,0.3)',
+                        background: 'var(--color-bg-secondary)',
                         border: '1px solid var(--border)',
                         borderRadius: '6px',
                         color: 'var(--color-text-primary)',
@@ -187,7 +187,7 @@ export default function SettingsPage({ onBack }) {
                         gridTemplateColumns: '1fr auto',
                         gap: '2rem',
                         padding: '1rem',
-                        background: 'rgba(0,0,0,0.2)',
+                        background: 'var(--color-bg-secondary)',
                         borderRadius: '8px',
                         alignItems: 'center'
                       }}
@@ -306,7 +306,7 @@ export default function SettingsPage({ onBack }) {
               <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem' }}>
                 <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Payment Method</h3>
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                  <div style={{ background: 'var(--color-bg-secondary)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
                     Visa ending in 4242
                   </div>
                   <button style={{
@@ -365,7 +365,7 @@ export default function SettingsPage({ onBack }) {
               <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem' }}>
                 <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Active Sessions</h3>
                 <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                  <div style={{ background: 'var(--color-bg-secondary)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
                     <div style={{ fontWeight: 'bold' }}>Chrome on Mac</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Last active 5 minutes ago</div>
                   </div>

@@ -480,9 +480,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         {subscriptionStatus === 'trialing' && (
           <div
             style={{
-              background: 'rgba(251, 191, 36, 0.1)',
-              border: '1px solid #fbbf24',
-              color: '#f59e0b',
+              background: 'var(--color-warning-alpha-12)',
+              border: '1px solid var(--color-warning-alpha-35)',
+              color: 'var(--color-warning-text)',
               padding: '1rem',
               borderRadius: '8px',
               marginBottom: '1.5rem',
@@ -502,7 +502,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             borderRadius: '12px',
             padding: '3rem',
             textAlign: 'center',
-            background: isDragging ? 'rgba(232,255,90,0.05)' : 'var(--card)',
+            background: isDragging ? 'var(--color-accent-alpha-08)' : 'var(--card)',
             transition: 'all var(--motion-duration-slow) var(--motion-ease-standard)',
             cursor: 'pointer',
             marginBottom: '2rem',
@@ -549,7 +549,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             <select
               value={selectedJobDescriptionId}
               onChange={(event) => setSelectedJobDescriptionId(event.target.value)}
-              style={{ minWidth: 280, border: '1px solid var(--border)', borderRadius: 8, background: '#111827', color: '#fff', padding: '0.6rem' }}
+              style={{ minWidth: 280, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', padding: '0.6rem' }}
             >
               {jobDescriptions.length === 0 && (
                 <option value="">No active/draft JD found</option>
@@ -639,9 +639,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         {error && (
           <div
             style={{
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid #ef4444',
-              color: '#ef4444',
+              background: 'var(--color-danger-alpha-15)',
+              border: '1px solid var(--color-error)',
+              color: 'var(--color-error)',
               padding: '1rem',
               borderRadius: '8px',
               marginBottom: '1.5rem',

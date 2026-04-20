@@ -2,16 +2,16 @@ import API_BASE from '../config/api'
 export default function SubscriptionCard({ user, token, onRefresh, subscription }) {
   const getStatusColor = (status) => {
     const colors = {
-      active: '#CCFF00',
-      trialing: '#3b82f6',
-      cancelled: '#ef4444',
-      past_due: '#f59e0b',
+      active: 'var(--color-accent-green)',
+      trialing: 'var(--color-info)',
+      cancelled: 'var(--color-error)',
+      past_due: 'var(--color-warning-text)',
     }
 
-    return colors[status] || '#9ca3af'
+    return colors[status] || 'var(--color-text-muted)'
   }
 
-  const getStatusTextColor = (status) => (status === 'active' ? '#000000' : '#ffffff')
+  const getStatusTextColor = (status) => (status === 'active' ? 'var(--color-bg-primary)' : 'var(--color-text-primary)')
 
   const handleCancelSubscription = async () => {
     if (!window.confirm('Cancel subscription? You\'ll lose access after the current period.')) return
@@ -44,8 +44,8 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
   return (
     <div
       style={{
-        background: '#1a1a1a',
-        border: '1px solid #333333',
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
         borderRadius: '12px',
         padding: '28px',
       }}
@@ -54,7 +54,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         style={{
           fontSize: '18px',
           fontWeight: '600',
-          color: '#ffffff',
+          color: 'var(--color-text-primary)',
           marginBottom: '24px',
           display: 'flex',
           alignItems: 'center',
@@ -69,7 +69,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         <p
           style={{
             fontSize: '12px',
-            color: '#a3a3a3',
+            color: 'var(--color-text-secondary)',
             marginBottom: '8px',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
@@ -98,7 +98,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         <p
           style={{
             fontSize: '12px',
-            color: '#a3a3a3',
+            color: 'var(--color-text-secondary)',
             marginBottom: '4px',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
@@ -106,14 +106,14 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         >
           Plan
         </p>
-        <p style={{ color: '#ffffff', fontSize: '14px', textTransform: 'capitalize' }}>{plan || 'N/A'}</p>
+        <p style={{ color: 'var(--color-text-primary)', fontSize: '14px', textTransform: 'capitalize' }}>{plan || 'N/A'}</p>
       </div>
 
       <div style={{ marginBottom: '24px' }}>
         <p
           style={{
             fontSize: '12px',
-            color: '#a3a3a3',
+            color: 'var(--color-text-secondary)',
             marginBottom: '4px',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
@@ -121,7 +121,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         >
           Started
         </p>
-        <p style={{ color: '#ffffff', fontSize: '14px' }}>
+        <p style={{ color: 'var(--color-text-primary)', fontSize: '14px' }}>
           {startedAt
             ? new Date(startedAt).toLocaleDateString('en-US', {
                 year: 'numeric',
@@ -138,9 +138,9 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
           style={{
             width: '100%',
             padding: '12px 20px',
-            background: 'rgba(239, 68, 68, 0.2)',
-            color: '#ef4444',
-            border: '1px solid #ef4444',
+            background: 'var(--color-danger-alpha-15)',
+            color: 'var(--color-error)',
+            border: '1px solid var(--color-error)',
             borderRadius: '6px',
             cursor: 'pointer',
             fontWeight: '600',
@@ -148,12 +148,12 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
             transition: 'all var(--motion-duration-base) var(--motion-ease-standard)',
           }}
           onMouseEnter={(event) => {
-            event.target.style.background = '#ef4444'
-            event.target.style.color = '#ffffff'
+            event.target.style.background = 'var(--color-error)'
+            event.target.style.color = 'var(--color-text-primary)'
           }}
           onMouseLeave={(event) => {
-            event.target.style.background = 'rgba(239, 68, 68, 0.2)'
-            event.target.style.color = '#ef4444'
+            event.target.style.background = 'var(--color-danger-alpha-15)'
+            event.target.style.color = 'var(--color-error)'
           }}
         >
           Cancel Subscription
@@ -168,8 +168,8 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
           style={{
             width: '100%',
             padding: '12px 20px',
-            background: '#CCFF00',
-            color: '#000000',
+            background: 'var(--color-accent-green)',
+            color: 'var(--color-bg-primary)',
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',

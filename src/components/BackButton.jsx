@@ -35,9 +35,9 @@ export default function BackButton({ label = 'Back to Home', to = '/', onBack })
         gap: '8px',
         padding: '10px 16px',
         borderRadius: '8px',
-        border: '1px solid rgba(255,255,255,0.15)',
+        border: '1px solid var(--color-white-alpha-20)',
         background: 'transparent',
-        color: '#d6ff4b',
+        color: 'var(--color-accent-green)',
         fontWeight: '500',
         cursor: 'pointer',
       }}

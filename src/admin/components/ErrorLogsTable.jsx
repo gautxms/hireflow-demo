@@ -6,8 +6,8 @@ function formatTime(value) {
   return new Date(value).toLocaleString()
 }
 
-const headerStyle = { textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: '0.75rem', fontSize: '0.8rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.03em' }
-const cellStyle = { borderBottom: '1px solid #f3f4f6', padding: '0.75rem', fontSize: '0.92rem', verticalAlign: 'top' }
+const headerStyle = { textAlign: 'left', borderBottom: '1px solid var(--admin-border)', padding: '0.75rem', fontSize: '0.8rem', color: 'var(--admin-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.03em' }
+const cellStyle = { borderBottom: '1px solid var(--admin-border)', padding: '0.75rem', fontSize: '0.92rem', verticalAlign: 'top' }
 
 export default function ErrorLogsTable({ items, loading, onResolve }) {
   const [expandedId, setExpandedId] = useState(null)
@@ -23,7 +23,7 @@ export default function ErrorLogsTable({ items, loading, onResolve }) {
   const toggleSort = (key) => setSortConfig((c) => ({ key, direction: c.key === key && c.direction === 'asc' ? 'desc' : 'asc' }))
 
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--admin-border)', borderRadius: 10 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead><tr>
           <th style={headerStyle}><button type='button' onClick={() => toggleSort('createdAt')}>Timestamp</button></th>
@@ -37,11 +37,11 @@ export default function ErrorLogsTable({ items, loading, onResolve }) {
             {sortedItems.map((item) => {
               const isExpanded = expandedId === item.id
               return <Fragment key={item.id}>
-                <tr onClick={() => setExpandedId(isExpanded ? null : item.id)} style={{ cursor: 'pointer', background: isExpanded ? '#f9fafb' : 'transparent' }}>
+                <tr onClick={() => setExpandedId(isExpanded ? null : item.id)} style={{ cursor: 'pointer', background: isExpanded ? 'var(--admin-surface-subtle)' : 'transparent' }}>
                   <td style={cellStyle}>{formatTime(item.createdAt)}</td><td style={cellStyle}>{item.endpoint || 'n/a'}</td><td style={cellStyle}>{item.statusCode || 'n/a'}</td><td style={cellStyle}>{item.message}</td><td style={cellStyle}>{item.affectedUsers}</td>
-                  <td style={cellStyle}>{item.resolved ? <span style={{ color: '#059669', fontWeight: 600 }}>Resolved</span> : <button type='button' onClick={(event) => { event.stopPropagation(); onResolve(item.id) }}>Mark resolved</button>}</td>
+                  <td style={cellStyle}>{item.resolved ? <span style={{ color: 'var(--admin-success-text)', fontWeight: 600 }}>Resolved</span> : <button type='button' onClick={(event) => { event.stopPropagation(); onResolve(item.id) }}>Mark resolved</button>}</td>
                 </tr>
-                {isExpanded ? <tr><td colSpan={6} style={{ ...cellStyle, background: '#0f172a', color: '#e2e8f0' }}><strong>Stack trace</strong><pre style={{ marginTop: '0.5rem', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>{item.stack || 'No stack trace captured.'}</pre></td></tr> : null}
+                {isExpanded ? <tr><td colSpan={6} style={{ ...cellStyle, background: 'var(--admin-bg)', color: 'var(--admin-text)' }}><strong>Stack trace</strong><pre style={{ marginTop: '0.5rem', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>{item.stack || 'No stack trace captured.'}</pre></td></tr> : null}
               </Fragment>
             })}
           </tbody>

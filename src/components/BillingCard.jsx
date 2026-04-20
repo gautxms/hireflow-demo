@@ -2,8 +2,8 @@ export default function BillingCard() {
   return (
     <div
       style={{
-        background: '#1a1a1a',
-        border: '1px solid #333333',
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
         borderRadius: '12px',
         padding: '28px',
       }}
@@ -12,7 +12,7 @@ export default function BillingCard() {
         style={{
           fontSize: '18px',
           fontWeight: '600',
-          color: '#ffffff',
+          color: 'var(--color-text-primary)',
           marginBottom: '24px',
           display: 'flex',
           alignItems: 'center',
@@ -25,7 +25,7 @@ export default function BillingCard() {
 
       <p
         style={{
-          color: '#a3a3a3',
+          color: 'var(--color-text-secondary)',
           marginBottom: '24px',
           lineHeight: '1.6',
           fontSize: '14px',
@@ -43,8 +43,8 @@ export default function BillingCard() {
           width: '100%',
           padding: '12px 20px',
           marginBottom: '12px',
-          background: '#CCFF00',
-          color: '#000000',
+          background: 'var(--color-accent-green)',
+          color: 'var(--color-bg-primary)',
           border: 'none',
           borderRadius: '6px',
           cursor: 'pointer',
@@ -70,9 +70,9 @@ export default function BillingCard() {
           display: 'block',
           width: '100%',
           padding: '12px 20px',
-          background: '#333333',
-          color: '#ffffff',
-          border: '1px solid #555555',
+          background: 'var(--color-bg-tertiary)',
+          color: 'var(--color-text-primary)',
+          border: '1px solid var(--border)',
           borderRadius: '6px',
           cursor: 'pointer',
           fontWeight: '600',
@@ -80,10 +80,10 @@ export default function BillingCard() {
           transition: 'background-color var(--motion-duration-base) var(--motion-ease-standard)',
         }}
         onMouseEnter={(event) => {
-          event.target.style.background = '#444444'
+          event.target.style.background = 'var(--color-white-alpha-08)'
         }}
         onMouseLeave={(event) => {
-          event.target.style.background = '#333333'
+          event.target.style.background = 'var(--color-bg-tertiary)'
         }}
       >
         Update Payment Method

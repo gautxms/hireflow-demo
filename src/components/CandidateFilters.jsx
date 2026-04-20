@@ -122,7 +122,7 @@ export default function CandidateFilters({
                 onClick={() => toggleSkill(skill)}
                 className="touch-target"
                 style={{
-                  background: active ? 'rgba(90,255,184,0.2)' : 'var(--card)',
+                  background: active ? 'var(--color-accent-alpha-15)' : 'var(--card)',
                   border: '1px solid var(--border)',
                   color: active ? 'var(--color-accent-green-hover)' : 'var(--color-text-primary)',
                   borderRadius: '999px',

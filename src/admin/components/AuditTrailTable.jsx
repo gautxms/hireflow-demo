@@ -48,7 +48,7 @@ export default function AuditTrailTable({ records = [] }) {
   return (
     <section style={{ marginTop: 24 }}>
       <h2>Admin audit trail</h2>
-      <p style={{ color: '#475569' }}>Who did what, when, and from where.</p>
+      <p style={{ color: 'var(--admin-text-muted)' }}>Who did what, when, and from where.</p>
 
       <input
         type="search"
@@ -81,7 +81,7 @@ export default function AuditTrailTable({ records = [] }) {
             ))}
             {!visibleRecords.length ? (
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: 12, color: '#64748b' }}>
+                <td colSpan={5} style={{ textAlign: 'center', padding: 12, color: 'var(--admin-text-subtle)' }}>
                   No matching audit entries.
                 </td>
               </tr>

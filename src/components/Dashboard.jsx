@@ -185,7 +185,7 @@ export default function Dashboard({ onNavigate }) {
                 </span>
               </div>
               {/* Progress bar */}
-              <div style={{ background: 'rgba(0,0,0,0.3)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ background: 'var(--color-bg-secondary)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{
                   background: task.progress === 100 ? 'var(--color-accent-green-hover)' : 'var(--color-accent-green)',
                   height: '100%',
@@ -216,7 +216,7 @@ export default function Dashboard({ onNavigate }) {
             { week: 8, milestone: 'Product Hunt launch', status: 'PENDING' }
           ].map(item => (
             <div key={item.week} style={{
-              background: item.status === 'IN_PROGRESS' ? 'rgba(232,255,90,0.1)' : 'var(--card)',
+              background: item.status === 'IN_PROGRESS' ? 'var(--color-accent-alpha-10)' : 'var(--card)',
               border: item.status === 'IN_PROGRESS' ? '1px solid var(--color-accent-green)' : '1px solid var(--border)',
               borderRadius: '8px',
               padding: '1rem',

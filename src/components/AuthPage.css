@@ -29,13 +29,13 @@
 .auth-glow--a {
   top: -140px;
   left: -120px;
-  background: radial-gradient(circle, rgba(232,255,90,0.14) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--color-accent-alpha-15) 0%, transparent 70%);
 }
 
 .auth-glow--b {
   bottom: -180px;
   right: -120px;
-  background: radial-gradient(circle, rgba(90,255,184,0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--color-accent-alpha-15) 0%, transparent 70%);
 }
 
 .auth-panel {
@@ -112,7 +112,7 @@
 .auth-input:focus {
   outline: none;
   border-color: var(--color-accent-green);
-  box-shadow: 0 0 0 2px rgba(232,255,90,0.2);
+  box-shadow: 0 0 0 2px var(--color-accent-alpha-15);
 }
 
 .auth-input-with-action {
