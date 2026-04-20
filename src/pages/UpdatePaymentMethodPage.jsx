@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import API_BASE from '../config/api'
+import '../styles/billing.css'
+import '../styles/checkout.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-
 
 export default function UpdatePaymentMethodPage() {
   const [form, setForm] = useState({ cardNumber: '', expiryMonth: '', expiryYear: '', cvc: '' })
@@ -78,17 +79,23 @@ export default function UpdatePaymentMethodPage() {
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)', padding: '2.5rem 1rem' }}>
-      <section style={{ maxWidth: 560, margin: '0 auto' }}>
+    <main className="billing-shell">
+      <section className="billing-shell__section">
         <BackButton />
-        <h1>Update Payment Method</h1>
-        <p style={{ color: 'var(--muted)' }}>Enter your card details below. Your account will remain on the billing page after this update.</p>
+        <h1 className="billing-shell__title">Update Payment Method</h1>
+        <p className="billing-shell__subtitle">Enter your card details below. Your account will remain on the billing page after this update.</p>
 
-        <form onSubmit={handleSubmit} style={{ marginTop: '1rem', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem' }}>
+        <form onSubmit={handleSubmit} className="billing-shell__form">
           <label htmlFor="card-number">Card Number</label>
-          <input id="card-number" value={form.cardNumber} onChange={(event) => setForm((prev) => ({ ...prev, cardNumber: event.target.value }))} placeholder="4242 4242 4242 4242" style={{ width: '100%', marginBottom: 10 }} />
+          <input
+            id="card-number"
+            className="billing-shell__input"
+            value={form.cardNumber}
+            onChange={(event) => setForm((prev) => ({ ...prev, cardNumber: event.target.value }))}
+            placeholder="4242 4242 4242 4242"
+          />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <div className="billing-shell__form-grid">
             <div>
               <label htmlFor="expiry-month">Month</label>
               <input id="expiry-month" value={form.expiryMonth} onChange={(event) => setForm((prev) => ({ ...prev, expiryMonth: event.target.value }))} placeholder="MM" />
@@ -103,10 +110,10 @@ export default function UpdatePaymentMethodPage() {
             </div>
           </div>
 
-          {error ? <p style={{ color: '#ff8f8f' }}>{error}</p> : null}
-          {message ? <p style={{ color: '#86efac' }}>{message}</p> : null}
+          {error ? <p className="billing-shell__feedback--error">{error}</p> : null}
+          {message ? <p className="billing-shell__feedback--success">{message}</p> : null}
 
-          <button type="submit" disabled={submitting} style={{ marginTop: 14 }}>
+          <button type="submit" disabled={submitting} className="hf-btn hf-btn--primary">
             {submitting ? 'Updating...' : 'Update payment method'}
           </button>
         </form>

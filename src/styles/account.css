@@ -1,0 +1,66 @@
+.account-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 60px 20px;
+  background: var(--color-bg-primary);
+  min-height: 100vh;
+}
+
+.account-page__loading,
+.account-page__error {
+  min-height: 100vh;
+  padding: var(--spacing-lg);
+  background: var(--color-bg-primary);
+}
+
+.account-page__loading {
+  color: var(--color-text-secondary);
+}
+
+.account-page__error {
+  color: var(--color-error);
+}
+
+.account-page__header {
+  margin-bottom: 60px;
+}
+
+.account-page__title {
+  font-size: 40px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.account-page__subtitle {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+}
+
+.account-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: 60px;
+}
+
+.account-page__danger-zone {
+  background: var(--color-danger-alpha-15);
+  border: 1px solid var(--color-danger-alpha-35);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  margin-top: 60px;
+}
+
+.account-page__danger-title {
+  color: var(--color-error);
+  margin-bottom: var(--spacing-base);
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.account-page__danger-description {
+  color: var(--color-text-secondary);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}

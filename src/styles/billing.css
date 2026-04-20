@@ -1,0 +1,243 @@
+.billing-page,
+.billing-shell {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.billing-page__section,
+.billing-shell__section {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 2.5rem 1rem 3rem;
+}
+
+.billing-shell__section {
+  max-width: 560px;
+}
+
+.billing-page__title,
+.billing-shell__title {
+  margin-bottom: 0.4rem;
+}
+
+.billing-page__subtitle,
+.billing-shell__subtitle,
+.billing-page__muted,
+.billing-modal__muted {
+  color: var(--color-text-secondary);
+}
+
+.billing-page__error {
+  color: #ff8f8f;
+}
+
+.billing-page__card,
+.billing-modal__card,
+.billing-shell__card,
+.billing-shell__form {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 1rem;
+  background: var(--color-bg-secondary);
+}
+
+.billing-page__plan-title,
+.billing-page__history-title,
+.billing-modal__title {
+  margin-top: 0;
+}
+
+.billing-page__line,
+.billing-page__meta {
+  margin: 0.2rem 0;
+}
+
+.billing-page__meta {
+  color: var(--color-text-secondary);
+}
+
+.billing-page__actions,
+.billing-shell__actions,
+.billing-modal__actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.billing-page__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.billing-page__table-cell--pad {
+  padding: 0.45rem 0;
+}
+
+.billing-page__table-cell--empty {
+  padding: 0.6rem 0;
+}
+
+.billing-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 40;
+}
+
+.billing-modal__card {
+  width: 100%;
+  max-width: 540px;
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.billing-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.billing-modal__body {
+  margin-top: 0.8rem;
+}
+
+.billing-modal__close {
+  border: none;
+  background: transparent;
+  color: var(--color-text-nav);
+  cursor: pointer;
+}
+
+.billing-modal__select {
+  width: 100%;
+  margin-top: 0.3rem;
+  margin-bottom: 0.8rem;
+}
+
+.billing-shell--centered {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.billing-shell__card {
+  width: 100%;
+  text-align: center;
+}
+
+.billing-shell__card--success {
+  max-width: 500px;
+  border: 2px solid var(--color-accent-green);
+  border-radius: 16px;
+  padding: 60px 40px;
+  box-shadow: 0 20px 60px var(--color-accent-alpha-10);
+}
+
+.billing-shell__icon-wrap {
+  width: 80px;
+  height: 80px;
+  background: var(--color-accent-green);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 30px;
+  animation: billing-scale-in 0.6s ease-out;
+  color: var(--color-black);
+  font-size: 40px;
+}
+
+.billing-shell__title--success {
+  font-size: clamp(1.8rem, 4vw, 32px);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-md);
+  color: var(--color-accent-green);
+}
+
+.billing-shell__message {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.billing-shell__summary {
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 30px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.billing-shell__summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.billing-shell__summary-label,
+.billing-shell__countdown {
+  color: var(--color-text-secondary);
+}
+
+.billing-shell__summary-value {
+  color: var(--color-accent-green);
+  text-transform: capitalize;
+}
+
+.billing-shell__transaction {
+  color: var(--color-text-primary);
+  font-family: monospace;
+  font-size: 12px;
+  display: block;
+  margin-top: 8px;
+  word-break: break-all;
+}
+
+.billing-shell__countdown {
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.billing-shell__form {
+  border-radius: 12px;
+}
+
+.billing-shell__form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.billing-shell__input {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.billing-shell__feedback--error {
+  color: #ff8f8f;
+}
+
+.billing-shell__feedback--success {
+  color: var(--color-success-text);
+}
+
+@keyframes billing-scale-in {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

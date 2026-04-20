@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
+import '../styles/checkout.css'
 
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -619,74 +620,34 @@ export default function Checkout({ onAuthSuccess }) {
   }
 
   return (
-    <main style={{
-      background: '#0a0a0a',
-      minHeight: '100vh',
-      padding: '40px 20px',
-      color: '#ffffff',
-    }}>
-      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-        <button
-          type="button"
-          onClick={() => window.history.back()}
-          style={{
-            background: 'transparent',
-            color: '#CCFF00',
-            border: 'none',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            marginBottom: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          ← Back to Home
-        </button>
+    <main className="checkout-page">
+      <div className="checkout-page__content">
+        <div className="checkout-page__back">
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="checkout-page__back-button"
+          >
+            ← Back to Home
+          </button>
+        </div>
 
-        <h1 style={{ fontSize: 'clamp(2rem, 6vw, 48px)', fontWeight: '700', marginBottom: '12px' }}>
-          Checkout
-        </h1>
+        <h1 className="checkout-page__title">Checkout</h1>
 
-        <p style={{ color: '#a3a3a3', fontSize: '16px', marginBottom: '40px' }}>
-          You selected the <strong style={{ color: '#CCFF00' }}>{selectedPlan}</strong> subscription.
+        <p className="checkout-page__subtitle">
+          You selected the <strong className="checkout-page__plan-name">{selectedPlan}</strong> subscription.
         </p>
 
         {isReactivation && (
-          <div style={{
-            background: 'rgba(204, 255, 0, 0.15)',
-            border: '2px solid #CCFF00',
-            borderRadius: '12px',
-            padding: '24px',
-            marginBottom: '32px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-              <span style={{ fontSize: '24px' }}>⚡</span>
+          <div className="checkout-page__reactivate">
+            <div className="checkout-page__reactivate-content">
+              <span className="checkout-page__reactivate-icon">⚡</span>
               <div>
-                <h3 style={{ color: '#CCFF00', fontSize: '16px', fontWeight: '700', marginBottom: '8px' }}>
-                  Reactivate Your Subscription
-                </h3>
-                <p style={{ color: '#a3a3a3', fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+                <h3 className="checkout-page__reactivate-title">Reactivate Your Subscription</h3>
+                <p className="checkout-page__reactivate-text">
                   Your subscription was cancelled. Reactivate now to regain access to resume analysis and full features.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleReactivateSubscription}
-                  style={{
-                    background: '#CCFF00',
-                    color: '#000000',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '12px 24px',
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    transition: 'opacity 0.2s',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
-                >
+                <button type="button" onClick={handleReactivateSubscription} className="hf-btn hf-btn--primary">
                   Reactivate Now
                 </button>
               </div>
@@ -695,58 +656,47 @@ export default function Checkout({ onAuthSuccess }) {
         )}
 
         {status === 'action_required' && requiredAction === 'past_due' && (
-          <div style={{ background: '#1a1a1a', border: '1px solid #333333', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-            <p style={{ margin: 0, color: '#a3a3a3' }}>
+          <div className="checkout-page__notice">
+            <p className="checkout-page__notice-text">
               Your previous payment needs attention. Please update your payment method from the billing portal.
             </p>
-            <a href="/billing" style={{ color: '#CCFF00', fontWeight: 700, marginTop: '10px', display: 'inline-block' }}>Open billing portal</a>
+            <a href="/billing" className="checkout-page__notice-link">Open billing portal</a>
           </div>
         )}
 
         {(errorMessage || successMessage) && (
-          <div style={{ marginBottom: '24px' }}>
+          <div className="checkout-page__messages">
             {!!errorMessage && (
-              <p style={{ margin: '0 0 8px', color: '#ff8f8f' }}>
+              <p className="checkout-page__message checkout-page__message--error">
                 Error: {errorMessage}
                 {status === 'error' && (
                   <>
                     <br />
-                    <a href="/pricing" style={{ color: '#CCFF00', textDecoration: 'none', marginTop: '1rem', display: 'inline-block' }}>
+                    <a href="/pricing" className="checkout-page__message-link">
                       ← Back to Pricing
                     </a>
                   </>
                 )}
               </p>
             )}
-            {!!successMessage && <p style={{ margin: 0, color: '#CCFF00', fontWeight: 600 }}>{successMessage}</p>}
-            {!errorMessage && <p style={{ margin: '8px 0 0', color: '#a3a3a3' }}>{getStatusMessage()}</p>}
+            {!!successMessage && <p className="checkout-page__message checkout-page__message--success">{successMessage}</p>}
+            {!errorMessage && <p className="checkout-page__message checkout-page__message--status">{getStatusMessage()}</p>}
           </div>
         )}
 
-        <div
-          id="paddle-container"
-          style={{
-            background: '#1a1a1a',
-            borderRadius: '12px',
-            padding: '32px',
-            border: '1px solid #333333',
-            minHeight: '500px',
-          }}
-        />
+        <div id="paddle-container" className="checkout-page__paddle-container" />
 
         {!checkoutOpen && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#a3a3a3' }}>
-            <p style={{ marginBottom: '8px' }}>Loading secure checkout...</p>
-            <div style={{ animation: 'pulse 2s infinite', display: 'inline-block' }}>
-              <span style={{ fontSize: '24px' }}>🔐</span>
+          <div className="checkout-page__loading-shell">
+            <p className="checkout-page__loading-text">Loading secure checkout...</p>
+            <div className="checkout-page__loading-icon">
+              <span>🔐</span>
             </div>
           </div>
         )}
 
         {status === 'opened' && transactionId && (
-          <p style={{ color: '#a3a3a3', fontSize: '12px', marginTop: '12px' }}>
-            Transaction reference: {transactionId}
-          </p>
+          <p className="checkout-page__transaction">Transaction reference: {transactionId}</p>
         )}
 
         {showRetry && !hasSuccessfulTransaction && (
@@ -763,27 +713,11 @@ export default function Checkout({ onAuthSuccess }) {
                 setRequiredAction(null)
               }
             }}
-            style={{
-              marginTop: '16px',
-              background: '#CCFF00',
-              color: '#000000',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '12px 24px',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
+            className="hf-btn hf-btn--primary"
           >
             Retry checkout
           </button>
         )}
-
-        <style>{`
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-          }
-        `}</style>
       </div>
     </main>
   )

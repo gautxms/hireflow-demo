@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import API_BASE from '../config/api'
+import '../styles/billing.css'
+import '../styles/checkout.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-
 
 const CANCEL_REASONS = [
   'Too expensive',
@@ -15,13 +16,13 @@ const CANCEL_REASONS = [
 
 function Modal({ title, children, onClose }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'grid', placeItems: 'center', padding: '1rem', zIndex: 40 }}>
-      <div style={{ width: '100%', maxWidth: 540, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0 }}>{title}</h3>
-          <button type="button" onClick={onClose}>✕</button>
+    <div className="billing-modal">
+      <div className="billing-modal__card">
+        <div className="billing-modal__header">
+          <h3 className="billing-modal__title">{title}</h3>
+          <button type="button" onClick={onClose} className="billing-modal__close hf-btn hf-btn--secondary">✕</button>
         </div>
-        <div style={{ marginTop: '0.8rem' }}>{children}</div>
+        <div className="billing-modal__body">{children}</div>
       </div>
     </div>
   )
@@ -145,41 +146,47 @@ export default function BillingPage() {
   }
 
   if (loading) {
-    return <main style={{ padding: '2rem' }}>Loading billing dashboard…</main>
+    return (
+      <main className="route-state billing-page">
+        <div className="route-state-card">
+          <h1 className="route-state-card__title">Loading billing dashboard…</h1>
+        </div>
+      </main>
+    )
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
-      <section style={{ maxWidth: 980, margin: '0 auto', padding: '2.5rem 1rem 3rem' }}>
+    <main className="billing-page">
+      <section className="billing-page__section">
         <BackButton />
-        <h1 style={{ marginBottom: '0.4rem' }}>Subscription Management</h1>
-        <p style={{ color: 'var(--muted)' }}>View plans, upcoming charges, and invoice history.</p>
+        <h1 className="billing-page__title">Subscription Management</h1>
+        <p className="billing-page__subtitle">View plans, upcoming charges, and invoice history.</p>
 
-        {error ? <p style={{ color: '#ff8f8f' }}>{error}</p> : null}
+        {error ? <p className="billing-page__error">{error}</p> : null}
 
         {subscription ? (
           <>
-            <article style={{ marginTop: '1rem', border: '1px solid var(--border)', borderRadius: 14, padding: '1rem', background: 'var(--card)' }}>
-              <h2 style={{ marginTop: 0 }}>Current Plan</h2>
-              <p style={{ margin: '0.2rem 0' }}><strong>{subscription.planLabel}</strong> — {subscription.costFormatted}</p>
-              <p style={{ margin: '0.2rem 0', color: 'var(--muted)' }}>Renewal date: {subscription.renewalDate ? new Date(subscription.renewalDate).toLocaleDateString() : '—'}</p>
-              <p style={{ margin: '0.2rem 0', color: 'var(--muted)' }}>Next billing: {subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toLocaleDateString() : '—'}</p>
-              <p style={{ margin: '0.2rem 0', color: 'var(--muted)' }}>Payment method: {subscription.paymentMethod}</p>
-              <p style={{ margin: '0.2rem 0', color: 'var(--muted)' }}>Status: {subscription.status}</p>
+            <article className="billing-page__card">
+              <h2 className="billing-page__plan-title">Current Plan</h2>
+              <p className="billing-page__line"><strong>{subscription.planLabel}</strong> — {subscription.costFormatted}</p>
+              <p className="billing-page__meta">Renewal date: {subscription.renewalDate ? new Date(subscription.renewalDate).toLocaleDateString() : '—'}</p>
+              <p className="billing-page__meta">Next billing: {subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toLocaleDateString() : '—'}</p>
+              <p className="billing-page__meta">Payment method: {subscription.paymentMethod}</p>
+              <p className="billing-page__meta">Status: {subscription.status}</p>
 
-              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button type="button" onClick={() => { setTargetPlan(subscription.plan === 'monthly' ? 'annual' : 'monthly'); setPlanModalOpen(true) }}>
+              <div className="billing-page__actions">
+                <button type="button" className="hf-btn hf-btn--primary" onClick={() => { setTargetPlan(subscription.plan === 'monthly' ? 'annual' : 'monthly'); setPlanModalOpen(true) }}>
                   {subscription.plan === 'monthly' ? 'Upgrade to annual' : 'Downgrade to monthly'}
                 </button>
-                <button type="button" onClick={() => setCancelModalOpen(true)} disabled={subscription.status === 'cancelled'}>
+                <button type="button" className="hf-btn hf-btn--destructive" onClick={() => setCancelModalOpen(true)} disabled={subscription.status === 'cancelled'}>
                   Cancel subscription
                 </button>
               </div>
             </article>
 
-            <article style={{ marginTop: '1rem', border: '1px solid var(--border)', borderRadius: 14, padding: '1rem', background: 'var(--card)' }}>
-              <h2 style={{ marginTop: 0 }}>Billing History (past 12 months)</h2>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <article className="billing-page__card">
+              <h2 className="billing-page__history-title">Billing History (past 12 months)</h2>
+              <table className="billing-page__table">
                 <thead>
                   <tr>
                     <th align="left">Date</th>
@@ -190,14 +197,14 @@ export default function BillingPage() {
                 </thead>
                 <tbody>
                   {history.length === 0 ? (
-                    <tr><td colSpan={4} style={{ padding: '0.6rem 0' }}>No invoices yet.</td></tr>
+                    <tr><td colSpan={4} className="billing-page__table-cell--empty">No invoices yet.</td></tr>
                   ) : history.map((row) => (
                     <tr key={row.id}>
-                      <td style={{ padding: '0.45rem 0' }}>{new Date(row.date).toLocaleDateString()}</td>
+                      <td className="billing-page__table-cell--pad">{new Date(row.date).toLocaleDateString()}</td>
                       <td>{row.amountFormatted}</td>
                       <td>{row.status}</td>
                       <td>
-                        <button type="button" onClick={() => downloadInvoice(row.id)} disabled={!row.canDownload}>Download PDF</button>
+                        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => downloadInvoice(row.id)} disabled={!row.canDownload}>Download PDF</button>
                       </td>
                     </tr>
                   ))}
@@ -211,22 +218,26 @@ export default function BillingPage() {
       {planModalOpen ? (
         <Modal title="Confirm plan change" onClose={() => setPlanModalOpen(false)}>
           <p>{switchingLabel}</p>
-          <p style={{ color: 'var(--muted)' }}>
+          <p className="billing-modal__muted">
             Upgrades apply prorated credits immediately. Downgrades take effect at the next billing date.
           </p>
-          <button type="button" onClick={changePlan}>Confirm</button>
+          <div className="billing-modal__actions">
+            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan}>Confirm</button>
+          </div>
         </Modal>
       ) : null}
 
       {cancelModalOpen ? (
         <Modal title="Cancel subscription" onClose={() => setCancelModalOpen(false)}>
           <p>If you cancel, access remains active through the end of your current billing period.</p>
-          <p style={{ color: 'var(--muted)' }}>Before you go: Contact support for a retention discount.</p>
+          <p className="billing-modal__muted">Before you go: Contact support for a retention discount.</p>
           <label htmlFor="cancel-reason">Reason</label>
-          <select id="cancel-reason" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} style={{ width: '100%', marginTop: '0.3rem', marginBottom: '0.8rem' }}>
+          <select id="cancel-reason" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="billing-modal__select">
             {CANCEL_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
           </select>
-          <button type="button" onClick={cancelSubscription}>Confirm cancellation</button>
+          <div className="billing-modal__actions">
+            <button type="button" className="hf-btn hf-btn--destructive" onClick={cancelSubscription}>Confirm cancellation</button>
+          </div>
         </Modal>
       ) : null}
     </main>
