@@ -10,15 +10,15 @@ export default function UserGrowthChart({ data = [] }) {
       <div className="mt-4 space-y-3">
         <div>
           <div className="mb-1 flex items-center justify-between text-sm"><span>DAU</span><strong>{latest.dau || 0}</strong></div>
-          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded bg-blue-600" style={{ width: `${pct(latest.dau)}%` }} /></div>
+          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${pct(latest.dau)}%`, background: 'var(--admin-chart-series-dau)' }} /></div>
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm"><span>WAU</span><strong>{latest.wau || 0}</strong></div>
-          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded bg-teal-600" style={{ width: `${pct(latest.wau)}%` }} /></div>
+          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${pct(latest.wau)}%`, background: 'var(--admin-chart-series-wau)' }} /></div>
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm"><span>MAU</span><strong>{latest.mau || 0}</strong></div>
-          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded bg-violet-600" style={{ width: `${pct(latest.mau)}%` }} /></div>
+          <div className="h-4 rounded bg-slate-100"><div className="h-full rounded" style={{ width: `${pct(latest.mau)}%`, background: 'var(--admin-chart-series-mau)' }} /></div>
         </div>
       </div>
     </section>

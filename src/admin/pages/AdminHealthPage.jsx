@@ -20,7 +20,7 @@ function MetricChart({ data, color, title, accessor }) {
   return (
     <section className="ui-card p-4">
       <h3 className="admin-section-title">{title}</h3>
-      <svg viewBox='0 0 100 100' preserveAspectRatio='none' className="h-[140px] w-full rounded-md bg-slate-50">
+      <svg viewBox='0 0 100 100' preserveAspectRatio='none' className="h-[140px] w-full rounded-md admin-chart-surface">
         <polyline fill='none' stroke={color} strokeWidth='2' points={points} />
       </svg>
       <div className="admin-note mt-2">Latest: {latest ? `${accessor(latest)}%` : '—'}</div>
@@ -89,13 +89,13 @@ export default function AdminHealthPage() {
       )}
 
       {loading && <p className="admin-note">Loading health data…</p>}
-      {error && <p className="text-sm font-medium text-rose-700">{error}</p>}
+      {error && <p className="admin-inline-alert admin-inline-alert--error">{error}</p>}
 
       <HealthStatus health={health} alerts={health?.alerts || []} />
 
       <div className="admin-grid admin-grid--2">
-        <MetricChart title='Memory usage trend' color='#2563eb' data={history} accessor={(point) => point.memoryPercent} />
-        <MetricChart title='CPU usage trend' color='#9333ea' data={history} accessor={(point) => point.cpuPercent} />
+        <MetricChart title='Memory usage trend' color='var(--admin-chart-series-memory)' data={history} accessor={(point) => point.memoryPercent} />
+        <MetricChart title='CPU usage trend' color='var(--admin-chart-series-cpu)' data={history} accessor={(point) => point.cpuPercent} />
       </div>
 
       <section className="ui-card p-4">
