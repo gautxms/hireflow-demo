@@ -1,9 +1,4 @@
-function getMatchColor(score) {
-  if (score >= 85) return 'var(--accent-2)'
-  if (score >= 70) return 'var(--accent)'
-  if (score >= 55) return '#f59e0b'
-  return '#ef4444'
-}
+import { resolveCandidateScoreState } from './candidateResultsState'
 
 export default function CandidateMatchScore({ matchScore }) {
   if (!matchScore || typeof matchScore.score !== 'number') {
@@ -15,23 +10,17 @@ export default function CandidateMatchScore({ matchScore }) {
   const experience = breakdown.experience || {}
   const roleMatch = breakdown.roleMatch || {}
 
-  const color = getMatchColor(score)
+  const scoreState = resolveCandidateScoreState(score)
   const matchedSkillsLabel = Array.isArray(requiredSkills.matchedSkills) && requiredSkills.matchedSkills.length > 0
     ? ` (${requiredSkills.matchedSkills.join(', ')})`
     : ''
 
   return (
-    <div style={{
-      marginTop: '1rem',
-      background: 'rgba(255,255,255,0.02)',
-      border: '1px solid var(--border)',
-      borderRadius: '8px',
-      padding: '1rem',
-    }}>
-      <p style={{ fontSize: '1rem', margin: 0, marginBottom: '0.5rem', color }}>
-        📊 Match: <strong>{score}%</strong> ({fit || 'Match'})
+    <div className={`mt-4 rounded-[var(--radius-lg)] border p-4 ${scoreState.surfaceClass}`}>
+      <p className={`mb-2 text-base ${scoreState.accentText}`}>
+        📊 Match: <strong>{score}%</strong> ({fit || scoreState.label})
       </p>
-      <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--muted)', lineHeight: 1.6 }}>
+      <ul className="m-0 list-disc pl-5 leading-relaxed text-[var(--muted)]">
         <li>
           {requiredSkills.matched === requiredSkills.total ? '✓' : '✗'} {requiredSkills.matched ?? 0}/{requiredSkills.total ?? 0} required skills{matchedSkillsLabel}
         </li>
