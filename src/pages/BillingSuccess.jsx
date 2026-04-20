@@ -57,7 +57,7 @@ export default function BillingSuccess() {
             <strong className="billing-shell__summary-value">{plan}</strong>
           </div>
           {transactionId && (
-            <div>
+            <div className="billing-shell__summary-row billing-shell__summary-row--transaction">
               <span className="billing-shell__summary-label">Transaction:</span>
               <code className="billing-shell__transaction">{transactionId}</code>
             </div>

@@ -20,3 +20,4 @@ Use this register for temporary, approved deviations from `docs/DESIGN_BRAND_GUI
 ## Route migration note (2026-04-20)
 - Migrated `/checkout`, `/account`, `/billing`, `/billing/success`, `/billing/cancel`, and `/account/payment-method` to class-based styles.
 - No runtime inline sizing/width styles remain in these routes after migration.
+- Route-state shells for loading/error/success remain aligned to shared `src/styles/app-route-states.css` classes (`route-state`, `route-state-card`, and modifiers).
