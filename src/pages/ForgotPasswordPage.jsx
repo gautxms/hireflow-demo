@@ -71,7 +71,7 @@ export default function ForgotPasswordPage({ onBackToLogin }) {
           />
 
           {error && <p className="auth-error">{error}</p>}
-          {success && <p style={{ color: '#047857', margin: 0 }}>{success}</p>}
+          {success && <p style={{ color: 'var(--color-success)', margin: 0 }}>{success}</p>}
 
           <button className="auth-submit" type="submit" disabled={loading}>
             {loading ? 'Sending reset link...' : 'Send Reset Link'}
