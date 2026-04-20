@@ -82,3 +82,23 @@ body {
   font-weight: var(--type-button-weight);
   letter-spacing: var(--type-button-tracking);
 }
+
+
+.hf-icon {
+  --hf-icon-size: var(--icon-size-md);
+  --hf-icon-stroke: var(--icon-stroke-regular);
+  --hf-icon-color: currentColor;
+  width: var(--hf-icon-size);
+  height: var(--hf-icon-size);
+  color: var(--hf-icon-color);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.hf-icon > svg {
+  width: 100%;
+  height: 100%;
+}

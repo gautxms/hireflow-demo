@@ -41,6 +41,24 @@
   --color-focus-ring: var(--color-accent-green);
   --color-focus-ring-inner: var(--color-bg-primary);
 
+
+  /* Iconography */
+  --icon-size-xs: 12px;
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+  --icon-size-xl: 32px;
+  --icon-stroke-thin: 1.25;
+  --icon-stroke-regular: 1.75;
+  --icon-stroke-bold: 2.25;
+  --icon-color-default: var(--color-text-primary);
+  --icon-color-muted: var(--color-text-secondary);
+  --icon-color-accent: var(--color-accent-green);
+  --icon-color-info: var(--color-info);
+  --icon-color-success: var(--color-success);
+  --icon-color-warning: var(--color-warning-text);
+  --icon-color-danger: var(--color-error);
+
   /* Typography */
   --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   --font-family-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;

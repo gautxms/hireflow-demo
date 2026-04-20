@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ADMIN_SECTIONS } from '../config/adminNavigation'
+import { Icon } from '../../components/Icon'
 
 const SECTIONS = ADMIN_SECTIONS
 
@@ -57,7 +58,7 @@ export default function AdminSidebar({ activeSection, onNavigate, mobileOpen, on
                     className={`admin-sidebar__item ${isActive ? 'admin-sidebar__item--active' : ''}`}
                     aria-current={isActive ? 'page' : undefined}
                   >
-                    <span className="admin-sidebar__icon" aria-hidden="true">{section.icon}</span>
+                    <span className="admin-sidebar__icon"><Icon name={section.icon} size="sm" tone="current" /></span>
                     <span>{section.label}</span>
                   </button>
                 </li>
