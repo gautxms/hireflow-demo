@@ -8,6 +8,8 @@ import {
   normalizeSortBy,
   paginateCandidates,
   resolveCandidateResumeUuid,
+  resolveCandidateScoreState,
+  resolveTierState,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -604,23 +606,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     )
   }
 
-  const getScoreColor = (score) => {
-    if (score >= 90) return 'var(--accent-2)'
-    if (score >= 80) return 'var(--accent)'
-    if (score >= 70) return '#f59e0b'
-    return '#ef4444'
-  }
-
-  const getTierBadge = (tier) => {
-    const styles = {
-      top: { bg: 'rgba(90,255,184,0.15)', color: 'var(--accent-2)', label: '⭐ TOP' },
-      strong: { bg: 'rgba(232,255,90,0.15)', color: 'var(--accent)', label: '✓ STRONG' },
-      consider: { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b', label: '→ CONSIDER' }
-    }
-    const style = styles[tier] || styles.consider
-    return { bg: style.bg, color: style.color, label: style.label }
-  }
-
   return (
     <div className="candidate-results-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
@@ -646,7 +631,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         <p style={{ color: 'var(--muted)' }}>
           {pagination.total} candidates analyzed and ranked by fit
         </p>
-        {resultsError && <p style={{ color: '#ef4444' }}>{resultsError}</p>}
+        {resultsError && <p style={{ color: 'var(--color-error)' }}>{resultsError}</p>}
       </div>
 
       <ShortlistManager
@@ -764,19 +749,13 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               .filter(Boolean)
           const candidatePros = Array.isArray(candidate.pros) ? candidate.pros : []
           const candidateCons = Array.isArray(candidate.cons) ? candidate.cons : []
-          const tier = getTierBadge(candidate.tier)
+          const scoreState = resolveCandidateScoreState(candidate.score)
+          const tierState = resolveTierState(candidate.tier, candidate.score)
 
           return (
             <div
-              className="candidate-result-card"
+              className="candidate-result-card rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--card)] p-8 shadow-[var(--shadow-md)] transition-all duration-300"
               key={candidate._bulkKey}
-              style={{
-                background: 'var(--card)',
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                padding: '2rem',
-                transition: 'all 0.3s'
-              }}
             >
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -804,7 +783,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     width: '90px',
                     height: '90px',
                     borderRadius: '50%',
-                    background: `conic-gradient(${getScoreColor(candidate.score)} ${candidate.score * 3.6}deg, rgba(255,255,255,0.1) 0deg)`,
+                    background: `conic-gradient(${scoreState.chartColor} ${candidate.score * 3.6}deg, rgba(255,255,255,0.1) 0deg)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -821,7 +800,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                       justifyContent: 'center',
                       fontSize: '1.5rem',
                       fontWeight: 'bold',
-                      color: getScoreColor(candidate.score)
+                      color: scoreState.chartColor
                     }}>
                       {candidate.score}
                     </div>
@@ -830,17 +809,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 </div>
 
                 <div>
-                  <div style={{
-                    background: tier.bg,
-                    color: tier.color,
-                    padding: '0.5rem 1rem',
-                    borderRadius: '20px',
-                    fontSize: '0.8rem',
-                    fontWeight: 'bold',
-                    textAlign: 'center',
-                    marginBottom: '0.75rem'
-                  }}>
-                    {tier.label}
+                  <div className={`mb-3 rounded-full border px-4 py-2 text-center text-xs font-bold ${tierState.badgeClass}`}>
+                    {`${tierState.icon} ${tierState.label.toUpperCase()}`}
                   </div>
                   <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Fit: {candidate.fit || 'N/A'}</p>
                   <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Experience: {candidate.experience || 'N/A'}</p>
@@ -859,12 +829,12 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     <span
                       key={idx}
                       style={{
-                        background: 'rgba(90,255,184,0.1)',
-                        color: 'var(--accent-2)',
+                        background: 'var(--color-accent-alpha-08)',
+                        color: 'var(--accent)',
                         padding: '0.25rem 0.75rem',
                         borderRadius: '20px',
                         fontSize: '0.85rem',
-                        border: '1px solid rgba(90,255,184,0.3)'
+                        border: '1px solid var(--color-accent-alpha-15)'
                       }}
                     >
                       {skill}
@@ -880,7 +850,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
               <div className="candidate-evaluation-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                 <div>
-                  <h3 style={{ color: 'var(--accent-2)', fontSize: '1rem', marginBottom: '0.75rem' }}>✅ Strengths</h3>
+                  <h3 style={{ color: 'var(--color-success-text)', fontSize: '1rem', marginBottom: '0.75rem' }}>✅ Strengths</h3>
                   <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text)' }}>
                     {candidatePros.length > 0
                       ? candidatePros.map((pro, idx) => (
@@ -891,7 +861,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 </div>
 
                 <div>
-                  <h3 style={{ color: '#f59e0b', fontSize: '1rem', marginBottom: '0.75rem' }}>⚠️ Considerations</h3>
+                  <h3 style={{ color: 'var(--color-warning-text)', fontSize: '1rem', marginBottom: '0.75rem' }}>⚠️ Considerations</h3>
                   <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text)' }}>
                     {candidateCons.length > 0
                       ? candidateCons.map((con, idx) => (
@@ -904,45 +874,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
               {/* CTA */}
               <div className="candidate-cta-row" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <button style={{
-                  minHeight: 44,
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  border: 'none',
-                  padding: '0.6rem 1.5rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}>
+                <button className="min-h-11 rounded-[var(--radius-sm)] bg-[var(--accent)] px-6 py-2.5 text-sm font-bold text-[var(--ink)] transition hover:brightness-95">
                   Schedule Interview
                 </button>
-                <button style={{
-                  minHeight: 44,
-                  background: 'transparent',
-                  color: 'var(--accent)',
-                  border: '1px solid var(--accent)',
-                  padding: '0.6rem 1.5rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}>
+                <button className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--accent)] px-6 py-2.5 text-sm font-bold text-[var(--accent)] transition hover:bg-[var(--color-accent-alpha-08)]">
                   View Full Profile
                 </button>
                 <button
                   onClick={() => addCandidateToShortlist(candidate)}
-                  style={{
-                    minHeight: 44,
-                    background: 'transparent',
-                    color: 'var(--accent-2)',
-                    border: '1px solid var(--accent-2)',
-                    padding: '0.6rem 1.5rem',
-                    borderRadius: '6px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}
+                  className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--accent)] px-6 py-2.5 text-sm font-bold text-[var(--accent)] transition hover:bg-[var(--color-accent-alpha-08)]"
                 >
                   Add to shortlist
                 </button>

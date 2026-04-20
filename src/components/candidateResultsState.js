@@ -108,3 +108,88 @@ export function resolveCandidateResumeUuid(candidate) {
 
   return null
 }
+
+const SCORE_STATE_BANDS = [
+  {
+    key: 'strong',
+    min: 85,
+    label: 'Strong match',
+    icon: '⭐',
+    chartColor: 'var(--color-success)',
+    accentText: 'text-[var(--color-success-text)]',
+    accentSubtleText: 'text-[var(--color-success)]',
+    surfaceClass: 'bg-[var(--color-success-alpha-12)] border-[color:var(--color-success-alpha-35)]',
+    badgeClass: 'bg-[var(--color-success-alpha-12)] text-[var(--color-success-text)] border-[color:var(--color-success-alpha-35)]',
+  },
+  {
+    key: 'good',
+    min: 70,
+    label: 'Good match',
+    icon: '👍',
+    chartColor: 'var(--accent)',
+    accentText: 'text-[var(--accent)]',
+    accentSubtleText: 'text-[var(--accent)]',
+    surfaceClass: 'bg-[var(--color-accent-alpha-08)] border-[color:var(--color-accent-alpha-15)]',
+    badgeClass: 'bg-[var(--color-accent-alpha-08)] text-[var(--accent)] border-[color:var(--color-accent-alpha-15)]',
+  },
+  {
+    key: 'consider',
+    min: 55,
+    label: 'Consider',
+    icon: '⏳',
+    chartColor: 'var(--color-warning-text)',
+    accentText: 'text-[var(--color-warning-text)]',
+    accentSubtleText: 'text-[var(--color-warning-text)]',
+    surfaceClass: 'bg-[var(--color-warning-alpha-12)] border-[color:var(--color-warning-alpha-35)]',
+    badgeClass: 'bg-[var(--color-warning-alpha-12)] text-[var(--color-warning-text)] border-[color:var(--color-warning-alpha-35)]',
+  },
+  {
+    key: 'low',
+    min: 0,
+    label: 'Low match',
+    icon: '⚠️',
+    chartColor: 'var(--color-error)',
+    accentText: 'text-[var(--color-error)]',
+    accentSubtleText: 'text-[var(--color-error)]',
+    surfaceClass: 'bg-[var(--color-danger-alpha-15)] border-[color:var(--color-danger-alpha-35)]',
+    badgeClass: 'bg-[var(--color-danger-alpha-15)] text-[var(--color-error)] border-[color:var(--color-danger-alpha-35)]',
+  },
+]
+
+const TIER_TO_SCORE_STATE = {
+  top: 'strong',
+  strong: 'good',
+  consider: 'consider',
+}
+
+export function resolveCandidateScoreState(rawScore) {
+  const score = Number(rawScore) || 0
+  return SCORE_STATE_BANDS.find((band) => score >= band.min) || SCORE_STATE_BANDS[SCORE_STATE_BANDS.length - 1]
+}
+
+export function resolveRecommendationState(recommendation, score) {
+  const value = String(recommendation || '').toLowerCase()
+  if (value.includes('strong')) {
+    return SCORE_STATE_BANDS[0]
+  }
+
+  if (value.includes('good')) {
+    return SCORE_STATE_BANDS[1]
+  }
+
+  if (value.includes('possible') || value.includes('consider')) {
+    return SCORE_STATE_BANDS[2]
+  }
+
+  return resolveCandidateScoreState(score)
+}
+
+export function resolveTierState(tier, score) {
+  const normalizedTier = String(tier || '').toLowerCase()
+  const mapped = TIER_TO_SCORE_STATE[normalizedTier]
+  if (mapped) {
+    return SCORE_STATE_BANDS.find((band) => band.key === mapped) || resolveCandidateScoreState(score)
+  }
+
+  return resolveCandidateScoreState(score)
+}

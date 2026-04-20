@@ -72,19 +72,19 @@ export default function Dashboard({ onNavigate }) {
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'DONE': return 'bg-emerald-500 bg-opacity-20 text-emerald-300'
-      case 'IN_PROGRESS': return 'bg-blue-500 bg-opacity-20 text-blue-300'
-      case 'PENDING': return 'bg-amber-500 bg-opacity-20 text-amber-300'
-      default: return 'bg-gray-500 bg-opacity-20 text-gray-300'
+      case 'DONE': return 'bg-[var(--color-success-alpha-12)] text-[var(--color-success-text)]'
+      case 'IN_PROGRESS': return 'bg-[var(--color-accent-alpha-08)] text-[var(--accent)]'
+      case 'PENDING': return 'bg-[var(--color-warning-alpha-12)] text-[var(--color-warning-text)]'
+      default: return 'bg-[var(--color-white-alpha-08)] text-[var(--muted)]'
     }
   }
 
   const getPriorityColor = (priority) => {
     switch(priority) {
-      case 'CRITICAL': return 'text-red-400'
-      case 'HIGH': return 'text-orange-400'
-      case 'MEDIUM': return 'text-yellow-400'
-      default: return 'text-gray-400'
+      case 'CRITICAL': return 'text-[var(--color-error)]'
+      case 'HIGH': return 'text-[var(--color-warning-text)]'
+      case 'MEDIUM': return 'text-[var(--accent)]'
+      default: return 'text-[var(--muted)]'
     }
   }
 
