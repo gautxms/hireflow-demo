@@ -83,8 +83,10 @@
   color: var(--admin-text);
   border-radius: var(--admin-radius-sm);
   padding: 0.5rem 0.8rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--type-button-size);
+  line-height: var(--type-button-line-height);
+  font-weight: var(--type-button-weight);
+  letter-spacing: var(--type-button-tracking);
   cursor: pointer;
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
@@ -139,7 +141,8 @@
   border: 1px solid var(--admin-border-strong);
   border-radius: var(--admin-radius-sm);
   padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
   color: var(--admin-text);
   background: var(--color-white-alpha-03);
 }
@@ -152,8 +155,10 @@
   color: var(--admin-text-muted);
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
+  font-weight: var(--type-small-weight);
+  letter-spacing: var(--type-small-tracking);
 }
 
 .ui-toast {
@@ -207,7 +212,10 @@
   align-items: center;
   gap: 0.6rem;
   cursor: pointer;
-  font-weight: 500;
+  font-size: var(--type-nav-size);
+  line-height: var(--type-nav-line-height);
+  font-weight: var(--type-nav-weight);
+  letter-spacing: var(--type-nav-tracking);
   transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
 }
 
@@ -222,7 +230,7 @@
   background: var(--color-accent-alpha-08);
   border-color: var(--admin-nav-active);
   color: var(--admin-nav-active);
-  font-weight: 700;
+  font-weight: var(--type-nav-weight);
 }
 
 .admin-shell-v2__main {
@@ -246,14 +254,17 @@
 
 .admin-shell-v2__header h1 {
   margin: 0;
-  font-size: clamp(1.15rem, 1rem + 0.45vw, 1.35rem);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line-height);
   font-family: var(--admin-display-font);
-  font-weight: 650;
+  font-weight: var(--type-h2-weight);
+  letter-spacing: var(--type-h2-tracking);
 }
 
 .admin-shell-v2__section {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--admin-text-subtle);
@@ -488,7 +499,10 @@
   align-items: center;
   gap: 0.55rem;
   cursor: pointer;
-  font-weight: 500;
+  font-size: var(--type-nav-size);
+  line-height: var(--type-nav-line-height);
+  font-weight: var(--type-nav-weight);
+  letter-spacing: var(--type-nav-tracking);
   transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
 }
 
@@ -539,7 +553,8 @@
 
 .admin-page__subtitle {
   margin: 0.4rem 0 0;
-  font-size: 0.92rem;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
   color: var(--admin-text-muted);
 }
 
@@ -581,8 +596,10 @@
 .admin-section-title {
   margin: 0 0 0.75rem;
   color: var(--admin-text);
-  font-size: 1.05rem;
-  font-weight: 650;
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line-height);
+  font-weight: var(--type-h3-weight);
+  letter-spacing: var(--type-h3-tracking);
 }
 
 .admin-alert {
@@ -683,7 +700,8 @@
 
 .admin-note {
   color: var(--admin-text-muted);
-  font-size: 0.9rem;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
 }
 
 .admin-webhook-list {
@@ -737,7 +755,8 @@
 
 .admin-section-header__eyebrow {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--admin-text-subtle);
@@ -745,14 +764,16 @@
 
 .admin-section-header__title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line-height);
   color: var(--admin-text);
 }
 
 .admin-section-header__subtitle {
   margin: 0.35rem 0 0;
   color: var(--admin-text-muted);
-  font-size: 0.9rem;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
 }
 
 .admin-section-header__action {
@@ -767,14 +788,16 @@
 }
 
 .admin-form-row__label {
-  font-size: 0.9rem;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
   color: var(--admin-text);
-  font-weight: 600;
+  font-weight: var(--type-button-weight);
 }
 
 .admin-form-row__hint {
   margin: 0;
-  font-size: 0.83rem;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
   color: var(--admin-text-muted);
 }
 
@@ -782,7 +805,8 @@
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-sm);
   padding: 0.7rem 0.85rem;
-  font-size: 0.9rem;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
 }
 
 .admin-inline-alert--info {
