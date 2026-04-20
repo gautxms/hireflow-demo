@@ -155,7 +155,7 @@
   align-items: center;
   justify-content: center;
   margin: 0 auto var(--spacing-xl);
-  animation: billing-scale-in 0.6s ease-out;
+  animation: billing-scale-in var(--motion-duration-emphasized) var(--motion-ease-standard);
   color: var(--color-black);
   font-size: 40px;
 }
@@ -271,5 +271,11 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .billing-shell__icon-wrap {
+    animation: none;
   }
 }

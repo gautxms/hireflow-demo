@@ -83,7 +83,7 @@ export default function PricingPage() {
                 background: plan.highlighted ? 'rgba(232,255,90,0.05)' : 'var(--card)',
                 position: 'relative',
                 transform: plan.highlighted ? 'scale(1.05)' : 'scale(1)',
-                transition: 'transform 0.3s ease'
+                transition: 'transform var(--motion-duration-slow) var(--motion-ease-standard)'
               }}
             >
               {plan.highlighted && (
@@ -129,7 +129,7 @@ export default function PricingPage() {
                   fontWeight: 'bold',
                   cursor: 'pointer',
                   fontSize: '1rem',
-                  transition: 'all 0.2s'
+                  transition: 'all var(--motion-duration-base) var(--motion-ease-standard)'
                 }}
               >
                 {plan.cta}

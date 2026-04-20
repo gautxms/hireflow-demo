@@ -301,7 +301,7 @@
 .demo-confirm-card { max-width: 640px; margin: 0 auto; }
 
 .about-story { max-width:900px; margin: 0 auto; display:grid; gap:1.25rem; }
-.about-team-card { text-align:center; cursor:pointer; transition: transform .2s ease; }
+.about-team-card { text-align:center; cursor:pointer; transition: transform var(--motion-duration-base) var(--motion-ease-standard); }
 .about-team-card.active { transform: scale(1.03); }
 .about-team-avatar { font-size: 3rem; margin-bottom: .75rem; }
 .about-team-meta { border-top:1px solid var(--color-border); margin-top:1rem; padding-top:1rem; }
@@ -329,3 +329,11 @@
 .public-max-800 { max-width: 800px; margin: 0 auto; }
 
 .demo-step-group { display:flex; align-items:center; gap:0.75rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .about-team-card,
+  .about-team-card.active {
+    transition: none;
+    transform: none;
+  }
+}

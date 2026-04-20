@@ -145,7 +145,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
             cursor: 'pointer',
             fontWeight: '600',
             fontSize: '14px',
-            transition: 'all 0.2s',
+            transition: 'all var(--motion-duration-base) var(--motion-ease-standard)',
           }}
           onMouseEnter={(event) => {
             event.target.style.background = '#ef4444'

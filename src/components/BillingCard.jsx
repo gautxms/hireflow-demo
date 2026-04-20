@@ -50,7 +50,7 @@ export default function BillingCard() {
           cursor: 'pointer',
           fontWeight: '600',
           fontSize: '14px',
-          transition: 'opacity 0.2s',
+          transition: 'opacity var(--motion-duration-base) var(--motion-ease-standard)',
         }}
         onMouseEnter={(event) => {
           event.target.style.opacity = '0.9'
@@ -77,7 +77,7 @@ export default function BillingCard() {
           cursor: 'pointer',
           fontWeight: '600',
           fontSize: '14px',
-          transition: 'background 0.2s',
+          transition: 'background-color var(--motion-duration-base) var(--motion-ease-standard)',
         }}
         onMouseEnter={(event) => {
           event.target.style.background = '#444444'

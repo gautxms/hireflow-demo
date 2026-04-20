@@ -55,7 +55,7 @@ export default function SettingsPage({ onBack }) {
                 marginBottom: '0.5rem',
                 cursor: 'pointer',
                 fontSize: '0.9rem',
-                transition: 'all 0.2s',
+                transition: 'all var(--motion-duration-base) var(--motion-ease-standard)',
                 textTransform: 'capitalize'
               }}
             >
