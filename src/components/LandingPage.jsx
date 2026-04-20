@@ -63,10 +63,10 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
       <section className="hero">
         <div className="orb-2"></div>
         <div className="hero-content">
-          <h1>
-            Hire Smarter.
-            <br />
-            <span className="gradient">Faster.</span>
+          <h1 className="hero-headline">
+            <span className="hero-headline-line">Hire</span>
+            <span className="hero-headline-line">Smarter.</span>
+            <span className="hero-headline-line hero-headline-line--accent">Faster.</span>
           </h1>
           <p>
             HireFlow automates candidate screening with AI. Reduce hiring time from weeks to days, 
