@@ -475,6 +475,13 @@ footer {
   border-bottom: none;
 }
 
+.candidate-results__actions-wrap {
+  margin-top: var(--spacing-lg);
+  display: flex;
+  gap: var(--spacing-base);
+  flex-wrap: wrap;
+}
+
 @media (max-width: 1439px) {
   .hero,
   .features,

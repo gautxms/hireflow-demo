@@ -873,7 +873,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               </div>
 
               {/* CTA */}
-              <div className="candidate-cta-row" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <div className="candidate-cta-row candidate-results__actions-wrap">
                 <button className="min-h-11 rounded-[var(--radius-sm)] bg-[var(--color-accent-green)] px-6 py-2.5 text-sm font-bold text-[var(--color-bg-primary)] transition hover:brightness-95">
                   Schedule Interview
                 </button>
