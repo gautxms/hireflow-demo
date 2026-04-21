@@ -328,7 +328,19 @@ a.public-card .public-copy {
 .help-sidebar { border-right: 1px solid var(--color-border); padding-right: 1.25rem; }
 .help-category-btn { display:flex; align-items:center; gap:0.5rem; width:100%; text-align:left; padding:0.75rem 1rem; border-radius:var(--radius-sm); border:1px solid transparent; background:transparent; color:var(--color-text-secondary); cursor:pointer; margin-bottom:0.5rem; }
 .help-category-btn.active { color: var(--color-accent-green); border-color: var(--color-accent-green); background: var(--color-accent-alpha-10); }
-.help-article-trigger { width:100%; text-align:left; display:grid; grid-template-columns:1fr auto; gap:1rem; }
+.help-article-item { display: grid; gap: 0.5rem; }
+.help-article-trigger { width:100%; text-align:left; display:grid; grid-template-columns:1fr auto; gap:1rem; transition: var(--motion-transition-color), border-color 160ms ease; }
+.help-article-trigger .public-card-title { color: var(--color-text-primary); }
+.help-article-trigger .public-card-copy { color: var(--color-text-secondary); }
+.help-article-trigger:hover .public-card-title,
+.help-article-trigger:focus-visible .public-card-title { color: var(--color-text-primary); }
+.help-article-trigger:hover .public-card-copy,
+.help-article-trigger:focus-visible .public-card-copy { color: var(--color-text-secondary); }
+.help-article-trigger[aria-expanded='true'] { border-color: var(--color-accent-green); border-left-width: 3px; padding-left: calc(var(--spacing-card) - 2px); background: var(--color-accent-alpha-10); }
+.help-article-trigger[aria-expanded='true'] .public-card-title { color: var(--color-text-primary); }
+.help-article-trigger[aria-expanded='true'] .public-card-copy { color: var(--color-text-primary); }
+.help-article-panel { border-top: 0; border-top-left-radius: 0; margin-top: -0.25rem; position: relative; }
+.help-article-panel::before { content: ''; position: absolute; left: 0; top: 0; width: 3px; height: 100%; background: var(--color-accent-green); border-bottom-left-radius: var(--radius-xs); }
 .help-search-wrap { text-align:center; }
  .help-search-wrap .public-form-search { max-width: 600px; }
 .help-category-icon { display:inline-flex; }
