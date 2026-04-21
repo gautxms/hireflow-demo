@@ -84,10 +84,10 @@ export default function AdminSecurityPage() {
             <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.fallbackApiKey} onChange={(e) => setForm((c) => ({ ...c, fallbackApiKey: e.target.value }))} placeholder={settings?.fallback?.maskedApiKey || 'sk-ant-...'} />
           </label>
           <label className="text-sm text-admin-body">Primary model
-            <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.primaryModel} onChange={(e) => setForm((c) => ({ ...c, primaryModel: e.target.value }))} placeholder={settings?.primary?.model || 'claude-3-5-sonnet-20241022'} />
+            <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.primaryModel} onChange={(e) => setForm((c) => ({ ...c, primaryModel: e.target.value }))} placeholder={settings?.primary?.model || settings?.defaultModel || ''} />
           </label>
           <label className="text-sm text-admin-body">Fallback model
-            <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.fallbackModel} onChange={(e) => setForm((c) => ({ ...c, fallbackModel: e.target.value }))} placeholder={settings?.fallback?.model || 'claude-3-5-sonnet-20241022'} />
+            <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.fallbackModel} onChange={(e) => setForm((c) => ({ ...c, fallbackModel: e.target.value }))} placeholder={settings?.fallback?.model || settings?.defaultModel || ''} />
           </label>
           <div className="md:col-span-2 flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={saving}>{saving ? 'Saving…' : 'Save AI settings'}</button>

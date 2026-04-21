@@ -1,8 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { logTelemetryToDatabase } from '../db/client.js'
 import { getActiveAiProviderCredentials } from './aiProviderConfigService.js'
+import { AI_MODEL_CONFIG } from '../config/aiModels.js'
 
-const MODEL = process.env.ANTHROPIC_RESUME_MODEL || 'claude-3-5-sonnet-20241022'
+const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
 const MIME_TYPE_MAP = {
   'application/pdf': 'application/pdf',

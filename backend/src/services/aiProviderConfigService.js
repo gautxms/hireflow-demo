@@ -1,7 +1,8 @@
 import { pool } from '../db/client.js'
+import { AI_MODEL_CONFIG, getAnthropicModelWarnings } from '../config/aiModels.js'
 
 const DEFAULT_PROVIDER = 'anthropic'
-const DEFAULT_MODEL = process.env.ANTHROPIC_RESUME_MODEL || 'claude-3-5-sonnet-20241022'
+const DEFAULT_MODEL = AI_MODEL_CONFIG.defaultModel
 
 let tableEnsured = false
 
@@ -52,6 +53,8 @@ export async function getAdminAiProviderSettings() {
 
   return {
     provider: DEFAULT_PROVIDER,
+    defaultModel: DEFAULT_MODEL,
+    allowedModels: AI_MODEL_CONFIG.allowedModels,
     primary: {
       configured: Boolean(primary?.api_key),
       maskedApiKey: maskApiKey(primary?.api_key),
@@ -93,6 +96,32 @@ export async function upsertAdminAiProviderKeys({ primaryApiKey, fallbackApiKey,
   }
 }
 
+
+export async function validateAiProviderModelConfiguration() {
+  await ensureAiProviderTable()
+
+  const { rows } = await pool.query(
+    `SELECT key_label, model
+     FROM admin_ai_provider_keys
+     WHERE provider = $1
+       AND is_active = true`,
+    [DEFAULT_PROVIDER],
+  )
+
+  const warnings = getAnthropicModelWarnings([
+    { source: 'env.ANTHROPIC_RESUME_MODEL', keyLabel: null, model: DEFAULT_MODEL },
+    ...rows.map((row) => ({
+      source: 'admin-console',
+      keyLabel: row.key_label,
+      model: row.model || DEFAULT_MODEL,
+    })),
+  ])
+
+  return {
+    allowedModels: AI_MODEL_CONFIG.allowedModels,
+    warnings,
+  }
+}
 export async function getActiveAiProviderCredentials() {
   await ensureAiProviderTable()
 
