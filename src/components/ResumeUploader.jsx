@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
+import { mapProviderError } from './aiProviderErrorMapping'
+import '../styles/resume-uploader.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
@@ -75,6 +77,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [parseStatus, setParseStatus] = useState('')
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
   const [error, setError] = useState('')
+  const [technicalErrorDetails, setTechnicalErrorDetails] = useState('')
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
@@ -158,8 +161,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
     if (rejected.length > 0) {
       setError(sanitizeForDisplay(rejected.join(' ')))
+      setTechnicalErrorDetails('')
     } else {
       setError('')
+      setTechnicalErrorDetails('')
     }
 
     if (allowed.length > 0) {
@@ -240,6 +245,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
     setIsAnalyzing(true)
     setError('')
+    setTechnicalErrorDetails('')
 
     try {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -406,7 +412,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         }
 
         if (statusPayload.status === 'failed') {
-          throw new Error(statusPayload.error || 'File format not recognized')
+          throw new Error(statusPayload.error || 'unknown_error')
         }
 
         await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
@@ -420,19 +426,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       setParseProgress(0)
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
+      const normalizedProviderError = mapProviderError(errorMessage)
 
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
+        setTechnicalErrorDetails('')
       } else if (isInfrastructureConfigError(errorMessage)) {
         setError(formatUploadError('AWS S3 not configured'))
+        setTechnicalErrorDetails('')
       } else if (
         errorMessage.toLowerCase().includes('parse')
         || errorMessage.toLowerCase().includes('no candidates')
         || errorMessage.toLowerCase().includes('format')
       ) {
         setError(formatParseError('File format not recognized'))
+        setTechnicalErrorDetails(errorMessage)
       } else {
-        setError(formatUploadError(errorMessage))
+        setError(normalizedProviderError.userMessage)
+        setTechnicalErrorDetails(normalizedProviderError.technicalDetails)
       }
     } finally {
       setIsAnalyzing(false)
@@ -448,71 +459,41 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     : 0
 
   return (
-    <div className="resume-uploader-page" style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      <div className="resume-uploader-header" style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
+    <div className="resume-uploader-page">
+      <div className="resume-uploader-header">
         {onBack && (
           <button
-            className="touch-target"
+            className="touch-target resume-uploader-back-button"
             onClick={onBack}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              color: 'var(--color-accent-green)',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginBottom: '1rem',
-              fontSize: '0.9rem',
-            }}
           >
             ← Back
           </button>
         )}
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
+        <h1 className="resume-uploader-title">
           Upload Resumes
         </h1>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem' }}>
+        <p className="resume-uploader-subtitle">
           Upload one or multiple resumes. Our AI will analyze and rank candidates automatically.
         </p>
       </div>
 
-      <div className="resume-uploader-content" style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <div className="resume-uploader-content">
         {subscriptionStatus === 'trialing' && (
-          <div
-            style={{
-              background: 'rgba(251, 191, 36, 0.1)',
-              border: '1px solid #fbbf24',
-              color: '#f59e0b',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-              textAlign: 'center',
-            }}
-          >
+          <div className="resume-uploader-trial-banner">
             <strong>Your 7-day trial is active.</strong> After this period, upgrade your plan to continue screening resumes.
           </div>
         )}
         <div
-          className="resume-drop-zone"
+          className={`resume-drop-zone ${isDragging ? 'resume-drop-zone--dragging' : ''}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          style={{
-            border: isDragging ? '2px solid var(--color-accent-green)' : '2px dashed var(--border)',
-            borderRadius: '12px',
-            padding: '3rem',
-            textAlign: 'center',
-            background: isDragging ? 'rgba(232,255,90,0.05)' : 'var(--card)',
-            transition: 'all var(--motion-duration-slow) var(--motion-ease-standard)',
-            cursor: 'pointer',
-            marginBottom: '2rem',
-          }}
         >
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📄</div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+          <div className="resume-drop-zone-icon">📄</div>
+          <h3 className="resume-drop-zone-title">
             Drop resumes here
           </h3>
-          <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
+          <p className="resume-drop-zone-subtitle">
             or click to select files (PDF or DOCX, up to 100MB each)
           </p>
           <input
@@ -520,36 +501,27 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             type="file"
             multiple
             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            style={{ display: 'none' }}
+            className="resume-file-input"
             onChange={addFiles}
           />
           <button
-            className="touch-target"
             type="button"
             onClick={handleFileSelect}
-            style={{
-              background: 'var(--color-accent-green)',
-              color: 'var(--color-bg-primary)',
-              border: 'none',
-              padding: '0.75rem 2rem',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-            }}
+            className="touch-target resume-select-files-button"
           >
             Select Files
           </button>
         </div>
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--color-text-secondary)' }}>
+        <div className="resume-jd-selector">
+          <label className="resume-jd-selector-label">
             Select job description for this upload
           </label>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="resume-jd-selector-row">
             <select
               value={selectedJobDescriptionId}
               onChange={(event) => setSelectedJobDescriptionId(event.target.value)}
-              style={{ minWidth: 280, border: '1px solid var(--border)', borderRadius: 8, background: '#111827', color: '#fff', padding: '0.6rem' }}
+              className="resume-jd-select"
             >
               {jobDescriptions.length === 0 && (
                 <option value="">No active/draft JD found</option>
@@ -561,7 +533,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               ))}
             </select>
             {isActiveSubscriber && (
-              <a href="/job-descriptions" style={{ color: 'var(--color-accent-green)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
+              <a href="/job-descriptions" className="resume-manage-jd-link">
                 Manage job descriptions
               </a>
             )}
@@ -569,46 +541,28 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         </div>
 
         {uploadedFiles.length > 0 && (
-          <div className="resume-file-list" style={{ marginBottom: '2rem' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+          <div className="resume-file-list">
+            <h3 className="resume-file-list-title">
               Selected Files ({uploadedFiles.length})
             </h3>
-            <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <div className="resume-file-list-grid">
               {uploadedFiles.map((f, i) => (
                 <div
                   className="resume-file-row"
                   key={i}
-                  style={{
-                    background: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    padding: '1rem',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
                 >
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <span style={{ fontSize: '1.5rem' }}>📄</span>
+                  <div className="resume-file-meta">
+                    <span className="resume-file-icon">📄</span>
                     <div>
-                      <div style={{ fontWeight: 'bold' }}>{f.name}</div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                      <div className="resume-file-name">{f.name}</div>
+                      <div className="resume-file-size">
                         {(f.size / 1024 / 1024).toFixed(2)} MB
                       </div>
                     </div>
                   </div>
                   <button
-                    className="touch-target"
+                    className="resume-remove-file-button"
                     onClick={() => removeFile(i)}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid var(--border)',
-                      color: 'var(--color-text-secondary)',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                    }}
                   >
                     Remove
                   </button>
@@ -619,17 +573,15 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         )}
 
         {isAnalyzing && uploadProgress.total > 0 && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: '0.5rem' }}>
+          <div className="resume-upload-progress">
+            <p className="resume-upload-progress-label">
               Upload progress: {uploadPercent}% ({uploadProgress.completed}/{uploadProgress.total} chunks)
             </p>
-            <div style={{ height: '10px', borderRadius: '999px', background: 'var(--border)', overflow: 'hidden' }}>
+            <div className="resume-upload-progress-bar">
               <div
+                className="resume-upload-progress-fill"
                 style={{
                   width: `${uploadPercent}%`,
-                  height: '100%',
-                  background: 'var(--color-accent-green)',
-                  transition: 'width var(--motion-duration-base) var(--motion-ease-standard)',
                 }}
               />
             </div>
@@ -637,44 +589,30 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         )}
 
         {error && (
-          <div
-            style={{
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid #ef4444',
-              color: '#ef4444',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-              textAlign: 'left',
-              whiteSpace: 'pre-line',
-            }}
-          >
+          <div className="resume-error-banner">
             {error}
+            {technicalErrorDetails && (
+              <details className="resume-error-details">
+                <summary className="resume-error-details-summary">Technical details</summary>
+                <pre className="resume-error-details-pre">
+                  {technicalErrorDetails}
+                </pre>
+              </details>
+            )}
           </div>
         )}
 
         {isAnalyzing && parseStatus && (
-          <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: '1rem' }}>
+          <p className="resume-parse-status">
             Parsing status: {parseStatus} ({parseProgress}%)
           </p>
         )}
 
-        <div className="resume-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+        <div className="resume-actions">
           <button
-            className="touch-target"
+            className={`touch-target resume-analyze-button ${uploadedFiles.length === 0 ? 'resume-analyze-button--disabled' : ''}`}
             onClick={handleAnalyze}
             disabled={uploadedFiles.length === 0 || isAnalyzing}
-            style={{
-              background: uploadedFiles.length === 0 ? 'var(--color-text-secondary)' : 'var(--color-accent-green)',
-              color: 'var(--color-bg-primary)',
-              border: 'none',
-              padding: '1rem 3rem',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              cursor: uploadedFiles.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: uploadedFiles.length === 0 ? 0.5 : 1,
-            }}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
           </button>
