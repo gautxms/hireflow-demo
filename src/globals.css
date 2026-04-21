@@ -465,6 +465,10 @@ footer {
   transition: var(--motion-transition-color);
 }
 
+.public-footer__intent-links {
+  margin-top: var(--spacing-md);
+}
+
 .public-footer__link:hover,
 .public-footer__link:focus-visible {
   color: var(--color-accent-green-hover);

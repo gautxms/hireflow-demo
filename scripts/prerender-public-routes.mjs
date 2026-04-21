@@ -96,6 +96,42 @@ const PUBLIC_ROUTES = [
       </main>
     `,
   },
+  {
+    route: '/ai-resume-screening',
+    body: `
+      <main>
+        <h1>AI Resume Screening Software</h1>
+        <p>Automatically evaluate applicants against role requirements and prioritize top-fit candidates in minutes.</p>
+      </main>
+    `,
+  },
+  {
+    route: '/bulk-resume-analysis',
+    body: `
+      <main>
+        <h1>Bulk Resume Analysis</h1>
+        <p>Upload and analyze large candidate batches with consistent AI scoring to reduce manual review time.</p>
+      </main>
+    `,
+  },
+  {
+    route: '/resume-scoring-ai',
+    body: `
+      <main>
+        <h1>Resume Scoring AI</h1>
+        <p>Use transparent, role-aware AI scoring to compare applicants fairly and identify strong interview prospects.</p>
+      </main>
+    `,
+  },
+  {
+    route: '/automated-candidate-shortlisting',
+    body: `
+      <main>
+        <h1>Automated Candidate Shortlisting</h1>
+        <p>Generate shortlist-ready candidate rankings with clear rationale so hiring teams can move faster.</p>
+      </main>
+    `,
+  },
 ]
 
 const withSeo = (html, routeConfig) => {

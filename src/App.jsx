@@ -31,6 +31,9 @@ const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 import PublicFooter from './components/PublicFooter'
 import PageSeo from './components/PageSeo'
 import API_BASE from './config/api'
+import IntentLandingPage from './pages/seo/IntentLandingPage'
+import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
+import { trackIntentLanding } from './seo/organicTracking'
 import './styles/app-route-states.css'
 const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
 const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
@@ -265,6 +268,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/refund-policy') {
       return <RefundPolicy />
+    }
+
+    if (INTENT_PAGE_ORDER.includes(pathname)) {
+      return <IntentLandingPage pathname={pathname} />
     }
 
     if (pathname === '/billing/success') {
@@ -609,6 +616,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setIsMobileNavOpen(false)
     navigate('/about')
   }
+  const handleSolutionsClick = () => {
+    setIsMobileNavOpen(false)
+    navigate('/ai-resume-screening')
+  }
 
   return (
     <>
@@ -636,6 +647,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </button>
         <div className={`nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
           <button type="button" className="site-nav-button" onClick={handleFeaturesClick}>Features</button>
+          <button type="button" className="site-nav-button" onClick={handleSolutionsClick}>Solutions</button>
           {canViewUpgradePricing && (
             <button type="button" className="site-nav-button" onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }}>
               {isAuthenticated ? 'Upgrade' : 'Pricing'}
@@ -820,6 +832,10 @@ export default function App() {
       navigate('/')
     }
   }, [isAuthenticated, pathname])
+
+  useEffect(() => {
+    trackIntentLanding(pathname)
+  }, [pathname])
 
   if (!isAuthInitialized) {
     return null
