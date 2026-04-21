@@ -5,6 +5,7 @@ import { getRateLimitStats } from '../middleware/rateLimiter.js'
 import { createPasswordResetToken, generateResetToken } from '../services/resetTokenService.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
 import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdminCookie } from '../middleware/adminAuth.js'
+import { getAdminAiProviderSettings, upsertAdminAiProviderKeys } from '../services/aiProviderConfigService.js'
 
 const router = Router()
 
@@ -65,6 +66,55 @@ function normalizeInquiryRow(row) {
     reviewed_by: row.reviewed_by || null,
   }
 }
+
+router.get('/ai-settings', async (_req, res) => {
+  try {
+    const settings = await getAdminAiProviderSettings()
+    return res.json(settings)
+  } catch (error) {
+    console.error('[Admin ai-settings] get failed:', error)
+    return res.status(500).json({ error: 'Unable to load AI settings' })
+  }
+})
+
+router.put('/ai-settings', async (req, res) => {
+  const primaryApiKey = String(req.body?.primaryApiKey || '').trim()
+  const fallbackApiKey = String(req.body?.fallbackApiKey || '').trim()
+  const primaryModel = String(req.body?.primaryModel || '').trim()
+  const fallbackModel = String(req.body?.fallbackModel || '').trim()
+
+  if (!primaryApiKey && !fallbackApiKey) {
+    return res.status(400).json({ error: 'At least one API key (primary or fallback) is required.' })
+  }
+
+  try {
+    await upsertAdminAiProviderKeys({
+      primaryApiKey,
+      fallbackApiKey,
+      primaryModel,
+      fallbackModel,
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_ai_settings_updated',
+      details: {
+        primaryUpdated: Boolean(primaryApiKey),
+        fallbackUpdated: Boolean(fallbackApiKey),
+        primaryModel: primaryModel || null,
+        fallbackModel: fallbackModel || null,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    const settings = await getAdminAiProviderSettings()
+    return res.json({ ok: true, settings })
+  } catch (error) {
+    console.error('[Admin ai-settings] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update AI settings' })
+  }
+})
 
 router.get('/inquiries', async (req, res) => {
   const search = String(req.query.search || '').trim()

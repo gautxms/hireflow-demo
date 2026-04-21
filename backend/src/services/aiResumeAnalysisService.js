@@ -1,12 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { logTelemetryToDatabase } from '../db/client.js'
+import { getActiveAiProviderCredentials } from './aiProviderConfigService.js'
 
 const MODEL = process.env.ANTHROPIC_RESUME_MODEL || 'claude-3-5-sonnet-20241022'
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
-
 const MIME_TYPE_MAP = {
   'application/pdf': 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -134,12 +131,13 @@ function normalizeUsageMetrics(usage) {
   }
 }
 
-export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY not configured. Claude analysis unavailable.')
+export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename, { apiKey, model = MODEL, credentialLabel = 'primary' } = {}) {
+  if (!apiKey) {
+    throw new Error('Anthropic API key not configured. Claude analysis unavailable.')
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
+  const client = new Anthropic({ apiKey })
 
   const prompt = `Extract and analyze this resume. Return ONLY valid JSON (no markdown, no explanation):
 {
@@ -182,7 +180,7 @@ export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filena
 
   try {
     const response = await client.messages.create({
-      model: MODEL,
+      model,
       max_tokens: 2000,
       temperature: 0,
       messages: [
@@ -224,8 +222,9 @@ export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filena
     return {
       result,
       tokenUsage,
-      provider: 'anthropic',
-      model: MODEL,
+      provider: `anthropic-${credentialLabel}`,
+      model,
+      credentialLabel,
     }
   } catch (error) {
     console.error('[Claude] Analysis failed:', {
@@ -234,4 +233,61 @@ export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filena
     })
     throw error
   }
+}
+
+export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename) {
+  const credentials = await getActiveAiProviderCredentials()
+  const attempts = [credentials.primary, credentials.fallback].filter((entry) => entry?.apiKey)
+  if (attempts.length === 0) {
+    throw new Error('No configured AI API keys found. Configure primary/fallback keys in Admin Security.')
+  }
+
+  let lastError = null
+  const attemptHistory = []
+
+  for (const entry of attempts) {
+    try {
+      const response = await analyzeResumeWithClaude(fileBufferBase64, mimeType, filename, {
+        apiKey: entry.apiKey,
+        model: entry.model || MODEL,
+        credentialLabel: entry.keyLabel,
+      })
+
+      return {
+        ...response,
+        providerSource: entry.source,
+        attempts: [
+          ...attemptHistory,
+          {
+            success: true,
+            provider: response.provider,
+            model: response.model,
+            credentialLabel: response.credentialLabel,
+            providerSource: entry.source,
+            tokenUsage: response.tokenUsage,
+          },
+        ],
+      }
+    } catch (error) {
+      lastError = error
+      attemptHistory.push({
+        success: false,
+        provider: `anthropic-${entry.keyLabel}`,
+        model: entry.model || MODEL,
+        credentialLabel: entry.keyLabel,
+        providerSource: entry.source,
+        tokenUsage: {
+          usageAvailable: false,
+          unavailableReason: `provider_request_failed:${String(error?.message || 'unknown').slice(0, 160)}`,
+        },
+      })
+      console.warn(`[AI Parse] ${entry.keyLabel} key failed:`, error.message)
+    }
+  }
+
+  if (lastError && attemptHistory.length > 0) {
+    lastError.attempts = attemptHistory
+  }
+
+  throw lastError || new Error('All configured AI providers failed.')
 }
