@@ -73,8 +73,18 @@ export async function upsertAdminAiProviderKeys({ primaryApiKey, fallbackApiKey,
   await ensureAiProviderTable()
 
   const normalizedUpdates = [
-    { label: 'primary', apiKey: String(primaryApiKey || '').trim(), model: String(primaryModel || '').trim() || DEFAULT_MODEL },
-    { label: 'fallback', apiKey: String(fallbackApiKey || '').trim(), model: String(fallbackModel || '').trim() || DEFAULT_MODEL },
+    {
+      label: 'primary',
+      apiKey: String(primaryApiKey || '').trim(),
+      model: String(primaryModel || '').trim(),
+      modelProvided: typeof primaryModel === 'string' && String(primaryModel).trim().length > 0,
+    },
+    {
+      label: 'fallback',
+      apiKey: String(fallbackApiKey || '').trim(),
+      model: String(fallbackModel || '').trim(),
+      modelProvided: typeof fallbackModel === 'string' && String(fallbackModel).trim().length > 0,
+    },
   ]
 
   const { rows } = await pool.query(
@@ -94,8 +104,10 @@ export async function upsertAdminAiProviderKeys({ primaryApiKey, fallbackApiKey,
 
   for (const entry of normalizedUpdates) {
     const existing = existingByLabel.get(entry.label)
+    const existingModel = existing?.model || DEFAULT_MODEL
     const hasApiKeyUpdate = Boolean(entry.apiKey)
-    const hasModelUpdateOnly = Boolean(!entry.apiKey && existing && entry.model && entry.model !== (existing.model || DEFAULT_MODEL))
+    const hasModelUpdateOnly = Boolean(!entry.apiKey && existing && entry.modelProvided && entry.model !== existingModel)
+    const targetModel = entry.modelProvided ? entry.model : existingModel
 
     if (!hasApiKeyUpdate && !hasModelUpdateOnly) {
       continue
@@ -112,7 +124,7 @@ export async function upsertAdminAiProviderKeys({ primaryApiKey, fallbackApiKey,
            is_active = true,
            updated_by = EXCLUDED.updated_by,
            updated_at = NOW()`,
-        [DEFAULT_PROVIDER, entry.label, entry.apiKey, entry.model, adminId || null],
+        [DEFAULT_PROVIDER, entry.label, entry.apiKey, targetModel, adminId || null],
       )
     } else {
       await pool.query(
@@ -123,18 +135,17 @@ export async function upsertAdminAiProviderKeys({ primaryApiKey, fallbackApiKey,
              updated_at = NOW()
          WHERE provider = $1
            AND key_label = $2`,
-        [DEFAULT_PROVIDER, entry.label, entry.model, adminId || null],
+        [DEFAULT_PROVIDER, entry.label, targetModel, adminId || null],
       )
     }
 
-    const existingModel = existing?.model || DEFAULT_MODEL
     if (entry.label === 'primary') {
       changeFlags.primaryKeyUpdated = hasApiKeyUpdate
-      changeFlags.primaryModelUpdated = entry.model !== existingModel
+      changeFlags.primaryModelUpdated = targetModel !== existingModel
     }
     if (entry.label === 'fallback') {
       changeFlags.fallbackKeyUpdated = hasApiKeyUpdate
-      changeFlags.fallbackModelUpdated = entry.model !== existingModel
+      changeFlags.fallbackModelUpdated = targetModel !== existingModel
     }
   }
 
