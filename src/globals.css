@@ -21,8 +21,8 @@ body {
   overflow-x: hidden;
 }
 
-/* ---- NAV ---- */
-nav {
+/* ---- NAV (public shell only) ---- */
+.site-header nav {
   position: fixed;
   top: 0;
   left: 0;
@@ -38,7 +38,7 @@ nav {
   border-bottom: 1px solid var(--color-border);
 }
 
-.nav-logo {
+.site-header .nav-logo {
   font-family: var(--font-family-display);
   font-weight: 800;
   font-size: 1.25rem;
@@ -46,20 +46,20 @@ nav {
   color: var(--color-text-primary);
 }
 
-.nav-logo span {
+.site-header .nav-logo span {
   color: var(--color-accent-green);
 }
 
-.nav-links {
+.site-header .nav-links {
   display: flex;
   align-items: center;
   gap: 1.5rem;
   list-style: none;
 }
 
-.nav-links a,
-.nav-links button,
-.site-nav-button {
+.site-header .nav-links a,
+.site-header .nav-links button,
+.site-header .site-nav-button {
   text-decoration: none;
   color: var(--color-text-secondary);
   padding: 0;
@@ -72,24 +72,24 @@ nav {
   transition: var(--motion-transition-color);
 }
 
-.nav-links button,
-.site-nav-button {
+.site-header .nav-links button,
+.site-header .site-nav-button {
   border: none;
   background: transparent;
   cursor: pointer;
   padding: 0;
 }
 
-.nav-links :is(a, button):hover,
-.nav-links :is(a, button)[aria-current='page'],
-.site-nav-button:hover,
-.site-nav-button[aria-current='page'] {
+.site-header .nav-links :is(a, button):hover,
+.site-header .nav-links :is(a, button)[aria-current='page'],
+.site-header .site-nav-button:hover,
+.site-header .site-nav-button[aria-current='page'] {
   color: var(--color-accent-green);
   background: transparent;
 }
 
-.nav-links :is(a, button):focus-visible,
-.site-nav-button:focus-visible {
+.site-header .nav-links :is(a, button):focus-visible,
+.site-header .site-nav-button:focus-visible {
   outline: none;
   box-shadow: none;
   color: var(--color-accent-green);
@@ -109,7 +109,7 @@ nav {
   box-shadow: 0 0 0 4px var(--color-focus-ring-inner);
 }
 
-.nav-cta {
+.site-header .nav-cta {
   display: flex;
   gap: 0.75rem;
   align-items: center;
@@ -586,13 +586,13 @@ footer {
     flex-wrap: wrap;
   }
 
-  .nav-links,
-  .site-auth-actions {
+  .site-header .nav-links,
+  .site-header .site-auth-actions {
     display: none !important;
   }
 
-  .nav-links.is-open,
-  .site-auth-actions.is-open {
+  .site-header .nav-links.is-open,
+  .site-header .site-auth-actions.is-open {
     display: flex !important;
     width: 100%;
     flex-direction: column;
@@ -601,8 +601,8 @@ footer {
     align-items: stretch;
   }
 
-  .nav-links.is-open button,
-  .site-auth-actions.is-open button {
+  .site-header .nav-links.is-open button,
+  .site-header .site-auth-actions.is-open button {
     min-height: 44px;
     width: 100%;
     text-align: left;
