@@ -91,7 +91,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-section public-section-alt"><div className="about-timeline"><h2 className="public-section-title center">Our Journey</h2>{timeline.map((item) => <article key={item.year} className="public-card about-timeline-item"><h3 className="public-card-title contact-accent-title">{item.year}</h3><p className="public-card-title">{item.event}</p><p className="public-card-copy">{item.desc}</p></article>)}</div></section>
 
-      <footer className="public-cta-footer"><h2 className="public-section-title">Join us on the mission</h2><p className="public-copy center">Start using HireFlow today and transform your hiring process</p><div className="public-button-row center"><button className="public-btn-secondary" onClick={() => { setIsScheduleFormOpen(true); setSubmitError(''); setSubmitSuccess(false) }}>Schedule Demo</button></div></footer>
+      <footer className="public-cta-footer"><h2 className="public-section-title">Join us on the mission</h2><p className="public-copy center">Start using HireFlow today and transform your hiring process</p><div className="public-button-row center"><a className="public-btn-primary" href="/contact">Contact Support</a><button className="public-btn-secondary" onClick={() => { setIsScheduleFormOpen(true); setSubmitError(''); setSubmitSuccess(false) }}>Schedule Demo</button></div></footer>
 
       {isScheduleFormOpen && (
         <div className="about-modal-overlay">
