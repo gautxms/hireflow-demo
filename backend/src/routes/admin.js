@@ -83,12 +83,16 @@ router.put('/ai-settings', async (req, res) => {
   const primaryModel = String(req.body?.primaryModel || '').trim()
   const fallbackModel = String(req.body?.fallbackModel || '').trim()
 
-  if (!primaryApiKey && !fallbackApiKey) {
-    return res.status(400).json({ error: 'At least one API key (primary or fallback) is required.' })
-  }
-
   try {
-    await upsertAdminAiProviderKeys({
+    const existingSettings = await getAdminAiProviderSettings()
+    const hasConfiguredKey = Boolean(existingSettings?.primary?.configured || existingSettings?.fallback?.configured)
+    const hasIncomingKey = Boolean(primaryApiKey || fallbackApiKey)
+
+    if (!hasConfiguredKey && !hasIncomingKey) {
+      return res.status(400).json({ error: 'At least one API key (primary or fallback) is required.' })
+    }
+
+    const updateFlags = await upsertAdminAiProviderKeys({
       primaryApiKey,
       fallbackApiKey,
       primaryModel,
@@ -100,8 +104,9 @@ router.put('/ai-settings', async (req, res) => {
       adminId: req.admin?.id,
       actionType: 'admin_ai_settings_updated',
       details: {
-        primaryUpdated: Boolean(primaryApiKey),
-        fallbackUpdated: Boolean(fallbackApiKey),
+        primaryUpdated: updateFlags.primaryKeyUpdated || updateFlags.primaryModelUpdated,
+        fallbackUpdated: updateFlags.fallbackKeyUpdated || updateFlags.fallbackModelUpdated,
+        ...updateFlags,
         primaryModel: primaryModel || null,
         fallbackModel: fallbackModel || null,
       },
@@ -109,7 +114,7 @@ router.put('/ai-settings', async (req, res) => {
     })
 
     const settings = await getAdminAiProviderSettings()
-    return res.json({ ok: true, settings })
+    return res.json({ ok: true, settings, ...updateFlags })
   } catch (error) {
     console.error('[Admin ai-settings] update failed:', error)
     return res.status(500).json({ error: 'Unable to update AI settings' })

@@ -75,25 +75,84 @@ export async function getAdminAiProviderSettings() {
 export async function upsertAdminAiProviderKeys({ primaryApiKey, fallbackApiKey, primaryModel, fallbackModel, adminId }) {
   await ensureAiProviderTable()
 
-  const updates = [
-    { label: 'primary', apiKey: String(primaryApiKey || '').trim(), model: String(primaryModel || '').trim() || DEFAULT_MODEL },
-    { label: 'fallback', apiKey: String(fallbackApiKey || '').trim(), model: String(fallbackModel || '').trim() || DEFAULT_MODEL },
-  ].filter((entry) => entry.apiKey)
+  const normalizedUpdates = [
+    {
+      label: 'primary',
+      apiKey: String(primaryApiKey || '').trim(),
+      model: String(primaryModel || '').trim(),
+      modelProvided: typeof primaryModel === 'string' && String(primaryModel).trim().length > 0,
+    },
+    {
+      label: 'fallback',
+      apiKey: String(fallbackApiKey || '').trim(),
+      model: String(fallbackModel || '').trim(),
+      modelProvided: typeof fallbackModel === 'string' && String(fallbackModel).trim().length > 0,
+    },
+  ]
 
-  for (const entry of updates) {
-    await pool.query(
-      `INSERT INTO admin_ai_provider_keys (provider, key_label, api_key, model, is_active, created_by, updated_by)
-       VALUES ($1, $2, $3, $4, true, $5, $5)
-       ON CONFLICT (provider, key_label)
-       DO UPDATE SET
-         api_key = EXCLUDED.api_key,
-         model = EXCLUDED.model,
-         is_active = true,
-         updated_by = EXCLUDED.updated_by,
-         updated_at = NOW()`,
-      [DEFAULT_PROVIDER, entry.label, entry.apiKey, entry.model, adminId || null],
-    )
+  const { rows } = await pool.query(
+    `SELECT key_label, api_key, model
+     FROM admin_ai_provider_keys
+     WHERE provider = $1`,
+    [DEFAULT_PROVIDER],
+  )
+  const existingByLabel = new Map(rows.map((row) => [row.key_label, row]))
+
+  const changeFlags = {
+    primaryModelUpdated: false,
+    fallbackModelUpdated: false,
+    primaryKeyUpdated: false,
+    fallbackKeyUpdated: false,
   }
+
+  for (const entry of normalizedUpdates) {
+    const existing = existingByLabel.get(entry.label)
+    const existingModel = existing?.model || DEFAULT_MODEL
+    const hasApiKeyUpdate = Boolean(entry.apiKey)
+    const hasModelUpdateOnly = Boolean(!entry.apiKey && existing && entry.modelProvided && entry.model !== existingModel)
+    const targetModel = entry.modelProvided ? entry.model : existingModel
+
+    if (!hasApiKeyUpdate && !hasModelUpdateOnly) {
+      continue
+    }
+
+    if (hasApiKeyUpdate) {
+      await pool.query(
+        `INSERT INTO admin_ai_provider_keys (provider, key_label, api_key, model, is_active, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, true, $5, $5)
+         ON CONFLICT (provider, key_label)
+         DO UPDATE SET
+           api_key = EXCLUDED.api_key,
+           model = EXCLUDED.model,
+           is_active = true,
+           updated_by = EXCLUDED.updated_by,
+           updated_at = NOW()`,
+        [DEFAULT_PROVIDER, entry.label, entry.apiKey, targetModel, adminId || null],
+      )
+    } else {
+      await pool.query(
+        `UPDATE admin_ai_provider_keys
+         SET model = $3,
+             is_active = true,
+             updated_by = $4,
+             updated_at = NOW()
+         WHERE provider = $1
+           AND key_label = $2`,
+        [DEFAULT_PROVIDER, entry.label, targetModel, adminId || null],
+      )
+    }
+
+    if (entry.label === 'primary') {
+      changeFlags.primaryKeyUpdated = hasApiKeyUpdate
+      changeFlags.primaryModelUpdated = targetModel !== existingModel
+    }
+    if (entry.label === 'fallback') {
+      changeFlags.fallbackKeyUpdated = hasApiKeyUpdate
+      changeFlags.fallbackModelUpdated = targetModel !== existingModel
+    }
+  }
+
+  return changeFlags
 }
 
 
