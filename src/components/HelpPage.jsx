@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import BackButton from './BackButton'
 import { filterHelpArticles, parseHelpCenterLocation, resolveVisibleSelection, updateHelpCenterHistory } from './helpCenterState'
 import { Icon } from './Icon'
@@ -52,6 +52,7 @@ export default function HelpPage({ onBack }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('getting-started')
   const [selectedArticleId, setSelectedArticleId] = useState(null)
+  const articleTriggerRefs = useRef({})
 
   useEffect(() => {
     const syncStateFromUrl = () => {
@@ -67,6 +68,22 @@ export default function HelpPage({ onBack }) {
 
   const filteredArticles = useMemo(() => filterHelpArticles(HELP_ARTICLES[activeCategory], searchQuery), [activeCategory, searchQuery])
   const visibleSelectedArticleId = resolveVisibleSelection(selectedArticleId, filteredArticles)
+
+  useEffect(() => {
+    if (!visibleSelectedArticleId) {
+      return
+    }
+
+    const triggerElement = articleTriggerRefs.current[visibleSelectedArticleId]
+    if (!triggerElement) {
+      return
+    }
+
+    const navOffset = 96
+    const triggerTop = triggerElement.getBoundingClientRect().top + window.scrollY - navOffset
+    window.scrollTo({ top: Math.max(triggerTop, 0), behavior: 'smooth' })
+    triggerElement.focus({ preventScroll: true })
+  }, [visibleSelectedArticleId])
 
   const openArticle = (article) => {
     const nextId = visibleSelectedArticleId === article.id ? null : article.id
@@ -109,8 +126,25 @@ export default function HelpPage({ onBack }) {
             <h2 className="public-section-title">{HELP_CATEGORIES.find((c) => c.id === activeCategory)?.name}</h2>
             <div className="public-faq-grid">
               {filteredArticles.map((article) => (
-                <div key={article.id} className="public-faq-grid">
-                  <button onClick={() => openArticle(article)} aria-expanded={visibleSelectedArticleId === article.id} aria-controls={`help-article-${article.id}`} className="public-card help-article-trigger">
+                <div key={article.id} className={`help-article-item ${visibleSelectedArticleId === article.id ? 'is-expanded' : ''}`}>
+                  <button
+                    id={`help-article-trigger-${article.id}`}
+                    ref={(element) => {
+                      if (element) {
+                        articleTriggerRefs.current[article.id] = element
+                      }
+                    }}
+                    onClick={() => openArticle(article)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        openArticle(article)
+                      }
+                    }}
+                    aria-expanded={visibleSelectedArticleId === article.id}
+                    aria-controls={`help-article-${article.id}`}
+                    className="public-card help-article-trigger"
+                  >
                     <div>
                       <h3 className="public-card-title">{article.title}</h3>
                       <p className="public-card-copy">{article.desc}</p>
@@ -119,7 +153,12 @@ export default function HelpPage({ onBack }) {
                   </button>
 
                   {visibleSelectedArticleId === article.id && (
-                    <div id={`help-article-${article.id}`} role="region" className="public-card">
+                    <div
+                      id={`help-article-${article.id}`}
+                      role="region"
+                      aria-labelledby={`help-article-trigger-${article.id}`}
+                      className="public-card help-article-panel"
+                    >
                       <h3 className="public-card-title">{article.title}</h3>
                       <div className="public-faq-grid">
                         {article.content.map((paragraph, index) => <p key={index} className="public-card-copy">{paragraph}</p>)}
