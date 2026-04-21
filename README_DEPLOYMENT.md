@@ -38,6 +38,25 @@ npm run preview
 
 ---
 
+
+## Public SEO Rendering Strategy
+
+Public marketing and legal routes are statically prerendered at build time while authenticated product routes continue to run as a client-side SPA.
+
+- Build command: `npm run build` (`vite build` + `scripts/prerender-public-routes.mjs`)
+- Prerendered public routes:
+  - `/`
+  - `/pricing`
+  - `/about`
+  - `/contact`
+  - `/help`
+  - `/terms`
+  - `/privacy`
+  - `/refund-policy`
+- Authenticated and app routes (`/login`, `/signup`, `/billing`, `/account`, `/admin/*`, etc.) still rewrite to `/index.html` in `vercel.json`.
+
+This keeps crawlable content indexable while preserving the existing client-side app runtime for authenticated workflows.
+
 ## Deploy to Vercel
 
 ### Option 1: One-Click Vercel Deploy (Recommended)
