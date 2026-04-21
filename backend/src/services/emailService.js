@@ -385,7 +385,7 @@ export async function sendPasswordResetConfirmationEmail({ to, firstName }) {
     text: `Hi ${values.firstName}, your password was reset successfully. If this wasn't you, contact support immediately.`,
     values: {
       ...values,
-      dashboardUrl: `${getAppUrl()}/settings/security`,
+      dashboardUrl: `${getAppUrl()}/login`,
     },
   })
 }
