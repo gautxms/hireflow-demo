@@ -7,6 +7,10 @@
       "destination": "https://hireflow-backend-production.up.railway.app/api/$1"
     },
     {
+      "source": "/(ai-resume-screening|bulk-resume-analysis|resume-scoring-ai|automated-candidate-shortlisting)",
+      "destination": "/$1/index.html"
+    },
+    {
       "source": "/(login|signup|verify-email-info|forgot-password|reset-password|verify|verify-email/success)",
       "destination": "/index.html"
     },
