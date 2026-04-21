@@ -77,6 +77,24 @@
   line-height: 1.45;
 }
 
+.admin-shell-v2 nav,
+.admin-shell-v2__sidebar-nav,
+.admin-shell-v2__sidebar > nav,
+.admin-shell-v2__mobile-tabs {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  background: transparent;
+  border: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.admin-shell-v2__sidebar > nav,
+.admin-shell-v2__sidebar-nav {
+  z-index: 1;
+}
+
 .admin-shell-v2 :is(button, a, input, select, textarea):focus-visible {
   outline: 2px solid var(--admin-focus);
   outline-offset: 2px;

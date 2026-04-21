@@ -3,6 +3,38 @@
   "reviewedAt": "2026-04-19",
   "reviewedBy": "qa-team",
   "notes": "Post rapid-fix baseline for auth/admin shell and major admin pages.",
+  "uiRegressionChecks": [
+    {
+      "id": "admin-analytics-layering-desktop",
+      "path": "/admin/analytics",
+      "viewport": "desktop",
+      "state": "default",
+      "assertions": [
+        "admin-shell header remains layered above scroll content",
+        "no full-screen dark overlay is visible"
+      ]
+    },
+    {
+      "id": "admin-analytics-mobile-drawer-closed",
+      "path": "/admin/analytics",
+      "viewport": "mobile",
+      "state": "drawer-closed",
+      "assertions": [
+        "bottom tab nav is visible",
+        "no full-screen dark overlay is visible"
+      ]
+    },
+    {
+      "id": "admin-analytics-mobile-drawer-open",
+      "path": "/admin/analytics",
+      "viewport": "mobile",
+      "state": "drawer-open",
+      "assertions": [
+        "drawer scrim is visible behind the panel",
+        "overlay does not obscure the full app when drawer is closed"
+      ]
+    }
+  ],
   "viewports": [
     {
       "name": "desktop",

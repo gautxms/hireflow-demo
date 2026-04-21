@@ -94,7 +94,7 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
     <div className="admin-shell-v2">
       <aside className="admin-shell-v2__sidebar" aria-label="Admin sections">
         <div className="admin-shell-v2__brand">HireFlow Admin</div>
-        <nav>
+        <nav className="admin-shell-v2__sidebar-nav" aria-label="Admin primary navigation">
           <ul className="admin-shell-v2__nav-list">
             {ADMIN_SECTIONS.map((item) => {
               const active = item.key === sectionKey
