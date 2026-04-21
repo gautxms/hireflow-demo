@@ -82,12 +82,15 @@ app.use(cookieParser())
 
 app.get('/health', (_req, res) => {
   const aiModelWarnings = []
+  const defaultModel = String(AI_MODEL_CONFIG.defaultModel || '').trim()
 
-  if (!isAllowedAnthropicModel(AI_MODEL_CONFIG.defaultModel)) {
+  if (!defaultModel || !isAllowedAnthropicModel(defaultModel)) {
     aiModelWarnings.push({
+      type: 'invalid_default_model',
       source: 'env.ANTHROPIC_RESUME_MODEL',
-      model: AI_MODEL_CONFIG.defaultModel,
+      model: defaultModel || null,
       allowedModels: AI_MODEL_CONFIG.allowedModels,
+      message: 'Configured default Anthropic model is not present in ANTHROPIC_ALLOWED_MODELS.',
     })
   }
 
