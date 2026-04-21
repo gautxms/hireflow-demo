@@ -22,7 +22,7 @@ function getBrandingValues() {
 
   return {
     companyName: process.env.COMPANY_NAME || 'HireFlow',
-    supportEmail: process.env.SUPPORT_EMAIL || 'support@hireflow.dev',
+    supportEmail: process.env.SUPPORT_EMAIL || 'hello@gfactai.com',
     logoUrl: process.env.COMPANY_LOGO_URL || `${appUrl}/vite.svg`,
     appUrl,
     year: String(new Date().getUTCFullYear()),
