@@ -156,13 +156,14 @@ async function runParse(job) {
         provider: attempt?.provider || 'anthropic',
         model: attempt?.model || null,
         tokenUsage: attempt?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
-        metadata: {
-          source: 'ai_primary_or_fallback_parse',
-          credentialLabel: attempt?.credentialLabel || 'primary',
-          providerSource: attempt?.providerSource || 'unknown',
-          success: Boolean(attempt?.success),
-          filename,
-        },
+          metadata: {
+            source: 'ai_primary_or_fallback_parse',
+            credentialLabel: attempt?.credentialLabel || 'primary',
+            providerSource: attempt?.providerSource || 'unknown',
+            providerType: attempt?.providerType || 'anthropic',
+            success: Boolean(attempt?.success),
+            filename,
+          },
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
       })
@@ -190,6 +191,7 @@ async function runParse(job) {
             source: 'ai_primary_or_fallback_parse',
             credentialLabel: attempt?.credentialLabel || 'primary',
             providerSource: attempt?.providerSource || 'unknown',
+            providerType: attempt?.providerType || 'anthropic',
             success: false,
             filename,
           },

@@ -311,32 +311,73 @@ export async function validateAiProviderModelConfiguration() {
 export async function getActiveAiProviderCredentials() {
   await ensureAiProviderTables()
 
+  const settingsResult = await pool.query('SELECT active_provider FROM admin_ai_settings WHERE id = true LIMIT 1')
+  const activeProvider = SUPPORTED_PROVIDERS.includes(settingsResult.rows[0]?.active_provider)
+    ? settingsResult.rows[0].active_provider
+    : DEFAULT_PROVIDER
+
   const { rows } = await pool.query(
-    `SELECT key_label, api_key, model, is_active
+    `SELECT provider, key_label, api_key, model, is_active
      FROM admin_ai_provider_keys
-     WHERE provider = $1
-     ORDER BY CASE key_label WHEN 'primary' THEN 1 ELSE 2 END`,
-    [DEFAULT_PROVIDER],
+     ORDER BY
+       CASE provider WHEN 'anthropic' THEN 1 WHEN 'openai' THEN 2 ELSE 3 END,
+       CASE key_label WHEN 'primary' THEN 1 ELSE 2 END`,
   )
 
-  const primary = rows.find((row) => row.key_label === 'primary' && row.is_active && row.api_key)
-  const fallback = rows.find((row) => row.key_label === 'fallback' && row.is_active && row.api_key)
+  function buildCredential(provider, keyLabel, envKey, envModelKey) {
+    const row = rows.find((entry) => (
+      entry.provider === provider
+      && entry.key_label === keyLabel
+      && entry.is_active
+      && entry.api_key
+    ))
+    const defaultModel = PROVIDER_MODEL_CONFIG[provider]?.defaultModel || AI_MODEL_CONFIG.defaultModel
 
-  return {
-    provider: DEFAULT_PROVIDER,
-    primary: {
-      keyLabel: 'primary',
-      apiKey: primary?.api_key || process.env.ANTHROPIC_API_KEY || '',
-      model: primary?.model || AI_MODEL_CONFIG.defaultModel,
-      source: primary?.api_key ? 'admin-console' : 'env',
+    return {
+      provider,
+      keyLabel,
+      apiKey: row?.api_key || process.env[envKey] || '',
+      model: row?.model || process.env[envModelKey] || defaultModel,
+      source: row?.api_key ? 'admin-console' : 'env',
+    }
+  }
+
+  const credentialMap = {
+    anthropic: {
+      primary: buildCredential('anthropic', 'primary', 'ANTHROPIC_API_KEY', 'ANTHROPIC_RESUME_MODEL'),
+      fallback: buildCredential('anthropic', 'fallback', 'ANTHROPIC_FALLBACK_API_KEY', 'ANTHROPIC_RESUME_MODEL'),
     },
-    fallback: {
-      keyLabel: 'fallback',
-      apiKey: fallback?.api_key || process.env.ANTHROPIC_FALLBACK_API_KEY || '',
-      model: fallback?.model || AI_MODEL_CONFIG.defaultModel,
-      source: fallback?.api_key ? 'admin-console' : 'env',
+    openai: {
+      primary: buildCredential('openai', 'primary', 'OPENAI_API_KEY', 'OPENAI_RESUME_MODEL'),
+      fallback: buildCredential('openai', 'fallback', 'OPENAI_FALLBACK_API_KEY', 'OPENAI_RESUME_MODEL'),
     },
   }
+
+  return {
+    activeProvider,
+    providers: credentialMap,
+  }
+}
+
+export function buildProviderAttemptPlan(credentials) {
+  const activeProvider = SUPPORTED_PROVIDERS.includes(credentials?.activeProvider)
+    ? credentials.activeProvider
+    : DEFAULT_PROVIDER
+  const secondaryProvider = SUPPORTED_PROVIDERS.find((provider) => provider !== activeProvider) || DEFAULT_PROVIDER
+
+  const ordered = [
+    { provider: activeProvider, keyLabel: 'primary' },
+    { provider: activeProvider, keyLabel: 'fallback' },
+    { provider: secondaryProvider, keyLabel: 'primary' },
+    { provider: secondaryProvider, keyLabel: 'fallback' },
+  ]
+
+  return ordered
+    .map((entry) => ({
+      ...entry,
+      ...credentials?.providers?.[entry.provider]?.[entry.keyLabel],
+    }))
+    .filter((entry) => entry?.apiKey)
 }
 
 export { SUPPORTED_PROVIDERS, KEY_LABELS }
