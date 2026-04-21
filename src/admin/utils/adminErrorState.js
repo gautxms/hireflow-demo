@@ -1,3 +1,56 @@
+const ADMIN_SESSION_STORAGE_KEY = 'admin_session'
+const ADMIN_SESSION_EXPIRED_EVENT = 'admin-session-expired'
+
+export function clearAdminSessionStorage(storage = globalThis?.localStorage) {
+  if (!storage) return
+  storage.removeItem(ADMIN_SESSION_STORAGE_KEY)
+  storage.removeItem('admin_id')
+}
+
+export function redirectToAdminLogin({ reason = 'timeout', message = 'Your admin session expired. Please sign in again.' } = {}, env = {}) {
+  const windowRef = env.windowRef || globalThis?.window
+
+  if (!windowRef?.history || !windowRef?.location) {
+    return
+  }
+
+  const url = new URL(windowRef.location.href)
+  url.pathname = '/admin/login'
+  url.search = ''
+  url.searchParams.set('reason', reason)
+  if (message) {
+    url.searchParams.set('message', message)
+  }
+
+  const nextPath = `${url.pathname}?${url.searchParams.toString()}`
+  const currentPath = `${windowRef.location.pathname}${windowRef.location.search}`
+
+  if (currentPath !== nextPath) {
+    const PopStateCtor = windowRef.PopStateEvent || globalThis.PopStateEvent
+    windowRef.history.pushState({}, '', nextPath)
+    if (typeof PopStateCtor === 'function') {
+      windowRef.dispatchEvent(new PopStateCtor('popstate'))
+    }
+  }
+}
+
+export function handleAdminUnauthorized({ reason = 'timeout', message = 'Your admin session expired. Please sign in again.' } = {}, env = {}) {
+  const storage = env.storage || globalThis?.localStorage
+  const windowRef = env.windowRef || globalThis?.window
+
+  clearAdminSessionStorage(storage)
+
+  if (windowRef?.dispatchEvent && typeof windowRef.CustomEvent === 'function') {
+    windowRef.dispatchEvent(new windowRef.CustomEvent(ADMIN_SESSION_EXPIRED_EVENT, {
+      detail: { reason, message },
+    }))
+  }
+
+  windowRef?.setTimeout?.(() => {
+    redirectToAdminLogin({ reason, message }, { windowRef })
+  }, 0)
+}
+
 export function mapAdminError({ status, code = '', message = '' } = {}) {
   const normalizedCode = String(code || '').toLowerCase()
   const normalizedMessage = String(message || '').toLowerCase()
@@ -55,11 +108,22 @@ export function mapAdminError({ status, code = '', message = '' } = {}) {
   }
 }
 
-export async function adminFetchJson(url) {
-  const response = await fetch(url, { credentials: 'include' })
+export async function adminFetchJson(url, options = {}) {
+  const requestOptions = typeof options === 'string' ? {} : options
+  const response = await fetch(url, {
+    credentials: 'include',
+    ...requestOptions,
+    headers: {
+      ...(requestOptions.headers || {}),
+    },
+  })
   const payload = await response.json().catch(() => ({}))
 
   if (!response.ok) {
+    if (response.status === 401) {
+      handleAdminUnauthorized()
+    }
+
     const mapped = mapAdminError({
       status: response.status,
       code: payload.code || payload.errorCode,
@@ -67,6 +131,8 @@ export async function adminFetchJson(url) {
     })
     const error = new Error(mapped.title)
     error.mapped = mapped
+    error.status = response.status
+    error.payload = payload
     throw error
   }
 
@@ -77,3 +143,5 @@ export function getMappedError(error) {
   if (error?.mapped) return error.mapped
   return mapAdminError({ message: error?.message })
 }
+
+export { ADMIN_SESSION_EXPIRED_EVENT }

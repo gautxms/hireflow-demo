@@ -52,6 +52,9 @@ const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
 const AdminShell = lazy(() => import('./admin/components/AdminShell'))
 const AdminPageFeedbackWidget = lazy(() => import('./admin/components/AdminPageFeedbackWidget'))
 const AdminRouteFallback = lazy(() => import('./admin/components/AdminRouteFallback'))
+import { AdminAuthProvider } from './admin/hooks/useAdminAuth'
+import useAdminAuth from './admin/hooks/useAdminAuth'
+const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -95,6 +98,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
+  const { logout: logoutAdmin } = useAdminAuth()
 
   const handleNavigate = (page, promptMessage = 'Please login or sign up to continue.') => {
     if (!isAuthenticated && PROTECTED_PAGES.has(page)) {
@@ -336,8 +340,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <UpdatePaymentMethodPage />
     }
 
-    const hasStoredAdminSession = Boolean(localStorage.getItem('admin_session'))
-
     if (pathname === '/admin/login') {
       return <AdminLoginPage />
     }
@@ -346,28 +348,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <AdminSetup2FA />
     }
 
-    const logoutAdmin = async () => {
-      await fetch(`${API_BASE}/auth/admin/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      }).catch(() => {})
-
-      localStorage.removeItem('admin_session')
-      localStorage.removeItem('admin_id')
-      navigate('/admin/login')
-    }
-
     const renderAdminSection = (sectionProps, page) => (
-      <AdminShell key={pathname} routePath={pathname} onLogout={logoutAdmin} {...sectionProps}>
-        {page}
-        <AdminPageFeedbackWidget routeContext={pathname} />
-      </AdminShell>
+      <AdminRouteGuard>
+        <AdminShell key={pathname} routePath={pathname} onLogout={logoutAdmin} {...sectionProps}>
+          {page}
+          <AdminPageFeedbackWidget routeContext={pathname} />
+        </AdminShell>
+      </AdminRouteGuard>
     )
-
-    if (isAdminPath && !hasStoredAdminSession) {
-      navigate('/admin/login')
-      return null
-    }
 
     if (pathname === '/admin' || pathname === '/admin/overview') {
       return renderAdminSection({
@@ -869,7 +857,8 @@ export default function App() {
   }
 
   return (
-    <MainSite
+    <AdminAuthProvider>
+      <MainSite
       isAuthenticated={isAuthenticated}
       onLogout={logout}
       onRequireAuth={requireAuth}
@@ -883,5 +872,6 @@ export default function App() {
       pendingVerificationEmail={pendingVerificationEmail}
       setPendingVerificationEmail={setPendingVerificationEmail}
     />
+    </AdminAuthProvider>
   )
 }
