@@ -160,6 +160,8 @@ async function runParse(job) {
           source: 'ai_primary_or_fallback_parse',
           credentialLabel: attempt?.credentialLabel || 'primary',
           providerSource: attempt?.providerSource || 'unknown',
+          promptVersion: Number(attempt?.promptVersion || 1),
+          promptIsDefaultFallback: Boolean(attempt?.promptIsDefaultFallback),
           success: Boolean(attempt?.success),
           filename,
         },
@@ -190,6 +192,8 @@ async function runParse(job) {
             source: 'ai_primary_or_fallback_parse',
             credentialLabel: attempt?.credentialLabel || 'primary',
             providerSource: attempt?.providerSource || 'unknown',
+            promptVersion: Number(attempt?.promptVersion || 1),
+            promptIsDefaultFallback: Boolean(attempt?.promptIsDefaultFallback),
             success: false,
             filename,
           },
@@ -209,6 +213,8 @@ async function runParse(job) {
         },
         metadata: {
           source: 'ai_primary_or_fallback_parse',
+          promptVersion: 1,
+          promptIsDefaultFallback: true,
           filename,
         },
       }).catch((persistError) => {

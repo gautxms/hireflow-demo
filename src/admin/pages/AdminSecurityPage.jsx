@@ -5,6 +5,7 @@ import { adminFetchJson } from '../utils/adminErrorState'
 
 export default function AdminSecurityPage() {
   const [settings, setSettings] = useState(null)
+  const [promptSettings, setPromptSettings] = useState(null)
   const [tokenUsageRows, setTokenUsageRows] = useState([])
   const [form, setForm] = useState({
     activeProvider: 'anthropic',
@@ -14,8 +15,11 @@ export default function AdminSecurityPage() {
     },
   })
   const [message, setMessage] = useState('')
+  const [promptMessage, setPromptMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingPrompt, setSavingPrompt] = useState(false)
+  const [systemPromptInput, setSystemPromptInput] = useState('')
   const hydrateFormFromSettings = useCallback((nextSettings) => {
     const settingsProviders = nextSettings?.providers || {}
     return {
@@ -48,13 +52,16 @@ export default function AdminSecurityPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [settingsPayload, analyticsPayload] = await Promise.all([
+      const [settingsPayload, analyticsPayload, promptPayload] = await Promise.all([
         adminFetchJson(`${API_BASE}/admin/ai-settings`),
         adminFetchJson(`${API_BASE}/admin/analytics/token-usage`),
+        adminFetchJson(`${API_BASE}/admin/system-prompt`),
       ])
       setSettings(settingsPayload)
       setForm(hydrateFormFromSettings(settingsPayload))
       setTokenUsageRows(Array.isArray(analyticsPayload?.tokenUsageUploads) ? analyticsPayload.tokenUsageUploads : [])
+      setPromptSettings(promptPayload)
+      setSystemPromptInput(promptPayload?.systemPrompt || '')
     } finally {
       setLoading(false)
     }
@@ -97,6 +104,26 @@ export default function AdminSecurityPage() {
     }
   }, [form, hydrateFormFromSettings])
 
+  const saveSystemPrompt = useCallback(async (event) => {
+    event.preventDefault()
+    setSavingPrompt(true)
+    setPromptMessage('')
+    try {
+      const payload = await adminFetchJson(`${API_BASE}/admin/system-prompt`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt: systemPromptInput }),
+      })
+      setPromptSettings(payload?.prompt || null)
+      setSystemPromptInput(payload?.prompt?.systemPrompt || '')
+      setPromptMessage('System prompt saved.')
+    } catch (error) {
+      setPromptMessage(error?.payload?.error || 'Unable to save system prompt.')
+    } finally {
+      setSavingPrompt(false)
+    }
+  }, [systemPromptInput])
+
   if (loading) {
     return <div className="admin-page"><section className="ui-card p-4">Loading AI settings…</section></div>
   }
@@ -134,6 +161,32 @@ export default function AdminSecurityPage() {
           <div className="md:col-span-2 flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={saving}>{saving ? 'Saving…' : 'Save AI settings'}</button>
             {message ? <span className="text-xs text-admin-muted">{message}</span> : null}
+          </div>
+        </form>
+      </section>
+
+      <section className="ui-card p-4">
+        <h2 className="text-lg font-semibold text-admin-strong">Resume analysis system prompt</h2>
+        <p className="mt-1 text-sm text-admin-body">Manage the shared system prompt used at runtime for provider-agnostic resume parsing.</p>
+        <form className="mt-4 grid gap-3" onSubmit={saveSystemPrompt}>
+          <label className="text-sm text-admin-body" htmlFor="systemPromptInput">System prompt</label>
+          <textarea
+            id="systemPromptInput"
+            className="min-h-56 w-full rounded border border-admin px-3 py-2 font-mono text-xs"
+            value={systemPromptInput}
+            onChange={(e) => setSystemPromptInput(e.target.value)}
+            placeholder="Enter the system prompt used by resume parsing."
+          />
+          <div className="text-xs text-admin-muted">
+            Version: <strong>{Number(promptSettings?.promptVersion || 1)}</strong>
+            {' · '}
+            Updated at: <strong>{promptSettings?.updatedAt ? new Date(promptSettings.updatedAt).toLocaleString() : 'Not updated yet'}</strong>
+            {' · '}
+            Characters: <strong>{systemPromptInput.length}</strong>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="submit" className="ui-btn" disabled={savingPrompt}>{savingPrompt ? 'Saving…' : 'Save system prompt'}</button>
+            {promptMessage ? <span className="text-xs text-admin-muted">{promptMessage}</span> : null}
           </div>
         </form>
       </section>
