@@ -5,7 +5,11 @@ import { getRateLimitStats } from '../middleware/rateLimiter.js'
 import { createPasswordResetToken, generateResetToken } from '../services/resetTokenService.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
 import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdminCookie } from '../middleware/adminAuth.js'
-import { getAdminAiProviderSettings, upsertAdminAiProviderKeys } from '../services/aiProviderConfigService.js'
+import {
+  getAdminAiProviderSettings,
+  upsertAdminAiProviderKeys,
+  validateAiProviderModelConfiguration,
+} from '../services/aiProviderConfigService.js'
 
 const router = Router()
 
@@ -114,7 +118,16 @@ router.put('/ai-settings', async (req, res) => {
     })
 
     const settings = await getAdminAiProviderSettings()
-    return res.json({ ok: true, settings, ...updateFlags })
+    const modelValidation = await validateAiProviderModelConfiguration()
+    const warnings = Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : []
+
+    return res.json({
+      ok: true,
+      settings,
+      modelWarnings: warnings,
+      warning: warnings.length > 0 ? 'One or more configured models are not in the allowed Anthropic model list.' : null,
+      ...updateFlags,
+    })
   } catch (error) {
     console.error('[Admin ai-settings] update failed:', error)
     return res.status(500).json({ error: 'Unable to update AI settings' })

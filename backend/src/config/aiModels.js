@@ -1,4 +1,7 @@
-const SUPPORTED_ANTHROPIC_MODEL = 'claude-3-5-sonnet-20241022'
+const ACTIVE_ANTHROPIC_MODELS = [
+  'claude-sonnet-4-20250514',
+  'claude-3-7-sonnet-20250219',
+]
 
 function normalizeModelList(value) {
   return String(value || '')
@@ -8,13 +11,18 @@ function normalizeModelList(value) {
 }
 
 const configuredAllowedModels = normalizeModelList(process.env.ANTHROPIC_ALLOWED_MODELS)
+const envOverrideModel = String(process.env.ANTHROPIC_RESUME_MODEL || '').trim()
+const fallbackAllowedModels = configuredAllowedModels.length > 0
+  ? Array.from(new Set(configuredAllowedModels))
+  : Array.from(new Set(ACTIVE_ANTHROPIC_MODELS))
+const normalizedAllowedModels = fallbackAllowedModels.length > 0
+  ? fallbackAllowedModels
+  : [ACTIVE_ANTHROPIC_MODELS[0]]
 
 export const AI_MODEL_CONFIG = {
   provider: 'anthropic',
-  defaultModel: process.env.ANTHROPIC_RESUME_MODEL || SUPPORTED_ANTHROPIC_MODEL,
-  allowedModels: configuredAllowedModels.length > 0
-    ? Array.from(new Set(configuredAllowedModels))
-    : [process.env.ANTHROPIC_RESUME_MODEL || SUPPORTED_ANTHROPIC_MODEL],
+  defaultModel: envOverrideModel || normalizedAllowedModels[0],
+  allowedModels: normalizedAllowedModels,
 }
 
 export function isAllowedAnthropicModel(model) {
