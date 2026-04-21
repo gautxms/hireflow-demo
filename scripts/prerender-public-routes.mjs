@@ -4,7 +4,7 @@ import { buildSeoHeadMarkup, resolvePageSeo } from '../src/seo/pageSeo.js'
 
 const DIST_DIR = resolve(process.cwd(), 'dist')
 const INDEX_PATH = resolve(DIST_DIR, 'index.html')
-const SITE_URL = process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://hireflow.ai'
+const SITE_URL = process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://hireflow.dev'
 
 const PUBLIC_ROUTES = [
   {

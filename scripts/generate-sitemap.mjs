@@ -1,39 +1,32 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { PUBLIC_PAGE_SEO } from '../src/seo/pageSeo.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const projectRoot = path.resolve(__dirname, '..')
 const publicDir = path.join(projectRoot, 'public')
 const seoPagesDir = path.join(projectRoot, 'src', 'pages', 'seo')
+const blogPagesDir = path.join(projectRoot, 'src', 'pages', 'blog')
 const sitemapPath = path.join(publicDir, 'sitemap.xml')
 
 const SITE_URL = 'https://hireflow.dev'
+const NON_INDEXABLE_ROUTES = new Set(['/demo'])
 
-const STATIC_INDEXABLE_ROUTES = [
-  '/',
-  '/pricing',
-  '/about',
-  '/contact',
-  '/help',
-  '/terms',
-  '/privacy',
-  '/refund-policy',
-  '/ai-resume-screening',
-  '/bulk-resume-analysis',
-  '/resume-scoring-ai',
-  '/automated-candidate-shortlisting',
-]
-
-function toRouteFromSeoFile(fileName) {
+function toRouteFromFileName(fileName) {
   const baseName = fileName.replace(/\.[^.]+$/, '')
+
+  if (baseName.toLowerCase() === 'index') {
+    return '/blog'
+  }
+
   const slug = baseName
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/_/g, '-')
     .toLowerCase()
 
-  return `/${slug}`
+  return `/blog/${slug}`
 }
 
 async function getSeoLandingRoutes() {
@@ -45,13 +38,52 @@ async function getSeoLandingRoutes() {
       .map((entry) => entry.name)
       .filter((name) => /\.(jsx|tsx|js|ts)$/.test(name) && !name.startsWith('_'))
       .filter((name) => !['IntentLandingPage.jsx', 'intentPages.js'].includes(name))
-      .map(toRouteFromSeoFile)
+      .map((name) => {
+        const baseName = name.replace(/\.[^.]+$/, '')
+        const slug = baseName
+          .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+          .replace(/_/g, '-')
+          .toLowerCase()
+
+        return `/${slug}`
+      })
   } catch (error) {
     if (error.code === 'ENOENT') {
       return []
     }
     throw error
   }
+}
+
+async function getBlogRoutes() {
+  try {
+    const entries = await fs.readdir(blogPagesDir, { withFileTypes: true })
+
+    return entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .filter((name) => /\.(jsx|tsx|js|ts|md|mdx)$/.test(name) && !name.startsWith('_'))
+      .filter((name) => !name.includes('['))
+      .map(toRouteFromFileName)
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+}
+
+function normalizeRoute(route) {
+  if (!route || route === '') {
+    return '/'
+  }
+
+  const clean = route.split('?')[0].split('#')[0]
+  if (clean === '/') {
+    return '/'
+  }
+
+  return clean.endsWith('/') ? clean.slice(0, -1) : clean
 }
 
 function xmlEscape(value) {
@@ -65,7 +97,14 @@ function xmlEscape(value) {
 
 async function generateSitemap() {
   const seoLandingRoutes = await getSeoLandingRoutes()
-  const allRoutes = [...new Set([...STATIC_INDEXABLE_ROUTES, ...seoLandingRoutes])].sort()
+  const blogRoutes = await getBlogRoutes()
+  const seoConfiguredRoutes = Object.keys(PUBLIC_PAGE_SEO)
+
+  const allRoutes = [...new Set([...seoConfiguredRoutes, ...seoLandingRoutes, ...blogRoutes])]
+    .map(normalizeRoute)
+    .filter((route) => !NON_INDEXABLE_ROUTES.has(route))
+    .sort()
+
   const lastmod = new Date().toISOString().split('T')[0]
 
   const urlEntries = allRoutes
