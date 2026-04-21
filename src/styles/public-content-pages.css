@@ -100,6 +100,23 @@
   padding: var(--spacing-card);
 }
 
+a.public-card,
+a.public-card:visited,
+a.public-card:hover,
+a.public-card:active {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+a.public-card .public-card-title {
+  color: var(--color-text-primary);
+}
+
+a.public-card .public-card-copy,
+a.public-card .public-copy {
+  color: var(--color-text-secondary);
+}
+
 .public-card-title {
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line-height);
