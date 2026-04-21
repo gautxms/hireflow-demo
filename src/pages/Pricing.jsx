@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import '../styles/pricing.css'
 

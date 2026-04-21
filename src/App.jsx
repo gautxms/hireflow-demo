@@ -29,6 +29,7 @@ const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
 const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 import PublicFooter from './components/PublicFooter'
+import PageSeo from './components/PageSeo'
 import API_BASE from './config/api'
 import './styles/app-route-states.css'
 const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
@@ -611,6 +612,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   return (
     <>
+      <PageSeo pathname={pathname} currentPage={currentPage} />
       <header className="site-header">
         <a
           href="/"
