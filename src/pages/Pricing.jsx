@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
-import StructuredData from '../components/StructuredData'
 import '../styles/pricing.css'
 
 const PLAN_FEATURES = [
@@ -82,7 +81,6 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
 }
 
 export default function Pricing({ isAuthenticated, onRequireAuth }) {
-  usePageSeo('HireFlow Pricing', 'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.')
   const pricingStructuredData = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -91,6 +89,11 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
     applicationCategory: 'Recruiting/Hiring Software',
     description: 'Hireflow pricing plans for AI-powered recruiting software with monthly and annual subscriptions.',
   }
+  usePageSeo(
+    'HireFlow Pricing',
+    'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.',
+    pricingStructuredData,
+  )
 
   const [selectedBilling, setSelectedBilling] = useState('annual')
 
@@ -105,7 +108,6 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
 
   return (
     <main className="pricing-page">
-      <StructuredData data={pricingStructuredData} />
       <section className="pricing-page__content">
         <div className="pricing-page__back">
           <BackButton />

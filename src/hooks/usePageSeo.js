@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-export default function usePageSeo(title, description) {
+export default function usePageSeo(title, description, structuredData = null) {
   useEffect(() => {
     const previousTitle = document.title
     document.title = title
@@ -25,4 +25,22 @@ export default function usePageSeo(title, description) {
       }
     }
   }, [description, title])
+
+  useEffect(() => {
+    if (!structuredData) {
+      return undefined
+    }
+
+    const scriptTag = document.createElement('script')
+    scriptTag.type = 'application/ld+json'
+    scriptTag.setAttribute('data-hireflow-seo', 'structured-data')
+    scriptTag.text = JSON.stringify(structuredData)
+    document.head.appendChild(scriptTag)
+
+    return () => {
+      if (scriptTag.parentNode) {
+        scriptTag.parentNode.removeChild(scriptTag)
+      }
+    }
+  }, [structuredData])
 }
