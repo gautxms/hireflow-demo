@@ -62,8 +62,9 @@ nav {
 .site-nav-button {
   text-decoration: none;
   color: var(--color-text-secondary);
-  padding: 0.3rem 0.5rem;
-  border-radius: var(--radius-sm);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   letter-spacing: var(--type-nav-tracking);
