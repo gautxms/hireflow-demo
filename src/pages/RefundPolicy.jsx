@@ -1,9 +1,6 @@
-import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 
 export default function RefundPolicy() {
-  usePageSeo('Refund Policy – Hireflow', 'Read Hireflow’s refund policy, including trial terms, non-refundable payments after conversion, and billing support contact information.')
-
   return (
     <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '3rem 1.25rem', lineHeight: 1.75 }}>

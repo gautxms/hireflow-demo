@@ -1,14 +1,15 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { buildSeoHeadMarkup, resolvePageSeo } from '../src/seo/pageSeo.js'
 
 const DIST_DIR = resolve(process.cwd(), 'dist')
 const INDEX_PATH = resolve(DIST_DIR, 'index.html')
+const SITE_URL = process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://hireflow.ai'
 
 const PUBLIC_ROUTES = [
   {
     route: '/',
-    title: 'HireFlow – AI Hiring Platform',
-    description: 'HireFlow helps teams hire faster using AI-powered resume screening, interviews, and candidate ranking.',
+    currentPage: 'landing',
     body: `
       <main>
         <section>
@@ -24,8 +25,6 @@ const PUBLIC_ROUTES = [
   },
   {
     route: '/pricing',
-    title: 'HireFlow Pricing',
-    description: 'Explore HireFlow pricing plans for teams of every size.',
     body: `
       <main>
         <h1>Simple, transparent pricing</h1>
@@ -35,8 +34,6 @@ const PUBLIC_ROUTES = [
   },
   {
     route: '/about',
-    title: 'About HireFlow',
-    description: 'Learn about the HireFlow mission and team.',
     body: `
       <main>
         <h1>About HireFlow</h1>
@@ -46,8 +43,6 @@ const PUBLIC_ROUTES = [
   },
   {
     route: '/contact',
-    title: 'Contact HireFlow',
-    description: 'Contact the HireFlow team for sales, support, and partnership inquiries.',
     body: `
       <main>
         <h1>Contact HireFlow</h1>
@@ -57,8 +52,6 @@ const PUBLIC_ROUTES = [
   },
   {
     route: '/help',
-    title: 'HireFlow Help Center',
-    description: 'Browse help articles and support guidance for HireFlow.',
     body: `
       <main>
         <h1>Help Center</h1>
@@ -67,9 +60,17 @@ const PUBLIC_ROUTES = [
     `,
   },
   {
+    route: '/demo',
+    currentPage: 'demo',
+    body: `
+      <main>
+        <h1>Book a HireFlow demo</h1>
+        <p>Choose a date and time to see HireFlow workflows in a guided product tour.</p>
+      </main>
+    `,
+  },
+  {
     route: '/terms',
-    title: 'HireFlow Terms of Service',
-    description: 'Review the HireFlow Terms of Service.',
     body: `
       <main>
         <h1>Terms of Service</h1>
@@ -79,8 +80,6 @@ const PUBLIC_ROUTES = [
   },
   {
     route: '/privacy',
-    title: 'HireFlow Privacy Policy',
-    description: 'Learn how HireFlow collects, uses, and protects information.',
     body: `
       <main>
         <h1>Privacy Policy</h1>
@@ -90,8 +89,6 @@ const PUBLIC_ROUTES = [
   },
   {
     route: '/refund-policy',
-    title: 'HireFlow Refund Policy',
-    description: 'Read HireFlow refund terms for subscriptions and billing.',
     body: `
       <main>
         <h1>Refund Policy</h1>
@@ -101,13 +98,21 @@ const PUBLIC_ROUTES = [
   },
 ]
 
-const withSeo = (html, { title, description }) => html
-  .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
-  .replace(/<meta\s+name="description"\s+content="[\s\S]*?"\s*\/>/i, `<meta name="description" content="${description}" />`)
+const withSeo = (html, routeConfig) => {
+  const seo = resolvePageSeo({
+    pathname: routeConfig.route,
+    currentPage: routeConfig.currentPage || null,
+    siteUrl: SITE_URL,
+  })
+
+  const headMarkup = `<!-- SEO_DEFAULT_START -->\n    ${buildSeoHeadMarkup(seo)}\n    <!-- SEO_DEFAULT_END -->`
+
+  return html.replace(/<!-- SEO_DEFAULT_START -->[\s\S]*?<!-- SEO_DEFAULT_END -->/i, headMarkup)
+}
 
 const withBody = (html, body) => html.replace('<div id="root"></div>', `<div id="root">${body}</div>`)
 
-const routeToDir = (route) => route === '/' ? DIST_DIR : resolve(DIST_DIR, route.slice(1))
+const routeToDir = (route) => (route === '/' ? DIST_DIR : resolve(DIST_DIR, route.slice(1)))
 
 async function prerender() {
   const indexHtml = await readFile(INDEX_PATH, 'utf8')

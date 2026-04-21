@@ -1,4 +1,3 @@
-import usePageSeo from '../hooks/usePageSeo'
 import termsContent from '../../TERMS_AND_CONDITIONS_CONTENT.md?raw'
 import BackButton from '../components/BackButton'
 
@@ -33,8 +32,6 @@ function renderTermsMarkdown(content) {
 }
 
 export default function Terms() {
-  usePageSeo('HireFlow Terms of Service', 'Review the HireFlow Terms of Service for using our resume screening platform and related features.')
-
   return (
     <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '3rem 1.25rem', lineHeight: 1.75 }}>

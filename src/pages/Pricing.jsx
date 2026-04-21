@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import '../styles/pricing.css'
 
@@ -81,8 +80,6 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
 }
 
 export default function Pricing({ isAuthenticated, onRequireAuth }) {
-  usePageSeo('HireFlow Pricing', 'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.')
-
   const [selectedBilling, setSelectedBilling] = useState('annual')
 
   const startCheckout = (plan) => {

@@ -1,9 +1,6 @@
-import usePageSeo from '../hooks/usePageSeo'
 import BackButton from './BackButton'
 
 export default function PrivacyPage() {
-  usePageSeo('HireFlow Privacy Policy', 'Learn how HireFlow collects, uses, and protects personal information processed on our hiring platform.')
-
   return (
     <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '4rem 1.5rem', lineHeight: 1.7 }}>
