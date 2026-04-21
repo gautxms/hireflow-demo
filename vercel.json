@@ -7,7 +7,31 @@
       "destination": "https://hireflow-backend-production.up.railway.app/api/$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/(login|signup|verify-email-info|forgot-password|reset-password|verify|verify-email/success)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reset-password/(.*)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(billing|checkout|account|settings|job-descriptions)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/account/payment-method",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/billing/(success|cancel)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/results/(.*)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/(.*)",
       "destination": "/index.html"
     }
   ]
