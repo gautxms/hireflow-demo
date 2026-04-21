@@ -67,7 +67,7 @@ export default function ContactPage({ onBack }) {
 
       <section className="public-page-hero">
         <h1 className="public-page-title">Get in Touch</h1>
-        <p className="public-page-subtitle">Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.</p>
+        <p className="public-page-subtitle">Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible, or visit hireflow.dev for product details.</p>
       </section>
 
       <section className="public-section public-section-alt">

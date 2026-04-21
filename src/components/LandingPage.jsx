@@ -1,8 +1,27 @@
 import { useEffect, useState } from 'react'
 import '../globals.css'
+import StructuredData from './StructuredData'
 
 export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'SoftwareApplication',
+        name: 'Hireflow',
+        url: 'https://hireflow.dev',
+        applicationCategory: 'Recruiting/Hiring Software',
+        description: 'Hireflow automates resume screening, ranks candidates, and helps teams hire faster with AI-powered recruiting workflows.',
+      },
+      {
+        '@type': 'Organization',
+        name: 'Hireflow',
+        url: 'https://hireflow.dev',
+        description: 'Hireflow builds AI recruiting software for modern hiring teams.',
+      }
+    ]
+  }
 
   useEffect(() => {
     // Smooth scroll and interactive effects
@@ -28,6 +47,7 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
 
   return (
     <>
+      <StructuredData data={structuredData} />
       <div className="landing-mobile-header">
         <button
           type="button"

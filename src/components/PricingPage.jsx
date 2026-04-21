@@ -1,8 +1,17 @@
 import usePageSeo from '../hooks/usePageSeo'
 import PublicFooter from './PublicFooter'
+import StructuredData from './StructuredData'
 
 export default function PricingPage() {
   usePageSeo('HireFlow Pricing', 'Explore HireFlow pricing plans for teams of every size, from starter recruiting workflows to enterprise hiring operations.')
+  const pricingStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Hireflow',
+    url: 'https://hireflow.dev',
+    applicationCategory: 'Recruiting/Hiring Software',
+    description: 'Hireflow pricing plans for AI-powered recruiting software, including starter, pro, and enterprise hiring workflows.',
+  }
   const plans = [
     {
       id: 'starter',
@@ -60,6 +69,7 @@ export default function PricingPage() {
 
   return (
     <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+      <StructuredData data={pricingStructuredData} />
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '4rem 2rem', textAlign: 'center' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>

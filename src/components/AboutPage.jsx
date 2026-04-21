@@ -76,7 +76,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-page-hero">
         <h1 className="public-page-title">About HireFlow</h1>
-        <p className="public-page-subtitle">We're on a mission to revolutionize hiring by building AI tools that help companies find their best talent. Fast, fair, and human-centric.</p>
+        <p className="public-page-subtitle">We're on a mission to revolutionize hiring by building AI tools that help companies find their best talent. Fast, fair, and human-centric. Learn more at hireflow.dev.</p>
       </section>
 
       <section className="public-section"><div className="about-story"><h2 className="public-section-title">Our Story</h2><p className="public-copy">Gautam spent 5 years as Head of Recruiting at Stripe, building their world-class talent team from scratch. He saw the pain firsthand: recruiters spend 40+ hours per week reading resumes, many of which could be screened by AI in seconds.</p><p className="public-copy">The tools available were either outdated (ATS from 2005) or overly complex (enterprise software that requires a PhD to operate). Gautam knew there had to be a better way.</p><p className="public-copy">In early 2024, he brought together the best ML engineers from OpenAI, Google, and Databricks. Together, they built HireFlow: a modern, AI-powered recruiting tool that's simple, transparent, and actually works.</p><p className="public-copy">Today, 500+ companies use HireFlow to hire faster and smarter. We're just getting started.</p></div></section>
