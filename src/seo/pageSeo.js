@@ -1,4 +1,4 @@
-const DEFAULT_SITE_URL = 'https://hireflow.ai'
+const DEFAULT_SITE_URL = 'https://hireflow.dev'
 const DEFAULT_OG_IMAGE = '/og-default.png'
 
 export const SEO_DEFAULTS = {
