@@ -1,0 +1,193 @@
+.pricing-marketing-page {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+}
+
+.pricing-marketing-page__header,
+.pricing-marketing-page__cards-section,
+.pricing-marketing-page__faq-section,
+.pricing-marketing-page__cta-section {
+  padding: 4rem 2rem;
+}
+
+.pricing-marketing-page__header {
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.pricing-marketing-page__title {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.pricing-marketing-page__subtitle,
+.pricing-marketing-page__cta-copy {
+  margin: 0 auto;
+  max-width: 37.5rem;
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+}
+
+.pricing-marketing-page__cards-section {
+  margin: 0 auto;
+  max-width: 75rem;
+}
+
+.pricing-marketing-page__cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 2rem;
+}
+
+.pricing-marketing-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 2.5rem;
+  transition: transform var(--motion-duration-slow) var(--motion-ease-standard);
+}
+
+.pricing-marketing-card--highlighted {
+  border: 2px solid var(--color-accent-green);
+  background: color-mix(in srgb, var(--color-accent-green) 5%, var(--card));
+  transform: scale(1.05);
+}
+
+.pricing-marketing-card__badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.pricing-marketing-card__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.pricing-marketing-card__description {
+  margin: 0 0 1.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+}
+
+.pricing-marketing-card__price {
+  margin: 0 0 2rem;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.pricing-marketing-card__period {
+  margin-left: 0.25rem;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.pricing-marketing-card__cta,
+.pricing-marketing-page__cta-button {
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pricing-marketing-card__cta {
+  margin: 0 0 2rem;
+  width: 100%;
+  border: 2px solid var(--color-accent-green);
+  background: transparent;
+  color: var(--color-accent-green);
+  padding: 0.75rem;
+  transition: all var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.pricing-marketing-card__cta--highlighted,
+.pricing-marketing-page__cta-button {
+  border: none;
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+}
+
+.pricing-marketing-card__features {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+}
+
+.pricing-marketing-card__feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.pricing-marketing-card__check {
+  margin-top: 2px;
+  color: var(--color-accent-green-hover);
+}
+
+.pricing-marketing-card__feature-text,
+.pricing-marketing-page__faq-answer {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+}
+
+.pricing-marketing-page__faq-section {
+  border-top: 1px solid var(--border);
+  background: var(--color-bg-secondary);
+}
+
+.pricing-marketing-page__section-title {
+  margin: 0 0 3rem;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.pricing-marketing-page__faq-list {
+  margin: 0 auto;
+  max-width: 50rem;
+  display: grid;
+  gap: 2rem;
+}
+
+.pricing-marketing-page__faq-item {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1.5rem;
+}
+
+.pricing-marketing-page__faq-question {
+  margin: 0 0 0.75rem;
+  font-weight: 700;
+}
+
+.pricing-marketing-page__faq-answer {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.pricing-marketing-page__cta-section {
+  text-align: center;
+}
+
+.pricing-marketing-page__cta-copy {
+  margin-bottom: 2rem;
+}
+
+.pricing-marketing-page__cta-button {
+  padding: 0.75rem 2rem;
+}
