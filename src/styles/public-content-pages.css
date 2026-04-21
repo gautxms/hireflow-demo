@@ -355,6 +355,7 @@
 
 .public-hero-compact { border-bottom: none; padding-top: 0; }
 .public-mt-md { margin-top: 1rem; }
+.public-mt-lg { margin-top: var(--spacing-lg); }
 .public-mb-md { margin-bottom: 1rem; }
 .public-max-800 { max-width: 800px; margin: 0 auto; }
 

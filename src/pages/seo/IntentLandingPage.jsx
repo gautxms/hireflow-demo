@@ -19,7 +19,7 @@ export default function IntentLandingPage({ pathname }) {
         <span className="public-pill">SEO landing page</span>
         <h1 className="public-page-title">{page.h1}</h1>
         <p className="public-page-subtitle">{page.hero}</p>
-        <div className="public-button-row center" style={{ marginTop: '1.5rem' }}>
+        <div className="public-button-row center public-mt-lg">
           <a className="btn-primary" href="/demo">{page.ctaLabel}</a>
           <a className="btn-ghost" href="/pricing">View pricing</a>
         </div>
@@ -71,7 +71,7 @@ export default function IntentLandingPage({ pathname }) {
         <p className="public-copy center public-max-800">
           See how HireFlow helps your team screen resumes faster, shortlist with confidence, and improve hiring consistency.
         </p>
-        <div className="public-button-row center" style={{ marginTop: '1rem' }}>
+        <div className="public-button-row center public-mt-md">
           <a className="btn-primary" href="/demo">Request demo</a>
           <a className="btn-ghost" href="/pricing">See pricing</a>
         </div>
