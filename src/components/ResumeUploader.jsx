@@ -684,8 +684,6 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             disabled={uploadedFiles.length === 0 || isAnalyzing}
             style={{
               background: uploadedFiles.length === 0 ? 'var(--color-text-secondary)' : 'var(--color-accent-green)',
-              color: 'var(--color-bg-primary)',
-              border: 'none',
             }}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
