@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { logTelemetryToDatabase } from '../db/client.js'
 import { getActiveAiProviderCredentials } from './aiProviderConfigService.js'
 import { AI_MODEL_CONFIG } from '../config/aiModels.js'
+import { getRuntimeResumeSystemPrompt } from './systemPromptService.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
@@ -132,52 +133,20 @@ function normalizeUsageMetrics(usage) {
   }
 }
 
-export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename, { apiKey, model = MODEL, credentialLabel = 'primary' } = {}) {
+export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filename, {
+  apiKey,
+  model = MODEL,
+  credentialLabel = 'primary',
+  systemPrompt,
+  promptVersion = 1,
+} = {}) {
   if (!apiKey) {
     throw new Error('Anthropic API key not configured. Claude analysis unavailable.')
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
   const client = new Anthropic({ apiKey })
-
-  const prompt = `Extract and analyze this resume. Return ONLY valid JSON (no markdown, no explanation):
-{
-  "candidates": [{
-    "name": "string (required)",
-    "email": "string or null",
-    "phone": "string or null",
-    "location": "string or null",
-    "summary": "2-3 sentence professional summary",
-    "skills": ["skill1", "skill2"],
-    "experience": [{
-      "title": "Job Title",
-      "company": "Company",
-      "duration": "X years or dates",
-      "description": "Key accomplishments",
-      "startDate": "YYYY-MM",
-      "endDate": "YYYY-MM"
-    }],
-    "education": [{
-      "degree": "BS Computer Science",
-      "school": "University",
-      "graduation_year": 2020
-    }],
-    "certifications": ["cert1"],
-    "languages": ["English"],
-    "projects": [{
-      "name": "Project",
-      "description": "What built",
-      "url": "link"
-    }],
-    "achievements": ["achievement1"],
-    "confidence": {
-      "name": 0.95,
-      "email": 0.85,
-      "skills": 0.88,
-      "experience": 0.90
-    }
-  }]
-}`
+  const prompt = String(systemPrompt || '').trim()
 
   try {
     const response = await client.messages.create({
@@ -226,6 +195,7 @@ export async function analyzeResumeWithClaude(fileBufferBase64, mimeType, filena
       provider: `anthropic-${credentialLabel}`,
       model,
       credentialLabel,
+      promptVersion: Number(promptVersion || 1),
     }
   } catch (error) {
     console.error('[Claude] Analysis failed:', {
@@ -243,6 +213,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     throw new Error('No configured AI API keys found. Configure primary/fallback keys in Admin Security.')
   }
 
+  const promptSettings = await getRuntimeResumeSystemPrompt()
+
   let lastError = null
   const attemptHistory = []
 
@@ -252,11 +224,15 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         apiKey: entry.apiKey,
         model: entry.model || MODEL,
         credentialLabel: entry.keyLabel,
+        systemPrompt: promptSettings.prompt,
+        promptVersion: promptSettings.promptVersion,
       })
 
       return {
         ...response,
         providerSource: entry.source,
+        promptVersion: promptSettings.promptVersion,
+        promptSource: promptSettings.source,
         attempts: [
           ...attemptHistory,
           {
@@ -265,6 +241,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             model: response.model,
             credentialLabel: response.credentialLabel,
             providerSource: entry.source,
+            promptVersion: promptSettings.promptVersion,
+            promptSource: promptSettings.source,
             tokenUsage: response.tokenUsage,
           },
         ],
@@ -277,6 +255,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         model: entry.model || MODEL,
         credentialLabel: entry.keyLabel,
         providerSource: entry.source,
+        promptVersion: promptSettings.promptVersion,
+        promptSource: promptSettings.source,
         tokenUsage: {
           usageAvailable: false,
           unavailableReason: `provider_request_failed:${String(error?.message || 'unknown').slice(0, 160)}`,
@@ -288,6 +268,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 
   if (lastError && attemptHistory.length > 0) {
     lastError.attempts = attemptHistory
+    lastError.promptVersion = promptSettings.promptVersion
+    lastError.promptSource = promptSettings.source
   }
 
   throw lastError || new Error('All configured AI providers failed.')

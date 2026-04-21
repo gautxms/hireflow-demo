@@ -12,19 +12,29 @@ export default function AdminSecurityPage() {
     primaryModel: '',
     fallbackModel: '',
   })
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [promptMeta, setPromptMeta] = useState(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingPrompt, setSavingPrompt] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [settingsPayload, analyticsPayload] = await Promise.all([
+      const [settingsPayload, analyticsPayload, promptPayload] = await Promise.all([
         adminFetchJson(`${API_BASE}/admin/ai-settings`),
         adminFetchJson(`${API_BASE}/admin/analytics/token-usage`),
+        adminFetchJson(`${API_BASE}/admin/system-prompt`),
       ])
       setSettings(settingsPayload)
       setTokenUsageRows(Array.isArray(analyticsPayload?.tokenUsageUploads) ? analyticsPayload.tokenUsageUploads : [])
+      setSystemPrompt(String(promptPayload?.systemPrompt || ''))
+      setPromptMeta({
+        promptVersion: Number(promptPayload?.promptVersion || 1),
+        updatedAt: promptPayload?.updatedAt || null,
+        maxLength: Number(promptPayload?.maxLength || 12000),
+      })
     } finally {
       setLoading(false)
     }
@@ -67,6 +77,31 @@ export default function AdminSecurityPage() {
     }
   }, [form])
 
+
+  const saveSystemPrompt = useCallback(async (event) => {
+    event.preventDefault()
+    setSavingPrompt(true)
+    setMessage('')
+    try {
+      const payload = await adminFetchJson(`${API_BASE}/admin/system-prompt`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt }),
+      })
+      setSystemPrompt(String(payload?.systemPrompt || systemPrompt))
+      setPromptMeta({
+        promptVersion: Number(payload?.promptVersion || 1),
+        updatedAt: payload?.updatedAt || null,
+        maxLength: Number(payload?.maxLength || 12000),
+      })
+      setMessage(`System prompt saved (v${Number(payload?.promptVersion || 1)}).`)
+    } catch (error) {
+      setMessage(error?.payload?.error || 'Unable to save system prompt.')
+    } finally {
+      setSavingPrompt(false)
+    }
+  }, [systemPrompt])
+
   if (loading) {
     return <div className="admin-page"><section className="ui-card p-4">Loading AI settings…</section></div>
   }
@@ -92,6 +127,31 @@ export default function AdminSecurityPage() {
           <div className="md:col-span-2 flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={saving}>{saving ? 'Saving…' : 'Save AI settings'}</button>
             {message ? <span className="text-xs text-admin-muted">{message}</span> : null}
+          </div>
+        </form>
+      </section>
+
+      <section className="ui-card p-4">
+        <h2 className="text-lg font-semibold text-admin-strong">Common system prompt</h2>
+        <p className="mt-1 text-sm text-admin-body">This prompt is shared across AI providers so Claude/OpenAI runs use the same parsing instructions.</p>
+        <form className="mt-4 grid gap-3" onSubmit={saveSystemPrompt}>
+          <label className="text-sm text-admin-body">System prompt
+            <textarea
+              className="mt-1 min-h-56 w-full rounded border border-admin px-2 py-2"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              maxLength={promptMeta?.maxLength || 12000}
+            />
+          </label>
+          <div className="flex items-center justify-between gap-3 text-xs text-admin-muted">
+            <span>
+              Version: <strong>{Number(promptMeta?.promptVersion || 1)}</strong>
+              {promptMeta?.updatedAt ? ` • Updated ${new Date(promptMeta.updatedAt).toLocaleString()}` : ' • Using default prompt'}
+            </span>
+            <span>{systemPrompt.length}/{promptMeta?.maxLength || 12000}</span>
+          </div>
+          <div>
+            <button type="submit" className="ui-btn" disabled={savingPrompt}>{savingPrompt ? 'Saving prompt…' : 'Save system prompt'}</button>
           </div>
         </form>
       </section>

@@ -162,6 +162,8 @@ async function runParse(job) {
           providerSource: attempt?.providerSource || 'unknown',
           success: Boolean(attempt?.success),
           filename,
+          promptVersion: Number(attempt?.promptVersion || aiResponse?.promptVersion || 1),
+          promptSource: attempt?.promptSource || aiResponse?.promptSource || 'unknown',
         },
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
@@ -192,6 +194,8 @@ async function runParse(job) {
             providerSource: attempt?.providerSource || 'unknown',
             success: false,
             filename,
+            promptVersion: Number(attempt?.promptVersion || aiError?.promptVersion || 1),
+            promptSource: attempt?.promptSource || aiError?.promptSource || 'unknown',
           },
         }).catch((persistError) => {
           console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
@@ -210,6 +214,8 @@ async function runParse(job) {
         metadata: {
           source: 'ai_primary_or_fallback_parse',
           filename,
+          promptVersion: Number(aiError?.promptVersion || 1),
+          promptSource: aiError?.promptSource || 'unknown',
         },
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)

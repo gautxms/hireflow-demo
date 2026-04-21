@@ -6,6 +6,12 @@ import { createPasswordResetToken, generateResetToken } from '../services/resetT
 import { sendPasswordResetEmail } from '../utils/mailer.js'
 import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdminCookie } from '../middleware/adminAuth.js'
 import { getAdminAiProviderSettings, upsertAdminAiProviderKeys } from '../services/aiProviderConfigService.js'
+import {
+  getAdminSystemPromptSettings,
+  MAX_SYSTEM_PROMPT_LENGTH,
+  upsertAdminSystemPrompt,
+  validateSystemPromptInput,
+} from '../services/systemPromptService.js'
 
 const router = Router()
 
@@ -118,6 +124,54 @@ router.put('/ai-settings', async (req, res) => {
   } catch (error) {
     console.error('[Admin ai-settings] update failed:', error)
     return res.status(500).json({ error: 'Unable to update AI settings' })
+  }
+})
+
+
+router.get('/system-prompt', async (_req, res) => {
+  try {
+    const settings = await getAdminSystemPromptSettings()
+    return res.json({
+      ...settings,
+      maxLength: MAX_SYSTEM_PROMPT_LENGTH,
+    })
+  } catch (error) {
+    console.error('[Admin system-prompt] get failed:', error)
+    return res.status(500).json({ error: 'Unable to load system prompt settings' })
+  }
+})
+
+router.put('/system-prompt', async (req, res) => {
+  const rawPrompt = String(req.body?.systemPrompt || '')
+  const validation = validateSystemPromptInput(rawPrompt)
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error, maxLength: MAX_SYSTEM_PROMPT_LENGTH })
+  }
+
+  try {
+    const settings = await upsertAdminSystemPrompt({
+      systemPrompt: validation.value,
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_system_prompt_updated',
+      details: {
+        promptVersion: settings.promptVersion,
+        promptLength: settings.systemPrompt.length,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({
+      ok: true,
+      ...settings,
+      maxLength: MAX_SYSTEM_PROMPT_LENGTH,
+    })
+  } catch (error) {
+    console.error('[Admin system-prompt] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update system prompt' })
   }
 })
 
