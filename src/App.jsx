@@ -258,6 +258,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <HelpPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
+    if (pathname === '/demo') {
+      return <DemoBookingPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+    }
+
     if (pathname === '/terms') {
       return <Terms />
     }
