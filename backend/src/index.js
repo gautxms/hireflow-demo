@@ -10,6 +10,7 @@ import { registerParseResumeJobProcessor } from './jobs/parseResumeJob.js'
 import { startChunkUploadCleanupCron } from './services/fileUploadService.js'
 import { ensureWebhookTables } from './services/webhookService.js'
 import { ensureNotificationTables } from './services/notificationService.js'
+import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -44,6 +45,14 @@ async function start() {
     await initializeJobQueue()
 
     logEmailConfigStatus()
+
+    const aiModelConfig = await validateAiProviderModelConfiguration()
+    if (aiModelConfig.warnings.length > 0) {
+      console.warn('[AI Model Config] Unsupported model configuration detected.', {
+        allowedModels: aiModelConfig.allowedModels,
+        warnings: aiModelConfig.warnings,
+      })
+    }
 
     registerParseResumeJobProcessor()
 

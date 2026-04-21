@@ -35,6 +35,7 @@ import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
+import { AI_MODEL_CONFIG, isAllowedAnthropicModel } from './config/aiModels.js'
 
 const app = express()
 
@@ -80,7 +81,17 @@ app.use(express.json())
 app.use(cookieParser())
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' })
+  const aiModelWarnings = []
+
+  if (!isAllowedAnthropicModel(AI_MODEL_CONFIG.defaultModel)) {
+    aiModelWarnings.push({
+      source: 'env.ANTHROPIC_RESUME_MODEL',
+      model: AI_MODEL_CONFIG.defaultModel,
+      allowedModels: AI_MODEL_CONFIG.allowedModels,
+    })
+  }
+
+  res.json({ status: 'ok', warnings: aiModelWarnings })
 })
 
 app.use('/api', generalApiLimiterUnauth)
