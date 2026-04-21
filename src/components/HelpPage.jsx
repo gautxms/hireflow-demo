@@ -327,11 +327,11 @@ export default function HelpPage({ onBack }) {
       </section>
 
       <footer className="public-cta-footer">
-        <h2 className="public-section-title">Need more help?</h2>
-        <p className="public-copy center">If the docs do not resolve your issue, contact support with your workspace ID and issue details.</p>
+        <h2 className="public-section-title">Get unstuck faster</h2>
+        <p className="public-copy center">Talk to support for issue resolution or book a walkthrough to improve your workflow.</p>
         <div className="public-button-row center">
-          <button className="btn-primary">Contact Support</button>
-          <button className="btn-ghost">Open ticket guide</button>
+          <a className="public-btn-primary" href="/contact">Contact support</a>
+          <a className="public-btn-secondary" href="/demo">Schedule demo</a>
         </div>
       </footer>
     </div>
