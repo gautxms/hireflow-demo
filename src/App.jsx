@@ -722,7 +722,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             </div>
           ) : (
             <>
-              <button type="button" className="btn-ghost" onClick={() => { setIsMobileNavOpen(false); navigate('/login') }}>Login</button>
+              <button type="button" className="btn-ghost btn-ghost--accent" onClick={() => { setIsMobileNavOpen(false); navigate('/login') }}>Login</button>
               <button type="button" className="btn-primary" onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }}>Sign up</button>
             </>
           )}

@@ -135,6 +135,17 @@ nav {
   background: var(--color-accent-alpha-08);
 }
 
+.btn-ghost--accent {
+  border-color: var(--color-accent-green);
+  color: var(--color-text-primary);
+}
+
+.btn-ghost--accent:hover {
+  border-color: var(--color-accent-green);
+  color: var(--color-accent-green);
+  background: var(--color-accent-alpha-08);
+}
+
 .btn-ghost:active {
   border-color: var(--color-accent-green-active);
   color: var(--color-accent-green-active);
