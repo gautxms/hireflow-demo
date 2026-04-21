@@ -843,6 +843,55 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined
+    }
+
+    const verifyUserSession = async () => {
+      const activeToken = getStoredToken()
+
+      if (!activeToken) {
+        return
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+          headers: { Authorization: `Bearer ${activeToken}` },
+        })
+
+        if (response.status !== 401) {
+          return
+        }
+      } catch {
+        return
+      }
+
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+      localStorage.removeItem('subscription_status')
+      localStorage.removeItem(USER_STORAGE_KEY)
+      setToken('')
+      setSubscriptionStatus('inactive')
+      setUserProfile(null)
+      setAuthPrompt('Your session expired while you were away. Please log in again.')
+      navigate('/login')
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void verifyUserSession()
+      }
+    }
+
+    window.addEventListener('focus', handleVisibilityChange)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityChange)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
     if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
       navigate('/')
     }
