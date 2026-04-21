@@ -2,6 +2,7 @@ import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
 import { triggerWebhook } from '../services/webhookService.js'
+import { normalizeProviderError } from './parseProviderError.js'
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -286,6 +287,7 @@ export function registerParseResumeJobProcessor() {
     try {
       return await runParse(job)
     } catch (error) {
+      const normalizedError = normalizeProviderError(error)
       const isTerminalFailure = isTerminalJobFailure(job)
       if (isTerminalFailure) {
         await pool.query(
@@ -294,14 +296,14 @@ export function registerParseResumeJobProcessor() {
                parse_error = $2,
                updated_at = NOW()
            WHERE id = $1`,
-          [job.data.resumeId, error.message || 'Unknown parse error'],
+          [job.data.resumeId, normalizedError.normalizedMessage],
         )
       }
 
       await setJobState(job.id, {
         status: isTerminalFailure ? 'failed' : 'retrying',
         progress: isTerminalFailure ? 100 : Number(job.progress() || 0),
-        error_message: error.message || 'Unknown parse error',
+        error_message: normalizedError.normalizedMessage,
         attempts: job.attemptsMade + 1,
       })
 
@@ -310,7 +312,7 @@ export function registerParseResumeJobProcessor() {
           status: 'failed',
           progress: 100,
           result: null,
-          error: error.message || 'Unknown parse error',
+          error: normalizedError.normalizedMessage,
         })
       }
 

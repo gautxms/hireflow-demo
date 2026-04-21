@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
+import { mapProviderError } from './aiProviderErrorMapping'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
@@ -75,6 +76,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [parseStatus, setParseStatus] = useState('')
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
   const [error, setError] = useState('')
+  const [technicalErrorDetails, setTechnicalErrorDetails] = useState('')
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
@@ -158,8 +160,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
     if (rejected.length > 0) {
       setError(sanitizeForDisplay(rejected.join(' ')))
+      setTechnicalErrorDetails('')
     } else {
       setError('')
+      setTechnicalErrorDetails('')
     }
 
     if (allowed.length > 0) {
@@ -240,6 +244,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
     setIsAnalyzing(true)
     setError('')
+    setTechnicalErrorDetails('')
 
     try {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -406,7 +411,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         }
 
         if (statusPayload.status === 'failed') {
-          throw new Error(statusPayload.error || 'File format not recognized')
+          throw new Error(statusPayload.error || 'unknown_error')
         }
 
         await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
@@ -420,19 +425,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       setParseProgress(0)
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
+      const normalizedProviderError = mapProviderError(errorMessage)
 
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
+        setTechnicalErrorDetails('')
       } else if (isInfrastructureConfigError(errorMessage)) {
         setError(formatUploadError('AWS S3 not configured'))
+        setTechnicalErrorDetails('')
       } else if (
         errorMessage.toLowerCase().includes('parse')
         || errorMessage.toLowerCase().includes('no candidates')
         || errorMessage.toLowerCase().includes('format')
       ) {
         setError(formatParseError('File format not recognized'))
+        setTechnicalErrorDetails(errorMessage)
       } else {
-        setError(formatUploadError(errorMessage))
+        setError(normalizedProviderError.userMessage)
+        setTechnicalErrorDetails(normalizedProviderError.technicalDetails)
       }
     } finally {
       setIsAnalyzing(false)
@@ -650,6 +660,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             }}
           >
             {error}
+            {technicalErrorDetails && (
+              <details style={{ marginTop: '0.75rem' }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Technical details</summary>
+                <pre style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                  {technicalErrorDetails}
+                </pre>
+              </details>
+            )}
           </div>
         )}
 
