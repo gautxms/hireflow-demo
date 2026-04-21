@@ -1,9 +1,6 @@
-import { Buffer } from 'buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
-import { runParseWithOcrFallback, shouldUseOcrFallback } from './ocrFallbackJob.js'
-import { analyzeResumeWithClaude } from '../services/aiResumeAnalysisService.js'
-import { estimateExtractableText, isLikelyScannedPdf } from '../services/ocrService.js'
+import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
 import { triggerWebhook } from '../services/webhookService.js'
 
 export function isTerminalJobFailure(job) {
@@ -131,91 +128,94 @@ async function runParse(job) {
   await setJobState(job.id, { progress: 75 })
   await job.progress(75)
 
-  const fileBuffer = Buffer.from(fileBufferBase64, 'base64')
-
   let analysisResult
-  let usedClaude = false
-  const extraction = estimateExtractableText(fileBuffer)
-  const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
+  let parseMethod = 'anthropic-primary'
 
   try {
-    console.log('[Parse] Attempting Claude analysis...')
-    const aiResponse = await analyzeResumeWithClaude(fileBufferBase64, mimeType, filename)
+    console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
+    const aiResponse = await analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename)
     const aiResult = aiResponse?.result || {}
-    await persistTokenUsageMetric({
-      resumeId,
-      parseJobId: job.id,
-      userId: job.data.userId,
-      jobDescriptionId: job.data.jobDescriptionId || null,
-      provider: aiResponse?.provider || 'anthropic',
-      model: aiResponse?.model || null,
-      tokenUsage: aiResponse?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
-      metadata: {
-        source: 'claude_primary_parse',
-        filename,
-      },
-    }).catch((persistError) => {
-      console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
-    })
+    const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
+      ? aiResponse.attempts
+      : [{
+          success: true,
+          provider: aiResponse?.provider || 'anthropic-primary',
+          model: aiResponse?.model || null,
+          credentialLabel: aiResponse?.credentialLabel || 'primary',
+          providerSource: aiResponse?.providerSource || 'unknown',
+          tokenUsage: aiResponse?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
+        }]
 
-    const aiCandidates = Array.isArray(aiResult?.candidates) ? aiResult.candidates : []
-    const aiConfidenceValues = aiCandidates.flatMap((candidate) =>
-      Object.values(candidate?.confidenceScores || candidate?.confidence || {}),
-    )
-    const normalizedConfidenceValues = aiConfidenceValues
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value))
-      .map((value) => (value <= 1 ? value * 100 : value))
-    const averageAiConfidence = normalizedConfidenceValues.length
-      ? normalizedConfidenceValues.reduce((sum, value) => sum + value, 0) / normalizedConfidenceValues.length
-      : 0
-
-    const shouldRunFallback = shouldUseOcrFallback({
-      scannedPdf,
-      extractionLength: extraction.length,
-      aiConfidence: averageAiConfidence,
-    })
-
-    if (shouldRunFallback) {
-      console.warn('[Parse Job] AI parse quality is low, invoking OCR fallback safeguards')
-      analysisResult = await runParseWithOcrFallback({
-        filename,
-        mimeType,
-        fileSize,
-        fileBuffer,
+    for (const attempt of usageAttempts) {
+      await persistTokenUsageMetric({
+        resumeId,
+        parseJobId: job.id,
+        userId: job.data.userId,
+        jobDescriptionId: job.data.jobDescriptionId || null,
+        provider: attempt?.provider || 'anthropic',
+        model: attempt?.model || null,
+        tokenUsage: attempt?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
+        metadata: {
+          source: 'ai_primary_or_fallback_parse',
+          credentialLabel: attempt?.credentialLabel || 'primary',
+          providerSource: attempt?.providerSource || 'unknown',
+          success: Boolean(attempt?.success),
+          filename,
+        },
+      }).catch((persistError) => {
+        console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
       })
-      usedClaude = false
-    } else {
-      console.log('[Parse] Claude analysis successful')
-      analysisResult = aiResult
-      usedClaude = true
     }
-  } catch (aiError) {
-    await persistTokenUsageMetric({
-      resumeId,
-      parseJobId: job.id,
-      userId: job.data.userId,
-      jobDescriptionId: job.data.jobDescriptionId || null,
-      tokenUsage: {
-        usageAvailable: false,
-        unavailableReason: `provider_request_failed:${normalizeUnavailableReason(aiError.message)}`,
-      },
-      metadata: {
-        source: 'claude_primary_parse',
-        filename,
-      },
-    }).catch((persistError) => {
-      console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
-    })
 
-    console.warn('[Parse] Claude failed, falling back to OCR:', aiError.message)
-    analysisResult = await runParseWithOcrFallback({
-      filename,
-      mimeType,
-      fileSize,
-      fileBuffer,
-    })
-    usedClaude = false
+    console.log('[Parse] AI analysis successful')
+    analysisResult = aiResult
+    parseMethod = aiResponse?.provider || 'anthropic-primary'
+  } catch (aiError) {
+    const failedAttempts = Array.isArray(aiError?.attempts) ? aiError.attempts : []
+    if (failedAttempts.length > 0) {
+      for (const attempt of failedAttempts) {
+        await persistTokenUsageMetric({
+          resumeId,
+          parseJobId: job.id,
+          userId: job.data.userId,
+          jobDescriptionId: job.data.jobDescriptionId || null,
+          provider: attempt?.provider || 'anthropic',
+          model: attempt?.model || null,
+          tokenUsage: attempt?.tokenUsage || {
+            usageAvailable: false,
+            unavailableReason: `provider_request_failed:${normalizeUnavailableReason(aiError.message)}`,
+          },
+          metadata: {
+            source: 'ai_primary_or_fallback_parse',
+            credentialLabel: attempt?.credentialLabel || 'primary',
+            providerSource: attempt?.providerSource || 'unknown',
+            success: false,
+            filename,
+          },
+        }).catch((persistError) => {
+          console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
+        })
+      }
+    } else {
+      await persistTokenUsageMetric({
+        resumeId,
+        parseJobId: job.id,
+        userId: job.data.userId,
+        jobDescriptionId: job.data.jobDescriptionId || null,
+        tokenUsage: {
+          usageAvailable: false,
+          unavailableReason: `provider_request_failed:${normalizeUnavailableReason(aiError.message)}`,
+        },
+        metadata: {
+          source: 'ai_primary_or_fallback_parse',
+          filename,
+        },
+      }).catch((persistError) => {
+        console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
+      })
+    }
+
+    throw aiError
   }
 
   const candidates = Array.isArray(analysisResult?.candidates)
@@ -230,9 +230,9 @@ async function runParse(job) {
     filename,
     mimeType,
     fileSize,
-    parserVersion: usedClaude ? 'claude-3.5-sonnet-hybrid' : 'ocr-fallback',
-    analyzerUsed: usedClaude ? 'Claude' : 'OCR',
-    methodUsed: analysisResult?.methodUsed || (usedClaude ? 'anthropic-claude' : 'ocr-fallback'),
+    parserVersion: 'ai-only',
+    analyzerUsed: 'AI',
+    methodUsed: analysisResult?.methodUsed || parseMethod,
     ...analysisResult,
     candidates,
   }
