@@ -1,16 +1,8 @@
 import { useState } from 'react'
-import { parseDemoRequestError, validateDemoRequestForm } from './demoRequestValidation.js'
-import API_BASE from '../config/api'
 import { Icon } from './Icon'
 
 export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
-  const [isScheduleFormOpen, setIsScheduleFormOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState('')
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [formErrors, setFormErrors] = useState({})
-  const [scheduleDemoForm, setScheduleDemoForm] = useState({ name: '', email: '', company: '', phone: '', message: '' })
 
   const teamMembers = [
     { id: 1, name: 'Gautam', title: 'Founder & CEO', bio: 'Former Head of Recruiting at Stripe. Passionate about building tools that make hiring human-centric.', expertise: ['Recruiting', 'Product', 'Operations'], image: '👔' },
@@ -41,35 +33,6 @@ export default function AboutPage({ onBack }) {
     { year: '2025 Q2', event: 'IPO Goals', desc: 'Become the standard for AI hiring.' }
   ]
 
-  const handleDemoInputChange = (event) => {
-    const { name, value } = event.target
-    setScheduleDemoForm((prev) => ({ ...prev, [name]: value }))
-    if (formErrors[name]) setFormErrors((prev) => ({ ...prev, [name]: '' }))
-  }
-
-  const handleScheduleDemoSubmit = async (event) => {
-    event.preventDefault()
-    if (isSubmitting) return
-    const errors = validateDemoRequestForm(scheduleDemoForm)
-    setFormErrors(errors)
-    if (Object.keys(errors).length > 0) return
-
-    setIsSubmitting(true)
-    setSubmitError('')
-    try {
-      const response = await fetch(`${API_BASE}/inquiries/demo-request`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scheduleDemoForm)
-      })
-      if (!response.ok) throw new Error(await parseDemoRequestError(response))
-      setSubmitSuccess(true)
-      setScheduleDemoForm({ name: '', email: '', company: '', phone: '', message: '' })
-      setFormErrors({})
-      setTimeout(() => { setIsScheduleFormOpen(false); setSubmitSuccess(false) }, 1500)
-    } catch (error) {
-      setSubmitError(error?.message || 'Unable to submit your request right now. Please try again shortly.')
-    } finally { setIsSubmitting(false) }
-  }
-
   return (
     <div className="public-page">
       <div className="public-page-header"><button type="button" onClick={onBack} className="public-page-back-button public-nav-text">← Back</button></div>
@@ -91,32 +54,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-section public-section-alt"><div className="about-timeline"><h2 className="public-section-title center">Our Journey</h2>{timeline.map((item) => <article key={item.year} className="public-card about-timeline-item"><h3 className="public-card-title contact-accent-title">{item.year}</h3><p className="public-card-title">{item.event}</p><p className="public-card-copy">{item.desc}</p></article>)}</div></section>
 
-      <footer className="public-cta-footer"><h2 className="public-section-title">Join us on the mission</h2><p className="public-copy center">Start using HireFlow today and transform your hiring process</p><div className="public-button-row center"><a className="public-btn-primary" href="/contact">Contact Support</a><button className="public-btn-secondary" onClick={() => { setIsScheduleFormOpen(true); setSubmitError(''); setSubmitSuccess(false) }}>Schedule Demo</button></div></footer>
-
-      {isScheduleFormOpen && (
-        <div className="about-modal-overlay">
-          <div className="public-form about-modal">
-            <div className="about-modal-header"><h3 className="public-card-title">Schedule a Demo</h3><button onClick={() => setIsScheduleFormOpen(false)} className="about-close-btn" aria-label="Close schedule demo form">✕</button></div>
-            <p className="public-card-copy">Share your details and we’ll reach out to schedule a tailored walkthrough.</p>
-            {submitSuccess && <p className="status-message status-message--success">Thanks! Your request has been submitted successfully.</p>}
-            {submitError && <p className="status-message status-message--error">{submitError}</p>}
-            <form onSubmit={handleScheduleDemoSubmit} className="public-form-grid">
-              {[
-                ['name', 'Full name *', 'text'], ['email', 'Work email *', 'email'], ['company', 'Company *', 'text']
-              ].map(([name, label, type]) => (
-                <div key={name} className={`public-form-field ${formErrors[name] ? 'has-error' : ''}`}>
-                  <label htmlFor={name}>{label}</label>
-                  <input id={name} type={type} name={name} value={scheduleDemoForm[name]} onChange={handleDemoInputChange} />
-                  {formErrors[name] && <div className="public-form-error">{formErrors[name]}</div>}
-                </div>
-              ))}
-              <div className="public-form-field"><label htmlFor="phone">Phone (optional)</label><input id="phone" type="tel" name="phone" value={scheduleDemoForm.phone} onChange={handleDemoInputChange} /></div>
-              <div className={`public-form-field ${formErrors.message ? 'has-error' : ''}`}><label htmlFor="message">Tell us about your hiring goals *</label><textarea id="message" rows={4} name="message" value={scheduleDemoForm.message} onChange={handleDemoInputChange} />{formErrors.message && <div className="public-form-error">{formErrors.message}</div>}</div>
-              <button type="submit" disabled={isSubmitting} className="public-btn-primary">{isSubmitting ? 'Submitting…' : 'Submit Demo Request'}</button>
-            </form>
-          </div>
-        </div>
-      )}
+      <footer className="public-cta-footer"><h2 className="public-section-title">Join us on the mission</h2><p className="public-copy center">Start using HireFlow today and transform your hiring process</p><div className="public-button-row center"><a className="public-btn-primary" href="/contact">Contact Support</a><a className="public-btn-secondary" href="/demo">Schedule Demo</a></div></footer>
     </div>
   )
 }
