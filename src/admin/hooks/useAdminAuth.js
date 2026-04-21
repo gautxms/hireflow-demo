@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import API_BASE from '../../config/api'
 import useAdminUxTracking from './useAdminUxTracking'
+import { ADMIN_SESSION_EXPIRED_EVENT, clearAdminSessionStorage, handleAdminUnauthorized } from '../utils/adminErrorState'
+import { shouldVerifyAdminSessionOnVisibility } from '../utils/adminSessionLifecycle'
 
 const DEFAULT_TIMEOUT_SECONDS = 15 * 60
 const TIMER_TICK_SECONDS = 10
 const ADMIN_SESSION_STORAGE_KEY = 'admin_session'
 const DEFAULT_TOTP_PERIOD_SECONDS = 30
+
+const AdminAuthContext = createContext(null)
 
 function sanitizeCode(value) {
   return String(value || '')
@@ -35,7 +39,7 @@ function toHelpfulMessage(message, fallback) {
   return text
 }
 
-export default function useAdminAuth() {
+function useAdminAuthController() {
   const { emitAdminEvent } = useAdminUxTracking()
   const [sessionSecondsLeft, setSessionSecondsLeft] = useState(DEFAULT_TIMEOUT_SECONDS)
   const [warningVisible, setWarningVisible] = useState(false)
@@ -52,6 +56,7 @@ export default function useAdminAuth() {
   const [acceptedEulaForPendingLogin, setAcceptedEulaForPendingLogin] = useState(false)
   const [requiresEula, setRequiresEula] = useState(false)
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
+  const [authCheckStatus, setAuthCheckStatus] = useState('idle')
   const hasHandledExpiryRef = useRef(false)
 
   const persistSession = useCallback((payload = {}) => {
@@ -72,9 +77,9 @@ export default function useAdminAuth() {
   }, [])
 
   const clearSession = useCallback(() => {
-    localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY)
-    localStorage.removeItem('admin_id')
+    clearAdminSessionStorage(localStorage)
     setIsAdminAuthenticated(false)
+    setActiveSessions([])
   }, [])
 
   const formattedTimer = useMemo(() => {
@@ -89,13 +94,35 @@ export default function useAdminAuth() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
+      if (response.status === 401) {
+        handleAdminUnauthorized()
+      }
       throw new Error(extractError(payload, 'Could not load active sessions'))
     }
 
     const sessions = payload.sessions || []
     setActiveSessions(sessions)
     setIsAdminAuthenticated(sessions.length > 0)
+    return sessions
   }, [])
+
+  const verifyAuth = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setAuthCheckStatus('checking')
+    }
+
+    try {
+      const sessions = await loadSessions()
+      const authenticated = sessions.length > 0
+      setIsAdminAuthenticated(authenticated)
+      setAuthCheckStatus(authenticated ? 'authenticated' : 'unauthenticated')
+      return authenticated
+    } catch {
+      setIsAdminAuthenticated(false)
+      setAuthCheckStatus('unauthenticated')
+      return false
+    }
+  }, [loadSessions])
 
   const loginWithPassword = useCallback(async ({ email, password }) => {
     setError('')
@@ -143,16 +170,6 @@ export default function useAdminAuth() {
       return { requiresTwoFactor: false, requiresTwoFactorSetup: true, setupToken: payload.setupToken || '' }
     }
 
-    setNeedsTwoFactor(Boolean(payload.requiresTwoFactor))
-    setPendingEmail(email)
-    setPendingPassword(password)
-
-    if (payload.requiresTwoFactor) {
-      setStatus('Enter your authenticator or backup code to continue.')
-      setTotpPeriodSeconds(Number(payload.totpPeriodSeconds) || DEFAULT_TOTP_PERIOD_SECONDS)
-      return { requiresTwoFactor: true }
-    }
-
     setSessionSecondsLeft(payload.sessionTimeoutSeconds || DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
     setStatus('Signed in.')
@@ -162,9 +179,9 @@ export default function useAdminAuth() {
     setPendingEmail('')
     setPendingPassword('')
     persistSession(payload)
-    await loadSessions().catch(() => {})
+    await verifyAuth({ silent: true })
     return { requiresTwoFactor: false }
-  }, [acceptedEula, emitAdminEvent, loadSessions, persistSession])
+  }, [acceptedEula, emitAdminEvent, persistSession, verifyAuth])
 
   const verifySecondFactor = useCallback(async ({ totpCode, backupCode }) => {
     setError('')
@@ -199,9 +216,9 @@ export default function useAdminAuth() {
     setStatus(payload.usedBackupCode ? 'Signed in with one-time backup code.' : '2FA verified. Access granted.')
     void emitAdminEvent({ eventType: 'admin_2fa_completed', route: '/admin/login', metadata: { usedBackupCode: Boolean(payload.usedBackupCode) } })
     persistSession(payload)
-    await loadSessions().catch(() => {})
+    await verifyAuth({ silent: true })
     return payload
-  }, [acceptedEulaForPendingLogin, emitAdminEvent, loadSessions, pendingEmail, pendingPassword, persistSession])
+  }, [acceptedEulaForPendingLogin, emitAdminEvent, pendingEmail, pendingPassword, persistSession, verifyAuth])
 
   const refreshActivity = useCallback(async () => {
     const response = await fetch(`${API_BASE}/admin/sessions/refresh`, {
@@ -227,12 +244,12 @@ export default function useAdminAuth() {
     setPendingPassword('')
     setSetupToken('')
     setSetupTokenExpiresAt(null)
-    setActiveSessions([])
     setRequiresEula(false)
     setAcceptedEulaForPendingLogin(false)
     setSessionSecondsLeft(DEFAULT_TIMEOUT_SECONDS)
     hasHandledExpiryRef.current = false
     clearSession()
+    setAuthCheckStatus('unauthenticated')
     setStatus(message)
   }, [clearSession])
 
@@ -250,9 +267,9 @@ export default function useAdminAuth() {
       throw new Error(extractError(payload, 'Could not logout other sessions'))
     }
 
-    await loadSessions().catch(() => {})
+    await verifyAuth({ silent: true })
     setStatus('Other sessions revoked.')
-  }, [loadSessions])
+  }, [verifyAuth])
 
   useEffect(() => {
     if (!isAdminAuthenticated) {
@@ -281,11 +298,11 @@ export default function useAdminAuth() {
     return () => window.clearInterval(tick)
   }, [isAdminAuthenticated, logout])
 
-
   useEffect(() => {
     const rawSession = localStorage.getItem(ADMIN_SESSION_STORAGE_KEY)
 
     if (!rawSession) {
+      setAuthCheckStatus('unauthenticated')
       return
     }
 
@@ -298,26 +315,47 @@ export default function useAdminAuth() {
       if (secondsLeftFromExpiry <= 0) {
         window.setTimeout(() => {
           clearSession()
+          setAuthCheckStatus('unauthenticated')
         }, 0)
         return
       }
 
       window.setTimeout(() => {
         setSessionSecondsLeft(secondsLeftFromExpiry)
-        setIsAdminAuthenticated(true)
         hasHandledExpiryRef.current = false
-      }, 0)
-      window.setTimeout(() => {
-        void loadSessions().catch(() => {
-          clearSession()
-        })
       }, 0)
     } catch {
       window.setTimeout(() => {
         clearSession()
+        setAuthCheckStatus('unauthenticated')
       }, 0)
+      return
     }
-  }, [clearSession, loadSessions])
+
+    void verifyAuth()
+  }, [clearSession, verifyAuth])
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      clearSession()
+      setAuthCheckStatus('unauthenticated')
+      setStatus('Session expired. Please sign in again.')
+    }
+
+    const onVisibilityChange = () => {
+      if (shouldVerifyAdminSessionOnVisibility({ visibilityState: document.visibilityState, pathname: window.location.pathname })) {
+        void verifyAuth({ silent: true })
+      }
+    }
+
+    window.addEventListener(ADMIN_SESSION_EXPIRED_EVENT, onSessionExpired)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.removeEventListener(ADMIN_SESSION_EXPIRED_EVENT, onSessionExpired)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [clearSession, verifyAuth])
 
   return {
     sessionSecondsLeft,
@@ -333,6 +371,7 @@ export default function useAdminAuth() {
     acceptedEula,
     requiresEula,
     isAdminAuthenticated,
+    authCheckStatus,
     setAcceptedEula,
     setError,
     setStatus,
@@ -343,7 +382,23 @@ export default function useAdminAuth() {
     verifySecondFactor,
     refreshActivity,
     loadSessions,
+    verifyAuth,
     logoutOtherSessions,
     logout,
   }
+}
+
+export function AdminAuthProvider({ children }) {
+  const value = useAdminAuthController()
+  return createElement(AdminAuthContext.Provider, { value }, children)
+}
+
+export default function useAdminAuth() {
+  const context = useContext(AdminAuthContext)
+
+  if (!context) {
+    throw new Error('useAdminAuth must be used within AdminAuthProvider')
+  }
+
+  return context
 }

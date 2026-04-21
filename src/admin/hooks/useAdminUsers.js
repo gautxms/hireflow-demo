@@ -119,15 +119,11 @@ export default function useAdminUsers() {
   }, [mutateUser])
 
   const updateProfile = useCallback(async (userId, updates) => {
-    const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
+    const payload = await adminFetchJson(`${API_BASE}/admin/users/${userId}`, {
       method: 'PATCH',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'edit', ...updates }),
     })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Failed to update user')
 
     mutateUser(userId, (user) => ({ ...user, ...updates, ...(payload.user || {}) }))
     appendAudit(userId, payload.audit || { action: 'profile_updated', details: updates })
@@ -135,15 +131,11 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const blockUser = useCallback(async (userId, reason) => {
-    const response = await fetch(`${API_BASE}/admin/users/${userId}/block`, {
+    const payload = await adminFetchJson(`${API_BASE}/admin/users/${userId}/block`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason }),
     })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Failed to block user')
 
     mutateUser(userId, (user) => ({ ...user, is_blocked: true, status: 'blocked' }))
     appendAudit(userId, payload.audit || { action: 'blocked', details: { reason } })
@@ -151,15 +143,11 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const unblockUser = useCallback(async (userId) => {
-    const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
+    const payload = await adminFetchJson(`${API_BASE}/admin/users/${userId}`, {
       method: 'PATCH',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'unblock', is_blocked: false }),
     })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Failed to unblock user')
 
     mutateUser(userId, (user) => ({ ...user, is_blocked: false, status: 'active' }))
     appendAudit(userId, payload.audit || { action: 'unblocked' })
@@ -167,27 +155,19 @@ export default function useAdminUsers() {
   }, [appendAudit, mutateUser])
 
   const resetPassword = useCallback(async (userId) => {
-    const response = await fetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
+    const payload = await adminFetchJson(`${API_BASE}/admin/users/${userId}/reset-password`, {
       method: 'POST',
-      credentials: 'include',
     })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Failed to send reset email')
     appendAudit(userId, payload.audit || { action: 'password_reset_email_sent' })
     return payload
   }, [appendAudit])
 
   const impersonateUser = useCallback(async (userId) => {
-    const response = await fetch(`${API_BASE}/admin/users/${userId}/impersonate`, {
+    const payload = await adminFetchJson(`${API_BASE}/admin/users/${userId}/impersonate`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ expiresInMinutes: 15 }),
     })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Failed to generate impersonation token')
     appendAudit(userId, payload.audit || { action: 'impersonation_token_created', details: { expiresInMinutes: 15 } })
     return payload
   }, [appendAudit])
@@ -203,9 +183,7 @@ export default function useAdminUsers() {
   const fetchUserById = useCallback(async (userId) => {
     if (!userId) return null
 
-    const response = await fetch(`${API_BASE}/admin/users/${userId}`, { credentials: 'include' })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Failed to load user')
+    const payload = await adminFetchJson(`${API_BASE}/admin/users/${userId}`)
 
     if (payload.user) {
       setUsers((current) => {
