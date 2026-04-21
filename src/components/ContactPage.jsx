@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import API_BASE from '../config/api'
 import { Icon } from './Icon'
 
 const OFFICES = [
@@ -12,6 +13,7 @@ export default function ContactPage({ onBack }) {
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const contactMethods = [
     { icon: 'mail', title: 'Email', description: 'Best for detailed inquiries', value: 'hello@hireflow.dev' },
@@ -33,6 +35,7 @@ export default function ContactPage({ onBack }) {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
+    if (submitError) setSubmitError('')
   }
 
   const validateForm = () => {
@@ -47,16 +50,33 @@ export default function ContactPage({ onBack }) {
     return Object.keys(next).length === 0
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!validateForm()) return
+    if (!validateForm() || isSubmitting) return
+
     setIsSubmitting(true)
-    setTimeout(() => {
-      setIsSubmitting(false)
+    setSubmitError('')
+
+    try {
+      const response = await fetch(`${API_BASE}/inquiries/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to send your message right now.')
+      }
+
       setSubmitted(true)
       setFormData({ name: '', email: '', company: '', subject: '', message: '' })
       setTimeout(() => setSubmitted(false), 5000)
-    }, 1500)
+    } catch (error) {
+      setSubmitError(error?.message || 'Unable to send your message right now.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -91,6 +111,7 @@ export default function ContactPage({ onBack }) {
           <div>
             <h2 className="public-section-title">Send us a Message</h2>
             {submitted && <div className="status-message status-message--success"><strong>Message Sent!</strong> Thank you for reaching out. We'll get back to you within 2 hours.</div>}
+            {submitError && <div className="status-message status-message--error">{submitError}</div>}
 
             <form onSubmit={handleSubmit} className="public-form public-form-grid">
               {[

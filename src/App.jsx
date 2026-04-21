@@ -46,6 +46,7 @@ const AdminUploadsPage = lazy(() => import('./admin/pages/AdminUploadsPage'))
 const AdminUploadDetailsPage = lazy(() => import('./admin/pages/AdminUploadDetailsPage'))
 const AdminUserDetailsPage = lazy(() => import('./admin/pages/AdminUserDetailsPage'))
 const AdminSecurityPage = lazy(() => import('./admin/pages/AdminSecurityPage'))
+const AdminInquiriesPage = lazy(() => import('./admin/pages/AdminInquiriesPage'))
 const AdminLoginPage = lazy(() => import('./admin/pages/AdminLoginPage'))
 const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
 const AdminShell = lazy(() => import('./admin/components/AdminShell'))
@@ -461,6 +462,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         purpose: 'Use this page to understand growth, retention, conversion, and revenue momentum.',
         breadcrumbs: ['Admin', 'Analytics'],
       }, <AdminAnalyticsPage />)
+    }
+
+    if (pathname === '/admin/inquiries') {
+      return renderAdminSection({
+        sectionKey: 'inquiries',
+        title: 'Inquiries',
+        subtitle: 'Review inbound contact and demo requests.',
+        purpose: 'Use this page to triage incoming inquiries, inspect submission details, and mark items as reviewed.',
+        breadcrumbs: ['Admin', 'Inquiries'],
+      }, <AdminInquiriesPage />)
     }
 
     if (pathname === '/admin/security') {
