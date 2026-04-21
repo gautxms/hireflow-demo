@@ -18,6 +18,34 @@ export const INTENT_PAGE_CONTENT = {
       'Implementation is lightweight. Upload resumes directly, analyze them in bulk, and prioritize candidates with clear match summaries. You can review recommendations, adjust criteria, and export or share results with stakeholders. Whether you are hiring for one critical role or coordinating multiple openings across departments, the workflow stays simple: define criteria, screen fast, review intelligently, and move qualified people forward earlier.',
       'If your team is currently spending hours on first-round filtering, this is where you reclaim capacity. AI resume screening helps you focus on higher-value recruiting work while creating a more structured and candidate-friendly process. Start with one role, measure shortlist velocity and interview-to-offer quality, then roll it out across your pipeline once you see the lift.',
     ],
+    personaPainPoints: [
+      {
+        title: 'Recruiters overloaded with first-pass review',
+        copy: 'Reduce repetitive resume triage so recruiters can focus on outreach, interviews, and stakeholder coordination.',
+      },
+      {
+        title: 'Hiring managers getting inconsistent shortlists',
+        copy: 'Use shared role criteria so each reviewer evaluates candidates against the same standards.',
+      },
+      {
+        title: 'Talent leaders pressured to improve speed and quality',
+        copy: 'Create a repeatable intake-to-shortlist system that improves throughput without lowering hiring quality.',
+      },
+    ],
+    outcomes: [
+      {
+        title: 'Faster time to shortlist',
+        copy: 'Teams can move qualified candidates to interviews sooner and reduce backlog in top-of-funnel stages.',
+      },
+      {
+        title: 'Higher shortlist confidence',
+        copy: 'Explainable score rationale helps recruiting teams defend who advances and why.',
+      },
+      {
+        title: 'Better operational consistency',
+        copy: 'A standardized screening workflow reduces reviewer drift and improves handoffs across teams.',
+      },
+    ],
     faqs: [
       {
         q: 'How accurate is AI resume screening for specialized roles?',
@@ -44,6 +72,34 @@ export const INTENT_PAGE_CONTENT = {
       'A strong bulk analysis process is not only about speed. It also helps improve candidate experience. When your team can review applicants faster, qualified candidates receive responses sooner and are less likely to accept competing offers. Faster triage also allows recruiters to proactively communicate timelines and keep candidates warm rather than going silent during resume backlog periods.',
       'HireFlow supports practical rollout for teams hiring across multiple roles at once. You can run separate scoring profiles by job family, compare outcomes across requisitions, and monitor which criteria are too broad or too strict. Over time, this creates a feedback loop: recruiters learn which inputs correlate with successful interviews and on-the-job performance, then tune the model-assisted process to improve quality with each hiring cycle.',
       'If your recruiting team is dealing with seasonal spikes, campus hiring, support roles, sales expansion, or any other high-volume scenario, bulk resume analysis provides immediate leverage. You keep humans in control of final decisions while automating repetitive initial review work. The result is a faster, cleaner funnel that helps your team hit hiring targets without burning out your recruiters.',
+    ],
+    personaPainPoints: [
+      {
+        title: 'Ops teams missing SLAs during hiring spikes',
+        copy: 'Batch analysis keeps screening throughput predictable when resume volume rises suddenly.',
+      },
+      {
+        title: 'Recruiters manually sorting massive applicant pools',
+        copy: 'Prioritized rankings help teams identify top-fit candidates without opening every file one by one.',
+      },
+      {
+        title: 'Department leaders waiting on candidate handoffs',
+        copy: 'Structured outputs reduce handoff delays between recruiting coordinators and hiring managers.',
+      },
+    ],
+    outcomes: [
+      {
+        title: 'Higher recruiter capacity',
+        copy: 'Teams process more applications per recruiter without sacrificing role-specific evaluation quality.',
+      },
+      {
+        title: 'Improved candidate response times',
+        copy: 'Faster triage means qualified applicants receive updates before they drop out or accept other offers.',
+      },
+      {
+        title: 'Cleaner pipeline collaboration',
+        copy: 'Shared ranking signals reduce rework and make review meetings faster and more aligned.',
+      },
     ],
     faqs: [
       {
@@ -72,6 +128,34 @@ export const INTENT_PAGE_CONTENT = {
       'From a leadership perspective, resume scoring AI helps create a measurable top-of-funnel system. You can benchmark how quickly candidates move from application to shortlist, evaluate pass-through rates by score bands, and identify where criteria tuning is needed. This makes hiring less reactive and more operationally disciplined, especially when multiple teams are hiring concurrently.',
       'If your team wants to make faster decisions without sacrificing judgment, AI scoring is the practical midpoint between fully manual review and opaque automation. HireFlow keeps people in the decision loop while removing low-leverage work. Start with one role, calibrate scores with your hiring manager, and scale once your team has a scoring model it trusts.',
     ],
+    personaPainPoints: [
+      {
+        title: 'Recruiters using inconsistent ranking logic',
+        copy: 'Role-based scoring creates a shared rubric so prioritization is repeatable across reviewers.',
+      },
+      {
+        title: 'Hiring managers disagreeing on candidate quality',
+        copy: 'Transparent candidate summaries make calibration conversations faster and more objective.',
+      },
+      {
+        title: 'Leadership lacking measurable screening standards',
+        copy: 'Track pass-through performance by score band to refine criteria and improve forecasting.',
+      },
+    ],
+    outcomes: [
+      {
+        title: 'Faster recruiter-manager alignment',
+        copy: 'Shared score rationale cuts duplicate reviews and shortens early-stage decision cycles.',
+      },
+      {
+        title: 'More defensible interview slates',
+        copy: 'Candidates are advanced using explicit criteria instead of ad hoc first impressions.',
+      },
+      {
+        title: 'Continuous scoring improvement',
+        copy: 'Teams can tune weights over time using interview outcomes and hiring manager feedback.',
+      },
+    ],
     faqs: [
       {
         q: 'What does resume scoring AI look at?',
@@ -98,6 +182,34 @@ export const INTENT_PAGE_CONTENT = {
       'Automation also supports fairness and consistency. Different reviewers naturally use different heuristics, especially under deadline pressure. By applying a consistent shortlist framework to all applicants for a role, your team reduces process drift and creates a more defensible hiring workflow. Recruiters can still override recommendations, but they start from a common baseline that improves alignment.',
       'Operationally, automated shortlisting improves funnel health. Teams can reduce time-to-first-touch for qualified candidates, prevent top talent from stalling in backlog, and create faster feedback loops between recruiting and hiring managers. Over multiple hiring cycles, this usually translates into better conversion rates because interviews are focused on stronger candidate pools earlier in the process.',
       'If your recruiting team is balancing speed, quality, and limited capacity, automated shortlisting is one of the highest-leverage upgrades you can make. HireFlow helps you launch quickly, test on active requisitions, and scale across departments once you confirm the process fit. The outcome is a more predictable hiring system that supports both immediate goals and long-term talent quality.',
+    ],
+    personaPainPoints: [
+      {
+        title: 'Lean recruiting teams handling too many reqs',
+        copy: 'Automated shortlisting reduces first-pass load so one recruiter can manage more openings confidently.',
+      },
+      {
+        title: 'Managers spending time on low-fit profiles',
+        copy: 'Ranked candidate lists surface likely interview matches before manager review begins.',
+      },
+      {
+        title: 'Teams struggling with process drift under deadlines',
+        copy: 'Consistent shortlist criteria keeps evaluation quality stable even during urgent hiring periods.',
+      },
+    ],
+    outcomes: [
+      {
+        title: 'Shorter application-to-interview cycle',
+        copy: 'Qualified candidates are identified and advanced sooner across active requisitions.',
+      },
+      {
+        title: 'Higher interview efficiency',
+        copy: 'Managers spend panel time on stronger matches instead of weakly aligned applicants.',
+      },
+      {
+        title: 'More predictable hiring operations',
+        copy: 'Repeatable shortlisting improves planning, funnel visibility, and cross-team accountability.',
+      },
     ],
     faqs: [
       {

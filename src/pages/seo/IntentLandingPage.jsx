@@ -16,7 +16,7 @@ export default function IntentLandingPage({ pathname }) {
   return (
     <article className="public-page">
       <section className="public-page-hero">
-        <span className="public-pill">SEO landing page</span>
+        <span className="public-pill">Solutions</span>
         <h1 className="public-page-title">{page.h1}</h1>
         <p className="public-page-subtitle">{page.hero}</p>
         <div className="public-button-row center public-mt-lg">
@@ -26,7 +26,7 @@ export default function IntentLandingPage({ pathname }) {
       </section>
 
       <section className="public-section">
-        <h2 className="public-section-title">Why hiring teams choose HireFlow</h2>
+        <h2 className="public-section-title">Problems we solve for modern hiring teams</h2>
         <div className="public-faq-grid">
           {page.paragraphs.map((paragraph) => (
             <p key={paragraph.slice(0, 36)} className="public-copy">{paragraph}</p>
@@ -35,7 +35,31 @@ export default function IntentLandingPage({ pathname }) {
       </section>
 
       <section className="public-section public-section-alt">
-        <h2 className="public-section-title">Next steps for your team</h2>
+        <h2 className="public-section-title">Persona pain points this solution addresses</h2>
+        <div className="public-feature-grid">
+          {page.personaPainPoints.map((item) => (
+            <article key={item.title} className="public-card">
+              <h3 className="public-card-title">{item.title}</h3>
+              <p className="public-card-copy">{item.copy}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="public-section">
+        <h2 className="public-section-title">Expected hiring outcomes</h2>
+        <div className="public-feature-grid">
+          {page.outcomes.map((item) => (
+            <article key={item.title} className="public-card">
+              <h3 className="public-card-title">{item.title}</h3>
+              <p className="public-card-copy">{item.copy}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="public-section public-section-alt">
+        <h2 className="public-section-title">Take the next step</h2>
         <div className="public-feature-grid">
           <a className="public-card" href="/demo">
             <h3 className="public-card-title">Book your tailored demo</h3>
@@ -48,32 +72,9 @@ export default function IntentLandingPage({ pathname }) {
           {relatedLinks.map((route) => (
             <a key={route} className="public-card" href={route}>
               <h3 className="public-card-title">Related use case: {route.slice(1).replaceAll('-', ' ')}</h3>
-              <p className="public-card-copy">Review this related solution page to compare goals, workflows, and expected recruiting outcomes.</p>
+              <p className="public-card-copy">Review this related solution page to compare hiring bottlenecks and expected outcomes.</p>
             </a>
           ))}
-        </div>
-      </section>
-
-      <section className="public-section">
-        <h2 className="public-section-title">Frequently asked questions</h2>
-        <div className="public-faq-grid">
-          {page.faqs.map((faq) => (
-            <div key={faq.q} className="public-card">
-              <h3 className="public-card-title">{faq.q}</h3>
-              <p className="public-card-copy">{faq.a}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="public-cta-footer">
-        <h2 className="public-section-title center">Ready to accelerate hiring?</h2>
-        <p className="public-copy center public-max-800">
-          See how HireFlow helps your team screen resumes faster, shortlist with confidence, and improve hiring consistency.
-        </p>
-        <div className="public-button-row center public-mt-md">
-          <a className="btn-primary" href="/demo">Request demo</a>
-          <a className="btn-ghost" href="/pricing">See pricing</a>
         </div>
       </section>
     </article>

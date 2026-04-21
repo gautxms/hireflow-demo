@@ -79,7 +79,7 @@ export default function HelpPage({ onBack }) {
       <div className="public-page-hero">
         <div className="public-copy center public-mb-md"><BackButton onBack={onBack} /></div>
         <h1 className="public-page-title">Help Center</h1>
-        <p className="public-page-subtitle">Find answers and learn how to get the most out of HireFlow</p>
+        <p className="public-page-subtitle">Find product documentation, troubleshooting steps, and billing support resources.</p>
       </div>
 
       <section className="public-section help-search-wrap">
@@ -135,6 +135,26 @@ export default function HelpPage({ onBack }) {
 
       <section className="public-section public-section-alt">
         <div className="public-page-main">
+          <h2 className="public-section-title center">Support quick links</h2>
+          <div className="public-feature-grid public-max-800">
+            <article className="public-card">
+              <h3 className="public-card-title">Account and access issues</h3>
+              <p className="public-card-copy">Use getting-started articles for login, onboarding, and workspace setup troubleshooting.</p>
+            </article>
+            <article className="public-card">
+              <h3 className="public-card-title">Scoring and analysis questions</h3>
+              <p className="public-card-copy">Review Analysis &amp; Scoring docs to understand scoring dimensions, rule configuration, and comparison tools.</p>
+            </article>
+            <article className="public-card">
+              <h3 className="public-card-title">Billing and subscription support</h3>
+              <p className="public-card-copy">Visit Billing &amp; Plans for invoices, receipts, refund terms, and plan-change guidance.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="public-section">
+        <div className="public-page-main">
           <h2 className="public-section-title center">Frequently Asked Questions</h2>
           <div className="public-faq-grid public-max-800">
             {HELP_FAQS.map((faq, i) => (
@@ -148,11 +168,11 @@ export default function HelpPage({ onBack }) {
       </section>
 
       <footer className="public-cta-footer">
-        <h2 className="public-section-title">Can't find what you're looking for?</h2>
-        <p className="public-copy center">Our support team is here to help</p>
+        <h2 className="public-section-title">Need more help?</h2>
+        <p className="public-copy center">If the docs do not resolve your issue, contact support with your workspace ID and issue details.</p>
         <div className="public-button-row center">
-          <button className="public-btn-primary">Contact Support</button>
-          <button className="public-btn-secondary">Schedule a Call</button>
+          <button className="btn-primary">Contact Support</button>
+          <button className="btn-ghost">Open ticket guide</button>
         </div>
       </footer>
     </div>
