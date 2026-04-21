@@ -7,14 +7,43 @@ export default function AdminSecurityPage() {
   const [settings, setSettings] = useState(null)
   const [tokenUsageRows, setTokenUsageRows] = useState([])
   const [form, setForm] = useState({
-    primaryApiKey: '',
-    fallbackApiKey: '',
-    primaryModel: '',
-    fallbackModel: '',
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: { primary: { apiKey: '', model: '' }, fallback: { apiKey: '', model: '' } },
+      openai: { primary: { apiKey: '', model: '' }, fallback: { apiKey: '', model: '' } },
+    },
   })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const hydrateFormFromSettings = useCallback((nextSettings) => {
+    const settingsProviders = nextSettings?.providers || {}
+    return {
+      activeProvider: nextSettings?.activeProvider || 'anthropic',
+      providers: {
+        anthropic: {
+          primary: {
+            apiKey: '',
+            model: settingsProviders?.anthropic?.primary?.model || settingsProviders?.anthropic?.defaultModel || '',
+          },
+          fallback: {
+            apiKey: '',
+            model: settingsProviders?.anthropic?.fallback?.model || settingsProviders?.anthropic?.defaultModel || '',
+          },
+        },
+        openai: {
+          primary: {
+            apiKey: '',
+            model: settingsProviders?.openai?.primary?.model || settingsProviders?.openai?.defaultModel || '',
+          },
+          fallback: {
+            apiKey: '',
+            model: settingsProviders?.openai?.fallback?.model || settingsProviders?.openai?.defaultModel || '',
+          },
+        },
+      },
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -24,11 +53,12 @@ export default function AdminSecurityPage() {
         adminFetchJson(`${API_BASE}/admin/analytics/token-usage`),
       ])
       setSettings(settingsPayload)
+      setForm(hydrateFormFromSettings(settingsPayload))
       setTokenUsageRows(Array.isArray(analyticsPayload?.tokenUsageUploads) ? analyticsPayload.tokenUsageUploads : [])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [hydrateFormFromSettings])
 
   useEffect(() => {
     load().catch(() => {})
@@ -58,14 +88,14 @@ export default function AdminSecurityPage() {
         body: JSON.stringify(form),
       })
       setSettings(payload.settings || null)
-      setForm((current) => ({ ...current, primaryApiKey: '', fallbackApiKey: '' }))
+      setForm(hydrateFormFromSettings(payload.settings || null))
       setMessage('AI settings saved.')
     } catch (error) {
       setMessage(error?.payload?.error || 'Unable to save AI settings.')
     } finally {
       setSaving(false)
     }
-  }, [form])
+  }, [form, hydrateFormFromSettings])
 
   if (loading) {
     return <div className="admin-page"><section className="ui-card p-4">Loading AI settings…</section></div>
@@ -75,20 +105,32 @@ export default function AdminSecurityPage() {
     <div className="admin-page">
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-admin-strong">Resume AI provider keys</h2>
-        <p className="mt-1 text-sm text-admin-body">Set primary and fallback AI API keys for resume analysis. Parsing now runs as AI-only; fallback key is used if the primary request fails.</p>
+        <p className="mt-1 text-sm text-admin-body">Set active provider plus primary/fallback API keys and models for both Anthropic and OpenAI.</p>
         <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={save}>
-          <label className="text-sm text-admin-body">Primary API key
-            <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.primaryApiKey} onChange={(e) => setForm((c) => ({ ...c, primaryApiKey: e.target.value }))} placeholder={settings?.primary?.maskedApiKey || 'sk-ant-...'} />
+          <label className="text-sm text-admin-body">Active provider
+            <select className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.activeProvider} onChange={(e) => setForm((c) => ({ ...c, activeProvider: e.target.value }))}>
+              <option value="anthropic">anthropic</option>
+              <option value="openai" disabled>openai (coming soon)</option>
+            </select>
           </label>
-          <label className="text-sm text-admin-body">Fallback API key
-            <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.fallbackApiKey} onChange={(e) => setForm((c) => ({ ...c, fallbackApiKey: e.target.value }))} placeholder={settings?.fallback?.maskedApiKey || 'sk-ant-...'} />
-          </label>
-          <label className="text-sm text-admin-body">Primary model
-            <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.primaryModel} onChange={(e) => setForm((c) => ({ ...c, primaryModel: e.target.value }))} placeholder={settings?.primary?.model || settings?.defaultModel || ''} />
-          </label>
-          <label className="text-sm text-admin-body">Fallback model
-            <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.fallbackModel} onChange={(e) => setForm((c) => ({ ...c, fallbackModel: e.target.value }))} placeholder={settings?.fallback?.model || settings?.defaultModel || ''} />
-          </label>
+          <div />
+          {['anthropic', 'openai'].map((provider) => (
+            <div className="md:col-span-2 grid gap-3 md:grid-cols-2" key={provider}>
+              <p className="md:col-span-2 text-sm font-semibold text-admin-strong capitalize">{provider}</p>
+              <label className="text-sm text-admin-body">{provider} primary API key
+                <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.providers[provider].primary.apiKey} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], primary: { ...c.providers[provider].primary, apiKey: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.primary?.maskedApiKey || ''} />
+              </label>
+              <label className="text-sm text-admin-body">{provider} fallback API key
+                <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.providers[provider].fallback.apiKey} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], fallback: { ...c.providers[provider].fallback, apiKey: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.fallback?.maskedApiKey || ''} />
+              </label>
+              <label className="text-sm text-admin-body">{provider} primary model
+                <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.providers[provider].primary.model} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], primary: { ...c.providers[provider].primary, model: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.primary?.model || settings?.providers?.[provider]?.defaultModel || ''} />
+              </label>
+              <label className="text-sm text-admin-body">{provider} fallback model
+                <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.providers[provider].fallback.model} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], fallback: { ...c.providers[provider].fallback, model: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.fallback?.model || settings?.providers?.[provider]?.defaultModel || ''} />
+              </label>
+            </div>
+          ))}
           <div className="md:col-span-2 flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={saving}>{saving ? 'Saving…' : 'Save AI settings'}</button>
             {message ? <span className="text-xs text-admin-muted">{message}</span> : null}
