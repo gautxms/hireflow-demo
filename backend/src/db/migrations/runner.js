@@ -18,6 +18,7 @@ const migrationFiles = [
   '015-add-resume-analysis-token-usage',
   '016-add-inquiries',
   '017-add-admin-ai-provider-keys',
+  '018-generalize-admin-ai-provider-config',
 ]
 
 async function ensureMigrationsTable(client) {

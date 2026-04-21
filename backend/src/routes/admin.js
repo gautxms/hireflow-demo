@@ -5,7 +5,7 @@ import { getRateLimitStats } from '../middleware/rateLimiter.js'
 import { createPasswordResetToken, generateResetToken } from '../services/resetTokenService.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
 import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdminCookie } from '../middleware/adminAuth.js'
-import { getAdminAiProviderSettings, upsertAdminAiProviderKeys } from '../services/aiProviderConfigService.js'
+import { getAdminAiProviderSettings, KEY_LABELS, SUPPORTED_PROVIDERS, upsertAdminAiProviderKeys } from '../services/aiProviderConfigService.js'
 
 const router = Router()
 
@@ -78,25 +78,75 @@ router.get('/ai-settings', async (_req, res) => {
 })
 
 router.put('/ai-settings', async (req, res) => {
-  const primaryApiKey = String(req.body?.primaryApiKey || '').trim()
-  const fallbackApiKey = String(req.body?.fallbackApiKey || '').trim()
-  const primaryModel = String(req.body?.primaryModel || '').trim()
-  const fallbackModel = String(req.body?.fallbackModel || '').trim()
+  const activeProvider = String(req.body?.activeProvider || req.body?.provider || 'anthropic').trim().toLowerCase()
+  const providers = req.body?.providers
 
   try {
     const existingSettings = await getAdminAiProviderSettings()
-    const hasConfiguredKey = Boolean(existingSettings?.primary?.configured || existingSettings?.fallback?.configured)
-    const hasIncomingKey = Boolean(primaryApiKey || fallbackApiKey)
+    const hasConfiguredKey = SUPPORTED_PROVIDERS.some((provider) => {
+      const config = existingSettings?.providers?.[provider]
+      return Boolean(config?.primary?.configured || config?.fallback?.configured)
+    })
+
+    const payload = providers && typeof providers === 'object'
+      ? req.body
+      : {
+          activeProvider,
+          providers: {
+            anthropic: {
+              primary: {
+                apiKey: req.body?.primaryApiKey,
+                model: req.body?.primaryModel,
+              },
+              fallback: {
+                apiKey: req.body?.fallbackApiKey,
+                model: req.body?.fallbackModel,
+              },
+            },
+          },
+        }
+
+    const normalizedActiveProvider = String(payload?.activeProvider || 'anthropic').trim().toLowerCase()
+    if (!SUPPORTED_PROVIDERS.includes(normalizedActiveProvider)) {
+      return res.status(400).json({ error: `activeProvider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}` })
+    }
+
+    const incomingProviders = payload?.providers
+    if (!incomingProviders || typeof incomingProviders !== 'object') {
+      return res.status(400).json({ error: 'providers object is required.' })
+    }
+
+    const invalidProviderKeys = Object.keys(incomingProviders).filter((provider) => !SUPPORTED_PROVIDERS.includes(provider))
+    if (invalidProviderKeys.length > 0) {
+      return res.status(400).json({ error: `Unsupported provider(s): ${invalidProviderKeys.join(', ')}` })
+    }
+
+    let hasIncomingKey = false
+    for (const provider of Object.keys(incomingProviders)) {
+      const providerPayload = incomingProviders[provider]
+      if (!providerPayload || typeof providerPayload !== 'object') {
+        return res.status(400).json({ error: `providers.${provider} must be an object.` })
+      }
+
+      for (const keyLabel of KEY_LABELS) {
+        const entry = providerPayload[keyLabel]
+        if (!entry || typeof entry !== 'object') continue
+
+        const apiKey = String(entry.apiKey || '').trim()
+        const model = String(entry.model || '').trim()
+        if (apiKey) hasIncomingKey = true
+        if (!model) {
+          return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model is required.` })
+        }
+      }
+    }
 
     if (!hasConfiguredKey && !hasIncomingKey) {
       return res.status(400).json({ error: 'At least one API key (primary or fallback) is required.' })
     }
 
     const updateFlags = await upsertAdminAiProviderKeys({
-      primaryApiKey,
-      fallbackApiKey,
-      primaryModel,
-      fallbackModel,
+      payload,
       adminId: req.admin?.id || null,
     })
 
@@ -104,11 +154,8 @@ router.put('/ai-settings', async (req, res) => {
       adminId: req.admin?.id,
       actionType: 'admin_ai_settings_updated',
       details: {
-        primaryUpdated: updateFlags.primaryKeyUpdated || updateFlags.primaryModelUpdated,
-        fallbackUpdated: updateFlags.fallbackKeyUpdated || updateFlags.fallbackModelUpdated,
         ...updateFlags,
-        primaryModel: primaryModel || null,
-        fallbackModel: fallbackModel || null,
+        activeProvider: normalizedActiveProvider,
       },
       ipAddress: req.admin?.ipAddress || null,
     })
