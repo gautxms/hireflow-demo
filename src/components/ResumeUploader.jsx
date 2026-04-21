@@ -690,8 +690,6 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               borderRadius: '6px',
               fontWeight: 'bold',
               fontSize: '1rem',
-              cursor: uploadedFiles.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: uploadedFiles.length === 0 ? 0.5 : 1,
             }}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
