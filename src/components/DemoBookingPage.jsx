@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import API_BASE from '../config/api'
 
 const TIME_SLOTS = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM']
 const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
@@ -20,6 +21,8 @@ export default function DemoBookingPage({ onBack }) {
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
   const [errors, setErrors] = useState({})
+  const [submitError, setSubmitError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const availableDates = generateDates()
 
@@ -27,6 +30,7 @@ export default function DemoBookingPage({ onBack }) {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
+    if (submitError) setSubmitError('')
   }
 
   const validateStep1 = () => {
@@ -40,6 +44,41 @@ export default function DemoBookingPage({ onBack }) {
     if (!formData.phone.trim()) next.phone = 'Phone number required'
     setErrors(next)
     return Object.keys(next).length === 0
+  }
+
+  const submitDemoRequest = async () => {
+    if (!selectedDate || !selectedTime || isSubmitting) return
+
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const response = await fetch(`${API_BASE}/inquiries/demo-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          email: formData.email,
+          company: formData.company,
+          companySize: formData.companySize,
+          phone: formData.phone,
+          message: formData.message || `Requested demo booking for ${selectedDate} at ${selectedTime} EST.`,
+          selectedDate,
+          selectedTime,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to confirm booking right now.')
+      }
+
+      setStep('confirmation')
+    } catch (error) {
+      setSubmitError(error?.message || 'Unable to confirm booking right now.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const stepState = {
@@ -151,10 +190,11 @@ export default function DemoBookingPage({ onBack }) {
             </div>
 
             {selectedDate && selectedTime && <div className="status-message status-message--info">📅 Demo scheduled for <strong>{selectedDate} at {selectedTime} EST</strong>. A confirmation email will be sent to {formData.email}.</div>}
+            {submitError && <div className="status-message status-message--error">{submitError}</div>}
 
             <div className="public-button-row center">
               <button className="public-btn-secondary" onClick={() => setStep('info')}>← Back</button>
-              <button className="public-btn-primary" disabled={!selectedDate || !selectedTime} onClick={() => setStep('confirmation')}>Confirm Booking →</button>
+              <button className="public-btn-primary" disabled={!selectedDate || !selectedTime || isSubmitting} onClick={submitDemoRequest}>{isSubmitting ? 'Submitting...' : 'Confirm Booking →'}</button>
             </div>
           </>
         )}
@@ -168,7 +208,7 @@ export default function DemoBookingPage({ onBack }) {
               <p className="public-copy"><strong>Company:</strong> {formData.company}</p>
             </div>
             <div className="public-button-row center">
-              <button className="public-btn-secondary" onClick={() => { setStep('info'); setSelectedDate(null); setSelectedTime(null) }}>Book Another Demo</button>
+              <button className="public-btn-secondary" onClick={() => { setStep('info'); setSelectedDate(null); setSelectedTime(null); setSubmitError('') }}>Book Another Demo</button>
             </div>
           </section>
         )}

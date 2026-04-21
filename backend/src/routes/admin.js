@@ -46,6 +46,124 @@ async function recordAdminAction({ adminId, actionType, targetId, details = {}, 
   )
 }
 
+
+function normalizeInquiryRow(row) {
+  return {
+    id: row.id,
+    inquiry_type: row.inquiry_type,
+    status: row.status,
+    name: row.name,
+    email: row.email,
+    company: row.company,
+    phone: row.phone,
+    subject: row.subject,
+    message: row.message,
+    metadata: row.metadata || {},
+    created_at: toIso(row.created_at),
+    updated_at: toIso(row.updated_at),
+    reviewed_at: toIso(row.reviewed_at),
+    reviewed_by: row.reviewed_by || null,
+  }
+}
+
+router.get('/inquiries', async (req, res) => {
+  const search = String(req.query.search || '').trim()
+  const typeFilter = String(req.query.type || 'all').toLowerCase()
+  const statusFilter = String(req.query.status || 'all').toLowerCase()
+  const fromDate = String(req.query.from || '').trim()
+  const toDate = String(req.query.to || '').trim()
+
+  const where = []
+  const params = []
+
+  if (typeFilter !== 'all') {
+    params.push(typeFilter)
+    where.push(`inquiry_type = $${params.length}`)
+  }
+
+  if (statusFilter !== 'all') {
+    params.push(statusFilter)
+    where.push(`status = $${params.length}`)
+  }
+
+  if (search) {
+    params.push(`%${search}%`)
+    where.push(`(
+      email ILIKE $${params.length}
+      OR name ILIKE $${params.length}
+      OR COALESCE(company, '') ILIKE $${params.length}
+      OR COALESCE(subject, '') ILIKE $${params.length}
+    )`)
+  }
+
+  if (fromDate) {
+    params.push(fromDate)
+    where.push(`created_at >= $${params.length}::timestamp`)
+  }
+
+  if (toDate) {
+    params.push(toDate)
+    where.push(`created_at < ($${params.length}::date + INTERVAL '1 day')`)
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+  try {
+    const result = await pool.query(
+      `SELECT id, inquiry_type, status, name, email, company, phone, subject, message, metadata, created_at, updated_at, reviewed_at, reviewed_by
+       FROM inquiries
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT 500`,
+      params,
+    )
+
+    return res.json({ inquiries: result.rows.map(normalizeInquiryRow) })
+  } catch (error) {
+    console.error('[Admin inquiries] list failed:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.patch('/inquiries/:id', async (req, res) => {
+  const { id } = req.params
+  const status = String(req.body?.status || '').trim().toLowerCase()
+
+  if (!['new', 'reviewed'].includes(status)) {
+    return res.status(400).json({ error: 'Valid status is required.' })
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE inquiries
+       SET status = $2,
+           reviewed_at = CASE WHEN $2 = 'reviewed' THEN NOW() ELSE NULL END,
+           reviewed_by = CASE WHEN $2 = 'reviewed' THEN $3 ELSE NULL END
+       WHERE id::text = $1
+       RETURNING id, inquiry_type, status, name, email, company, phone, subject, message, metadata, created_at, updated_at, reviewed_at, reviewed_by`,
+      [id, status, req.admin?.id || null],
+    )
+
+    const inquiry = result.rows[0]
+    if (!inquiry) {
+      return res.status(404).json({ error: 'Inquiry not found' })
+    }
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'inquiry_status_updated',
+      targetId: String(id),
+      details: { status },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({ ok: true, inquiry: normalizeInquiryRow(inquiry) })
+  } catch (error) {
+    console.error('[Admin inquiries] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update inquiry' })
+  }
+})
+
 router.get('/users', async (req, res) => {
   const search = String(req.query.search || '').trim()
 

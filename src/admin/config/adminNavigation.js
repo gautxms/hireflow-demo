@@ -4,6 +4,7 @@ export const ADMIN_SECTIONS = [
   { key: 'billing', label: 'Billing', icon: 'creditCard', href: '/admin/billing' },
   { key: 'uploads', label: 'Uploads', icon: 'upload', href: '/admin/uploads' },
   { key: 'analytics', label: 'Analytics', icon: 'chart', href: '/admin/analytics' },
+  { key: 'inquiries', label: 'Inquiries', icon: 'chat', href: '/admin/inquiries' },
   { key: 'logs', label: 'Logs', icon: 'logs', href: '/admin/logs' },
   { key: 'health', label: 'Health', icon: 'health', href: '/admin/health' },
   { key: 'security', label: 'Security', icon: 'lock', href: '/admin/security' },
