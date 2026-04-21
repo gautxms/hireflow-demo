@@ -81,7 +81,19 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
 }
 
 export default function Pricing({ isAuthenticated, onRequireAuth }) {
-  usePageSeo('HireFlow Pricing', 'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.')
+  const pricingStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Hireflow',
+    url: 'https://hireflow.dev',
+    applicationCategory: 'Recruiting/Hiring Software',
+    description: 'Hireflow pricing plans for AI-powered recruiting software with monthly and annual subscriptions.',
+  }
+  usePageSeo(
+    'HireFlow Pricing',
+    'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.',
+    pricingStructuredData,
+  )
 
   const [selectedBilling, setSelectedBilling] = useState('annual')
 

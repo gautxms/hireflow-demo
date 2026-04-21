@@ -194,9 +194,7 @@ export default function PricingPage() {
             border: 'none',
             padding: '0.75rem 2rem',
             borderRadius: '6px',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            cursor: 'pointer'
+            fontWeight: 'bold'
           }}
         >
           Start Free Trial
