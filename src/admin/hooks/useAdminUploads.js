@@ -158,9 +158,7 @@ export function useAdminUploadDetails(uploadId) {
       setRetrying(true)
       setError(null)
 
-      const response = await fetch(`${API_BASE}/admin/uploads/${uploadId}/retry`, { method: 'POST', credentials: 'include' })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error('Retry failed')
+      const payload = await adminFetchJson(`${API_BASE}/admin/uploads/${uploadId}/retry`, { method: 'POST' })
 
       await loadUpload()
       return payload

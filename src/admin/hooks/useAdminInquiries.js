@@ -54,15 +54,11 @@ export default function useAdminInquiries() {
   }, [fromDate, search, statusFilter, toDate, typeFilter])
 
   const markReviewed = useCallback(async (inquiryId, status = 'reviewed') => {
-    const response = await fetch(`${API_BASE}/admin/inquiries/${inquiryId}`, {
+    const payload = await adminFetchJson(`${API_BASE}/admin/inquiries/${inquiryId}`, {
       method: 'PATCH',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Unable to update inquiry status')
 
     setInquiries((current) => current.map((item) => (item.id === inquiryId ? normalizeInquiry(payload.inquiry || item) : item)))
     return payload
