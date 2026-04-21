@@ -205,6 +205,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
   const isActiveSubscriber = normalizedSubscriptionStatus === 'active'
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
+  const isAdminPath = pathname.startsWith('/admin')
 
   const getPageContent = () => {
     if (pathname.match(/^\/results\/[^/]+$/)) {
@@ -330,7 +331,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <UpdatePaymentMethodPage />
     }
 
-    const isAdminPath = pathname.startsWith('/admin')
     const hasStoredAdminSession = Boolean(localStorage.getItem('admin_session'))
 
     if (pathname === '/admin/login') {
@@ -353,7 +353,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const renderAdminSection = (sectionProps, page) => (
-      <AdminShell key={pathname} onLogout={logoutAdmin} {...sectionProps}>
+      <AdminShell key={pathname} routePath={pathname} onLogout={logoutAdmin} {...sectionProps}>
         {page}
         <AdminPageFeedbackWidget routeContext={pathname} />
       </AdminShell>
@@ -593,7 +593,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/verify-email/success' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     setIsMobileNavOpen(false)
@@ -619,6 +618,21 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const handleSolutionsClick = () => {
     setIsMobileNavOpen(false)
     navigate('/ai-resume-screening')
+  }
+
+  const pageContent = (
+    <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>Loading…</div>}>
+      {getPageContent()}
+    </Suspense>
+  )
+
+  if (isAdminPath) {
+    return (
+      <div className="admin-app-root">
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main>{pageContent}</main>
+      </div>
+    )
   }
 
   return (
@@ -729,9 +743,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </div>
       </header>
       <main>
-        <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>Loading…</div>}>
-          {getPageContent()}
-        </Suspense>
+        {pageContent}
       </main>
       <PublicFooter />
     </>

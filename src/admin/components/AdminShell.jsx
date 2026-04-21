@@ -30,7 +30,7 @@ function formatSessionLabel() {
   }
 }
 
-export default function AdminShell({ sectionKey, title, subtitle, purpose, breadcrumbs = [], children, onLogout }) {
+export default function AdminShell({ sectionKey, title, subtitle, purpose, breadcrumbs = [], children, onLogout, routePath }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') {
@@ -52,14 +52,34 @@ export default function AdminShell({ sectionKey, title, subtitle, purpose, bread
   }
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setMobileNavOpen(false)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [routePath, sectionKey])
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      const timeoutId = window.setTimeout(() => {
+        setMobileNavOpen(false)
+      }, 0)
+
+      return () => {
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    return undefined
+  }, [isMobileViewport])
+
+  useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth <= MOBILE_BREAKPOINT_PX
 
       setIsMobileViewport(mobile)
-
-      if (!mobile) {
-        setMobileNavOpen(false)
-      }
     }
 
     handleResize()

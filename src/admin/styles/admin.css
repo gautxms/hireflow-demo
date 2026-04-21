@@ -1,5 +1,11 @@
 @import '../../styles/variables.css';
 
+.admin-app-root {
+  min-height: 100vh;
+  isolation: isolate;
+  background: var(--color-bg-primary);
+}
+
 .admin-shell-v2 {
   --admin-font: var(--font-family-base);
   --admin-display-font: var(--font-family-base);
