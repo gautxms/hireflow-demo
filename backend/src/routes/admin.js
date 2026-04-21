@@ -12,6 +12,11 @@ import {
   upsertAdminAiProviderKeys,
   validateAiProviderModelConfiguration,
 } from '../services/aiProviderConfigService.js'
+import {
+  getAdminSystemPrompt,
+  upsertAdminSystemPrompt,
+  validateSystemPromptInput,
+} from '../services/adminSystemPromptService.js'
 
 const router = Router()
 const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = ['anthropic']
@@ -191,6 +196,44 @@ router.put('/ai-settings', async (req, res) => {
   } catch (error) {
     console.error('[Admin ai-settings] update failed:', error)
     return res.status(500).json({ error: 'Unable to update AI settings' })
+  }
+})
+
+router.get('/system-prompt', async (_req, res) => {
+  try {
+    const prompt = await getAdminSystemPrompt()
+    return res.json(prompt)
+  } catch (error) {
+    console.error('[Admin system-prompt] get failed:', error)
+    return res.status(500).json({ error: 'Unable to load system prompt' })
+  }
+})
+
+router.put('/system-prompt', async (req, res) => {
+  try {
+    const systemPrompt = validateSystemPromptInput(req.body?.systemPrompt)
+    const prompt = await upsertAdminSystemPrompt({
+      systemPrompt,
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_system_prompt_updated',
+      details: {
+        promptVersion: prompt.promptVersion,
+        promptLength: prompt.systemPrompt.length,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({ ok: true, prompt })
+  } catch (error) {
+    if (/systemPrompt/i.test(String(error?.message || ''))) {
+      return res.status(400).json({ error: error.message })
+    }
+    console.error('[Admin system-prompt] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update system prompt' })
   }
 })
 
