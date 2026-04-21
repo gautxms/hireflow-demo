@@ -5,7 +5,18 @@ import { getRateLimitStats } from '../middleware/rateLimiter.js'
 import { createPasswordResetToken, generateResetToken } from '../services/resetTokenService.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
 import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdminCookie } from '../middleware/adminAuth.js'
-import { getAdminAiProviderSettings, upsertAdminAiProviderKeys } from '../services/aiProviderConfigService.js'
+import {
+  getAdminAiProviderSettings,
+  KEY_LABELS,
+  SUPPORTED_PROVIDERS,
+  upsertAdminAiProviderKeys,
+} from '../services/aiProviderConfigService.js'
+import {
+  getAdminSystemPromptSettings,
+  MAX_SYSTEM_PROMPT_LENGTH,
+  upsertAdminSystemPrompt,
+  validateSystemPromptInput,
+} from '../services/systemPromptService.js'
 
 const router = Router()
 
@@ -48,6 +59,55 @@ async function recordAdminAction({ adminId, actionType, targetId, details = {}, 
 }
 
 
+
+function parseAiSettingsPayload(body) {
+  const payloadCandidate = body?.payload
+
+  if (payloadCandidate && typeof payloadCandidate !== 'object') {
+    return { ok: false, error: 'payload must be an object when provided.' }
+  }
+
+  if (payloadCandidate) {
+    const invalidProvider = Object.keys(payloadCandidate.providers || {}).find((provider) => !SUPPORTED_PROVIDERS.includes(provider))
+    if (invalidProvider) {
+      return { ok: false, error: `Unsupported provider "${invalidProvider}".` }
+    }
+
+    for (const provider of Object.keys(payloadCandidate.providers || {})) {
+      const providerConfig = payloadCandidate.providers?.[provider]
+      if (!providerConfig || typeof providerConfig !== 'object') {
+        return { ok: false, error: `Invalid provider config for "${provider}".` }
+      }
+
+      const invalidLabel = Object.keys(providerConfig).find((label) => !KEY_LABELS.includes(label))
+      if (invalidLabel) {
+        return { ok: false, error: `Unsupported key label "${invalidLabel}" for provider "${provider}".` }
+      }
+    }
+
+    return { ok: true, payload: payloadCandidate }
+  }
+
+  return {
+    ok: true,
+    payload: {
+      activeProvider: 'anthropic',
+      providers: {
+        anthropic: {
+          primary: {
+            apiKey: String(body?.primaryApiKey || '').trim(),
+            model: String(body?.primaryModel || '').trim(),
+          },
+          fallback: {
+            apiKey: String(body?.fallbackApiKey || '').trim(),
+            model: String(body?.fallbackModel || '').trim(),
+          },
+        },
+      },
+    },
+  }
+}
+
 function normalizeInquiryRow(row) {
   return {
     id: row.id,
@@ -78,37 +138,45 @@ router.get('/ai-settings', async (_req, res) => {
 })
 
 router.put('/ai-settings', async (req, res) => {
-  const primaryApiKey = String(req.body?.primaryApiKey || '').trim()
-  const fallbackApiKey = String(req.body?.fallbackApiKey || '').trim()
-  const primaryModel = String(req.body?.primaryModel || '').trim()
-  const fallbackModel = String(req.body?.fallbackModel || '').trim()
+  const parsedPayload = parseAiSettingsPayload(req.body || {})
+  if (!parsedPayload.ok) {
+    return res.status(400).json({ error: parsedPayload.error })
+  }
+
+  const legacyPrimaryApiKey = String(req.body?.primaryApiKey || '').trim()
+  const legacyFallbackApiKey = String(req.body?.fallbackApiKey || '').trim()
 
   try {
     const existingSettings = await getAdminAiProviderSettings()
-    const hasConfiguredKey = Boolean(existingSettings?.primary?.configured || existingSettings?.fallback?.configured)
-    const hasIncomingKey = Boolean(primaryApiKey || fallbackApiKey)
+    const existingAnthropic = existingSettings?.providers?.anthropic || {}
+    const hasConfiguredKey = Boolean(existingAnthropic?.primary?.configured || existingAnthropic?.fallback?.configured)
 
-    if (!hasConfiguredKey && !hasIncomingKey) {
-      return res.status(400).json({ error: 'At least one API key (primary or fallback) is required.' })
+    const incomingAnthropic = parsedPayload.payload?.providers?.anthropic || {}
+    const hasIncomingAnthropicKey = Boolean(
+      String(incomingAnthropic?.primary?.apiKey || legacyPrimaryApiKey).trim()
+      || String(incomingAnthropic?.fallback?.apiKey || legacyFallbackApiKey).trim(),
+    )
+
+    if (!hasConfiguredKey && !hasIncomingAnthropicKey) {
+      return res.status(400).json({ error: 'At least one API key (primary or fallback) is required for anthropic.' })
     }
 
     const updateFlags = await upsertAdminAiProviderKeys({
-      primaryApiKey,
-      fallbackApiKey,
-      primaryModel,
-      fallbackModel,
+      payload: parsedPayload.payload,
       adminId: req.admin?.id || null,
+      primaryApiKey: legacyPrimaryApiKey,
+      fallbackApiKey: legacyFallbackApiKey,
+      primaryModel: String(req.body?.primaryModel || '').trim(),
+      fallbackModel: String(req.body?.fallbackModel || '').trim(),
     })
 
     await recordAdminAction({
       adminId: req.admin?.id,
       actionType: 'admin_ai_settings_updated',
       details: {
-        primaryUpdated: updateFlags.primaryKeyUpdated || updateFlags.primaryModelUpdated,
-        fallbackUpdated: updateFlags.fallbackKeyUpdated || updateFlags.fallbackModelUpdated,
         ...updateFlags,
-        primaryModel: primaryModel || null,
-        fallbackModel: fallbackModel || null,
+        activeProvider: parsedPayload.payload?.activeProvider || 'anthropic',
+        providerCount: Object.keys(parsedPayload.payload?.providers || {}).length,
       },
       ipAddress: req.admin?.ipAddress || null,
     })
@@ -116,8 +184,60 @@ router.put('/ai-settings', async (req, res) => {
     const settings = await getAdminAiProviderSettings()
     return res.json({ ok: true, settings, ...updateFlags })
   } catch (error) {
+    if (error?.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ error: error.message })
+    }
+
     console.error('[Admin ai-settings] update failed:', error)
     return res.status(500).json({ error: 'Unable to update AI settings' })
+  }
+})
+
+
+router.get('/system-prompt', async (_req, res) => {
+  try {
+    const settings = await getAdminSystemPromptSettings()
+    return res.json({
+      ...settings,
+      maxLength: MAX_SYSTEM_PROMPT_LENGTH,
+    })
+  } catch (error) {
+    console.error('[Admin system-prompt] get failed:', error)
+    return res.status(500).json({ error: 'Unable to load system prompt settings' })
+  }
+})
+
+router.put('/system-prompt', async (req, res) => {
+  const rawPrompt = String(req.body?.systemPrompt || '')
+  const validation = validateSystemPromptInput(rawPrompt)
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error, maxLength: MAX_SYSTEM_PROMPT_LENGTH })
+  }
+
+  try {
+    const settings = await upsertAdminSystemPrompt({
+      systemPrompt: validation.value,
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_system_prompt_updated',
+      details: {
+        promptVersion: settings.promptVersion,
+        promptLength: settings.systemPrompt.length,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({
+      ok: true,
+      ...settings,
+      maxLength: MAX_SYSTEM_PROMPT_LENGTH,
+    })
+  } catch (error) {
+    console.error('[Admin system-prompt] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update system prompt' })
   }
 })
 

@@ -26,7 +26,8 @@
     "qa:contrast-a11y": "node scripts/audit-accessibility-contrast.mjs",
     "lint:primitives": "node scripts/check-primitive-composition.mjs",
     "lint:primitives:baseline": "node scripts/check-primitive-composition.mjs --write-baseline",
-    "qa:primitive-visual-baseline": "node scripts/verify-primitive-visual-baseline.mjs"
+    "qa:primitive-visual-baseline": "node scripts/verify-primitive-visual-baseline.mjs",
+    "lint:duplicate-imports": "eslint backend/src/routes/admin.js backend/src/services/aiProviderConfigService.js --rule 'no-duplicate-imports: error' --rule 'no-undef: off'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
