@@ -20,6 +20,10 @@ const STATIC_INDEXABLE_ROUTES = [
   '/terms',
   '/privacy',
   '/refund-policy',
+  '/ai-resume-screening',
+  '/bulk-resume-analysis',
+  '/resume-scoring-ai',
+  '/automated-candidate-shortlisting',
 ]
 
 function toRouteFromSeoFile(fileName) {
@@ -40,6 +44,7 @@ async function getSeoLandingRoutes() {
       .filter((entry) => entry.isFile())
       .map((entry) => entry.name)
       .filter((name) => /\.(jsx|tsx|js|ts)$/.test(name) && !name.startsWith('_'))
+      .filter((name) => !['IntentLandingPage.jsx', 'intentPages.js'].includes(name))
       .map(toRouteFromSeoFile)
   } catch (error) {
     if (error.code === 'ENOENT') {
