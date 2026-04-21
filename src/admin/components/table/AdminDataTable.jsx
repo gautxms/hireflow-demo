@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { EmptyState, TableSkeleton } from '../WidgetState'
 
 function SortIndicator({ active, direction }) {
@@ -58,6 +58,15 @@ export default function AdminDataTable({
 
   const totalColumns = columns.length
   const visibleRows = useMemo(() => rows || [], [rows])
+
+  useEffect(() => {
+    const handleRouteChange = () => setSelectedRow(null)
+
+    window.addEventListener('popstate', handleRouteChange)
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange)
+    }
+  }, [])
 
   return (
     <section className="ui-card space-y-4 p-4 md:p-5">
