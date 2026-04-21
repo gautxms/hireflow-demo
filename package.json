@@ -15,6 +15,7 @@
     "dev": "vite",
     "build": "node scripts/generate-sitemap.mjs && vite build && node scripts/prerender-public-routes.mjs",
     "lint": "eslint . && npm run lint:primitives",
+    "lint:duplicate-imports": "eslint \"backend/src/**/*.js\" --no-config-lookup --parser-options '{\"ecmaVersion\":\"latest\",\"sourceType\":\"module\"}' --rule \"no-duplicate-imports:error\"",
     "qa:admin-smoke": "node scripts/admin-smoke-checks.mjs",
     "preview": "vite preview",
     "backend:dev": "node --watch backend/src/index.js",
