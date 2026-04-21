@@ -1036,3 +1036,109 @@
     text-align: left;
   }
 }
+
+.admin-overview-intro {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-overview-grid {
+  display: grid;
+  gap: var(--admin-spacing-stack);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-overview-tile {
+  text-align: left;
+  color: var(--admin-text);
+  cursor: pointer;
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  min-height: 10.25rem;
+  transition: var(--motion-transition-color), transform 160ms ease;
+}
+
+.admin-overview-tile:hover {
+  border-color: var(--admin-primary);
+  background: var(--color-accent-alpha-08);
+}
+
+.admin-overview-tile:active {
+  transform: translateY(1px);
+}
+
+.admin-overview-tile__icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--admin-radius-interactive);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent-alpha-08);
+}
+
+.admin-overview-tile__label {
+  color: var(--admin-text);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line-height);
+  font-weight: var(--type-h3-weight);
+  letter-spacing: var(--type-h3-tracking);
+}
+
+.admin-overview-tile__hint {
+  color: var(--admin-text-muted);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
+}
+
+.admin-feedback {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-feedback__form {
+  display: grid;
+  gap: var(--admin-spacing-stack);
+}
+
+.admin-feedback__choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--admin-spacing-inline);
+}
+
+.admin-feedback__comment {
+  width: 100%;
+  resize: vertical;
+  min-height: 6.5rem;
+}
+
+.admin-feedback__submit-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+@media (max-width: 1180px) {
+  .admin-overview-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-overview-tile {
+    transition: var(--motion-transition-color);
+  }
+}
