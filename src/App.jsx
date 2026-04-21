@@ -246,6 +246,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <AboutPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
+    if (pathname === '/contact') {
+      return <ContactPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+    }
+
+    if (pathname === '/help') {
+      return <HelpPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+    }
+
     if (pathname === '/terms') {
       return <Terms />
     }

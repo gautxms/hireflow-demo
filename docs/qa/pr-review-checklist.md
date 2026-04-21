@@ -8,6 +8,8 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] Primary public routes load without runtime errors.
 - [ ] Navigation links and CTA buttons route correctly.
 - [ ] Responsive behavior validated at `1440x1024` and `390x844`.
+- [ ] Public SEO routes (`/`, `/pricing`, `/about`, `/contact`, `/help`, `/terms`, `/privacy`, `/refund-policy`) return readable heading/body copy in raw HTTP responses.
+- [ ] “View Source” for each public SEO route includes readable marketing/legal text before hydration.
 
 ### Token and style compliance
 - [ ] No hardcoded color literals in JSX `style={{ ... }}` blocks.
