@@ -16,6 +16,34 @@ export default function AdminSecurityPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const hydrateFormFromSettings = useCallback((nextSettings) => {
+    const settingsProviders = nextSettings?.providers || {}
+    return {
+      activeProvider: nextSettings?.activeProvider || 'anthropic',
+      providers: {
+        anthropic: {
+          primary: {
+            apiKey: '',
+            model: settingsProviders?.anthropic?.primary?.model || settingsProviders?.anthropic?.defaultModel || '',
+          },
+          fallback: {
+            apiKey: '',
+            model: settingsProviders?.anthropic?.fallback?.model || settingsProviders?.anthropic?.defaultModel || '',
+          },
+        },
+        openai: {
+          primary: {
+            apiKey: '',
+            model: settingsProviders?.openai?.primary?.model || settingsProviders?.openai?.defaultModel || '',
+          },
+          fallback: {
+            apiKey: '',
+            model: settingsProviders?.openai?.fallback?.model || settingsProviders?.openai?.defaultModel || '',
+          },
+        },
+      },
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -25,11 +53,12 @@ export default function AdminSecurityPage() {
         adminFetchJson(`${API_BASE}/admin/analytics/token-usage`),
       ])
       setSettings(settingsPayload)
+      setForm(hydrateFormFromSettings(settingsPayload))
       setTokenUsageRows(Array.isArray(analyticsPayload?.tokenUsageUploads) ? analyticsPayload.tokenUsageUploads : [])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [hydrateFormFromSettings])
 
   useEffect(() => {
     load().catch(() => {})
@@ -59,27 +88,14 @@ export default function AdminSecurityPage() {
         body: JSON.stringify(form),
       })
       setSettings(payload.settings || null)
-      setForm((current) => ({
-        ...current,
-        activeProvider: payload?.settings?.activeProvider || current.activeProvider,
-        providers: {
-          anthropic: {
-            primary: { ...current.providers.anthropic.primary, apiKey: '' },
-            fallback: { ...current.providers.anthropic.fallback, apiKey: '' },
-          },
-          openai: {
-            primary: { ...current.providers.openai.primary, apiKey: '' },
-            fallback: { ...current.providers.openai.fallback, apiKey: '' },
-          },
-        },
-      }))
+      setForm(hydrateFormFromSettings(payload.settings || null))
       setMessage('AI settings saved.')
     } catch (error) {
       setMessage(error?.payload?.error || 'Unable to save AI settings.')
     } finally {
       setSaving(false)
     }
-  }, [form])
+  }, [form, hydrateFormFromSettings])
 
   if (loading) {
     return <div className="admin-page"><section className="ui-card p-4">Loading AI settings…</section></div>
@@ -94,7 +110,7 @@ export default function AdminSecurityPage() {
           <label className="text-sm text-admin-body">Active provider
             <select className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.activeProvider} onChange={(e) => setForm((c) => ({ ...c, activeProvider: e.target.value }))}>
               <option value="anthropic">anthropic</option>
-              <option value="openai">openai</option>
+              <option value="openai" disabled>openai (coming soon)</option>
             </select>
           </label>
           <div />

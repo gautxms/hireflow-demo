@@ -8,6 +8,7 @@ import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdm
 import { getAdminAiProviderSettings, KEY_LABELS, SUPPORTED_PROVIDERS, upsertAdminAiProviderKeys } from '../services/aiProviderConfigService.js'
 
 const router = Router()
+const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = ['anthropic']
 
 function getMonthStart(inputDate) {
   const date = inputDate ? new Date(inputDate) : new Date()
@@ -110,6 +111,11 @@ router.put('/ai-settings', async (req, res) => {
     if (!SUPPORTED_PROVIDERS.includes(normalizedActiveProvider)) {
       return res.status(400).json({ error: `activeProvider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}` })
     }
+    if (!RUNTIME_SUPPORTED_ACTIVE_PROVIDERS.includes(normalizedActiveProvider)) {
+      return res.status(400).json({
+        error: `activeProvider=${normalizedActiveProvider} is not available yet. Currently supported: ${RUNTIME_SUPPORTED_ACTIVE_PROVIDERS.join(', ')}`,
+      })
+    }
 
     const incomingProviders = payload?.providers
     if (!incomingProviders || typeof incomingProviders !== 'object') {
@@ -133,10 +139,15 @@ router.put('/ai-settings', async (req, res) => {
         if (!entry || typeof entry !== 'object') continue
 
         const apiKey = String(entry.apiKey || '').trim()
+        const hasModelField = Object.prototype.hasOwnProperty.call(entry, 'model')
         const model = String(entry.model || '').trim()
         if (apiKey) hasIncomingKey = true
-        if (!model) {
-          return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model is required.` })
+        if (!apiKey && (!hasModelField || !model)) {
+          continue
+        }
+
+        if (hasModelField && !model) {
+          return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model cannot be empty when provided.` })
         }
       }
     }
