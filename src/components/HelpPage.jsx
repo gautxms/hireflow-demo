@@ -151,8 +151,8 @@ export default function HelpPage({ onBack }) {
         <h2 className="public-section-title">Can't find what you're looking for?</h2>
         <p className="public-copy center">Our support team is here to help</p>
         <div className="public-button-row center">
-          <button className="public-btn-primary">Contact Support</button>
-          <button className="public-btn-secondary">Schedule a Call</button>
+          <a className="public-btn-primary" href="/contact">Contact Support</a>
+          <a className="public-btn-secondary" href="/demo">Schedule a Call</a>
         </div>
       </footer>
     </div>

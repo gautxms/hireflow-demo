@@ -67,7 +67,7 @@ export default function ContactPage({ onBack }) {
 
       <section className="public-page-hero">
         <h1 className="public-page-title">Get in Touch</h1>
-        <p className="public-page-subtitle">Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.</p>
+        <p className="public-page-subtitle">Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible. You can also review <a href="/help">Help Center articles</a> or compare <a href="/pricing">plans and pricing</a> before reaching out.</p>
       </section>
 
       <section className="public-section public-section-alt">

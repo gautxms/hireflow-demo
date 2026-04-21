@@ -20,6 +20,16 @@ const PUBLIC_ROUTES = [
           <h2>Why teams choose HireFlow</h2>
           <p>Reduce manual resume review, improve consistency, and move qualified candidates to interviews quickly.</p>
         </section>
+        <nav aria-label="Public crawl paths">
+          <a href="/pricing">Pricing</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/help">Help</a>
+          <a href="/demo">Demo</a>
+          <a href="/ai-resume-screening">AI resume screening</a>
+          <a href="/candidate-ranking-software">Candidate ranking software</a>
+          <a href="/recruiting-automation-tools">Recruiting automation tools</a>
+        </nav>
       </main>
     `,
   },
@@ -93,6 +103,36 @@ const PUBLIC_ROUTES = [
       <main>
         <h1>Refund Policy</h1>
         <p>Understand trial terms, non-refundable charges after conversion, and how to contact billing support.</p>
+      </main>
+    `,
+  },
+  {
+    route: '/ai-resume-screening',
+    body: `
+      <main>
+        <h1>AI Resume Screening Software</h1>
+        <p>Automate first-pass resume review while keeping recruiters in control of hiring decisions.</p>
+        <p>Continue to <a href="/candidate-ranking-software">candidate ranking software</a>, <a href="/pricing">pricing</a>, or <a href="/contact">contact</a>.</p>
+      </main>
+    `,
+  },
+  {
+    route: '/candidate-ranking-software',
+    body: `
+      <main>
+        <h1>Candidate Ranking Software</h1>
+        <p>Rank applicants with transparent, configurable scoring models built for collaborative hiring teams.</p>
+        <p>Continue to <a href="/recruiting-automation-tools">recruiting automation tools</a>, <a href="/help">Help Center</a>, or <a href="/demo">book a demo</a>.</p>
+      </main>
+    `,
+  },
+  {
+    route: '/recruiting-automation-tools',
+    body: `
+      <main>
+        <h1>Recruiting Automation Tools</h1>
+        <p>Coordinate sourcing, resume parsing, and shortlist workflows with automation designed for recruiters.</p>
+        <p>Continue to <a href="/ai-resume-screening">AI resume screening</a>, <a href="/pricing">pricing</a>, or <a href="/about">about HireFlow</a>.</p>
       </main>
     `,
   },

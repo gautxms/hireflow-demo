@@ -48,6 +48,18 @@ export const PUBLIC_PAGE_SEO = {
     title: 'HireFlow Refund Policy',
     description: 'Read HireFlow refund terms for subscriptions, trials, and billing support response timelines.',
   },
+  '/ai-resume-screening': {
+    title: 'AI Resume Screening Software | HireFlow',
+    description: 'Learn how HireFlow AI resume screening helps teams review applicants faster with transparent scoring and human oversight.',
+  },
+  '/candidate-ranking-software': {
+    title: 'Candidate Ranking Software | HireFlow',
+    description: 'Discover candidate ranking software workflows for consistent hiring decisions using weighted scorecards and recruiter calibration.',
+  },
+  '/recruiting-automation-tools': {
+    title: 'Recruiting Automation Tools | HireFlow',
+    description: 'Explore recruiting automation tools for resume parsing, candidate ranking, and pipeline orchestration across hiring teams.',
+  },
 }
 
 function normalizePath(pathname = '/') {

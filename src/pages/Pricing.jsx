@@ -102,6 +102,9 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
         <p className="pricing-page__subtitle">
           7-day free trial, cancel anytime.
         </p>
+        <p className="pricing-page__subtitle">
+          New to HireFlow? Read our <a href="/ai-resume-screening">AI resume screening guide</a> or visit the <a href="/help">Help Center</a>.
+        </p>
 
         <div className="pricing-page__toggle-wrap">
           <div

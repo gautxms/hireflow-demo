@@ -28,6 +28,9 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
 const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
+const AiResumeScreening = lazy(() => import('./pages/seo/AiResumeScreening'))
+const CandidateRankingSoftware = lazy(() => import('./pages/seo/CandidateRankingSoftware'))
+const RecruitingAutomationTools = lazy(() => import('./pages/seo/RecruitingAutomationTools'))
 import PublicFooter from './components/PublicFooter'
 import PageSeo from './components/PageSeo'
 import API_BASE from './config/api'
@@ -265,6 +268,18 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/refund-policy') {
       return <RefundPolicy />
+    }
+
+    if (pathname === '/ai-resume-screening') {
+      return <AiResumeScreening />
+    }
+
+    if (pathname === '/candidate-ranking-software') {
+      return <CandidateRankingSoftware />
+    }
+
+    if (pathname === '/recruiting-automation-tools') {
+      return <RecruitingAutomationTools />
     }
 
     if (pathname === '/billing/success') {
@@ -587,29 +602,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
   const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/verify-email/success' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
-  const handlePricingClick = () => navigate('/pricing')
-  const handleFeaturesClick = () => {
-    setIsMobileNavOpen(false)
-    if (pathname !== '/') {
-      navigate('/')
-    }
-    setCurrentPage('landing')
-    window.setTimeout(() => {
-      document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
-    }, 0)
-  }
-  const handleHelpClick = () => {
-    setIsMobileNavOpen(false)
-    if (pathname !== '/') {
-      navigate('/')
-    }
-    setCurrentPage('help')
-  }
-  const handleAboutClick = () => {
-    setIsMobileNavOpen(false)
-    navigate('/about')
-  }
-
   return (
     <>
       <PageSeo pathname={pathname} currentPage={currentPage} />
@@ -635,14 +627,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           ☰
         </button>
         <div className={`nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
-          <button type="button" className="site-nav-button" onClick={handleFeaturesClick}>Features</button>
+          <a href="/#features" className="site-nav-button" onClick={() => setIsMobileNavOpen(false)}>Features</a>
           {canViewUpgradePricing && (
-            <button type="button" className="site-nav-button" onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }}>
+            <a href="/pricing" className="site-nav-button" onClick={() => setIsMobileNavOpen(false)}>
               {isAuthenticated ? 'Upgrade' : 'Pricing'}
-            </button>
+            </a>
           )}
-          <button type="button" className="site-nav-button" onClick={handleAboutClick}>About</button>
-          <button type="button" className="site-nav-button" onClick={handleHelpClick}>Help</button>
+          <a href="/about" className="site-nav-button" onClick={() => setIsMobileNavOpen(false)}>About</a>
+          <a href="/help" className="site-nav-button" onClick={() => setIsMobileNavOpen(false)}>Help</a>
         </div>
         <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
           {isAuthenticated ? (
@@ -710,8 +702,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             </div>
           ) : (
             <>
-              <button type="button" className="btn-ghost" onClick={() => { setIsMobileNavOpen(false); navigate('/login') }}>Login</button>
-              <button type="button" className="btn-primary" onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }}>Sign up</button>
+              <a href="/login" className="btn-ghost" onClick={() => setIsMobileNavOpen(false)}>Login</a>
+              <a href="/signup" className="btn-primary" onClick={() => setIsMobileNavOpen(false)}>Sign up</a>
             </>
           )}
         </div>
