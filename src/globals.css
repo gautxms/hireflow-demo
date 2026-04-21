@@ -303,10 +303,10 @@ nav {
 
 /* ---- HERO ---- */
 .hero {
-  min-height: 100vh;
+  min-height: calc(100vh - 4.5rem);
   display: flex;
   align-items: center;
-  padding: 8rem 4rem 6rem;
+  padding: clamp(6rem, 8vh, 7rem) 4rem 5rem;
   position: relative;
   overflow: hidden;
 }
@@ -357,6 +357,18 @@ nav {
   max-width: 800px;
   display: grid;
   justify-items: start;
+}
+
+@media (min-width: 768px) and (max-width: 1439px) {
+  .hero-content {
+    transform: translateY(-1.25rem);
+  }
+}
+
+@media (min-width: 1440px) {
+  .hero-content {
+    transform: translateY(-1.75rem);
+  }
 }
 
 .hero-headline {
