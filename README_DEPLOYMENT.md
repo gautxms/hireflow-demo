@@ -210,6 +210,12 @@ Edit the `MOCK_CANDIDATES` array in `src/components/CandidateRanking.jsx`
 
 ---
 
+## Deployment Checklist
+
+- [ ] Run `npm run build` to generate and include `public/sitemap.xml` in deploy output.
+- [ ] Verify production serves `https://hireflow.dev/sitemap.xml` after deploy.
+- [ ] Submit `https://hireflow.dev/sitemap.xml` in Google Search Console after deploy.
+
 ## Testing Checklist
 
 - [ ] Landing page loads

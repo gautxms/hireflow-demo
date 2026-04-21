@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender-public-routes.mjs",
+    "build": "node scripts/generate-sitemap.mjs && vite build && node scripts/prerender-public-routes.mjs",
     "lint": "eslint . && npm run lint:primitives",
     "qa:admin-smoke": "node scripts/admin-smoke-checks.mjs",
     "preview": "vite preview",
