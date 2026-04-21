@@ -367,3 +367,73 @@
     transform: none;
   }
 }
+
+.terms-page {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+}
+
+.terms-page__main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 3rem 1.25rem;
+  line-height: var(--type-body-line-height);
+}
+
+.terms-page__back-button-wrap {
+  margin-bottom: 1.25rem;
+}
+
+.terms-page__article {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.terms-page__title {
+  font-family: var(--font-family-display);
+  margin-bottom: 1.5rem;
+  line-height: var(--type-h1-line-height);
+}
+
+.terms-page__section-title {
+  font-family: var(--font-family-display);
+  margin: 2rem 0 0.75rem;
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line-height);
+  font-weight: var(--type-h2-weight);
+  letter-spacing: var(--type-h2-tracking);
+}
+
+.terms-page__paragraph {
+  margin: 0;
+}
+
+.policy-page {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+}
+
+.policy-page__main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 3rem 1.25rem;
+  line-height: var(--type-body-line-height);
+}
+
+.policy-page__back-button-wrap {
+  margin-bottom: 1.25rem;
+}
+
+.policy-page__title {
+  margin-bottom: 1.5rem;
+  font-family: var(--font-family-display);
+  line-height: var(--type-h1-line-height);
+}
+
+.policy-page__link {
+  color: var(--color-accent-green);
+}

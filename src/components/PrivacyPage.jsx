@@ -2,12 +2,12 @@ import BackButton from './BackButton'
 
 export default function PrivacyPage() {
   return (
-    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '4rem 1.5rem', lineHeight: 1.7 }}>
-        <div style={{ marginBottom: '1.25rem' }}>
+    <div className="policy-page">
+      <main className="policy-page__main">
+        <div className="policy-page__back-button-wrap">
           <BackButton />
         </div>
-        <h1 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-display)' }}>Privacy Policy</h1>
+        <h1 className="policy-page__title">Privacy Policy</h1>
         <p>HireFlow processes business and candidate data to provide recruiting automation features for customers.</p>
         <h2>Information We Collect</h2>
         <p>We collect account information, workflow configuration, and content voluntarily submitted through the platform, including resumes and evaluation notes.</p>

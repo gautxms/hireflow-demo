@@ -8,6 +8,7 @@ export const SEO_DEFAULTS = {
   type: 'website',
   image: DEFAULT_OG_IMAGE,
   twitterCard: 'summary_large_image',
+  robots: 'index, follow',
 }
 
 export const PUBLIC_PAGE_SEO = {
@@ -127,6 +128,9 @@ export function applySeoToDocument(doc, seo) {
   doc.title = seo.title
 
   upsertMeta(doc, 'meta[name="description"]', { name: 'description', content: seo.description })
+  if (seo.robots) {
+    upsertMeta(doc, 'meta[name="robots"]', { name: 'robots', content: seo.robots })
+  }
   upsertCanonical(doc, seo.url)
 
   upsertMeta(doc, 'meta[property="og:title"]', { property: 'og:title', content: seo.title })
@@ -145,6 +149,7 @@ export function buildSeoHeadMarkup(seo) {
   return [
     `<title>${seo.title}</title>`,
     `<meta name="description" content="${seo.description}" />`,
+    `${seo.robots ? `<meta name="robots" content="${seo.robots}" />` : ''}`,
     `<link rel="canonical" href="${seo.url}" />`,
     `<meta property="og:title" content="${seo.title}" />`,
     `<meta property="og:description" content="${seo.description}" />`,
@@ -155,5 +160,5 @@ export function buildSeoHeadMarkup(seo) {
     `<meta name="twitter:title" content="${seo.title}" />`,
     `<meta name="twitter:description" content="${seo.description}" />`,
     `<meta name="twitter:image" content="${seo.image}" />`,
-  ].join('\n    ')
+  ].filter(Boolean).join('\n    ')
 }
