@@ -61,6 +61,69 @@ async function persistInquiry({
   return result.rows[0]
 }
 
+async function persistDemoInquiryIdempotent({
+  idempotencyKey,
+  name,
+  email,
+  company,
+  phone,
+  message,
+  metadata = {},
+}) {
+  const client = await pool.connect()
+
+  try {
+    await client.query('BEGIN')
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`demo-inquiry:${idempotencyKey}`])
+
+    const existingResult = await client.query(
+      `SELECT id, inquiry_type, status, name, email, company, phone, subject, message, metadata, created_at, updated_at, reviewed_at
+       FROM inquiries
+       WHERE inquiry_type = 'demo'
+         AND metadata->>'idempotencyKey' = $1
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [idempotencyKey],
+    )
+
+    if (existingResult.rows[0]) {
+      await client.query('COMMIT')
+      return {
+        inquiry: existingResult.rows[0],
+        created: false,
+      }
+    }
+
+    const result = await client.query(
+      `INSERT INTO inquiries (inquiry_type, name, email, company, phone, subject, message, metadata)
+       VALUES ('demo', $1, $2, $3, $4, NULL, $5, $6::jsonb)
+       RETURNING id, inquiry_type, status, name, email, company, phone, subject, message, metadata, created_at, updated_at, reviewed_at`,
+      [
+        name,
+        email,
+        company || null,
+        phone || null,
+        message,
+        JSON.stringify({
+          ...metadata,
+          idempotencyKey,
+        }),
+      ],
+    )
+
+    await client.query('COMMIT')
+    return {
+      inquiry: result.rows[0],
+      created: true,
+    }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 router.post('/contact', async (req, res) => {
   const name = sanitizeText(req.body?.name, 120)
   const email = sanitizeText(req.body?.email, 255).toLowerCase()
@@ -130,8 +193,8 @@ router.post('/demo-request', async (req, res) => {
   const idempotencyKey = getIdempotencyKey(req, { email, company, message, selectedDate, selectedTime })
 
   try {
-    const inquiry = await persistInquiry({
-      inquiryType: 'demo',
+    const { inquiry, created } = await persistDemoInquiryIdempotent({
+      idempotencyKey,
       name,
       email,
       company,
@@ -179,7 +242,7 @@ router.post('/demo-request', async (req, res) => {
     return res.status(201).json({
       success: true,
       inquiryId: inquiry.id,
-      duplicate: adminDelivery.duplicate && confirmation.duplicate,
+      duplicate: !created || (adminDelivery.duplicate && confirmation.duplicate),
     })
   } catch (error) {
     console.error('[INQUIRIES] Failed to send demo request email:', error)
