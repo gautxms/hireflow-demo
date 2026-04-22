@@ -11,7 +11,7 @@ import { startChunkUploadCleanupCron } from './services/fileUploadService.js'
 import { ensureWebhookTables } from './services/webhookService.js'
 import { ensureNotificationTables } from './services/notificationService.js'
 import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
-import { verifyAdminAiUserReferenceCompatibility } from './services/adminAiSchemaCompatibility.js'
+import { alignAdminAiUserReferenceColumns, verifyAdminAiUserReferenceCompatibility } from './services/adminAiSchemaCompatibility.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -43,8 +43,15 @@ async function start() {
     await ensurePaymentTrackingTables()
     await ensureWebhookTables()
     await ensureNotificationTables()
+    const adminAiSchemaAlignment = await alignAdminAiUserReferenceColumns()
+    console.log(`[Startup] Admin AI users.id type detected: ${adminAiSchemaAlignment.usersIdType}`)
+    console.log(
+      `[Startup] Admin AI columns aligned: ${adminAiSchemaAlignment.alignedColumns.length > 0 ? adminAiSchemaAlignment.alignedColumns.join(', ') : 'none'}`,
+    )
+
     const adminAiSchemaHealth = await verifyAdminAiUserReferenceCompatibility()
     if (!adminAiSchemaHealth.ok) {
+      console.error('[Startup] Admin AI schema compatibility issues remain after alignment:', adminAiSchemaHealth.issues)
       throw new Error(
         `[Startup] Admin AI schema compatibility check failed for users.id (${adminAiSchemaHealth.usersIdType}): ${adminAiSchemaHealth.issues.join('; ')}`,
       )
