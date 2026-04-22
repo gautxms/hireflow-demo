@@ -220,6 +220,31 @@ async function setJobState(jobId, fields) {
   )
 }
 
+export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionContext = null) {
+  if (jobDescriptionContext?.hasContext) {
+    return candidates
+  }
+
+  return candidates.map((candidate) => ({
+    ...candidate,
+    matchScore: null,
+    matchScoreReason: 'job_description_missing',
+    fit_assessment: {
+      ...(candidate?.fit_assessment && typeof candidate.fit_assessment === 'object' ? candidate.fit_assessment : {}),
+      has_job_description_context: false,
+      overall_fit_score: null,
+      skill_match_score: null,
+      experience_match_score: null,
+      education_match_score: null,
+      location_match_score: null,
+      notes: Array.from(new Set([
+        ...(Array.isArray(candidate?.fit_assessment?.notes) ? candidate.fit_assessment.notes : []),
+        'job_description_missing',
+      ])),
+    },
+  }))
+}
+
 async function runParse(job) {
   const { resumeId, filename, mimeType, fileSize, fileBufferBase64 } = job.data
   const startedAt = Date.now()
@@ -359,6 +384,7 @@ async function runParse(job) {
         confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
       }))
     : []
+  const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
 
   const parseResult = {
     filename,
@@ -374,7 +400,7 @@ async function runParse(job) {
     jobDescriptionContextMissingReason: jobDescriptionContext?.hasContext
       ? null
       : (jobDescriptionContext?.missingReason || 'job_description_missing'),
-    candidates,
+    candidates: normalizedCandidates,
   }
 
   const parseDurationMs = Date.now() - startedAt
