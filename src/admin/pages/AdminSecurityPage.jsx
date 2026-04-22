@@ -275,13 +275,13 @@ export default function AdminSecurityPage() {
                           {connectionStatus?.state === 'loading' ? 'Testing…' : 'Test connection'}
                         </button>
                         {connectionStatus?.message ? (
-                          <span className={`text-xs ${connectionStatus.state === 'error' ? 'text-red-600' : 'text-admin-muted'}`}>
+                          <span className={`text-xs ${connectionStatus.state === 'error' ? 'text-admin-danger' : 'text-admin-muted'}`}>
                             {connectionStatus.message}
                           </span>
                         ) : null}
                       </div>
                       {warnings.length > 0 ? (
-                        <ul className="mt-2 list-disc pl-5 text-xs text-amber-700">
+                        <ul className="mt-2 list-disc pl-5 text-xs text-admin-warning">
                           {warnings.map((warning, index) => (
                             <li key={`${warning.source}-${index}`}>
                               Model "{warning.model}" is flagged as deprecated/invalid.
@@ -297,7 +297,7 @@ export default function AdminSecurityPage() {
           ))}
           <div className="md:col-span-2 flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={saving}>{saving ? 'Saving…' : 'Save AI settings'}</button>
-            {fieldError ? <span className="text-xs text-red-600">{fieldError}</span> : null}
+            {fieldError ? <span className="text-xs text-admin-danger">{fieldError}</span> : null}
             {!fieldError && message ? <span className="text-xs text-admin-muted">{message}</span> : null}
           </div>
         </form>
