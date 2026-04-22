@@ -155,6 +155,39 @@ function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
 }
 
+function buildConnectionTestMetaKey(provider, keyLabel, model) {
+  return `${provider}:${keyLabel}:${String(model || '').trim()}`
+}
+
+async function persistSuccessfulConnectionTest({ provider, keyLabel, model, successfulAt, adminId = null }) {
+  if (!provider || !keyLabel || !model || !successfulAt) return
+
+  const settingsResult = await pool.query(
+    'SELECT settings_metadata FROM admin_ai_settings WHERE id = true LIMIT 1',
+  )
+  const existingMetadata = settingsResult.rows[0]?.settings_metadata || {}
+  const existingConnectionTests = existingMetadata?.connectionTestsByModel && typeof existingMetadata.connectionTestsByModel === 'object'
+    ? existingMetadata.connectionTestsByModel
+    : {}
+  const nextMetadata = {
+    ...(existingMetadata || {}),
+    connectionTestsByModel: {
+      ...existingConnectionTests,
+      [buildConnectionTestMetaKey(provider, keyLabel, model)]: successfulAt,
+    },
+  }
+
+  await pool.query(
+    `INSERT INTO admin_ai_settings (id, active_provider, settings_metadata, updated_by)
+     VALUES (true, COALESCE((SELECT active_provider FROM admin_ai_settings WHERE id = true), 'anthropic'), $1::jsonb, $2)
+     ON CONFLICT (id) DO UPDATE
+       SET settings_metadata = EXCLUDED.settings_metadata,
+           updated_by = EXCLUDED.updated_by,
+           updated_at = NOW()`,
+    [JSON.stringify(nextMetadata), adminId || null],
+  )
+}
+
 function collectProviderConfigChanges(updateFlags = {}) {
   const keyRotations = []
   const modelChanges = []
@@ -270,11 +303,22 @@ router.post('/ai-settings/test-connection', async (req, res) => {
       })
     }
 
+    const successfulAt = new Date().toISOString()
+    await persistSuccessfulConnectionTest({
+      provider,
+      keyLabel,
+      model,
+      successfulAt,
+      adminId: req.admin?.id || null,
+    })
+
     return res.json({
       ok: true,
       provider,
       keyLabel,
       model,
+      testedAt: successfulAt,
+      successfulAt,
       message: 'Connection successful.',
     })
   } catch (error) {

@@ -7,5 +7,6 @@ test('system prompt save path points to admin system prompt endpoint', () => {
 })
 
 test('system prompt textarea includes the expected sizing class', () => {
-  assert.match(SYSTEM_PROMPT_TEXTAREA_CLASS, /min-h-56/)
+  assert.match(SYSTEM_PROMPT_TEXTAREA_CLASS, /min-h-\[24rem\]/)
+  assert.match(SYSTEM_PROMPT_TEXTAREA_CLASS, /resize-y/)
 })
