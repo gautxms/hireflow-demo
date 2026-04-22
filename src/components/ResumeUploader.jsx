@@ -10,9 +10,13 @@ import {
 } from './resumeUploaderState'
 import {
   buildFileSnapshot,
+  clearResumeAnalysisResult,
   clearResumeAnalysisSession,
+  getResumeAnalysisOwnerKey,
   isSessionRecoverable,
+  readResumeAnalysisResult,
   readResumeAnalysisSession,
+  writeResumeAnalysisResult,
   writeResumeAnalysisSession,
 } from './resumeAnalysisSession'
 import { buildFailedAnalysisState } from './resumeUploaderRecoveryState'
@@ -84,7 +88,7 @@ function writeUploadCache(next) {
   localStorage.setItem(RESUME_UPLOAD_STATE_KEY, JSON.stringify(next))
 }
 
-export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false }) {
+export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false, userProfile = null }) {
   const fileInputRef = useRef(null)
   const mountedRef = useRef(true)
   const activePollAbortControllerRef = useRef(null)
@@ -105,6 +109,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
   const isDevelopment = import.meta.env.DEV
   const canViewAdminDiagnostics = isAdmin || isDevelopment
+  const resumeAnalysisOwnerKey = getResumeAnalysisOwnerKey(userProfile)
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -310,6 +315,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setError('')
     setTechnicalErrorDetails('')
     setProviderErrorGuidance(null)
+    clearResumeAnalysisResult()
 
     try {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -570,8 +576,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           throw new Error('Resume parsing finished, but no candidates were returned')
         }
 
-        clearResumeAnalysisSession()
-        onFileUploaded({
+        const latestResult = {
           candidates,
           parseMeta: {
             methodUsed: parseResult.methodUsed || 'ai-extraction',
@@ -580,7 +585,22 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             requiresManualCorrection: Boolean(parseResult.requiresManualCorrection),
             feedback: parseResult.feedback || null,
           },
+        }
+
+        writeResumeAnalysisSession({
+          jobId: primaryJobId,
+          parseStatus: 'complete',
+          parseProgress: 100,
+          selectedJobDescriptionId,
+          fileSnapshots: buildFileSnapshot(uploadedFiles),
         })
+        writeResumeAnalysisResult({
+          ...latestResult,
+          jobId: primaryJobId,
+        }, resumeAnalysisOwnerKey)
+
+        onFileUploaded(latestResult)
+        clearResumeAnalysisSession()
         return
       }
 
@@ -596,11 +616,12 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     }
 
     throw new Error('Resume parsing timed out. Please try again.')
-  }, [onFileUploaded, selectedJobDescriptionId, uploadedFiles])
+  }, [onFileUploaded, resumeAnalysisOwnerKey, selectedJobDescriptionId, uploadedFiles])
 
   const handleResumeTracking = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token || !recoverableSession?.jobId) {
+    const recoverableJobId = recoverableSession?.jobId || readResumeAnalysisResult(resumeAnalysisOwnerKey)?.jobId
+    if (!token || !recoverableJobId) {
       setShowRecoveryPrompt(false)
       return
     }
@@ -610,7 +631,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setProviderErrorGuidance(null)
     setFailedAnalysisState(null)
     try {
-      await trackParseStatus({ token, primaryJobId: recoverableSession.jobId })
+      await trackParseStatus({ token, primaryJobId: recoverableJobId })
     } catch (resumeError) {
       if (resumeError?.name !== 'AbortError') {
         setError(sanitizeForDisplay(resumeError.message || 'Unable to resume analysis.'))

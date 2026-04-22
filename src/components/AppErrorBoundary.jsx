@@ -1,8 +1,18 @@
 import React from 'react'
-import { readResumeAnalysisSession } from './resumeAnalysisSession'
+import { getResumeAnalysisOwnerKey, readResumeAnalysisResult, readResumeAnalysisSession } from './resumeAnalysisSession'
 import { deriveBoundaryStateFromError } from './appErrorBoundaryState'
 
 const RECENT_CRASH_CONTEXT_KEY = 'hireflow_recent_crash_context_v1'
+const USER_STORAGE_KEY = 'hireflow_user_profile'
+
+function getCurrentResumeOwnerKey() {
+  try {
+    const parsedProfile = JSON.parse(localStorage.getItem(USER_STORAGE_KEY) || 'null')
+    return getResumeAnalysisOwnerKey(parsedProfile)
+  } catch {
+    return ''
+  }
+}
 
 function isDevelopment() {
   return import.meta.env?.DEV
@@ -20,7 +30,8 @@ export default class AppErrorBoundary extends React.Component {
 
   static getDerivedStateFromError(error) {
     const session = readResumeAnalysisSession()
-    return deriveBoundaryStateFromError(error, session)
+    const latestResult = readResumeAnalysisResult(getCurrentResumeOwnerKey())
+    return deriveBoundaryStateFromError(error, session, latestResult)
   }
 
   componentDidCatch(error, info) {
