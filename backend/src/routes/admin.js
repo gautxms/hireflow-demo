@@ -45,10 +45,19 @@ function normalizeProviderError(error) {
 }
 
 async function runProviderConnectionTest({ provider, apiKey, model }) {
-  const headers = {
+  const baseHeaders = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey}`,
   }
+  const headers = provider === 'anthropic'
+    ? {
+        ...baseHeaders,
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      }
+    : {
+        ...baseHeaders,
+        Authorization: `Bearer ${apiKey}`,
+      }
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), CONNECTION_TEST_TIMEOUT_MS)
 
@@ -69,12 +78,7 @@ async function runProviderConnectionTest({ provider, apiKey, model }) {
       provider === 'anthropic' ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/responses',
       {
         method: 'POST',
-        headers: provider === 'anthropic'
-          ? {
-              ...headers,
-              'anthropic-version': '2023-06-01',
-            }
-          : headers,
+        headers,
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       },
