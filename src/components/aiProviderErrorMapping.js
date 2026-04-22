@@ -4,11 +4,12 @@ const CATEGORY_MESSAGES = {
   rate_limit_error: 'The AI provider is rate-limiting requests right now.',
   timeout_error: 'The AI provider timed out while processing this request.',
   network_error: 'Temporary network issue while contacting the AI provider.',
+  ai_disabled_error: 'AI analysis is currently disabled by an administrator.',
   not_found_error: 'The configured AI model could not be found.',
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
 const DEFAULT_ADMIN_PATH = '/admin/security'
 
 function sanitizeRawMessage(rawMessage) {

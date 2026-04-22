@@ -4,6 +4,12 @@ import { AI_MODEL_CONFIG, getAnthropicModelWarnings } from '../config/aiModels.j
 const DEFAULT_PROVIDER = 'anthropic'
 const SUPPORTED_PROVIDERS = ['anthropic', 'openai']
 const KEY_LABELS = ['primary', 'fallback']
+const DEFAULT_GOVERNANCE = {
+  aiEnabled: true,
+  workflowToggles: {
+    resumeAnalysisEnabled: true,
+  },
+}
 
 const PROVIDER_MODEL_CONFIG = {
   anthropic: {
@@ -127,6 +133,28 @@ function normalizeLegacyPayload(payload = {}) {
   }
 }
 
+function normalizeGovernanceConfig(governance = {}) {
+  const workflowToggles = governance?.workflowToggles && typeof governance.workflowToggles === 'object'
+    ? governance.workflowToggles
+    : {}
+
+  return {
+    aiEnabled: typeof governance?.aiEnabled === 'boolean'
+      ? governance.aiEnabled
+      : DEFAULT_GOVERNANCE.aiEnabled,
+    workflowToggles: {
+      resumeAnalysisEnabled: typeof workflowToggles.resumeAnalysisEnabled === 'boolean'
+        ? workflowToggles.resumeAnalysisEnabled
+        : DEFAULT_GOVERNANCE.workflowToggles.resumeAnalysisEnabled,
+    },
+  }
+}
+
+function extractGovernanceFromMetadata(metadata = {}) {
+  const nextMetadata = metadata && typeof metadata === 'object' ? metadata : {}
+  return normalizeGovernanceConfig(nextMetadata.governance || {})
+}
+
 function createEmptyChangeFlags() {
   const byProvider = Object.fromEntries(
     SUPPORTED_PROVIDERS.map((provider) => [provider, {
@@ -139,6 +167,9 @@ function createEmptyChangeFlags() {
 
   return {
     activeProviderUpdated: false,
+    governanceUpdated: false,
+    aiEnabledUpdated: false,
+    workflowTogglesUpdated: false,
     providers: byProvider,
   }
 }
@@ -176,6 +207,7 @@ export async function getAdminAiProviderSettings() {
   return {
     activeProvider: normalizedActiveProvider,
     metadata: settingsResult.rows[0]?.settings_metadata || {},
+    governance: extractGovernanceFromMetadata(settingsResult.rows[0]?.settings_metadata || {}),
     providers,
   }
 }
@@ -263,7 +295,21 @@ export async function upsertAdminAiProviderKeys({ payload, adminId }) {
   const existingActiveProvider = settingsResult.rows[0]?.active_provider || DEFAULT_PROVIDER
   const nextActiveProvider = SUPPORTED_PROVIDERS.includes(activeProvider) ? activeProvider : DEFAULT_PROVIDER
 
-  if (existingActiveProvider !== nextActiveProvider || metadata) {
+  const currentSettingsResult = await pool.query(
+    'SELECT active_provider, settings_metadata FROM admin_ai_settings WHERE id = true LIMIT 1',
+  )
+  const existingMetadata = currentSettingsResult.rows[0]?.settings_metadata || {}
+  const currentGovernance = extractGovernanceFromMetadata(existingMetadata)
+  const incomingGovernance = normalizeGovernanceConfig({
+    ...(currentGovernance || {}),
+    ...(normalizedPayload?.governance && typeof normalizedPayload.governance === 'object' ? normalizedPayload.governance : {}),
+  })
+
+  const nextMetadata = metadata
+    ? { ...metadata, governance: incomingGovernance }
+    : { ...(existingMetadata || {}), governance: incomingGovernance }
+
+  if (existingActiveProvider !== nextActiveProvider || metadata || JSON.stringify(nextMetadata) !== JSON.stringify(existingMetadata)) {
     await pool.query(
       `INSERT INTO admin_ai_settings (id, active_provider, settings_metadata, updated_by)
        VALUES (true, $1, COALESCE($2::jsonb, '{}'::jsonb), $3)
@@ -273,9 +319,12 @@ export async function upsertAdminAiProviderKeys({ payload, adminId }) {
          settings_metadata = COALESCE($2::jsonb, admin_ai_settings.settings_metadata),
          updated_by = EXCLUDED.updated_by,
          updated_at = NOW()`,
-      [nextActiveProvider, metadata ? JSON.stringify(metadata) : null, adminId || null],
+      [nextActiveProvider, JSON.stringify(nextMetadata), adminId || null],
     )
     changeFlags.activeProviderUpdated = existingActiveProvider !== nextActiveProvider
+    changeFlags.aiEnabledUpdated = currentGovernance.aiEnabled !== incomingGovernance.aiEnabled
+    changeFlags.workflowTogglesUpdated = currentGovernance.workflowToggles.resumeAnalysisEnabled !== incomingGovernance.workflowToggles.resumeAnalysisEnabled
+    changeFlags.governanceUpdated = changeFlags.aiEnabledUpdated || changeFlags.workflowTogglesUpdated
   }
 
   return changeFlags
@@ -353,7 +402,7 @@ export async function getActiveAiProviderCredentials() {
        ORDER BY provider ASC, CASE key_label WHEN 'primary' THEN 1 ELSE 2 END`,
       [SUPPORTED_PROVIDERS],
     ),
-    pool.query('SELECT active_provider FROM admin_ai_settings WHERE id = true LIMIT 1'),
+    pool.query('SELECT active_provider, settings_metadata FROM admin_ai_settings WHERE id = true LIMIT 1'),
   ])
 
   const rowsByProvider = new Map(SUPPORTED_PROVIDERS.map((provider) => [provider, []]))
@@ -392,6 +441,7 @@ export async function getActiveAiProviderCredentials() {
 
   return {
     activeProvider: SUPPORTED_PROVIDERS.includes(activeProvider) ? activeProvider : DEFAULT_PROVIDER,
+    governance: extractGovernanceFromMetadata(settingsResult.rows[0]?.settings_metadata || {}),
     providers,
   }
 }

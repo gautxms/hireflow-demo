@@ -9,6 +9,12 @@ const KEY_LABELS = ['primary', 'fallback']
 function buildEmptyForm() {
   return {
     activeProvider: 'anthropic',
+    governance: {
+      aiEnabled: true,
+      workflowToggles: {
+        resumeAnalysisEnabled: true,
+      },
+    },
     providers: {
       anthropic: { primary: { apiKey: '', model: '' }, fallback: { apiKey: '', model: '' } },
       openai: { primary: { apiKey: '', model: '' }, fallback: { apiKey: '', model: '' } },
@@ -38,6 +44,12 @@ export default function AdminSecurityPage() {
     const settingsProviders = nextSettings?.providers || {}
     return {
       activeProvider: nextSettings?.activeProvider || 'anthropic',
+      governance: {
+        aiEnabled: nextSettings?.governance?.aiEnabled !== false,
+        workflowToggles: {
+          resumeAnalysisEnabled: nextSettings?.governance?.workflowToggles?.resumeAnalysisEnabled !== false,
+        },
+      },
       providers: {
         anthropic: {
           primary: {
@@ -148,6 +160,35 @@ export default function AdminSecurityPage() {
 
     return ''
   }, [form])
+
+  const governanceChecklist = useMemo(() => {
+    const activeProviderConfigured = settings?.providers?.[form.activeProvider]
+    const hasPrimaryKey = Boolean(activeProviderConfigured?.primary?.configured)
+    const hasFallbackKey = Boolean(activeProviderConfigured?.fallback?.configured)
+
+    return [
+      {
+        label: 'Global AI analysis enabled',
+        ok: form?.governance?.aiEnabled !== false,
+      },
+      {
+        label: 'Resume analysis workflow enabled',
+        ok: form?.governance?.workflowToggles?.resumeAnalysisEnabled !== false,
+      },
+      {
+        label: 'Active provider has primary key',
+        ok: hasPrimaryKey,
+      },
+      {
+        label: 'Fallback key is configured',
+        ok: hasFallbackKey,
+      },
+      {
+        label: 'System prompt is versioned',
+        ok: Number(promptSettings?.promptVersion || 0) > 0,
+      },
+    ]
+  }, [form.activeProvider, form?.governance?.aiEnabled, form?.governance?.workflowToggles?.resumeAnalysisEnabled, promptSettings?.promptVersion, settings?.providers])
 
   const save = useCallback(async (event) => {
     event.preventDefault()
@@ -301,6 +342,54 @@ export default function AdminSecurityPage() {
             {!fieldError && message ? <span className="text-xs text-admin-muted">{message}</span> : null}
           </div>
         </form>
+      </section>
+
+      <section className="ui-card p-4">
+        <h2 className="text-lg font-semibold text-admin-strong">AI governance controls</h2>
+        <p className="mt-1 text-sm text-admin-body">Toggle global/workflow AI usage and review readiness posture.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="flex items-center gap-2 rounded border border-admin p-3 text-sm text-admin-body">
+            <input
+              type="checkbox"
+              checked={form?.governance?.aiEnabled !== false}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                governance: {
+                  ...current.governance,
+                  aiEnabled: event.target.checked,
+                },
+              }))}
+            />
+            Global AI analysis enabled
+          </label>
+          <label className="flex items-center gap-2 rounded border border-admin p-3 text-sm text-admin-body">
+            <input
+              type="checkbox"
+              checked={form?.governance?.workflowToggles?.resumeAnalysisEnabled !== false}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                governance: {
+                  ...current.governance,
+                  workflowToggles: {
+                    ...current.governance.workflowToggles,
+                    resumeAnalysisEnabled: event.target.checked,
+                  },
+                },
+              }))}
+            />
+            Resume analysis workflow enabled
+          </label>
+        </div>
+        <div className="mt-4 rounded border border-admin p-3">
+          <p className="text-sm font-semibold text-admin-strong">Security & operations checklist</p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {governanceChecklist.map((item) => (
+              <li key={item.label} className={item.ok ? 'text-admin-muted' : 'text-admin-danger'}>
+                {item.ok ? '✅' : '⚠️'} {item.label}
+              </li>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <section className="ui-card p-4">

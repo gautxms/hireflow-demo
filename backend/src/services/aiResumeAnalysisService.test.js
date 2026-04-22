@@ -77,3 +77,16 @@ test('analyzeResumeWithConfiguredFallback attaches full attempt trail on termina
     },
   )
 })
+
+test('analyzeResumeWithConfiguredFallback blocks analysis when governance disables AI', async () => {
+  await assert.rejects(
+    () => analyzeResumeWithConfiguredFallback('dGVzdA==', 'application/pdf', 'resume.pdf', {
+      credentials: {
+        ...baseCredentials,
+        governance: { aiEnabled: false, workflowToggles: { resumeAnalysisEnabled: true } },
+      },
+      systemPromptConfig: { systemPrompt: 'test', promptVersion: 1, isDefaultFallback: false },
+    }),
+    /ai_disabled_error/i,
+  )
+})

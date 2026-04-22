@@ -406,6 +406,12 @@ export async function analyzeWithOpenAI(
 export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, options = {}) {
   const credentials = options.credentials || await getActiveAiProviderCredentials()
   const systemPromptConfig = options.systemPromptConfig || await getRuntimeSystemPromptConfig()
+  const governance = credentials?.governance && typeof credentials.governance === 'object'
+    ? credentials.governance
+    : { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } }
+  if (governance.aiEnabled === false || governance?.workflowToggles?.resumeAnalysisEnabled === false) {
+    throw new Error('ai_disabled_error::AI resume analysis is disabled by admin governance policy.')
+  }
   const adapters = {
     anthropic: options.analyzeWithAnthropic || analyzeWithAnthropic,
     openai: options.analyzeWithOpenAI || analyzeWithOpenAI,
