@@ -12,6 +12,7 @@ import {
   getActiveAiProviderCredentials,
   upsertAdminAiProviderKeys,
   validateAiProviderModelConfiguration,
+  syncProviderModelRegistry,
 } from '../services/aiProviderConfigService.js'
 import {
   getAdminSystemPrompt,
@@ -244,6 +245,47 @@ router.post('/ai-settings/test-connection', async (req, res) => {
   } catch (error) {
     console.error('[Admin ai-settings] connection test failed:', error)
     return res.status(500).json({ error: 'Unable to test provider connection.' })
+  }
+})
+
+router.post('/ai-settings/sync-models', async (req, res) => {
+  const provider = String(req.query?.provider || '').trim().toLowerCase()
+  if (!SUPPORTED_PROVIDERS.includes(provider)) {
+    return res.status(400).json({ error: `provider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}` })
+  }
+
+  try {
+    const syncResult = await syncProviderModelRegistry({
+      provider,
+      adminId: req.adminUser?.id || null,
+    })
+    await recordAdminAction({
+      adminId: req.adminUser?.id || null,
+      actionType: 'admin_ai_model_registry_synced',
+      targetId: provider,
+      details: syncResult,
+      ipAddress: req.ip || null,
+    })
+
+    const [settings, modelValidation] = await Promise.all([
+      getAdminAiProviderSettings(),
+      validateAiProviderModelConfiguration(),
+    ])
+
+    return res.json({
+      ok: true,
+      ...syncResult,
+      settings,
+      modelWarnings: Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : [],
+      allowedModelsByProvider: modelValidation?.allowedModelsByProvider || {},
+    })
+  } catch (error) {
+    return res.status(502).json({
+      ok: false,
+      provider,
+      error: String(error?.message || 'Unable to sync provider models.'),
+      fallbackManualEntry: true,
+    })
   }
 })
 

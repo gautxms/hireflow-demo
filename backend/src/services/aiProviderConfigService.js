@@ -22,6 +22,11 @@ const PROVIDER_MODEL_CONFIG = {
     seedModels: PROVIDER_MODEL_BOOTSTRAP.openai.seedModels,
   },
 }
+const PROVIDER_MODEL_SYNC_ENDPOINTS = {
+  anthropic: process.env.ANTHROPIC_MODEL_METADATA_ENDPOINT || 'https://api.anthropic.com/v1/models',
+  openai: process.env.OPENAI_MODEL_METADATA_ENDPOINT || 'https://api.openai.com/v1/models',
+}
+const PROVIDER_MODEL_SYNC_TIMEOUT_MS = 15000
 
 let tablesEnsured = false
 
@@ -230,6 +235,124 @@ async function getRegistryRowsByProvider() {
     grouped.get(provider).push(row)
   }
   return grouped
+}
+
+function normalizeDiscoveredModelIds(payload = {}) {
+  const rows = Array.isArray(payload?.data) ? payload.data : []
+  return rows
+    .map((row) => String(row?.id || '').trim())
+    .filter((modelId, index, list) => Boolean(modelId) && list.indexOf(modelId) === index)
+}
+
+async function fetchProviderModelIds({ provider, apiKey }) {
+  const endpoint = PROVIDER_MODEL_SYNC_ENDPOINTS[provider]
+  if (!endpoint) {
+    throw new Error(`No model sync endpoint configured for provider "${provider}".`)
+  }
+
+  const headers = provider === 'anthropic'
+    ? {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      }
+    : {
+        Authorization: `Bearer ${apiKey}`,
+      }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), PROVIDER_MODEL_SYNC_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers,
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}`
+      try {
+        const body = await response.json()
+        errorMessage = body?.error?.message || body?.message || errorMessage
+      } catch {
+        errorMessage = `HTTP ${response.status}`
+      }
+      throw new Error(errorMessage)
+    }
+
+    const payload = await response.json()
+    const modelIds = normalizeDiscoveredModelIds(payload)
+    if (!modelIds.length) {
+      throw new Error('Provider returned no models.')
+    }
+
+    return {
+      endpoint,
+      modelIds,
+      rawCount: Array.isArray(payload?.data) ? payload.data.length : 0,
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Model sync timed out while contacting provider API.')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function syncProviderModelRegistry({ provider, adminId = null }) {
+  await ensureAiProviderTables()
+
+  if (!SUPPORTED_PROVIDERS.includes(provider)) {
+    throw new Error(`provider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}`)
+  }
+
+  const credentials = await getActiveAiProviderCredentials()
+  const providerCredentials = credentials?.providers?.[provider]
+  const apiKey = String(providerCredentials?.primary?.apiKey || providerCredentials?.fallback?.apiKey || '').trim()
+  if (!apiKey) {
+    throw new Error(`No API key configured for ${provider}. Add a key manually and retry sync.`)
+  }
+
+  const fetched = await fetchProviderModelIds({ provider, apiKey })
+  const nowIso = new Date().toISOString()
+  let upserted = 0
+
+  for (const modelId of fetched.modelIds) {
+    const result = await pool.query(
+      `INSERT INTO admin_ai_model_registry (provider, model_id, status, display_name, metadata, source, updated_at)
+       VALUES ($1, $2, 'active', $2, $3::jsonb, 'provider_api', NOW())
+       ON CONFLICT (provider, model_id)
+       DO UPDATE SET
+         status = 'active',
+         display_name = EXCLUDED.display_name,
+         metadata = EXCLUDED.metadata,
+         source = EXCLUDED.source,
+         updated_at = NOW()
+       RETURNING id`,
+      [
+        provider,
+        modelId,
+        JSON.stringify({
+          sync: {
+            syncedAt: nowIso,
+            source: fetched.endpoint,
+            actor: adminId || null,
+          },
+        }),
+      ],
+    )
+    upserted += result.rowCount || 0
+  }
+
+  return {
+    provider,
+    endpoint: fetched.endpoint,
+    discovered: fetched.modelIds.length,
+    upserted,
+    syncedAt: nowIso,
+    fallbackManualEntry: true,
+  }
 }
 
 export async function getAdminAiProviderSettings() {
