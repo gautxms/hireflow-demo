@@ -12,6 +12,11 @@ const MIME_TYPE_MAP = {
   'application/msword': 'application/msword',
 }
 const PROVIDER_ORDER = ['anthropic', 'openai']
+const OPENAI_MODEL_CAPABILITIES = {
+  default: {
+    supportsTemperature: false,
+  },
+}
 
 let claudeTokensUsed = {
   input: 0,
@@ -487,6 +492,7 @@ export async function analyzeWithOpenAI(
     providerSource = 'unknown',
     systemPromptConfig = null,
     jobDescriptionContext = null,
+    modelCapabilities = null,
     fetchImpl = fetch,
   } = {},
 ) {
@@ -499,32 +505,42 @@ export async function analyzeWithOpenAI(
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
 
+  const effectiveModelCapabilities = modelCapabilities && typeof modelCapabilities === 'object'
+    ? modelCapabilities
+    : OPENAI_MODEL_CAPABILITIES.default
+
+  const requestBody = {
+    model,
+    max_output_tokens: 2000,
+    input: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_file',
+            filename: 'resume',
+            file_data: `data:${mediaType};base64,${fileBufferBase64}`,
+          },
+          {
+            type: 'input_text',
+            text: prompt,
+          },
+        ],
+      },
+    ],
+  }
+
+  if (effectiveModelCapabilities.supportsTemperature === true) {
+    requestBody.temperature = 0
+  }
+
   const response = await fetchImpl('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      max_output_tokens: 2000,
-      input: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'input_file',
-              filename: 'resume',
-              file_data: `data:${mediaType};base64,${fileBufferBase64}`,
-            },
-            {
-              type: 'input_text',
-              text: prompt,
-            },
-          ],
-        },
-      ],
-    }),
+    body: JSON.stringify(requestBody),
   })
 
   if (!response.ok) {

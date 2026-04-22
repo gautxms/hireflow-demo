@@ -178,6 +178,53 @@ test('analyzeWithOpenAI embeds JD mode contract in request payload', async () =>
   assert.equal(Object.hasOwn(capturedBody, 'temperature'), false)
 })
 
+test('analyzeWithOpenAI omits temperature for modern responses models', async () => {
+  let capturedBody = null
+  const fetchImpl = async (_url, request) => {
+    const body = JSON.parse(request.body)
+    capturedBody = body
+    if (Object.hasOwn(body, 'temperature')) {
+      return {
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: "Unsupported parameter: 'temperature'" } }),
+      }
+    }
+    return {
+      ok: true,
+      json: async () => ({ output_text: '{"candidates":[{"id":"cand-1"}]}' }),
+    }
+  }
+
+  await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'oa-key',
+    model: 'gpt-4.1-mini',
+    fetchImpl,
+  })
+
+  assert.equal(Object.hasOwn(capturedBody, 'temperature'), false)
+})
+
+test('analyzeWithOpenAI supports opt-in temperature via model capability flags', async () => {
+  let capturedBody = null
+  const fetchImpl = async (_url, request) => {
+    capturedBody = JSON.parse(request.body)
+    return {
+      ok: true,
+      json: async () => ({ output_text: '{"candidates":[{"id":"cand-1"}]}' }),
+    }
+  }
+
+  await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'oa-key',
+    model: 'gpt-custom-preview',
+    modelCapabilities: { supportsTemperature: true },
+    fetchImpl,
+  })
+
+  assert.equal(capturedBody.temperature, 0)
+})
+
 test('extractJsonWithContext parses raw JSON', () => {
   const result = extractJsonWithContext('{"candidates":[{"id":"cand-1"}]}', { provider: 'openai', model: 'gpt-4o-mini' })
   assert.equal(Array.isArray(result.candidates), true)
