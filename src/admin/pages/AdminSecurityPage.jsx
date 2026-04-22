@@ -4,6 +4,9 @@ import { navigateAdmin } from '../config/adminNavigation'
 import { adminFetchJson } from '../utils/adminErrorState'
 import {
   getSystemPromptSaveErrorMessage,
+  getSystemPromptSourceLabel,
+  LOCAL_FALLBACK_SYSTEM_PROMPT,
+  SYSTEM_PROMPT_RESET_PATH,
   SYSTEM_PROMPT_SAVE_PATH,
   SYSTEM_PROMPT_TEXTAREA_CLASS,
 } from './adminSystemPromptConfig'
@@ -151,10 +154,25 @@ export default function AdminSecurityPage() {
 
     if (promptResult.status === 'fulfilled') {
       const promptPayload = promptResult.value
-      setPromptSettings(promptPayload)
-      setSystemPromptInput(promptPayload?.systemPrompt || '')
+      const nextPromptSettings = promptPayload || {
+        systemPrompt: LOCAL_FALLBACK_SYSTEM_PROMPT,
+        promptVersion: 1,
+        updatedBy: null,
+        updatedAt: null,
+        isDefaultFallback: true,
+      }
+      setPromptSettings(nextPromptSettings)
+      setSystemPromptInput(nextPromptSettings?.systemPrompt || LOCAL_FALLBACK_SYSTEM_PROMPT)
     } else {
       nextErrors.systemPrompt = 'Couldn’t load prompt, using default fallback.'
+      setPromptSettings({
+        systemPrompt: LOCAL_FALLBACK_SYSTEM_PROMPT,
+        promptVersion: 1,
+        updatedBy: null,
+        updatedAt: null,
+        isDefaultFallback: true,
+      })
+      setSystemPromptInput(LOCAL_FALLBACK_SYSTEM_PROMPT)
     }
 
     setLoadSectionErrors(nextErrors)
@@ -347,6 +365,23 @@ export default function AdminSecurityPage() {
       setSavingPrompt(false)
     }
   }, [systemPromptInput])
+
+  const resetSystemPrompt = useCallback(async () => {
+    setSavingPrompt(true)
+    setPromptMessage('')
+    try {
+      const payload = await adminFetchJson(`${API_BASE}${SYSTEM_PROMPT_RESET_PATH}`, {
+        method: 'POST',
+      })
+      setPromptSettings(payload?.prompt || null)
+      setSystemPromptInput(payload?.prompt?.systemPrompt || LOCAL_FALLBACK_SYSTEM_PROMPT)
+      setPromptMessage('System prompt reset to default.')
+    } catch (error) {
+      setPromptMessage(getSystemPromptSaveErrorMessage(error))
+    } finally {
+      setSavingPrompt(false)
+    }
+  }, [])
 
   const testConnection = useCallback(async (provider, keyLabel) => {
     const model = String(form?.providers?.[provider]?.[keyLabel]?.model || '').trim()
@@ -604,10 +639,13 @@ export default function AdminSecurityPage() {
             {' · '}
             Last updated: <strong>{promptSettings?.updatedAt ? new Date(promptSettings.updatedAt).toLocaleString() : 'Not updated yet'}</strong>
             {' · '}
+            Source: <strong>{getSystemPromptSourceLabel(promptSettings || { isDefaultFallback: true })}</strong>
+            {' · '}
             Characters: <strong>{systemPromptInput.length.toLocaleString()}</strong> / <strong>{MAX_SYSTEM_PROMPT_LENGTH.toLocaleString()}</strong>
           </div>
           <div className="flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={savingPrompt}>{savingPrompt ? 'Saving…' : 'Save system prompt'}</button>
+            <button type="button" className="ui-btn" disabled={savingPrompt} onClick={resetSystemPrompt}>Reset to default prompt</button>
             {promptMessage ? <span className="text-xs text-admin-muted">{promptMessage}</span> : null}
           </div>
         </form>
