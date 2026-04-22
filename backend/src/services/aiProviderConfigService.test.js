@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { pool } from '../db/client.js'
-import { syncProviderModelRegistry, validateAiProviderModelConfiguration } from './aiProviderConfigService.js'
+import { syncProviderModelRegistry, upsertAdminAiProviderKeys, validateAiProviderModelConfiguration } from './aiProviderConfigService.js'
 
 const originalQuery = pool.query.bind(pool)
 const originalFetch = global.fetch
@@ -173,4 +173,153 @@ test('validateAiProviderModelConfiguration returns tiered warnings with remediat
   const validUnlisted = result.warnings.find((warning) => warning.validationTier === 'valid_unlisted')
   assert.equal(validUnlisted?.provider, 'anthropic')
   assert.equal(['model_not_registered', 'provider_registry_empty'].includes(validUnlisted?.detail), true)
+})
+
+test('upsertAdminAiProviderKeys preserves existing model when payload omits model field', async () => {
+  const state = {
+    rows: [
+      { provider: 'anthropic', key_label: 'primary', api_key: 'old-primary', model: 'claude-sonnet-4-20250514' },
+      { provider: 'openai', key_label: 'fallback', api_key: 'openai-fallback', model: 'gpt-4o-mini' },
+    ],
+    activeProvider: 'anthropic',
+    metadata: {},
+  }
+
+  pool.query = async (queryText, params = []) => {
+    const sql = String(queryText).trim().replace(/\s+/g, ' ')
+
+    if (sql.startsWith('SELECT provider, key_label, api_key, model FROM admin_ai_provider_keys')) {
+      return { rows: state.rows.map((row) => ({ ...row })) }
+    }
+
+    if (sql.startsWith('INSERT INTO admin_ai_provider_keys')) {
+      const [provider, keyLabel, apiKey, model] = params
+      const existingIndex = state.rows.findIndex((row) => row.provider === provider && row.key_label === keyLabel)
+      const nextRow = { provider, key_label: keyLabel, api_key: apiKey, model }
+      if (existingIndex >= 0) state.rows[existingIndex] = nextRow
+      else state.rows.push(nextRow)
+      return { rowCount: 1, rows: [] }
+    }
+
+    if (sql.startsWith('SELECT active_provider FROM admin_ai_settings WHERE id = true LIMIT 1')) {
+      return { rows: [{ active_provider: state.activeProvider }] }
+    }
+
+    if (sql.startsWith('SELECT active_provider, settings_metadata FROM admin_ai_settings WHERE id = true LIMIT 1')) {
+      return { rows: [{ active_provider: state.activeProvider, settings_metadata: state.metadata }] }
+    }
+
+    if (sql.startsWith('INSERT INTO admin_ai_settings')) {
+      state.activeProvider = params[0]
+      state.metadata = JSON.parse(params[1] || '{}')
+      return { rowCount: 1, rows: [] }
+    }
+
+    throw new Error(`Unexpected SQL in upsertAdminAiProviderKeys test: ${sql} | params=${JSON.stringify(params)}`)
+  }
+
+  const flags = await upsertAdminAiProviderKeys({
+    payload: {
+      activeProvider: 'anthropic',
+      providers: {
+        anthropic: {
+          primary: {
+            apiKey: 'new-primary',
+          },
+        },
+      },
+    },
+    adminId: 'admin-1',
+  })
+
+  const anthropicPrimary = state.rows.find((row) => row.provider === 'anthropic' && row.key_label === 'primary')
+  const openaiFallback = state.rows.find((row) => row.provider === 'openai' && row.key_label === 'fallback')
+
+  assert.equal(anthropicPrimary?.model, 'claude-sonnet-4-20250514')
+  assert.equal(openaiFallback?.model, 'gpt-4o-mini')
+  assert.equal(flags.providers.anthropic.primaryKeyUpdated, true)
+  assert.equal(flags.providers.anthropic.primaryModelUpdated, false)
+  assert.equal(flags.providers.openai.fallbackKeyUpdated, false)
+  assert.equal(flags.providers.openai.fallbackModelUpdated, false)
+})
+
+test('upsertAdminAiProviderKeys updates only explicitly provided model slots in partial payloads', async () => {
+  const state = {
+    rows: [
+      { provider: 'anthropic', key_label: 'primary', api_key: 'anthropic-primary', model: 'claude-sonnet-4-20250514' },
+      { provider: 'anthropic', key_label: 'fallback', api_key: 'anthropic-fallback', model: 'claude-3-5-haiku-latest' },
+      { provider: 'openai', key_label: 'primary', api_key: 'openai-primary', model: 'gpt-4o-mini' },
+      { provider: 'openai', key_label: 'fallback', api_key: 'openai-fallback', model: 'gpt-4.1-mini' },
+    ],
+    activeProvider: 'anthropic',
+    metadata: {},
+  }
+
+  pool.query = async (queryText, params = []) => {
+    const sql = String(queryText).trim().replace(/\s+/g, ' ')
+
+    if (sql.startsWith('SELECT provider, key_label, api_key, model FROM admin_ai_provider_keys')) {
+      return { rows: state.rows.map((row) => ({ ...row })) }
+    }
+
+    if (sql.startsWith('INSERT INTO admin_ai_provider_keys')) {
+      const [provider, keyLabel, apiKey, model] = params
+      const existingIndex = state.rows.findIndex((row) => row.provider === provider && row.key_label === keyLabel)
+      const nextRow = { provider, key_label: keyLabel, api_key: apiKey, model }
+      if (existingIndex >= 0) state.rows[existingIndex] = nextRow
+      else state.rows.push(nextRow)
+      return { rowCount: 1, rows: [] }
+    }
+
+    if (sql.startsWith('UPDATE admin_ai_provider_keys SET model = $3')) {
+      const [provider, keyLabel, model] = params
+      const existingIndex = state.rows.findIndex((row) => row.provider === provider && row.key_label === keyLabel)
+      if (existingIndex >= 0) state.rows[existingIndex] = { ...state.rows[existingIndex], model }
+      return { rowCount: existingIndex >= 0 ? 1 : 0, rows: [] }
+    }
+
+    if (sql.startsWith('SELECT active_provider FROM admin_ai_settings WHERE id = true LIMIT 1')) {
+      return { rows: [{ active_provider: state.activeProvider }] }
+    }
+
+    if (sql.startsWith('SELECT active_provider, settings_metadata FROM admin_ai_settings WHERE id = true LIMIT 1')) {
+      return { rows: [{ active_provider: state.activeProvider, settings_metadata: state.metadata }] }
+    }
+
+    if (sql.startsWith('INSERT INTO admin_ai_settings')) {
+      state.activeProvider = params[0]
+      state.metadata = JSON.parse(params[1] || '{}')
+      return { rowCount: 1, rows: [] }
+    }
+
+    throw new Error(`Unexpected SQL in partial model upsert test: ${sql} | params=${JSON.stringify(params)}`)
+  }
+
+  const flags = await upsertAdminAiProviderKeys({
+    payload: {
+      activeProvider: 'anthropic',
+      providers: {
+        openai: {
+          fallback: {
+            model: 'gpt-4.1',
+          },
+        },
+      },
+    },
+    adminId: 'admin-1',
+  })
+
+  const anthropicPrimary = state.rows.find((row) => row.provider === 'anthropic' && row.key_label === 'primary')
+  const anthropicFallback = state.rows.find((row) => row.provider === 'anthropic' && row.key_label === 'fallback')
+  const openaiPrimary = state.rows.find((row) => row.provider === 'openai' && row.key_label === 'primary')
+  const openaiFallback = state.rows.find((row) => row.provider === 'openai' && row.key_label === 'fallback')
+
+  assert.equal(anthropicPrimary?.model, 'claude-sonnet-4-20250514')
+  assert.equal(anthropicFallback?.model, 'claude-3-5-haiku-latest')
+  assert.equal(openaiPrimary?.model, 'gpt-4o-mini')
+  assert.equal(openaiFallback?.model, 'gpt-4.1')
+  assert.equal(flags.providers.openai.fallbackModelUpdated, true)
+  assert.equal(flags.providers.openai.primaryModelUpdated, false)
+  assert.equal(flags.providers.anthropic.primaryModelUpdated, false)
+  assert.equal(flags.providers.anthropic.fallbackModelUpdated, false)
 })

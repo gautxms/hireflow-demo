@@ -200,6 +200,23 @@ function collectProviderConfigChanges(updateFlags = {}) {
   return { keyRotations, modelChanges }
 }
 
+function buildChangedFields(updateFlags = {}) {
+  const changedFields = []
+  if (updateFlags?.activeProviderUpdated) changedFields.push('activeProvider')
+  if (updateFlags?.aiEnabledUpdated) changedFields.push('governance.aiEnabled')
+  if (updateFlags?.workflowTogglesUpdated) changedFields.push('governance.workflowToggles.resumeAnalysisEnabled')
+
+  const providers = updateFlags?.providers && typeof updateFlags.providers === 'object' ? updateFlags.providers : {}
+  for (const [provider, providerFlags] of Object.entries(providers)) {
+    if (providerFlags?.primaryKeyUpdated) changedFields.push(`providers.${provider}.primary.apiKey`)
+    if (providerFlags?.primaryModelUpdated) changedFields.push(`providers.${provider}.primary.model`)
+    if (providerFlags?.fallbackKeyUpdated) changedFields.push(`providers.${provider}.fallback.apiKey`)
+    if (providerFlags?.fallbackModelUpdated) changedFields.push(`providers.${provider}.fallback.model`)
+  }
+
+  return changedFields
+}
+
 function buildResetUrl(token) {
   const url = new URL('/reset-password', getFrontendOrigin())
   url.searchParams.set('token', token)
@@ -439,12 +456,12 @@ router.put('/ai-settings', async (req, res) => {
         const hasModelField = Object.prototype.hasOwnProperty.call(entry, 'model')
         const model = String(entry.model || '').trim()
         if (apiKey) hasIncomingKey = true
-        if (!apiKey && (!hasModelField || !model)) {
-          continue
-        }
-
         if (hasModelField && !model) {
           return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model cannot be empty when provided.` })
+        }
+
+        if (!apiKey && !hasModelField) {
+          continue
         }
 
         if (model && !isValidModelFormat(model)) {
@@ -560,6 +577,7 @@ router.put('/ai-settings', async (req, res) => {
       settings,
       modelWarnings: warnings,
       warning: warnings.length > 0 ? 'One or more configured models should be reviewed.' : null,
+      changedFields: buildChangedFields(updateFlags),
       ...updateFlags,
     })
   } catch (error) {
