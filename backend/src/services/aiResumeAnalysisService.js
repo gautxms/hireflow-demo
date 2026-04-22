@@ -307,6 +307,7 @@ export async function analyzeWithAnthropic(
     providerSource = 'unknown',
     systemPromptConfig = null,
     jobDescriptionContext = null,
+    anthropicClientFactory = null,
   } = {},
 ) {
   if (!apiKey) {
@@ -314,7 +315,9 @@ export async function analyzeWithAnthropic(
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
-  const client = new Anthropic({ apiKey })
+  const client = anthropicClientFactory
+    ? anthropicClientFactory({ apiKey })
+    : new Anthropic({ apiKey })
 
   const prompt = buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const promptVersion = systemPromptConfig?.promptVersion || 1
@@ -383,6 +386,7 @@ export async function analyzeWithOpenAI(
     providerSource = 'unknown',
     systemPromptConfig = null,
     jobDescriptionContext = null,
+    fetchImpl = fetch,
   } = {},
 ) {
   if (!apiKey) {
@@ -394,7 +398,7 @@ export async function analyzeWithOpenAI(
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  const response = await fetchImpl('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

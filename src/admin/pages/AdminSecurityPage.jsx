@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
 import { navigateAdmin } from '../config/adminNavigation'
 import { adminFetchJson } from '../utils/adminErrorState'
+import { SYSTEM_PROMPT_SAVE_PATH, SYSTEM_PROMPT_TEXTAREA_CLASS } from './adminSystemPromptConfig'
 
 const PROVIDERS = ['anthropic', 'openai']
 const KEY_LABELS = ['primary', 'fallback']
@@ -81,7 +82,7 @@ export default function AdminSecurityPage() {
       const [settingsPayload, analyticsPayload, promptPayload] = await Promise.all([
         adminFetchJson(`${API_BASE}/admin/ai-settings`),
         adminFetchJson(`${API_BASE}/admin/analytics/token-usage`),
-        adminFetchJson(`${API_BASE}/admin/system-prompt`),
+        adminFetchJson(`${API_BASE}${SYSTEM_PROMPT_SAVE_PATH}`),
       ])
       setSettings(settingsPayload)
       setForm(hydrateFormFromSettings(settingsPayload))
@@ -225,7 +226,7 @@ export default function AdminSecurityPage() {
     setSavingPrompt(true)
     setPromptMessage('')
     try {
-      const payload = await adminFetchJson(`${API_BASE}/admin/system-prompt`, {
+      const payload = await adminFetchJson(`${API_BASE}${SYSTEM_PROMPT_SAVE_PATH}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ systemPrompt: systemPromptInput }),
@@ -399,7 +400,7 @@ export default function AdminSecurityPage() {
           <label className="text-sm text-admin-body" htmlFor="systemPromptInput">System prompt</label>
           <textarea
             id="systemPromptInput"
-            className="min-h-56 w-full rounded border border-admin px-3 py-2 font-mono text-xs"
+            className={SYSTEM_PROMPT_TEXTAREA_CLASS}
             value={systemPromptInput}
             onChange={(e) => setSystemPromptInput(e.target.value)}
             placeholder="Enter the system prompt used by resume parsing."

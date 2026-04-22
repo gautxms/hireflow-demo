@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analyzeResumeWithConfiguredFallback, buildPromptWithJobDescription, buildProviderAttemptPlan } from './aiResumeAnalysisService.js'
+import {
+  analyzeResumeWithConfiguredFallback,
+  analyzeWithAnthropic,
+  analyzeWithOpenAI,
+  buildPromptWithJobDescription,
+  buildProviderAttemptPlan,
+} from './aiResumeAnalysisService.js'
 
 const baseCredentials = {
   activeProvider: 'anthropic',
@@ -133,4 +139,61 @@ test('buildPromptWithJobDescription includes fallback directive when JD context 
 
   assert.match(prompt, /Job Description Context:\nMISSING/)
   assert.match(prompt, /job_description_missing/)
+})
+
+test('analyzeWithOpenAI payload includes generated prompt and JD context', async () => {
+  const jdContext = {
+    hasContext: true,
+    jobDescriptionId: 'jd-9',
+    title: 'Data Engineer',
+    description: 'Build ETL pipelines',
+  }
+  let capturedRequest = null
+  const response = await analyzeWithOpenAI('dGVzdA==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'openai-test',
+    model: 'gpt-4o-mini',
+    systemPromptConfig: { systemPrompt: 'base prompt', promptVersion: 4, isDefaultFallback: false },
+    jobDescriptionContext: jdContext,
+    fetchImpl: async (_url, request) => {
+      capturedRequest = JSON.parse(request.body)
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: JSON.stringify({ candidates: [{ id: 'c-1' }] }),
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+      }
+    },
+  })
+
+  assert.equal(response.provider, 'openai-primary')
+  assert.match(capturedRequest.input[0].content[1].text, /base prompt/)
+  assert.match(capturedRequest.input[0].content[1].text, /Job Description Context:\nAVAILABLE/)
+  assert.match(capturedRequest.input[0].content[1].text, /Job Description ID: jd-9/)
+})
+
+test('analyzeWithAnthropic payload includes generated prompt and missing JD marker', async () => {
+  let capturedPayload = null
+  const response = await analyzeWithAnthropic('dGVzdA==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'anthropic-test',
+    model: 'claude-test',
+    systemPromptConfig: { systemPrompt: 'base prompt', promptVersion: 5, isDefaultFallback: false },
+    jobDescriptionContext: { hasContext: false, missingReason: 'job_description_missing' },
+    anthropicClientFactory: () => ({
+      messages: {
+        create: async (payload) => {
+          capturedPayload = payload
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ candidates: [{ id: 'c-1' }] }) }],
+            usage: { input_tokens: 1, output_tokens: 1 },
+          }
+        },
+      },
+    }),
+  })
+
+  assert.equal(response.provider, 'anthropic-primary')
+  assert.match(capturedPayload.messages[0].content[1].text, /base prompt/)
+  assert.match(capturedPayload.messages[0].content[1].text, /Job Description Context:\nMISSING/)
+  assert.match(capturedPayload.messages[0].content[1].text, /job_description_missing/)
 })
