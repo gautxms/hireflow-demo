@@ -13,6 +13,114 @@ function normalizeUnavailableReason(reason) {
   return raw ? raw.slice(0, 180) : 'unknown'
 }
 
+function normalizeString(value) {
+  const normalized = String(value || '').trim()
+  return normalized || null
+}
+
+function normalizeSkills(value) {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeString(entry)).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map((entry) => normalizeString(entry)).filter(Boolean)
+  }
+  return []
+}
+
+function getPreferredJobDescriptionText(row = {}) {
+  const candidates = [
+    row.file_text,
+    row.extracted_text,
+    row.parsed_text,
+    row.content_text,
+    row.raw_text,
+  ]
+  return candidates.map((value) => normalizeString(value)).find(Boolean) || null
+}
+
+function buildJobDescriptionContext(row) {
+  if (!row) {
+    return {
+      hasContext: false,
+      source: 'none',
+      missingReason: 'job_description_missing',
+    }
+  }
+
+  const fileText = getPreferredJobDescriptionText(row)
+  const hasFile = Boolean(normalizeString(row.file_url))
+  const skills = normalizeSkills(row.skills)
+  const normalized = {
+    hasContext: true,
+    jobDescriptionId: row.id || null,
+    title: normalizeString(row.title),
+    description: normalizeString(row.description),
+    requirements: normalizeString(row.requirements),
+    skills,
+    experienceYears: Number.isFinite(Number(row.experience_years)) ? Number(row.experience_years) : null,
+    location: normalizeString(row.location),
+    salaryMin: Number.isFinite(Number(row.salary_min)) ? Number(row.salary_min) : null,
+    salaryMax: Number.isFinite(Number(row.salary_max)) ? Number(row.salary_max) : null,
+    salaryCurrency: normalizeString(row.salary_currency) || 'USD',
+    fileUrl: normalizeString(row.file_url),
+    fileText,
+    source: fileText ? 'file_text' : hasFile ? 'manual_fields_file_fallback' : 'manual_fields',
+    fileTextAvailable: Boolean(fileText),
+  }
+
+  const hasManualContext = Boolean(
+    normalized.title
+      || normalized.description
+      || normalized.requirements
+      || normalized.skills.length > 0
+      || normalized.experienceYears !== null,
+  )
+
+  if (!normalized.fileText && !hasManualContext) {
+    return {
+      hasContext: false,
+      jobDescriptionId: row.id || null,
+      source: hasFile ? 'file_only_no_text' : 'none',
+      missingReason: hasFile ? 'job_description_file_text_unavailable' : 'job_description_empty',
+    }
+  }
+
+  return normalized
+}
+
+async function fetchJobDescriptionContext({ userId, jobDescriptionId }) {
+  if (!userId || !jobDescriptionId) {
+    return {
+      hasContext: false,
+      source: 'none',
+      missingReason: 'job_description_missing',
+    }
+  }
+
+  const jdResult = await pool.query(
+    `SELECT *
+     FROM job_descriptions
+     WHERE id = $1
+       AND user_id = $2
+       AND status <> 'archived'
+     LIMIT 1`,
+    [jobDescriptionId, userId],
+  )
+
+  if (!jdResult.rows[0]) {
+    return {
+      hasContext: false,
+      jobDescriptionId,
+      source: 'none',
+      missingReason: 'job_description_not_found_or_archived',
+    }
+  }
+
+  return buildJobDescriptionContext(jdResult.rows[0])
+}
+
 let tokenUsageTableEnsured = false
 
 async function ensureTokenUsageTable() {
@@ -131,10 +239,16 @@ async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
+  const jobDescriptionContext = await fetchJobDescriptionContext({
+    userId: job.data.userId,
+    jobDescriptionId: job.data.jobDescriptionId || null,
+  })
 
   try {
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    const aiResponse = await analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename)
+    const aiResponse = await analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, {
+      jobDescriptionContext,
+    })
     const aiResult = aiResponse?.result || {}
     const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
       ? aiResponse.attempts
@@ -164,6 +278,8 @@ async function runParse(job) {
           promptIsDefaultFallback: Boolean(attempt?.promptIsDefaultFallback),
           success: Boolean(attempt?.success),
           filename,
+          jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
+          jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
         },
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
@@ -196,6 +312,8 @@ async function runParse(job) {
             promptIsDefaultFallback: Boolean(attempt?.promptIsDefaultFallback),
             success: false,
             filename,
+            jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
+            jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
           },
         }).catch((persistError) => {
           console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
@@ -216,6 +334,8 @@ async function runParse(job) {
           promptVersion: 1,
           promptIsDefaultFallback: true,
           filename,
+          jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
+          jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
         },
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
@@ -241,6 +361,12 @@ async function runParse(job) {
     analyzerUsed: 'AI',
     methodUsed: analysisResult?.methodUsed || parseMethod,
     ...analysisResult,
+    jobDescriptionId: job.data.jobDescriptionId || null,
+    jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
+    jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
+    jobDescriptionContextMissingReason: jobDescriptionContext?.hasContext
+      ? null
+      : (jobDescriptionContext?.missingReason || 'job_description_missing'),
     candidates,
   }
 
