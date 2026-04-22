@@ -45,3 +45,14 @@ test('normalizeProviderError captures retired model provider/model context from 
   assert.equal(result.model, 'claude-2.0')
   assert.equal(result.action, 'review_model_configuration')
 })
+
+test('normalizeProviderError preserves provider/model context for response format failures', () => {
+  const providerFailure = new Error('response_format_error::{"technicalDetails":"Unexpected token ` in JSON","provider":"openai","model":"gpt-4o-mini"}')
+  const result = normalizeProviderError(providerFailure)
+
+  assert.equal(result.category, 'response_format_error')
+  assert.equal(result.provider, 'openai')
+  assert.equal(result.model, 'gpt-4o-mini')
+  assert.equal(result.action, 'retry_or_adjust_provider_model')
+  assert.match(result.normalizedMessage, /^response_format_error::\{/)
+})

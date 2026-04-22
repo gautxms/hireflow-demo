@@ -1,4 +1,5 @@
 const CATEGORY_MESSAGES = {
+  response_format_error: 'The AI provider returned an invalid response format.',
   invalid_request_error: 'The configured AI model is invalid or no longer supported.',
   auth_error: 'The AI provider API key is invalid or expired.',
   rate_limit_error: 'The AI provider is rate-limiting requests right now.',
@@ -9,11 +10,23 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
 const DEFAULT_ADMIN_PATH = '/admin/security'
 
 function sanitizeRawMessage(rawMessage) {
   return String(rawMessage || '').trim()
+}
+
+export function isStorageInfrastructureError(rawMessage) {
+  const lower = sanitizeRawMessage(rawMessage).toLowerCase()
+  return lower.includes('aws_s3_bucket')
+    || lower.includes('s3 bucket')
+    || lower.includes('s3 storage')
+    || lower.includes('object storage')
+    || lower.includes('storage not configured')
+    || lower.includes('storage credentials')
+    || lower.includes('could not load credentials from any providers')
+    || lower.includes('access denied')
 }
 
 export function detectProviderErrorCategory(rawMessage) {
@@ -26,6 +39,15 @@ export function detectProviderErrorCategory(rawMessage) {
       category: normalizedPrefixMatch[1].toLowerCase(),
       extractedDetails: sanitizeRawMessage(normalizedPrefixMatch[3]),
     }
+  }
+
+  if (
+    lower.includes('response_format_error')
+    || lower.includes('unexpected token')
+    || lower.includes('is not valid json')
+    || lower.includes('unable to parse provider json')
+  ) {
+    return { category: 'response_format_error', extractedDetails: '' }
   }
 
   if (lower.includes('not_found_error') || lower.includes('model not found') || lower.includes('resource not found')) {
@@ -98,7 +120,13 @@ export function mapProviderError(rawMessage) {
             'Replace retired or unsupported models with an allowed model.',
             'Save and retry the resume analysis.',
           ]
-        : [
+        : category === 'response_format_error'
+          ? [
+              'Retry once, as provider output formatting issues can be transient.',
+              'If this repeats, use Admin Security to switch provider/model.',
+              'Save settings and retry the resume analysis.',
+            ]
+          : [
             'Wait briefly, then retry the request.',
             'If this repeats, review provider failover settings in Admin Security.',
           ]

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mapProviderError } from './aiProviderErrorMapping.js'
+import { isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping.js'
 
 test('mapProviderError maps invalid request errors to admin security guidance', () => {
   const result = mapProviderError('invalid_request_error: model is not allowed')
@@ -50,4 +50,21 @@ test('mapProviderError maps admin disablement to governance guidance', () => {
 
   assert.equal(result.category, 'ai_disabled_error')
   assert.equal(result.userMessage, 'AI analysis is currently disabled by an administrator.')
+})
+
+test('mapProviderError maps provider response format errors with actionable retry guidance', () => {
+  const result = mapProviderError('response_format_error::{"technicalDetails":"Unexpected token ` in JSON","provider":"openai","model":"gpt-4o-mini"}')
+
+  assert.equal(result.category, 'response_format_error')
+  assert.equal(result.provider, 'openai')
+  assert.equal(result.model, 'gpt-4o-mini')
+  assert.equal(result.userMessage, 'The AI provider returned an invalid response format.')
+  assert.equal(result.remediationSteps.length > 0, true)
+})
+
+test('isStorageInfrastructureError only flags storage-specific upload failures', () => {
+  assert.equal(isStorageInfrastructureError('Missing AWS_S3_BUCKET env var'), true)
+  assert.equal(isStorageInfrastructureError('object storage credentials are invalid'), true)
+  assert.equal(isStorageInfrastructureError('Could not load credentials from any providers'), true)
+  assert.equal(isStorageInfrastructureError('response_format_error::Unexpected token ` in JSON'), false)
 })

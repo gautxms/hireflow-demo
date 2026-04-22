@@ -2,6 +2,7 @@ const MAX_TECHNICAL_DETAILS_LENGTH = 500
 const ADMIN_SECURITY_PATH = '/admin/security'
 
 const CATEGORY_MESSAGES = {
+  response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
   invalid_request_error: 'AI model configuration issue in Admin Security.',
   not_found_error: 'AI model configuration issue in Admin Security.',
   auth_error: 'AI key invalid or expired.',
@@ -11,7 +12,7 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
 
 function toMessage(value) {
   if (value instanceof Error) {
@@ -95,6 +96,18 @@ function buildHints(category, { provider, model } = {}) {
     }
   }
 
+  if (category === 'response_format_error') {
+    return {
+      action: 'retry_or_adjust_provider_model',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        'Retry once; transient provider formatting issues can self-resolve.',
+        modelStep,
+        'If persistent, switch to a different supported model or fallback provider.',
+      ],
+    }
+  }
+
   return {
     action: 'review_provider_settings',
     adminPath: ADMIN_SECURITY_PATH,
@@ -115,6 +128,15 @@ export function detectProviderErrorCategory(errorLike) {
       category: normalizedPrefixMatch[1].toLowerCase(),
       extractedDetails: String(normalizedPrefixMatch[3] || '').trim(),
     }
+  }
+
+  if (
+    lower.includes('response_format_error')
+    || lower.includes('unexpected token')
+    || lower.includes('is not valid json')
+    || lower.includes('unable to parse provider json')
+  ) {
+    return { category: 'response_format_error', extractedDetails: '' }
   }
 
   if (lower.includes('not_found_error') || lower.includes('model not found') || lower.includes('resource not found')) {
@@ -159,8 +181,18 @@ export function detectProviderErrorCategory(errorLike) {
 export function normalizeProviderError(errorLike) {
   const technicalDetails = toMessage(errorLike).slice(0, MAX_TECHNICAL_DETAILS_LENGTH)
   const { category, extractedDetails } = detectProviderErrorCategory(technicalDetails)
-  const scopedTechnicalDetails = extractedDetails || technicalDetails || 'Unknown parse error'
-  const { provider, model } = extractProviderAndModel(scopedTechnicalDetails, errorLike)
+  let parsedDetails = null
+  try {
+    parsedDetails = extractedDetails ? JSON.parse(extractedDetails) : null
+  } catch {
+    parsedDetails = null
+  }
+  const scopedTechnicalDetails = parsedDetails?.technicalDetails || extractedDetails || technicalDetails || 'Unknown parse error'
+  const providerFromDetails = parsedDetails?.provider ? String(parsedDetails.provider).trim() : null
+  const modelFromDetails = parsedDetails?.model ? String(parsedDetails.model).trim() : null
+  const { provider: detectedProvider, model: detectedModel } = extractProviderAndModel(scopedTechnicalDetails, errorLike)
+  const provider = providerFromDetails || detectedProvider
+  const model = modelFromDetails || detectedModel
   const hints = buildHints(category, { provider, model })
   const serializedDetails = JSON.stringify({
     technicalDetails: scopedTechnicalDetails,
