@@ -3,6 +3,7 @@ const ADMIN_SECURITY_PATH = '/admin/security'
 
 const CATEGORY_MESSAGES = {
   response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
+  response_truncated_error: 'AI response was truncated before completion; retry or switch provider/model.',
   invalid_request_error: 'AI model configuration issue in Admin Security.',
   not_found_error: 'AI model configuration issue in Admin Security.',
   auth_error: 'AI key invalid or expired.',
@@ -13,7 +14,7 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
 
 function toMessage(value) {
   if (value instanceof Error) {
@@ -109,7 +110,7 @@ function buildHints(category, { provider, model } = {}) {
     }
   }
 
-  if (category === 'response_format_error') {
+  if (category === 'response_format_error' || category === 'response_truncated_error') {
     return {
       action: 'retry_or_adjust_provider_model',
       adminPath: ADMIN_SECURITY_PATH,
@@ -141,6 +142,15 @@ export function detectProviderErrorCategory(errorLike) {
       category: normalizedPrefixMatch[1].toLowerCase(),
       extractedDetails: String(normalizedPrefixMatch[3] || '').trim(),
     }
+  }
+
+  if (
+    lower.includes('response_truncated_error')
+    || lower.includes('output was truncated')
+    || lower.includes('max_tokens')
+    || lower.includes('stop_reason')
+  ) {
+    return { category: 'response_truncated_error', extractedDetails: '' }
   }
 
   if (

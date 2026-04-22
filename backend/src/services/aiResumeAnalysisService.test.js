@@ -7,6 +7,7 @@ import {
   analyzeWithOpenAI,
   buildPromptWithJobDescription,
   extractJsonWithContext,
+  extractOpenAiResponseText,
 } from './aiResumeAnalysisService.js'
 
 test('buildPromptWithJobDescription includes AVAILABLE JD block when context exists', () => {
@@ -272,4 +273,132 @@ test('extractJsonWithContext keeps strict failure for invalid json body', () => 
     () => extractJsonWithContext(payload, { provider: 'anthropic', model: 'claude-sonnet-4' }),
     /response_format_error::/,
   )
+})
+
+
+test('extractOpenAiResponseText falls back to output content text nodes', () => {
+  const payload = {
+    output: [
+      {
+        type: 'message',
+        content: [
+          { type: 'output_text', text: '{"candidates":[{"id":"cand-alt-1"}]}' },
+        ],
+      },
+    ],
+  }
+
+  const text = extractOpenAiResponseText(payload)
+  assert.equal(text, '{"candidates":[{"id":"cand-alt-1"}]}')
+})
+
+test('analyzeWithOpenAI supports alternate response shapes without output_text', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({
+      output: [
+        {
+          type: 'message',
+          content: [
+            { output_text: '{"candidates":[{"id":"cand-alt-2"}]}' },
+          ],
+        },
+      ],
+    }),
+  })
+
+  const response = await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'oa-key',
+    model: 'gpt-4.1-mini',
+    fetchImpl,
+  })
+
+  assert.equal(response.result.candidates[0].id, 'cand-alt-2')
+})
+
+test('analyzeWithAnthropic categorizes truncated output failures', async () => {
+  const anthropicClientFactory = () => ({
+    messages: {
+      create: async () => ({
+        stop_reason: 'max_tokens',
+        usage: { input_tokens: 1, output_tokens: 1 },
+        content: [{ type: 'text', text: '{"candidates":[' }],
+      }),
+    },
+  })
+
+  await assert.rejects(
+    () => analyzeWithAnthropic('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      apiKey: 'anth-key',
+      model: 'claude-sonnet-4',
+      systemPromptConfig: { systemPrompt: 'Base prompt' },
+      anthropicClientFactory,
+    }),
+    /response_truncated_error::/,
+  )
+})
+
+test('analyzeWithAnthropic performs one JSON repair retry on parse failure', async () => {
+  let callCount = 0
+  const anthropicClientFactory = () => ({
+    messages: {
+      create: async () => {
+        callCount += 1
+        if (callCount === 1) {
+          return {
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 1, output_tokens: 1 },
+            content: [{ type: 'text', text: '```json\n{"candidates":[{"id":"cand-r"}],}\n```' }],
+          }
+        }
+        return {
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 1, output_tokens: 1 },
+          content: [{ type: 'text', text: '{"candidates":[{"id":"cand-r"}]}' }],
+        }
+      },
+    },
+  })
+
+  const response = await analyzeWithAnthropic('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'anth-key',
+    model: 'claude-sonnet-4',
+    systemPromptConfig: { systemPrompt: 'Base prompt' },
+    anthropicClientFactory,
+  })
+
+  assert.equal(callCount, 2)
+  assert.equal(response.result.candidates[0].id, 'cand-r')
+})
+
+test('analyzeResumeWithConfiguredFallback records failure categories for failover attempts', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+      openai: {
+        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  const response = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+    analyzeWithAnthropic: async () => {
+      throw new Error('billing_quota_error::{"technicalDetails":"insufficient quota"}')
+    },
+    analyzeWithOpenAI: async () => ({
+      result: { candidates: [{ id: 'cand-fallback' }] },
+      provider: 'openai-primary',
+      model: 'gpt-4.1-mini',
+      tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+    }),
+  })
+
+  assert.equal(response.attempts[0].failureCategory, 'billing_quota_error')
+  assert.equal(response.attempts[1].success, true)
 })

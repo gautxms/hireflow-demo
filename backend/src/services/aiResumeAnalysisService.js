@@ -42,6 +42,7 @@ function sanitizeSnippet(value, maxLength = 180) {
 }
 
 function createProviderResponseFormatError({
+  category = 'response_format_error',
   provider = null,
   model = null,
   technicalDetails = 'Provider returned malformed JSON output.',
@@ -51,7 +52,73 @@ function createProviderResponseFormatError({
     provider: provider || null,
     model: model || null,
   })
-  return new Error(`response_format_error::${serialized}`)
+  return new Error(`${category}::${serialized}`)
+}
+
+function buildPayloadKeySummary(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return 'payload_type=non_object'
+  }
+  return `keys=${Object.keys(payload).slice(0, 10).join(',') || 'none'}`
+}
+
+function findFirstJsonObjectBlock(text = '') {
+  const input = String(text || '')
+  const start = input.indexOf('{')
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < input.length; index += 1) {
+    const char = input[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') {
+      depth += 1
+      continue
+    }
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return input.slice(start, index + 1).trim()
+      }
+    }
+  }
+  return null
+}
+
+function isLikelyTruncatedResponse(text = '', { stopReason = null } = {}) {
+  const normalizedStopReason = String(stopReason || '').toLowerCase()
+  if (['max_tokens', 'length', 'model_context_window_exceeded'].includes(normalizedStopReason)) {
+    return true
+  }
+
+  const trimmed = String(text || '').trim()
+  if (!trimmed) return false
+  const openBraces = (trimmed.match(/{/g) || []).length
+  const closeBraces = (trimmed.match(/}/g) || []).length
+  const openBrackets = (trimmed.match(/\[/g) || []).length
+  const closeBrackets = (trimmed.match(/]/g) || []).length
+  const hasUnclosedFence = trimmed.includes('```') && (trimmed.match(/```/g) || []).length % 2 === 1
+  return openBraces > closeBraces || openBrackets > closeBrackets || hasUnclosedFence
 }
 
 export function extractJsonWithContext(text = '', { provider = null, model = null } = {}) {
@@ -92,11 +159,9 @@ export function extractJsonWithContext(text = '', { provider = null, model = nul
   }
   parseCandidates.push(...fenceBodies)
 
-  const firstBrace = trimmed.indexOf('{')
-  const lastBrace = trimmed.lastIndexOf('}')
-  const hasRecoverableBraces = firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
-  if (hasRecoverableBraces) {
-    parseCandidates.push(trimmed.slice(firstBrace, lastBrace + 1).trim())
+  const firstObjectBlock = findFirstJsonObjectBlock(trimmed)
+  if (firstObjectBlock) {
+    parseCandidates.push(firstObjectBlock)
   }
 
   const uniqueCandidates = [...new Set(parseCandidates.filter(Boolean))]
@@ -114,6 +179,45 @@ export function extractJsonWithContext(text = '', { provider = null, model = nul
     model,
     technicalDetails: `Unable to parse provider JSON response (${sanitizeSnippet(lastError?.message || 'invalid_json')}). Snippet: ${sanitizeSnippet(trimmed)}`,
   })
+}
+
+function extractTextFromOpenAiContentNode(node) {
+  if (!node || typeof node !== 'object') {
+    return []
+  }
+
+  const chunks = []
+  const directText = [node.output_text, node.text, node.value]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+  chunks.push(...directText)
+
+  if (Array.isArray(node.content)) {
+    for (const child of node.content) {
+      chunks.push(...extractTextFromOpenAiContentNode(child))
+    }
+  }
+
+  return chunks
+}
+
+export function extractOpenAiResponseText(payload) {
+  const directOutputText = String(payload?.output_text || '').trim()
+  if (directOutputText) {
+    return directOutputText
+  }
+
+  const outputs = Array.isArray(payload?.output) ? payload.output : []
+  const collectedText = []
+  for (const outputNode of outputs) {
+    collectedText.push(...extractTextFromOpenAiContentNode(outputNode))
+  }
+
+  return collectedText
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join('\n')
+    .trim()
 }
 
 async function sendBudgetAlert({ currentCost, limit }) {
@@ -256,6 +360,15 @@ function normalizeProviderError(error, attemptHistory = []) {
   if (lower.includes('authentication') || lower.includes('unauthorized') || lower.includes('invalid api key') || lower.includes('401')) {
     return format('auth_error')
   }
+  if (
+    lower.includes('insufficient_quota')
+    || lower.includes('quota exceeded')
+    || lower.includes('exceeded your current quota')
+    || lower.includes('billing')
+    || lower.includes('check your plan and billing details')
+  ) {
+    return format('billing_quota_error')
+  }
   if (lower.includes('rate limit') || lower.includes('429')) {
     return format('rate_limit_error')
   }
@@ -278,6 +391,8 @@ function createAttemptRecord({
   promptVersion,
   promptIsDefaultFallback,
   tokenUsage,
+  failureCategory = null,
+  failureReason = null,
 }) {
   return {
     success: Boolean(success),
@@ -288,6 +403,8 @@ function createAttemptRecord({
     promptVersion,
     promptIsDefaultFallback,
     tokenUsage,
+    failureCategory,
+    failureReason,
   }
 }
 
@@ -299,6 +416,12 @@ function createTerminalProviderError(lastError, attemptHistory) {
   terminalError.attempts = attemptHistory
   terminalError.cause = lastError || null
   return terminalError
+}
+
+function getFailureCategory(message = '') {
+  const normalized = String(message || '').trim()
+  const match = normalized.match(/^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::|$)/i)
+  return match?.[1] ? String(match[1]).toLowerCase() : 'unknown_error'
 }
 
 export function buildProviderAttemptPlan(credentials = {}) {
@@ -431,7 +554,7 @@ export async function analyzeWithAnthropic(
 
   const response = await client.messages.create({
     model,
-    max_tokens: 2000,
+    max_tokens: 2800,
     temperature: 0,
     messages: [
       {
@@ -461,10 +584,64 @@ export async function analyzeWithAnthropic(
 
   const textContent = (response.content || []).find((item) => item.type === 'text')
   if (!textContent || textContent.type !== 'text') {
-    throw new Error('Unexpected Anthropic response format')
+    throw createProviderResponseFormatError({
+      provider: 'anthropic',
+      model,
+      technicalDetails: `Unexpected Anthropic response format (${buildPayloadKeySummary(response)})`,
+    })
   }
 
-  const result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model })
+  let result = null
+  try {
+    result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model })
+  } catch (error) {
+    const parseFailed = String(error?.message || '').includes('response_format_error::')
+    if (!parseFailed) {
+      throw error
+    }
+
+    if (isLikelyTruncatedResponse(textContent.text, { stopReason: response?.stop_reason })) {
+      throw createProviderResponseFormatError({
+        category: 'response_truncated_error',
+        provider: 'anthropic',
+        model,
+        technicalDetails: `Provider output was truncated before valid JSON completion (stop_reason=${sanitizeSnippet(response?.stop_reason || 'unknown')}).`,
+      })
+    }
+
+    const repaired = await client.messages.create({
+      model,
+      max_tokens: 1400,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: [
+                'The previous response was not valid JSON.',
+                'Return the same content as strict valid JSON only, no markdown.',
+                'Do not include any explanation text.',
+                'Previous response:',
+                textContent.text,
+              ].join('\n'),
+            },
+          ],
+        },
+      ],
+    })
+    const repairedText = (repaired.content || []).find((item) => item.type === 'text')?.text || ''
+    try {
+      result = extractJsonWithContext(repairedText, { provider: 'anthropic', model })
+    } catch {
+      throw createProviderResponseFormatError({
+        provider: 'anthropic',
+        model,
+        technicalDetails: 'Unable to parse provider JSON after repair retry.',
+      })
+    }
+  }
+
   if (!Array.isArray(result?.candidates)) {
     throw new Error('Anthropic response is missing candidates array')
   }
@@ -550,9 +727,13 @@ export async function analyzeWithOpenAI(
   }
 
   const payload = await response.json()
-  const outputText = String(payload?.output_text || '').trim()
+  const outputText = extractOpenAiResponseText(payload)
   if (!outputText) {
-    throw new Error('Unexpected OpenAI response format')
+    throw createProviderResponseFormatError({
+      provider: 'openai',
+      model,
+      technicalDetails: `Unexpected OpenAI response format (${buildPayloadKeySummary(payload)})`,
+    })
   }
 
   const result = extractJsonWithContext(outputText, { provider: 'openai', model })
@@ -624,6 +805,9 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       }
     } catch (error) {
       lastError = error
+      const normalizedMessage = normalizeProviderError(error, attemptHistory)
+      const failureCategory = getFailureCategory(normalizedMessage)
+      const failureReason = sanitizeSnippet(String(error?.message || 'unknown_error'), 220)
       attemptHistory.push(createAttemptRecord({
         success: false,
         provider: entry.provider,
@@ -634,10 +818,18 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback),
         tokenUsage: {
           usageAvailable: false,
-          unavailableReason: `provider_request_failed:${String(error?.message || 'unknown').slice(0, 160)}`,
+          unavailableReason: `provider_request_failed:${failureCategory}:${failureReason}`,
         },
+        failureCategory,
+        failureReason,
       }))
-      console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} failed:`, error.message)
+      if (failureCategory === 'billing_quota_error') {
+        console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} quota/billing failed; immediate failover.`, error.message)
+      } else if (failureCategory === 'response_format_error') {
+        console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} response format failed after repair retry; failing over.`, error.message)
+      } else {
+        console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} failed:`, error.message)
+      }
     }
   }
 
