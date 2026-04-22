@@ -35,6 +35,18 @@ test('mapProviderError maps provider rate limits to retry guidance', () => {
   assert.equal(result.technicalDetails, 'provider returned 429')
 })
 
+test('mapProviderError maps provider billing/quota failures with explicit remediation', () => {
+  const result = mapProviderError('insufficient_quota: You exceeded your current quota, please check your plan and billing details')
+
+  assert.equal(result.category, 'billing_quota_error')
+  assert.equal(result.userMessage, 'The active AI provider has a billing or quota issue.')
+  assert.deepEqual(result.remediationSteps, [
+    'Add credits or resolve billing for the active AI provider account.',
+    'Change active provider/model in Admin Security.',
+    'Test fallback provider/key and retry the resume analysis.',
+  ])
+})
+
 test('mapProviderError parses structured backend context for retired model guidance', () => {
   const result = mapProviderError('not_found_error::{"technicalDetails":"Model claude-2.0 retired","provider":"anthropic","model":"claude-2.0","adminPath":"/admin/security","action":"review_model_configuration","remediationSteps":["Replace retired model","Save settings","Retry"]}')
 
@@ -67,4 +79,6 @@ test('isStorageInfrastructureError only flags storage-specific upload failures',
   assert.equal(isStorageInfrastructureError('object storage credentials are invalid'), true)
   assert.equal(isStorageInfrastructureError('Could not load credentials from any providers'), true)
   assert.equal(isStorageInfrastructureError('response_format_error::Unexpected token ` in JSON'), false)
+  assert.equal(isStorageInfrastructureError('insufficient_quota: check your plan and billing details'), false)
+  assert.equal(isStorageInfrastructureError('openai access denied due to billing hold'), false)
 })
