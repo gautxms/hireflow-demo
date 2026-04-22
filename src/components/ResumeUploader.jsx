@@ -670,7 +670,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         {showRecoveryPrompt && recoverableSession && (
           <div className="resume-uploader-trial-banner" role="status">
             <strong>Unfinished analysis detected.</strong> Resume your previous run or discard it and start fresh.
-            <div className="resume-actions" style={{ marginTop: '0.75rem' }}>
+            <div className="resume-actions resume-actions--recovery-prompt">
               <button type="button" className="touch-target resume-analyze-button" onClick={handleResumeTracking}>
                 Resume tracking
               </button>
@@ -783,6 +783,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             <div className="resume-upload-progress-bar">
               <div
                 className="resume-upload-progress-fill"
+                // inline-style-allow runtime-dimension
                 style={{
                   width: `${uploadPercent}%`,
                 }}
@@ -828,7 +829,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           <div className="resume-error-banner" role="alert">
             <strong>{failedAnalysisState.message}</strong>
             <p>{failedAnalysisState.detail}</p>
-            <div className="resume-actions" style={{ marginTop: '0.5rem' }}>
+            <div className="resume-actions resume-actions--failure">
               <button type="button" className="touch-target resume-analyze-button" onClick={handleAnalyze}>
                 Retry
               </button>

@@ -70,7 +70,7 @@ export default class AppErrorBoundary extends React.Component {
           <p className="route-state-card__description">
             Your session is safe. You can reload the app, return home, or resume your last analysis.
           </p>
-          <div className="route-state-card__actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div className="route-state-card__actions route-state-card__actions--recovery">
             <button type="button" className="route-state-card__action" onClick={this.handleReload}>Reload app</button>
             <button type="button" className="route-state-card__action" onClick={this.handleReturnHome}>Return to dashboard/home</button>
             {this.state.resumeAvailable && (
@@ -78,7 +78,7 @@ export default class AppErrorBoundary extends React.Component {
             )}
           </div>
           {dev && this.state.error && (
-            <details className="resume-error-details" style={{ marginTop: '1rem' }}>
+            <details className="resume-error-details route-state-card__details">
               <summary className="resume-error-details-summary">Development diagnostics</summary>
               <pre className="resume-error-details-pre">{this.state.error.stack || this.state.error.message}</pre>
             </details>
