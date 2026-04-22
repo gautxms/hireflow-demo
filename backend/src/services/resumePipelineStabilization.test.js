@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { hasCompleteChunkSet } from './fileUploadService.js'
 import { isScanResultSafe } from './virusScanService.js'
 import { shouldUseOcrFallback } from '../jobs/ocrFallbackJob.js'
-import { isTerminalJobFailure } from '../jobs/parseResumeJob.js'
+import { buildJobDescriptionContext, isTerminalJobFailure } from '../jobs/parseResumeJob.js'
 import { normalizeQueueCounts } from '../routes/admin/health.js'
 import { redactValue } from '../routes/admin/logs.js'
 
@@ -35,6 +35,20 @@ test('queue retry logic marks resume failed only on terminal failure', () => {
   assert.equal(isTerminalJobFailure({ attemptsMade: 0, opts: { attempts: 3 } }), false)
   assert.equal(isTerminalJobFailure({ attemptsMade: 1, opts: { attempts: 3 } }), false)
   assert.equal(isTerminalJobFailure({ attemptsMade: 2, opts: { attempts: 3 } }), true)
+})
+
+test('job description context preserves nullable numeric fields', () => {
+  const normalized = buildJobDescriptionContext({
+    id: 'jd-1',
+    title: 'Platform Engineer',
+    experience_years: null,
+    salary_min: null,
+    salary_max: null,
+  })
+
+  assert.equal(normalized.experienceYears, null)
+  assert.equal(normalized.salaryMin, null)
+  assert.equal(normalized.salaryMax, null)
 })
 
 test('health queue response normalizes numeric counts safely', () => {

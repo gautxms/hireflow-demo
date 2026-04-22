@@ -29,6 +29,13 @@ function normalizeSkills(value) {
   return []
 }
 
+function normalizeNullableNumber(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' && value.trim() === '') return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
 function getPreferredJobDescriptionText(row = {}) {
   const candidates = [
     row.file_text,
@@ -40,7 +47,7 @@ function getPreferredJobDescriptionText(row = {}) {
   return candidates.map((value) => normalizeString(value)).find(Boolean) || null
 }
 
-function buildJobDescriptionContext(row) {
+export function buildJobDescriptionContext(row) {
   if (!row) {
     return {
       hasContext: false,
@@ -59,10 +66,10 @@ function buildJobDescriptionContext(row) {
     description: normalizeString(row.description),
     requirements: normalizeString(row.requirements),
     skills,
-    experienceYears: Number.isFinite(Number(row.experience_years)) ? Number(row.experience_years) : null,
+    experienceYears: normalizeNullableNumber(row.experience_years),
     location: normalizeString(row.location),
-    salaryMin: Number.isFinite(Number(row.salary_min)) ? Number(row.salary_min) : null,
-    salaryMax: Number.isFinite(Number(row.salary_max)) ? Number(row.salary_max) : null,
+    salaryMin: normalizeNullableNumber(row.salary_min),
+    salaryMax: normalizeNullableNumber(row.salary_max),
     salaryCurrency: normalizeString(row.salary_currency) || 'USD',
     fileUrl: normalizeString(row.file_url),
     fileText,
