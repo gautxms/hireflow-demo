@@ -8,6 +8,15 @@ import {
   resolveSelectedJobDescriptionId,
   toOptionalJobDescriptionId,
 } from './resumeUploaderState'
+import {
+  buildFileSnapshot,
+  clearResumeAnalysisSession,
+  isSessionRecoverable,
+  readResumeAnalysisSession,
+  writeResumeAnalysisSession,
+} from './resumeAnalysisSession'
+import { buildFailedAnalysisState } from './resumeUploaderRecoveryState'
+import { shouldSkipStateUpdate, waitWithAbort } from './abortableAsync'
 import '../styles/resume-uploader.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -77,6 +86,8 @@ function writeUploadCache(next) {
 
 export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false }) {
   const fileInputRef = useRef(null)
+  const mountedRef = useRef(true)
+  const activePollAbortControllerRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -88,8 +99,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [providerErrorGuidance, setProviderErrorGuidance] = useState(null)
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
+  const [recoverableSession, setRecoverableSession] = useState(null)
+  const [showRecoveryPrompt, setShowRecoveryPrompt] = useState(false)
+  const [failedAnalysisState, setFailedAnalysisState] = useState(null)
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
-  const isDevelopment = process.env.NODE_ENV === 'development'
+  const isDevelopment = import.meta.env.DEV
   const canViewAdminDiagnostics = isAdmin || isDevelopment
 
   const handleAuthRedirect = useCallback(() => {
@@ -102,6 +116,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       handleAuthRedirect()
     }
   }, [handleAuthRedirect, isAuthenticated])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      activePollAbortControllerRef.current?.abort()
+    }
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -132,9 +154,27 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       })
   }, [isAuthenticated])
 
-  if (!isAuthenticated) {
-    return null
-  }
+  useEffect(() => {
+    const cachedSession = readResumeAnalysisSession()
+    if (!isSessionRecoverable(cachedSession)) {
+      return
+    }
+
+    setRecoverableSession(cachedSession)
+    setShowRecoveryPrompt(true)
+    if (Array.isArray(cachedSession.fileSnapshots) && cachedSession.fileSnapshots.length > 0) {
+      setUploadedFiles(
+        cachedSession.fileSnapshots.map((fileSnapshot) => ({
+          ...fileSnapshot,
+          file: null,
+          restoredFromSession: true,
+        })),
+      )
+    }
+    if (cachedSession.selectedJobDescriptionId) {
+      setSelectedJobDescriptionId(cachedSession.selectedJobDescriptionId)
+    }
+  }, [])
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -261,6 +301,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
   const handleAnalyze = async () => {
     if (uploadedFiles.length === 0) return
+    if (uploadedFiles.some((item) => !item.file)) {
+      setError('Please re-select files before retrying analysis.')
+      return
+    }
 
     setIsAnalyzing(true)
     setError('')
@@ -381,87 +425,32 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       if (!primaryJobId) {
         throw new Error('No parse job ID returned from upload request')
       }
+      writeResumeAnalysisSession({
+        jobId: primaryJobId,
+        parseStatus: 'processing',
+        parseProgress: 5,
+        selectedJobDescriptionId,
+        fileSnapshots: buildFileSnapshot(uploadedFiles),
+      })
 
-      setParseStatus('processing')
-      setParseProgress(5)
-
-      const pollDelayMs = 2000
-      const maxPollAttempts = 300
-      let queueRetryAttempt = 0
-
-      for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-        const statusResponse = await fetch(`${API_BASE}/uploads/${primaryJobId}/parse-status`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (!statusResponse.ok) {
-          const isQueueBusy = [429, 503, 504].includes(statusResponse.status)
-          if (isQueueBusy && queueRetryAttempt < MAX_QUEUE_RETRIES) {
-            queueRetryAttempt += 1
-            const retryDelayMs = BASE_QUEUE_RETRY_DELAY_MS * queueRetryAttempt
-            setError(
-              formatMultiLineError([
-                `Queue is busy. Retrying in ${Math.round(retryDelayMs / 1000)} seconds...`,
-                `(attempt ${queueRetryAttempt}/${MAX_QUEUE_RETRIES})`,
-              ]),
-            )
-            await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
-            continue
-          }
-          throw withErrorContext(new Error(`Polling failed (${statusResponse.status})`), {
-            stage: 'parse_status',
-            endpoint: '/uploads/:jobId/parse-status',
-            status: statusResponse.status,
-          })
-        }
-
-        queueRetryAttempt = 0
-        setError('')
-        const statusPayload = await statusResponse.json()
-        setParseStatus(statusPayload.status || 'processing')
-        setParseProgress(Number(statusPayload.progress || 0))
-
-        if (statusPayload.status === 'complete') {
-          const parseResult = statusPayload.result || {}
-          const candidates = parseResult.candidates || []
-
-          if (candidates.length === 0) {
-            throw new Error('Resume parsing finished, but no candidates were returned')
-          }
-
-          onFileUploaded({
-            candidates,
-            parseMeta: {
-              methodUsed: parseResult.methodUsed || 'ai-extraction',
-              confidence: Number(parseResult.confidence || 0),
-              attempts: Array.isArray(parseResult.attempts) ? parseResult.attempts : [],
-              requiresManualCorrection: Boolean(parseResult.requiresManualCorrection),
-              feedback: parseResult.feedback || null,
-            },
-          })
-          return
-        }
-
-        if (statusPayload.status === 'failed') {
-          throw withErrorContext(new Error(statusPayload.error || 'unknown_error'), {
-            stage: 'parse_status',
-            endpoint: '/uploads/:jobId/parse-status',
-            status: 200,
-          })
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
-      }
-
-      throw new Error('Resume parsing timed out. Please try again.')
+      await trackParseStatus({ token, primaryJobId })
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        return
+      }
       console.error('Upload error:', err)
       setIsAnalyzing(false)
       setParseStatus('')
       setParseProgress(0)
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
+      const currentSession = readResumeAnalysisSession()
+      if (currentSession?.jobId) {
+        writeResumeAnalysisSession({
+          ...currentSession,
+          parseStatus: 'failed',
+        })
+      }
       const normalizedProviderError = mapProviderError(errorMessage)
       const errorContext = err?.context && typeof err.context === 'object' ? err.context : {}
       const isUploadStage = String(errorContext.stage || '').startsWith('upload')
@@ -499,9 +488,146 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         setTechnicalErrorDetails(safeView.technicalErrorDetails)
         setProviderErrorGuidance(safeView.providerErrorGuidance)
       }
+
+      setFailedAnalysisState(buildFailedAnalysisState(errorMessage))
     } finally {
       setIsAnalyzing(false)
     }
+  }
+
+  const trackParseStatus = useCallback(async ({ token, primaryJobId }) => {
+    setParseStatus('processing')
+    setParseProgress(5)
+    setShowRecoveryPrompt(false)
+    setRecoverableSession(null)
+
+    const pollDelayMs = 2000
+    const maxPollAttempts = 300
+    let queueRetryAttempt = 0
+    const abortController = new AbortController()
+    activePollAbortControllerRef.current = abortController
+
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+      if (shouldSkipStateUpdate({ mounted: mountedRef.current, signal: abortController.signal })) {
+        throw new DOMException('Polling aborted', 'AbortError')
+      }
+
+      const statusResponse = await fetch(`${API_BASE}/uploads/${primaryJobId}/parse-status`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: abortController.signal,
+      })
+
+      if (!statusResponse.ok) {
+        const isQueueBusy = [429, 503, 504].includes(statusResponse.status)
+        if (isQueueBusy && queueRetryAttempt < MAX_QUEUE_RETRIES) {
+          queueRetryAttempt += 1
+          const retryDelayMs = BASE_QUEUE_RETRY_DELAY_MS * queueRetryAttempt
+          if (mountedRef.current) {
+            setError(
+              formatMultiLineError([
+                `Queue is busy. Retrying in ${Math.round(retryDelayMs / 1000)} seconds...`,
+                `(attempt ${queueRetryAttempt}/${MAX_QUEUE_RETRIES})`,
+              ]),
+            )
+          }
+          await waitWithAbort(retryDelayMs, abortController.signal)
+          continue
+        }
+        throw withErrorContext(new Error(`Polling failed (${statusResponse.status})`), {
+          stage: 'parse_status',
+          endpoint: '/uploads/:jobId/parse-status',
+          status: statusResponse.status,
+        })
+      }
+
+      queueRetryAttempt = 0
+      if (mountedRef.current) {
+        setError('')
+      }
+      const statusPayload = await statusResponse.json()
+      const nextStatus = statusPayload.status || 'processing'
+      const nextProgress = Number(statusPayload.progress || 0)
+
+      writeResumeAnalysisSession({
+        jobId: primaryJobId,
+        parseStatus: nextStatus,
+        parseProgress: nextProgress,
+        selectedJobDescriptionId,
+        fileSnapshots: buildFileSnapshot(uploadedFiles),
+      })
+
+      if (mountedRef.current) {
+        setParseStatus(nextStatus)
+        setParseProgress(nextProgress)
+      }
+
+      if (nextStatus === 'complete') {
+        const parseResult = statusPayload.result || {}
+        const candidates = parseResult.candidates || []
+
+        if (candidates.length === 0) {
+          throw new Error('Resume parsing finished, but no candidates were returned')
+        }
+
+        clearResumeAnalysisSession()
+        onFileUploaded({
+          candidates,
+          parseMeta: {
+            methodUsed: parseResult.methodUsed || 'ai-extraction',
+            confidence: Number(parseResult.confidence || 0),
+            attempts: Array.isArray(parseResult.attempts) ? parseResult.attempts : [],
+            requiresManualCorrection: Boolean(parseResult.requiresManualCorrection),
+            feedback: parseResult.feedback || null,
+          },
+        })
+        return
+      }
+
+      if (nextStatus === 'failed') {
+        throw withErrorContext(new Error(statusPayload.error || 'unknown_error'), {
+          stage: 'parse_status',
+          endpoint: '/uploads/:jobId/parse-status',
+          status: 200,
+        })
+      }
+
+      await waitWithAbort(pollDelayMs, abortController.signal)
+    }
+
+    throw new Error('Resume parsing timed out. Please try again.')
+  }, [onFileUploaded, selectedJobDescriptionId, uploadedFiles])
+
+  const handleResumeTracking = async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token || !recoverableSession?.jobId) {
+      setShowRecoveryPrompt(false)
+      return
+    }
+    setIsAnalyzing(true)
+    setError('')
+    setTechnicalErrorDetails('')
+    setProviderErrorGuidance(null)
+    setFailedAnalysisState(null)
+    try {
+      await trackParseStatus({ token, primaryJobId: recoverableSession.jobId })
+    } catch (resumeError) {
+      if (resumeError?.name !== 'AbortError') {
+        setError(sanitizeForDisplay(resumeError.message || 'Unable to resume analysis.'))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsAnalyzing(false)
+      }
+    }
+  }
+
+  const handleDiscardRecovery = () => {
+    clearResumeAnalysisSession()
+    setRecoverableSession(null)
+    setShowRecoveryPrompt(false)
+    setParseStatus('')
+    setParseProgress(0)
   }
 
   const removeFile = (index) => {
@@ -511,6 +637,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const uploadPercent = uploadProgress.total > 0
     ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
     : 0
+
+  if (!isAuthenticated) {
+    return null
+  }
 
   return (
     <div className="resume-uploader-page">
@@ -535,6 +665,19 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         {subscriptionStatus === 'trialing' && (
           <div className="resume-uploader-trial-banner">
             <strong>Your 7-day trial is active.</strong> After this period, upgrade your plan to continue screening resumes.
+          </div>
+        )}
+        {showRecoveryPrompt && recoverableSession && (
+          <div className="resume-uploader-trial-banner" role="status">
+            <strong>Unfinished analysis detected.</strong> Resume your previous run or discard it and start fresh.
+            <div className="resume-actions" style={{ marginTop: '0.75rem' }}>
+              <button type="button" className="touch-target resume-analyze-button" onClick={handleResumeTracking}>
+                Resume tracking
+              </button>
+              <button type="button" className="touch-target resume-remove-file-button" onClick={handleDiscardRecovery}>
+                Discard and start fresh
+              </button>
+            </div>
           </div>
         )}
         <div
@@ -613,6 +756,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                       <div className="resume-file-size">
                         {(f.size / 1024 / 1024).toFixed(2)} MB
                       </div>
+                      {f.restoredFromSession && (
+                        <div className="resume-file-size">
+                          Restored from previous session — re-select file to re-upload if retrying.
+                        </div>
+                      )}
                     </div>
                   </div>
                   <button
@@ -673,6 +821,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 </pre>
               </details>
             )}
+          </div>
+        )}
+
+        {failedAnalysisState && (
+          <div className="resume-error-banner" role="alert">
+            <strong>{failedAnalysisState.message}</strong>
+            <p>{failedAnalysisState.detail}</p>
+            <div className="resume-actions" style={{ marginTop: '0.5rem' }}>
+              <button type="button" className="touch-target resume-analyze-button" onClick={handleAnalyze}>
+                Retry
+              </button>
+              <button type="button" className="touch-target resume-select-files-button" onClick={() => setSelectedJobDescriptionId('')}>
+                Use fallback provider
+              </button>
+              <a href="/contact" className="touch-target resume-manage-jd-link">
+                Contact support
+              </a>
+            </div>
           </div>
         )}
 
