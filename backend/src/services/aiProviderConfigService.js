@@ -111,6 +111,7 @@ function normalizeLegacyPayload(payload = {}) {
     return {
       activeProvider: payload.activeProvider,
       providers: payload.providers,
+      governance: payload.governance,
       metadata: payload.metadata,
     }
   }
@@ -129,6 +130,7 @@ function normalizeLegacyPayload(payload = {}) {
         },
       },
     },
+    governance: payload.governance,
     metadata: payload.metadata,
   }
 }
