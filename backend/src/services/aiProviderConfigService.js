@@ -26,6 +26,7 @@ let tablesEnsured = false
 
 async function ensureAiProviderTables() {
   if (tablesEnsured) return
+  const usersIdType = await getUsersIdReferenceType(pool)
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_ai_provider_keys (
