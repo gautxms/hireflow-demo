@@ -5,6 +5,7 @@ import { adminFetchJson } from '../utils/adminErrorState'
 
 const PROVIDERS = ['anthropic', 'openai']
 const KEY_LABELS = ['primary', 'fallback']
+const MAX_SYSTEM_PROMPT_LENGTH = 12000
 
 function buildEmptyForm() {
   return {
@@ -395,21 +396,23 @@ export default function AdminSecurityPage() {
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-admin-strong">Resume analysis system prompt</h2>
         <p className="mt-1 text-sm text-admin-body">Manage the shared system prompt used at runtime for provider-agnostic resume parsing.</p>
-        <form className="mt-4 grid gap-3" onSubmit={saveSystemPrompt}>
+        <form className="mt-4 grid w-full gap-3" onSubmit={saveSystemPrompt}>
           <label className="text-sm text-admin-body" htmlFor="systemPromptInput">System prompt</label>
+          <p className="text-xs text-admin-muted">Use this prompt to control extraction + JD matching behavior.</p>
           <textarea
             id="systemPromptInput"
-            className="min-h-56 w-full rounded border border-admin px-3 py-2 font-mono text-xs"
+            rows={12}
+            className="min-h-56 w-full resize-y rounded border border-admin px-3 py-2 font-mono text-xs md:text-sm"
             value={systemPromptInput}
             onChange={(e) => setSystemPromptInput(e.target.value)}
             placeholder="Enter the system prompt used by resume parsing."
           />
-          <div className="text-xs text-admin-muted">
+          <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded bg-admin px-1 py-1 text-xs text-admin-muted">
             Version: <strong>{Number(promptSettings?.promptVersion || 1)}</strong>
             {' · '}
             Last updated: <strong>{promptSettings?.updatedAt ? new Date(promptSettings.updatedAt).toLocaleString() : 'Not updated yet'}</strong>
             {' · '}
-            Characters: <strong>{systemPromptInput.length}</strong>
+            Characters: <strong>{systemPromptInput.length.toLocaleString()}</strong> / <strong>{MAX_SYSTEM_PROMPT_LENGTH.toLocaleString()}</strong>
           </div>
           <div className="flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={savingPrompt}>{savingPrompt ? 'Saving…' : 'Save system prompt'}</button>
