@@ -13,12 +13,15 @@ function toIsoOrEmpty(value) {
 export default function useAdminLogs(initialFilters = {}) {
   const [items, setItems] = useState([])
   const [webhooks, setWebhooks] = useState([])
+  const [auditTrail, setAuditTrail] = useState([])
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [webhookLoading, setWebhookLoading] = useState(false)
   const [webhookError, setWebhookError] = useState(null)
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditError, setAuditError] = useState(null)
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -79,6 +82,20 @@ export default function useAdminLogs(initialFilters = {}) {
     }
   }, [])
 
+  const refreshAuditTrail = useCallback(async (page = 1) => {
+    setAuditLoading(true)
+    setAuditError(null)
+    try {
+      const payload = await adminFetchJson(`${API_BASE}/admin/logs/audit-trail?page=${page}&pageSize=20`, 'Failed to fetch admin audit trail')
+      setAuditTrail(payload.items || [])
+    } catch (fetchError) {
+      setAuditError(getMappedError(fetchError, 'Failed to load admin audit trail'))
+      setAuditTrail([])
+    } finally {
+      setAuditLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     refreshLogs()
   }, [refreshLogs])
@@ -86,15 +103,19 @@ export default function useAdminLogs(initialFilters = {}) {
   return {
     items,
     webhooks,
+    auditTrail,
     total,
     pages,
     loading,
     error,
     webhookLoading,
     webhookError,
+    auditLoading,
+    auditError,
     filters,
     setFilters,
     refreshLogs,
     refreshWebhooks,
+    refreshAuditTrail,
   }
 }

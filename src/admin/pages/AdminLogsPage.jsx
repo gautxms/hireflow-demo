@@ -58,16 +58,20 @@ export default function AdminLogsPage() {
   const {
     items,
     webhooks,
+    auditTrail,
     total,
     pages,
     loading,
     error,
     webhookLoading,
     webhookError,
+    auditLoading,
+    auditError,
     filters,
     setFilters,
     refreshLogs,
     refreshWebhooks,
+    refreshAuditTrail,
   } = useAdminLogs()
 
   const {
@@ -80,7 +84,8 @@ export default function AdminLogsPage() {
 
   useEffect(() => {
     refreshWebhooks()
-  }, [refreshWebhooks])
+    refreshAuditTrail()
+  }, [refreshWebhooks, refreshAuditTrail])
 
   const endpointOptions = useMemo(() => {
     const unique = new Set(items.map((item) => item.endpoint).filter(Boolean))
@@ -195,6 +200,26 @@ export default function AdminLogsPage() {
       />
 
       <ErrorRateChart items={items} />
+      <Card>
+        <SectionHeader title="AI governance audit trail" subtitle="Prompt, provider, key/model, and policy toggle changes." />
+        {auditLoading ? <p className="admin-note">Loading governance audit trail…</p> : null}
+        {auditError ? <p className="text-sm text-admin-danger">{auditError.message || 'Unable to load governance audit trail.'}</p> : null}
+        {!auditLoading && !auditError ? (
+          <ul className="space-y-2 text-sm">
+            {auditTrail.map((entry) => (
+              <li key={entry.id} className="rounded border border-[var(--admin-border)] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <strong>{entry.actionType}</strong>
+                  <span className="text-xs text-admin-muted">{dateLabel(entry.createdAt)}</span>
+                </div>
+                <p className="text-xs text-admin-muted">Actor: {entry.adminEmail || entry.adminId || 'Unknown'} · IP: {entry.ipAddress || '—'}</p>
+                <pre className="mt-2 max-h-40 overflow-auto rounded bg-admin-subtle p-2 text-xs">{JSON.stringify(entry.details || {}, null, 2)}</pre>
+              </li>
+            ))}
+            {!auditTrail.length ? <li className="admin-note">No governance audit entries found.</li> : null}
+          </ul>
+        ) : null}
+      </Card>
       <WebhookAudit items={webhooks} loading={webhookLoading} error={webhookError} onRetry={() => void refreshWebhooks()} />
     </main>
   )

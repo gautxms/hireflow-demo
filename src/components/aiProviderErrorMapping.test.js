@@ -44,3 +44,10 @@ test('mapProviderError parses structured backend context for retired model guida
   assert.equal(result.remediationSteps[0], 'Replace retired model')
   assert.equal(result.actionHint, 'Go to Admin Security')
 })
+
+test('mapProviderError maps admin disablement to governance guidance', () => {
+  const result = mapProviderError('ai_disabled_error::AI resume analysis disabled')
+
+  assert.equal(result.category, 'ai_disabled_error')
+  assert.equal(result.userMessage, 'AI analysis is currently disabled by an administrator.')
+})

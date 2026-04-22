@@ -121,6 +121,21 @@ function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
 }
 
+function collectProviderConfigChanges(updateFlags = {}) {
+  const keyRotations = []
+  const modelChanges = []
+  const providers = updateFlags?.providers && typeof updateFlags.providers === 'object' ? updateFlags.providers : {}
+
+  for (const [provider, providerFlags] of Object.entries(providers)) {
+    if (providerFlags?.primaryKeyUpdated) keyRotations.push(`${provider}:primary`)
+    if (providerFlags?.fallbackKeyUpdated) keyRotations.push(`${provider}:fallback`)
+    if (providerFlags?.primaryModelUpdated) modelChanges.push(`${provider}:primary`)
+    if (providerFlags?.fallbackModelUpdated) modelChanges.push(`${provider}:fallback`)
+  }
+
+  return { keyRotations, modelChanges }
+}
+
 function buildResetUrl(token) {
   const url = new URL('/reset-password', getFrontendOrigin())
   url.searchParams.set('token', token)
@@ -270,6 +285,10 @@ router.put('/ai-settings', async (req, res) => {
       })
     }
 
+    const governance = payload?.governance && typeof payload.governance === 'object'
+      ? payload.governance
+      : existingSettings?.governance || {}
+
     const incomingProviders = payload?.providers
     if (!incomingProviders || typeof incomingProviders !== 'object') {
       return res.status(400).json({ error: 'providers object is required.' })
@@ -310,7 +329,10 @@ router.put('/ai-settings', async (req, res) => {
     }
 
     const updateFlags = await upsertAdminAiProviderKeys({
-      payload,
+      payload: {
+        ...payload,
+        governance,
+      },
       adminId: req.admin?.id || null,
     })
 
@@ -323,6 +345,48 @@ router.put('/ai-settings', async (req, res) => {
       },
       ipAddress: req.admin?.ipAddress || null,
     })
+
+    const providerConfigChanges = collectProviderConfigChanges(updateFlags)
+    if (updateFlags.activeProviderUpdated) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_provider_switched',
+        details: { activeProvider: normalizedActiveProvider },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
+
+    if (providerConfigChanges.keyRotations.length > 0) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_key_rotated',
+        details: { keys: providerConfigChanges.keyRotations },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
+
+    if (providerConfigChanges.modelChanges.length > 0) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_model_changed',
+        details: { models: providerConfigChanges.modelChanges },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
+
+    if (updateFlags.governanceUpdated) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_governance_updated',
+        details: {
+          aiEnabled: !updateFlags.aiEnabledUpdated ? existingSettings?.governance?.aiEnabled : governance?.aiEnabled,
+          resumeAnalysisEnabled: !updateFlags.workflowTogglesUpdated
+            ? existingSettings?.governance?.workflowToggles?.resumeAnalysisEnabled
+            : governance?.workflowToggles?.resumeAnalysisEnabled,
+        },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
 
     const settings = await getAdminAiProviderSettings()
     const modelValidation = await validateAiProviderModelConfiguration()
