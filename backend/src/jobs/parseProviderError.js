@@ -1,4 +1,5 @@
 const MAX_TECHNICAL_DETAILS_LENGTH = 500
+const ADMIN_SECURITY_PATH = '/admin/security'
 
 const CATEGORY_MESSAGES = {
   invalid_request_error: 'AI model configuration issue in Admin Security.',
@@ -18,6 +19,90 @@ function toMessage(value) {
   }
 
   return String(value || '').trim()
+}
+
+function extractAttemptContext(errorLike) {
+  const attempts = Array.isArray(errorLike?.attempts) ? errorLike.attempts : []
+  const lastAttempt = [...attempts].reverse().find((attempt) => attempt && !attempt.success)
+  if (!lastAttempt) {
+    return { provider: null, model: null }
+  }
+
+  const providerLabel = String(lastAttempt.provider || '').trim()
+  const provider = providerLabel.includes('-') ? providerLabel.split('-')[0] : providerLabel || null
+  const model = String(lastAttempt.model || '').trim() || null
+  return { provider, model }
+}
+
+function extractProviderAndModel(message = '', errorLike = null) {
+  const contextual = extractAttemptContext(errorLike)
+  const lower = String(message || '').toLowerCase()
+
+  const providerFromMessage = lower.includes('anthropic')
+    ? 'anthropic'
+    : lower.includes('openai')
+      ? 'openai'
+      : null
+
+  const modelMatch = String(message || '').match(/model(?:\s+name)?(?:\s+is|\s*=|:)?\s*["']?([a-z0-9][a-z0-9._:-]+)["']?/i)
+  const modelFromMessage = modelMatch?.[1] ? String(modelMatch[1]).trim() : null
+
+  return {
+    provider: contextual.provider || providerFromMessage,
+    model: contextual.model || modelFromMessage,
+  }
+}
+
+function buildHints(category, { provider, model } = {}) {
+  const contextLabel = [provider, model].filter(Boolean).join(' / ')
+  const modelStep = contextLabel
+    ? `Verify ${contextLabel} is configured as an active provider/model pair.`
+    : 'Verify the configured provider/model pair in Admin Security.'
+
+  if (category === 'not_found_error' || category === 'invalid_request_error') {
+    return {
+      action: 'review_model_configuration',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        modelStep,
+        'Replace retired or unsupported models with an allowed model.',
+        'Save changes and retry the resume analysis.',
+      ],
+    }
+  }
+
+  if (category === 'auth_error') {
+    return {
+      action: 'rotate_provider_api_key',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        provider ? `Update the ${provider} API key in Admin Security.` : 'Update the provider API key in Admin Security.',
+        'Confirm key scope includes model inference permissions.',
+        'Save credentials and retry the resume analysis.',
+      ],
+    }
+  }
+
+  if (category === 'rate_limit_error' || category === 'timeout_error' || category === 'network_error') {
+    return {
+      action: 'retry_or_failover_provider',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        'Retry after a short delay to allow provider capacity to recover.',
+        'If repeated, switch to fallback provider/key in Admin Security.',
+        'Review provider status dashboard for active incidents.',
+      ],
+    }
+  }
+
+  return {
+    action: 'review_provider_settings',
+    adminPath: ADMIN_SECURITY_PATH,
+    remediationSteps: [
+      'Check provider and model settings in Admin Security.',
+      'Retry once after confirming credentials and model availability.',
+    ],
+  }
 }
 
 export function detectProviderErrorCategory(errorLike) {
@@ -74,11 +159,23 @@ export function detectProviderErrorCategory(errorLike) {
 export function normalizeProviderError(errorLike) {
   const technicalDetails = toMessage(errorLike).slice(0, MAX_TECHNICAL_DETAILS_LENGTH)
   const { category, extractedDetails } = detectProviderErrorCategory(technicalDetails)
+  const scopedTechnicalDetails = extractedDetails || technicalDetails || 'Unknown parse error'
+  const { provider, model } = extractProviderAndModel(scopedTechnicalDetails, errorLike)
+  const hints = buildHints(category, { provider, model })
+  const serializedDetails = JSON.stringify({
+    technicalDetails: scopedTechnicalDetails,
+    provider,
+    model,
+    ...hints,
+  })
 
   return {
     category,
     userMessage: CATEGORY_MESSAGES[category] || CATEGORY_MESSAGES.unknown_error,
-    technicalDetails: extractedDetails || technicalDetails || 'Unknown parse error',
-    normalizedMessage: `${category}::${extractedDetails || technicalDetails || 'Unknown parse error'}`,
+    technicalDetails: scopedTechnicalDetails,
+    provider,
+    model,
+    ...hints,
+    normalizedMessage: `${category}::${serializedDetails}`,
   }
 }
