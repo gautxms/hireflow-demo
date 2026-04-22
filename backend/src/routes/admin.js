@@ -46,6 +46,38 @@ function normalizeProviderError(error) {
   }
 }
 
+function remediationStepsForProviderError(provider, keyLabel, providerError = {}) {
+  const code = String(providerError?.code || '').trim().toLowerCase()
+  if (code === 'auth_error') {
+    return [
+      `Update the ${provider} ${keyLabel} API key and verify it has model access.`,
+      'Retry the connection test after rotating the key.',
+    ]
+  }
+  if (code === 'invalid_model') {
+    return [
+      'Confirm the model id is correct and available for your account.',
+      `Sync ${provider} models in Admin and re-run the connection test.`,
+    ]
+  }
+  if (code === 'rate_limit') {
+    return [
+      'Retry after provider rate limits reset.',
+      'If this persists, reduce test frequency or review provider quota limits.',
+    ]
+  }
+  if (code === 'timeout') {
+    return [
+      'Retry the connection test to rule out transient network issues.',
+      'If failures continue, verify provider status and outbound network access.',
+    ]
+  }
+  return [
+    'Review provider error details and retry the connection test.',
+    `If the issue persists, switch to a known working ${provider} model.`,
+  ]
+}
+
 async function runProviderConnectionTest({ provider, apiKey, model }) {
   const baseHeaders = {
     'Content-Type': 'application/json',
@@ -226,11 +258,14 @@ router.post('/ai-settings/test-connection', async (req, res) => {
 
     const testResult = await runProviderConnectionTest({ provider, apiKey, model })
     if (!testResult.ok) {
+      const providerError = testResult?.error || {}
       return res.status(400).json({
         ok: false,
         provider,
         keyLabel,
         model,
+        validationTier: 'provider_rejected',
+        remediationSteps: remediationStepsForProviderError(provider, keyLabel, providerError),
         ...testResult,
       })
     }
@@ -343,6 +378,12 @@ router.put('/ai-settings', async (req, res) => {
     }
 
     let hasIncomingKey = false
+    const providerValidationResults = Array.isArray(payload?.providerValidationResults)
+      ? payload.providerValidationResults
+      : []
+    const validationPolicy = payload?.validationPolicy && typeof payload.validationPolicy === 'object'
+      ? payload.validationPolicy
+      : {}
     for (const provider of Object.keys(incomingProviders)) {
       const providerPayload = incomingProviders[provider]
       if (!providerPayload || typeof providerPayload !== 'object') {
@@ -373,6 +414,39 @@ router.put('/ai-settings', async (req, res) => {
 
     if (!hasConfiguredKey && !hasIncomingKey) {
       return res.status(400).json({ error: 'At least one API key (primary or fallback) is required.' })
+    }
+
+    const providerRejectedWarnings = providerValidationResults
+      .map((entry) => {
+        const provider = String(entry?.provider || '').trim().toLowerCase()
+        const keyLabel = String(entry?.keyLabel || '').trim().toLowerCase()
+        const model = String(entry?.model || '').trim()
+        const state = String(entry?.state || '').trim().toLowerCase()
+        const providerError = entry?.error && typeof entry.error === 'object' ? entry.error : null
+        if (!provider || !SUPPORTED_PROVIDERS.includes(provider) || !keyLabel || !KEY_LABELS.includes(keyLabel) || !model) {
+          return null
+        }
+        if (state !== 'error' || !providerError) return null
+        return {
+          provider,
+          source: 'connection-test',
+          keyLabel,
+          model,
+          reason: 'provider_rejected',
+          validationTier: 'provider_rejected',
+          detail: providerError?.code || 'unknown',
+          remediationSteps: remediationStepsForProviderError(provider, keyLabel, providerError),
+          providerError,
+        }
+      })
+      .filter(Boolean)
+
+    if (validationPolicy?.blockOnProviderRejected === true && providerRejectedWarnings.length > 0) {
+      return res.status(400).json({
+        error: 'Provider connection test failed for one or more configured models.',
+        validationTier: 'provider_rejected',
+        providerValidationWarnings: providerRejectedWarnings,
+      })
     }
 
     const updateFlags = await upsertAdminAiProviderKeys({
@@ -437,7 +511,8 @@ router.put('/ai-settings', async (req, res) => {
 
     const settings = await getAdminAiProviderSettings()
     const modelValidation = await validateAiProviderModelConfiguration()
-    const warnings = Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : []
+    const modelWarnings = Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : []
+    const warnings = [...modelWarnings, ...providerRejectedWarnings]
 
     return res.json({
       ok: true,

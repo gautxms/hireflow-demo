@@ -30,13 +30,16 @@ function getWarningKey(warning = {}) {
 
 
 function getModelWarningMessage(warning = {}) {
-  if (warning?.reason === 'invalid_format') {
+  if (warning?.validationTier === 'invalid_format' || warning?.reason === 'invalid_format') {
     return `Model "${warning.model}" has an invalid format.`
   }
-  if (warning?.reason === 'risky_untested_model') {
-    return `Model "${warning.model}" is untested for this provider (${warning?.detail || 'not in registry'}).`
+  if (warning?.validationTier === 'provider_rejected' || warning?.reason === 'provider_rejected') {
+    return `Model "${warning.model}" was rejected by the provider during runtime validation.`
   }
-  return `Model "${warning.model}" is deprecated or blocked in the registry.`
+  if (warning?.validationTier === 'valid_unlisted') {
+    return `Model "${warning.model}" is unlisted in the registry but may still be valid.`
+  }
+  return `Model "${warning.model}" is known in the registry (${warning?.detail || 'status: active'}).`
 }
 
 export default function AdminSecurityPage() {
@@ -220,7 +223,20 @@ export default function AdminSecurityPage() {
       const payload = await adminFetchJson(`${API_BASE}/admin/ai-settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          providerValidationResults: Object.entries(connectionStatusByField).map(([fieldKey, status]) => {
+            const [provider, keyLabel] = String(fieldKey || '').split(':')
+            const model = String(form?.providers?.[provider]?.[keyLabel]?.model || '').trim()
+            return {
+              provider,
+              keyLabel,
+              model,
+              state: status?.state || 'unknown',
+              error: status?.providerError || null,
+            }
+          }),
+        }),
       })
       setSettings(payload.settings || null)
       setForm(hydrateFormFromSettings(payload.settings || null))
@@ -232,7 +248,7 @@ export default function AdminSecurityPage() {
     } finally {
       setSaving(false)
     }
-  }, [form, hydrateFormFromSettings, validateForm])
+  }, [connectionStatusByField, form, hydrateFormFromSettings, validateForm])
 
   const saveSystemPrompt = useCallback(async (event) => {
     event.preventDefault()
@@ -286,7 +302,11 @@ export default function AdminSecurityPage() {
       const details = error?.payload?.error?.message || error?.payload?.error || error?.payload?.message || 'Connection test failed.'
       setConnectionStatusByField((current) => ({
         ...current,
-        [key]: { state: 'error', message: String(details) },
+        [key]: {
+          state: 'error',
+          message: String(details),
+          providerError: error?.payload?.error && typeof error.payload.error === 'object' ? error.payload.error : null,
+        },
       }))
     }
   }, [form])
@@ -369,6 +389,9 @@ export default function AdminSecurityPage() {
                           {warnings.map((warning, index) => (
                             <li key={`${warning.source}-${index}`}>
                               {getModelWarningMessage(warning)}
+                              {Array.isArray(warning?.remediationSteps) && warning.remediationSteps.length > 0
+                                ? ` Next: ${warning.remediationSteps.join(' ')}`
+                                : ''}
                             </li>
                           ))}
                         </ul>

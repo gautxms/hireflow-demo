@@ -120,3 +120,57 @@ test('syncProviderModelRegistry upserts provider discovered models', async () =>
   const upserts = executed.filter((entry) => entry.sql.startsWith('INSERT INTO admin_ai_model_registry'))
   assert.equal(upserts.length, 2)
 })
+
+test('validateAiProviderModelConfiguration returns tiered warnings with remediation steps', async () => {
+  pool.query = async (queryText, params = []) => {
+    const sql = String(queryText).trim().replace(/\s+/g, ' ')
+
+    if (sql.includes('SELECT format_type(a.atttypid, a.atttypmod) AS data_type')) {
+      return { rows: [{ data_type: 'character varying' }] }
+    }
+
+    if (sql.startsWith('SELECT provider, key_label, model FROM admin_ai_provider_keys')) {
+      return {
+        rows: [
+          { provider: 'anthropic', key_label: 'primary', model: 'invalid model' },
+          { provider: 'anthropic', key_label: 'fallback', model: 'claude-custom-2026' },
+          { provider: 'openai', key_label: 'primary', model: 'gpt-4o-mini' },
+        ],
+      }
+    }
+
+    if (sql.startsWith('SELECT provider, model_id, status, display_name, metadata, source FROM admin_ai_model_registry')) {
+      return {
+        rows: [
+          { provider: 'openai', model_id: 'gpt-4o-mini', status: 'active', display_name: 'GPT-4o mini', metadata: {}, source: 'provider-sync' },
+        ],
+      }
+    }
+
+    if (sql.startsWith('CREATE TABLE IF NOT EXISTS') || sql.startsWith('CREATE INDEX IF NOT EXISTS')) {
+      return { rows: [] }
+    }
+
+    if (sql.startsWith('INSERT INTO admin_ai_settings')) {
+      return { rows: [] }
+    }
+
+    if (sql.startsWith('INSERT INTO admin_ai_model_registry')) {
+      return { rows: [] }
+    }
+
+    throw new Error(`Unexpected SQL in tiered validation test: ${sql} | params=${JSON.stringify(params)}`)
+  }
+
+  const result = await validateAiProviderModelConfiguration()
+  assert.equal(Array.isArray(result.warnings), true)
+
+  const invalidFormat = result.warnings.find((warning) => warning.validationTier === 'invalid_format')
+  assert.equal(invalidFormat?.provider, 'anthropic')
+  assert.equal(Array.isArray(invalidFormat?.remediationSteps), true)
+  assert.equal(invalidFormat.remediationSteps.length > 0, true)
+
+  const validUnlisted = result.warnings.find((warning) => warning.validationTier === 'valid_unlisted')
+  assert.equal(validUnlisted?.provider, 'anthropic')
+  assert.equal(['model_not_registered', 'provider_registry_empty'].includes(validUnlisted?.detail), true)
+})
