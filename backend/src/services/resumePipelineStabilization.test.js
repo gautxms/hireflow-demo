@@ -51,6 +51,31 @@ test('job description context preserves nullable numeric fields', () => {
   assert.equal(normalized.salaryMax, null)
 })
 
+test('job description context includes manual JD fields when provided', () => {
+  const normalized = buildJobDescriptionContext({
+    id: 'jd-42',
+    title: 'Platform Engineer',
+    description: 'Build internal developer tooling',
+    requirements: '5+ years Node.js',
+    skills: ['Node.js', 'PostgreSQL'],
+    experience_years: 5,
+  })
+
+  assert.equal(normalized.hasContext, true)
+  assert.equal(normalized.jobDescriptionId, 'jd-42')
+  assert.equal(normalized.title, 'Platform Engineer')
+  assert.deepEqual(normalized.skills, ['Node.js', 'PostgreSQL'])
+})
+
+test('job description context marks missing JD when parse request has no JD row', () => {
+  const normalized = buildJobDescriptionContext(null)
+  assert.deepEqual(normalized, {
+    hasContext: false,
+    source: 'none',
+    missingReason: 'job_description_missing',
+  })
+})
+
 test('health queue response normalizes numeric counts safely', () => {
   const normalized = normalizeQueueCounts({ pending: '3', processing: '2', failed: null, succeeded: undefined })
   assert.deepEqual(normalized, {

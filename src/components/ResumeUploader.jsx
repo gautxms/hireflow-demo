@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
 import { mapProviderError } from './aiProviderErrorMapping'
+import {
+  ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL,
+  buildChunkInitPayload,
+  resolveSelectedJobDescriptionId,
+  toOptionalJobDescriptionId,
+} from './resumeUploaderState'
 import '../styles/resume-uploader.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -116,9 +122,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         const eligible = items.filter((item) => item.status === 'active' || item.status === 'draft')
         setJobDescriptions(eligible)
 
-        setSelectedJobDescriptionId((currentSelection) => (
-          eligible.some((item) => item.id === currentSelection) ? currentSelection : ''
-        ))
+        setSelectedJobDescriptionId((currentSelection) => resolveSelectedJobDescriptionId(currentSelection, eligible))
       })
       .catch(() => {
         setJobDescriptions([])
@@ -217,8 +221,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     uploadedFiles.forEach(({ file }) => {
       formData.append('resumes', file)
     })
-    if (selectedJobDescriptionId) {
-      formData.append('jobDescriptionId', selectedJobDescriptionId)
+    const optionalJobDescriptionId = toOptionalJobDescriptionId(selectedJobDescriptionId)
+    if (optionalJobDescriptionId) {
+      formData.append('jobDescriptionId', optionalJobDescriptionId)
     }
 
     const response = await fetch(`${API_BASE}/uploads`, {
@@ -276,12 +281,12 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
+            body: JSON.stringify(buildChunkInitPayload({
               filename: file.name,
               fileSize: file.size,
               mimeType: file.type,
-              jobDescriptionId: selectedJobDescriptionId || undefined,
-            }),
+              selectedJobDescriptionId,
+            })),
           })
 
           if (!initResponse.ok) {
@@ -537,7 +542,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               onChange={(event) => setSelectedJobDescriptionId(event.target.value)}
               className="resume-jd-select"
             >
-              <option value="">Analyze without Job Description</option>
+              <option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>
               {jobDescriptions.map((jd) => (
                 <option key={jd.id} value={jd.id}>
                   {jd.title} ({jd.status})
