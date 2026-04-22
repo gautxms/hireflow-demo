@@ -50,6 +50,7 @@ export default function AdminSecurityPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingPrompt, setSavingPrompt] = useState(false)
+  const [syncingProvider, setSyncingProvider] = useState('')
   const [systemPromptInput, setSystemPromptInput] = useState('')
   const [fieldError, setFieldError] = useState('')
   const [connectionStatusByField, setConnectionStatusByField] = useState({})
@@ -290,6 +291,25 @@ export default function AdminSecurityPage() {
     }
   }, [form])
 
+  const refreshProviderModels = useCallback(async (provider) => {
+    setMessage('')
+    setSyncingProvider(provider)
+    try {
+      const payload = await adminFetchJson(`${API_BASE}/admin/ai-settings/sync-models?provider=${provider}`, {
+        method: 'POST',
+      })
+      setSettings(payload?.settings || null)
+      setForm(hydrateFormFromSettings(payload?.settings || null))
+      setModelWarnings(Array.isArray(payload?.modelWarnings) ? payload.modelWarnings : [])
+      setMessage(`Refreshed ${provider} models (${Number(payload?.discovered || 0)} discovered).`)
+    } catch (error) {
+      const details = error?.payload?.error || 'Model sync unavailable. Manual model entry remains available.'
+      setMessage(String(details))
+    } finally {
+      setSyncingProvider('')
+    }
+  }, [hydrateFormFromSettings])
+
   if (loading) {
     return <div className="admin-page"><section className="ui-card p-4">Loading AI settings…</section></div>
   }
@@ -309,6 +329,16 @@ export default function AdminSecurityPage() {
           {PROVIDERS.map((provider) => (
             <div className="md:col-span-2 grid gap-3" key={provider}>
               <p className="text-sm font-semibold text-admin-strong capitalize">{provider}</p>
+              <div>
+                <button
+                  type="button"
+                  className="ui-btn"
+                  onClick={() => refreshProviderModels(provider)}
+                  disabled={syncingProvider === provider}
+                >
+                  {syncingProvider === provider ? 'Refreshing…' : 'Refresh models'}
+                </button>
+              </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {KEY_LABELS.map((keyLabel) => {
                   const model = form.providers?.[provider]?.[keyLabel]?.model || ''
