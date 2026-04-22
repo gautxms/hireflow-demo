@@ -43,8 +43,11 @@ function getModelStatusBadge(warnings = []) {
   if (warnings.some((warning) => warning?.validationTier === 'provider_rejected' || warning?.reason === 'provider_rejected')) {
     return { label: 'Rejected by provider', className: 'bg-admin-danger/10 text-admin-danger border-admin-danger/30' }
   }
-  if (warnings.some((warning) => warning?.validationTier === 'valid_unlisted' || warning?.validationTier === 'invalid_format' || warning?.reason === 'invalid_format')) {
-    return { label: 'Unlisted', className: 'bg-admin-warning/10 text-admin-warning border-admin-warning/30' }
+  if (warnings.some((warning) => warning?.validationTier === 'invalid_format' || warning?.reason === 'invalid_format')) {
+    return { label: 'Invalid format', className: 'bg-admin-danger/10 text-admin-danger border-admin-danger/30' }
+  }
+  if (warnings.some((warning) => warning?.validationTier === 'valid_unlisted')) {
+    return { label: 'Unlisted model (allowed).', className: 'bg-admin-warning/10 text-admin-warning border-admin-warning/30' }
   }
   return { label: 'Known', className: 'bg-admin-muted/10 text-admin-muted border-admin/60' }
 }
@@ -245,14 +248,7 @@ export default function AdminSecurityPage() {
         const fieldKey = `${provider}:${keyLabel}`
         const model = String(form?.providers?.[provider]?.[keyLabel]?.model || '').trim()
         const apiKey = String(form?.providers?.[provider]?.[keyLabel]?.apiKey || '').trim()
-        const persistedModel = String(
-          settings?.providers?.[provider]?.[keyLabel]?.model || settings?.providers?.[provider]?.defaultModel || ''
-        ).trim()
-        const shouldRequireModel = (
-          Boolean(apiKey)
-          || Boolean(modelEditedByField[fieldKey])
-          || (provider === form.activeProvider && !persistedModel)
-        )
+        const shouldRequireModel = Boolean(apiKey) || Boolean(modelEditedByField[fieldKey])
 
         if (shouldRequireModel && !model) {
           return `${provider} ${keyLabel} model is required when changing this slot.`
@@ -261,7 +257,7 @@ export default function AdminSecurityPage() {
     }
 
     return ''
-  }, [form, modelEditedByField, settings?.providers])
+  }, [form, modelEditedByField])
 
   const governanceChecklist = useMemo(() => {
     const activeProviderConfigured = settings?.providers?.[form.activeProvider]
@@ -501,6 +497,7 @@ export default function AdminSecurityPage() {
                     .filter((row) => ['active', 'experimental', 'untested'].includes(String(row?.status || '').trim().toLowerCase() || 'active'))
                     .map((row) => String(row?.modelId || '').trim())
                     .filter(Boolean)
+                  const modelIsUnlisted = Boolean(model) && !modelSuggestions.includes(String(model).trim())
                   return (
                     <div className="rounded border border-admin p-3" key={`${provider}:${keyLabel}`}>
                       <p className="text-xs font-semibold uppercase tracking-wide text-admin-muted">{keyLabel}</p>
@@ -521,6 +518,13 @@ export default function AdminSecurityPage() {
                       </datalist>
                       <p className="mt-1 text-xs text-admin-muted">Use exact provider model ID; new models are allowed.</p>
                       <p className="mt-1 text-xs text-admin-muted">Unchanged slots keep existing model.</p>
+                      {modelIsUnlisted ? (
+                        <div className="mt-2">
+                          <span className="inline-flex rounded border border-admin-warning/30 bg-admin-warning/10 px-2 py-1 text-xs font-semibold text-admin-warning">
+                            Unlisted model (allowed).
+                          </span>
+                        </div>
+                      ) : null}
                       <div className="mt-2 flex items-center gap-2 text-xs">
                         <span className={`inline-flex rounded border px-2 py-1 font-semibold ${statusBadge.className}`}>
                           {statusBadge.label}
