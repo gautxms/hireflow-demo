@@ -1,5 +1,7 @@
 import { pool } from '../db/client.js'
 import { PROVIDER_MODEL_BOOTSTRAP, isValidModelFormat } from '../config/aiModels.js'
+import { AI_MODEL_CONFIG, getAnthropicModelWarnings } from '../config/aiModels.js'
+import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
 const DEFAULT_PROVIDER = 'anthropic'
 const SUPPORTED_PROVIDERS = ['anthropic', 'openai']
@@ -26,6 +28,7 @@ let tablesEnsured = false
 
 async function ensureAiProviderTables() {
   if (tablesEnsured) return
+  const usersIdType = await getUsersIdReferenceType(pool)
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_ai_provider_keys (
@@ -35,8 +38,8 @@ async function ensureAiProviderTables() {
       api_key TEXT NOT NULL,
       model TEXT,
       is_active BOOLEAN NOT NULL DEFAULT true,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by ${usersIdType} REFERENCES users(id) ON DELETE SET NULL,
+      updated_by ${usersIdType} REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
       UNIQUE (provider, key_label)
@@ -48,7 +51,7 @@ async function ensureAiProviderTables() {
       id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id = true),
       active_provider TEXT NOT NULL DEFAULT 'anthropic',
       settings_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_by ${usersIdType} REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
