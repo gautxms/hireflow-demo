@@ -182,6 +182,8 @@
 
 .resume-parse-status { text-align: center; margin-bottom: 1rem; }
 .resume-actions { display: flex; gap: 1rem; justify-content: center; }
+.resume-actions--recovery-prompt { margin-top: var(--spacing-md); }
+.resume-actions--failure { margin-top: var(--spacing-sm); }
 .resume-analyze-button { padding: 1rem 3rem; font-size: 1rem; }
 .resume-analyze-button--disabled {
   background: var(--color-text-secondary);

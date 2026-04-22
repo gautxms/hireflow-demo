@@ -70,6 +70,16 @@
   background: var(--color-accent-green-hover);
 }
 
+.route-state-card__actions--recovery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.route-state-card__details {
+  margin-top: var(--spacing-base);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .route-state-card,
   .route-state-card__action {
