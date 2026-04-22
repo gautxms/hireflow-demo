@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
 import { navigateAdmin } from '../config/adminNavigation'
 import { adminFetchJson } from '../utils/adminErrorState'
-import { SYSTEM_PROMPT_SAVE_PATH, SYSTEM_PROMPT_TEXTAREA_CLASS } from './adminSystemPromptConfig'
+import {
+  getSystemPromptSaveErrorMessage,
+  SYSTEM_PROMPT_SAVE_PATH,
+  SYSTEM_PROMPT_TEXTAREA_CLASS,
+} from './adminSystemPromptConfig'
 
 const PROVIDERS = ['anthropic', 'openai']
 const KEY_LABELS = ['primary', 'fallback']
@@ -289,7 +293,7 @@ export default function AdminSecurityPage() {
       setSystemPromptInput(payload?.prompt?.systemPrompt || '')
       setPromptMessage('System prompt saved.')
     } catch (error) {
-      setPromptMessage(error?.payload?.error || 'Unable to save system prompt.')
+      setPromptMessage(getSystemPromptSaveErrorMessage(error))
     } finally {
       setSavingPrompt(false)
     }

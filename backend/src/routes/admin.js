@@ -601,8 +601,25 @@ router.put('/system-prompt', async (req, res) => {
     if (/systemPrompt/i.test(String(error?.message || ''))) {
       return res.status(400).json({ error: error.message })
     }
-    console.error('[Admin system-prompt] update failed:', error)
+    const dbErrorCode = String(error?.code || '').trim()
+    const dbDetails = String(error?.detail || '').trim()
     const details = String(error?.message || '').trim()
+    const queryErrorCodes = new Set(['42P18', '42601', '42883', '42P01', '42703'])
+
+    console.error('[Admin system-prompt] update failed:', {
+      code: dbErrorCode || null,
+      message: details || null,
+      detail: dbDetails || null,
+      stack: error?.stack || null,
+    })
+
+    if (queryErrorCodes.has(dbErrorCode)) {
+      return res.status(500).json({
+        error: 'System prompt save failed due to a database query issue. Please retry or contact support.',
+        details: dbErrorCode,
+      })
+    }
+
     return res.status(500).json({
       error: 'Unable to update system prompt',
       details: details || 'unknown_error',
