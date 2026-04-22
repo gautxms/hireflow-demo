@@ -166,13 +166,13 @@ export async function upsertAdminSystemPrompt({ systemPrompt, adminId }) {
 
   const updateResult = await pool.query(
     `UPDATE admin_system_prompts
-     SET system_prompt = $2,
+     SET system_prompt = $1,
          prompt_version = prompt_version + 1,
-         updated_by = $3,
+         updated_by = $2,
          updated_at = NOW()
      WHERE id = true
      RETURNING system_prompt, prompt_version, updated_by, created_at, updated_at`,
-    [true, normalizedPrompt, adminId || null],
+    [normalizedPrompt, adminId || null],
   )
 
   if (updateResult.rows.length > 0) {
