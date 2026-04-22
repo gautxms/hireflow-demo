@@ -10,9 +10,12 @@ import {
 } from './resumeUploaderState'
 import {
   buildFileSnapshot,
+  clearResumeAnalysisResult,
   clearResumeAnalysisSession,
   isSessionRecoverable,
+  readResumeAnalysisResult,
   readResumeAnalysisSession,
+  writeResumeAnalysisResult,
   writeResumeAnalysisSession,
 } from './resumeAnalysisSession'
 import { buildFailedAnalysisState } from './resumeUploaderRecoveryState'
@@ -310,6 +313,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setError('')
     setTechnicalErrorDetails('')
     setProviderErrorGuidance(null)
+    clearResumeAnalysisResult()
 
     try {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -570,8 +574,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           throw new Error('Resume parsing finished, but no candidates were returned')
         }
 
-        clearResumeAnalysisSession()
-        onFileUploaded({
+        const latestResult = {
           candidates,
           parseMeta: {
             methodUsed: parseResult.methodUsed || 'ai-extraction',
@@ -580,7 +583,22 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             requiresManualCorrection: Boolean(parseResult.requiresManualCorrection),
             feedback: parseResult.feedback || null,
           },
+        }
+
+        writeResumeAnalysisSession({
+          jobId: primaryJobId,
+          parseStatus: 'complete',
+          parseProgress: 100,
+          selectedJobDescriptionId,
+          fileSnapshots: buildFileSnapshot(uploadedFiles),
         })
+        writeResumeAnalysisResult({
+          ...latestResult,
+          jobId: primaryJobId,
+        })
+
+        onFileUploaded(latestResult)
+        clearResumeAnalysisSession()
         return
       }
 
@@ -600,7 +618,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
   const handleResumeTracking = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token || !recoverableSession?.jobId) {
+    const recoverableJobId = recoverableSession?.jobId || readResumeAnalysisResult()?.jobId
+    if (!token || !recoverableJobId) {
       setShowRecoveryPrompt(false)
       return
     }
@@ -610,7 +629,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setProviderErrorGuidance(null)
     setFailedAnalysisState(null)
     try {
-      await trackParseStatus({ token, primaryJobId: recoverableSession.jobId })
+      await trackParseStatus({ token, primaryJobId: recoverableJobId })
     } catch (resumeError) {
       if (resumeError?.name !== 'AbortError') {
         setError(sanitizeForDisplay(resumeError.message || 'Unable to resume analysis.'))
