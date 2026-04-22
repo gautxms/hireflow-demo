@@ -273,6 +273,30 @@ function formatArray(values) {
   return normalized.length > 0 ? normalized.join(', ') : null
 }
 
+function buildAnalysisModeDirectives(jobDescriptionContext = null) {
+  const hasJobDescription = Boolean(jobDescriptionContext?.hasContext)
+
+  if (hasJobDescription) {
+    return [
+      'Analysis Mode: WITH_JOB_DESCRIPTION',
+      'Contract:',
+      '- Perform resume extraction and JD-aware fit analysis.',
+      '- Map candidate evidence to JD requirements and skills.',
+      '- Include fit rationale and shortlisting signal strengths/risks in your JSON fields.',
+      '- Keep output JSON-compatible with existing schema.',
+    ].join('\n')
+  }
+
+  return [
+    'Analysis Mode: WITHOUT_JOB_DESCRIPTION',
+    'Contract:',
+    '- Perform resume extraction only (no JD fit scoring assumptions).',
+    '- Provide comparative shortlist signals derived from resume evidence (seniority, skills depth, impact, role alignment confidence).',
+    '- Mark missing JD context clearly using "job_description_missing" in rationale/notes fields when present.',
+    '- Keep output JSON-compatible with existing schema.',
+  ].join('\n')
+}
+
 export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContext = null) {
   const basePrompt = normalizePrompt(systemPrompt)
   const jdContext = jobDescriptionContext && typeof jobDescriptionContext === 'object'
@@ -293,7 +317,9 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
       ].join('\n')
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
 
-  return `${basePrompt}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker \"job_description_missing\" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
+
+  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker \"job_description_missing\" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
 
 export async function analyzeWithAnthropic(
