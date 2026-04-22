@@ -4,81 +4,53 @@ import assert from 'node:assert/strict'
 const ORIGINAL_ENV = {
   ANTHROPIC_ALLOWED_MODELS: process.env.ANTHROPIC_ALLOWED_MODELS,
   ANTHROPIC_RESUME_MODEL: process.env.ANTHROPIC_RESUME_MODEL,
+  OPENAI_ALLOWED_MODELS: process.env.OPENAI_ALLOWED_MODELS,
+  OPENAI_RESUME_MODEL: process.env.OPENAI_RESUME_MODEL,
 }
 
-async function loadConfigWithEnv({ allowed, resumeModel }) {
-  if (typeof allowed === 'undefined') {
-    delete process.env.ANTHROPIC_ALLOWED_MODELS
-  } else {
-    process.env.ANTHROPIC_ALLOWED_MODELS = allowed
-  }
+async function loadConfigWithEnv({ anthropicAllowed, anthropicResumeModel, openaiAllowed, openaiResumeModel }) {
+  if (typeof anthropicAllowed === 'undefined') delete process.env.ANTHROPIC_ALLOWED_MODELS
+  else process.env.ANTHROPIC_ALLOWED_MODELS = anthropicAllowed
 
-  if (typeof resumeModel === 'undefined') {
-    delete process.env.ANTHROPIC_RESUME_MODEL
-  } else {
-    process.env.ANTHROPIC_RESUME_MODEL = resumeModel
-  }
+  if (typeof anthropicResumeModel === 'undefined') delete process.env.ANTHROPIC_RESUME_MODEL
+  else process.env.ANTHROPIC_RESUME_MODEL = anthropicResumeModel
+
+  if (typeof openaiAllowed === 'undefined') delete process.env.OPENAI_ALLOWED_MODELS
+  else process.env.OPENAI_ALLOWED_MODELS = openaiAllowed
+
+  if (typeof openaiResumeModel === 'undefined') delete process.env.OPENAI_RESUME_MODEL
+  else process.env.OPENAI_RESUME_MODEL = openaiResumeModel
 
   return import(`./aiModels.js?scenario=${Date.now()}-${Math.random()}`)
 }
 
-test('uses an active default model when env override is not provided', async () => {
+test('builds provider bootstrap defaults with optional env seed models', async () => {
   const module = await loadConfigWithEnv({
-    allowed: undefined,
-    resumeModel: undefined,
+    anthropicAllowed: 'claude-sonnet-4-20250514,claude-3-7-sonnet-20250219',
+    anthropicResumeModel: 'claude-sonnet-4-20250514',
+    openaiAllowed: 'gpt-4.1-mini',
+    openaiResumeModel: 'gpt-4o-mini',
   })
 
-  assert.equal(module.AI_MODEL_CONFIG.defaultModel, 'claude-sonnet-4-20250514')
-  assert.equal(module.isAllowedAnthropicModel(module.AI_MODEL_CONFIG.defaultModel), true)
-})
-
-test('flags invalid or retired env default model against allowlist', async () => {
-  const module = await loadConfigWithEnv({
-    allowed: 'claude-sonnet-4-20250514,claude-3-7-sonnet-20250219',
-    resumeModel: 'claude-3-5-sonnet-20241022',
-  })
-
-  assert.equal(module.AI_MODEL_CONFIG.defaultModel, 'claude-3-5-sonnet-20241022')
-  assert.equal(module.isAllowedAnthropicModel(module.AI_MODEL_CONFIG.defaultModel), false)
-
-  const warnings = module.getAnthropicModelWarnings([
-    { source: 'env.ANTHROPIC_RESUME_MODEL', model: module.AI_MODEL_CONFIG.defaultModel },
-  ])
-
-  assert.equal(warnings.length, 1)
-  assert.equal(warnings[0].source, 'env.ANTHROPIC_RESUME_MODEL')
-})
-
-test('normalizes allowlist and falls back to active models for empty values', async () => {
-  const module = await loadConfigWithEnv({
-    allowed: ' , claude-sonnet-4-20250514, claude-sonnet-4-20250514 ,,claude-3-7-sonnet-20250219 ',
-    resumeModel: undefined,
-  })
-
-  assert.deepEqual(module.AI_MODEL_CONFIG.allowedModels, [
+  assert.equal(module.PROVIDER_MODEL_BOOTSTRAP.anthropic.defaultModel, 'claude-sonnet-4-20250514')
+  assert.deepEqual(module.PROVIDER_MODEL_BOOTSTRAP.anthropic.seedModels, [
     'claude-sonnet-4-20250514',
     'claude-3-7-sonnet-20250219',
   ])
+  assert.deepEqual(module.PROVIDER_MODEL_BOOTSTRAP.openai.seedModels, ['gpt-4.1-mini', 'gpt-4o-mini'])
+})
 
-  const fallbackModule = await loadConfigWithEnv({
-    allowed: ' , , ',
-    resumeModel: undefined,
-  })
-
-  assert.equal(fallbackModule.AI_MODEL_CONFIG.allowedModels.length > 0, true)
-  assert.equal(fallbackModule.AI_MODEL_CONFIG.allowedModels.includes('claude-sonnet-4-20250514'), true)
+test('accepts flexible model ids but rejects empty/whitespace format', async () => {
+  const module = await loadConfigWithEnv({})
+  assert.equal(module.isValidModelFormat('gpt-4.1-mini'), true)
+  assert.equal(module.isValidModelFormat('claude-sonnet-4-20250514'), true)
+  assert.equal(module.isValidModelFormat('  '), false)
+  assert.equal(module.isValidModelFormat('model with spaces'), false)
 })
 
 after(() => {
-  if (typeof ORIGINAL_ENV.ANTHROPIC_ALLOWED_MODELS === 'undefined') {
-    delete process.env.ANTHROPIC_ALLOWED_MODELS
-  } else {
-    process.env.ANTHROPIC_ALLOWED_MODELS = ORIGINAL_ENV.ANTHROPIC_ALLOWED_MODELS
-  }
-
-  if (typeof ORIGINAL_ENV.ANTHROPIC_RESUME_MODEL === 'undefined') {
-    delete process.env.ANTHROPIC_RESUME_MODEL
-  } else {
-    process.env.ANTHROPIC_RESUME_MODEL = ORIGINAL_ENV.ANTHROPIC_RESUME_MODEL
+  for (const [key, value] of Object.entries(ORIGINAL_ENV)) {
+    if (typeof value === 'undefined') delete process.env[key]
+    else process.env[key] = value
   }
 })

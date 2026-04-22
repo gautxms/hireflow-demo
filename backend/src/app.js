@@ -35,7 +35,7 @@ import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
-import { AI_MODEL_CONFIG, isAllowedAnthropicModel } from './config/aiModels.js'
+import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
 
 const app = express()
 
@@ -84,13 +84,12 @@ app.get('/health', (_req, res) => {
   const aiModelWarnings = []
   const defaultModel = String(AI_MODEL_CONFIG.defaultModel || '').trim()
 
-  if (!defaultModel || !isAllowedAnthropicModel(defaultModel)) {
+  if (!defaultModel || !isValidModelFormat(defaultModel)) {
     aiModelWarnings.push({
-      type: 'invalid_default_model',
+      type: 'invalid_default_model_format',
       source: 'env.ANTHROPIC_RESUME_MODEL',
       model: defaultModel || null,
-      allowedModels: AI_MODEL_CONFIG.allowedModels,
-      message: 'Configured default Anthropic model is not present in ANTHROPIC_ALLOWED_MODELS.',
+      message: 'Configured default Anthropic model does not match expected provider model format.',
     })
   }
 
