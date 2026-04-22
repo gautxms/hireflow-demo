@@ -52,10 +52,9 @@ const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
 const AdminShell = lazy(() => import('./admin/components/AdminShell'))
 const AdminPageFeedbackWidget = lazy(() => import('./admin/components/AdminPageFeedbackWidget'))
 const AdminRouteFallback = lazy(() => import('./admin/components/AdminRouteFallback'))
-import { AdminAuthProvider } from './admin/hooks/useAdminAuth'
-import useAdminAuth from './admin/hooks/useAdminAuth'
+import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
-import { readResumeAnalysisResult } from './components/resumeAnalysisSession'
+import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -100,6 +99,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
   const { logout: logoutAdmin } = useAdminAuth()
+  const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
 
   const handleNavigate = (page, promptMessage = 'Please login or sign up to continue.') => {
     if (!isAuthenticated && PROTECTED_PAGES.has(page)) {
@@ -138,7 +138,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return
     }
 
-    const latestResult = readResumeAnalysisResult()
+    const latestResult = readResumeAnalysisResult(resumeAnalysisOwnerKey)
     if (!latestResult || !Array.isArray(latestResult.candidates) || latestResult.candidates.length === 0) {
       return
     }
@@ -153,7 +153,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     const nextQuery = params.toString()
     const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname
     window.history.replaceState(window.history.state || {}, '', nextUrl)
-  }, [pathname])
+  }, [pathname, resumeAnalysisOwnerKey])
 
 
   useEffect(() => {
@@ -582,6 +582,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             isAuthenticated={isAuthenticated}
             onRequireAuth={onRequireAuth}
             subscriptionStatus={subscriptionStatus}
+            userProfile={userProfile}
           />
         )}
 
@@ -841,6 +842,7 @@ export default function App() {
   }
 
   const logout = async () => {
+    clearResumeAnalysisResult()
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     localStorage.removeItem('subscription_status')
     localStorage.removeItem(USER_STORAGE_KEY)
@@ -893,6 +895,7 @@ export default function App() {
       localStorage.removeItem(TOKEN_STORAGE_KEY)
       localStorage.removeItem('subscription_status')
       localStorage.removeItem(USER_STORAGE_KEY)
+      clearResumeAnalysisResult()
       setToken('')
       setSubscriptionStatus('inactive')
       setUserProfile(null)

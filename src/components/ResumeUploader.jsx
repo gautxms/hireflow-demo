@@ -12,6 +12,7 @@ import {
   buildFileSnapshot,
   clearResumeAnalysisResult,
   clearResumeAnalysisSession,
+  getResumeAnalysisOwnerKey,
   isSessionRecoverable,
   readResumeAnalysisResult,
   readResumeAnalysisSession,
@@ -87,7 +88,7 @@ function writeUploadCache(next) {
   localStorage.setItem(RESUME_UPLOAD_STATE_KEY, JSON.stringify(next))
 }
 
-export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false }) {
+export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false, userProfile = null }) {
   const fileInputRef = useRef(null)
   const mountedRef = useRef(true)
   const activePollAbortControllerRef = useRef(null)
@@ -108,6 +109,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
   const isDevelopment = import.meta.env.DEV
   const canViewAdminDiagnostics = isAdmin || isDevelopment
+  const resumeAnalysisOwnerKey = getResumeAnalysisOwnerKey(userProfile)
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -595,7 +597,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         writeResumeAnalysisResult({
           ...latestResult,
           jobId: primaryJobId,
-        })
+        }, resumeAnalysisOwnerKey)
 
         onFileUploaded(latestResult)
         clearResumeAnalysisSession()
@@ -614,11 +616,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     }
 
     throw new Error('Resume parsing timed out. Please try again.')
-  }, [onFileUploaded, selectedJobDescriptionId, uploadedFiles])
+  }, [onFileUploaded, resumeAnalysisOwnerKey, selectedJobDescriptionId, uploadedFiles])
 
   const handleResumeTracking = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    const recoverableJobId = recoverableSession?.jobId || readResumeAnalysisResult()?.jobId
+    const recoverableJobId = recoverableSession?.jobId || readResumeAnalysisResult(resumeAnalysisOwnerKey)?.jobId
     if (!token || !recoverableJobId) {
       setShowRecoveryPrompt(false)
       return

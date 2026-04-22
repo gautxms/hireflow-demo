@@ -1,6 +1,32 @@
 const RESUME_ANALYSIS_SESSION_KEY = 'hireflow_resume_analysis_session_v1'
 const RESUME_ANALYSIS_RESULT_KEY = 'hireflow_resume_analysis_result_v1'
 
+function normalizeOwner(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+export function getResumeAnalysisOwnerKey(userProfile = null) {
+  if (!userProfile || typeof userProfile !== 'object') {
+    return ''
+  }
+
+  const preferred = [
+    userProfile.id,
+    userProfile.userId,
+    userProfile.uuid,
+    userProfile.email,
+  ]
+
+  for (const value of preferred) {
+    const normalized = normalizeOwner(value)
+    if (normalized) {
+      return normalized
+    }
+  }
+
+  return ''
+}
+
 function nowIso() {
   return new Date().toISOString()
 }
@@ -91,7 +117,7 @@ export function clearResumeAnalysisSession(storage = localStorage) {
   storage.removeItem(RESUME_ANALYSIS_SESSION_KEY)
 }
 
-export function readResumeAnalysisResult(storage = localStorage) {
+export function readResumeAnalysisResult(ownerKey = '', storage = localStorage) {
   const raw = storage.getItem(RESUME_ANALYSIS_RESULT_KEY)
   if (!raw) {
     return null
@@ -107,19 +133,32 @@ export function readResumeAnalysisResult(storage = localStorage) {
     return null
   }
 
+  const normalizedOwnerKey = normalizeOwner(ownerKey)
+  const savedOwnerKey = normalizeOwner(parsed.ownerKey)
+
+  if (savedOwnerKey && normalizedOwnerKey !== savedOwnerKey) {
+    return null
+  }
+
+  if (normalizedOwnerKey && !savedOwnerKey) {
+    return null
+  }
+
   return {
     version: 1,
     candidates,
     parseMeta: parsed.parseMeta && typeof parsed.parseMeta === 'object' ? parsed.parseMeta : null,
     jobId: String(parsed.jobId || '').trim(),
+    ownerKey: savedOwnerKey,
     savedAt: String(parsed.savedAt || ''),
   }
 }
 
-export function writeResumeAnalysisResult(payload, storage = localStorage) {
+export function writeResumeAnalysisResult(payload, ownerKey = '', storage = localStorage) {
   const next = {
     version: 1,
     ...(payload || {}),
+    ownerKey: normalizeOwner(ownerKey),
     savedAt: nowIso(),
   }
 
