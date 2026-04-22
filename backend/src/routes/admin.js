@@ -9,6 +9,7 @@ import {
   getAdminAiProviderSettings,
   KEY_LABELS,
   SUPPORTED_PROVIDERS,
+  getActiveAiProviderCredentials,
   upsertAdminAiProviderKeys,
   validateAiProviderModelConfiguration,
 } from '../services/aiProviderConfigService.js'
@@ -20,6 +21,92 @@ import {
 
 const router = Router()
 const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = [...SUPPORTED_PROVIDERS]
+const CONNECTION_TEST_TIMEOUT_MS = 15000
+
+function normalizeProviderError(error) {
+  const status = Number(error?.status || error?.statusCode || 0)
+  const message = String(error?.message || 'Unknown provider error')
+  const lower = message.toLowerCase()
+  const normalizedCode = status === 401 || lower.includes('authentication') || lower.includes('invalid api key')
+    ? 'auth_error'
+    : status === 404 || lower.includes('model not found') || lower.includes('not found')
+      ? 'invalid_model'
+      : status === 429 || lower.includes('rate limit')
+        ? 'rate_limit'
+        : lower.includes('timeout')
+          ? 'timeout'
+          : 'unknown'
+
+  return {
+    code: normalizedCode,
+    status: Number.isFinite(status) && status > 0 ? status : null,
+    message,
+  }
+}
+
+async function runProviderConnectionTest({ provider, apiKey, model }) {
+  const baseHeaders = {
+    'Content-Type': 'application/json',
+  }
+  const headers = provider === 'anthropic'
+    ? {
+        ...baseHeaders,
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      }
+    : {
+        ...baseHeaders,
+        Authorization: `Bearer ${apiKey}`,
+      }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), CONNECTION_TEST_TIMEOUT_MS)
+
+  try {
+    const requestBody = provider === 'anthropic'
+      ? {
+          model,
+          max_tokens: 8,
+          messages: [{ role: 'user', content: 'Respond with: ok' }],
+        }
+      : {
+          model,
+          max_output_tokens: 8,
+          input: 'Respond with: ok',
+        }
+
+    const response = await fetch(
+      provider === 'anthropic' ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/responses',
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) {
+      let body = null
+      try {
+        body = await response.json()
+      } catch {
+        body = null
+      }
+      throw {
+        status: response.status,
+        message: body?.error?.message || body?.message || `HTTP ${response.status}`,
+      }
+    }
+
+    return { ok: true }
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      return { ok: false, error: { code: 'timeout', status: null, message: 'Connection test timed out.' } }
+    }
+    return { ok: false, error: normalizeProviderError(error) }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 function getMonthStart(inputDate) {
   const date = inputDate ? new Date(inputDate) : new Date()
@@ -81,11 +168,66 @@ function normalizeInquiryRow(row) {
 
 router.get('/ai-settings', async (_req, res) => {
   try {
-    const settings = await getAdminAiProviderSettings()
-    return res.json(settings)
+    const [settings, modelValidation] = await Promise.all([
+      getAdminAiProviderSettings(),
+      validateAiProviderModelConfiguration(),
+    ])
+    return res.json({
+      ...settings,
+      modelWarnings: Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : [],
+      allowedModelsByProvider: modelValidation?.allowedModelsByProvider || {},
+    })
   } catch (error) {
     console.error('[Admin ai-settings] get failed:', error)
     return res.status(500).json({ error: 'Unable to load AI settings' })
+  }
+})
+
+router.post('/ai-settings/test-connection', async (req, res) => {
+  const provider = String(req.body?.provider || '').trim().toLowerCase()
+  const keyLabel = String(req.body?.keyLabel || 'primary').trim().toLowerCase()
+  const model = String(req.body?.model || '').trim()
+  const directApiKey = String(req.body?.apiKey || '').trim()
+
+  if (!SUPPORTED_PROVIDERS.includes(provider)) {
+    return res.status(400).json({ error: `provider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}` })
+  }
+  if (!KEY_LABELS.includes(keyLabel)) {
+    return res.status(400).json({ error: `keyLabel must be one of: ${KEY_LABELS.join(', ')}` })
+  }
+  if (!model) {
+    return res.status(400).json({ error: 'model is required.' })
+  }
+
+  try {
+    const credentials = await getActiveAiProviderCredentials()
+    const persistedApiKey = credentials?.providers?.[provider]?.[keyLabel]?.apiKey || ''
+    const apiKey = directApiKey || persistedApiKey
+    if (!apiKey) {
+      return res.status(400).json({ error: `No API key configured for ${provider} ${keyLabel}.` })
+    }
+
+    const testResult = await runProviderConnectionTest({ provider, apiKey, model })
+    if (!testResult.ok) {
+      return res.status(400).json({
+        ok: false,
+        provider,
+        keyLabel,
+        model,
+        ...testResult,
+      })
+    }
+
+    return res.json({
+      ok: true,
+      provider,
+      keyLabel,
+      model,
+      message: 'Connection successful.',
+    })
+  } catch (error) {
+    console.error('[Admin ai-settings] connection test failed:', error)
+    return res.status(500).json({ error: 'Unable to test provider connection.' })
   }
 })
 

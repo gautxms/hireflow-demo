@@ -286,24 +286,58 @@ export async function validateAiProviderModelConfiguration() {
   await ensureAiProviderTables()
 
   const { rows } = await pool.query(
-    `SELECT key_label, model
+    `SELECT provider, key_label, model
      FROM admin_ai_provider_keys
-     WHERE provider = $1
+     WHERE provider = ANY($1::text[])
        AND is_active = true`,
-    [DEFAULT_PROVIDER],
+    [SUPPORTED_PROVIDERS],
   )
 
-  const warnings = getAnthropicModelWarnings([
+  const warnings = []
+
+  const anthropicWarnings = getAnthropicModelWarnings([
     { source: 'env.ANTHROPIC_RESUME_MODEL', keyLabel: null, model: AI_MODEL_CONFIG.defaultModel },
-    ...rows.map((row) => ({
-      source: 'admin-console',
-      keyLabel: row.key_label,
-      model: row.model || AI_MODEL_CONFIG.defaultModel,
-    })),
+    ...rows
+      .filter((row) => row.provider === 'anthropic')
+      .map((row) => ({
+        source: 'admin-console',
+        keyLabel: row.key_label,
+        model: row.model || AI_MODEL_CONFIG.defaultModel,
+      })),
   ])
 
+  warnings.push(...anthropicWarnings.map((entry) => ({
+    provider: 'anthropic',
+    source: entry.source,
+    keyLabel: entry.keyLabel,
+    model: entry.model,
+    reason: 'invalid_or_deprecated_model',
+  })))
+
+  for (const provider of SUPPORTED_PROVIDERS.filter((item) => item !== 'anthropic')) {
+    const allowedModels = PROVIDER_MODEL_CONFIG[provider]?.allowedModels || []
+    if (!allowedModels.length) continue
+
+    const rowsForProvider = rows.filter((row) => row.provider === provider)
+    for (const row of rowsForProvider) {
+      const model = String(row.model || '').trim()
+      if (!model) continue
+      if (allowedModels.includes(model)) continue
+
+      warnings.push({
+        provider,
+        source: 'admin-console',
+        keyLabel: row.key_label,
+        model,
+        reason: 'invalid_or_deprecated_model',
+      })
+    }
+  }
+
   return {
-    allowedModels: AI_MODEL_CONFIG.allowedModels,
+    allowedModelsByProvider: Object.fromEntries(
+      SUPPORTED_PROVIDERS.map((provider) => [provider, PROVIDER_MODEL_CONFIG[provider]?.allowedModels || []]),
+    ),
     warnings,
   }
 }
