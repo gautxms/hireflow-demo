@@ -27,16 +27,73 @@ export function resetClaudeTokenStats() {
   claudeTokensUsed = { input: 0, output: 0, totalRequests: 0 }
 }
 
-function extractJson(text = '') {
+function sanitizeSnippet(value, maxLength = 180) {
+  return String(value || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+    .trim()
+    .slice(0, maxLength)
+}
+
+function createProviderResponseFormatError({
+  provider = null,
+  model = null,
+  technicalDetails = 'Provider returned malformed JSON output.',
+}) {
+  const serialized = JSON.stringify({
+    technicalDetails: sanitizeSnippet(technicalDetails),
+    provider: provider || null,
+    model: model || null,
+  })
+  return new Error(`response_format_error::${serialized}`)
+}
+
+export function extractJsonWithContext(text = '', { provider = null, model = null } = {}) {
   const trimmed = String(text || '').trim()
   if (!trimmed) {
-    throw new Error('Provider returned an empty response')
+    throw createProviderResponseFormatError({
+      provider,
+      model,
+      technicalDetails: 'Provider returned an empty response body.',
+    })
   }
 
+  const parseCandidates = []
+  const fenceStart = trimmed.indexOf('```')
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-  const payload = fencedMatch ? fencedMatch[1].trim() : trimmed
+  if (fencedMatch?.[1]) {
+    parseCandidates.push(fencedMatch[1].trim())
+  }
 
-  return JSON.parse(payload)
+  const firstBrace = trimmed.indexOf('{')
+  const lastBrace = trimmed.lastIndexOf('}')
+  const hasRecoverableBraces = firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
+  if (hasRecoverableBraces) {
+    parseCandidates.push(trimmed.slice(firstBrace, lastBrace + 1).trim())
+  }
+
+  if (fenceStart === -1 || !fencedMatch) {
+    parseCandidates.push(trimmed)
+  } else if (trimmed.slice(fenceStart).indexOf('```', 3) === -1) {
+    parseCandidates.push(trimmed)
+  }
+
+  const uniqueCandidates = [...new Set(parseCandidates.filter(Boolean))]
+  let lastError = null
+  for (const candidate of uniqueCandidates) {
+    try {
+      return JSON.parse(candidate)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw createProviderResponseFormatError({
+    provider,
+    model,
+    technicalDetails: `Unable to parse provider JSON response (${sanitizeSnippet(lastError?.message || 'invalid_json')}). Snippet: ${sanitizeSnippet(trimmed)}`,
+  })
 }
 
 async function sendBudgetAlert({ currentCost, limit }) {
@@ -167,6 +224,9 @@ function normalizeProviderError(error, attemptHistory = []) {
 
   const format = (category) => `${category}::${JSON.stringify({ technicalDetails: message, provider, model })}`
 
+  if (lower.includes('response_format_error')) {
+    return format('response_format_error')
+  }
   if (lower.includes('not_found_error') || lower.includes('model not found') || lower.includes('resource not found') || lower.includes('404')) {
     return format('not_found_error')
   }
@@ -319,7 +379,7 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
 
   const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
 
-  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker \"job_description_missing\" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
 
 export async function analyzeWithAnthropic(
@@ -384,7 +444,7 @@ export async function analyzeWithAnthropic(
     throw new Error('Unexpected Anthropic response format')
   }
 
-  const result = extractJson(textContent.text)
+  const result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('Anthropic response is missing candidates array')
   }
@@ -432,7 +492,6 @@ export async function analyzeWithOpenAI(
     },
     body: JSON.stringify({
       model,
-      temperature: 0,
       max_output_tokens: 2000,
       input: [
         {
@@ -465,7 +524,7 @@ export async function analyzeWithOpenAI(
     throw new Error('Unexpected OpenAI response format')
   }
 
-  const result = extractJson(outputText)
+  const result = extractJsonWithContext(outputText, { provider: 'openai', model })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('OpenAI response is missing candidates array')
   }

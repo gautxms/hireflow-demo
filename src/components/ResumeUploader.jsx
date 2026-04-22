@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
-import { mapProviderError } from './aiProviderErrorMapping'
+import { isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
 import {
   ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL,
   buildChunkInitPayload,
@@ -26,12 +26,13 @@ function sanitizeForDisplay(message) {
   return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
 }
 
-function isInfrastructureConfigError(message) {
-  const normalizedMessage = String(message || '').toLowerCase()
-  return normalizedMessage.includes('aws_s3_bucket')
-    || normalizedMessage.includes('s3')
-    || normalizedMessage.includes('credentials')
-    || normalizedMessage.includes('access denied')
+function withErrorContext(error, context = {}) {
+  const nextError = error instanceof Error ? error : new Error(String(error || 'unknown_error'))
+  nextError.context = {
+    ...(nextError.context && typeof nextError.context === 'object' ? nextError.context : {}),
+    ...context,
+  }
+  return nextError
 }
 
 function formatMultiLineError(lines) {
@@ -208,7 +209,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       if (attempt === MAX_CHUNK_RETRIES) {
         const errorPayload = await response.json().catch(() => ({}))
-        throw new Error(errorPayload.error || `Chunk upload failed at chunk ${chunkIndex + 1}`)
+        throw withErrorContext(new Error(errorPayload.error || `Chunk upload failed at chunk ${chunkIndex + 1}`), {
+          stage: 'upload_chunk',
+          endpoint: '/uploads/chunks/:uploadId/chunk',
+          status: response.status,
+        })
       }
 
       await new Promise((resolve) => setTimeout(resolve, 500 * attempt))
@@ -235,7 +240,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     const payload = await parseJsonSafe(response)
 
     if (!response.ok) {
-      throw new Error(payload.error || 'Unable to queue upload request')
+      throw withErrorContext(new Error(payload.error || 'Unable to queue upload request'), {
+        stage: 'upload_init',
+        endpoint: '/uploads',
+        status: response.status,
+      })
     }
 
     const jobs = Array.isArray(payload.jobs) ? payload.jobs : []
@@ -291,7 +300,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
           if (!initResponse.ok) {
             const payload = await parseJsonSafe(initResponse)
-            throw new Error(payload.error || `Failed to start chunk upload for ${file.name}`)
+            throw withErrorContext(new Error(payload.error || `Failed to start chunk upload for ${file.name}`), {
+              stage: 'upload_init',
+              endpoint: '/uploads/chunks/init',
+              status: initResponse.status,
+            })
           }
 
           const initPayload = await parseJsonSafe(initResponse)
@@ -334,7 +347,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           const completePayload = await parseJsonSafe(completeResponse)
 
           if (!completeResponse.ok) {
-            throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
+            throw withErrorContext(new Error(completePayload.error || `Failed to finalize upload for ${file.name}`), {
+              stage: 'upload_complete',
+              endpoint: '/uploads/chunks/:uploadId/complete',
+              status: completeResponse.status,
+            })
           }
 
           if (completePayload.scan?.malicious) {
@@ -350,7 +367,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       } catch (uploadError) {
         const fallbackMessage = sanitizeForDisplay(uploadError.message || '')
-        if (!isInfrastructureConfigError(fallbackMessage)) {
+        if (!isStorageInfrastructureError(fallbackMessage)) {
           throw uploadError
         }
 
@@ -390,7 +407,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
             continue
           }
-          throw new Error(`Polling failed (${statusResponse.status})`)
+          throw withErrorContext(new Error(`Polling failed (${statusResponse.status})`), {
+            stage: 'parse_status',
+            endpoint: '/uploads/:jobId/parse-status',
+            status: statusResponse.status,
+          })
         }
 
         queueRetryAttempt = 0
@@ -421,7 +442,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         }
 
         if (statusPayload.status === 'failed') {
-          throw new Error(statusPayload.error || 'unknown_error')
+          throw withErrorContext(new Error(statusPayload.error || 'unknown_error'), {
+            stage: 'parse_status',
+            endpoint: '/uploads/:jobId/parse-status',
+            status: 200,
+          })
         }
 
         await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
@@ -436,19 +461,25 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
       const normalizedProviderError = mapProviderError(errorMessage)
+      const errorContext = err?.context && typeof err.context === 'object' ? err.context : {}
+      const isUploadStage = String(errorContext.stage || '').startsWith('upload')
+      const isParseStatusStage = errorContext.stage === 'parse_status'
 
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
         setTechnicalErrorDetails('')
         setProviderErrorGuidance(null)
-      } else if (isInfrastructureConfigError(errorMessage)) {
+      } else if (isUploadStage && isStorageInfrastructureError(errorMessage)) {
         setError(formatUploadError('AWS S3 not configured'))
         setTechnicalErrorDetails('')
         setProviderErrorGuidance(null)
       } else if (
-        errorMessage.toLowerCase().includes('parse')
-        || errorMessage.toLowerCase().includes('no candidates')
-        || errorMessage.toLowerCase().includes('format')
+        !isParseStatusStage
+        && (
+          errorMessage.toLowerCase().includes('parse')
+          || errorMessage.toLowerCase().includes('no candidates')
+          || errorMessage.toLowerCase().includes('format')
+        )
       ) {
         setError(formatParseError('File format not recognized'))
         setTechnicalErrorDetails(errorMessage)

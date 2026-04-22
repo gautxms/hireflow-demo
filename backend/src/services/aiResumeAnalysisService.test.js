@@ -6,6 +6,7 @@ import {
   analyzeWithAnthropic,
   analyzeWithOpenAI,
   buildPromptWithJobDescription,
+  extractJsonWithContext,
 } from './aiResumeAnalysisService.js'
 
 test('buildPromptWithJobDescription includes AVAILABLE JD block when context exists', () => {
@@ -151,8 +152,10 @@ test('analyzeWithAnthropic embeds JD mode contract in request payload', async ()
 
 test('analyzeWithOpenAI embeds JD mode contract in request payload', async () => {
   let capturedPrompt = ''
+  let capturedBody = null
   const fetchImpl = async (_url, request) => {
     const body = JSON.parse(request.body)
+    capturedBody = body
     capturedPrompt = body?.input?.[0]?.content?.find((item) => item.type === 'input_text')?.text || ''
     return {
       ok: true,
@@ -172,4 +175,28 @@ test('analyzeWithOpenAI embeds JD mode contract in request payload', async () =>
   })
 
   assert.equal(capturedPrompt.includes('Analysis Mode: WITH_JOB_DESCRIPTION'), true)
+  assert.equal(Object.hasOwn(capturedBody, 'temperature'), false)
+})
+
+test('extractJsonWithContext parses raw JSON', () => {
+  const result = extractJsonWithContext('{"candidates":[{"id":"cand-1"}]}', { provider: 'openai', model: 'gpt-4o-mini' })
+  assert.equal(Array.isArray(result.candidates), true)
+})
+
+test('extractJsonWithContext parses fenced JSON', () => {
+  const result = extractJsonWithContext('```json\n{"candidates":[{"id":"cand-2"}]}\n```', { provider: 'anthropic', model: 'claude-sonnet-4' })
+  assert.equal(result.candidates[0].id, 'cand-2')
+})
+
+test('extractJsonWithContext recovers malformed fence using braces', () => {
+  const payload = 'Here is the result:\n```json\n{"candidates":[{"id":"cand-3"}]}\n'
+  const result = extractJsonWithContext(payload, { provider: 'anthropic', model: 'claude-sonnet-4' })
+  assert.equal(result.candidates[0].id, 'cand-3')
+})
+
+test('extractJsonWithContext throws response_format_error for non-recoverable text', () => {
+  assert.throws(
+    () => extractJsonWithContext('No JSON provided in this response', { provider: 'openai', model: 'gpt-4o-mini' }),
+    /response_format_error::/,
+  )
 })
