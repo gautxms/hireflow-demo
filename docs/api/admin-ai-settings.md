@@ -12,7 +12,7 @@
     "anthropic": {
       "provider": "anthropic",
       "defaultModel": "claude-3-5-sonnet-20241022",
-      "allowedModels": ["claude-3-5-sonnet-20241022"],
+      "modelRegistry": [{"modelId": "claude-sonnet-4-20250514", "status": "active", "displayName": "Claude Sonnet 4", "metadata": {}, "source": "admin"}],
       "primary": {
         "configured": true,
         "maskedApiKey": "sk-a****1bcd",
@@ -31,7 +31,7 @@
     "openai": {
       "provider": "openai",
       "defaultModel": "gpt-4o-mini",
-      "allowedModels": ["gpt-4o-mini"],
+      "modelRegistry": [{"modelId": "gpt-4o-mini", "status": "active", "displayName": "GPT-4o mini", "metadata": {}, "source": "env_seed"}],
       "primary": {
         "configured": false,
         "maskedApiKey": null,
@@ -138,3 +138,10 @@ Legacy flat payloads are still accepted and mapped to `providers.anthropic`:
   "fallbackModel": "claude-3-5-sonnet-20241022"
 }
 ```
+
+### Model validation behavior
+
+- If `admin_ai_model_registry` contains entries for a provider, configured models are checked against that registry.
+- If a provider has no registry entries, any model string is accepted (warning tier only, no save failure).
+- Invalid model **format** still returns `400` during save.
+- Warning reasons are tiered: `risky_untested_model` vs `invalid_or_deprecated_model` vs `invalid_format`.

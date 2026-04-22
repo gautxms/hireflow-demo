@@ -18,6 +18,7 @@ import {
   upsertAdminSystemPrompt,
   validateSystemPromptInput,
 } from '../services/adminSystemPromptService.js'
+import { isValidModelFormat } from '../config/aiModels.js'
 
 const router = Router()
 const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = [...SUPPORTED_PROVIDERS]
@@ -321,6 +322,10 @@ router.put('/ai-settings', async (req, res) => {
         if (hasModelField && !model) {
           return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model cannot be empty when provided.` })
         }
+
+        if (model && !isValidModelFormat(model)) {
+          return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model has invalid format.` })
+        }
       }
     }
 
@@ -396,7 +401,7 @@ router.put('/ai-settings', async (req, res) => {
       ok: true,
       settings,
       modelWarnings: warnings,
-      warning: warnings.length > 0 ? 'One or more configured models are not in the allowed Anthropic model list.' : null,
+      warning: warnings.length > 0 ? 'One or more configured models should be reviewed.' : null,
       ...updateFlags,
     })
   } catch (error) {
@@ -439,7 +444,11 @@ router.put('/system-prompt', async (req, res) => {
       return res.status(400).json({ error: error.message })
     }
     console.error('[Admin system-prompt] update failed:', error)
-    return res.status(500).json({ error: 'Unable to update system prompt' })
+    const details = String(error?.message || '').trim()
+    return res.status(500).json({
+      error: 'Unable to update system prompt',
+      details: details || 'unknown_error',
+    })
   }
 })
 

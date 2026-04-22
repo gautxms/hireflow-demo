@@ -28,6 +28,17 @@ function getWarningKey(warning = {}) {
   return `${warning?.provider || ''}:${warning?.keyLabel || ''}:${warning?.model || ''}`
 }
 
+
+function getModelWarningMessage(warning = {}) {
+  if (warning?.reason === 'invalid_format') {
+    return `Model "${warning.model}" has an invalid format.`
+  }
+  if (warning?.reason === 'risky_untested_model') {
+    return `Model "${warning.model}" is untested for this provider (${warning?.detail || 'not in registry'}).`
+  }
+  return `Model "${warning.model}" is deprecated or blocked in the registry.`
+}
+
 export default function AdminSecurityPage() {
   const [settings, setSettings] = useState(null)
   const [promptSettings, setPromptSettings] = useState(null)
@@ -327,7 +338,7 @@ export default function AdminSecurityPage() {
                         <ul className="mt-2 list-disc pl-5 text-xs text-admin-warning">
                           {warnings.map((warning, index) => (
                             <li key={`${warning.source}-${index}`}>
-                              Model "{warning.model}" is flagged as deprecated/invalid.
+                              {getModelWarningMessage(warning)}
                             </li>
                           ))}
                         </ul>
@@ -404,7 +415,6 @@ export default function AdminSecurityPage() {
             id="systemPromptInput"
             className={SYSTEM_PROMPT_TEXTAREA_CLASS}
             rows={12}
-            className="min-h-56 w-full resize-y rounded border border-admin px-3 py-2 font-mono text-xs md:text-sm"
             value={systemPromptInput}
             onChange={(e) => setSystemPromptInput(e.target.value)}
             placeholder="Enter the system prompt used by resume parsing."

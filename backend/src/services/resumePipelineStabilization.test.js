@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { hasCompleteChunkSet } from './fileUploadService.js'
 import { isScanResultSafe } from './virusScanService.js'
 import { shouldUseOcrFallback } from '../jobs/ocrFallbackJob.js'
-import { buildJobDescriptionContext, isTerminalJobFailure } from '../jobs/parseResumeJob.js'
+import { applyJobDescriptionScoringMode, buildJobDescriptionContext, isTerminalJobFailure } from '../jobs/parseResumeJob.js'
 import { normalizeQueueCounts } from '../routes/admin/health.js'
 import { redactValue } from '../routes/admin/logs.js'
 
@@ -74,6 +74,26 @@ test('job description context marks missing JD when parse request has no JD row'
     source: 'none',
     missingReason: 'job_description_missing',
   })
+})
+
+test('no-JD scoring mode nulls match score and annotates missing-JD reason', () => {
+  const [candidate] = applyJobDescriptionScoringMode([{
+    id: 'cand-1',
+    matchScore: { score: 84, fit: 'good' },
+    fit_assessment: {
+      notes: ['existing_note'],
+      overall_fit_score: 84,
+    },
+  }], {
+    hasContext: false,
+    missingReason: 'job_description_missing',
+  })
+
+  assert.equal(candidate.matchScore, null)
+  assert.equal(candidate.matchScoreReason, 'job_description_missing')
+  assert.equal(candidate.fit_assessment.has_job_description_context, false)
+  assert.equal(candidate.fit_assessment.overall_fit_score, null)
+  assert.equal(candidate.fit_assessment.notes.includes('job_description_missing'), true)
 })
 
 test('health queue response normalizes numeric counts safely', () => {
