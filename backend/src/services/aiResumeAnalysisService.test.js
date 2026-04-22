@@ -188,15 +188,41 @@ test('extractJsonWithContext parses fenced JSON', () => {
   assert.equal(result.candidates[0].id, 'cand-2')
 })
 
+test('extractJsonWithContext parses fenced JSON wrapped in provider text', () => {
+  const payload = 'Absolutely — here is the parsed result.\n```json\n{"candidates":[{"id":"cand-2b"}]}\n```\nLet me know if you want a schema.'
+  const result = extractJsonWithContext(payload, { provider: 'anthropic', model: 'claude-sonnet-4' })
+  assert.equal(result.candidates[0].id, 'cand-2b')
+})
+
 test('extractJsonWithContext recovers malformed fence using braces', () => {
   const payload = 'Here is the result:\n```json\n{"candidates":[{"id":"cand-3"}]}\n'
   const result = extractJsonWithContext(payload, { provider: 'anthropic', model: 'claude-sonnet-4' })
   assert.equal(result.candidates[0].id, 'cand-3')
 })
 
+test('extractJsonWithContext recovers unclosed generic fence with language tag', () => {
+  const payload = 'Result below:\n```javascript\n{"candidates":[{"id":"cand-3b"}]}'
+  const result = extractJsonWithContext(payload, { provider: 'openai', model: 'gpt-4o-mini' })
+  assert.equal(result.candidates[0].id, 'cand-3b')
+})
+
+test('extractJsonWithContext recovers when json is surrounded by extra text', () => {
+  const payload = 'analysis-start {"candidates":[{"id":"cand-4"}],"confidence":0.9} analysis-end'
+  const result = extractJsonWithContext(payload, { provider: 'openai', model: 'gpt-4o-mini' })
+  assert.equal(result.candidates[0].id, 'cand-4')
+})
+
 test('extractJsonWithContext throws response_format_error for non-recoverable text', () => {
   assert.throws(
     () => extractJsonWithContext('No JSON provided in this response', { provider: 'openai', model: 'gpt-4o-mini' }),
+    /response_format_error::/,
+  )
+})
+
+test('extractJsonWithContext keeps strict failure for invalid json body', () => {
+  const payload = '```json\n{"candidates":[{"id":"cand-bad",}]}\n```'
+  assert.throws(
+    () => extractJsonWithContext(payload, { provider: 'anthropic', model: 'claude-sonnet-4' }),
     /response_format_error::/,
   )
 })

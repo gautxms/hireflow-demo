@@ -60,23 +60,38 @@ export function extractJsonWithContext(text = '', { provider = null, model = nul
   }
 
   const parseCandidates = []
-  const fenceStart = trimmed.indexOf('```')
-  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-  if (fencedMatch?.[1]) {
-    parseCandidates.push(fencedMatch[1].trim())
+  parseCandidates.push(trimmed)
+
+  const fenceBodies = []
+  const fencePattern = /```(?:[a-z0-9_-]+)?[ \t]*\n?([\s\S]*?)```/ig
+  let fencedMatch = fencePattern.exec(trimmed)
+  while (fencedMatch) {
+    if (fencedMatch?.[1]) {
+      fenceBodies.push(fencedMatch[1].trim())
+    }
+    fencedMatch = fencePattern.exec(trimmed)
   }
+
+  const hasAnyFence = trimmed.includes('```')
+  const hasClosedFence = fenceBodies.length > 0
+  if (hasAnyFence && !hasClosedFence) {
+    const lastFenceIndex = trimmed.lastIndexOf('```')
+    const afterFence = trimmed.slice(lastFenceIndex + 3)
+    const firstNewlineIndex = afterFence.indexOf('\n')
+    const fencedBody = firstNewlineIndex === -1
+      ? afterFence
+      : afterFence.slice(firstNewlineIndex + 1)
+    if (fencedBody.trim()) {
+      fenceBodies.push(fencedBody.trim())
+    }
+  }
+  parseCandidates.push(...fenceBodies)
 
   const firstBrace = trimmed.indexOf('{')
   const lastBrace = trimmed.lastIndexOf('}')
   const hasRecoverableBraces = firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
   if (hasRecoverableBraces) {
     parseCandidates.push(trimmed.slice(firstBrace, lastBrace + 1).trim())
-  }
-
-  if (fenceStart === -1 || !fencedMatch) {
-    parseCandidates.push(trimmed)
-  } else if (trimmed.slice(fenceStart).indexOf('```', 3) === -1) {
-    parseCandidates.push(trimmed)
   }
 
   const uniqueCandidates = [...new Set(parseCandidates.filter(Boolean))]
