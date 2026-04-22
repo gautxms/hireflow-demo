@@ -63,6 +63,11 @@ export default function AdminSecurityPage() {
   const [settings, setSettings] = useState(null)
   const [promptSettings, setPromptSettings] = useState(null)
   const [tokenUsageRows, setTokenUsageRows] = useState([])
+  const [loadSectionErrors, setLoadSectionErrors] = useState({
+    aiSettings: '',
+    tokenUsage: '',
+    systemPrompt: '',
+  })
   const [form, setForm] = useState(buildEmptyForm)
   const [modelWarnings, setModelWarnings] = useState([])
   const [message, setMessage] = useState('')
@@ -112,23 +117,46 @@ export default function AdminSecurityPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    try {
-      const [settingsPayload, analyticsPayload, promptPayload] = await Promise.all([
-        adminFetchJson(`${API_BASE}/admin/ai-settings`),
-        adminFetchJson(`${API_BASE}/admin/analytics/token-usage`),
-        adminFetchJson(`${API_BASE}${SYSTEM_PROMPT_SAVE_PATH}`),
-      ])
+    const [settingsResult, analyticsResult, promptResult] = await Promise.allSettled([
+      adminFetchJson(`${API_BASE}/admin/ai-settings`),
+      adminFetchJson(`${API_BASE}/admin/analytics/token-usage`),
+      adminFetchJson(`${API_BASE}${SYSTEM_PROMPT_SAVE_PATH}`),
+    ])
+
+    const nextErrors = {
+      aiSettings: '',
+      tokenUsage: '',
+      systemPrompt: '',
+    }
+
+    if (settingsResult.status === 'fulfilled') {
+      const settingsPayload = settingsResult.value
       setSettings(settingsPayload)
       setForm(hydrateFormFromSettings(settingsPayload))
       setModelWarnings(Array.isArray(settingsPayload?.modelWarnings) ? settingsPayload.modelWarnings : [])
-      setTokenUsageRows(Array.isArray(analyticsPayload?.tokenUsageUploads) ? analyticsPayload.tokenUsageUploads : [])
-      setPromptSettings(promptPayload)
-      setSystemPromptInput(promptPayload?.systemPrompt || '')
       setConnectionStatusByField({})
       setLastSuccessfulTestsByModel(settingsPayload?.metadata?.connectionTestsByModel || {})
-    } finally {
-      setLoading(false)
+    } else {
+      nextErrors.aiSettings = 'Couldn’t load AI settings. Showing last known configuration.'
     }
+
+    if (analyticsResult.status === 'fulfilled') {
+      const analyticsPayload = analyticsResult.value
+      setTokenUsageRows(Array.isArray(analyticsPayload?.tokenUsageUploads) ? analyticsPayload.tokenUsageUploads : [])
+    } else {
+      nextErrors.tokenUsage = 'Couldn’t load token analytics. Showing last known usage values.'
+    }
+
+    if (promptResult.status === 'fulfilled') {
+      const promptPayload = promptResult.value
+      setPromptSettings(promptPayload)
+      setSystemPromptInput(promptPayload?.systemPrompt || '')
+    } else {
+      nextErrors.systemPrompt = 'Couldn’t load prompt, using default fallback.'
+    }
+
+    setLoadSectionErrors(nextErrors)
+    setLoading(false)
   }, [hydrateFormFromSettings])
 
   useEffect(() => {
@@ -378,6 +406,9 @@ export default function AdminSecurityPage() {
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-admin-strong">Resume AI provider keys</h2>
         <p className="mt-1 text-sm text-admin-body">Set active provider plus primary/fallback API keys and models for Anthropic and OpenAI.</p>
+        {loadSectionErrors.aiSettings ? (
+          <p className="mt-2 text-xs text-admin-warning">{loadSectionErrors.aiSettings}</p>
+        ) : null}
         <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={save}>
           <label className="text-sm text-admin-body">Active provider
             <select className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.activeProvider} onChange={(e) => setForm((c) => ({ ...c, activeProvider: e.target.value }))}>
@@ -531,6 +562,9 @@ export default function AdminSecurityPage() {
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-admin-strong">Resume analysis system prompt</h2>
         <p className="mt-1 text-sm text-admin-body">Manage the shared system prompt used at runtime for provider-agnostic resume parsing.</p>
+        {loadSectionErrors.systemPrompt ? (
+          <p className="mt-2 text-xs text-admin-warning">{loadSectionErrors.systemPrompt}</p>
+        ) : null}
         <form className="mt-4 grid w-full min-w-0 gap-3" onSubmit={saveSystemPrompt}>
           <label className="text-sm text-admin-body" htmlFor="systemPromptInput">System prompt</label>
           <p className="text-xs text-admin-muted">Use this prompt to control extraction + JD matching behavior.</p>
@@ -559,6 +593,9 @@ export default function AdminSecurityPage() {
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-admin-strong">Token usage by key</h2>
         <p className="mt-1 text-sm text-admin-body">Track token and estimated cost consumption separately for primary and fallback keys.</p>
+        {loadSectionErrors.tokenUsage ? (
+          <p className="mt-2 text-xs text-admin-warning">{loadSectionErrors.tokenUsage}</p>
+        ) : null}
         <div className="mt-3 grid gap-3 md:grid-cols-2 text-sm">
           <div className="rounded border border-admin p-3">
             <p className="text-admin-muted">Primary key</p>
