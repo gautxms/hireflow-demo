@@ -19,7 +19,7 @@ import {
 } from '../services/adminSystemPromptService.js'
 
 const router = Router()
-const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = ['anthropic']
+const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = [...SUPPORTED_PROVIDERS]
 
 function getMonthStart(inputDate) {
   const date = inputDate ? new Date(inputDate) : new Date()

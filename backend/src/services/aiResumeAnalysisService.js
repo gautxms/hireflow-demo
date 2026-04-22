@@ -11,6 +11,7 @@ const MIME_TYPE_MAP = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/msword': 'application/msword',
 }
+const PROVIDER_ORDER = ['anthropic', 'openai']
 
 let claudeTokensUsed = {
   input: 0,
@@ -29,7 +30,7 @@ export function resetClaudeTokenStats() {
 function extractJson(text = '') {
   const trimmed = String(text || '').trim()
   if (!trimmed) {
-    throw new Error('Claude returned an empty response')
+    throw new Error('Provider returned an empty response')
   }
 
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
@@ -96,7 +97,7 @@ async function trackTokens(usage = {}, resumeId = 'unknown') {
   await checkBudgetAlert(totalCostThisSession)
 }
 
-function normalizeUsageMetrics(usage) {
+function normalizeUsageMetrics(usage, provider = 'anthropic') {
   if (!usage) {
     return {
       usageAvailable: false,
@@ -108,8 +109,8 @@ function normalizeUsageMetrics(usage) {
     }
   }
 
-  const inputTokens = Number(usage.input_tokens)
-  const outputTokens = Number(usage.output_tokens)
+  const inputTokens = Number(usage.input_tokens ?? usage.input_tokens_total ?? usage.prompt_tokens ?? usage.inputTokens)
+  const outputTokens = Number(usage.output_tokens ?? usage.output_tokens_total ?? usage.completion_tokens ?? usage.outputTokens)
   if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens)) {
     return {
       usageAvailable: false,
@@ -121,7 +122,9 @@ function normalizeUsageMetrics(usage) {
     }
   }
 
-  const estimatedCostUsd = (inputTokens / 1000) * 0.003 + (outputTokens / 1000) * 0.015
+  const estimatedCostUsd = provider === 'anthropic'
+    ? (inputTokens / 1000) * 0.003 + (outputTokens / 1000) * 0.015
+    : null
 
   return {
     usageAvailable: true,
@@ -129,18 +132,103 @@ function normalizeUsageMetrics(usage) {
     inputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
-    estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)),
+    estimatedCostUsd: estimatedCostUsd === null ? null : Number(estimatedCostUsd.toFixed(6)),
   }
 }
 
-export async function analyzeResumeWithClaude(
+function normalizeProviderError(error) {
+  const message = String(error?.message || 'Unknown provider error').trim()
+  const lower = message.toLowerCase()
+
+  if (lower.includes('not_found_error') || lower.includes('model not found') || lower.includes('resource not found') || lower.includes('404')) {
+    return `not_found_error::${message}`
+  }
+  if (lower.includes('invalid_request_error') || lower.includes('invalid request') || lower.includes('unsupported model')) {
+    return `invalid_request_error::${message}`
+  }
+  if (lower.includes('authentication') || lower.includes('unauthorized') || lower.includes('invalid api key') || lower.includes('401')) {
+    return `auth_error::${message}`
+  }
+  if (lower.includes('rate limit') || lower.includes('429')) {
+    return `rate_limit_error::${message}`
+  }
+  if (lower.includes('timeout') || lower.includes('timed out')) {
+    return `timeout_error::${message}`
+  }
+  if (lower.includes('network') || lower.includes('fetch failed') || lower.includes('econnreset')) {
+    return `network_error::${message}`
+  }
+
+  return `unknown_error::${message}`
+}
+
+function createAttemptRecord({
+  success,
+  provider,
+  keyLabel,
+  model,
+  providerSource,
+  promptVersion,
+  promptIsDefaultFallback,
+  tokenUsage,
+}) {
+  return {
+    success: Boolean(success),
+    provider: `${provider}-${keyLabel}`,
+    model,
+    credentialLabel: keyLabel,
+    providerSource,
+    promptVersion,
+    promptIsDefaultFallback,
+    tokenUsage,
+  }
+}
+
+function createTerminalProviderError(lastError, attemptHistory) {
+  const normalizedMessage = lastError ? normalizeProviderError(lastError) : 'unknown_error::All configured AI providers failed.'
+  const terminalError = new Error(normalizedMessage)
+  terminalError.attempts = attemptHistory
+  terminalError.cause = lastError || null
+  return terminalError
+}
+
+export function buildProviderAttemptPlan(credentials = {}) {
+  const activeProvider = String(credentials?.activeProvider || 'anthropic').trim().toLowerCase()
+  const providers = credentials?.providers && typeof credentials.providers === 'object' ? credentials.providers : {}
+  const secondaryProviders = PROVIDER_ORDER.filter((provider) => provider !== activeProvider)
+  const orderedProviders = [activeProvider, ...secondaryProviders].filter((provider, index, list) => list.indexOf(provider) === index)
+
+  const plan = []
+  for (const provider of orderedProviders) {
+    const providerConfig = providers?.[provider]
+    if (!providerConfig || typeof providerConfig !== 'object') continue
+
+    for (const keyLabel of ['primary', 'fallback']) {
+      const candidate = providerConfig?.[keyLabel]
+      if (!candidate?.apiKey) continue
+
+      plan.push({
+        provider,
+        keyLabel,
+        apiKey: candidate.apiKey,
+        model: candidate.model || MODEL,
+        source: candidate.source || 'unknown',
+      })
+    }
+  }
+
+  return plan
+}
+
+export async function analyzeWithAnthropic(
   fileBufferBase64,
   mimeType,
   filename,
   {
     apiKey,
     model = MODEL,
-    credentialLabel = 'primary',
+    keyLabel = 'primary',
+    providerSource = 'unknown',
     systemPromptConfig = null,
   } = {},
 ) {
@@ -155,110 +243,187 @@ export async function analyzeResumeWithClaude(
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
 
-  try {
-    const response = await client.messages.create({
+  const response = await client.messages.create({
+    model,
+    max_tokens: 2000,
+    temperature: 0,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: fileBufferBase64,
+            },
+          },
+          {
+            type: 'text',
+            text: prompt,
+          },
+        ],
+      },
+    ],
+  })
+
+  const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
+  if (tokenUsage.usageAvailable) {
+    await trackTokens(response.usage, filename)
+  }
+
+  const textContent = (response.content || []).find((item) => item.type === 'text')
+  if (!textContent || textContent.type !== 'text') {
+    throw new Error('Unexpected Anthropic response format')
+  }
+
+  const result = extractJson(textContent.text)
+  if (!Array.isArray(result?.candidates)) {
+    throw new Error('Anthropic response is missing candidates array')
+  }
+
+  return {
+    result,
+    tokenUsage,
+    provider: `anthropic-${keyLabel}`,
+    model,
+    credentialLabel: keyLabel,
+    providerSource,
+    promptVersion,
+    promptIsDefaultFallback,
+  }
+}
+
+export async function analyzeWithOpenAI(
+  fileBufferBase64,
+  mimeType,
+  _filename,
+  {
+    apiKey,
+    model = 'gpt-4o-mini',
+    keyLabel = 'primary',
+    providerSource = 'unknown',
+    systemPromptConfig = null,
+  } = {},
+) {
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured. OpenAI analysis unavailable.')
+  }
+
+  const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
+  const prompt = systemPromptConfig?.systemPrompt
+  const promptVersion = systemPromptConfig?.promptVersion || 1
+  const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
       model,
-      max_tokens: 2000,
       temperature: 0,
-      messages: [
+      max_output_tokens: 2000,
+      input: [
         {
           role: 'user',
           content: [
             {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: fileBufferBase64,
-              },
+              type: 'input_file',
+              filename: 'resume',
+              file_data: `data:${mediaType};base64,${fileBufferBase64}`,
             },
             {
-              type: 'text',
+              type: 'input_text',
               text: prompt,
             },
           ],
         },
       ],
-    })
+    }),
+  })
 
-    const tokenUsage = normalizeUsageMetrics(response.usage)
-    if (tokenUsage.usageAvailable) {
-      await trackTokens(response.usage, filename)
-    }
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null)
+    const message = errorPayload?.error?.message || `OpenAI request failed with status ${response.status}`
+    throw new Error(message)
+  }
 
-    const textContent = (response.content || []).find((item) => item.type === 'text')
-    if (!textContent || textContent.type !== 'text') {
-      throw new Error('Unexpected Claude response format')
-    }
+  const payload = await response.json()
+  const outputText = String(payload?.output_text || '').trim()
+  if (!outputText) {
+    throw new Error('Unexpected OpenAI response format')
+  }
 
-    const result = extractJson(textContent.text)
-    if (!Array.isArray(result?.candidates)) {
-      throw new Error('Claude response is missing candidates array')
-    }
+  const result = extractJson(outputText)
+  if (!Array.isArray(result?.candidates)) {
+    throw new Error('OpenAI response is missing candidates array')
+  }
 
-    return {
-      result,
-      tokenUsage,
-      provider: `anthropic-${credentialLabel}`,
-      model,
-      credentialLabel,
-      promptVersion,
-      promptIsDefaultFallback,
-    }
-  } catch (error) {
-    console.error('[Claude] Analysis failed:', {
-      error: error.message,
-      file: filename,
-    })
-    throw error
+  return {
+    result,
+    tokenUsage: normalizeUsageMetrics(payload?.usage, 'openai'),
+    provider: `openai-${keyLabel}`,
+    model,
+    credentialLabel: keyLabel,
+    providerSource,
+    promptVersion,
+    promptIsDefaultFallback,
   }
 }
 
-export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename) {
-  const credentials = await getActiveAiProviderCredentials()
-  const systemPromptConfig = await getRuntimeSystemPromptConfig()
+export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, options = {}) {
+  const credentials = options.credentials || await getActiveAiProviderCredentials()
+  const systemPromptConfig = options.systemPromptConfig || await getRuntimeSystemPromptConfig()
+  const adapters = {
+    anthropic: options.analyzeWithAnthropic || analyzeWithAnthropic,
+    openai: options.analyzeWithOpenAI || analyzeWithOpenAI,
+  }
+  const attemptPlan = buildProviderAttemptPlan(credentials)
 
-  const attempts = [credentials.primary, credentials.fallback].filter((entry) => entry?.apiKey)
-  if (attempts.length === 0) {
-    throw new Error('No configured AI API keys found. Configure primary/fallback keys in Admin Security.')
+  if (attemptPlan.length === 0) {
+    throw new Error('No configured AI API keys found. Configure provider primary/fallback keys in Admin Security.')
   }
 
   let lastError = null
   const attemptHistory = []
 
-  for (const entry of attempts) {
+  for (const entry of attemptPlan) {
     try {
-      const response = await analyzeResumeWithClaude(fileBufferBase64, mimeType, filename, {
+      const adapter = adapters[entry.provider] || analyzeWithAnthropic
+      const response = await adapter(fileBufferBase64, mimeType, filename, {
         apiKey: entry.apiKey,
-        model: entry.model || MODEL,
-        credentialLabel: entry.keyLabel,
+        model: entry.model,
+        keyLabel: entry.keyLabel,
+        providerSource: entry.source,
         systemPromptConfig,
       })
 
       return {
         ...response,
-        providerSource: entry.source,
         attempts: [
           ...attemptHistory,
-          {
+          createAttemptRecord({
             success: true,
-            provider: response.provider,
+            provider: entry.provider,
+            keyLabel: entry.keyLabel,
             model: response.model,
-            credentialLabel: response.credentialLabel,
             providerSource: entry.source,
-            tokenUsage: response.tokenUsage,
             promptVersion: response.promptVersion,
             promptIsDefaultFallback: response.promptIsDefaultFallback,
-          },
+            tokenUsage: response.tokenUsage,
+          }),
         ],
       }
     } catch (error) {
       lastError = error
-      attemptHistory.push({
+      attemptHistory.push(createAttemptRecord({
         success: false,
-        provider: `anthropic-${entry.keyLabel}`,
-        model: entry.model || MODEL,
-        credentialLabel: entry.keyLabel,
+        provider: entry.provider,
+        keyLabel: entry.keyLabel,
+        model: entry.model,
         providerSource: entry.source,
         promptVersion: systemPromptConfig?.promptVersion || 1,
         promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback),
@@ -266,14 +431,12 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
           usageAvailable: false,
           unavailableReason: `provider_request_failed:${String(error?.message || 'unknown').slice(0, 160)}`,
         },
-      })
-      console.warn(`[AI Parse] ${entry.keyLabel} key failed:`, error.message)
+      }))
+      console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} failed:`, error.message)
     }
   }
 
-  if (lastError && attemptHistory.length > 0) {
-    lastError.attempts = attemptHistory
-  }
-
-  throw lastError || new Error('All configured AI providers failed.')
+  throw createTerminalProviderError(lastError, attemptHistory)
 }
+
+export const analyzeResumeWithClaude = analyzeWithAnthropic

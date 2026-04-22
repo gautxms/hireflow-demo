@@ -311,31 +311,54 @@ export async function validateAiProviderModelConfiguration() {
 export async function getActiveAiProviderCredentials() {
   await ensureAiProviderTables()
 
-  const { rows } = await pool.query(
-    `SELECT key_label, api_key, model, is_active
-     FROM admin_ai_provider_keys
-     WHERE provider = $1
-     ORDER BY CASE key_label WHEN 'primary' THEN 1 ELSE 2 END`,
-    [DEFAULT_PROVIDER],
-  )
+  const [keysResult, settingsResult] = await Promise.all([
+    pool.query(
+      `SELECT provider, key_label, api_key, model, is_active
+       FROM admin_ai_provider_keys
+       WHERE provider = ANY($1::text[])
+       ORDER BY provider ASC, CASE key_label WHEN 'primary' THEN 1 ELSE 2 END`,
+      [SUPPORTED_PROVIDERS],
+    ),
+    pool.query('SELECT active_provider FROM admin_ai_settings WHERE id = true LIMIT 1'),
+  ])
 
-  const primary = rows.find((row) => row.key_label === 'primary' && row.is_active && row.api_key)
-  const fallback = rows.find((row) => row.key_label === 'fallback' && row.is_active && row.api_key)
+  const rowsByProvider = new Map(SUPPORTED_PROVIDERS.map((provider) => [provider, []]))
+  for (const row of keysResult.rows) {
+    const provider = String(row.provider || '').trim()
+    if (!rowsByProvider.has(provider)) continue
+    rowsByProvider.get(provider).push(row)
+  }
+
+  const providers = Object.fromEntries(SUPPORTED_PROVIDERS.map((provider) => {
+    const rows = rowsByProvider.get(provider) || []
+    const primary = rows.find((row) => row.key_label === 'primary' && row.is_active && row.api_key)
+    const fallback = rows.find((row) => row.key_label === 'fallback' && row.is_active && row.api_key)
+    const envPrimaryKey = provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY
+    const envFallbackKey = provider === 'anthropic' ? process.env.ANTHROPIC_FALLBACK_API_KEY : process.env.OPENAI_FALLBACK_API_KEY
+    const defaultModel = PROVIDER_MODEL_CONFIG[provider]?.defaultModel || AI_MODEL_CONFIG.defaultModel
+
+    return [provider, {
+      provider,
+      primary: {
+        keyLabel: 'primary',
+        apiKey: primary?.api_key || envPrimaryKey || '',
+        model: primary?.model || defaultModel,
+        source: primary?.api_key ? 'admin-console' : 'env',
+      },
+      fallback: {
+        keyLabel: 'fallback',
+        apiKey: fallback?.api_key || envFallbackKey || '',
+        model: fallback?.model || defaultModel,
+        source: fallback?.api_key ? 'admin-console' : 'env',
+      },
+    }]
+  }))
+
+  const activeProvider = settingsResult.rows[0]?.active_provider
 
   return {
-    provider: DEFAULT_PROVIDER,
-    primary: {
-      keyLabel: 'primary',
-      apiKey: primary?.api_key || process.env.ANTHROPIC_API_KEY || '',
-      model: primary?.model || AI_MODEL_CONFIG.defaultModel,
-      source: primary?.api_key ? 'admin-console' : 'env',
-    },
-    fallback: {
-      keyLabel: 'fallback',
-      apiKey: fallback?.api_key || process.env.ANTHROPIC_FALLBACK_API_KEY || '',
-      model: fallback?.model || AI_MODEL_CONFIG.defaultModel,
-      source: fallback?.api_key ? 'admin-console' : 'env',
-    },
+    activeProvider: SUPPORTED_PROVIDERS.includes(activeProvider) ? activeProvider : DEFAULT_PROVIDER,
+    providers,
   }
 }
 
