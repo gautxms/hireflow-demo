@@ -69,3 +69,11 @@ test('normalizeProviderError preserves provider/model context for response forma
   assert.equal(result.action, 'retry_or_adjust_provider_model')
   assert.match(result.normalizedMessage, /^response_format_error::\{/)
 })
+
+
+test('normalizeProviderError maps truncated provider outputs', () => {
+  const result = normalizeProviderError('response_truncated_error::{"technicalDetails":"stop_reason=max_tokens"}')
+
+  assert.equal(result.category, 'response_truncated_error')
+  assert.equal(result.action, 'retry_or_adjust_provider_model')
+})

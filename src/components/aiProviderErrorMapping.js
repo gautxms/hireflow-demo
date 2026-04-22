@@ -1,17 +1,18 @@
 const CATEGORY_MESSAGES = {
-  response_format_error: 'The AI provider returned an invalid response format.',
-  invalid_request_error: 'The configured AI model is invalid or no longer supported.',
-  auth_error: 'The AI provider API key is invalid or expired.',
-  billing_quota_error: 'The active AI provider has a billing or quota issue.',
-  rate_limit_error: 'The AI provider is rate-limiting requests right now.',
-  timeout_error: 'The AI provider timed out while processing this request.',
-  network_error: 'Temporary network issue while contacting the AI provider.',
-  ai_disabled_error: 'AI analysis is currently disabled by an administrator.',
-  not_found_error: 'The configured AI model could not be found.',
+  response_format_error: 'We could not read the AI analysis response. Please retry.',
+  response_truncated_error: 'The AI response was cut off before it finished. Please retry.',
+  invalid_request_error: 'This analysis request could not be completed right now. Please retry.',
+  auth_error: 'The AI service is temporarily unavailable. Please retry.',
+  billing_quota_error: 'The AI service is temporarily unavailable. Please retry.',
+  rate_limit_error: 'The AI service is busy right now. Please retry shortly.',
+  timeout_error: 'The AI service timed out while processing this request. Please retry.',
+  network_error: 'A temporary network issue interrupted analysis. Please retry.',
+  ai_disabled_error: 'AI analysis is currently unavailable. Please contact support.',
+  not_found_error: 'The AI service configuration is unavailable right now. Please retry.',
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
 const DEFAULT_ADMIN_PATH = '/admin/security'
 
 function sanitizeRawMessage(rawMessage) {
@@ -43,6 +44,15 @@ export function detectProviderErrorCategory(rawMessage) {
       category: normalizedPrefixMatch[1].toLowerCase(),
       extractedDetails: sanitizeRawMessage(normalizedPrefixMatch[3]),
     }
+  }
+
+  if (
+    lower.includes('response_truncated_error')
+    || lower.includes('max_tokens')
+    || lower.includes('length')
+    || lower.includes('output was truncated')
+  ) {
+    return { category: 'response_truncated_error', extractedDetails: '' }
   }
 
   if (
@@ -135,7 +145,7 @@ export function mapProviderError(rawMessage) {
             'Replace retired or unsupported models with an allowed model.',
             'Save and retry the resume analysis.',
           ]
-      : category === 'response_format_error'
+        : category === 'response_format_error' || category === 'response_truncated_error'
           ? [
               'Retry once, as provider output formatting issues can be transient.',
               'If this repeats, use Admin Security to switch provider/model.',
@@ -147,10 +157,10 @@ export function mapProviderError(rawMessage) {
                 'Change active provider/model in Admin Security.',
                 'Test fallback provider/key and retry the resume analysis.',
               ]
-          : [
-            'Wait briefly, then retry the request.',
-            'If this repeats, review provider failover settings in Admin Security.',
-          ]
+            : [
+              'Wait briefly, then retry the request.',
+              'If this repeats, review provider failover settings in Admin Security.',
+            ]
 
   return {
     category,
@@ -162,5 +172,40 @@ export function mapProviderError(rawMessage) {
     action,
     remediationSteps,
     actionHint: 'Go to Admin Security',
+  }
+}
+
+export function shouldShowAdminDiagnostics({ isAdmin = false, isDevelopment = false } = {}) {
+  return Boolean(isAdmin || isDevelopment)
+}
+
+export function buildRoleSafeErrorView(providerError, { isAdmin = false, isDevelopment = false } = {}) {
+  const showAdminDiagnostics = shouldShowAdminDiagnostics({ isAdmin, isDevelopment })
+  const guidance = providerError && typeof providerError === 'object' ? providerError : null
+
+  if (!guidance) {
+    return {
+      showAdminDiagnostics,
+      userMessage: 'Unable to analyze resumes right now. Please retry. If this keeps happening, contact support.',
+      supportMessage: 'Please retry. If the issue persists, contact support.',
+      providerErrorGuidance: null,
+      technicalErrorDetails: '',
+    }
+  }
+
+  return {
+    showAdminDiagnostics,
+    userMessage: `${guidance.userMessage} Please retry. If this keeps happening, contact support.`,
+    supportMessage: 'Please retry. If the issue persists, contact support.',
+    providerErrorGuidance: showAdminDiagnostics
+      ? {
+          remediationSteps: guidance.remediationSteps || [],
+          actionHint: guidance.actionHint,
+          adminPath: guidance.adminPath,
+          provider: guidance.provider,
+          model: guidance.model,
+        }
+      : null,
+    technicalErrorDetails: showAdminDiagnostics ? guidance.technicalDetails || '' : '',
   }
 }

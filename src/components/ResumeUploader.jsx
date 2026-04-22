@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
-import { isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
+import { buildRoleSafeErrorView, isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
 import {
   ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL,
   buildChunkInitPayload,
@@ -75,7 +75,7 @@ function writeUploadCache(next) {
   localStorage.setItem(RESUME_UPLOAD_STATE_KEY, JSON.stringify(next))
 }
 
-export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus }) {
+export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false }) {
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
@@ -89,6 +89,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  const canViewAdminDiagnostics = isAdmin || isDevelopment
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -470,7 +472,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         setTechnicalErrorDetails('')
         setProviderErrorGuidance(null)
       } else if (isUploadStage && isStorageInfrastructureError(errorMessage)) {
-        setError(formatUploadError('AWS S3 not configured'))
+        setError(formatUploadError('Storage service is unavailable'))
         setTechnicalErrorDetails('')
         setProviderErrorGuidance(null)
       } else if (
@@ -481,19 +483,21 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           || errorMessage.toLowerCase().includes('format')
         )
       ) {
-        setError(formatParseError('File format not recognized'))
-        setTechnicalErrorDetails(errorMessage)
-        setProviderErrorGuidance(null)
-      } else {
-        setError(normalizedProviderError.userMessage)
-        setTechnicalErrorDetails(normalizedProviderError.technicalDetails)
-        setProviderErrorGuidance({
-          remediationSteps: normalizedProviderError.remediationSteps || [],
-          actionHint: normalizedProviderError.actionHint,
-          adminPath: normalizedProviderError.adminPath,
-          provider: normalizedProviderError.provider,
-          model: normalizedProviderError.model,
+        const safeView = buildRoleSafeErrorView(normalizedProviderError, {
+          isAdmin,
+          isDevelopment,
         })
+        setError(formatParseError('File format not recognized'))
+        setTechnicalErrorDetails(canViewAdminDiagnostics ? errorMessage : '')
+        setProviderErrorGuidance(safeView.providerErrorGuidance)
+      } else {
+        const safeView = buildRoleSafeErrorView(normalizedProviderError, {
+          isAdmin,
+          isDevelopment,
+        })
+        setError(safeView.userMessage)
+        setTechnicalErrorDetails(safeView.technicalErrorDetails)
+        setProviderErrorGuidance(safeView.providerErrorGuidance)
       }
     } finally {
       setIsAnalyzing(false)
@@ -661,7 +665,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 </a>
               </div>
             )}
-            {technicalErrorDetails && (
+            {canViewAdminDiagnostics && technicalErrorDetails && (
               <details className="resume-error-details">
                 <summary className="resume-error-details-summary">Technical details</summary>
                 <pre className="resume-error-details-pre">
