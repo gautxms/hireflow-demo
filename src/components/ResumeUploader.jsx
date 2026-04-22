@@ -116,9 +116,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         const eligible = items.filter((item) => item.status === 'active' || item.status === 'draft')
         setJobDescriptions(eligible)
 
-        if (!selectedJobDescriptionId && eligible[0]?.id) {
-          setSelectedJobDescriptionId(eligible[0].id)
-        }
+        setSelectedJobDescriptionId((currentSelection) => (
+          eligible.some((item) => item.id === currentSelection) ? currentSelection : ''
+        ))
       })
       .catch(() => {
         setJobDescriptions([])
@@ -537,9 +537,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               onChange={(event) => setSelectedJobDescriptionId(event.target.value)}
               className="resume-jd-select"
             >
-              {jobDescriptions.length === 0 && (
-                <option value="">No active/draft JD found</option>
-              )}
+              <option value="">Analyze without Job Description</option>
               {jobDescriptions.map((jd) => (
                 <option key={jd.id} value={jd.id}>
                   {jd.title} ({jd.status})
@@ -552,6 +550,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               </a>
             )}
           </div>
+          <p className="resume-jd-selector-helper">
+            No JD selected = extract candidate profiles only; fit scoring will be limited.
+          </p>
         </div>
 
         {uploadedFiles.length > 0 && (
