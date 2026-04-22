@@ -65,5 +65,6 @@ test('mapProviderError maps provider response format errors with actionable retr
 test('isStorageInfrastructureError only flags storage-specific upload failures', () => {
   assert.equal(isStorageInfrastructureError('Missing AWS_S3_BUCKET env var'), true)
   assert.equal(isStorageInfrastructureError('object storage credentials are invalid'), true)
+  assert.equal(isStorageInfrastructureError('Could not load credentials from any providers'), true)
   assert.equal(isStorageInfrastructureError('response_format_error::Unexpected token ` in JSON'), false)
 })

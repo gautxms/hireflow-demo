@@ -25,6 +25,7 @@ export function isStorageInfrastructureError(rawMessage) {
     || lower.includes('object storage')
     || lower.includes('storage not configured')
     || lower.includes('storage credentials')
+    || lower.includes('could not load credentials from any providers')
     || lower.includes('access denied')
 }
 
