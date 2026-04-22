@@ -78,6 +78,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
   const [error, setError] = useState('')
   const [technicalErrorDetails, setTechnicalErrorDetails] = useState('')
+  const [providerErrorGuidance, setProviderErrorGuidance] = useState(null)
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
@@ -162,9 +163,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     if (rejected.length > 0) {
       setError(sanitizeForDisplay(rejected.join(' ')))
       setTechnicalErrorDetails('')
+      setProviderErrorGuidance(null)
     } else {
       setError('')
       setTechnicalErrorDetails('')
+      setProviderErrorGuidance(null)
     }
 
     if (allowed.length > 0) {
@@ -246,6 +249,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setIsAnalyzing(true)
     setError('')
     setTechnicalErrorDetails('')
+    setProviderErrorGuidance(null)
 
     try {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -431,9 +435,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
         setTechnicalErrorDetails('')
+        setProviderErrorGuidance(null)
       } else if (isInfrastructureConfigError(errorMessage)) {
         setError(formatUploadError('AWS S3 not configured'))
         setTechnicalErrorDetails('')
+        setProviderErrorGuidance(null)
       } else if (
         errorMessage.toLowerCase().includes('parse')
         || errorMessage.toLowerCase().includes('no candidates')
@@ -441,9 +447,17 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       ) {
         setError(formatParseError('File format not recognized'))
         setTechnicalErrorDetails(errorMessage)
+        setProviderErrorGuidance(null)
       } else {
         setError(normalizedProviderError.userMessage)
         setTechnicalErrorDetails(normalizedProviderError.technicalDetails)
+        setProviderErrorGuidance({
+          remediationSteps: normalizedProviderError.remediationSteps || [],
+          actionHint: normalizedProviderError.actionHint,
+          adminPath: normalizedProviderError.adminPath,
+          provider: normalizedProviderError.provider,
+          model: normalizedProviderError.model,
+        })
       }
     } finally {
       setIsAnalyzing(false)
@@ -591,6 +605,25 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         {error && (
           <div className="resume-error-banner">
             {error}
+            {providerErrorGuidance && (
+              <div className="resume-error-guidance">
+                <p>
+                  {providerErrorGuidance.provider || providerErrorGuidance.model
+                    ? `Provider context: ${[providerErrorGuidance.provider, providerErrorGuidance.model].filter(Boolean).join(' / ')}`
+                    : 'Provider context: check the active AI provider configuration.'}
+                </p>
+                {providerErrorGuidance.remediationSteps.length > 0 && (
+                  <ol>
+                    {providerErrorGuidance.remediationSteps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                )}
+                <a href={providerErrorGuidance.adminPath || '/admin/security'}>
+                  {providerErrorGuidance.actionHint || 'Go to Admin Security'}
+                </a>
+              </div>
+            )}
             {technicalErrorDetails && (
               <details className="resume-error-details">
                 <summary className="resume-error-details-summary">Technical details</summary>

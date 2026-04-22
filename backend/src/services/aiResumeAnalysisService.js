@@ -136,30 +136,57 @@ function normalizeUsageMetrics(usage, provider = 'anthropic') {
   }
 }
 
-function normalizeProviderError(error) {
+function extractProviderAndModelContext(message, attemptHistory = []) {
+  const recentFailure = [...attemptHistory].reverse().find((attempt) => attempt && !attempt.success)
+  if (recentFailure) {
+    const providerLabel = String(recentFailure.provider || '').trim()
+    const provider = providerLabel.includes('-') ? providerLabel.split('-')[0] : providerLabel || null
+    return {
+      provider,
+      model: String(recentFailure.model || '').trim() || null,
+    }
+  }
+
+  const lower = String(message || '').toLowerCase()
+  const provider = lower.includes('anthropic')
+    ? 'anthropic'
+    : lower.includes('openai')
+      ? 'openai'
+      : null
+  const modelMatch = String(message || '').match(/model(?:\s+name)?(?:\s+is|\s*=|:)?\s*["']?([a-z0-9][a-z0-9._:-]+)["']?/i)
+  return {
+    provider,
+    model: modelMatch?.[1] ? String(modelMatch[1]).trim() : null,
+  }
+}
+
+function normalizeProviderError(error, attemptHistory = []) {
   const message = String(error?.message || 'Unknown provider error').trim()
   const lower = message.toLowerCase()
+  const { provider, model } = extractProviderAndModelContext(message, attemptHistory)
+
+  const format = (category) => `${category}::${JSON.stringify({ technicalDetails: message, provider, model })}`
 
   if (lower.includes('not_found_error') || lower.includes('model not found') || lower.includes('resource not found') || lower.includes('404')) {
-    return `not_found_error::${message}`
+    return format('not_found_error')
   }
   if (lower.includes('invalid_request_error') || lower.includes('invalid request') || lower.includes('unsupported model')) {
-    return `invalid_request_error::${message}`
+    return format('invalid_request_error')
   }
   if (lower.includes('authentication') || lower.includes('unauthorized') || lower.includes('invalid api key') || lower.includes('401')) {
-    return `auth_error::${message}`
+    return format('auth_error')
   }
   if (lower.includes('rate limit') || lower.includes('429')) {
-    return `rate_limit_error::${message}`
+    return format('rate_limit_error')
   }
   if (lower.includes('timeout') || lower.includes('timed out')) {
-    return `timeout_error::${message}`
+    return format('timeout_error')
   }
   if (lower.includes('network') || lower.includes('fetch failed') || lower.includes('econnreset')) {
-    return `network_error::${message}`
+    return format('network_error')
   }
 
-  return `unknown_error::${message}`
+  return format('unknown_error')
 }
 
 function createAttemptRecord({
@@ -185,7 +212,9 @@ function createAttemptRecord({
 }
 
 function createTerminalProviderError(lastError, attemptHistory) {
-  const normalizedMessage = lastError ? normalizeProviderError(lastError) : 'unknown_error::All configured AI providers failed.'
+  const normalizedMessage = lastError
+    ? normalizeProviderError(lastError, attemptHistory)
+    : 'unknown_error::All configured AI providers failed.'
   const terminalError = new Error(normalizedMessage)
   terminalError.attempts = attemptHistory
   terminalError.cause = lastError || null
