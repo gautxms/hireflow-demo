@@ -249,6 +249,53 @@ export function buildProviderAttemptPlan(credentials = {}) {
   return plan
 }
 
+function normalizePrompt(value) {
+  return String(value || '').trim()
+}
+
+function formatScalar(value) {
+  if (value === null || value === undefined) {
+    return null
+  }
+  const formatted = String(value).trim()
+  return formatted || null
+}
+
+function formatArray(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return null
+  }
+
+  const normalized = values
+    .map((value) => formatScalar(value))
+    .filter(Boolean)
+
+  return normalized.length > 0 ? normalized.join(', ') : null
+}
+
+export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContext = null) {
+  const basePrompt = normalizePrompt(systemPrompt)
+  const jdContext = jobDescriptionContext && typeof jobDescriptionContext === 'object'
+    ? jobDescriptionContext
+    : null
+
+  const hasJobDescription = Boolean(jdContext?.hasContext)
+  const jdSummary = hasJobDescription
+    ? [
+        `- Job Description ID: ${formatScalar(jdContext?.jobDescriptionId) || 'unknown'}`,
+        `- Title: ${formatScalar(jdContext?.title) || 'Not provided'}`,
+        `- Description: ${formatScalar(jdContext?.description) || 'Not provided'}`,
+        `- Requirements: ${formatScalar(jdContext?.requirements) || 'Not provided'}`,
+        `- Skills: ${formatArray(jdContext?.skills) || 'Not provided'}`,
+        `- Experience Years: ${formatScalar(jdContext?.experienceYears) || 'Not provided'}`,
+        `- Location: ${formatScalar(jdContext?.location) || 'Not provided'}`,
+        `- Source: ${formatScalar(jdContext?.source) || 'manual_fields'}`,
+      ].join('\n')
+    : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
+
+  return `${basePrompt}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker \"job_description_missing\" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+}
+
 export async function analyzeWithAnthropic(
   fileBufferBase64,
   mimeType,
@@ -259,6 +306,7 @@ export async function analyzeWithAnthropic(
     keyLabel = 'primary',
     providerSource = 'unknown',
     systemPromptConfig = null,
+    jobDescriptionContext = null,
   } = {},
 ) {
   if (!apiKey) {
@@ -268,7 +316,7 @@ export async function analyzeWithAnthropic(
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
   const client = new Anthropic({ apiKey })
 
-  const prompt = systemPromptConfig?.systemPrompt
+  const prompt = buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
 
@@ -334,6 +382,7 @@ export async function analyzeWithOpenAI(
     keyLabel = 'primary',
     providerSource = 'unknown',
     systemPromptConfig = null,
+    jobDescriptionContext = null,
   } = {},
 ) {
   if (!apiKey) {
@@ -341,7 +390,7 @@ export async function analyzeWithOpenAI(
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
-  const prompt = systemPromptConfig?.systemPrompt
+  const prompt = buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
 
@@ -434,6 +483,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         keyLabel: entry.keyLabel,
         providerSource: entry.source,
         systemPromptConfig,
+        jobDescriptionContext: options.jobDescriptionContext || null,
       })
 
       return {

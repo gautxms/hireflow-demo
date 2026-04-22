@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { analyzeResumeWithConfiguredFallback, buildProviderAttemptPlan } from './aiResumeAnalysisService.js'
+import { analyzeResumeWithConfiguredFallback, buildPromptWithJobDescription, buildProviderAttemptPlan } from './aiResumeAnalysisService.js'
 
 const baseCredentials = {
   activeProvider: 'anthropic',
@@ -89,4 +89,48 @@ test('analyzeResumeWithConfiguredFallback blocks analysis when governance disabl
     }),
     /ai_disabled_error/i,
   )
+})
+
+test('analyzeResumeWithConfiguredFallback forwards jobDescriptionContext to provider adapters', async () => {
+  const jobDescriptionContext = {
+    hasContext: true,
+    jobDescriptionId: 'jd-1',
+    title: 'Backend Engineer',
+    description: 'Node.js and PostgreSQL role',
+    skills: ['Node.js', 'PostgreSQL'],
+    source: 'manual_fields',
+  }
+  const receivedContexts = []
+
+  await analyzeResumeWithConfiguredFallback('dGVzdA==', 'application/pdf', 'resume.pdf', {
+    credentials: baseCredentials,
+    systemPromptConfig: { systemPrompt: 'test prompt', promptVersion: 2, isDefaultFallback: false },
+    jobDescriptionContext,
+    analyzeWithAnthropic: async (_file, _mime, _name, opts) => {
+      receivedContexts.push(opts.jobDescriptionContext)
+      return {
+        result: { candidates: [{ id: '1' }] },
+        tokenUsage: { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
+        provider: `anthropic-${opts.keyLabel}`,
+        model: opts.model,
+        credentialLabel: opts.keyLabel,
+        providerSource: opts.providerSource,
+        promptVersion: 2,
+        promptIsDefaultFallback: false,
+      }
+    },
+  })
+
+  assert.equal(receivedContexts.length, 1)
+  assert.deepEqual(receivedContexts[0], jobDescriptionContext)
+})
+
+test('buildPromptWithJobDescription includes fallback directive when JD context is missing', () => {
+  const prompt = buildPromptWithJobDescription('base prompt', {
+    hasContext: false,
+    missingReason: 'job_description_missing',
+  })
+
+  assert.match(prompt, /Job Description Context:\nMISSING/)
+  assert.match(prompt, /job_description_missing/)
 })
