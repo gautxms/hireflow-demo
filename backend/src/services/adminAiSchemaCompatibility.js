@@ -7,17 +7,27 @@ const ADMIN_AI_USER_COLUMNS = [
   { table: 'admin_ai_settings', column: 'updated_by' },
 ]
 
-function normalizeTypeName(typeName) {
+export function normalizeTypeName(typeName) {
   const normalized = String(typeName || '').trim().toLowerCase()
 
   if (normalized === 'uuid') return 'uuid'
   if (normalized === 'integer' || normalized === 'int4') return 'integer'
   if (normalized === 'bigint' || normalized === 'int8') return 'bigint'
 
+  if (
+    normalized === 'text'
+    || normalized === 'character varying'
+    || normalized === 'varchar'
+    || normalized === 'character'
+    || normalized === 'bpchar'
+  ) {
+    return 'text'
+  }
+
   throw new Error(`[Admin AI schema] Unsupported users.id type: ${typeName}`)
 }
 
-function getCastExpression(columnName, targetType) {
+export function getCastExpression(columnName, targetType) {
   if (targetType === 'uuid') {
     return `CASE
       WHEN ${columnName} IS NULL THEN NULL
@@ -31,6 +41,13 @@ function getCastExpression(columnName, targetType) {
       WHEN ${columnName} IS NULL THEN NULL
       WHEN ${columnName}::text ~ '^-?[0-9]+$' THEN ${columnName}::${targetType}
       ELSE NULL
+    END`
+  }
+
+  if (targetType === 'text') {
+    return `CASE
+      WHEN ${columnName} IS NULL THEN NULL
+      ELSE ${columnName}::text
     END`
   }
 
@@ -88,7 +105,14 @@ async function getColumnType(client, tableName, columnName) {
 
   if (result.rows.length === 0) return null
 
-  return normalizeTypeName(result.rows[0].data_type === 'USER-DEFINED' ? result.rows[0].udt_name : result.rows[0].data_type)
+  const row = result.rows[0]
+  const dataType = String(row.data_type || '').trim().toLowerCase()
+
+  if (dataType === 'user-defined') {
+    return normalizeTypeName(row.udt_name)
+  }
+
+  return normalizeTypeName(dataType)
 }
 
 function buildConstraintName(tableName, columnName) {
@@ -100,6 +124,7 @@ export async function alignAdminAiUserReferenceColumns() {
 
   try {
     const usersIdType = await getUsersIdReferenceType(client)
+    const alignedColumns = []
 
     for (const { table, column } of ADMIN_AI_USER_COLUMNS) {
       const currentType = await getColumnType(client, table, column)
@@ -126,9 +151,11 @@ export async function alignAdminAiUserReferenceColumns() {
         FOREIGN KEY (${column}) REFERENCES users(id)
         ON DELETE SET NULL
       `)
+
+      alignedColumns.push(`${table}.${column}`)
     }
 
-    return { usersIdType }
+    return { usersIdType, alignedColumns }
   } finally {
     client.release()
   }
