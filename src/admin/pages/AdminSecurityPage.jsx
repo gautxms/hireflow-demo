@@ -28,6 +28,17 @@ function getWarningKey(warning = {}) {
   return `${warning?.provider || ''}:${warning?.keyLabel || ''}:${warning?.model || ''}`
 }
 
+
+function getModelWarningMessage(warning = {}) {
+  if (warning?.reason === 'invalid_format') {
+    return `Model "${warning.model}" has an invalid format.`
+  }
+  if (warning?.reason === 'risky_untested_model') {
+    return `Model "${warning.model}" is untested for this provider (${warning?.detail || 'not in registry'}).`
+  }
+  return `Model "${warning.model}" is deprecated or blocked in the registry.`
+}
+
 export default function AdminSecurityPage() {
   const [settings, setSettings] = useState(null)
   const [promptSettings, setPromptSettings] = useState(null)
@@ -327,7 +338,7 @@ export default function AdminSecurityPage() {
                         <ul className="mt-2 list-disc pl-5 text-xs text-admin-warning">
                           {warnings.map((warning, index) => (
                             <li key={`${warning.source}-${index}`}>
-                              Model "{warning.model}" is flagged as deprecated/invalid.
+                              {getModelWarningMessage(warning)}
                             </li>
                           ))}
                         </ul>

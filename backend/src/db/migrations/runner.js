@@ -20,6 +20,7 @@ const migrationFiles = [
   '017-add-admin-ai-provider-keys',
   '018-generalize-admin-ai-provider-config',
   '019-add-admin-system-prompt',
+  '020-add-admin-ai-model-registry',
 ]
 
 async function ensureMigrationsTable(client) {
