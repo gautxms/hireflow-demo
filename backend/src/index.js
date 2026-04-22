@@ -11,6 +11,7 @@ import { startChunkUploadCleanupCron } from './services/fileUploadService.js'
 import { ensureWebhookTables } from './services/webhookService.js'
 import { ensureNotificationTables } from './services/notificationService.js'
 import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
+import { verifyAdminAiUserReferenceCompatibility } from './services/adminAiSchemaCompatibility.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -42,6 +43,12 @@ async function start() {
     await ensurePaymentTrackingTables()
     await ensureWebhookTables()
     await ensureNotificationTables()
+    const adminAiSchemaHealth = await verifyAdminAiUserReferenceCompatibility()
+    if (!adminAiSchemaHealth.ok) {
+      throw new Error(
+        `[Startup] Admin AI schema compatibility check failed for users.id (${adminAiSchemaHealth.usersIdType}): ${adminAiSchemaHealth.issues.join('; ')}`,
+      )
+    }
     await initializeJobQueue()
 
     logEmailConfigStatus()

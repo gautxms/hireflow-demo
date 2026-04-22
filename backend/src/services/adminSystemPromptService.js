@@ -1,4 +1,5 @@
 import { pool } from '../db/client.js'
+import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
 export const MAX_SYSTEM_PROMPT_LENGTH = 12000
 export const DEFAULT_SYSTEM_PROMPT = `You are a resume analysis engine for a single candidate profile.
@@ -91,13 +92,14 @@ let systemPromptTableEnsured = false
 
 async function ensureSystemPromptTable() {
   if (systemPromptTableEnsured) return
+  const usersIdType = await getUsersIdReferenceType(pool)
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_system_prompts (
       id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id = true),
       system_prompt TEXT NOT NULL,
       prompt_version INTEGER NOT NULL DEFAULT 1 CHECK (prompt_version >= 1),
-      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_by ${usersIdType} REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
