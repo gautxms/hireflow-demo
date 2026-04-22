@@ -16,6 +16,7 @@ import {
 } from '../services/aiProviderConfigService.js'
 import {
   getAdminSystemPrompt,
+  resetAdminSystemPromptToDefault,
   upsertAdminSystemPrompt,
   validateSystemPromptInput,
 } from '../services/adminSystemPromptService.js'
@@ -642,6 +643,29 @@ router.put('/system-prompt', async (req, res) => {
       error: 'Unable to update system prompt',
       details: details || 'unknown_error',
     })
+  }
+})
+
+router.post('/system-prompt/reset', async (req, res) => {
+  try {
+    const prompt = await resetAdminSystemPromptToDefault({
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_system_prompt_reset',
+      details: {
+        promptVersion: prompt.promptVersion,
+        promptLength: prompt.systemPrompt.length,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({ ok: true, prompt })
+  } catch (error) {
+    console.error('[Admin system-prompt] reset failed:', error)
+    return res.status(500).json({ error: 'Unable to reset system prompt' })
   }
 })
 

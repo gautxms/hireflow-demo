@@ -2,7 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { pool } from '../db/client.js'
-import { upsertAdminSystemPrompt } from './adminSystemPromptService.js'
+import {
+  DEFAULT_SYSTEM_PROMPT,
+  resetAdminSystemPromptToDefault,
+  upsertAdminSystemPrompt,
+} from './adminSystemPromptService.js'
 
 const originalQuery = pool.query.bind(pool)
 
@@ -100,4 +104,30 @@ test('upsertAdminSystemPrompt falls back to insert when update does not find a r
   const insertCall = calls.find((entry) => entry.sql.startsWith('INSERT INTO admin_system_prompts (id, system_prompt, prompt_version, updated_by)'))
   assert.ok(updateCall)
   assert.ok(insertCall)
+})
+
+test('resetAdminSystemPromptToDefault persists the known default prompt', async () => {
+  pool.query = async (queryText, params = []) => {
+    const sql = String(queryText).trim().replace(/\s+/g, ' ')
+
+    if (sql.startsWith('UPDATE admin_system_prompts')) {
+      assert.deepEqual(params, [DEFAULT_SYSTEM_PROMPT, 'admin-reset'])
+      return {
+        rows: [{
+          system_prompt: DEFAULT_SYSTEM_PROMPT,
+          prompt_version: 9,
+          updated_by: 'admin-reset',
+          created_at: '2026-04-20T00:00:00.000Z',
+          updated_at: '2026-04-22T00:00:00.000Z',
+        }],
+      }
+    }
+
+    throw new Error(`Unexpected SQL in reset adminSystemPromptService.test: ${sql} | params=${JSON.stringify(params)}`)
+  }
+
+  const result = await resetAdminSystemPromptToDefault({ adminId: 'admin-reset' })
+
+  assert.equal(result.systemPrompt, DEFAULT_SYSTEM_PROMPT)
+  assert.equal(result.promptVersion, 9)
 })

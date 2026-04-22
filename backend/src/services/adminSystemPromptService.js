@@ -189,6 +189,13 @@ export async function upsertAdminSystemPrompt({ systemPrompt, adminId }) {
   return normalizePromptRow(insertResult.rows[0])
 }
 
+export async function resetAdminSystemPromptToDefault({ adminId } = {}) {
+  return upsertAdminSystemPrompt({
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    adminId: adminId || null,
+  })
+}
+
 export async function getRuntimeSystemPromptConfig() {
   try {
     return await getAdminSystemPrompt()
