@@ -3,23 +3,37 @@ import API_BASE from '../../config/api'
 import { navigateAdmin } from '../config/adminNavigation'
 import { adminFetchJson } from '../utils/adminErrorState'
 
-export default function AdminSecurityPage() {
-  const [settings, setSettings] = useState(null)
-  const [promptSettings, setPromptSettings] = useState(null)
-  const [tokenUsageRows, setTokenUsageRows] = useState([])
-  const [form, setForm] = useState({
+const PROVIDERS = ['anthropic', 'openai']
+const KEY_LABELS = ['primary', 'fallback']
+
+function buildEmptyForm() {
+  return {
     activeProvider: 'anthropic',
     providers: {
       anthropic: { primary: { apiKey: '', model: '' }, fallback: { apiKey: '', model: '' } },
       openai: { primary: { apiKey: '', model: '' }, fallback: { apiKey: '', model: '' } },
     },
-  })
+  }
+}
+
+function getWarningKey(warning = {}) {
+  return `${warning?.provider || ''}:${warning?.keyLabel || ''}:${warning?.model || ''}`
+}
+
+export default function AdminSecurityPage() {
+  const [settings, setSettings] = useState(null)
+  const [promptSettings, setPromptSettings] = useState(null)
+  const [tokenUsageRows, setTokenUsageRows] = useState([])
+  const [form, setForm] = useState(buildEmptyForm)
+  const [modelWarnings, setModelWarnings] = useState([])
   const [message, setMessage] = useState('')
   const [promptMessage, setPromptMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingPrompt, setSavingPrompt] = useState(false)
   const [systemPromptInput, setSystemPromptInput] = useState('')
+  const [fieldError, setFieldError] = useState('')
+  const [connectionStatusByField, setConnectionStatusByField] = useState({})
   const hydrateFormFromSettings = useCallback((nextSettings) => {
     const settingsProviders = nextSettings?.providers || {}
     return {
@@ -59,9 +73,11 @@ export default function AdminSecurityPage() {
       ])
       setSettings(settingsPayload)
       setForm(hydrateFormFromSettings(settingsPayload))
+      setModelWarnings(Array.isArray(settingsPayload?.modelWarnings) ? settingsPayload.modelWarnings : [])
       setTokenUsageRows(Array.isArray(analyticsPayload?.tokenUsageUploads) ? analyticsPayload.tokenUsageUploads : [])
       setPromptSettings(promptPayload)
       setSystemPromptInput(promptPayload?.systemPrompt || '')
+      setConnectionStatusByField({})
     } finally {
       setLoading(false)
     }
@@ -84,10 +100,67 @@ export default function AdminSecurityPage() {
     }, {})
   }, [tokenUsageRows])
 
+  const warningsByField = useMemo(() => {
+    const byKey = {}
+    for (const warning of modelWarnings) {
+      const key = getWarningKey(warning)
+      if (!byKey[key]) byKey[key] = []
+      byKey[key].push(warning)
+    }
+    return byKey
+  }, [modelWarnings])
+
+  const updateField = useCallback((provider, keyLabel, field, value) => {
+    setForm((current) => ({
+      ...current,
+      providers: {
+        ...current.providers,
+        [provider]: {
+          ...current.providers[provider],
+          [keyLabel]: {
+            ...current.providers[provider][keyLabel],
+            [field]: value,
+          },
+        },
+      },
+    }))
+
+    setConnectionStatusByField((current) => {
+      const next = { ...current }
+      delete next[`${provider}:${keyLabel}`]
+      return next
+    })
+  }, [])
+
+  const validateForm = useCallback(() => {
+    if (!PROVIDERS.includes(form.activeProvider)) {
+      return 'Active provider must be anthropic or openai.'
+    }
+
+    for (const provider of PROVIDERS) {
+      for (const keyLabel of KEY_LABELS) {
+        const model = String(form?.providers?.[provider]?.[keyLabel]?.model || '').trim()
+        if (!model) {
+          return `${provider} ${keyLabel} model is required.`
+        }
+      }
+    }
+
+    return ''
+  }, [form])
+
   const save = useCallback(async (event) => {
     event.preventDefault()
     setSaving(true)
     setMessage('')
+    const validationError = validateForm()
+    if (validationError) {
+      setFieldError(validationError)
+      setSaving(false)
+      return
+    }
+
+    setFieldError('')
     try {
       const payload = await adminFetchJson(`${API_BASE}/admin/ai-settings`, {
         method: 'PUT',
@@ -96,13 +169,15 @@ export default function AdminSecurityPage() {
       })
       setSettings(payload.settings || null)
       setForm(hydrateFormFromSettings(payload.settings || null))
+      setModelWarnings(Array.isArray(payload?.modelWarnings) ? payload.modelWarnings : [])
       setMessage('AI settings saved.')
+      setConnectionStatusByField({})
     } catch (error) {
       setMessage(error?.payload?.error || 'Unable to save AI settings.')
     } finally {
       setSaving(false)
     }
-  }, [form, hydrateFormFromSettings])
+  }, [form, hydrateFormFromSettings, validateForm])
 
   const saveSystemPrompt = useCallback(async (event) => {
     event.preventDefault()
@@ -124,6 +199,43 @@ export default function AdminSecurityPage() {
     }
   }, [systemPromptInput])
 
+  const testConnection = useCallback(async (provider, keyLabel) => {
+    const model = String(form?.providers?.[provider]?.[keyLabel]?.model || '').trim()
+    const apiKey = String(form?.providers?.[provider]?.[keyLabel]?.apiKey || '').trim()
+    const key = `${provider}:${keyLabel}`
+
+    if (!model) {
+      setConnectionStatusByField((current) => ({
+        ...current,
+        [key]: { state: 'error', message: 'Model is required before running a connection test.' },
+      }))
+      return
+    }
+
+    setConnectionStatusByField((current) => ({
+      ...current,
+      [key]: { state: 'loading', message: 'Testing connection…' },
+    }))
+
+    try {
+      const payload = await adminFetchJson(`${API_BASE}/admin/ai-settings/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, keyLabel, model, apiKey }),
+      })
+      setConnectionStatusByField((current) => ({
+        ...current,
+        [key]: { state: 'success', message: payload?.message || 'Connection successful.' },
+      }))
+    } catch (error) {
+      const details = error?.payload?.error?.message || error?.payload?.error || error?.payload?.message || 'Connection test failed.'
+      setConnectionStatusByField((current) => ({
+        ...current,
+        [key]: { state: 'error', message: String(details) },
+      }))
+    }
+  }, [form])
+
   if (loading) {
     return <div className="admin-page"><section className="ui-card p-4">Loading AI settings…</section></div>
   }
@@ -132,35 +244,61 @@ export default function AdminSecurityPage() {
     <div className="admin-page">
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-admin-strong">Resume AI provider keys</h2>
-        <p className="mt-1 text-sm text-admin-body">Set active provider plus primary/fallback API keys and models for both Anthropic and OpenAI.</p>
+        <p className="mt-1 text-sm text-admin-body">Set active provider plus primary/fallback API keys and models for Anthropic and OpenAI.</p>
         <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={save}>
           <label className="text-sm text-admin-body">Active provider
             <select className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.activeProvider} onChange={(e) => setForm((c) => ({ ...c, activeProvider: e.target.value }))}>
-              <option value="anthropic">anthropic</option>
-              <option value="openai" disabled>openai (coming soon)</option>
+              {PROVIDERS.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
             </select>
           </label>
           <div />
-          {['anthropic', 'openai'].map((provider) => (
-            <div className="md:col-span-2 grid gap-3 md:grid-cols-2" key={provider}>
-              <p className="md:col-span-2 text-sm font-semibold text-admin-strong capitalize">{provider}</p>
-              <label className="text-sm text-admin-body">{provider} primary API key
-                <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.providers[provider].primary.apiKey} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], primary: { ...c.providers[provider].primary, apiKey: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.primary?.maskedApiKey || ''} />
-              </label>
-              <label className="text-sm text-admin-body">{provider} fallback API key
-                <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.providers[provider].fallback.apiKey} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], fallback: { ...c.providers[provider].fallback, apiKey: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.fallback?.maskedApiKey || ''} />
-              </label>
-              <label className="text-sm text-admin-body">{provider} primary model
-                <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.providers[provider].primary.model} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], primary: { ...c.providers[provider].primary, model: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.primary?.model || settings?.providers?.[provider]?.defaultModel || ''} />
-              </label>
-              <label className="text-sm text-admin-body">{provider} fallback model
-                <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={form.providers[provider].fallback.model} onChange={(e) => setForm((c) => ({ ...c, providers: { ...c.providers, [provider]: { ...c.providers[provider], fallback: { ...c.providers[provider].fallback, model: e.target.value } } } }))} placeholder={settings?.providers?.[provider]?.fallback?.model || settings?.providers?.[provider]?.defaultModel || ''} />
-              </label>
+          {PROVIDERS.map((provider) => (
+            <div className="md:col-span-2 grid gap-3" key={provider}>
+              <p className="text-sm font-semibold text-admin-strong capitalize">{provider}</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                {KEY_LABELS.map((keyLabel) => {
+                  const model = form.providers?.[provider]?.[keyLabel]?.model || ''
+                  const warningKey = getWarningKey({ provider, keyLabel, model })
+                  const warnings = warningsByField[warningKey] || []
+                  const connectionStatus = connectionStatusByField[`${provider}:${keyLabel}`]
+                  return (
+                    <div className="rounded border border-admin p-3" key={`${provider}:${keyLabel}`}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-admin-muted">{keyLabel}</p>
+                      <label className="mt-2 block text-sm text-admin-body">{provider} {keyLabel} API key
+                        <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.providers[provider][keyLabel].apiKey} onChange={(e) => updateField(provider, keyLabel, 'apiKey', e.target.value)} placeholder={settings?.providers?.[provider]?.[keyLabel]?.maskedApiKey || ''} />
+                      </label>
+                      <label className="mt-2 block text-sm text-admin-body">{provider} {keyLabel} model
+                        <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={model} onChange={(e) => updateField(provider, keyLabel, 'model', e.target.value)} placeholder={settings?.providers?.[provider]?.[keyLabel]?.model || settings?.providers?.[provider]?.defaultModel || ''} />
+                      </label>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button type="button" className="ui-btn" onClick={() => testConnection(provider, keyLabel)} disabled={connectionStatus?.state === 'loading'}>
+                          {connectionStatus?.state === 'loading' ? 'Testing…' : 'Test connection'}
+                        </button>
+                        {connectionStatus?.message ? (
+                          <span className={`text-xs ${connectionStatus.state === 'error' ? 'text-red-600' : 'text-admin-muted'}`}>
+                            {connectionStatus.message}
+                          </span>
+                        ) : null}
+                      </div>
+                      {warnings.length > 0 ? (
+                        <ul className="mt-2 list-disc pl-5 text-xs text-amber-700">
+                          {warnings.map((warning, index) => (
+                            <li key={`${warning.source}-${index}`}>
+                              Model "{warning.model}" is flagged as deprecated/invalid.
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           ))}
           <div className="md:col-span-2 flex items-center gap-2">
             <button type="submit" className="ui-btn" disabled={saving}>{saving ? 'Saving…' : 'Save AI settings'}</button>
-            {message ? <span className="text-xs text-admin-muted">{message}</span> : null}
+            {fieldError ? <span className="text-xs text-red-600">{fieldError}</span> : null}
+            {!fieldError && message ? <span className="text-xs text-admin-muted">{message}</span> : null}
           </div>
         </form>
       </section>
@@ -180,7 +318,7 @@ export default function AdminSecurityPage() {
           <div className="text-xs text-admin-muted">
             Version: <strong>{Number(promptSettings?.promptVersion || 1)}</strong>
             {' · '}
-            Updated at: <strong>{promptSettings?.updatedAt ? new Date(promptSettings.updatedAt).toLocaleString() : 'Not updated yet'}</strong>
+            Last updated: <strong>{promptSettings?.updatedAt ? new Date(promptSettings.updatedAt).toLocaleString() : 'Not updated yet'}</strong>
             {' · '}
             Characters: <strong>{systemPromptInput.length}</strong>
           </div>
