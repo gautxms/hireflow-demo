@@ -33,6 +33,19 @@ test('normalizeProviderError maps provider throttling and timeouts to retry cate
   assert.equal(timedOut.action, 'retry_or_failover_provider')
 })
 
+test('normalizeProviderError maps provider billing/quota failures to billing guidance', () => {
+  const result = normalizeProviderError('insufficient_quota: You exceeded your current quota, please check your plan and billing details')
+
+  assert.equal(result.category, 'billing_quota_error')
+  assert.equal(result.userMessage, 'AI provider billing/quota issue; update credits or switch provider.')
+  assert.equal(result.action, 'resolve_provider_billing_or_quota')
+  assert.deepEqual(result.remediationSteps, [
+    'Add credits or resolve billing for the active AI provider account.',
+    'Change the active provider/model pair in Admin Security.',
+    'Test fallback provider/key and retry the resume analysis.',
+  ])
+})
+
 test('normalizeProviderError captures retired model provider/model context from attempt history', () => {
   const providerFailure = new Error('not_found_error::Model not found')
   providerFailure.attempts = [

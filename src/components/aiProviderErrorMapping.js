@@ -2,6 +2,7 @@ const CATEGORY_MESSAGES = {
   response_format_error: 'The AI provider returned an invalid response format.',
   invalid_request_error: 'The configured AI model is invalid or no longer supported.',
   auth_error: 'The AI provider API key is invalid or expired.',
+  billing_quota_error: 'The active AI provider has a billing or quota issue.',
   rate_limit_error: 'The AI provider is rate-limiting requests right now.',
   timeout_error: 'The AI provider timed out while processing this request.',
   network_error: 'Temporary network issue while contacting the AI provider.',
@@ -10,7 +11,7 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
 const DEFAULT_ADMIN_PATH = '/admin/security'
 
 function sanitizeRawMessage(rawMessage) {
@@ -25,8 +26,11 @@ export function isStorageInfrastructureError(rawMessage) {
     || lower.includes('object storage')
     || lower.includes('storage not configured')
     || lower.includes('storage credentials')
+    || lower.includes('bucket does not exist')
+    || lower.includes('no such bucket')
+    || lower.includes('invalidaccesskeyid')
+    || lower.includes('signaturedoesnotmatch')
     || lower.includes('could not load credentials from any providers')
-    || lower.includes('access denied')
 }
 
 export function detectProviderErrorCategory(rawMessage) {
@@ -56,6 +60,17 @@ export function detectProviderErrorCategory(rawMessage) {
 
   if (lower.includes('invalid_request_error') || lower.includes('invalid request') || lower.includes('bad request')) {
     return { category: 'invalid_request_error', extractedDetails: '' }
+  }
+
+  if (
+    lower.includes('insufficient_quota')
+    || lower.includes('quota exceeded')
+    || lower.includes('exceeded your current quota')
+    || lower.includes('billing')
+    || lower.includes('check your plan and billing details')
+    || lower.includes('add credits')
+  ) {
+    return { category: 'billing_quota_error', extractedDetails: '' }
   }
 
   if (
@@ -120,12 +135,18 @@ export function mapProviderError(rawMessage) {
             'Replace retired or unsupported models with an allowed model.',
             'Save and retry the resume analysis.',
           ]
-        : category === 'response_format_error'
+      : category === 'response_format_error'
           ? [
               'Retry once, as provider output formatting issues can be transient.',
               'If this repeats, use Admin Security to switch provider/model.',
               'Save settings and retry the resume analysis.',
             ]
+          : category === 'billing_quota_error'
+            ? [
+                'Add credits or resolve billing for the active AI provider account.',
+                'Change active provider/model in Admin Security.',
+                'Test fallback provider/key and retry the resume analysis.',
+              ]
           : [
             'Wait briefly, then retry the request.',
             'If this repeats, review provider failover settings in Admin Security.',

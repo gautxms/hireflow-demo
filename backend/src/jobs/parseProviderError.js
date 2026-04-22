@@ -6,13 +6,14 @@ const CATEGORY_MESSAGES = {
   invalid_request_error: 'AI model configuration issue in Admin Security.',
   not_found_error: 'AI model configuration issue in Admin Security.',
   auth_error: 'AI key invalid or expired.',
+  billing_quota_error: 'AI provider billing/quota issue; update credits or switch provider.',
   rate_limit_error: 'AI service temporarily unavailable; please retry.',
   timeout_error: 'AI service temporarily unavailable; please retry.',
   network_error: 'AI service temporarily unavailable; please retry.',
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
 
 function toMessage(value) {
   if (value instanceof Error) {
@@ -84,6 +85,18 @@ function buildHints(category, { provider, model } = {}) {
     }
   }
 
+  if (category === 'billing_quota_error') {
+    return {
+      action: 'resolve_provider_billing_or_quota',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        'Add credits or resolve billing for the active AI provider account.',
+        'Change the active provider/model pair in Admin Security.',
+        'Test fallback provider/key and retry the resume analysis.',
+      ],
+    }
+  }
+
   if (category === 'rate_limit_error' || category === 'timeout_error' || category === 'network_error') {
     return {
       action: 'retry_or_failover_provider',
@@ -145,6 +158,17 @@ export function detectProviderErrorCategory(errorLike) {
 
   if (lower.includes('invalid_request_error') || lower.includes('invalid request') || lower.includes('bad request')) {
     return { category: 'invalid_request_error', extractedDetails: '' }
+  }
+
+  if (
+    lower.includes('insufficient_quota')
+    || lower.includes('quota exceeded')
+    || lower.includes('exceeded your current quota')
+    || lower.includes('billing')
+    || lower.includes('check your plan and billing details')
+    || lower.includes('add credits')
+  ) {
+    return { category: 'billing_quota_error', extractedDetails: '' }
   }
 
   if (
