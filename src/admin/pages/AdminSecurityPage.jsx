@@ -80,6 +80,7 @@ export default function AdminSecurityPage() {
   const [fieldError, setFieldError] = useState('')
   const [connectionStatusByField, setConnectionStatusByField] = useState({})
   const [lastSuccessfulTestsByModel, setLastSuccessfulTestsByModel] = useState({})
+  const [modelEditedByField, setModelEditedByField] = useState({})
   const hydrateFormFromSettings = useCallback((nextSettings) => {
     const settingsProviders = nextSettings?.providers || {}
     return {
@@ -135,6 +136,7 @@ export default function AdminSecurityPage() {
       setForm(hydrateFormFromSettings(settingsPayload))
       setModelWarnings(Array.isArray(settingsPayload?.modelWarnings) ? settingsPayload.modelWarnings : [])
       setConnectionStatusByField({})
+      setModelEditedByField({})
       setLastSuccessfulTestsByModel(settingsPayload?.metadata?.connectionTestsByModel || {})
     } else {
       nextErrors.aiSettings = 'Couldn’t load AI settings. Showing last known configuration.'
@@ -201,6 +203,13 @@ export default function AdminSecurityPage() {
       },
     }))
 
+    if (field === 'model') {
+      setModelEditedByField((current) => ({
+        ...current,
+        [`${provider}:${keyLabel}`]: true,
+      }))
+    }
+
     setConnectionStatusByField((current) => {
       const next = { ...current }
       delete next[`${provider}:${keyLabel}`]
@@ -215,15 +224,26 @@ export default function AdminSecurityPage() {
 
     for (const provider of PROVIDERS) {
       for (const keyLabel of KEY_LABELS) {
+        const fieldKey = `${provider}:${keyLabel}`
         const model = String(form?.providers?.[provider]?.[keyLabel]?.model || '').trim()
-        if (!model) {
-          return `${provider} ${keyLabel} model is required.`
+        const apiKey = String(form?.providers?.[provider]?.[keyLabel]?.apiKey || '').trim()
+        const persistedModel = String(
+          settings?.providers?.[provider]?.[keyLabel]?.model || settings?.providers?.[provider]?.defaultModel || ''
+        ).trim()
+        const shouldRequireModel = (
+          Boolean(apiKey)
+          || Boolean(modelEditedByField[fieldKey])
+          || (provider === form.activeProvider && !persistedModel)
+        )
+
+        if (shouldRequireModel && !model) {
+          return `${provider} ${keyLabel} model is required when changing this slot.`
         }
       }
     }
 
     return ''
-  }, [form])
+  }, [form, modelEditedByField, settings?.providers])
 
   const governanceChecklist = useMemo(() => {
     const activeProviderConfigured = settings?.providers?.[form.activeProvider]
@@ -300,6 +320,7 @@ export default function AdminSecurityPage() {
       setLastSuccessfulTestsByModel(payload?.settings?.metadata?.connectionTestsByModel || {})
       setMessage('AI settings saved.')
       setConnectionStatusByField({})
+      setModelEditedByField({})
     } catch (error) {
       setMessage(error?.payload?.error || 'Unable to save AI settings.')
     } finally {
@@ -388,6 +409,7 @@ export default function AdminSecurityPage() {
       setSettings(payload?.settings || null)
       setForm(hydrateFormFromSettings(payload?.settings || null))
       setModelWarnings(Array.isArray(payload?.modelWarnings) ? payload.modelWarnings : [])
+      setModelEditedByField({})
       setMessage(`Refreshed ${provider} models (${Number(payload?.discovered || 0)} discovered).`)
     } catch (error) {
       const details = error?.payload?.error || 'Model sync unavailable. Manual model entry remains available.'
@@ -463,6 +485,7 @@ export default function AdminSecurityPage() {
                         {modelSuggestions.map((modelId) => <option key={modelId} value={modelId} />)}
                       </datalist>
                       <p className="mt-1 text-xs text-admin-muted">Use exact provider model ID; new models are allowed.</p>
+                      <p className="mt-1 text-xs text-admin-muted">Unchanged slots keep existing model.</p>
                       <div className="mt-2 flex items-center gap-2 text-xs">
                         <span className={`inline-flex rounded border px-2 py-1 font-semibold ${statusBadge.className}`}>
                           {statusBadge.label}
