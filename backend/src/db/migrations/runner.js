@@ -17,10 +17,10 @@ const migrationFiles = [
   '014-add-admin-ux-feedback',
   '015-add-resume-analysis-token-usage',
   '016-add-inquiries',
+  '020-fix-admin-ai-user-reference-types',
   '017-add-admin-ai-provider-keys',
   '018-generalize-admin-ai-provider-config',
   '019-add-admin-system-prompt',
-  '020-fix-admin-ai-user-reference-types',
 ]
 
 async function ensureMigrationsTable(client) {
