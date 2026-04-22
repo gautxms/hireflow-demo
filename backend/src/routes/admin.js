@@ -155,6 +155,36 @@ function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
 }
 
+function buildConnectionTestMetaKey(provider, keyLabel, model) {
+  return `${provider}:${keyLabel}:${String(model || '').trim()}`
+}
+
+async function persistSuccessfulConnectionTest({ provider, keyLabel, model, successfulAt, adminId = null }) {
+  if (!provider || !keyLabel || !model || !successfulAt) return
+
+  const metaKey = buildConnectionTestMetaKey(provider, keyLabel, model)
+
+  await pool.query(
+    `INSERT INTO admin_ai_settings (id, active_provider, settings_metadata, updated_by)
+     VALUES (
+       true,
+       COALESCE((SELECT active_provider FROM admin_ai_settings WHERE id = true), 'anthropic'),
+       jsonb_build_object('connectionTestsByModel', jsonb_build_object($1::text, to_jsonb($2::text))),
+       $3
+     )
+     ON CONFLICT (id) DO UPDATE
+       SET settings_metadata = jsonb_set(
+             COALESCE(admin_ai_settings.settings_metadata, '{}'::jsonb),
+             ARRAY['connectionTestsByModel', $1::text],
+             to_jsonb($2::text),
+             true
+           ),
+           updated_by = EXCLUDED.updated_by,
+           updated_at = NOW()`,
+    [metaKey, successfulAt, adminId || null],
+  )
+}
+
 function collectProviderConfigChanges(updateFlags = {}) {
   const keyRotations = []
   const modelChanges = []
@@ -270,11 +300,22 @@ router.post('/ai-settings/test-connection', async (req, res) => {
       })
     }
 
+    const successfulAt = new Date().toISOString()
+    await persistSuccessfulConnectionTest({
+      provider,
+      keyLabel,
+      model,
+      successfulAt,
+      adminId: req.admin?.id || null,
+    })
+
     return res.json({
       ok: true,
       provider,
       keyLabel,
       model,
+      testedAt: successfulAt,
+      successfulAt,
       message: 'Connection successful.',
     })
   } catch (error) {

@@ -28,6 +28,19 @@ function getWarningKey(warning = {}) {
   return `${warning?.provider || ''}:${warning?.keyLabel || ''}:${warning?.model || ''}`
 }
 
+function getConnectionTestMetaKey(provider, keyLabel, model) {
+  return `${provider}:${keyLabel}:${String(model || '').trim()}`
+}
+
+function getModelStatusBadge(warnings = []) {
+  if (warnings.some((warning) => warning?.validationTier === 'provider_rejected' || warning?.reason === 'provider_rejected')) {
+    return { label: 'Rejected by provider', className: 'bg-admin-danger/10 text-admin-danger border-admin-danger/30' }
+  }
+  if (warnings.some((warning) => warning?.validationTier === 'valid_unlisted' || warning?.validationTier === 'invalid_format' || warning?.reason === 'invalid_format')) {
+    return { label: 'Unlisted', className: 'bg-admin-warning/10 text-admin-warning border-admin-warning/30' }
+  }
+  return { label: 'Known', className: 'bg-admin-muted/10 text-admin-muted border-admin/60' }
+}
 
 function getModelWarningMessage(warning = {}) {
   if (warning?.validationTier === 'invalid_format' || warning?.reason === 'invalid_format') {
@@ -57,6 +70,7 @@ export default function AdminSecurityPage() {
   const [systemPromptInput, setSystemPromptInput] = useState('')
   const [fieldError, setFieldError] = useState('')
   const [connectionStatusByField, setConnectionStatusByField] = useState({})
+  const [lastSuccessfulTestsByModel, setLastSuccessfulTestsByModel] = useState({})
   const hydrateFormFromSettings = useCallback((nextSettings) => {
     const settingsProviders = nextSettings?.providers || {}
     return {
@@ -107,6 +121,7 @@ export default function AdminSecurityPage() {
       setPromptSettings(promptPayload)
       setSystemPromptInput(promptPayload?.systemPrompt || '')
       setConnectionStatusByField({})
+      setLastSuccessfulTestsByModel(settingsPayload?.metadata?.connectionTestsByModel || {})
     } finally {
       setLoading(false)
     }
@@ -234,13 +249,23 @@ export default function AdminSecurityPage() {
               model,
               state: status?.state || 'unknown',
               error: status?.providerError || null,
+              testedAt: status?.testedAt || null,
+              successfulAt: status?.successfulAt || null,
             }
           }),
+          metadata: {
+            ...(settings?.metadata || {}),
+            connectionTestsByModel: {
+              ...(settings?.metadata?.connectionTestsByModel || {}),
+              ...lastSuccessfulTestsByModel,
+            },
+          },
         }),
       })
       setSettings(payload.settings || null)
       setForm(hydrateFormFromSettings(payload.settings || null))
       setModelWarnings(Array.isArray(payload?.modelWarnings) ? payload.modelWarnings : [])
+      setLastSuccessfulTestsByModel(payload?.settings?.metadata?.connectionTestsByModel || {})
       setMessage('AI settings saved.')
       setConnectionStatusByField({})
     } catch (error) {
@@ -248,7 +273,7 @@ export default function AdminSecurityPage() {
     } finally {
       setSaving(false)
     }
-  }, [connectionStatusByField, form, hydrateFormFromSettings, validateForm])
+  }, [connectionStatusByField, form, hydrateFormFromSettings, lastSuccessfulTestsByModel, settings?.metadata, validateForm])
 
   const saveSystemPrompt = useCallback(async (event) => {
     event.preventDefault()
@@ -296,7 +321,17 @@ export default function AdminSecurityPage() {
       })
       setConnectionStatusByField((current) => ({
         ...current,
-        [key]: { state: 'success', message: payload?.message || 'Connection successful.' },
+        [key]: {
+          state: 'success',
+          message: payload?.message || 'Connection successful.',
+          testedAt: payload?.testedAt || new Date().toISOString(),
+          successfulAt: payload?.successfulAt || new Date().toISOString(),
+        },
+      }))
+      const successfulAt = payload?.successfulAt || new Date().toISOString()
+      setLastSuccessfulTestsByModel((current) => ({
+        ...current,
+        [getConnectionTestMetaKey(provider, keyLabel, model)]: successfulAt,
       }))
     } catch (error) {
       const details = error?.payload?.error?.message || error?.payload?.error || error?.payload?.message || 'Connection test failed.'
@@ -364,7 +399,16 @@ export default function AdminSecurityPage() {
                   const model = form.providers?.[provider]?.[keyLabel]?.model || ''
                   const warningKey = getWarningKey({ provider, keyLabel, model })
                   const warnings = warningsByField[warningKey] || []
+                  const statusBadge = getModelStatusBadge(warnings)
                   const connectionStatus = connectionStatusByField[`${provider}:${keyLabel}`]
+                  const lastSuccessfulTestAt = lastSuccessfulTestsByModel[getConnectionTestMetaKey(provider, keyLabel, model)]
+                  const providerModelRegistry = Array.isArray(settings?.providers?.[provider]?.modelRegistry)
+                    ? settings.providers[provider].modelRegistry
+                    : []
+                  const modelSuggestions = providerModelRegistry
+                    .filter((row) => ['active', 'experimental', 'untested'].includes(String(row?.status || '').trim().toLowerCase() || 'active'))
+                    .map((row) => String(row?.modelId || '').trim())
+                    .filter(Boolean)
                   return (
                     <div className="rounded border border-admin p-3" key={`${provider}:${keyLabel}`}>
                       <p className="text-xs font-semibold uppercase tracking-wide text-admin-muted">{keyLabel}</p>
@@ -372,8 +416,30 @@ export default function AdminSecurityPage() {
                         <input className="mt-1 w-full rounded border border-admin px-2 py-2" type="password" value={form.providers[provider][keyLabel].apiKey} onChange={(e) => updateField(provider, keyLabel, 'apiKey', e.target.value)} placeholder={settings?.providers?.[provider]?.[keyLabel]?.maskedApiKey || ''} />
                       </label>
                       <label className="mt-2 block text-sm text-admin-body">{provider} {keyLabel} model
-                        <input className="mt-1 w-full rounded border border-admin px-2 py-2" value={model} onChange={(e) => updateField(provider, keyLabel, 'model', e.target.value)} placeholder={settings?.providers?.[provider]?.[keyLabel]?.model || settings?.providers?.[provider]?.defaultModel || ''} />
+                        <input
+                          className="mt-1 w-full rounded border border-admin px-2 py-2"
+                          value={model}
+                          onChange={(e) => updateField(provider, keyLabel, 'model', e.target.value)}
+                          placeholder={settings?.providers?.[provider]?.[keyLabel]?.model || settings?.providers?.[provider]?.defaultModel || ''}
+                          list={`${provider}-${keyLabel}-models`}
+                        />
                       </label>
+                      <datalist id={`${provider}-${keyLabel}-models`}>
+                        {modelSuggestions.map((modelId) => <option key={modelId} value={modelId} />)}
+                      </datalist>
+                      <p className="mt-1 text-xs text-admin-muted">Use exact provider model ID; new models are allowed.</p>
+                      <div className="mt-2 flex items-center gap-2 text-xs">
+                        <span className={`inline-flex rounded border px-2 py-1 font-semibold ${statusBadge.className}`}>
+                          {statusBadge.label}
+                        </span>
+                        {lastSuccessfulTestAt ? (
+                          <span className="text-admin-muted">
+                            Last successful test: {new Date(lastSuccessfulTestAt).toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-admin-muted">Last successful test: Not recorded</span>
+                        )}
+                      </div>
                       <div className="mt-2 flex items-center gap-2">
                         <button type="button" className="ui-btn" onClick={() => testConnection(provider, keyLabel)} disabled={connectionStatus?.state === 'loading'}>
                           {connectionStatus?.state === 'loading' ? 'Testing…' : 'Test connection'}
@@ -461,7 +527,7 @@ export default function AdminSecurityPage() {
       <section className="ui-card p-4">
         <h2 className="text-lg font-semibold text-admin-strong">Resume analysis system prompt</h2>
         <p className="mt-1 text-sm text-admin-body">Manage the shared system prompt used at runtime for provider-agnostic resume parsing.</p>
-        <form className="mt-4 grid w-full gap-3" onSubmit={saveSystemPrompt}>
+        <form className="mt-4 grid w-full min-w-0 gap-3" onSubmit={saveSystemPrompt}>
           <label className="text-sm text-admin-body" htmlFor="systemPromptInput">System prompt</label>
           <p className="text-xs text-admin-muted">Use this prompt to control extraction + JD matching behavior.</p>
           <textarea
