@@ -526,6 +526,16 @@ export async function validateAiProviderModelConfiguration() {
   ])
 
   const warnings = []
+  const buildWarning = ({ provider, keyLabel, model, validationTier, detail = null, remediationSteps = [] }) => ({
+    provider,
+    source: 'admin-console',
+    keyLabel,
+    model,
+    reason: validationTier,
+    validationTier,
+    detail,
+    remediationSteps,
+  })
   for (const provider of SUPPORTED_PROVIDERS) {
     const providerRows = configResult.rows.filter((row) => row.provider === provider)
     const registryRows = registryRowsByProvider.get(provider) || []
@@ -537,60 +547,76 @@ export async function validateAiProviderModelConfiguration() {
       if (!model) continue
 
       if (!isValidModelFormat(model)) {
-        warnings.push({
+        warnings.push(buildWarning({
           provider,
-          source: 'admin-console',
           keyLabel: row.key_label,
           model,
-          reason: 'invalid_format',
-        })
+          validationTier: 'invalid_format',
+          remediationSteps: [
+            'Use letters, numbers, and . _ : - only.',
+            'Remove spaces and surrounding quotes.',
+            `Run a connection test for ${provider} ${row.key_label} after correcting the model id.`,
+          ],
+        }))
         continue
       }
 
       if (!hasRegistryEntries) {
-        warnings.push({
+        warnings.push(buildWarning({
           provider,
-          source: 'admin-console',
           keyLabel: row.key_label,
           model,
-          reason: 'risky_untested_model',
+          validationTier: 'valid_unlisted',
           detail: 'provider_registry_empty',
-        })
+          remediationSteps: [
+            `Sync the ${provider} model registry to improve validation confidence.`,
+            'Run a provider connection test to verify runtime availability.',
+          ],
+        }))
         continue
       }
 
       const entry = registryByModel.get(model)
       if (!entry) {
-        warnings.push({
+        warnings.push(buildWarning({
           provider,
-          source: 'admin-console',
           keyLabel: row.key_label,
           model,
-          reason: 'risky_untested_model',
+          validationTier: 'valid_unlisted',
           detail: 'model_not_registered',
-        })
+          remediationSteps: [
+            `Sync ${provider} models and retry to confirm whether "${model}" is now listed.`,
+            'Run a provider connection test to confirm this model can be used at runtime.',
+          ],
+        }))
         continue
       }
 
       const status = String(entry.status || '').trim().toLowerCase() || 'active'
       if (['experimental', 'untested'].includes(status)) {
-        warnings.push({
+        warnings.push(buildWarning({
           provider,
-          source: 'admin-console',
           keyLabel: row.key_label,
           model,
-          reason: 'risky_untested_model',
+          validationTier: 'valid_known',
           detail: `registry_status:${status}`,
-        })
+          remediationSteps: [
+            'Keep this model if expected, but monitor provider release notes for stability changes.',
+            'Run a connection test after provider-side updates.',
+          ],
+        }))
       } else if (['deprecated', 'retired', 'blocked', 'inactive'].includes(status)) {
-        warnings.push({
+        warnings.push(buildWarning({
           provider,
-          source: 'admin-console',
           keyLabel: row.key_label,
           model,
-          reason: 'invalid_or_deprecated_model',
+          validationTier: 'valid_known',
           detail: `registry_status:${status}`,
-        })
+          remediationSteps: [
+            'Choose a newer active model from the provider registry.',
+            `Run a connection test for ${provider} after switching models.`,
+          ],
+        }))
       }
     }
   }
