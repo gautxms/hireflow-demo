@@ -99,6 +99,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
+  const lastResultsValidatedOwnerKeyRef = useRef(null)
   const { logout: logoutAdmin } = useAdminAuth()
   const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
 
@@ -149,6 +150,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   useEffect(() => {
     if (!isAuthenticated) {
       setResultsRecoveryAttempted(false)
+      lastResultsValidatedOwnerKeyRef.current = null
       return
     }
 
@@ -160,7 +162,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       setCurrentPage('results')
     }
 
+    const isResultsContext = currentPage === 'results' || isResultsRoute
+    const shouldRevalidateForOwner = isResultsContext && lastResultsValidatedOwnerKeyRef.current !== resumeAnalysisOwnerKey
     const shouldTryRecovery = hasResumeAnalysisFlag
+      || shouldRevalidateForOwner
       || (currentPage === 'results' && !hasCandidateResults(uploadedFiles))
       || (isResultsRoute && !hasCandidateResults(uploadedFiles))
 
@@ -177,8 +182,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       })
       setResultsRecoveryAttempted(false)
     } else {
+      setUploadedFiles(null)
       setResultsRecoveryAttempted(true)
     }
+    lastResultsValidatedOwnerKeyRef.current = resumeAnalysisOwnerKey
 
     if (hasResumeAnalysisFlag) {
       params.delete('resumeAnalysis')
