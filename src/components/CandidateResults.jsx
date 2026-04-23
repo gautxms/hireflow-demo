@@ -828,7 +828,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                       ? candidateCons.map((con, idx) => (
                         <li key={idx} style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>{con}</li>
                       ))
-                      : <li style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>No concerns listed.</li>}
+                      : <li className="candidate-results__evaluation-item">No concerns listed.</li>}
                   </ul>
                 </div>
               </div>
