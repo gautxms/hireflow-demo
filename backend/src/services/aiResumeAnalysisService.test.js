@@ -316,6 +316,42 @@ test('analyzeWithOpenAI supports alternate response shapes without output_text',
   assert.equal(response.result.candidates[0].id, 'cand-alt-2')
 })
 
+test('analyzeWithOpenAI surfaces provider status failures before parse fallback', async () => {
+  await assert.rejects(
+    () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      apiKey: 'oa-key',
+      model: 'gpt-5-nano-2025-08-07',
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_123',
+          status: 'failed',
+          error: { message: 'Model execution failed' },
+        }),
+      }),
+    }),
+    /Model execution failed/,
+  )
+})
+
+test('analyzeWithOpenAI maps max_output_tokens incomplete responses to truncated errors', async () => {
+  await assert.rejects(
+    () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      apiKey: 'oa-key',
+      model: 'gpt-5-nano-2025-08-07',
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_456',
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+        }),
+      }),
+    }),
+    /response_truncated_error::/,
+  )
+})
+
 test('analyzeWithAnthropic categorizes truncated output failures', async () => {
   const anthropicClientFactory = () => ({
     messages: {
