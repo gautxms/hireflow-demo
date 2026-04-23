@@ -389,6 +389,16 @@ a.public-card .public-copy {
 .public-max-800 { max-width: 800px; margin: 0 auto; }
 
 .demo-step-group { display:flex; align-items:center; gap:0.75rem; }
+.demo-info-layout { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.demo-content-stack { display:grid; gap: 1rem; }
+.demo-content-title { margin-bottom: 0; font-size: var(--type-h2-size); line-height: var(--type-h2-line-height); }
+.demo-content-section { display:grid; gap: 0.8rem; }
+.demo-content-list { margin: 0; padding-left: 1.2rem; display:grid; gap: 0.45rem; }
+.demo-lower-content { display:grid; gap: 1rem; margin-top: 1.25rem; }
+
+@media (max-width: 900px) {
+  .demo-info-layout { grid-template-columns: 1fr; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .about-team-card,
