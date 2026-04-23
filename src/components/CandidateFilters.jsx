@@ -80,32 +80,24 @@ export default function CandidateFilters({
   }
 
   return (
-    <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'grid', gap: '1rem' }}>
+    <div className="candidate-results-controls candidate-results-controls-layout">
       <div>
-        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Search</label>
+        <label className="candidate-filter-label">Search</label>
         <input
           type="text"
           value={searchText}
           onChange={(event) => onSearch?.(event.target.value)}
           placeholder="Search name, email, or phone"
-          className="touch-target"
-          style={{
-            width: '100%',
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            color: 'var(--color-text-primary)',
-            padding: '0.5rem 0.75rem',
-            borderRadius: '6px',
-          }}
+          className="touch-target candidate-filter-search-input"
         />
       </div>
 
-      <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+      <div className="candidate-filter-grid">
         <div>
-          <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>
+          <label className="candidate-filter-label">
             Experience years: {experienceMin} - {experienceMax}
           </label>
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
+          <div className="candidate-filter-range-group">
             <input
               type="range"
               min="0"
@@ -128,7 +120,7 @@ export default function CandidateFilters({
         </div>
 
         <div>
-          <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort by</label>
+          <label className="candidate-filter-label">Sort by</label>
           <select
             value={sortBy}
             onChange={(event) => onSort?.(event.target.value)}
@@ -142,7 +134,7 @@ export default function CandidateFilters({
       </div>
 
       <div>
-        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Skills</label>
+        <label className="candidate-filter-label">Skills</label>
         <input
           className="filter-skill-search"
           type="text"
@@ -154,7 +146,7 @@ export default function CandidateFilters({
           }}
         />
         <div className="filter-skill-grid">
-          {dedupedSkills.length === 0 && <span style={{ color: 'var(--color-text-secondary)' }}>No skills available</span>}
+          {dedupedSkills.length === 0 && <span className="candidate-filter-empty-skills">No skills available</span>}
           {displaySkills.map((skill) => {
             const active = selectedSkills.includes(skill.key)
             return (
