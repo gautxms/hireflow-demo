@@ -799,7 +799,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             : Array.isArray(candidate.cons)
               ? candidate.cons.map((item) => toDisplayText(item, '')).filter(Boolean)
               : []
-          const score = candidate.matchScore?.score ?? candidate.profile_score
+          const score = candidate.matchScore?.score ?? candidate.profile_score ?? candidate.score
           const hasRoleFitScore = candidate.matchScore?.score != null
           const scoreColor = score >= 80 ? '#c8ff00' : score >= 60 ? '#7ab3f7' : '#ffa500'
           const scoreGradient = score >= 80 ? 'linear-gradient(90deg, #c8ff00, #39ff9f)' : score >= 60 ? '#7ab3f7' : '#ffa500'
