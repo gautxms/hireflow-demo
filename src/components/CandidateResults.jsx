@@ -799,10 +799,18 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             : Array.isArray(candidate.cons)
               ? candidate.cons.map((item) => toDisplayText(item, '')).filter(Boolean)
               : []
-          const score = candidate.matchScore?.score ?? candidate.profile_score
+          const score = candidate.matchScore?.score ?? candidate.profile_score ?? candidate.score
           const hasRoleFitScore = candidate.matchScore?.score != null
-          const scoreColor = score >= 80 ? '#c8ff00' : score >= 60 ? '#7ab3f7' : '#ffa500'
-          const scoreGradient = score >= 80 ? 'linear-gradient(90deg, #c8ff00, #39ff9f)' : score >= 60 ? '#7ab3f7' : '#ffa500'
+          const scoreToneClass = score >= 80
+            ? 'profile-score-tone--high'
+            : score >= 60
+              ? 'profile-score-tone--medium'
+              : 'profile-score-tone--low'
+          const scoreGradientClass = score >= 80
+            ? 'profile-score-bar-fill--high'
+            : score >= 60
+              ? 'profile-score-bar-fill--medium'
+              : 'profile-score-bar-fill--low'
           const initials = toDisplayText(candidate.name, 'Candidate')
             .split(' ')
             .map((namePart) => namePart[0] || '')
@@ -849,11 +857,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   {score != null && (
                     <div className="profile-score-card">
                       <div className="profile-score-eyebrow">{hasRoleFitScore ? 'Role Fit Score' : 'Profile Score'}</div>
-                      <div className="profile-score-big" style={{ color: scoreColor }}>{score}<span>%</span></div>
+                      <div className={`profile-score-big ${scoreToneClass}`}>{score}<span>%</span></div>
                       <div className="profile-score-bar-track">
-                        <div className="profile-score-bar-fill" style={{ width: `${Math.max(0, Math.min(score, 100))}%`, background: scoreGradient }} />
+                        <progress
+                          className={`profile-score-bar-fill ${scoreGradientClass}`}
+                          value={Math.max(0, Math.min(score, 100))}
+                          max={100}
+                        />
                       </div>
-                      {candidate.matchScore?.fit && <div className="profile-score-fit" style={{ color: scoreColor }}>{candidate.matchScore.fit} match</div>}
+                      {candidate.matchScore?.fit && <div className={`profile-score-fit ${scoreToneClass}`}>{candidate.matchScore.fit} match</div>}
                       {candidate.seniority_level && <div className="profile-score-seniority">{candidate.seniority_level}</div>}
                     </div>
                   )}
@@ -977,7 +989,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                         {candidate.matchScore.breakdown?.experience && (
                           <div className="profile-breakdown-item">
                             <div className="profile-breakdown-label">Experience</div>
-                            <div className="profile-breakdown-val" style={{ color: candidate.matchScore.breakdown.experience.meetsMinimum ? '#c8ff00' : '#ffa500' }}>
+                            <div
+                              className={`profile-breakdown-val ${candidate.matchScore.breakdown.experience.meetsMinimum ? 'profile-score-tone--high' : 'profile-score-tone--low'}`}
+                            >
                               {candidate.matchScore.breakdown.experience.candidateYears} yrs
                               {candidate.matchScore.breakdown.experience.meetsMinimum ? ' ✓' : ' (below min)'}
                             </div>
