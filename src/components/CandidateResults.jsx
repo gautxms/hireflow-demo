@@ -10,6 +10,8 @@ import {
   resolveCandidateResumeUuid,
   resolveCandidateScoreState,
   resolveTierState,
+  toDisplayText,
+  toSafeScore,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -662,14 +664,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   <input
                     checked={selectedIds.includes(candidate._bulkKey)}
                     onChange={() => toggleCandidateSelection(candidate._bulkKey)}
-                    aria-label={`Select ${candidate.name}`}
+                    aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
                     type="checkbox"
                   />
                 </td>
-                <td data-label="Candidate">{candidate.name}</td>
-                <td data-label="Fit">{candidate.matchScore?.fit || candidate.fit}</td>
-                <td data-label="Score">{candidate.matchScore?.score ?? candidate.score}</td>
-                <td data-label="Top skills">{Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3).join(', ') : String(candidate.skills || 'N/A')}</td>
+                <td data-label="Candidate">{toDisplayText(candidate.name)}</td>
+                <td data-label="Fit">{toDisplayText(candidate.matchScore?.fit ?? candidate.fit)}</td>
+                <td data-label="Score">{toDisplayText(candidate.matchScore?.score ?? candidate.score, '0')}</td>
+                <td data-label="Top skills">{toDisplayText(Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3) : candidate.skills)}</td>
               </tr>
             ))}
           </tbody>
@@ -701,10 +703,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               .split(',')
               .map((skill) => skill.trim())
               .filter(Boolean)
-          const candidatePros = Array.isArray(candidate.pros) ? candidate.pros : []
-          const candidateCons = Array.isArray(candidate.cons) ? candidate.cons : []
-          const scoreState = resolveCandidateScoreState(candidate.score)
-          const tierState = resolveTierState(candidate.tier, candidate.score)
+          const candidatePros = Array.isArray(candidate.pros)
+            ? candidate.pros.map((pro) => toDisplayText(pro, '')).filter(Boolean)
+            : []
+          const candidateCons = Array.isArray(candidate.cons)
+            ? candidate.cons.map((con) => toDisplayText(con, '')).filter(Boolean)
+            : []
+          const safeScore = toSafeScore(candidate.score)
+          const scoreState = resolveCandidateScoreState(safeScore)
+          const tierState = resolveTierState(candidate.tier, safeScore)
 
           return (
             <div
@@ -716,7 +723,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   <input
                     checked={selectedIds.includes(candidate._bulkKey)}
                     onChange={() => toggleCandidateSelection(candidate._bulkKey)}
-                    aria-label={`Select ${candidate.name}`}
+                    aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
                     type="checkbox"
                   />
                   Select candidate
@@ -726,10 +733,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
                 <div>
                   <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--color-text-primary)' }}>
-                    {candidate.name}
+                    {toDisplayText(candidate.name)}
                   </h2>
-                  <p style={{ color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>📧 {candidate.email || 'No email provided'}</p>
-                  <p style={{ color: 'var(--color-text-secondary)' }}>📍 {candidate.location || 'Unknown location'}</p>
+                  <p style={{ color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>📧 {toDisplayText(candidate.email, 'No email provided')}</p>
+                  <p style={{ color: 'var(--color-text-secondary)' }}>📍 {toDisplayText(candidate.location, 'Unknown location')}</p>
                 </div>
 
                 <div style={{ textAlign: 'center' }}>
@@ -737,7 +744,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     width: '90px',
                     height: '90px',
                     borderRadius: '50%',
-                    background: `conic-gradient(${scoreState.chartColor} ${candidate.score * 3.6}deg, rgba(255,255,255,0.1) 0deg)`,
+                    background: `conic-gradient(${scoreState.chartColor} ${safeScore * 3.6}deg, rgba(255,255,255,0.1) 0deg)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -756,7 +763,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                       fontWeight: 'bold',
                       color: scoreState.chartColor
                     }}>
-                      {candidate.score}
+                      {toDisplayText(safeScore, '0')}
                     </div>
                   </div>
                   <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Match Score</p>
@@ -766,14 +773,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   <div className={`mb-3 rounded-full border px-4 py-2 text-center text-xs font-bold ${tierState.badgeClass}`}>
                     {`${tierState.icon} ${tierState.label.toUpperCase()}`}
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Fit: {candidate.fit || 'N/A'}</p>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Experience: {candidate.experience || 'N/A'}</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Fit: {toDisplayText(candidate.fit)}</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Experience: {toDisplayText(candidate.experience)}</p>
                 </div>
               </div>
 
               <div style={{ marginBottom: '1.5rem' }}>
                 <h3 style={{ fontSize: '1rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>Summary</h3>
-                <p style={{ color: 'var(--color-text-primary)', lineHeight: '1.6' }}>{candidate.summary || 'No summary available'}</p>
+                <p style={{ color: 'var(--color-text-primary)', lineHeight: '1.6' }}>{toDisplayText(candidate.summary, 'No summary available')}</p>
               </div>
 
               <div style={{ marginBottom: '1.5rem' }}>

@@ -6,6 +6,8 @@ import {
   normalizeSortBy,
   paginateCandidates,
   resolveCandidateResumeUuid,
+  toDisplayText,
+  toSafeScore,
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
@@ -48,4 +50,18 @@ test('resolveCandidateResumeUuid only returns valid UUID values', () => {
   assert.equal(resolveCandidateResumeUuid({ resumeId: resumeUuid }), resumeUuid)
   assert.equal(resolveCandidateResumeUuid({ id: 'parsed-1' }), null)
   assert.equal(resolveCandidateResumeUuid({ resume_id: '123' }), null)
+})
+
+test('toDisplayText normalizes object/array candidate fields into safe renderable text', () => {
+  assert.equal(toDisplayText({ text: 'Senior engineer' }), 'Senior engineer')
+  assert.equal(toDisplayText({ value: 'Remote' }), 'Remote')
+  assert.equal(toDisplayText({ nested: true }, 'No summary available'), 'No summary available')
+  assert.equal(toDisplayText(['React', { text: 'Node.js' }, 7]), 'React, Node.js, 7')
+})
+
+test('toSafeScore constrains malformed or out-of-range values for chart rendering', () => {
+  assert.equal(toSafeScore({ score: 90 }, 0), 0)
+  assert.equal(toSafeScore('95'), 95)
+  assert.equal(toSafeScore(999), 100)
+  assert.equal(toSafeScore(-12), 0)
 })
