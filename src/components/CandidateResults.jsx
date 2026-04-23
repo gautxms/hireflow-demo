@@ -34,6 +34,13 @@ function parseSkills(skills) {
     .filter(Boolean)
 }
 
+function normalizeSkillKey(skill) {
+  return String(skill || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s*[()]/g, '')
+}
+
 function parseYears(experience) {
   if (typeof experience === 'number' && Number.isFinite(experience)) {
     return experience
@@ -69,9 +76,9 @@ function filterAndSortCandidates(candidates, filters) {
       }
     }
 
-    const candidateSkills = parseSkills(candidate?.skills).map((skill) => skill.toLowerCase())
+    const candidateSkills = new Set(parseSkills(candidate?.skills).map(normalizeSkillKey))
     if (selectedSkills.length > 0) {
-      const hasAtLeastOneSkill = selectedSkills.some((skill) => candidateSkills.includes(String(skill).toLowerCase()))
+      const hasAtLeastOneSkill = selectedSkills.some((skill) => candidateSkills.has(normalizeSkillKey(skill)))
       if (!hasAtLeastOneSkill) {
         return false
       }
