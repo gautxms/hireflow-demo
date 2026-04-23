@@ -121,6 +121,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [resultsError, setResultsError] = useState('')
+  const [jdOpen, setJdOpen] = useState(false)
+  const [jdText, setJdText] = useState('')
+  const [reanalysing, setReanalysing] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
 
@@ -133,14 +136,22 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [tagDraft, setTagDraft] = useState('')
   const [candidateTags, setCandidateTags] = useState({})
 
-  const rawCandidates = Array.isArray(candidates)
-    ? candidates
-    : Array.isArray(candidates?.candidates)
-      ? candidates.candidates
-      : []
+  const rawCandidates = useMemo(() => (
+    Array.isArray(candidates)
+      ? candidates
+      : Array.isArray(candidates?.candidates)
+        ? candidates.candidates
+        : []
+  ), [candidates])
   const hasJobDescription = Boolean(candidates?.parseMeta?.hasJobDescription)
 
-  const displayCandidates = rawCandidates.length > 0 ? rawCandidates : null
+  const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
+
+  useEffect(() => {
+    setLiveCandidates(rawCandidates)
+  }, [rawCandidates])
+
+  const displayCandidates = liveCandidates.length > 0 ? liveCandidates : null
 
   const hasRenderableCandidates = Array.isArray(displayCandidates)
     && displayCandidates.length > 0
@@ -182,6 +193,43 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       setShortlistLoading(false)
     }
   }, [authHeaders, selectedShortlistId])
+
+  const fetchCandidates = useCallback(async () => {
+    const response = await fetch(`${API_BASE}/results?page=1&pageSize=100`, {
+      method: 'GET',
+      headers: authHeaders(),
+      credentials: 'include',
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to refresh candidates')
+    }
+    setLiveCandidates(Array.isArray(payload.candidates) ? payload.candidates : [])
+  }, [authHeaders])
+
+  const handleReanalyse = useCallback(async () => {
+    try {
+      setReanalysing(true)
+      setResultsError('')
+      const response = await fetch(`${API_BASE}/candidates/reanalyse`, {
+        method: 'POST',
+        headers: authHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ jobDescription: jdText }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to re-score candidates')
+      }
+      await fetchCandidates()
+      setJdOpen(false)
+    } catch (error) {
+      console.error(error)
+      setResultsError(error.message || 'Unable to re-score candidates')
+    } finally {
+      setReanalysing(false)
+    }
+  }, [authHeaders, fetchCandidates, jdText])
 
   const loadShortlistDetails = useCallback(async (shortlistId, sortKey = shortlistSort) => {
     if (!shortlistId) {
@@ -660,6 +708,49 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
         <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
       </BulkActions>
+
+      <div className="jd-panel">
+        <button type="button" className="jd-toggle" onClick={() => setJdOpen((open) => !open)}>
+          <span className="jd-toggle-chevron">{jdOpen ? '▲' : '▼'}</span>
+          {jdText
+            ? '✓ Job description active — candidates scored against this role'
+            : 'Set job description for accurate role-fit scoring'}
+        </button>
+
+        {jdOpen && (
+          <div className="jd-body">
+            <textarea
+              className="jd-textarea"
+              placeholder="Paste the full job description here. AI will re-score every candidate against this specific role..."
+              value={jdText}
+              onChange={(event) => setJdText(event.target.value)}
+              rows={7}
+            />
+            <div className="jd-footer">
+              <button
+                type="button"
+                className="jd-btn-apply"
+                onClick={handleReanalyse}
+                disabled={!jdText.trim() || reanalysing}
+              >
+                {reanalysing ? 'Re-scoring candidates…' : 'Re-score all candidates against this role'}
+              </button>
+              {jdText && (
+                <button
+                  type="button"
+                  className="jd-btn-clear"
+                  onClick={() => {
+                    setJdText('')
+                    setJdOpen(false)
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="ranking-stats">
         <div className="ranking-stat">
