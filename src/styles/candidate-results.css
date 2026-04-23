@@ -690,6 +690,12 @@
 
 .profile-score-big span { font-size: 20px; }
 
+.profile-score-tone--high { color: #c8ff00; }
+
+.profile-score-tone--medium { color: #7ab3f7; }
+
+.profile-score-tone--low { color: #ffa500; }
+
 .profile-score-bar-track {
   background: #1e1e1e;
   border-radius: 100px;
@@ -699,8 +705,29 @@
 
 .profile-score-bar-fill {
   height: 4px;
+  width: 100%;
   border-radius: 100px;
+  border: 0;
+  overflow: hidden;
+  appearance: none;
+  background: transparent;
 }
+
+.profile-score-bar-fill::-webkit-progress-bar { background: transparent; }
+
+.profile-score-bar-fill--high::-webkit-progress-value {
+  background: linear-gradient(90deg, #c8ff00, #39ff9f);
+}
+
+.profile-score-bar-fill--high::-moz-progress-bar { background: linear-gradient(90deg, #c8ff00, #39ff9f); }
+
+.profile-score-bar-fill--medium::-webkit-progress-value { background: #7ab3f7; }
+
+.profile-score-bar-fill--medium::-moz-progress-bar { background: #7ab3f7; }
+
+.profile-score-bar-fill--low::-webkit-progress-value { background: #ffa500; }
+
+.profile-score-bar-fill--low::-moz-progress-bar { background: #ffa500; }
 
 .profile-score-fit {
   font-family: 'DM Sans', sans-serif;
