@@ -36,6 +36,40 @@ function normalizeNullableNumber(value) {
   return Number.isFinite(numeric) ? numeric : null
 }
 
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => normalizeString(entry)).filter(Boolean)
+}
+
+function normalizeStructuredSkills(skills) {
+  if (!skills || typeof skills !== 'object' || Array.isArray(skills)) {
+    return {
+      tools_and_platforms: [],
+      methodologies: [],
+      domain_expertise: [],
+      soft_skills: [],
+    }
+  }
+
+  return {
+    tools_and_platforms: normalizeStringArray(skills.tools_and_platforms),
+    methodologies: normalizeStringArray(skills.methodologies),
+    domain_expertise: normalizeStringArray(skills.domain_expertise),
+    soft_skills: normalizeStringArray(skills.soft_skills),
+  }
+}
+
+function flattenStructuredSkills(skillsStructured) {
+  const flattened = [
+    ...(skillsStructured.tools_and_platforms || []),
+    ...(skillsStructured.methodologies || []),
+    ...(skillsStructured.domain_expertise || []),
+    ...(skillsStructured.soft_skills || []),
+  ]
+
+  return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
+}
+
 function getPreferredJobDescriptionText(row = {}) {
   const candidates = [
     row.file_text,
@@ -382,11 +416,27 @@ async function runParse(job) {
   }
 
   const candidates = Array.isArray(analysisResult?.candidates)
-    ? analysisResult.candidates.map((candidate, index) => ({
-        id: candidate?.id || `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
-        ...candidate,
-        confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
-      }))
+    ? analysisResult.candidates.map((candidate, index) => {
+        const skillsStructured = normalizeStructuredSkills(candidate?.skills)
+        const fallbackSkills = normalizeSkills(candidate?.skills)
+        const flattenedSkills = flattenStructuredSkills(skillsStructured)
+        const resolvedSkillsFlat = flattenedSkills.length > 0 ? flattenedSkills : fallbackSkills
+        return {
+          id: candidate?.id || `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
+          ...candidate,
+          years_experience: normalizeNullableNumber(candidate?.years_experience),
+          profile_score: normalizeNullableNumber(candidate?.profile_score),
+          strengths: normalizeStringArray(candidate?.strengths),
+          considerations: normalizeStringArray(candidate?.considerations),
+          seniority_level: normalizeString(candidate?.seniority_level),
+          tags: normalizeStringArray(candidate?.tags),
+          top_skills: normalizeStringArray(candidate?.top_skills).slice(0, 5),
+          skills_structured: skillsStructured,
+          skills: skillsStructured,
+          skills_flat: resolvedSkillsFlat,
+          confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
+        }
+      })
     : []
   const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
 
@@ -409,16 +459,44 @@ async function runParse(job) {
 
   const parseDurationMs = Date.now() - startedAt
 
+  const primaryCandidate = normalizedCandidates[0] || null
   await pool.query(
     `UPDATE resumes
      SET parse_status = 'complete',
          parse_result = $2::jsonb,
+         years_experience = $3,
+         profile_score = $4,
+         strengths = $5::jsonb,
+         considerations = $6::jsonb,
+         seniority_level = $7,
+         tags = $8::jsonb,
+         top_skills = $9::jsonb,
+         skills_structured = $10::jsonb,
+         skills = $11::jsonb,
          parse_error = NULL,
-         parse_duration_ms = $3,
+         parse_duration_ms = $12,
          updated_at = NOW(),
          raw_text = COALESCE(raw_text, '')
      WHERE id = $1`,
-    [resumeId, JSON.stringify(parseResult), parseDurationMs],
+    [
+      resumeId,
+      JSON.stringify(parseResult),
+      normalizeNullableNumber(primaryCandidate?.years_experience),
+      normalizeNullableNumber(primaryCandidate?.profile_score),
+      JSON.stringify(primaryCandidate?.strengths || []),
+      JSON.stringify(primaryCandidate?.considerations || []),
+      normalizeString(primaryCandidate?.seniority_level),
+      JSON.stringify(primaryCandidate?.tags || []),
+      JSON.stringify(primaryCandidate?.top_skills || []),
+      JSON.stringify(primaryCandidate?.skills_structured || {
+        tools_and_platforms: [],
+        methodologies: [],
+        domain_expertise: [],
+        soft_skills: [],
+      }),
+      JSON.stringify(primaryCandidate?.skills_flat || []),
+      parseDurationMs,
+    ],
   )
 
   await setJobState(job.id, {

@@ -23,6 +23,7 @@ const migrationFiles = [
   '019-add-admin-system-prompt',
   '020-add-admin-ai-model-registry',
   '021-admin-ai-actor-columns-text-compat',
+  '022-add-resume-ai-profile-fields',
 ]
 
 async function ensureMigrationsTable(client) {
