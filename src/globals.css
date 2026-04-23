@@ -567,6 +567,44 @@ footer {
   width: 100%;
 }
 
+.candidate-results-controls-layout {
+  max-width: 1200px;
+  margin: 0 auto 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.candidate-filter-label {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.candidate-filter-search-input {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--color-text-primary);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.candidate-filter-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.candidate-filter-range-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.candidate-filter-empty-skills {
+  color: var(--color-text-secondary);
+}
+
 .candidate-results-controls input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 18px;
