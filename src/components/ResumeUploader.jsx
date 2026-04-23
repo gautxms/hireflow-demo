@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
 import { buildRoleSafeErrorView, isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
@@ -10,6 +10,7 @@ import {
 } from './resumeUploaderState'
 import {
   buildFileSnapshot,
+  getResumeAnalysisOwnerKey,
   clearResumeAnalysisResult,
   clearResumeAnalysisSession,
   isSessionRecoverable,
@@ -108,6 +109,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
   const isDevelopment = import.meta.env.DEV
   const canViewAdminDiagnostics = isAdmin || isDevelopment
+  const resumeAnalysisOwnerKey = useMemo(() => {
+    try {
+      const parsedUser = JSON.parse(localStorage.getItem('hireflow_user_profile') || 'null')
+      return getResumeAnalysisOwnerKey(parsedUser)
+    } catch {
+      return ''
+    }
+  }, [])
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -313,7 +322,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setError('')
     setTechnicalErrorDetails('')
     setProviderErrorGuidance(null)
-    clearResumeAnalysisResult()
+    clearResumeAnalysisResult(resumeAnalysisOwnerKey)
 
     try {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -596,7 +605,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           writeResumeAnalysisResult({
             ...latestResult,
             jobId: primaryJobId,
-          })
+          }, resumeAnalysisOwnerKey)
         } catch (persistError) {
           console.warn('Unable to persist resume analysis result for recovery', persistError)
         }
@@ -618,11 +627,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     }
 
     throw new Error('Resume parsing timed out. Please try again.')
-  }, [onFileUploaded, selectedJobDescriptionId, uploadedFiles])
+  }, [onFileUploaded, resumeAnalysisOwnerKey, selectedJobDescriptionId, uploadedFiles])
 
   const handleResumeTracking = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    const recoverableJobId = recoverableSession?.jobId || readResumeAnalysisResult()?.jobId
+    const recoverableJobId = recoverableSession?.jobId || readResumeAnalysisResult(resumeAnalysisOwnerKey)?.jobId
     if (!token || !recoverableJobId) {
       setShowRecoveryPrompt(false)
       return

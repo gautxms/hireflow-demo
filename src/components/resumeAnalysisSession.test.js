@@ -4,6 +4,7 @@ import {
   buildFileSnapshot,
   clearResumeAnalysisResult,
   clearResumeAnalysisSession,
+  getResumeAnalysisOwnerKey,
   isSessionRecoverable,
   readResumeAnalysisResult,
   readResumeAnalysisSession,
@@ -64,34 +65,30 @@ test('buildFileSnapshot preserves retry context fingerprints', () => {
 
 test('resume analysis results are scoped to the authenticated account', () => {
   const storage = createStorageMock()
-  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-a', email: 'a@example.com' }))
+  const ownerA = getResumeAnalysisOwnerKey({ id: 'user-a', email: 'a@example.com' })
+  const ownerB = getResumeAnalysisOwnerKey({ id: 'user-b', email: 'b@example.com' })
 
   writeResumeAnalysisResult({
     candidates: [{ name: 'Alice' }],
     jobId: 'job-1',
-  }, storage)
+  }, ownerA, storage)
 
-  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-b', email: 'b@example.com' }))
-  assert.equal(readResumeAnalysisResult(storage), null)
+  assert.equal(readResumeAnalysisResult(ownerB, storage), null)
+  assert.equal(readResumeAnalysisResult(ownerA, storage)?.jobId, 'job-1')
 })
 
 test('clearResumeAnalysisResult only clears the active account scope', () => {
   const storage = createStorageMock()
-  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-a' }))
+  const ownerA = getResumeAnalysisOwnerKey({ id: 'user-a' })
+  const ownerB = getResumeAnalysisOwnerKey({ id: 'user-b' })
   writeResumeAnalysisResult({
     candidates: [{ name: 'Alice' }],
     jobId: 'job-1',
-  }, storage)
+  }, ownerA, storage)
 
-  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-b' }))
-  writeResumeAnalysisResult({
-    candidates: [{ name: 'Bob' }],
-    jobId: 'job-2',
-  }, storage)
+  clearResumeAnalysisResult(ownerB, storage)
+  assert.equal(readResumeAnalysisResult(ownerA, storage)?.jobId, 'job-1')
 
-  clearResumeAnalysisResult(storage)
-  assert.equal(readResumeAnalysisResult(storage), null)
-
-  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-a' }))
-  assert.equal(readResumeAnalysisResult(storage)?.jobId, 'job-1')
+  clearResumeAnalysisResult(ownerA, storage)
+  assert.equal(readResumeAnalysisResult(ownerA, storage), null)
 })
