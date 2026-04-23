@@ -710,11 +710,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           const scoreValue = hasJobDescription ? candidate?.matchScore?.score : (candidate?.profile_score ?? candidate?.score)
           const score = Number(scoreValue ?? 0)
           const isSelected = selectedIds.includes(candidate._bulkKey)
-          const bg = score >= 80
-            ? 'linear-gradient(90deg,#c8ff00,#39ff9f)'
-            : score >= 60
-              ? '#7ab3f7'
-              : '#ffa500'
           const scoreBand = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'possible'
 
           return (
@@ -748,7 +743,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   <>
                     <div className={`cand-score-num cand-score-num--${scoreBand}`}>{score}<span className="cand-pct">%</span></div>
                     <div className="cand-bar-track">
-                      <div className={`cand-bar-fill cand-bar-fill--${scoreBand}`} style={{ width: `${Math.max(0, Math.min(score, 100))}%`, background: bg }} />
+                      <progress
+                        className={`cand-bar-fill cand-bar-fill--${scoreBand}`}
+                        value={Math.max(0, Math.min(score, 100))}
+                        max={100}
+                      />
                     </div>
                     <div className={`cand-fit-label cand-fit-label--${scoreBand}`}>
                       {candidate.matchScore?.fit ?? (score >= 80 ? 'Strong' : score >= 60 ? 'Good' : 'Possible')}
