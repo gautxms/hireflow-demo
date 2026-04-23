@@ -85,6 +85,43 @@ function normalizeCandidateFromAnalysis(candidate, resumeId, fallbackName = 'res
   }
 }
 
+function resolveResumeTextForReanalysis(row) {
+  const directRawText = normalizeString(row?.raw_text)
+  if (directRawText) {
+    return directRawText
+  }
+
+  const parseResult = row?.parse_result && typeof row.parse_result === 'object' ? row.parse_result : {}
+  const parseResultText = normalizeString(
+    parseResult.raw_text
+      || parseResult.rawText
+      || parseResult.extracted_text
+      || parseResult.extractedText
+      || parseResult.parsed_text
+      || parseResult.parsedText,
+  )
+  if (parseResultText) {
+    return parseResultText
+  }
+
+  const previousCandidates = Array.isArray(parseResult.candidates) ? parseResult.candidates : []
+  const normalizedTextBlocks = previousCandidates
+    .map((candidate) => {
+      if (!candidate || typeof candidate !== 'object') return null
+      const lines = [
+        normalizeString(candidate.name),
+        normalizeString(candidate.summary),
+        normalizeString(candidate.position),
+        normalizeString(candidate.experience),
+        normalizeString(Array.isArray(candidate.skills_flat) ? candidate.skills_flat.join(', ') : candidate.skills),
+      ].filter(Boolean)
+      return lines.length > 0 ? lines.join('\n') : null
+    })
+    .filter(Boolean)
+
+  return normalizedTextBlocks.length > 0 ? normalizedTextBlocks.join('\n\n') : null
+}
+
 router.post('/reanalyse', requireAuth, async (req, res) => {
   const jobDescription = String(req.body?.jobDescription || '').trim()
   if (!jobDescription) {
@@ -119,7 +156,7 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
     const updatedCandidates = []
 
     for (const row of resumeResult.rows) {
-      const resumeText = String(row.raw_text || '').trim()
+      const resumeText = resolveResumeTextForReanalysis(row)
       if (!resumeText) {
         const previousCandidates = Array.isArray(row.parse_result?.candidates) ? row.parse_result.candidates : []
         const rescoredPrevious = applyJobDescriptionScoringMode(previousCandidates, jobDescriptionContext)

@@ -143,13 +143,16 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         ? candidates.candidates
         : []
   ), [candidates])
-  const hasJobDescription = Boolean(candidates?.parseMeta?.hasJobDescription)
+  const [hasJobDescription, setHasJobDescription] = useState(Boolean(candidates?.parseMeta?.hasJobDescription))
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
 
   useEffect(() => {
     setLiveCandidates(rawCandidates)
   }, [rawCandidates])
+  useEffect(() => {
+    setHasJobDescription(Boolean(candidates?.parseMeta?.hasJobDescription))
+  }, [candidates])
 
   const displayCandidates = liveCandidates.length > 0 ? liveCandidates : null
 
@@ -195,16 +198,29 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   }, [authHeaders, selectedShortlistId])
 
   const fetchCandidates = useCallback(async () => {
-    const response = await fetch(`${API_BASE}/results?page=1&pageSize=100`, {
-      method: 'GET',
-      headers: authHeaders(),
-      credentials: 'include',
-    })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      throw new Error(payload.error || 'Unable to refresh candidates')
+    const collected = []
+    let currentPage = 1
+    let totalPages = 1
+
+    while (currentPage <= totalPages) {
+      const response = await fetch(`${API_BASE}/results?page=${currentPage}&pageSize=100`, {
+        method: 'GET',
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to refresh candidates')
+      }
+
+      const pageCandidates = Array.isArray(payload.candidates) ? payload.candidates : []
+      collected.push(...pageCandidates)
+      totalPages = Math.max(1, Number(payload?.pagination?.totalPages) || 1)
+      currentPage += 1
     }
-    setLiveCandidates(Array.isArray(payload.candidates) ? payload.candidates : [])
+
+    setLiveCandidates(collected)
+    setHasJobDescription(collected.some((candidate) => candidate?.matchScore?.score != null))
   }, [authHeaders])
 
   const handleReanalyse = useCallback(async () => {
