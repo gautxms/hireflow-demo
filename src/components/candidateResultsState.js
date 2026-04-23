@@ -91,6 +91,32 @@ export function paginateCandidates(candidates, page, pageSize) {
   }
 }
 
+export function normalizeCandidateForResults(candidate, index = 0) {
+  const isRenderable = Boolean(candidate && typeof candidate === 'object')
+  const source = isRenderable ? candidate : {}
+  const skillsValue = source.skills
+  const normalizedSkills = Array.isArray(skillsValue)
+    ? skillsValue
+    : typeof skillsValue === 'string'
+      ? skillsValue
+      : ''
+
+  return {
+    ...source,
+    skills: normalizedSkills,
+    _bulkKey: String(source?.id ?? `${source?.name || 'candidate'}-${index}`),
+    _isRenderable: isRenderable,
+  }
+}
+
+export function hasRenderableCandidates(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return false
+  }
+
+  return candidates.some((candidate) => Boolean(candidate?._isRenderable))
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function resolveCandidateResumeUuid(candidate) {
