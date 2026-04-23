@@ -16,12 +16,6 @@ router.get('/:id/parse-status', requireAuth, async (req, res) => {
   const { id } = req.params
 
   try {
-    const cached = await getCachedJobResult(id)
-
-    if (cached) {
-      return res.json(cached)
-    }
-
     const jobRowResult = await pool.query(
       `SELECT job_id, status, progress, result, error_message, resume_id, user_id
        FROM parse_jobs
@@ -34,6 +28,15 @@ router.get('/:id/parse-status', requireAuth, async (req, res) => {
 
     if (!jobRow || Number(jobRow.user_id) !== Number(req.userId)) {
       return res.status(404).json({ error: 'Parse job not found' })
+    }
+
+    const cached = await getCachedJobResult(id)
+    if (cached) {
+      return res.json({
+        ...cached,
+        jobId: String(jobRow.job_id || id),
+        resumeId: String(jobRow.resume_id || ''),
+      })
     }
 
     const queueJob = await parseQueue.getJob(id)

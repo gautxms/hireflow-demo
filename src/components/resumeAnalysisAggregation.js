@@ -4,7 +4,7 @@ function toStableResumeId(value) {
 }
 
 function toStableCandidateId(candidate, fallbackId) {
-  const candidateId = String(candidate?.resumeId || candidate?.resume_id || candidate?.id || '').trim()
+  const candidateId = String(candidate?.id || '').trim()
   if (candidateId) {
     return candidateId
   }
@@ -23,7 +23,7 @@ export function mergeCandidatesByResumeId(previousMap, incomingEntries) {
     }
 
     const fallbackId = resumeId || `candidate-${index + 1}`
-    const stableId = toStableCandidateId(candidate, fallbackId)
+    const stableId = resumeId || toStableCandidateId(candidate, fallbackId)
     if (!stableId) {
       return
     }

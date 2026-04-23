@@ -12,8 +12,19 @@ test('mergeCandidatesByResumeId accumulates multiple resumes without overwriting
   ])
 
   assert.equal(Object.keys(merged).length, 2)
-  assert.equal(merged['candidate-1'].resumeId, 'resume-1')
-  assert.equal(merged['candidate-2'].resumeId, 'resume-2')
+  assert.equal(merged['resume-1'].resumeId, 'resume-1')
+  assert.equal(merged['resume-2'].resumeId, 'resume-2')
+})
+
+test('mergeCandidatesByResumeId prefers resumeId over duplicate provider candidate ids', () => {
+  const merged = mergeCandidatesByResumeId({}, [
+    { resumeId: 'resume-1', filename: 'a.pdf', candidate: { id: 'duplicate-id', name: 'Alpha' } },
+    { resumeId: 'resume-2', filename: 'b.pdf', candidate: { id: 'duplicate-id', name: 'Beta' } },
+  ])
+
+  assert.equal(Object.keys(merged).length, 2)
+  assert.equal(merged['resume-1'].name, 'Alpha')
+  assert.equal(merged['resume-2'].name, 'Beta')
 })
 
 test('summarizeJobStatus reports uploaded/analyzed/failed/pending totals', () => {
