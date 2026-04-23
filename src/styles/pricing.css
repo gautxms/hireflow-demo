@@ -31,6 +31,14 @@
   margin-bottom: var(--spacing-lg);
 }
 
+.pricing-page__intro {
+  max-width: 860px;
+  margin: 0 auto var(--spacing-xl);
+  color: var(--color-text-secondary);
+  text-align: center;
+  line-height: 1.7;
+}
+
 .pricing-page__price-note {
   margin-bottom: 1.9rem;
 }
@@ -163,4 +171,58 @@
   padding-left: 1.1rem;
   display: grid;
   gap: 0.55rem;
+}
+
+.pricing-page__section {
+  margin-top: var(--spacing-2xl);
+}
+
+.pricing-page__section-title {
+  font-family: var(--font-family-display);
+  font-size: clamp(1.45rem, 3vw, 1.8rem);
+  margin-bottom: var(--spacing-base);
+}
+
+.pricing-page__section-copy {
+  color: var(--color-text-secondary);
+  line-height: 1.75;
+  margin-bottom: var(--spacing-base);
+}
+
+.pricing-page__section-list {
+  color: var(--color-text-secondary);
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.55rem;
+  line-height: 1.6;
+}
+
+.pricing-page__faq-list {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.pricing-page__faq-item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  padding: var(--spacing-lg);
+}
+
+.pricing-page__faq-question {
+  margin-bottom: var(--spacing-sm);
+  font-size: 1.05rem;
+}
+
+.pricing-page__faq-answer {
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+
+.pricing-page__trust-line {
+  text-align: center;
+  margin: var(--spacing-2xl) auto var(--spacing-xl);
+  max-width: 720px;
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
 }
