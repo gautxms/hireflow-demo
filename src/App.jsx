@@ -92,6 +92,7 @@ function navigate(pathname, options = {}) {
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
+  const [resultsRecoveryAttempted, setResultsRecoveryAttempted] = useState(false)
   const [sharedResults, setSharedResults] = useState(null)
   const [sharedResultsLoading, setSharedResultsLoading] = useState(false)
   const [sharedResultsError, setSharedResultsError] = useState('')
@@ -100,6 +101,18 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const profileMenuRef = useRef(null)
   const { logout: logoutAdmin } = useAdminAuth()
   const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
+
+  const hasCandidateResults = (value) => {
+    if (Array.isArray(value)) {
+      return value.length > 0
+    }
+
+    if (value && typeof value === 'object' && Array.isArray(value.candidates)) {
+      return value.candidates.length > 0
+    }
+
+    return false
+  }
 
   const handleNavigate = (page, promptMessage = 'Please login or sign up to continue.') => {
     if (!isAuthenticated && PROTECTED_PAGES.has(page)) {
@@ -121,6 +134,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const handleFileUploaded = (candidateResults) => {
     setUploadedFiles(candidateResults)
+    setResultsRecoveryAttempted(false)
     handleNavigate('results')
   }
 
@@ -133,27 +147,46 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [currentPage, isAuthenticated, onRequireAuth])
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setResultsRecoveryAttempted(false)
+      return
+    }
+
     const params = new URLSearchParams(window.location.search)
-    if (params.get('resumeAnalysis') !== '1') {
+    const isResultsRoute = pathname === '/results'
+    const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
+
+    if (isResultsRoute && currentPage !== 'results') {
+      setCurrentPage('results')
+    }
+
+    const shouldTryRecovery = hasResumeAnalysisFlag
+      || (currentPage === 'results' && !hasCandidateResults(uploadedFiles))
+      || (isResultsRoute && !hasCandidateResults(uploadedFiles))
+
+    if (!shouldTryRecovery) {
       return
     }
 
     const latestResult = readResumeAnalysisResult(resumeAnalysisOwnerKey)
-    if (!latestResult || !Array.isArray(latestResult.candidates) || latestResult.candidates.length === 0) {
-      return
+
+    if (latestResult && Array.isArray(latestResult.candidates) && latestResult.candidates.length > 0) {
+      setUploadedFiles({
+        candidates: latestResult.candidates,
+        parseMeta: latestResult.parseMeta || null,
+      })
+      setResultsRecoveryAttempted(false)
+    } else {
+      setResultsRecoveryAttempted(true)
     }
 
-    setUploadedFiles({
-      candidates: latestResult.candidates,
-      parseMeta: latestResult.parseMeta || null,
-    })
-    setCurrentPage('results')
-
-    params.delete('resumeAnalysis')
-    const nextQuery = params.toString()
-    const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname
-    window.history.replaceState(window.history.state || {}, '', nextUrl)
-  }, [pathname, resumeAnalysisOwnerKey])
+    if (hasResumeAnalysisFlag) {
+      params.delete('resumeAnalysis')
+      const nextQuery = params.toString()
+      const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname
+      window.history.replaceState(window.history.state || {}, '', nextUrl)
+    }
+  }, [currentPage, isAuthenticated, pathname, resumeAnalysisOwnerKey, uploadedFiles])
 
 
   useEffect(() => {
@@ -340,6 +373,41 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/billing') {
       return <BillingPage />
+    }
+
+    if (pathname === '/results') {
+      if (!isAuthenticated) {
+        onRequireAuth('Please login to view candidate analysis results.')
+        return null
+      }
+
+      if (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted) {
+        return (
+          <main className="route-state route-state--results-empty">
+            <StatePattern
+              kind="empty"
+              title="No recent analysis found"
+              description="We couldn’t find a recent resume analysis for your account. Upload resumes to start a new analysis."
+              action={(
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="route-state-card__action"
+                >
+                  Go to uploader
+                </button>
+              )}
+            />
+          </main>
+        )
+      }
+
+      return (
+        <CandidateResults
+          candidates={uploadedFiles}
+          onBack={() => navigate('/')}
+        />
+      )
     }
 
     if (pathname === '/job-descriptions') {
@@ -587,10 +655,32 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         )}
 
         {currentPage === 'results' && (
-          <CandidateResults
-            candidates={uploadedFiles}
-            onBack={() => handleNavigate('uploader')}
-          />
+          (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted
+            ? (
+              <main className="route-state route-state--results-empty">
+                <StatePattern
+                  kind="empty"
+                  title="No recent analysis found"
+                  description="We couldn’t find a recent resume analysis for your account. Upload resumes to start a new analysis."
+                  action={(
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('uploader')}
+                      className="route-state-card__action"
+                    >
+                      Go to uploader
+                    </button>
+                  )}
+                />
+              </main>
+              )
+            : (
+              <CandidateResults
+                candidates={uploadedFiles}
+                onBack={() => handleNavigate('uploader')}
+              />
+              )
+          )
         )}
 
         {currentPage === 'dashboard' && (
