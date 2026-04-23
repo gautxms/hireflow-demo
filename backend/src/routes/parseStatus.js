@@ -42,6 +42,8 @@ router.get('/:id/parse-status', requireAuth, async (req, res) => {
     const normalizedStatus = normalizeParseStatus(status, jobRow.status)
 
     const responsePayload = {
+      jobId: String(jobRow.job_id || id),
+      resumeId: String(jobRow.resume_id || ''),
       status: normalizedStatus,
       progress: Number(jobRow.progress || (queueJob ? queueJob.progress() : 0) || 0),
       result: jobRow.result || null,

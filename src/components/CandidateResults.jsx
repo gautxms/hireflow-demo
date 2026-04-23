@@ -134,6 +134,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     : Array.isArray(candidates?.candidates)
       ? candidates.candidates
       : []
+  const hasJobDescription = Boolean(candidates?.parseMeta?.hasJobDescription)
 
   const displayCandidates = rawCandidates.length > 0 ? rawCandidates : null
 
@@ -586,7 +587,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           Candidate Ranking
         </h1>
         <p className="candidate-results-page__state-copy">
-          {pagination.total} candidates analyzed and ranked by fit
+          {hasJobDescription
+            ? `${pagination.total} candidates analyzed and ranked by fit`
+            : `${pagination.total} candidates analyzed`}
         </p>
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
@@ -652,8 +655,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 />
               </th>
               <th>Candidate</th>
-              <th>Fit</th>
-              <th>Score</th>
+              {hasJobDescription && <th>Fit</th>}
+              {hasJobDescription && <th>Score</th>}
               <th>Top skills</th>
             </tr>
           </thead>
@@ -669,8 +672,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   />
                 </td>
                 <td data-label="Candidate">{toDisplayText(candidate.name)}</td>
-                <td data-label="Fit">{toDisplayText(candidate.matchScore?.fit ?? candidate.fit)}</td>
-                <td data-label="Score">{toDisplayText(candidate.matchScore?.score ?? candidate.score, '0')}</td>
+                {hasJobDescription && <td data-label="Fit">{toDisplayText(candidate.matchScore?.fit ?? candidate.fit)}</td>}
+                {hasJobDescription && <td data-label="Score">{toDisplayText(candidate.matchScore?.score ?? candidate.score, '0')}</td>}
                 <td data-label="Top skills">{toDisplayText(Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3) : candidate.skills)}</td>
               </tr>
             ))}
@@ -739,30 +742,36 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   <p className="candidate-results__meta">📍 {toDisplayText(candidate.location, 'Unknown location')}</p>
                 </div>
 
-                <div className="candidate-results__score-wrap">
-                  <div className="candidate-results__score-chart" role="img" aria-label={`Match score ${safeScore} out of 100`}>
-                    <svg className="candidate-results__score-svg" viewBox="0 0 36 36" aria-hidden="true">
-                      <circle className="candidate-results__score-track" cx="18" cy="18" r="15.5" />
-                      <circle
-                        className={`candidate-results__score-progress candidate-results__score-progress--${scoreState.key}`}
-                        cx="18"
-                        cy="18"
-                        r="15.5"
-                        strokeDasharray={`${(safeScore / 100) * 97.39} 97.39`}
-                      />
-                    </svg>
-                    <div className={`candidate-results__score-value candidate-results__score-value--${scoreState.key}`}>
-                      {toDisplayText(safeScore, '0')}
+                {hasJobDescription && (
+                  <div className="candidate-results__score-wrap">
+                    <div className="candidate-results__score-chart" role="img" aria-label={`Match score ${safeScore} out of 100`}>
+                      <svg className="candidate-results__score-svg" viewBox="0 0 36 36" aria-hidden="true">
+                        <circle className="candidate-results__score-track" cx="18" cy="18" r="15.5" />
+                        <circle
+                          className={`candidate-results__score-progress candidate-results__score-progress--${scoreState.key}`}
+                          cx="18"
+                          cy="18"
+                          r="15.5"
+                          strokeDasharray={`${(safeScore / 100) * 97.39} 97.39`}
+                        />
+                      </svg>
+                      <div className={`candidate-results__score-value candidate-results__score-value--${scoreState.key}`}>
+                        {toDisplayText(safeScore, '0')}
+                      </div>
                     </div>
+                    <p className="candidate-results__meta">Match Score</p>
                   </div>
-                  <p className="candidate-results__meta">Match Score</p>
-                </div>
+                )}
 
                 <div>
-                  <div className={`mb-3 rounded-full border px-4 py-2 text-center text-xs font-bold ${tierState.badgeClass}`}>
-                    {`${tierState.icon} ${tierState.label.toUpperCase()}`}
-                  </div>
-                  <p className="candidate-results__meta">Fit: {toDisplayText(candidate.fit)}</p>
+                  {hasJobDescription && (
+                    <>
+                      <div className={`mb-3 rounded-full border px-4 py-2 text-center text-xs font-bold ${tierState.badgeClass}`}>
+                        {`${tierState.icon} ${tierState.label.toUpperCase()}`}
+                      </div>
+                      <p className="candidate-results__meta">Fit: {toDisplayText(candidate.fit)}</p>
+                    </>
+                  )}
                   <p className="candidate-results__meta">Experience: {toDisplayText(candidate.experience)}</p>
                 </div>
               </div>
