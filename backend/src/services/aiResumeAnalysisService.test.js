@@ -438,3 +438,49 @@ test('analyzeResumeWithConfiguredFallback records failure categories for failove
   assert.equal(response.attempts[0].failureCategory, 'billing_quota_error')
   assert.equal(response.attempts[1].success, true)
 })
+
+test('analyzeResumeWithConfiguredFallback skips anthropic for non-pdf mime types and fails over to openai', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+      openai: {
+        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  let anthropicCalled = false
+  const response = await analyzeResumeWithConfiguredFallback(
+    'ZmFrZQ==',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'resume.docx',
+    {
+      credentials,
+      systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+      analyzeWithAnthropic: async () => {
+        anthropicCalled = true
+        return {
+          result: { candidates: [{ id: 'should-not-run' }] },
+          provider: 'anthropic-primary',
+          model: 'claude-sonnet-4',
+          tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+        }
+      },
+      analyzeWithOpenAI: async () => ({
+        result: { candidates: [{ id: 'cand-openai' }] },
+        provider: 'openai-primary',
+        model: 'gpt-4.1-mini',
+        tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+      }),
+    },
+  )
+
+  assert.equal(anthropicCalled, false)
+  assert.equal(response.result.candidates[0].id, 'cand-openai')
+  assert.equal(response.attempts[0].failureCategory, 'invalid_request_error')
+  assert.equal(response.attempts[1].success, true)
+})

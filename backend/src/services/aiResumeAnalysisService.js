@@ -437,6 +437,15 @@ function getFailureCategory(message = '') {
   return match?.[1] ? String(match[1]).toLowerCase() : 'unknown_error'
 }
 
+function providerSupportsMimeType(provider, mimeType) {
+  const normalizedProvider = String(provider || '').trim().toLowerCase()
+  const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
+  if (normalizedProvider === 'anthropic') {
+    return normalizedMimeType === 'application/pdf'
+  }
+  return true
+}
+
 export function buildProviderAttemptPlan(credentials = {}) {
   const activeProvider = String(credentials?.activeProvider || 'anthropic').trim().toLowerCase()
   const providers = credentials?.providers && typeof credentials.providers === 'object' ? credentials.providers : {}
@@ -812,6 +821,14 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 
   for (const entry of attemptPlan) {
     try {
+      if (!providerSupportsMimeType(entry.provider, mimeType)) {
+        throw new Error(`invalid_request_error::${JSON.stringify({
+          technicalDetails: `Unsupported mime type for ${entry.provider}: ${mimeType}. Anthropic document inputs must be application/pdf.`,
+          provider: entry.provider,
+          model: entry.model,
+        })}`)
+      }
+
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
       const response = await adapter(fileBufferBase64, mimeType, filename, {
         apiKey: entry.apiKey,
