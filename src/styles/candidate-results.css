@@ -94,6 +94,7 @@
 }
 
 .bulk-toolbar,
+.jd-panel,
 .ranking-stats,
 .cand-list {
   max-width: 1200px;
@@ -158,6 +159,113 @@
   color: #444444;
   margin-right: 4px;
   margin-bottom: 0;
+}
+
+.jd-panel {
+  background: #111111;
+  border: 1px solid #1e1e1e;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.jd-toggle {
+  width: 100%;
+  padding: 15px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #777777;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: color 0.15s;
+}
+
+.jd-toggle:hover {
+  color: #ffffff;
+}
+
+.jd-toggle-chevron {
+  font-size: 9px;
+  color: #444444;
+}
+
+.jd-body {
+  padding: 0 20px 20px;
+}
+
+.jd-textarea {
+  width: 100%;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  color: #ffffff;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  resize: vertical;
+  min-height: 130px;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 12px;
+}
+
+.jd-textarea:focus {
+  border-color: #c8ff00;
+}
+
+.jd-textarea::placeholder {
+  color: #2a2a2a;
+}
+
+.jd-footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.jd-btn-apply {
+  background: #c8ff00;
+  color: #000000;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 11px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.jd-btn-apply:hover:not(:disabled) {
+  background: #b8ec00;
+}
+
+.jd-btn-apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jd-btn-clear {
+  background: transparent;
+  color: #555555;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  padding: 11px 16px;
+  border-radius: 8px;
+  border: 1px solid #1e1e1e;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.jd-btn-clear:hover {
+  color: #aaaaaa;
+  border-color: #333333;
 }
 
 .ranking-stats {
