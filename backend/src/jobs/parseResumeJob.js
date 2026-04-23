@@ -42,7 +42,16 @@ function normalizeStringArray(value) {
 }
 
 function normalizeStructuredSkills(skills) {
-  if (!skills || typeof skills !== 'object' || Array.isArray(skills)) {
+  if (Array.isArray(skills) || typeof skills === 'string') {
+    return {
+      tools_and_platforms: normalizeSkills(skills),
+      methodologies: [],
+      domain_expertise: [],
+      soft_skills: [],
+    }
+  }
+
+  if (!skills || typeof skills !== 'object') {
     return {
       tools_and_platforms: [],
       methodologies: [],
