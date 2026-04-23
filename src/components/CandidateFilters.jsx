@@ -13,6 +13,13 @@ function parseSkills(rawSkills) {
     .filter(Boolean)
 }
 
+function normalizeSkillKey(skill) {
+  return String(skill || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s*[()]/g, '')
+}
+
 export default function CandidateFilters({
   candidates = [],
   searchText = '',
@@ -37,24 +44,24 @@ export default function CandidateFilters({
     return [...skills]
   }, [candidates])
 
-  const dedupedSkills = useMemo(
-    () =>
-      allSkills
-        .map((skill) => skill.trim())
-        .filter(
-          (skill, index, skills) =>
-            skills.findIndex(
-              (candidateSkill) =>
-                candidateSkill.toLowerCase().replace(/\s*[()]/g, '') ===
-                skill.toLowerCase().replace(/\s*[()]/g, ''),
-            ) === index,
-        )
-        .sort((a, b) => a.localeCompare(b)),
-    [allSkills],
-  )
+  const dedupedSkills = useMemo(() => {
+    const uniqueByKey = new Map()
+
+    allSkills
+      .map((skill) => skill.trim())
+      .forEach((skill) => {
+        const key = normalizeSkillKey(skill)
+        if (!key || uniqueByKey.has(key)) return
+        uniqueByKey.set(key, skill)
+      })
+
+    return [...uniqueByKey.entries()]
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [allSkills])
 
   const visibleSkills = useMemo(
-    () => dedupedSkills.filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase())),
+    () => dedupedSkills.filter((skill) => skill.label.toLowerCase().includes(skillSearch.toLowerCase())),
     [dedupedSkills, skillSearch],
   )
 
@@ -63,11 +70,11 @@ export default function CandidateFilters({
   const experienceMin = Number(expRange?.min || 0)
   const experienceMax = Number(expRange?.max || 50)
 
-  const toggleSkill = (skill) => {
-    const alreadySelected = selectedSkills.includes(skill)
+  const toggleSkill = (skillKey) => {
+    const alreadySelected = selectedSkills.includes(skillKey)
     const next = alreadySelected
-      ? selectedSkills.filter((selected) => selected !== skill)
-      : [...selectedSkills, skill]
+      ? selectedSkills.filter((selected) => selected !== skillKey)
+      : [...selectedSkills, skillKey]
 
     onSkillsFilter?.(next)
   }
@@ -149,15 +156,15 @@ export default function CandidateFilters({
         <div className="filter-skill-grid">
           {dedupedSkills.length === 0 && <span style={{ color: 'var(--color-text-secondary)' }}>No skills available</span>}
           {displaySkills.map((skill) => {
-            const active = selectedSkills.includes(skill)
+            const active = selectedSkills.includes(skill.key)
             return (
               <button
                 type="button"
-                key={skill}
-                onClick={() => toggleSkill(skill)}
+                key={skill.key}
+                onClick={() => toggleSkill(skill.key)}
                 className={`touch-target filter-skill-pill${active ? ' selected' : ''}`}
               >
-                {skill}
+                {skill.label}
               </button>
             )
           })}
