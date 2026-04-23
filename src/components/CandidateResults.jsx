@@ -4,6 +4,8 @@ import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
 import {
   buildResultsQueryParams,
+  hasRenderableCandidates,
+  normalizeCandidateForResults,
   normalizeNumericRange,
   normalizeSortBy,
   paginateCandidates,
@@ -155,10 +157,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   }, [candidates])
 
   const displayCandidates = liveCandidates.length > 0 ? liveCandidates : null
-
-  const hasRenderableCandidates = Array.isArray(displayCandidates)
-    && displayCandidates.length > 0
-    && displayCandidates.every((candidate) => candidate && (Array.isArray(candidate.skills) || typeof candidate.skills === 'string'))
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -391,15 +389,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     }
 
     return displayCandidates
-      .map((candidate, index) => ({
-        ...candidate,
-        _bulkKey: String(candidate?.id ?? `${candidate?.name || 'candidate'}-${index}`)
-      }))
+      .map((candidate, index) => normalizeCandidateForResults(candidate, index))
+      .filter((candidate) => candidate._isRenderable)
       .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
   }, [deletedIds, displayCandidates])
 
+  const hasCandidatesToRender = hasRenderableCandidates(candidateRows)
+
   const filtered = useMemo(() => {
-    if (!hasRenderableCandidates) {
+    if (!hasCandidatesToRender) {
       return []
     }
 
@@ -409,7 +407,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       expRange,
       sortBy: normalizeSortBy(sortBy),
     })
-  }, [candidateRows, expRange, hasRenderableCandidates, searchText, selectedSkills, sortBy])
+  }, [candidateRows, expRange, hasCandidatesToRender, searchText, selectedSkills, sortBy])
 
   const { rows: visibleCandidates, pagination } = useMemo(() => paginateCandidates(filtered, page, pageSize), [filtered, page, pageSize])
 
@@ -638,7 +636,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     )
   }
 
-  if (!hasRenderableCandidates) {
+  if (!hasCandidatesToRender) {
     return (
       <div className="candidate-results-page candidate-results-page--state">
         <div className="candidate-results-page__state-wrap">

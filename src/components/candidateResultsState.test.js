@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildResultsQueryParams,
+  hasRenderableCandidates,
+  normalizeCandidateForResults,
   normalizeNumericRange,
   normalizeSortBy,
   paginateCandidates,
@@ -64,4 +66,25 @@ test('toSafeScore constrains malformed or out-of-range values for chart renderin
   assert.equal(toSafeScore('95'), 95)
   assert.equal(toSafeScore(999), 100)
   assert.equal(toSafeScore(-12), 0)
+})
+
+test('hasRenderableCandidates allows mixed-validity arrays when at least one candidate is valid', () => {
+  const mixedCandidates = [
+    null,
+    normalizeCandidateForResults(undefined, 0),
+    normalizeCandidateForResults({ id: 'c-1', name: 'Valid User', skills: null }, 1),
+  ]
+
+  assert.equal(hasRenderableCandidates(mixedCandidates), true)
+})
+
+test('normalizeCandidateForResults defaults malformed skills to empty string', () => {
+  const normalized = normalizeCandidateForResults({ id: 'c-2', skills: { primary: 'React' } }, 0)
+  assert.equal(normalized.skills, '')
+  assert.equal(normalized._isRenderable, true)
+})
+
+test('hasRenderableCandidates returns false when no valid candidate objects exist', () => {
+  assert.equal(hasRenderableCandidates([]), false)
+  assert.equal(hasRenderableCandidates([null, undefined]), false)
 })
