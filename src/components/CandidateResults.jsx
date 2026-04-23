@@ -23,6 +23,23 @@ import {
 import '../styles/candidate-results.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const RESULTS_DATA_QUALITY_EVENT = 'hireflow:results-data-quality'
+
+function reportResultsDataQualityIssue(issue) {
+  const detail = {
+    type: 'results_data_quality_issue',
+    timestamp: new Date().toISOString(),
+    ...issue,
+  }
+
+  try {
+    window.dispatchEvent(new CustomEvent(RESULTS_DATA_QUALITY_EVENT, { detail }))
+  } catch {
+    // no-op
+  }
+
+  console.warn('[HireFlow] Results data quality issue', detail)
+}
 
 function parseSkills(skills) {
   if (Array.isArray(skills)) {
@@ -48,6 +65,59 @@ function parseUploadDate(candidate) {
   const value = candidate?.uploadDate || candidate?.uploadedAt || candidate?.created_at || candidate?.createdAt
   const timestamp = Date.parse(String(value || ''))
   return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+function toSafeText(value, fallback = '') {
+  if (value === null || value === undefined) {
+    return fallback
+  }
+  return String(value)
+}
+
+function toSafeNumber(value, fallback = 0) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+function normalizeCandidate(candidate, index) {
+  const source = candidate && typeof candidate === 'object' ? candidate : {}
+  const rawSkills = source.skills
+  const normalizedSkills = Array.isArray(rawSkills)
+    ? rawSkills.map((skill) => toSafeText(skill).trim()).filter(Boolean)
+    : toSafeText(rawSkills, '')
+      .split(',')
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+
+  const normalizedScore = Math.max(0, Math.min(100, toSafeNumber(source.score, 0)))
+  const hadUnsafeShape = !candidate || typeof candidate !== 'object'
+    || (!Array.isArray(rawSkills) && typeof rawSkills !== 'string' && rawSkills !== undefined && rawSkills !== null)
+    || (source.score !== undefined && source.score !== null && !Number.isFinite(Number(source.score)))
+
+  if (hadUnsafeShape) {
+    reportResultsDataQualityIssue({
+      index,
+      candidateName: toSafeText(source.name, `Candidate ${index + 1}`),
+      scoreType: typeof source.score,
+      skillsType: Array.isArray(rawSkills) ? 'array' : typeof rawSkills,
+    })
+  }
+
+  return {
+    ...source,
+    name: toSafeText(source.name, `Candidate ${index + 1}`),
+    email: toSafeText(source.email, ''),
+    phone: toSafeText(source.phone, ''),
+    location: toSafeText(source.location, ''),
+    summary: toSafeText(source.summary, ''),
+    fit: toSafeText(source.fit, ''),
+    experience: toSafeText(source.experience, ''),
+    skills: normalizedSkills,
+    pros: Array.isArray(source.pros) ? source.pros.map((entry) => toSafeText(entry)).filter(Boolean) : [],
+    cons: Array.isArray(source.cons) ? source.cons.map((entry) => toSafeText(entry)).filter(Boolean) : [],
+    score: normalizedScore,
+    _bulkKey: toSafeText(source.id, `${toSafeText(source.name, 'candidate')}-${index}`),
+  }
 }
 
 function filterAndSortCandidates(candidates, filters) {
@@ -135,9 +205,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   const displayCandidates = rawCandidates.length > 0 ? rawCandidates : null
 
-  const hasRenderableCandidates = Array.isArray(displayCandidates)
-    && displayCandidates.length > 0
-    && displayCandidates.every((candidate) => candidate && (Array.isArray(candidate.skills) || typeof candidate.skills === 'string'))
+  const hasRenderableCandidates = Array.isArray(displayCandidates) && displayCandidates.length > 0
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -320,10 +388,18 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     }
 
     return displayCandidates
-      .map((candidate, index) => ({
-        ...candidate,
-        _bulkKey: String(candidate?.id ?? `${candidate?.name || 'candidate'}-${index}`)
-      }))
+      .map((candidate, index) => {
+        try {
+          return normalizeCandidate(candidate, index)
+        } catch (error) {
+          reportResultsDataQualityIssue({
+            index,
+            candidateName: toSafeText(candidate?.name, `Candidate ${index + 1}`),
+            normalizationError: error?.message || 'unknown_normalization_error',
+          })
+          return normalizeCandidate({}, index)
+        }
+      })
       .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
   }, [deletedIds, displayCandidates])
 

@@ -55,6 +55,7 @@ const AdminRouteFallback = lazy(() => import('./admin/components/AdminRouteFallb
 import { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 import useAdminAuth from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
+import { readResumeAnalysisResult } from './components/resumeAnalysisSession'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -130,6 +131,29 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       setCurrentPage('landing')
     }
   }, [currentPage, isAuthenticated, onRequireAuth])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('resumeAnalysis') !== '1') {
+      return
+    }
+
+    const latestResult = readResumeAnalysisResult()
+    if (!latestResult || !Array.isArray(latestResult.candidates) || latestResult.candidates.length === 0) {
+      return
+    }
+
+    setUploadedFiles({
+      candidates: latestResult.candidates,
+      parseMeta: latestResult.parseMeta || null,
+    })
+    setCurrentPage('results')
+
+    params.delete('resumeAnalysis')
+    const nextQuery = params.toString()
+    const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname
+    window.history.replaceState(window.history.state || {}, '', nextUrl)
+  }, [pathname])
 
 
   useEffect(() => {

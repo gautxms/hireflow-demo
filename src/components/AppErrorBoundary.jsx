@@ -1,5 +1,5 @@
 import React from 'react'
-import { readResumeAnalysisSession } from './resumeAnalysisSession'
+import { readResumeAnalysisResult, readResumeAnalysisSession } from './resumeAnalysisSession'
 import { deriveBoundaryStateFromError } from './appErrorBoundaryState'
 
 const RECENT_CRASH_CONTEXT_KEY = 'hireflow_recent_crash_context_v1'
@@ -20,7 +20,8 @@ export default class AppErrorBoundary extends React.Component {
 
   static getDerivedStateFromError(error) {
     const session = readResumeAnalysisSession()
-    return deriveBoundaryStateFromError(error, session)
+    const latestResult = readResumeAnalysisResult()
+    return deriveBoundaryStateFromError(error, session, latestResult)
   }
 
   componentDidCatch(error, info) {
