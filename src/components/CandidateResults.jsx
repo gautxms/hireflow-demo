@@ -8,10 +8,7 @@ import {
   normalizeSortBy,
   paginateCandidates,
   resolveCandidateResumeUuid,
-  resolveCandidateScoreState,
-  resolveTierState,
   toDisplayText,
-  toSafeScore,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -791,21 +788,42 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       </div>
       <div className="candidate-results-list candidate-results-list--cards">
         {visibleCandidates.map((candidate) => {
-          const candidateSkills = Array.isArray(candidate.skills)
-            ? candidate.skills
-            : String(candidate.skills || '')
-              .split(',')
-              .map((skill) => skill.trim())
-              .filter(Boolean)
-          const candidatePros = Array.isArray(candidate.pros)
-            ? candidate.pros.map((pro) => toDisplayText(pro, '')).filter(Boolean)
-            : []
-          const candidateCons = Array.isArray(candidate.cons)
-            ? candidate.cons.map((con) => toDisplayText(con, '')).filter(Boolean)
-            : []
-          const safeScore = toSafeScore(candidate.score)
-          const scoreState = resolveCandidateScoreState(safeScore)
-          const tierState = resolveTierState(candidate.tier, safeScore)
+          const candidateSkills = parseSkills(candidate.skills)
+          const candidateStrengths = Array.isArray(candidate.strengths)
+            ? candidate.strengths.map((item) => toDisplayText(item, '')).filter(Boolean)
+            : Array.isArray(candidate.pros)
+              ? candidate.pros.map((item) => toDisplayText(item, '')).filter(Boolean)
+              : []
+          const candidateConsiderations = Array.isArray(candidate.considerations)
+            ? candidate.considerations.map((item) => toDisplayText(item, '')).filter(Boolean)
+            : Array.isArray(candidate.cons)
+              ? candidate.cons.map((item) => toDisplayText(item, '')).filter(Boolean)
+              : []
+          const score = candidate.matchScore?.score ?? candidate.profile_score ?? candidate.score
+          const hasRoleFitScore = candidate.matchScore?.score != null
+          const scoreToneClass = score >= 80
+            ? 'profile-score-tone--high'
+            : score >= 60
+              ? 'profile-score-tone--medium'
+              : 'profile-score-tone--low'
+          const scoreGradientClass = score >= 80
+            ? 'profile-score-bar-fill--high'
+            : score >= 60
+              ? 'profile-score-bar-fill--medium'
+              : 'profile-score-bar-fill--low'
+          const initials = toDisplayText(candidate.name, 'Candidate')
+            .split(' ')
+            .map((namePart) => namePart[0] || '')
+            .join('')
+            .slice(0, 2)
+            .toUpperCase()
+          const skillsByCategory = {
+            'Tools & Platforms': candidate.skills_structured?.tools_and_platforms,
+            Methodologies: candidate.skills_structured?.methodologies,
+            'Domain Expertise': candidate.skills_structured?.domain_expertise,
+            'Soft Skills': candidate.skills_structured?.soft_skills,
+          }
+          const experienceEntries = Array.isArray(candidate.experience) ? candidate.experience : []
 
           return (
             <div
@@ -824,111 +842,166 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 </label>
               </div>
 
-              <div className="candidate-top-section candidate-results__top-section">
-                <div>
-                  <h2 className="candidate-results__name">
-                    {toDisplayText(candidate.name)}
-                  </h2>
-                  <p className="candidate-results__meta candidate-results__meta--stacked">📧 {toDisplayText(candidate.email, 'No email provided')}</p>
-                  <p className="candidate-results__meta">📍 {toDisplayText(candidate.location, 'Unknown location')}</p>
-                </div>
-
-                {hasJobDescription && (
-                  <div className="candidate-results__score-wrap">
-                    <div className="candidate-results__score-chart" role="img" aria-label={`Match score ${safeScore} out of 100`}>
-                      <svg className="candidate-results__score-svg" viewBox="0 0 36 36" aria-hidden="true">
-                        <circle className="candidate-results__score-track" cx="18" cy="18" r="15.5" />
-                        <circle
-                          className={`candidate-results__score-progress candidate-results__score-progress--${scoreState.key}`}
-                          cx="18"
-                          cy="18"
-                          r="15.5"
-                          strokeDasharray={`${(safeScore / 100) * 97.39} 97.39`}
-                        />
-                      </svg>
-                      <div className={`candidate-results__score-value candidate-results__score-value--${scoreState.key}`}>
-                        {toDisplayText(safeScore, '0')}
+              <div className="profile-layout">
+                <aside className="profile-left">
+                  <div className="profile-header-block">
+                    <div className="profile-avatar-lg">{initials}</div>
+                    <div>
+                      <h1 className="profile-name">{toDisplayText(candidate.name)}</h1>
+                      <div className="profile-subtitle">
+                        {[candidate.current_title, candidate.current_company].filter(Boolean).join(' · ')}
                       </div>
                     </div>
-                    <p className="candidate-results__meta">Match Score</p>
                   </div>
-                )}
 
-                <div>
-                  {hasJobDescription && (
-                    <>
-                      <div className={`mb-3 rounded-full border px-4 py-2 text-center text-xs font-bold ${tierState.badgeClass}`}>
-                        {`${tierState.icon} ${tierState.label.toUpperCase()}`}
+                  {score != null && (
+                    <div className="profile-score-card">
+                      <div className="profile-score-eyebrow">{hasRoleFitScore ? 'Role Fit Score' : 'Profile Score'}</div>
+                      <div className={`profile-score-big ${scoreToneClass}`}>{score}<span>%</span></div>
+                      <div className="profile-score-bar-track">
+                        <progress
+                          className={`profile-score-bar-fill ${scoreGradientClass}`}
+                          value={Math.max(0, Math.min(score, 100))}
+                          max={100}
+                        />
                       </div>
-                      <p className="candidate-results__meta">Fit: {toDisplayText(candidate.fit)}</p>
-                    </>
+                      {candidate.matchScore?.fit && <div className={`profile-score-fit ${scoreToneClass}`}>{candidate.matchScore.fit} match</div>}
+                      {candidate.seniority_level && <div className="profile-score-seniority">{candidate.seniority_level}</div>}
+                    </div>
                   )}
-                  <p className="candidate-results__meta">Experience: {toDisplayText(candidate.experience)}</p>
-                </div>
-              </div>
 
-              <div className="candidate-results__section">
-                <h3 className="candidate-results__section-title">Summary</h3>
-                <p className="candidate-results__summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
-              </div>
+                  <div className="profile-contact-block">
+                    {candidate.email && (
+                      <a href={`mailto:${candidate.email}`} className="profile-contact-item">
+                        <span className="profile-contact-dot" />
+                        {candidate.email}
+                      </a>
+                    )}
+                    {candidate.location && (
+                      <div className="profile-contact-item">
+                        <span className="profile-contact-dot" />
+                        {candidate.location}
+                      </div>
+                    )}
+                    {candidate.years_experience != null && (
+                      <div className="profile-contact-item">
+                        <span className="profile-contact-dot" />
+                        {candidate.years_experience} years experience
+                      </div>
+                    )}
+                  </div>
 
-              <div className="candidate-results__section">
-                <h3 className="candidate-results__section-title candidate-results__section-title--spacious">Top Skills</h3>
-                <div className="candidate-results__skills">
-                  {candidateSkills.map((skill, idx) => (
-                    <span
-                      key={idx}
-                      className="candidate-results__skill-pill"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-                {candidateTags[candidate._bulkKey]?.length > 0 ? (
-                  <p className="candidate-results__tags">
-                    Tags: {candidateTags[candidate._bulkKey].join(', ')}
-                  </p>
-                ) : null}
-              </div>
+                  {candidateTags[candidate._bulkKey]?.length > 0 && (
+                    <div className="profile-tag-row">
+                      {candidateTags[candidate._bulkKey].map((tag) => (
+                        <span className="profile-cat-tag" key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  )}
 
-              <div className="candidate-evaluation-grid candidate-results__evaluation-grid">
-                <div>
-                  <h3 className="candidate-results__evaluation-title candidate-results__evaluation-title--strengths">✅ Strengths</h3>
-                  <ul className="candidate-results__evaluation-list">
-                    {candidatePros.length > 0
-                      ? candidatePros.map((pro, idx) => (
-                        <li key={idx} className="candidate-results__evaluation-item">{pro}</li>
+                  <div className="profile-action-stack">
+                    <button className="profile-btn-primary">Schedule Interview</button>
+                    <button className="profile-btn-ghost">View Full Resume</button>
+                    <button onClick={() => addCandidateToShortlist(candidate)} className="profile-btn-ghost">Add to Shortlist</button>
+                  </div>
+                </aside>
+
+                <main className="profile-right">
+                  <section className="profile-section">
+                    <h2 className="profile-section-heading">Summary</h2>
+                    <p className="profile-section-body">{toDisplayText(candidate.summary, 'No summary available')}</p>
+                  </section>
+
+                  <div className="profile-two-col">
+                    <section className="profile-analysis-box profile-strengths-box">
+                      <h2 className="profile-section-heading profile-heading-green">Strengths</h2>
+                      {candidateStrengths.length > 0
+                        ? candidateStrengths.map((strength, idx) => (
+                          <div className="profile-analysis-row" key={idx}>{strength}</div>
+                        ))
+                        : <div className="profile-analysis-empty">Run re-analysis to generate AI insights.</div>}
+                    </section>
+                    <section className="profile-analysis-box profile-considerations-box">
+                      <h2 className="profile-section-heading profile-heading-amber">Considerations</h2>
+                      {candidateConsiderations.length > 0
+                        ? candidateConsiderations.map((consideration, idx) => (
+                          <div className="profile-analysis-row" key={idx}>{consideration}</div>
+                        ))
+                        : <div className="profile-analysis-empty">Run re-analysis to generate AI insights.</div>}
+                    </section>
+                  </div>
+
+                  <section className="profile-section">
+                    <h2 className="profile-section-heading">Skills</h2>
+                    {candidate.skills_structured
+                      ? Object.entries(skillsByCategory).map(([category, skills]) => skills?.length > 0 && (
+                        <div className="profile-skill-group" key={category}>
+                          <div className="profile-skill-cat-label">{category}</div>
+                          <div className="profile-skill-pill-row">
+                            {skills.map((skill) => (
+                              <span className="profile-skill-pill" key={skill}>{skill}</span>
+                            ))}
+                          </div>
+                        </div>
                       ))
-                      : <li className="candidate-results__evaluation-item">No strengths listed.</li>}
-                  </ul>
-                </div>
+                      : candidateSkills.length > 0
+                        ? (
+                          <div className="profile-skill-pill-row">
+                            {candidateSkills.map((skill) => (
+                              <span className="profile-skill-pill" key={skill}>{skill}</span>
+                            ))}
+                          </div>
+                        )
+                        : null}
+                  </section>
 
-                <div>
-                  <h3 className="candidate-results__evaluation-title candidate-results__evaluation-title--considerations">⚠️ Considerations</h3>
-                  <ul className="candidate-results__evaluation-list">
-                    {candidateCons.length > 0
-                      ? candidateCons.map((con, idx) => (
-                        <li key={idx} className="candidate-results__evaluation-item">{con}</li>
-                      ))
-                      : <li className="candidate-results__evaluation-item">No concerns listed.</li>}
-                  </ul>
-                </div>
-              </div>
+                  {experienceEntries.length > 0 && (
+                    <section className="profile-section">
+                      <h2 className="profile-section-heading">Experience</h2>
+                      {experienceEntries.map((job, idx) => (
+                        <div className="profile-job-row" key={idx}>
+                          <div className="profile-job-top">
+                            <span className="profile-job-title">{job.title}</span>
+                            <span className="profile-job-duration">
+                              {job.durationText || [job.startDate, job.endDate].filter(Boolean).join(' – ')}
+                            </span>
+                          </div>
+                          <div className="profile-job-company">{job.company}</div>
+                          {job.description && <div className="profile-job-desc">{job.description}</div>}
+                        </div>
+                      ))}
+                    </section>
+                  )}
 
-              {/* CTA */}
-              <div className="candidate-cta-row candidate-results__actions-wrap">
-                <button className="min-h-11 rounded-[var(--radius-sm)] bg-[var(--color-accent-green)] px-6 py-2.5 text-sm font-bold text-[var(--color-bg-primary)] transition hover:brightness-95">
-                  Schedule Interview
-                </button>
-                <button className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--color-accent-green)] px-6 py-2.5 text-sm font-bold text-[var(--color-accent-green)] transition hover:bg-[var(--color-accent-alpha-08)]">
-                  View Full Profile
-                </button>
-                <button
-                  onClick={() => addCandidateToShortlist(candidate)}
-                  className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--color-accent-green)] px-6 py-2.5 text-sm font-bold text-[var(--color-accent-green)] transition hover:bg-[var(--color-accent-alpha-08)]"
-                >
-                  Add to shortlist
-                </button>
+                  {candidate.matchScore?.score != null && (
+                    <section className="profile-section">
+                      <h2 className="profile-section-heading">Role Match Breakdown</h2>
+                      <div className="profile-breakdown-grid">
+                        {candidate.matchScore.breakdown?.requiredSkills && (
+                          <div className="profile-breakdown-item">
+                            <div className="profile-breakdown-label">Skills matched</div>
+                            <div className="profile-breakdown-val">
+                              {candidate.matchScore.breakdown.requiredSkills.matched}
+                              /{candidate.matchScore.breakdown.requiredSkills.total}
+                            </div>
+                          </div>
+                        )}
+                        {candidate.matchScore.breakdown?.experience && (
+                          <div className="profile-breakdown-item">
+                            <div className="profile-breakdown-label">Experience</div>
+                            <div
+                              className={`profile-breakdown-val ${candidate.matchScore.breakdown.experience.meetsMinimum ? 'profile-score-tone--high' : 'profile-score-tone--low'}`}
+                            >
+                              {candidate.matchScore.breakdown.experience.candidateYears} yrs
+                              {candidate.matchScore.breakdown.experience.meetsMinimum ? ' ✓' : ' (below min)'}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {candidate.matchScore.reason && <div className="profile-match-reason">{candidate.matchScore.reason}</div>}
+                    </section>
+                  )}
+                </main>
               </div>
             </div>
           )
