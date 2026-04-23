@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 function parseSkills(rawSkills) {
   if (Array.isArray(rawSkills)) {
@@ -24,6 +24,9 @@ export default function CandidateFilters({
   onExperienceFilter,
   onSort,
 }) {
+  const [skillSearch, setSkillSearch] = useState('')
+  const [showAll, setShowAll] = useState(false)
+
   const allSkills = useMemo(() => {
     const skills = new Set()
 
@@ -31,8 +34,31 @@ export default function CandidateFilters({
       parseSkills(candidate?.skills).forEach((skill) => skills.add(skill))
     })
 
-    return [...skills].sort((a, b) => a.localeCompare(b))
+    return [...skills]
   }, [candidates])
+
+  const dedupedSkills = useMemo(
+    () =>
+      allSkills
+        .map((skill) => skill.trim())
+        .filter(
+          (skill, index, skills) =>
+            skills.findIndex(
+              (candidateSkill) =>
+                candidateSkill.toLowerCase().replace(/\s*[()]/g, '') ===
+                skill.toLowerCase().replace(/\s*[()]/g, ''),
+            ) === index,
+        )
+        .sort((a, b) => a.localeCompare(b)),
+    [allSkills],
+  )
+
+  const visibleSkills = useMemo(
+    () => dedupedSkills.filter((skill) => skill.toLowerCase().includes(skillSearch.toLowerCase())),
+    [dedupedSkills, skillSearch],
+  )
+
+  const displaySkills = showAll ? visibleSkills : visibleSkills.slice(0, 24)
 
   const experienceMin = Number(expRange?.min || 0)
   const experienceMax = Number(expRange?.max || 50)
@@ -99,8 +125,7 @@ export default function CandidateFilters({
           <select
             value={sortBy}
             onChange={(event) => onSort?.(event.target.value)}
-            className="touch-target"
-            style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', padding: '0.5rem', borderRadius: '6px' }}
+            className="touch-target filter-sort-select"
           >
             <option value="name">Name (A-Z)</option>
             <option value="experience">Experience (high-low)</option>
@@ -111,30 +136,37 @@ export default function CandidateFilters({
 
       <div>
         <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Skills</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-          {allSkills.length === 0 && <span style={{ color: 'var(--color-text-secondary)' }}>No skills available</span>}
-          {allSkills.map((skill) => {
+        <input
+          className="filter-skill-search"
+          type="text"
+          placeholder="Search skills..."
+          value={skillSearch}
+          onChange={(event) => {
+            setSkillSearch(event.target.value)
+            setShowAll(true)
+          }}
+        />
+        <div className="filter-skill-grid">
+          {dedupedSkills.length === 0 && <span style={{ color: 'var(--color-text-secondary)' }}>No skills available</span>}
+          {displaySkills.map((skill) => {
             const active = selectedSkills.includes(skill)
             return (
               <button
                 type="button"
                 key={skill}
                 onClick={() => toggleSkill(skill)}
-                className="touch-target"
-                style={{
-                  background: active ? 'rgba(90,255,184,0.2)' : 'var(--card)',
-                  border: '1px solid var(--border)',
-                  color: active ? 'var(--color-accent-green-hover)' : 'var(--color-text-primary)',
-                  borderRadius: '999px',
-                  padding: '0.35rem 0.8rem',
-                  cursor: 'pointer',
-                }}
+                className={`touch-target filter-skill-pill${active ? ' selected' : ''}`}
               >
                 {skill}
               </button>
             )
           })}
         </div>
+        {!showAll && visibleSkills.length > 24 && (
+          <button type="button" className="filter-show-more" onClick={() => setShowAll(true)}>
+            Show {visibleSkills.length - 24} more skills
+          </button>
+        )}
       </div>
     </div>
   )
