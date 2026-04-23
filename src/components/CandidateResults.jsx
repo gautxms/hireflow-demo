@@ -355,6 +355,21 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds)
+  const activeScore = useCallback((candidate) => {
+    const jdScore = candidate?.matchScore?.score
+    const profileScore = candidate?.profile_score ?? candidate?.score
+    const resolved = hasJobDescription ? jdScore : profileScore
+    return Number(resolved ?? 0)
+  }, [hasJobDescription])
+
+  const avgScore = filtered.length
+    ? Math.round(filtered.reduce((sum, candidate) => sum + activeScore(candidate), 0) / filtered.length)
+    : 0
+  const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
+  const sortedCandidates = useMemo(
+    () => [...visibleCandidates].sort((a, b) => activeScore(b) - activeScore(a)),
+    [activeScore, visibleCandidates],
+  )
 
   const toggleCandidateSelection = (candidateKey) => {
     setSelectedIds((currentSelected) => toggleSelection(currentSelected, candidateKey))
@@ -626,59 +641,136 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       />
 
       <BulkActions selectedCount={selectedCandidates.length}>
-        <button className="touch-target" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
-        <button className="touch-target" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
-        <button className="touch-target" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
-        <button className="touch-target" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
-        <button className="touch-target" onClick={createShareLink} type="button">🔗 Share View</button>
-        <button className="touch-target" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
+        <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
+        <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
+        <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
+        <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
+        <button className="touch-target bulk-btn" onClick={createShareLink} type="button">🔗 Share View</button>
+        <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
         <input
           className="touch-target candidate-results-page__tag-input"
           value={tagDraft}
           onChange={(event) => setTagDraft(event.target.value)}
           placeholder="tag1, tag2"
         />
-        <button className="touch-target" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
-        <button className="touch-target" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
+        <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
+        <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
       </BulkActions>
 
-      <div className="candidate-results-table-wrapper">
-        <table className="candidate-results-table">
-          <thead>
-            <tr>
-              <th>
-                <input
-                  checked={allFilteredSelected}
-                  onChange={toggleSelectAllFiltered}
-                  aria-label="Select all candidates"
-                  type="checkbox"
-                />
-              </th>
-              <th>Candidate</th>
-              {hasJobDescription && <th>Fit</th>}
-              {hasJobDescription && <th>Score</th>}
-              <th>Top skills</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleCandidates.map((candidate) => (
-              <tr key={`summary-${candidate._bulkKey}`}>
-                <td data-label="Select">
-                  <input
-                    checked={selectedIds.includes(candidate._bulkKey)}
-                    onChange={() => toggleCandidateSelection(candidate._bulkKey)}
-                    aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
-                    type="checkbox"
-                  />
-                </td>
-                <td data-label="Candidate">{toDisplayText(candidate.name)}</td>
-                {hasJobDescription && <td data-label="Fit">{toDisplayText(candidate.matchScore?.fit ?? candidate.fit)}</td>}
-                {hasJobDescription && <td data-label="Score">{toDisplayText(candidate.matchScore?.score ?? candidate.score, '0')}</td>}
-                <td data-label="Top skills">{toDisplayText(Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3) : candidate.skills)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="ranking-stats">
+        <div className="ranking-stat">
+          <div className="ranking-stat-num">{filtered.length}</div>
+          <div className="ranking-stat-label">Analysed</div>
+        </div>
+        <div className="ranking-stat">
+          <div className="ranking-stat-num ranking-stat-num--strong">{strongCount}</div>
+          <div className="ranking-stat-label">Strong matches</div>
+        </div>
+        <div className="ranking-stat">
+          <div className="ranking-stat-num">{avgScore}%</div>
+          <div className="ranking-stat-label">Avg score</div>
+        </div>
+      </div>
+
+      <div className="cand-list">
+        <div className="cand-row cand-row--header" onClick={toggleSelectAllFiltered} role="button" tabIndex={0} onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            toggleSelectAllFiltered()
+          }
+        }}>
+          <div className="cand-rank">#</div>
+          <div className="cand-avatar">ALL</div>
+          <div className="cand-main">
+            <div className="cand-name">Select all on this page</div>
+          </div>
+          <div className="cand-score-block" />
+          <input
+            type="checkbox"
+            className="cand-check"
+            checked={allFilteredSelected}
+            onChange={(event) => {
+              event.stopPropagation()
+              toggleSelectAllFiltered()
+            }}
+            onClick={(event) => event.stopPropagation()}
+            aria-label="Select all candidates"
+          />
+        </div>
+        {sortedCandidates.map((candidate, index) => {
+          const initials = String(candidate?.name || '')
+            .split(' ')
+            .map((part) => part[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase()
+          const candidateSkills = Array.isArray(candidate?.top_skills)
+            ? candidate.top_skills
+            : parseSkills(candidate?.skills)
+          const scoreValue = hasJobDescription ? candidate?.matchScore?.score : (candidate?.profile_score ?? candidate?.score)
+          const score = Number(scoreValue ?? 0)
+          const isSelected = selectedIds.includes(candidate._bulkKey)
+          const bg = score >= 80
+            ? 'linear-gradient(90deg,#c8ff00,#39ff9f)'
+            : score >= 60
+              ? '#7ab3f7'
+              : '#ffa500'
+          const scoreBand = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'possible'
+
+          return (
+            <div
+              className={`cand-row ${isSelected ? 'cand-row--selected' : ''}`}
+              key={candidate._bulkKey}
+              onClick={() => {
+                window.location.href = `/candidates/${candidate.id}`
+              }}
+            >
+              <div className="cand-rank">#{index + 1}</div>
+
+              <div className="cand-avatar">{initials || 'NA'}</div>
+
+              <div className="cand-main">
+                <div className="cand-name">{toDisplayText(candidate.name)}</div>
+                <div className="cand-meta">
+                  {candidate.seniority_level && <span className="cand-seniority-badge">{candidate.seniority_level}</span>}
+                  {candidate.years_experience != null && <span>{candidate.years_experience} yrs exp</span>}
+                  {candidate.location && <span>{candidate.location}</span>}
+                </div>
+                <div className="cand-skill-list">
+                  {candidateSkills.slice(0, 4).map((skill) => (
+                    <span className="cand-skill-pill" key={`${candidate._bulkKey}-${skill}`}>{skill}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="cand-score-block">
+                {scoreValue != null ? (
+                  <>
+                    <div className={`cand-score-num cand-score-num--${scoreBand}`}>{score}<span className="cand-pct">%</span></div>
+                    <div className="cand-bar-track">
+                      <div className={`cand-bar-fill cand-bar-fill--${scoreBand}`} style={{ width: `${Math.max(0, Math.min(score, 100))}%`, background: bg }} />
+                    </div>
+                    <div className={`cand-fit-label cand-fit-label--${scoreBand}`}>
+                      {candidate.matchScore?.fit ?? (score >= 80 ? 'Strong' : score >= 60 ? 'Good' : 'Possible')}
+                    </div>
+                  </>
+                ) : <div className="cand-score-empty">Not scored</div>}
+              </div>
+
+              <input
+                type="checkbox"
+                className="cand-check"
+                checked={isSelected}
+                onChange={(event) => {
+                  event.stopPropagation()
+                  toggleCandidateSelection(candidate._bulkKey)
+                }}
+                onClick={(event) => event.stopPropagation()}
+                aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
+              />
+            </div>
+          )
+        })}
       </div>
 
 
