@@ -16,6 +16,8 @@ export const CHUNK_SIZE_BYTES = 5 * 1024 * 1024
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 let uploadTablesReady = false
+const PDF_EXTENSION_PATTERN = /\.pdf$/i
+const DOCX_EXTENSION_PATTERN = /\.docx$/i
 
 const s3Bucket = process.env.AWS_S3_BUCKET
 const s3Client = new S3Client({
@@ -46,6 +48,29 @@ function ensureS3Configured() {
   if (!s3Bucket) {
     throw new Error('AWS_S3_BUCKET is required for chunk uploads')
   }
+}
+
+function normalizeMimeType(filename, mimeType) {
+  const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
+  if (normalizedMimeType === 'application/pdf') {
+    return 'application/pdf'
+  }
+  if (
+    normalizedMimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || normalizedMimeType === 'application/msword'
+  ) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+
+  const safeFilename = String(filename || '').trim()
+  if (PDF_EXTENSION_PATTERN.test(safeFilename)) {
+    return 'application/pdf'
+  }
+  if (DOCX_EXTENSION_PATTERN.test(safeFilename)) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+
+  return normalizedMimeType || null
 }
 
 async function ensureUploadChunkTables() {
@@ -141,6 +166,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
 
   const totalChunks = Math.ceil(fileSize / CHUNK_SIZE_BYTES)
   const safeFilename = sanitizeFilename(filename)
+  const normalizedMimeType = normalizeMimeType(safeFilename, mimeType)
 
   if (jobDescriptionId) {
     const jdResult = await pool.query(
@@ -188,7 +214,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
       (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, expires_at)
      VALUES
       ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, NOW() + INTERVAL '24 hours')`,
-    [uploadId, userId, safeFilename, fileSize, mimeType, totalChunks, [], prefix, jobDescriptionId],
+    [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId],
   )
 
   return {
@@ -326,12 +352,13 @@ export async function completeChunkUpload({ userId, uploadId }) {
 
   const assembledHash = crypto.createHash('sha256').update(assembledBuffer).digest('hex')
   const assembledKey = `${buildPrefix(uploadId)}/assembled/${row.filename}`
+  const normalizedMimeType = normalizeMimeType(row.filename, row.mime_type)
 
   await s3Client.send(new PutObjectCommand({
     Bucket: s3Bucket,
     Key: assembledKey,
     Body: assembledBuffer,
-    ContentType: row.mime_type || 'application/octet-stream',
+    ContentType: normalizedMimeType || 'application/octet-stream',
   }))
 
   const scanResult = await scanFileBuffer(assembledBuffer, row.filename)
@@ -376,7 +403,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
         `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, job_description_id, updated_at)
          VALUES ($1, $2, '', $3, $4, 'pending', $5, NOW())
          RETURNING id`,
-        [userId, row.filename, row.file_size, row.mime_type, row.job_description_id],
+        [userId, row.filename, row.file_size, normalizedMimeType, row.job_description_id],
       )
       resumeId = resumeInsertResult.rows[0].id
     }
@@ -418,7 +445,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
     resumeId: finalizedUpload.resumeId,
     userId,
     filename: row.filename,
-    mimeType: row.mime_type,
+    mimeType: normalizedMimeType,
     fileSize: row.file_size,
     fileBufferBase64: assembledBuffer.toString('base64'),
     jobDescriptionId: row.job_description_id,

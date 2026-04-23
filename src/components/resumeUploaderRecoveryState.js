@@ -1,8 +1,11 @@
 export function buildFailedAnalysisState(errorMessage) {
+  const hasSpecificMessage = Boolean(String(errorMessage || '').trim())
   return {
     message: 'Analysis failed',
-    detail: String(errorMessage || 'Unable to analyze resumes'),
-    actions: ['retry', 'fallback_provider', 'contact_support'],
+    detail: hasSpecificMessage
+      ? 'We could not analyze resumes right now. Please retry.'
+      : 'Unable to analyze resumes. Please retry.',
+    actions: ['retry', 'contact_support'],
   }
 }
 

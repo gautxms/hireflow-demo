@@ -35,6 +35,8 @@ const ACCEPTED_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ])
+const DOCX_EXTENSION_PATTERN = /\.docx$/i
+const PDF_EXTENSION_PATTERN = /\.pdf$/i
 
 function sanitizeForDisplay(message) {
   return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
@@ -62,11 +64,38 @@ function formatUploadError(message) {
 }
 
 function formatParseError(reason = 'File format not recognized') {
-  return formatMultiLineError([
-    '⚠️ Parse Failed',
-    `Reason: ${reason}`,
-    'Next: Try a different format (PDF/DOCX)',
-  ])
+  return `Parse failed: ${reason}. Please upload a PDF or DOCX file and retry.`
+}
+
+function inferResumeMimeType(fileLike = {}) {
+  const explicitType = String(fileLike?.type || '').trim().toLowerCase()
+  if (ACCEPTED_TYPES.has(explicitType)) {
+    return explicitType
+  }
+
+  const fileName = String(fileLike?.name || '').trim()
+  if (DOCX_EXTENSION_PATTERN.test(fileName)) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+  if (PDF_EXTENSION_PATTERN.test(fileName)) {
+    return 'application/pdf'
+  }
+
+  return explicitType
+}
+
+function toUserFriendlyJobError(rawError) {
+  const message = String(rawError || '').trim()
+  if (!message) {
+    return 'Could not analyze this resume. Please retry.'
+  }
+
+  if (message.toLowerCase().includes('file format')) {
+    return 'Unsupported or unreadable file format. Upload a valid PDF or DOCX and retry.'
+  }
+
+  const normalized = mapProviderError(message)
+  return normalized?.userMessage || 'Could not analyze this resume. Please retry.'
 }
 
 async function parseJsonSafe(response) {
@@ -198,7 +227,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     const rejected = []
 
     normalizedFiles.forEach((file) => {
-      const isAllowedType = ACCEPTED_TYPES.has(file.type)
+      const isAllowedType = ACCEPTED_TYPES.has(inferResumeMimeType(file))
       const isAllowedSize = file.size <= MAX_FILE_SIZE
 
       if (!isAllowedType) {
@@ -306,7 +335,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     return { primaryJobId }
   }
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async ({ isAutomaticRetry = false } = {}) => {
     if (uploadedFiles.length === 0) return
     if (uploadedFiles.some((item) => !item.file)) {
       setError('Please re-select files before retrying analysis.')
@@ -317,6 +346,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     setError('')
     setTechnicalErrorDetails('')
     setProviderErrorGuidance(null)
+    setFailedAnalysisState(null)
+    setJobStatuses([])
     clearResumeAnalysisResult()
 
     try {
@@ -347,7 +378,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             body: JSON.stringify(buildChunkInitPayload({
               filename: file.name,
               fileSize: file.size,
-              mimeType: file.type,
+              mimeType: inferResumeMimeType(file),
               selectedJobDescriptionId,
             })),
           })
@@ -466,6 +497,13 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       setParseProgress(0)
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
+      const errorContext = err?.context && typeof err.context === 'object' ? err.context : {}
+      if (errorContext.stage === 'all_failed' && !isAutomaticRetry) {
+        setError('All resumes failed with the current provider. Retrying automatically with fallback configuration.')
+        await handleAnalyze({ isAutomaticRetry: true })
+        return
+      }
+
       const currentSession = readResumeAnalysisSession()
       if (currentSession?.jobId) {
         writeResumeAnalysisSession({
@@ -474,7 +512,6 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         })
       }
       const normalizedProviderError = mapProviderError(errorMessage)
-      const errorContext = err?.context && typeof err.context === 'object' ? err.context : {}
       const isUploadStage = String(errorContext.stage || '').startsWith('upload')
       const isParseStatusStage = errorContext.stage === 'parse_status'
 
@@ -644,7 +681,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       if (!hasPendingJobs) {
         const mergedCandidates = Object.values(resultsByResumeId)
         if (mergedCandidates.length === 0) {
-          throw new Error('Resume parsing finished, but no candidates were returned')
+          throw withErrorContext(new Error('Resume parsing finished, but no candidates were returned'), {
+            stage: 'all_failed',
+          })
         }
 
         const latestResult = {
@@ -915,16 +954,13 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </div>
         )}
 
-        {failedAnalysisState && (
+        {failedAnalysisState && !jobStatuses.some((job) => job.status === 'failed') && (
           <div className="resume-error-banner" role="alert">
             <strong>{failedAnalysisState.message}</strong>
             <p>{failedAnalysisState.detail}</p>
             <div className="resume-actions resume-actions--failure">
-              <button type="button" className="touch-target resume-analyze-button" onClick={handleAnalyze}>
+              <button type="button" className="touch-target resume-analyze-button" onClick={() => handleAnalyze()}>
                 Retry
-              </button>
-              <button type="button" className="touch-target resume-select-files-button" onClick={() => setSelectedJobDescriptionId('')}>
-                Use fallback provider
               </button>
               <a href="/contact" className="touch-target resume-manage-jd-link">
                 Contact support
@@ -951,10 +987,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             <strong>Some resumes failed to analyze.</strong>
             <ul>
               {jobStatuses.filter((job) => job.status === 'failed').map((job) => (
-                <li key={`failed-${job.jobId}`}>{job.filename || job.jobId}: {job.error || 'Unknown parse error'}</li>
+                <li key={`failed-${job.jobId}`}>{job.filename || job.jobId}: {toUserFriendlyJobError(job.error)}</li>
               ))}
             </ul>
-            <button type="button" className="touch-target resume-analyze-button" onClick={handleAnalyze}>
+            <button type="button" className="touch-target resume-analyze-button" onClick={() => handleAnalyze()}>
               Retry failed resumes
             </button>
           </div>
@@ -963,7 +999,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         <div className="resume-actions">
           <button
             className={`touch-target resume-analyze-button ${uploadedFiles.length === 0 ? 'resume-analyze-button--disabled' : ''}`}
-            onClick={handleAnalyze}
+            onClick={() => handleAnalyze()}
             disabled={uploadedFiles.length === 0 || isAnalyzing}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
