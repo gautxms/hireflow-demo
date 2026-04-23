@@ -121,6 +121,19 @@ function isLikelyTruncatedResponse(text = '', { stopReason = null } = {}) {
   return openBraces > closeBraces || openBrackets > closeBrackets || hasUnclosedFence
 }
 
+export function safeParseAIResponse(rawResponse) {
+  let text = String(rawResponse || '').trim()
+  text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '')
+  text = text.replace(/^```\s*/i, '').replace(/\s*```$/i, '')
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    console.error('AI response JSON parse failed:', error)
+    console.error('Raw response was:', rawResponse)
+    throw new Error('AI returned invalid JSON')
+  }
+}
+
 export function extractJsonWithContext(text = '', { provider = null, model = null } = {}) {
   const trimmed = String(text || '').trim()
   if (!trimmed) {
@@ -168,7 +181,7 @@ export function extractJsonWithContext(text = '', { provider = null, model = nul
   let lastError = null
   for (const candidate of uniqueCandidates) {
     try {
-      return JSON.parse(candidate)
+      return safeParseAIResponse(candidate)
     } catch (error) {
       lastError = error
     }
@@ -593,6 +606,7 @@ export async function analyzeWithAnthropic(
 
   let result = null
   try {
+    console.log('[AI][Anthropic] Raw response before parsing:', textContent.text)
     result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model })
   } catch (error) {
     const parseFailed = String(error?.message || '').includes('response_format_error::')
@@ -632,6 +646,7 @@ export async function analyzeWithAnthropic(
     })
     const repairedText = (repaired.content || []).find((item) => item.type === 'text')?.text || ''
     try {
+      console.log('[AI][Anthropic] Raw repaired response before parsing:', repairedText)
       result = extractJsonWithContext(repairedText, { provider: 'anthropic', model })
     } catch {
       throw createProviderResponseFormatError({
@@ -736,6 +751,7 @@ export async function analyzeWithOpenAI(
     })
   }
 
+  console.log('[AI][OpenAI] Raw response before parsing:', outputText)
   const result = extractJsonWithContext(outputText, { provider: 'openai', model })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('OpenAI response is missing candidates array')

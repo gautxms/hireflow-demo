@@ -29,7 +29,6 @@ JSON schema to return:
     "phone": "string or null",
     "location": "string or null",
     "summary": "string",
-    "skills": ["string"],
     "experience": [{
       "title": "string",
       "company": "string",
@@ -45,6 +44,19 @@ JSON schema to return:
     }],
     "certifications": ["string"],
     "languages": ["string"],
+    "years_experience": "number|null",
+    "profile_score": "number|null",
+    "strengths": ["string"],
+    "considerations": ["string"],
+    "seniority_level": "Junior|Mid|Senior|Lead|Executive|null",
+    "tags": ["string"],
+    "skills": {
+      "tools_and_platforms": ["string"],
+      "methodologies": ["string"],
+      "domain_expertise": ["string"],
+      "soft_skills": ["string"]
+    },
+    "top_skills": ["string"],
     "projects": [{
       "name": "string",
       "description": "string or null",
@@ -77,6 +89,22 @@ JSON schema to return:
     }
   }]
 }
+
+IMPORTANT RULES:
+1) Return ONLY valid JSON (UTF-8), no markdown, no prose before/after JSON.
+2) Output must match this exact top-level shape: {"candidates":[...]}
+3) Always return exactly 1 candidate object in candidates for a single-resume request.
+4) Use null for unknown scalar fields, [] for unknown list fields, and {} only where object schema requires it.
+5) Do not hallucinate: never invent employers, dates, degrees, certifications, projects, skills, metrics, links, or contact details.
+6) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
+7) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
+8) For years_experience: first scan the summary/profile section for an explicit statement like "X years of experience" or "X+ years". If found, use that number (strip the +). If not found, calculate by summing all experience entry durations: subtract startDate from endDate for each role. For roles where endDate is null or "Present", use today's date. Sum all durations, round down to nearest integer. If neither method works, return null. Never return N/A as a string.
+9) profile_score is a general quality score 0-100 based on the resume alone, independent of any JD. Score using these weights: Depth of experience (35%) years of experience, seniority of roles, career progression shown; Skill breadth (25%) variety and relevance of skills listed; Education (15%) degree level and institution quality; Achievements & certifications (15%) measurable outcomes, awards, certifications listed; Resume clarity (10%) how clearly structured and specific the resume content is. Always populate this field. It is not affected by JD availability. When a JD is available, matchScore.score is the primary ranking signal. When no JD is available, profile_score is the fallback ranking signal.
+10) strengths: Generate 3 to 5 specific, concrete strengths based on what is actually written in the resume. Reference real companies, projects, technologies, or measurable outcomes. Do not write generic statements like "strong communicator" or "team player" unless backed by specific evidence from the resume.
+11) considerations: Generate 2 to 3 honest, constructive observations a recruiter should probe in an interview. These are not negatives — they are gaps, unknowns, or risk factors.
+12) skills categorisation and deduplication: tools_and_platforms are specific named software, tools, SaaS products, programming languages, cloud services; methodologies are processes, frameworks, and ways of working; domain_expertise is business and functional domain knowledge; soft_skills are interpersonal and leadership capabilities; top_skills must contain exactly the 5 skills that best represent this candidate from across all categories. DEDUPLICATION: before including any skill, check if a semantically equivalent skill is already in the list and keep only one normalized form (e.g., "Agile (Scrum)" over "Agile Scrum", "Jira" over "JIRA").
+13) seniority_level: classify based on years of experience and role titles: Junior = 0-2 years, Mid = 3-5 years, Senior = 6-10 years, Lead = 10+ years with team/project leadership, Executive = VP/Director/C-suite titles.
+14) tags: 2-4 short category labels describing the candidate's profile for quick filtering. Use the candidate's actual domain, not generic labels.
 
 JD-aware behavior:
 - If job_description_context is AVAILABLE, compute fit_assessment scores from explicit evidence only.
