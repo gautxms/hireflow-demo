@@ -10,6 +10,8 @@ import {
   resolveCandidateResumeUuid,
   resolveCandidateScoreState,
   resolveTierState,
+  toDisplayText,
+  toSafeScore,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -662,14 +664,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   <input
                     checked={selectedIds.includes(candidate._bulkKey)}
                     onChange={() => toggleCandidateSelection(candidate._bulkKey)}
-                    aria-label={`Select ${candidate.name}`}
+                    aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
                     type="checkbox"
                   />
                 </td>
-                <td data-label="Candidate">{candidate.name}</td>
-                <td data-label="Fit">{candidate.matchScore?.fit || candidate.fit}</td>
-                <td data-label="Score">{candidate.matchScore?.score ?? candidate.score}</td>
-                <td data-label="Top skills">{Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3).join(', ') : String(candidate.skills || 'N/A')}</td>
+                <td data-label="Candidate">{toDisplayText(candidate.name)}</td>
+                <td data-label="Fit">{toDisplayText(candidate.matchScore?.fit ?? candidate.fit)}</td>
+                <td data-label="Score">{toDisplayText(candidate.matchScore?.score ?? candidate.score, '0')}</td>
+                <td data-label="Top skills">{toDisplayText(Array.isArray(candidate.skills) ? candidate.skills.slice(0, 3) : candidate.skills)}</td>
               </tr>
             ))}
           </tbody>
@@ -701,127 +703,114 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               .split(',')
               .map((skill) => skill.trim())
               .filter(Boolean)
-          const candidatePros = Array.isArray(candidate.pros) ? candidate.pros : []
-          const candidateCons = Array.isArray(candidate.cons) ? candidate.cons : []
-          const scoreState = resolveCandidateScoreState(candidate.score)
-          const tierState = resolveTierState(candidate.tier, candidate.score)
+          const candidatePros = Array.isArray(candidate.pros)
+            ? candidate.pros.map((pro) => toDisplayText(pro, '')).filter(Boolean)
+            : []
+          const candidateCons = Array.isArray(candidate.cons)
+            ? candidate.cons.map((con) => toDisplayText(con, '')).filter(Boolean)
+            : []
+          const safeScore = toSafeScore(candidate.score)
+          const scoreState = resolveCandidateScoreState(safeScore)
+          const tierState = resolveTierState(candidate.tier, safeScore)
 
           return (
             <div
               className="candidate-result-card rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--card)] p-8 shadow-[var(--shadow-md)] transition-all duration-300"
               key={candidate._bulkKey}
             >
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div className="candidate-results__selection">
+                <label className="candidate-results__selection-label">
                   <input
                     checked={selectedIds.includes(candidate._bulkKey)}
                     onChange={() => toggleCandidateSelection(candidate._bulkKey)}
-                    aria-label={`Select ${candidate.name}`}
+                    aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
                     type="checkbox"
                   />
                   Select candidate
                 </label>
               </div>
 
-              <div className="candidate-top-section" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2rem', marginBottom: '1.5rem', alignItems: 'start' }}>
+              <div className="candidate-top-section candidate-results__top-section">
                 <div>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--color-text-primary)' }}>
-                    {candidate.name}
+                  <h2 className="candidate-results__name">
+                    {toDisplayText(candidate.name)}
                   </h2>
-                  <p style={{ color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>📧 {candidate.email || 'No email provided'}</p>
-                  <p style={{ color: 'var(--color-text-secondary)' }}>📍 {candidate.location || 'Unknown location'}</p>
+                  <p className="candidate-results__meta candidate-results__meta--stacked">📧 {toDisplayText(candidate.email, 'No email provided')}</p>
+                  <p className="candidate-results__meta">📍 {toDisplayText(candidate.location, 'Unknown location')}</p>
                 </div>
 
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    width: '90px',
-                    height: '90px',
-                    borderRadius: '50%',
-                    background: `conic-gradient(${scoreState.chartColor} ${candidate.score * 3.6}deg, rgba(255,255,255,0.1) 0deg)`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: '0.5rem',
-                    position: 'relative'
-                  }}>
-                    <div style={{
-                      width: '75px',
-                      height: '75px',
-                      borderRadius: '50%',
-                      background: 'var(--card)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1.5rem',
-                      fontWeight: 'bold',
-                      color: scoreState.chartColor
-                    }}>
-                      {candidate.score}
+                <div className="candidate-results__score-wrap">
+                  <div className="candidate-results__score-chart" role="img" aria-label={`Match score ${safeScore} out of 100`}>
+                    <svg className="candidate-results__score-svg" viewBox="0 0 36 36" aria-hidden="true">
+                      <circle className="candidate-results__score-track" cx="18" cy="18" r="15.5" />
+                      <circle
+                        className={`candidate-results__score-progress candidate-results__score-progress--${scoreState.key}`}
+                        cx="18"
+                        cy="18"
+                        r="15.5"
+                        strokeDasharray={`${(safeScore / 100) * 97.39} 97.39`}
+                      />
+                    </svg>
+                    <div className={`candidate-results__score-value candidate-results__score-value--${scoreState.key}`}>
+                      {toDisplayText(safeScore, '0')}
                     </div>
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Match Score</p>
+                  <p className="candidate-results__meta">Match Score</p>
                 </div>
 
                 <div>
                   <div className={`mb-3 rounded-full border px-4 py-2 text-center text-xs font-bold ${tierState.badgeClass}`}>
                     {`${tierState.icon} ${tierState.label.toUpperCase()}`}
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Fit: {candidate.fit || 'N/A'}</p>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Experience: {candidate.experience || 'N/A'}</p>
+                  <p className="candidate-results__meta">Fit: {toDisplayText(candidate.fit)}</p>
+                  <p className="candidate-results__meta">Experience: {toDisplayText(candidate.experience)}</p>
                 </div>
               </div>
 
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '1rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>Summary</h3>
-                <p style={{ color: 'var(--color-text-primary)', lineHeight: '1.6' }}>{candidate.summary || 'No summary available'}</p>
+              <div className="candidate-results__section">
+                <h3 className="candidate-results__section-title">Summary</h3>
+                <p className="candidate-results__summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
               </div>
 
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '1rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem' }}>Top Skills</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div className="candidate-results__section">
+                <h3 className="candidate-results__section-title candidate-results__section-title--spacious">Top Skills</h3>
+                <div className="candidate-results__skills">
                   {candidateSkills.map((skill, idx) => (
                     <span
                       key={idx}
-                      style={{
-                        background: 'var(--color-accent-alpha-08)',
-                        color: 'var(--color-accent-green)',
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '20px',
-                        fontSize: '0.85rem',
-                        border: '1px solid var(--color-accent-alpha-15)'
-                      }}
+                      className="candidate-results__skill-pill"
                     >
                       {skill}
                     </span>
                   ))}
                 </div>
                 {candidateTags[candidate._bulkKey]?.length > 0 ? (
-                  <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                  <p className="candidate-results__tags">
                     Tags: {candidateTags[candidate._bulkKey].join(', ')}
                   </p>
                 ) : null}
               </div>
 
-              <div className="candidate-evaluation-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div className="candidate-evaluation-grid candidate-results__evaluation-grid">
                 <div>
-                  <h3 style={{ color: 'var(--color-success-text)', fontSize: '1rem', marginBottom: '0.75rem' }}>✅ Strengths</h3>
-                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--color-text-primary)' }}>
+                  <h3 className="candidate-results__evaluation-title candidate-results__evaluation-title--strengths">✅ Strengths</h3>
+                  <ul className="candidate-results__evaluation-list">
                     {candidatePros.length > 0
                       ? candidatePros.map((pro, idx) => (
-                        <li key={idx} style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>{pro}</li>
+                        <li key={idx} className="candidate-results__evaluation-item">{pro}</li>
                       ))
-                      : <li style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>No strengths listed.</li>}
+                      : <li className="candidate-results__evaluation-item">No strengths listed.</li>}
                   </ul>
                 </div>
 
                 <div>
-                  <h3 style={{ color: 'var(--color-warning-text)', fontSize: '1rem', marginBottom: '0.75rem' }}>⚠️ Considerations</h3>
-                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--color-text-primary)' }}>
+                  <h3 className="candidate-results__evaluation-title candidate-results__evaluation-title--considerations">⚠️ Considerations</h3>
+                  <ul className="candidate-results__evaluation-list">
                     {candidateCons.length > 0
                       ? candidateCons.map((con, idx) => (
-                        <li key={idx} style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>{con}</li>
+                        <li key={idx} className="candidate-results__evaluation-item">{con}</li>
                       ))
-                      : <li style={{ marginBottom: '0.5rem', lineHeight: '1.5' }}>No concerns listed.</li>}
+                      : <li className="candidate-results__evaluation-item">No concerns listed.</li>}
                   </ul>
                 </div>
               </div>

@@ -193,3 +193,54 @@ export function resolveTierState(tier, score) {
 
   return resolveCandidateScoreState(score)
 }
+
+export function toDisplayText(value, fallback = 'N/A') {
+  if (value === null || value === undefined) {
+    return fallback
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim()
+    return normalized || fallback
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : fallback
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No'
+  }
+
+  if (Array.isArray(value)) {
+    const joined = value
+      .map((entry) => toDisplayText(entry, ''))
+      .filter(Boolean)
+      .join(', ')
+      .trim()
+    return joined || fallback
+  }
+
+  if (typeof value === 'object') {
+    if (typeof value.text === 'string' && value.text.trim()) {
+      return value.text.trim()
+    }
+
+    if (typeof value.value === 'string' && value.value.trim()) {
+      return value.value.trim()
+    }
+
+    return fallback
+  }
+
+  return fallback
+}
+
+export function toSafeScore(value, fallback = 0) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+
+  return Math.max(0, Math.min(100, parsed))
+}
