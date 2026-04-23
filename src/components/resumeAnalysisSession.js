@@ -85,6 +85,9 @@ export function readResumeAnalysisSession(storage = localStorage) {
   }
 
   const jobId = String(parsed.jobId || '').trim()
+  const jobIds = Array.isArray(parsed.jobIds)
+    ? parsed.jobIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : []
   if (!jobId) {
     return null
   }
@@ -92,6 +95,7 @@ export function readResumeAnalysisSession(storage = localStorage) {
   return {
     version: 1,
     jobId,
+    jobIds: jobIds.length > 0 ? jobIds : [jobId],
     selectedJobDescriptionId: String(parsed.selectedJobDescriptionId || '').trim(),
     parseStatus: String(parsed.parseStatus || 'processing').trim() || 'processing',
     parseProgress: Number(parsed.parseProgress || 0),
@@ -176,7 +180,8 @@ export function isSessionRecoverable(session) {
   }
 
   const terminalStates = new Set(['complete', 'failed', 'cancelled'])
-  return Boolean(session.jobId) && !terminalStates.has(String(session.parseStatus || '').toLowerCase())
+  const hasAnyJob = Boolean(session.jobId) || (Array.isArray(session.jobIds) && session.jobIds.length > 0)
+  return hasAnyJob && !terminalStates.has(String(session.parseStatus || '').toLowerCase())
 }
 
 export { RESUME_ANALYSIS_SESSION_KEY, RESUME_ANALYSIS_RESULT_KEY }
