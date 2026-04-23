@@ -742,6 +742,25 @@ export async function analyzeWithOpenAI(
   }
 
   const payload = await response.json()
+  if (payload?.error?.message) {
+    throw new Error(String(payload.error.message))
+  }
+
+  const responseStatus = String(payload?.status || '').toLowerCase()
+  if (responseStatus && responseStatus !== 'completed') {
+    const incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
+    if (incompleteReason.toLowerCase() === 'max_output_tokens') {
+      throw createProviderResponseFormatError({
+        category: 'response_truncated_error',
+        provider: 'openai',
+        model,
+        technicalDetails: `Provider output was truncated before valid JSON completion (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}).`,
+      })
+    }
+
+    throw new Error(`OpenAI response status was ${responseStatus}${incompleteReason ? ` (${incompleteReason})` : ''}`)
+  }
+
   const outputText = extractOpenAiResponseText(payload)
   if (!outputText) {
     throw createProviderResponseFormatError({
