@@ -2,9 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildFileSnapshot,
+  clearResumeAnalysisResult,
   clearResumeAnalysisSession,
   isSessionRecoverable,
+  readResumeAnalysisResult,
   readResumeAnalysisSession,
+  writeResumeAnalysisResult,
   writeResumeAnalysisSession,
 } from './resumeAnalysisSession.js'
 
@@ -57,4 +60,38 @@ test('buildFileSnapshot preserves retry context fingerprints', () => {
 
   assert.equal(snapshot.length, 1)
   assert.equal(snapshot[0].fingerprint, 'candidate.docx::2048::171000')
+})
+
+test('resume analysis results are scoped to the authenticated account', () => {
+  const storage = createStorageMock()
+  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-a', email: 'a@example.com' }))
+
+  writeResumeAnalysisResult({
+    candidates: [{ name: 'Alice' }],
+    jobId: 'job-1',
+  }, storage)
+
+  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-b', email: 'b@example.com' }))
+  assert.equal(readResumeAnalysisResult(storage), null)
+})
+
+test('clearResumeAnalysisResult only clears the active account scope', () => {
+  const storage = createStorageMock()
+  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-a' }))
+  writeResumeAnalysisResult({
+    candidates: [{ name: 'Alice' }],
+    jobId: 'job-1',
+  }, storage)
+
+  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-b' }))
+  writeResumeAnalysisResult({
+    candidates: [{ name: 'Bob' }],
+    jobId: 'job-2',
+  }, storage)
+
+  clearResumeAnalysisResult(storage)
+  assert.equal(readResumeAnalysisResult(storage), null)
+
+  storage.setItem('hireflow_user_profile', JSON.stringify({ id: 'user-a' }))
+  assert.equal(readResumeAnalysisResult(storage)?.jobId, 'job-1')
 })

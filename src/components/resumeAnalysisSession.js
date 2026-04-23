@@ -1,5 +1,7 @@
 const RESUME_ANALYSIS_SESSION_KEY = 'hireflow_resume_analysis_session_v1'
 const RESUME_ANALYSIS_RESULT_KEY = 'hireflow_resume_analysis_result_v1'
+const USER_STORAGE_KEY = 'hireflow_user_profile'
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
 function nowIso() {
   return new Date().toISOString()
@@ -11,6 +13,35 @@ function safeJsonParse(value, fallback) {
   } catch {
     return fallback
   }
+}
+
+function readScopeValue(storage = localStorage) {
+  const rawUserProfile = storage.getItem(USER_STORAGE_KEY)
+  const parsedUserProfile = safeJsonParse(rawUserProfile, null)
+  const userId = String(parsedUserProfile?.id || '').trim()
+  if (userId) {
+    return `user:${userId}`
+  }
+
+  const userEmail = String(parsedUserProfile?.email || '').trim().toLowerCase()
+  if (userEmail) {
+    return `email:${userEmail}`
+  }
+
+  const token = String(storage.getItem(TOKEN_STORAGE_KEY) || '').trim()
+  if (token) {
+    return `token:${token}`
+  }
+
+  return ''
+}
+
+function getScopedResumeAnalysisResultKey(storage = localStorage) {
+  const scopeValue = readScopeValue(storage)
+  if (!scopeValue) {
+    return ''
+  }
+  return `${RESUME_ANALYSIS_RESULT_KEY}::${scopeValue}`
 }
 
 export function buildFileFingerprintFromMetadata(file) {
@@ -92,7 +123,12 @@ export function clearResumeAnalysisSession(storage = localStorage) {
 }
 
 export function readResumeAnalysisResult(storage = localStorage) {
-  const raw = storage.getItem(RESUME_ANALYSIS_RESULT_KEY)
+  const scopedKey = getScopedResumeAnalysisResultKey(storage)
+  if (!scopedKey) {
+    return null
+  }
+
+  const raw = storage.getItem(scopedKey)
   if (!raw) {
     return null
   }
@@ -117,18 +153,27 @@ export function readResumeAnalysisResult(storage = localStorage) {
 }
 
 export function writeResumeAnalysisResult(payload, storage = localStorage) {
+  const scopedKey = getScopedResumeAnalysisResultKey(storage)
+  if (!scopedKey) {
+    return null
+  }
+
   const next = {
     version: 1,
     ...(payload || {}),
     savedAt: nowIso(),
   }
 
-  storage.setItem(RESUME_ANALYSIS_RESULT_KEY, JSON.stringify(next))
+  storage.setItem(scopedKey, JSON.stringify(next))
   return next
 }
 
 export function clearResumeAnalysisResult(storage = localStorage) {
-  storage.removeItem(RESUME_ANALYSIS_RESULT_KEY)
+  const scopedKey = getScopedResumeAnalysisResultKey(storage)
+  if (!scopedKey) {
+    return
+  }
+  storage.removeItem(scopedKey)
 }
 
 export function isSessionRecoverable(session) {

@@ -592,10 +592,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           selectedJobDescriptionId,
           fileSnapshots: buildFileSnapshot(uploadedFiles),
         })
-        writeResumeAnalysisResult({
-          ...latestResult,
-          jobId: primaryJobId,
-        })
+        try {
+          writeResumeAnalysisResult({
+            ...latestResult,
+            jobId: primaryJobId,
+          })
+        } catch (persistError) {
+          console.warn('Unable to persist resume analysis result for recovery', persistError)
+        }
 
         onFileUploaded(latestResult)
         clearResumeAnalysisSession()
