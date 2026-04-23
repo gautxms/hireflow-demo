@@ -165,8 +165,9 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   }
 
   const totalChunks = Math.ceil(fileSize / CHUNK_SIZE_BYTES)
-  const safeFilename = sanitizeFilename(filename)
-  const normalizedMimeType = normalizeMimeType(safeFilename, mimeType)
+  const originalFilename = String(filename || '').trim()
+  const safeFilename = sanitizeFilename(originalFilename)
+  const normalizedMimeType = normalizeMimeType(originalFilename, mimeType)
 
   if (jobDescriptionId) {
     const jdResult = await pool.query(

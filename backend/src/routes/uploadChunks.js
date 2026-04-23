@@ -1,7 +1,6 @@
 import multer from 'multer'
 import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
-import { sanitizeFilename } from '../utils/sanitize.js'
 import {
   CHUNK_SIZE_BYTES,
   MAX_FILE_SIZE_BYTES,
@@ -41,7 +40,7 @@ router.post('/init', requireAuth, async (req, res) => {
 
     const session = await initChunkUpload({
       userId: req.userId,
-      filename: sanitizeFilename(filename),
+      filename,
       fileSize: parsedSize,
       mimeType,
       jobDescriptionId: jobDescriptionId || null,
