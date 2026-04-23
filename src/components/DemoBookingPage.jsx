@@ -95,9 +95,9 @@ export default function DemoBookingPage({ onBack }) {
 
       <main className="public-page-main public-section">
         <div className="public-page-hero public-hero-compact">
-          <h1 className="public-page-title">{step === 'info' ? 'Schedule Your Demo' : step === 'calendar' ? 'Pick a Time' : 'Demo Confirmed!'}</h1>
+          <h1 className="public-page-title">{step === 'info' ? 'See Hireflow in action — free 30-minute demo' : step === 'calendar' ? 'Pick a Time' : 'Demo Confirmed!'}</h1>
           <p className="public-page-subtitle">
-            {step === 'info' && 'See HireFlow in action. Our team will show you how to reduce hiring time by 60% and make better hiring decisions.'}
+            {step === 'info' && 'Book a personalized walkthrough to see how Hireflow handles resume intake, ranking, and shortlist collaboration for your team. We focus the session on your hiring goals and current process so you leave with clear next steps.'}
             {step === 'calendar' && 'Select a date and time that works best for you (All times in EST)'}
             {step === 'confirmation' && 'Your booking is confirmed. We emailed your meeting details.'}
           </p>
@@ -114,55 +114,102 @@ export default function DemoBookingPage({ onBack }) {
 
         {step === 'info' && (
           <>
-            <form className="public-form public-form-grid">
-              <div className="public-form-grid cols-2">
-                {[
-                  ['firstName', 'First Name *', 'text', 'John'],
-                  ['lastName', 'Last Name *', 'text', 'Smith']
-                ].map(([name, label, type, placeholder]) => (
-                  <div key={name} className={`public-form-field ${errors[name] ? 'has-error' : ''}`}>
-                    <label htmlFor={name}>{label}</label>
-                    <input id={name} type={type} name={name} value={formData[name]} onChange={handleInputChange} placeholder={placeholder} />
-                    {errors[name] && <div className="public-form-error">{errors[name]}</div>}
+            <div className="demo-info-layout">
+              <section className="public-card demo-content-stack">
+                <h2 className="public-section-title demo-content-title">See Hireflow in action — free 30-minute demo</h2>
+                <p className="public-copy">
+                  In your live demo, we walk through the full resume screening workflow in Hireflow, from creating a role to reviewing ranked candidates.
+                  You will see how the platform helps teams triage high-volume applicant pipelines faster without losing context.
+                  This session is designed for recruiters, HR managers, and hiring teams who want a clearer, more consistent evaluation process.
+                  We tailor the walkthrough to your hiring motion, role types, and current screening bottlenecks so the conversation stays practical.
+                </p>
+
+                <section className="demo-content-section">
+                  <h3 className="public-card-title">What you&apos;ll learn in your demo</h3>
+                  <ul className="demo-content-list public-copy">
+                    <li>How to upload resumes in bulk and automatically score candidates against a specific role.</li>
+                    <li>How Hireflow&apos;s AI ranking surfaces stronger-fit candidates and highlights supporting evidence.</li>
+                    <li>How to configure role-specific scoring criteria so the ranking reflects your real hiring priorities.</li>
+                    <li>How to build and export shortlists for hiring manager review and downstream interview planning.</li>
+                    <li>How to fit Hireflow into your existing stack using exports and handoff-friendly workflows.</li>
+                  </ul>
+                </section>
+              </section>
+
+              <div>
+                <form className="public-form public-form-grid">
+                  <div className="public-form-grid cols-2">
+                    {[
+                      ['firstName', 'First Name *', 'text', 'John'],
+                      ['lastName', 'Last Name *', 'text', 'Smith']
+                    ].map(([name, label, type, placeholder]) => (
+                      <div key={name} className={`public-form-field ${errors[name] ? 'has-error' : ''}`}>
+                        <label htmlFor={name}>{label}</label>
+                        <input id={name} type={type} name={name} value={formData[name]} onChange={handleInputChange} placeholder={placeholder} />
+                        {errors[name] && <div className="public-form-error">{errors[name]}</div>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
 
-              {[
-                ['email', 'Work Email *', 'email', 'john@company.com'],
-                ['phone', 'Phone Number *', 'tel', '+1 (555) 123-4567']
-              ].map(([name, label, type, placeholder]) => (
-                <div key={name} className={`public-form-field ${errors[name] ? 'has-error' : ''}`}>
-                  <label htmlFor={name}>{label}</label>
-                  <input id={name} type={type} name={name} value={formData[name]} onChange={handleInputChange} placeholder={placeholder} />
-                  {errors[name] && <div className="public-form-error">{errors[name]}</div>}
+                  {[
+                    ['email', 'Work Email *', 'email', 'john@company.com'],
+                    ['phone', 'Phone Number *', 'tel', '+1 (555) 123-4567']
+                  ].map(([name, label, type, placeholder]) => (
+                    <div key={name} className={`public-form-field ${errors[name] ? 'has-error' : ''}`}>
+                      <label htmlFor={name}>{label}</label>
+                      <input id={name} type={type} name={name} value={formData[name]} onChange={handleInputChange} placeholder={placeholder} />
+                      {errors[name] && <div className="public-form-error">{errors[name]}</div>}
+                    </div>
+                  ))}
+
+                  <div className="public-form-grid cols-2">
+                    <div className={`public-form-field ${errors.company ? 'has-error' : ''}`}>
+                      <label htmlFor="company">Company Name *</label>
+                      <input id="company" type="text" name="company" value={formData.company} onChange={handleInputChange} placeholder="TechCorp Inc" />
+                      {errors.company && <div className="public-form-error">{errors.company}</div>}
+                    </div>
+                    <div className={`public-form-field ${errors.companySize ? 'has-error' : ''}`}>
+                      <label htmlFor="companySize">Company Size *</label>
+                      <select id="companySize" name="companySize" value={formData.companySize} onChange={handleInputChange}>
+                        <option value="">Select size</option>
+                        {COMPANY_SIZES.map((size) => <option key={size} value={size}>{size} employees</option>)}
+                      </select>
+                      {errors.companySize && <div className="public-form-error">{errors.companySize}</div>}
+                    </div>
+                  </div>
+
+                  <div className="public-form-field">
+                    <label htmlFor="message">Additional Notes (Optional)</label>
+                    <textarea id="message" name="message" rows="4" value={formData.message} onChange={handleInputChange} placeholder="Tell us about your hiring challenges..." />
+                  </div>
+                </form>
+
+                <div className="public-button-row center public-mt-md">
+                  <button className="public-btn-primary" onClick={() => validateStep1() && setStep('calendar')}>Continue to Calendar →</button>
                 </div>
-              ))}
-
-              <div className="public-form-grid cols-2">
-                <div className={`public-form-field ${errors.company ? 'has-error' : ''}`}>
-                  <label htmlFor="company">Company Name *</label>
-                  <input id="company" type="text" name="company" value={formData.company} onChange={handleInputChange} placeholder="TechCorp Inc" />
-                  {errors.company && <div className="public-form-error">{errors.company}</div>}
-                </div>
-                <div className={`public-form-field ${errors.companySize ? 'has-error' : ''}`}>
-                  <label htmlFor="companySize">Company Size *</label>
-                  <select id="companySize" name="companySize" value={formData.companySize} onChange={handleInputChange}>
-                    <option value="">Select size</option>
-                    {COMPANY_SIZES.map((size) => <option key={size} value={size}>{size} employees</option>)}
-                  </select>
-                  {errors.companySize && <div className="public-form-error">{errors.companySize}</div>}
-                </div>
               </div>
+            </div>
 
-              <div className="public-form-field">
-                <label htmlFor="message">Additional Notes (Optional)</label>
-                <textarea id="message" name="message" rows="4" value={formData.message} onChange={handleInputChange} placeholder="Tell us about your hiring challenges..." />
-              </div>
-            </form>
+            <div className="demo-lower-content">
+              <section className="public-card demo-content-section">
+                <h3 className="public-card-title">What our customers say</h3>
+                <div className="public-faq-grid">
+                  <p className="public-copy">&ldquo;Before Hireflow, we spent hours manually sorting resumes for every open role. Now our team starts each week with a ranked shortlist and fewer back-and-forths with hiring managers.&rdquo; — Sarah, HR Manager at a 200-person SaaS company</p>
+                  <p className="public-copy">&ldquo;The biggest win is consistency. We align on role criteria up front, and Hireflow applies that logic to every applicant so our screening decisions are easier to explain.&rdquo; — Marcus, Talent Lead at a multi-location healthcare group</p>
+                  <p className="public-copy">&ldquo;We hire across operations and customer support, and volume can spike fast. Hireflow helps us quickly spot qualified applicants without missing strong candidates buried in the queue.&rdquo; — Priya, People Operations Manager at a logistics company</p>
+                </div>
+              </section>
 
-            <div className="public-button-row center public-mt-md">
-              <button className="public-btn-primary" onClick={() => validateStep1() && setStep('calendar')}>Continue to Calendar →</button>
+              <section className="public-card demo-content-section">
+                <h3 className="public-card-title">Before your demo</h3>
+                <ul className="demo-content-list public-copy">
+                  <li>Have a current job description ready so we can tailor examples to a real role.</li>
+                  <li>Think about your current screening bottlenecks, especially where decisions slow down.</li>
+                  <li>Invite your hiring manager if possible so alignment can start during the session.</li>
+                </ul>
+              </section>
+
+              <p className="public-copy center">No hard sell, no obligation — and you can cancel or reschedule anytime.</p>
             </div>
           </>
         )}
