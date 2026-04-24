@@ -3,6 +3,9 @@ import { useMemo, useState } from 'react'
 function parseSkills(rawSkills) {
   if (Array.isArray(rawSkills)) {
     return rawSkills
+      .map((skill) => (typeof skill === 'object' && skill !== null
+        ? skill.name || skill.label || JSON.stringify(skill)
+        : skill))
       .map((skill) => String(skill || '').trim())
       .filter(Boolean)
   }
