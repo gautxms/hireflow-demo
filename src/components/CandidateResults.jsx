@@ -138,6 +138,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [resultsError, setResultsError] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
+  const [expandedId, setExpandedId] = useState(null)
 
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
@@ -392,10 +393,13 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     ? Math.round(filtered.reduce((sum, candidate) => sum + activeScore(candidate), 0) / filtered.length)
     : 0
   const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
-  const sortedCandidates = useMemo(
-    () => [...visibleCandidates].sort((a, b) => activeScore(b) - activeScore(a)),
-    [activeScore, visibleCandidates],
-  )
+  const sortedCandidates = useMemo(() => (
+    [...visibleCandidates].sort((a, b) => {
+      const sA = a.matchScore?.score ?? a.profile_score ?? 0
+      const sB = b.matchScore?.score ?? b.profile_score ?? 0
+      return sB - sA
+    })
+  ), [visibleCandidates])
 
   const toggleCandidateSelection = (candidateKey) => {
     setSelectedIds((currentSelected) => toggleSelection(currentSelected, candidateKey))
@@ -403,6 +407,16 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   const toggleSelectAllFiltered = () => {
     setSelectedIds((currentSelected) => toggleSelectAllVisible(currentSelected, visibleCandidates))
+  }
+
+  const handleCardClick = (id) => {
+    setExpandedId((currentExpandedId) => (currentExpandedId === id ? null : id))
+    setTimeout(() => {
+      document.getElementById('candidate-detail')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }, 100)
   }
 
   const exportCSV = async (selected) => {
@@ -563,6 +577,16 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   }
 
   const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
+  const expandedCandidate = useMemo(
+    () => sortedCandidates.find((candidate) => candidate.id === expandedId),
+    [expandedId, sortedCandidates],
+  )
+
+  useEffect(() => {
+    if (expandedId && !expandedCandidate) {
+      setExpandedId(null)
+    }
+  }, [expandedCandidate, expandedId])
 
   if (isLoading || isSharedLoading) {
     return (
@@ -698,96 +722,77 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </div>
       </div>
 
-      <div className="cand-list">
-        <div className="cand-row cand-row--header" onClick={toggleSelectAllFiltered} role="button" tabIndex={0} onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            toggleSelectAllFiltered()
-          }
-        }}>
-          <div className="cand-rank">#</div>
-          <div className="cand-avatar">ALL</div>
-          <div className="cand-main">
-            <div className="cand-name">Select all on this page</div>
-          </div>
-          <div className="cand-score-block" />
+      <div className="results-select-all">
+        <label className="results-select-all__label">
           <input
             type="checkbox"
-            className="cand-check"
             checked={allFilteredSelected}
-            onChange={(event) => {
-              event.stopPropagation()
-              toggleSelectAllFiltered()
-            }}
-            onClick={(event) => event.stopPropagation()}
-            aria-label="Select all candidates"
+            onChange={toggleSelectAllFiltered}
+            aria-label="Select all candidates on this page"
           />
-        </div>
+          Select all on this page
+        </label>
+      </div>
+
+      <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
+          const score = candidate.matchScore?.score ?? candidate.profile_score
+          const isExpanded = expandedId === candidate.id
+          const scoreTone = score >= 80 ? 'strong' : score >= 60 ? 'good' : score != null ? 'possible' : 'unscored'
+          const fitLabel = score >= 80 ? 'Strong match' : score >= 60 ? 'Good match' : score != null ? 'Possible match' : 'Not scored'
           const initials = String(candidate?.name || '')
             .split(' ')
-            .map((part) => part[0])
+            .map((part) => part[0] || '')
             .join('')
             .slice(0, 2)
             .toUpperCase()
-          const candidateSkills = Array.isArray(candidate?.top_skills)
-            ? candidate.top_skills
-            : parseSkills(candidate?.skills)
-          const scoreValue = hasJobDescription ? candidate?.matchScore?.score : (candidate?.profile_score ?? candidate?.score)
-          const score = Number(scoreValue ?? 0)
-          const isSelected = selectedIds.includes(candidate._bulkKey)
-          const scoreBand = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'possible'
+          const topSkills = parseSkills(
+            Array.isArray(candidate.top_skills)
+              ? candidate.top_skills
+              : (candidate.top_skills || candidate.skills),
+          )
+          const selected = selectedIds.includes(candidate._bulkKey)
 
           return (
             <div
-              className={`cand-row ${isSelected ? 'cand-row--selected' : ''}`}
               key={candidate._bulkKey}
-              onClick={() => {
-                window.location.href = `/candidates/${candidate.id}`
-              }}
+              className={`result-card${isExpanded ? ' result-card--active' : ''}`}
+              onClick={() => handleCardClick(candidate.id)}
             >
-              <div className="cand-rank">#{index + 1}</div>
-
-              <div className="cand-avatar">{initials || 'NA'}</div>
-
-              <div className="cand-main">
-                <div className="cand-name">{toDisplayText(candidate.name)}</div>
-                <div className="cand-meta">
-                  {candidate.seniority_level && <span className="cand-seniority-badge">{candidate.seniority_level}</span>}
-                  {candidate.years_experience != null && <span>{candidate.years_experience} yrs exp</span>}
-                  {candidate.location && <span>{candidate.location}</span>}
-                </div>
-                <div className="cand-skill-list">
-                  {candidateSkills.slice(0, 4).map((skill) => (
-                    <span className="cand-skill-pill" key={`${candidate._bulkKey}-${String(formatSkillLabel(skill))}`}>
-                      {formatSkillLabel(skill)}
-                    </span>
-                  ))}
-                </div>
+              <div className="rc-rank">#{index + 1}</div>
+              <div className={`rc-avatar rc-avatar--${scoreTone}`}>
+                {initials || 'NA'}
               </div>
-
-              <div className="cand-score-block">
-                {scoreValue != null ? (
-                  <>
-                    <div className={`cand-score-num cand-score-num--${scoreBand}`}>{score}<span className="cand-pct">%</span></div>
-                    <div className="cand-bar-track">
-                      <progress
-                        className={`cand-bar-fill cand-bar-fill--${scoreBand}`}
-                        value={Math.max(0, Math.min(score, 100))}
-                        max={100}
-                      />
-                    </div>
-                    <div className={`cand-fit-label cand-fit-label--${scoreBand}`}>
-                      {candidate.matchScore?.fit ?? (score >= 80 ? 'Strong' : score >= 60 ? 'Good' : 'Possible')}
-                    </div>
-                  </>
-                ) : <div className="cand-score-empty">Not scored</div>}
+              <div className="rc-name">{toDisplayText(candidate.name)}</div>
+              <div className="rc-role">
+                {[candidate.current_title, candidate.years_experience ? `${candidate.years_experience}y` : null].filter(Boolean).join(' · ')}
               </div>
-
+              <div className="rc-location">{candidate.location || 'Location unavailable'}</div>
+              <div className={`rc-score rc-score--${scoreTone}`}>
+                {score != null ? `${score}%` : '—'}
+              </div>
+              <div className="rc-score-track">
+                {/* inline-style-allow runtime-dimension */}
+                <div className={`rc-score-fill rc-score-fill--${scoreTone}`} style={{
+                  width: `${score ?? 0}%`,
+                }}
+                />
+              </div>
+              <div className={`rc-fit rc-fit--${scoreTone}`}>{fitLabel}</div>
+              <div className="rc-skills">
+                {topSkills.slice(0, 3).map((skill) => (
+                  <span className="rc-skill-tag" key={`${candidate._bulkKey}-${String(formatSkillLabel(skill))}`}>
+                    {formatSkillLabel(skill)}
+                  </span>
+                ))}
+              </div>
+              <div className="rc-expand-hint">
+                {isExpanded ? 'Click to collapse ↑' : 'Click to expand ↓'}
+              </div>
               <input
                 type="checkbox"
-                className="cand-check"
-                checked={isSelected}
+                className="rc-check"
+                checked={selected}
                 onChange={(event) => {
                   event.stopPropagation()
                   toggleCandidateSelection(candidate._bulkKey)
@@ -800,6 +805,161 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         })}
       </div>
 
+      {expandedCandidate && (() => {
+        const candidate = expandedCandidate
+        const score = candidate.matchScore?.score ?? candidate.profile_score
+        const scoreTone = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'possible'
+        const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
+          ? candidate.strengths
+          : Array.isArray(candidate.achievements)
+            ? candidate.achievements.slice(0, 3)
+            : []
+        const candidateConsiderations = Array.isArray(candidate.considerations) ? candidate.considerations : []
+        const experienceEntries = Array.isArray(candidate.experience) ? candidate.experience.slice(0, 2) : []
+        const topSkills = Array.isArray(candidate.top_skills) ? candidate.top_skills : parseSkills(candidate.skills).slice(0, 6)
+        const initials = String(candidate?.name || '')
+          .split(' ')
+          .map((part) => part[0] || '')
+          .join('')
+          .slice(0, 2)
+          .toUpperCase()
+
+        return (
+          <div id="candidate-detail" className="detail-drawer">
+            <div className="dd-header">
+              <div className="dd-avatar">{initials || 'NA'}</div>
+              <div className="dd-header-info">
+                <div className="dd-name">{toDisplayText(candidate.name)}</div>
+                <div className="dd-subtitle">
+                  {[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              {score != null && (
+                <div className={`dd-score-badge dd-score-badge--${scoreTone}`}>
+                  {score}%
+                </div>
+              )}
+              <div className="dd-actions">
+                <button className="dd-btn-primary" type="button">Schedule Interview</button>
+                <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
+              </div>
+              <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
+            </div>
+
+            <div className="dd-body">
+              <div className="dd-col">
+                <div className="dd-section-label">Summary</div>
+                <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
+
+                <div className="dd-facts">
+                  {candidate.years_experience != null && (
+                    <div className="dd-fact">
+                      <span className="dd-fact-label">Experience</span>
+                      <span className="dd-fact-val">{candidate.years_experience} years</span>
+                    </div>
+                  )}
+                  {candidate.seniority_level && (
+                    <div className="dd-fact">
+                      <span className="dd-fact-label">Seniority</span>
+                      <span className="dd-fact-val">{candidate.seniority_level}</span>
+                    </div>
+                  )}
+                  {candidate.email && (
+                    <div className="dd-fact">
+                      <span className="dd-fact-label">Email</span>
+                      <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="dd-section-label dd-section-label--spaced">Recent experience</div>
+                {experienceEntries.map((job, idx) => (
+                  <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
+                    <div className="dd-job-title">{job.title}</div>
+                    <div className="dd-job-meta">
+                      {job.company} · {job.durationText || [job.startDate, job.endDate].filter(Boolean).join(' – ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="dd-col">
+                <div className="dd-section-label">Strengths</div>
+                <div className="dd-analysis-box dd-strengths">
+                  {candidateStrengths.length > 0
+                    ? candidateStrengths.map((strength, idx) => (
+                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>
+                    ))
+                    : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+                </div>
+
+                <div className="dd-section-label dd-section-label--considerations">Considerations</div>
+                <div className="dd-analysis-box dd-considerations">
+                  {candidateConsiderations.length > 0
+                    ? candidateConsiderations.map((consideration, idx) => (
+                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-consideration-${idx}`}>{consideration}</div>
+                    ))
+                    : (
+                      <div className="dd-analysis-item">
+                        {candidate.years_experience == null
+                          ? 'Experience duration could not be determined — verify dates in resume'
+                          : candidate.years_experience < 3
+                            ? 'Early-career candidate — assess growth trajectory in interview'
+                            : 'Run re-analysis to generate detailed AI considerations'}
+                      </div>
+                    )}
+                </div>
+              </div>
+
+              <div className="dd-col">
+                <div className="dd-section-label">Top skills</div>
+                <div className="dd-top-skills">
+                  {topSkills.map((skill) => (
+                    <span className="dd-top-skill-tag" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
+                      {formatSkillLabel(skill)}
+                    </span>
+                  ))}
+                </div>
+
+                {candidate.skills_structured && (
+                  <>
+                    {Object.entries({
+                      Tools: candidate.skills_structured.tools_and_platforms,
+                      Methods: candidate.skills_structured.methodologies,
+                      Domain: candidate.skills_structured.domain_expertise,
+                    }).map(([category, skills]) => skills?.length > 0 && (
+                      <div key={`${candidate._bulkKey}-${category}`} className="dd-skill-group">
+                        <div className="dd-skill-cat">{category}</div>
+                        <div className="dd-skill-row">
+                          {skills.slice(0, 6).map((skill) => (
+                            <span className="dd-skill-pill" key={`${candidate._bulkKey}-${category}-${String(formatSkillLabel(skill))}`}>
+                              {formatSkillLabel(skill)}
+                            </span>
+                          ))}
+                          {skills.length > 6 && (
+                            <span className="dd-skill-more">+{skills.length - 6}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                <button
+                  className="dd-view-full"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    window.location.href = `/candidates/${candidate.id}`
+                  }}
+                >
+                  View full profile →
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {visibleCandidates.length === 0 && (
         <div className="candidate-results-page__empty-note">
@@ -816,231 +976,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           <option value={25}>25 / page</option>
           <option value={50}>50 / page</option>
         </select>
-      </div>
-      <div className="candidate-results-list candidate-results-list--cards">
-        {visibleCandidates.map((candidate) => {
-          const candidateSkills = parseSkills(candidate.skills)
-          const candidateStrengths = Array.isArray(candidate.strengths)
-            ? candidate.strengths.map((item) => toDisplayText(item, '')).filter(Boolean)
-            : Array.isArray(candidate.pros)
-              ? candidate.pros.map((item) => toDisplayText(item, '')).filter(Boolean)
-              : []
-          const candidateConsiderations = Array.isArray(candidate.considerations)
-            ? candidate.considerations.map((item) => toDisplayText(item, '')).filter(Boolean)
-            : Array.isArray(candidate.cons)
-              ? candidate.cons.map((item) => toDisplayText(item, '')).filter(Boolean)
-              : []
-          const score = candidate.matchScore?.score ?? candidate.profile_score ?? candidate.score
-          const hasRoleFitScore = candidate.matchScore?.score != null
-          const scoreToneClass = score >= 80
-            ? 'profile-score-tone--high'
-            : score >= 60
-              ? 'profile-score-tone--medium'
-              : 'profile-score-tone--low'
-          const scoreGradientClass = score >= 80
-            ? 'profile-score-bar-fill--high'
-            : score >= 60
-              ? 'profile-score-bar-fill--medium'
-              : 'profile-score-bar-fill--low'
-          const initials = toDisplayText(candidate.name, 'Candidate')
-            .split(' ')
-            .map((namePart) => namePart[0] || '')
-            .join('')
-            .slice(0, 2)
-            .toUpperCase()
-          const skillsByCategory = {
-            'Tools & Platforms': candidate.skills_structured?.tools_and_platforms,
-            Methodologies: candidate.skills_structured?.methodologies,
-            'Domain Expertise': candidate.skills_structured?.domain_expertise,
-            'Soft Skills': candidate.skills_structured?.soft_skills,
-          }
-          const experienceEntries = Array.isArray(candidate.experience) ? candidate.experience : []
-
-          return (
-            <div
-              className="candidate-result-card rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--card)] p-8 shadow-[var(--shadow-md)] transition-all duration-300"
-              key={candidate._bulkKey}
-            >
-              <div className="candidate-results__selection">
-                <label className="candidate-results__selection-label">
-                  <input
-                    checked={selectedIds.includes(candidate._bulkKey)}
-                    onChange={() => toggleCandidateSelection(candidate._bulkKey)}
-                    aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
-                    type="checkbox"
-                  />
-                  Select candidate
-                </label>
-              </div>
-
-              <div className="profile-layout">
-                <aside className="profile-left">
-                  <div className="profile-header-block">
-                    <div className="profile-avatar-lg">{initials}</div>
-                    <div>
-                      <h1 className="profile-name">{toDisplayText(candidate.name)}</h1>
-                      <div className="profile-subtitle">
-                        {[candidate.current_title, candidate.current_company].filter(Boolean).join(' · ')}
-                      </div>
-                    </div>
-                  </div>
-
-                  {score != null && (
-                    <div className="profile-score-card">
-                      <div className="profile-score-eyebrow">{hasRoleFitScore ? 'Role Fit Score' : 'Profile Score'}</div>
-                      <div className={`profile-score-big ${scoreToneClass}`}>{score}<span>%</span></div>
-                      <div className="profile-score-bar-track">
-                        <progress
-                          className={`profile-score-bar-fill ${scoreGradientClass}`}
-                          value={Math.max(0, Math.min(score, 100))}
-                          max={100}
-                        />
-                      </div>
-                      {candidate.matchScore?.fit && <div className={`profile-score-fit ${scoreToneClass}`}>{candidate.matchScore.fit} match</div>}
-                      {candidate.seniority_level && <div className="profile-score-seniority">{candidate.seniority_level}</div>}
-                    </div>
-                  )}
-
-                  <div className="profile-contact-block">
-                    {candidate.email && (
-                      <a href={`mailto:${candidate.email}`} className="profile-contact-item">
-                        <span className="profile-contact-dot" />
-                        {candidate.email}
-                      </a>
-                    )}
-                    {candidate.location && (
-                      <div className="profile-contact-item">
-                        <span className="profile-contact-dot" />
-                        {candidate.location}
-                      </div>
-                    )}
-                    {candidate.years_experience != null && (
-                      <div className="profile-contact-item">
-                        <span className="profile-contact-dot" />
-                        {candidate.years_experience} years experience
-                      </div>
-                    )}
-                  </div>
-
-                  {candidateTags[candidate._bulkKey]?.length > 0 && (
-                    <div className="profile-tag-row">
-                      {candidateTags[candidate._bulkKey].map((tag) => (
-                        <span className="profile-cat-tag" key={tag}>{tag}</span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="profile-action-stack">
-                    <button className="profile-btn-primary">Schedule Interview</button>
-                    <button className="profile-btn-ghost">View Full Resume</button>
-                    <button onClick={() => addCandidateToShortlist(candidate)} className="profile-btn-ghost">Add to Shortlist</button>
-                  </div>
-                </aside>
-
-                <main className="profile-right">
-                  <section className="profile-section">
-                    <h2 className="profile-section-heading">Summary</h2>
-                    <p className="profile-section-body">{toDisplayText(candidate.summary, 'No summary available')}</p>
-                  </section>
-
-                  <div className="profile-two-col">
-                    <section className="profile-analysis-box profile-strengths-box">
-                      <h2 className="profile-section-heading profile-heading-green">Strengths</h2>
-                      {candidateStrengths.length > 0
-                        ? candidateStrengths.map((strength, idx) => (
-                          <div className="profile-analysis-row" key={idx}>{strength}</div>
-                        ))
-                        : <div className="profile-analysis-empty">Run re-analysis to generate AI insights.</div>}
-                    </section>
-                    <section className="profile-analysis-box profile-considerations-box">
-                      <h2 className="profile-section-heading profile-heading-amber">Considerations</h2>
-                      {candidateConsiderations.length > 0
-                        ? candidateConsiderations.map((consideration, idx) => (
-                          <div className="profile-analysis-row" key={idx}>{consideration}</div>
-                        ))
-                        : <div className="profile-analysis-empty">Run re-analysis to generate AI insights.</div>}
-                    </section>
-                  </div>
-
-                  <section className="profile-section">
-                    <h2 className="profile-section-heading">Skills</h2>
-                    {candidate.skills_structured
-                      ? Object.entries(skillsByCategory).map(([category, skills]) => skills?.length > 0 && (
-                        <div className="profile-skill-group" key={category}>
-                          <div className="profile-skill-cat-label">{category}</div>
-                          <div className="profile-skill-pill-row">
-                            {skills.map((skill) => (
-                              <span className="profile-skill-pill" key={String(formatSkillLabel(skill))}>
-                                {formatSkillLabel(skill)}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))
-                      : candidateSkills.length > 0
-                        ? (
-                          <div className="profile-skill-pill-row">
-                            {candidateSkills.map((skill) => (
-                              <span className="profile-skill-pill" key={String(formatSkillLabel(skill))}>
-                                {formatSkillLabel(skill)}
-                              </span>
-                            ))}
-                          </div>
-                        )
-                        : null}
-                  </section>
-
-                  {experienceEntries.length > 0 && (
-                    <section className="profile-section">
-                      <h2 className="profile-section-heading">Experience</h2>
-                      {experienceEntries.map((job, idx) => (
-                        <div className="profile-job-row" key={idx}>
-                          <div className="profile-job-top">
-                            <span className="profile-job-title">{job.title}</span>
-                            <span className="profile-job-duration">
-                              {job.durationText || [job.startDate, job.endDate].filter(Boolean).join(' – ')}
-                            </span>
-                          </div>
-                          <div className="profile-job-company">{job.company}</div>
-                          {job.description && <div className="profile-job-desc">{job.description}</div>}
-                        </div>
-                      ))}
-                    </section>
-                  )}
-
-                  {candidate.matchScore?.score != null && (
-                    <section className="profile-section">
-                      <h2 className="profile-section-heading">Role Match Breakdown</h2>
-                      <div className="profile-breakdown-grid">
-                        {candidate.matchScore.breakdown?.requiredSkills && (
-                          <div className="profile-breakdown-item">
-                            <div className="profile-breakdown-label">Skills matched</div>
-                            <div className="profile-breakdown-val">
-                              {candidate.matchScore.breakdown.requiredSkills.matched}
-                              /{candidate.matchScore.breakdown.requiredSkills.total}
-                            </div>
-                          </div>
-                        )}
-                        {candidate.matchScore.breakdown?.experience && (
-                          <div className="profile-breakdown-item">
-                            <div className="profile-breakdown-label">Experience</div>
-                            <div
-                              className={`profile-breakdown-val ${candidate.matchScore.breakdown.experience.meetsMinimum ? 'profile-score-tone--high' : 'profile-score-tone--low'}`}
-                            >
-                              {candidate.matchScore.breakdown.experience.candidateYears} yrs
-                              {candidate.matchScore.breakdown.experience.meetsMinimum ? ' ✓' : ' (below min)'}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {candidate.matchScore.reason && <div className="profile-match-reason">{candidate.matchScore.reason}</div>}
-                    </section>
-                  )}
-                </main>
-              </div>
-            </div>
-          )
-        })}
       </div>
     </div>
   )
