@@ -834,12 +834,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         {sortedCandidates.map((candidate, index) => {
           const score = candidate.matchScore?.score ?? candidate.profile_score
           const isExpanded = expandedId === candidate.id
-          const scoreColor = score >= 80 ? '#c8ff00' : score >= 60 ? '#7ab3f7' : score != null ? '#ffa500' : '#333333'
-          const scoreGrad = score >= 80
-            ? 'linear-gradient(90deg,#c8ff00,#39ff9f)'
-            : score >= 60
-              ? '#7ab3f7'
-              : '#ffa500'
+          const scoreTone = score >= 80 ? 'strong' : score >= 60 ? 'good' : score != null ? 'possible' : 'unscored'
           const fitLabel = score >= 80 ? 'Strong match' : score >= 60 ? 'Good match' : score != null ? 'Possible match' : 'Not scored'
           const initials = String(candidate?.name || '')
             .split(' ')
@@ -847,7 +842,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             .join('')
             .slice(0, 2)
             .toUpperCase()
-          const topSkills = (candidate.top_skills || candidate.skills || [])
+          const topSkills = parseSkills(
+            Array.isArray(candidate.top_skills)
+              ? candidate.top_skills
+              : (candidate.top_skills || candidate.skills),
+          )
           const selected = selectedIds.includes(candidate._bulkKey)
 
           return (
@@ -857,7 +856,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               onClick={() => handleCardClick(candidate.id)}
             >
               <div className="rc-rank">#{index + 1}</div>
-              <div className="rc-avatar" style={{ borderColor: `${scoreColor}40` }}>
+              <div className={`rc-avatar rc-avatar--${scoreTone}`}>
                 {initials || 'NA'}
               </div>
               <div className="rc-name">{toDisplayText(candidate.name)}</div>
@@ -865,17 +864,17 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 {[candidate.current_title, candidate.years_experience ? `${candidate.years_experience}y` : null].filter(Boolean).join(' · ')}
               </div>
               <div className="rc-location">{candidate.location || 'Location unavailable'}</div>
-              <div className="rc-score" style={{ color: scoreColor }}>
+              <div className={`rc-score rc-score--${scoreTone}`}>
                 {score != null ? `${score}%` : '—'}
               </div>
               <div className="rc-score-track">
-                <div className="rc-score-fill" style={{
+                {/* inline-style-allow runtime-dimension */}
+                <div className={`rc-score-fill rc-score-fill--${scoreTone}`} style={{
                   width: `${score ?? 0}%`,
-                  background: score != null ? scoreGrad : '#1e1e1e',
                 }}
                 />
               </div>
-              <div className="rc-fit" style={{ color: scoreColor }}>{fitLabel}</div>
+              <div className={`rc-fit rc-fit--${scoreTone}`}>{fitLabel}</div>
               <div className="rc-skills">
                 {topSkills.slice(0, 3).map((skill) => (
                   <span className="rc-skill-tag" key={`${candidate._bulkKey}-${String(formatSkillLabel(skill))}`}>
@@ -905,7 +904,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       {expandedCandidate && (() => {
         const candidate = expandedCandidate
         const score = candidate.matchScore?.score ?? candidate.profile_score
-        const scoreColor = score >= 80 ? '#c8ff00' : score >= 60 ? '#7ab3f7' : '#ffa500'
+        const scoreTone = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'possible'
         const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
           ? candidate.strengths
           : Array.isArray(candidate.achievements)
@@ -932,7 +931,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 </div>
               </div>
               {score != null && (
-                <div className="dd-score-badge" style={{ color: scoreColor }}>
+                <div className={`dd-score-badge dd-score-badge--${scoreTone}`}>
                   {score}%
                 </div>
               )}
