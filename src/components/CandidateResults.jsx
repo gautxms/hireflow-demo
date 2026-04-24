@@ -847,7 +847,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
             .join('')
             .slice(0, 2)
             .toUpperCase()
-          const topSkills = (candidate.top_skills || candidate.skills || [])
+          const topSkills = parseSkills(
+            Array.isArray(candidate.top_skills)
+              ? candidate.top_skills
+              : (candidate.top_skills || candidate.skills),
+          )
           const selected = selectedIds.includes(candidate._bulkKey)
 
           return (
