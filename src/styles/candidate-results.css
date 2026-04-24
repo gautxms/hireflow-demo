@@ -40,7 +40,6 @@
 }
 
 .candidate-results-page__state-copy,
-.candidate-results-page__pagination-label,
 .candidate-results-page__empty-note {
   color: var(--color-text-secondary);
 }
@@ -157,12 +156,12 @@
   color: #f87171;
 }
 
-.bulk-label {
+.bulk-selected-label {
   font-family: 'DM Sans', sans-serif;
-  font-size: 12px;
-  color: #444444;
+  font-size: 13px;
+  color: #c8ff00;
+  font-weight: 600;
   margin-right: 4px;
-  margin-bottom: 0;
 }
 
 .jd-panel {
@@ -524,7 +523,7 @@
 }
 
 .candidate-results-page__empty-note,
-.candidate-results-page__pagination,
+.pagination,
 .candidate-results-list--cards {
   max-width: 1200px;
   margin-left: auto;
@@ -535,11 +534,58 @@
   margin-bottom: var(--spacing-base);
 }
 
-.candidate-results-page__pagination {
-  margin-bottom: 1.5rem;
+.pagination {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  margin-bottom: 1.5rem;
+  justify-content: center;
+}
+
+.page-btn {
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  color: #666666;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: #444444;
+  color: #ffffff;
+}
+
+.page-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: #555555;
+  padding: 0 8px;
+}
+
+.page-size-select {
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  color: #888888;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px 28px 8px 12px;
+  border-radius: 7px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 
 .candidate-results-list--cards {
