@@ -705,22 +705,24 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </>
       )}
 
-      <BulkActions selectedCount={selectedCandidates.length}>
-        <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
-        <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
-        <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
-        <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
-        <button className="touch-target bulk-btn" onClick={createShareLink} type="button">🔗 Share View</button>
-        <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
-        <input
-          className="touch-target candidate-results-page__tag-input"
-          value={tagDraft}
-          onChange={(event) => setTagDraft(event.target.value)}
-          placeholder="tag1, tag2"
-        />
-        <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
-        <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
-      </BulkActions>
+      {selectedCandidates.length > 0 && (
+        <BulkActions selectedCount={selectedCandidates.length}>
+          <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
+          <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
+          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
+          <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
+          <button className="touch-target bulk-btn" onClick={createShareLink} type="button">🔗 Share View</button>
+          <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
+          <input
+            className="touch-target candidate-results-page__tag-input"
+            value={tagDraft}
+            onChange={(event) => setTagDraft(event.target.value)}
+            placeholder="tag1, tag2"
+          />
+          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
+          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
+        </BulkActions>
+      )}
 
       <div className="ranking-stats">
         <div className="ranking-stat">
@@ -982,11 +984,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         </div>
       )}
 
-      <div className="candidate-results-page__pagination">
-        <button className="touch-target" type="button" disabled={pagination.page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button>
-        <span className="candidate-results-page__pagination-label">Page {pagination.page} of {pagination.totalPages}</span>
-        <button className="touch-target" type="button" disabled={!pagination.hasNextPage} onClick={() => setPage((current) => current + 1)}>Next</button>
-        <select className="touch-target" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+      <div className="pagination">
+        <button className="touch-target page-btn" type="button" disabled={pagination.page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button>
+        <span className="page-info">Page {pagination.page} of {pagination.totalPages}</span>
+        <button className="touch-target page-btn" type="button" disabled={!pagination.hasNextPage} onClick={() => setPage((current) => current + 1)}>Next</button>
+        <select className="touch-target page-size-select" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
           <option value={10}>10 / page</option>
           <option value={25}>25 / page</option>
           <option value={50}>50 / page</option>
