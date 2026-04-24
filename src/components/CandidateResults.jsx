@@ -139,6 +139,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
   const [expandedId, setExpandedId] = useState(null)
+  const [shortlistOpen, setShortlistOpen] = useState(false)
 
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
@@ -659,25 +660,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
 
-      <ShortlistManager
-        shortlists={shortlists}
-        selectedShortlistId={selectedShortlistId}
-        shortlistDetails={shortlistDetails}
-        onSelectShortlist={setSelectedShortlistId}
-        onCreateShortlist={createShortlist}
-        onChangeSort={async (sortOption) => {
-          setShortlistSort(sortOption)
-          await loadShortlistDetails(selectedShortlistId, sortOption)
-        }}
-        onRefresh={async () => {
-          await loadShortlists()
-          await loadShortlistDetails(selectedShortlistId)
-        }}
-        onRemoveCandidate={removeCandidateFromShortlist}
-        loading={shortlistLoading}
-        error={shortlistError}
-      />
-
       <CandidateFilters
         candidates={displayCandidates}
         searchText={searchText}
@@ -688,7 +670,40 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         onSkillsFilter={setSelectedSkills}
         onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 50 }))}
         onSort={(next) => setSortBy(normalizeSortBy(next))}
+        shortlistOpen={shortlistOpen}
+        onToggleShortlist={setShortlistOpen}
       />
+
+      {shortlistOpen && (
+        <>
+          <div className="panel-overlay" onClick={() => setShortlistOpen(false)} aria-hidden="true" />
+          <div className="shortlist-panel" role="dialog" aria-modal="true" aria-label="Candidate shortlists">
+            <div className="sp-header">
+              <div className="sp-title">Shortlists</div>
+              <button type="button" className="touch-target sp-close" onClick={() => setShortlistOpen(false)}>✕</button>
+            </div>
+
+            <ShortlistManager
+              shortlists={shortlists}
+              selectedShortlistId={selectedShortlistId}
+              shortlistDetails={shortlistDetails}
+              onSelectShortlist={setSelectedShortlistId}
+              onCreateShortlist={createShortlist}
+              onChangeSort={async (sortOption) => {
+                setShortlistSort(sortOption)
+                await loadShortlistDetails(selectedShortlistId, sortOption)
+              }}
+              onRefresh={async () => {
+                await loadShortlists()
+                await loadShortlistDetails(selectedShortlistId)
+              }}
+              onRemoveCandidate={removeCandidateFromShortlist}
+              loading={shortlistLoading}
+              error={shortlistError}
+            />
+          </div>
+        </>
+      )}
 
       <BulkActions selectedCount={selectedCandidates.length}>
         <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
