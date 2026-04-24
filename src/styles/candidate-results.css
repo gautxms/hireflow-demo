@@ -1094,3 +1094,494 @@
   50% { opacity: 0.95; }
   100% { opacity: 0.45; }
 }
+
+.results-select-all {
+  margin: 0 0 12px;
+}
+
+.results-select-all__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #888888;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+}
+
+.results-select-all__label input {
+  width: 15px;
+  height: 15px;
+  accent-color: #c8ff00;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 1024px) {
+  .results-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.result-card {
+  background: #111111;
+  border: 1px solid #1e1e1e;
+  border-radius: 14px;
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-card:hover {
+  border-color: #2a2a2a;
+  background: #141414;
+  transform: translateY(-1px);
+}
+
+.result-card--active {
+  border-color: rgba(200, 255, 0, 0.35) !important;
+  background: rgba(200, 255, 0, 0.03) !important;
+}
+
+.rc-rank {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 8px;
+}
+
+.rc-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(200, 255, 0, 0.08);
+  border: 1px solid rgba(200, 255, 0, 0.15);
+  color: #c8ff00;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.rc-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.rc-role {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #666666;
+  margin-bottom: 2px;
+}
+
+.rc-location {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #444444;
+  margin-bottom: 12px;
+}
+
+.rc-score {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rc-score-track {
+  background: #1e1e1e;
+  border-radius: 100px;
+  height: 3px;
+  margin: 6px 0 4px;
+}
+
+.rc-score-fill {
+  height: 3px;
+  border-radius: 100px;
+}
+
+.rc-fit {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.rc-skills {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.rc-skill-tag {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #666666;
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.rc-expand-hint {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #333333;
+  margin-top: auto;
+}
+
+.result-card--active .rc-expand-hint {
+  color: rgba(200, 255, 0, 0.5);
+}
+
+.rc-check {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 15px;
+  height: 15px;
+  accent-color: #c8ff00;
+  cursor: pointer;
+}
+
+.detail-drawer {
+  background: #111111;
+  border: 1px solid rgba(200, 255, 0, 0.2);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 24px;
+  scroll-margin-top: 80px;
+}
+
+.dd-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #1a1a1a;
+  flex-wrap: wrap;
+}
+
+.dd-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(200, 255, 0, 0.1);
+  border: 1px solid rgba(200, 255, 0, 0.2);
+  color: #c8ff00;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dd-header-info {
+  flex: 1;
+}
+
+.dd-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.dd-subtitle {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: #666666;
+}
+
+.dd-score-badge {
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.dd-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dd-btn-primary {
+  background: #c8ff00;
+  color: #000;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dd-btn-primary:hover {
+  background: #b8ec00;
+}
+
+.dd-btn-ghost {
+  background: transparent;
+  color: #888888;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #2a2a2a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dd-btn-ghost:hover {
+  border-color: #444;
+  color: #fff;
+}
+
+.dd-close {
+  background: transparent;
+  border: none;
+  color: #444444;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-left: auto;
+  transition: color 0.15s;
+}
+
+.dd-close:hover {
+  color: #ffffff;
+}
+
+.dd-body {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 900px) {
+  .dd-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dd-col {
+  min-width: 0;
+}
+
+.dd-section-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #444444;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.dd-section-label--spaced {
+  margin-top: 20px;
+}
+
+.dd-section-label--considerations {
+  margin-top: 16px;
+}
+
+.dd-summary {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: #777777;
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.dd-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-fact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.dd-fact-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #444444;
+}
+
+.dd-fact-val {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #aaaaaa;
+  font-weight: 500;
+}
+
+.dd-fact-link {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #888888;
+  text-decoration: none;
+}
+
+.dd-fact-link:hover {
+  color: #c8ff00;
+}
+
+.dd-job {
+  margin-bottom: 12px;
+}
+
+.dd-job-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cccccc;
+}
+
+.dd-job-meta {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #555555;
+}
+
+.dd-analysis-box {
+  background: #0d0d0d;
+  border-radius: 10px;
+  padding: 14px;
+  border-top: 2px solid transparent;
+}
+
+.dd-strengths {
+  border-top-color: rgba(200, 255, 0, 0.25);
+}
+
+.dd-considerations {
+  border-top-color: rgba(255, 165, 0, 0.25);
+}
+
+.dd-analysis-item {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: #777777;
+  line-height: 1.6;
+  padding: 7px 0;
+  border-bottom: 1px solid #141414;
+}
+
+.dd-analysis-item:last-child {
+  border-bottom: none;
+}
+
+.dd-analysis-empty {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #333333;
+  font-style: italic;
+}
+
+.dd-top-skills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.dd-top-skill-tag {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #c8ff00;
+  background: rgba(200, 255, 0, 0.08);
+  border: 1px solid rgba(200, 255, 0, 0.2);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.dd-skill-group {
+  margin-top: 14px;
+}
+
+.dd-skill-cat {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #333333;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.dd-skill-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.dd-skill-pill {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #666666;
+  background: #111111;
+  border: 1px solid #1e1e1e;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.dd-skill-more {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #444444;
+  padding: 3px 6px;
+}
+
+.dd-view-full {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: #666666;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: all 0.15s;
+}
+
+.dd-view-full:hover {
+  border-color: #444444;
+  color: #ffffff;
+}
