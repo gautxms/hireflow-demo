@@ -1181,6 +1181,22 @@
   margin-bottom: 10px;
 }
 
+.rc-avatar--strong {
+  border-color: rgba(200, 255, 0, 0.25);
+}
+
+.rc-avatar--good {
+  border-color: rgba(122, 179, 247, 0.4);
+}
+
+.rc-avatar--possible {
+  border-color: rgba(255, 165, 0, 0.4);
+}
+
+.rc-avatar--unscored {
+  border-color: rgba(51, 51, 51, 0.4);
+}
+
 .rc-name {
   font-family: 'DM Sans', sans-serif;
   font-size: 15px;
@@ -1209,6 +1225,22 @@
   line-height: 1;
 }
 
+.rc-score--strong {
+  color: #c8ff00;
+}
+
+.rc-score--good {
+  color: #7ab3f7;
+}
+
+.rc-score--possible {
+  color: #ffa500;
+}
+
+.rc-score--unscored {
+  color: #333333;
+}
+
 .rc-score-track {
   background: #1e1e1e;
   border-radius: 100px;
@@ -1219,6 +1251,23 @@
 .rc-score-fill {
   height: 3px;
   border-radius: 100px;
+  background: #1e1e1e;
+}
+
+.rc-score-fill--strong {
+  background: linear-gradient(90deg, #c8ff00, #39ff9f);
+}
+
+.rc-score-fill--good {
+  background: #7ab3f7;
+}
+
+.rc-score-fill--possible {
+  background: #ffa500;
+}
+
+.rc-score-fill--unscored {
+  background: #1e1e1e;
 }
 
 .rc-fit {
@@ -1226,6 +1275,22 @@
   font-size: 11px;
   font-weight: 600;
   margin-bottom: 12px;
+}
+
+.rc-fit--strong {
+  color: #c8ff00;
+}
+
+.rc-fit--good {
+  color: #7ab3f7;
+}
+
+.rc-fit--possible {
+  color: #ffa500;
+}
+
+.rc-fit--unscored {
+  color: #333333;
 }
 
 .rc-skills {
@@ -1324,6 +1389,18 @@
   font-weight: 700;
   line-height: 1;
   flex-shrink: 0;
+}
+
+.dd-score-badge--strong {
+  color: #c8ff00;
+}
+
+.dd-score-badge--good {
+  color: #7ab3f7;
+}
+
+.dd-score-badge--possible {
+  color: #ffa500;
 }
 
 .dd-actions {
