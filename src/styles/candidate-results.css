@@ -91,6 +91,10 @@
 
 .candidate-results-page__tag-input {
   min-width: 160px;
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  color: #ffffff;
+  font-family: 'DM Sans', sans-serif;
 }
 
 .bulk-toolbar,
@@ -286,7 +290,7 @@
 .ranking-stat-num {
   font-family: 'Syne', sans-serif;
   font-size: 28px;
-  font-weight: 800;
+  font-weight: 700;
   color: #ffffff;
   line-height: 1;
 }
@@ -332,7 +336,8 @@
 }
 
 .cand-row--selected {
-  background: rgba(200, 255, 0, 0.08);
+  background: rgba(200, 255, 0, 0.06);
+  border-left: 2px solid rgba(200, 255, 0, 0.4);
 }
 
 .cand-rank {

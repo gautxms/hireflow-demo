@@ -27,7 +27,12 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
 function parseSkills(skills) {
   if (Array.isArray(skills)) {
-    return skills.map((skill) => String(skill || '').trim()).filter(Boolean)
+    return skills
+      .map((skill) => (typeof skill === 'object' && skill !== null
+        ? skill.name || skill.label || JSON.stringify(skill)
+        : skill))
+      .map((skill) => String(skill || '').trim())
+      .filter(Boolean)
   }
 
   return String(skills || '')
@@ -41,6 +46,14 @@ function normalizeSkillKey(skill) {
     .trim()
     .toLowerCase()
     .replace(/\s*[()]/g, '')
+}
+
+function formatSkillLabel(skill) {
+  if (typeof skill === 'object' && skill !== null) {
+    return skill.name || skill.label || JSON.stringify(skill)
+  }
+
+  return skill
 }
 
 function parseYears(experience) {
@@ -842,7 +855,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 </div>
                 <div className="cand-skill-list">
                   {candidateSkills.slice(0, 4).map((skill) => (
-                    <span className="cand-skill-pill" key={`${candidate._bulkKey}-${skill}`}>{skill}</span>
+                    <span className="cand-skill-pill" key={`${candidate._bulkKey}-${String(formatSkillLabel(skill))}`}>
+                      {formatSkillLabel(skill)}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -1051,7 +1066,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                           <div className="profile-skill-cat-label">{category}</div>
                           <div className="profile-skill-pill-row">
                             {skills.map((skill) => (
-                              <span className="profile-skill-pill" key={skill}>{skill}</span>
+                              <span className="profile-skill-pill" key={String(formatSkillLabel(skill))}>
+                                {formatSkillLabel(skill)}
+                              </span>
                             ))}
                           </div>
                         </div>
@@ -1060,7 +1077,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                         ? (
                           <div className="profile-skill-pill-row">
                             {candidateSkills.map((skill) => (
-                              <span className="profile-skill-pill" key={skill}>{skill}</span>
+                              <span className="profile-skill-pill" key={String(formatSkillLabel(skill))}>
+                                {formatSkillLabel(skill)}
+                              </span>
                             ))}
                           </div>
                         )
