@@ -334,7 +334,43 @@ test('analyzeWithOpenAI surfaces provider status failures before parse fallback'
   )
 })
 
-test('analyzeWithOpenAI maps max_output_tokens incomplete responses to truncated errors', async () => {
+test('analyzeWithOpenAI retries once with higher max_output_tokens for incomplete responses', async () => {
+  let callCount = 0
+  const response = await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'oa-key',
+    model: 'gpt-5-nano-2025-08-07',
+    fetchImpl: async (_url, request) => {
+      callCount += 1
+      const body = JSON.parse(request.body)
+      if (callCount === 1) {
+        assert.equal(body.max_output_tokens, 2000)
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'resp_456',
+            status: 'incomplete',
+            incomplete_details: { reason: 'max_output_tokens' },
+          }),
+        }
+      }
+
+      assert.equal(body.max_output_tokens, 4000)
+      return {
+        ok: true,
+        json: async () => ({
+          id: 'resp_789',
+          status: 'completed',
+          output_text: '{"candidates":[{"id":"cand-openai-retry"}]}',
+        }),
+      }
+    },
+  })
+
+  assert.equal(callCount, 2)
+  assert.equal(response.result.candidates[0].id, 'cand-openai-retry')
+})
+
+test('analyzeWithOpenAI surfaces truncated error when retry is still incomplete', async () => {
   await assert.rejects(
     () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
       apiKey: 'oa-key',
@@ -481,6 +517,6 @@ test('analyzeResumeWithConfiguredFallback skips anthropic for non-pdf mime types
 
   assert.equal(anthropicCalled, false)
   assert.equal(response.result.candidates[0].id, 'cand-openai')
-  assert.equal(response.attempts[0].failureCategory, 'invalid_request_error')
-  assert.equal(response.attempts[1].success, true)
+  assert.equal(response.attempts.length, 1)
+  assert.equal(response.attempts[0].success, true)
 })
