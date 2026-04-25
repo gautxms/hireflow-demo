@@ -93,6 +93,10 @@ router.post(
     try {
       await ensureResumeParseColumns()
       const selectedJobDescriptionId = req.body.jobDescriptionId || null
+      console.log(
+        '[HireFlow] JD received at endpoint:',
+        selectedJobDescriptionId ? `${String(selectedJobDescriptionId).slice(0, 80)}...` : 'NONE',
+      )
 
       if (selectedJobDescriptionId) {
         const jdResult = await pool.query(

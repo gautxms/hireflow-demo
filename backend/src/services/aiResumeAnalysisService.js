@@ -572,6 +572,10 @@ export async function analyzeWithAnthropic(
   const prompt = buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
+  console.log(
+    '[HireFlow] JD in AI user message:',
+    prompt.includes('Job Description Context:\nAVAILABLE') ? 'YES' : 'NO — JD missing from prompt',
+  )
 
   const response = await client.messages.create({
     model,
@@ -705,6 +709,10 @@ export async function analyzeWithOpenAI(
   const prompt = buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
+  console.log(
+    '[HireFlow] JD in AI user message:',
+    prompt.includes('Job Description Context:\nAVAILABLE') ? 'YES' : 'NO — JD missing from prompt',
+  )
 
   const effectiveModelCapabilities = modelCapabilities && typeof modelCapabilities === 'object'
     ? modelCapabilities
