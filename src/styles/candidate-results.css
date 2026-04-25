@@ -288,7 +288,7 @@
 
 .ranking-stat-num {
   font-family: 'Syne', sans-serif;
-  font-size: 28px;
+  font-size: min(28px, 7vw);
   font-weight: 700;
   color: #ffffff;
   line-height: 1;
@@ -1391,7 +1391,14 @@
   width: 14px;
   height: 14px;
   accent-color: #c8ff00;
+  opacity: 0.6;
   cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.rc-checkbox:hover,
+.rc-checkbox:checked {
+  opacity: 1;
 }
 
 /* ── Detail drawer ────────────────────────────────── */

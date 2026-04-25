@@ -28,7 +28,7 @@ export default function CandidateFilters({
   searchText = '',
   selectedSkills = [],
   expRange = { min: '0', max: '50' },
-  sortBy = 'name',
+  sortBy = 'score',
   onSearch,
   onSkillsFilter,
   onExperienceFilter,
@@ -111,7 +111,7 @@ export default function CandidateFilters({
           value={sortBy}
           onChange={(event) => onSort?.(event.target.value)}
         >
-          <option value="match_score">Best match first</option>
+          <option value="score">Best match</option>
           <option value="name">Name A–Z</option>
           <option value="experience">Most experienced</option>
           <option value="upload_date">Recently added</option>

@@ -92,7 +92,7 @@ function filterAndSortCandidates(candidates, filters) {
     searchText = '',
     selectedSkills = [],
     expRange = { min: '', max: '' },
-    sortBy = 'name',
+    sortBy = 'score',
   } = filters || {}
 
   const query = searchText.trim().toLowerCase()
@@ -148,7 +148,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
-  const [sortBy, setSortBy] = useState('name')
+  const [sortBy, setSortBy] = useState('score')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [resultsError, setResultsError] = useState('')
@@ -744,8 +744,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           <div className="ranking-stat-label">Strong matches</div>
         </div>
         <div className="ranking-stat">
-          <div className="ranking-stat-num">{avgScore}%</div>
-          <div className="ranking-stat-label">Avg score</div>
+          <div className="ranking-stat-num">{(avgScore / 10).toFixed(1)}</div>
+          <div className="ranking-stat-label">Avg score /10</div>
         </div>
       </div>
 
