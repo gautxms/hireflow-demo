@@ -710,54 +710,68 @@ export async function analyzeWithOpenAI(
     ? modelCapabilities
     : OPENAI_MODEL_CAPABILITIES.default
 
-  const requestBody = {
-    model,
-    max_output_tokens: 2000,
-    input: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_file',
-            filename: 'resume',
-            file_data: `data:${mediaType};base64,${fileBufferBase64}`,
-          },
-          {
-            type: 'input_text',
-            text: prompt,
-          },
-        ],
+  const buildRequestBody = (maxOutputTokens) => {
+    const requestBody = {
+      model,
+      max_output_tokens: maxOutputTokens,
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_file',
+              filename: 'resume',
+              file_data: `data:${mediaType};base64,${fileBufferBase64}`,
+            },
+            {
+              type: 'input_text',
+              text: prompt,
+            },
+          ],
+        },
+      ],
+    }
+
+    if (effectiveModelCapabilities.supportsTemperature === true) {
+      requestBody.temperature = 0
+    }
+    return requestBody
+  }
+
+  const callOpenAi = async (maxOutputTokens) => {
+    const response = await fetchImpl('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
       },
-    ],
+      body: JSON.stringify(buildRequestBody(maxOutputTokens)),
+    })
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null)
+      const message = errorPayload?.error?.message || `OpenAI request failed with status ${response.status}`
+      throw new Error(message)
+    }
+
+    const payload = await response.json()
+    if (payload?.error?.message) {
+      throw new Error(String(payload.error.message))
+    }
+
+    return payload
   }
 
-  if (effectiveModelCapabilities.supportsTemperature === true) {
-    requestBody.temperature = 0
+  let payload = await callOpenAi(2000)
+  let responseStatus = String(payload?.status || '').toLowerCase()
+  let incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
+  if (responseStatus === 'incomplete' && incompleteReason.toLowerCase() === 'max_output_tokens') {
+    payload = await callOpenAi(4000)
+    responseStatus = String(payload?.status || '').toLowerCase()
+    incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
   }
 
-  const response = await fetchImpl('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(requestBody),
-  })
-
-  if (!response.ok) {
-    const errorPayload = await response.json().catch(() => null)
-    const message = errorPayload?.error?.message || `OpenAI request failed with status ${response.status}`
-    throw new Error(message)
-  }
-
-  const payload = await response.json()
-  if (payload?.error?.message) {
-    throw new Error(String(payload.error.message))
-  }
-
-  const responseStatus = String(payload?.status || '').toLowerCase()
   if (responseStatus && responseStatus !== 'completed') {
-    const incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
     if (incompleteReason.toLowerCase() === 'max_output_tokens') {
       throw createProviderResponseFormatError({
         category: 'response_truncated_error',
@@ -820,15 +834,12 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const attemptHistory = []
 
   for (const entry of attemptPlan) {
-    try {
-      if (!providerSupportsMimeType(entry.provider, mimeType)) {
-        throw new Error(`invalid_request_error::${JSON.stringify({
-          technicalDetails: `Unsupported mime type for ${entry.provider}: ${mimeType}. Anthropic document inputs must be application/pdf.`,
-          provider: entry.provider,
-          model: entry.model,
-        })}`)
-      }
+    if (!providerSupportsMimeType(entry.provider, mimeType)) {
+      console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${mimeType}.`)
+      continue
+    }
 
+    try {
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
       const response = await adapter(fileBufferBase64, mimeType, filename, {
         apiKey: entry.apiKey,
