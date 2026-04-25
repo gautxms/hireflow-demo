@@ -152,7 +152,7 @@ test('analyzeWithAnthropic embeds JD mode contract in request payload', async ()
 })
 
 
-test('analyzeWithAnthropic sends document payload for word uploads', async () => {
+test('analyzeWithAnthropic sends document payload for pdf uploads', async () => {
   let capturedRequest = null
   const anthropicClientFactory = () => ({
     messages: {
@@ -166,7 +166,7 @@ test('analyzeWithAnthropic sends document payload for word uploads', async () =>
     },
   })
 
-  const response = await analyzeWithAnthropic('d29yayBleHBlcmllbmNlIHNraWxscw==', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'resume.docx', {
+  const response = await analyzeWithAnthropic('d29yayBleHBlcmllbmNlIHNraWxscw==', 'application/pdf', 'resume.pdf', {
     apiKey: 'anth-key',
     model: 'claude-sonnet-4',
     systemPromptConfig: { systemPrompt: 'Base prompt' },
@@ -175,7 +175,7 @@ test('analyzeWithAnthropic sends document payload for word uploads', async () =>
 
   assert.equal(response.result.candidates[0].id, 'cand-word')
   assert.equal(capturedRequest.messages[0].content[0].type, 'document')
-  assert.equal(capturedRequest.messages[0].content[0].source.media_type, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  assert.equal(capturedRequest.messages[0].content[0].source.media_type, 'application/pdf')
 })
 
 test('analyzeWithOpenAI embeds JD mode contract in request payload', async () => {
@@ -510,7 +510,7 @@ test('analyzeResumeWithConfiguredFallback records failure categories for failove
   assert.equal(response.attempts[1].success, true)
 })
 
-test('analyzeResumeWithConfiguredFallback allows anthropic for docx mime types', async () => {
+test('analyzeResumeWithConfiguredFallback skips anthropic for docx mime types and falls back to openai', async () => {
   const credentials = {
     activeProvider: 'anthropic',
     providers: {
@@ -554,9 +554,10 @@ test('analyzeResumeWithConfiguredFallback allows anthropic for docx mime types',
     },
   )
 
-  assert.equal(anthropicCalled, true)
-  assert.equal(openAiCalled, false)
-  assert.equal(response.result.candidates[0].id, 'cand-anthropic-docx')
+  assert.equal(anthropicCalled, false)
+  assert.equal(openAiCalled, true)
+  assert.equal(response.result.candidates[0].id, 'cand-openai')
   assert.equal(response.attempts.length, 1)
   assert.equal(response.attempts[0].success, true)
+  assert.equal(response.attempts[0].provider, 'openai-primary')
 })

@@ -8,8 +8,6 @@ const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
 const MIME_TYPE_MAP = {
   'application/pdf': 'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/msword': 'application/msword',
 }
 const PROVIDER_ORDER = ['anthropic', 'openai']
 const OPENAI_MODEL_CAPABILITIES = {
@@ -442,7 +440,7 @@ function providerSupportsMimeType(provider, mimeType) {
   const normalizedProvider = String(provider || '').trim().toLowerCase()
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
   if (normalizedProvider === 'anthropic') {
-    return ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'].includes(normalizedMimeType)
+    return ['application/pdf'].includes(normalizedMimeType)
   }
   return true
 }
