@@ -357,6 +357,15 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         throw new Error('Authentication required. Please log in first.')
       }
 
+      const selectedJobDescription = jobDescriptions.find((jd) => jd.id === selectedJobDescriptionId)
+      const jobDescriptionLogSnippet = selectedJobDescription
+        ? `${selectedJobDescription.title || selectedJobDescriptionId}`.slice(0, 80)
+        : ''
+      console.log(
+        '[HireFlow] Sending JD to backend:',
+        jobDescriptionLogSnippet ? `${jobDescriptionLogSnippet}...` : 'NONE — no JD set',
+      )
+
       const totalChunksAllFiles = uploadedFiles.reduce((sum, item) => sum + Math.ceil(item.file.size / CHUNK_SIZE), 0)
       let uploadedChunkCount = 0
       setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })

@@ -23,6 +23,10 @@ const chunkUpload = multer({
 router.post('/init', requireAuth, async (req, res) => {
   try {
     const { filename, fileSize, mimeType, jobDescriptionId } = req.body || {}
+    console.log(
+      '[HireFlow] JD received at endpoint:',
+      jobDescriptionId ? `${String(jobDescriptionId).slice(0, 80)}...` : 'NONE',
+    )
 
     if (!filename || !fileSize) {
       return res.status(400).json({ error: 'filename and fileSize are required' })
