@@ -1,7 +1,7 @@
 import { pool } from '../db/client.js'
 import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
-export const MAX_SYSTEM_PROMPT_LENGTH = 12000
+export const MAX_SYSTEM_PROMPT_LENGTH = 50000
 export const DEFAULT_SYSTEM_PROMPT = `You are a resume analysis engine for a single candidate profile.
 
 Primary goal:

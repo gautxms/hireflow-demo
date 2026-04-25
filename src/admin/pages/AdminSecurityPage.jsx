@@ -13,7 +13,7 @@ import {
 
 const PROVIDERS = ['anthropic', 'openai']
 const KEY_LABELS = ['primary', 'fallback']
-const MAX_SYSTEM_PROMPT_LENGTH = 12000
+const MAX_SYSTEM_PROMPT_LENGTH = 50000
 
 function buildEmptyForm() {
   return {
