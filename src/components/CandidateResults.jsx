@@ -818,12 +818,12 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               </div>
 
               {score != null && (
-                <div className="rc-bar-track">
-                  <div
-                    className={`rc-bar-fill rc-bar--${tier}`}
-                    style={{ width: `${score}%` }}
-                  />
-                </div>
+                <progress
+                  className={`rc-bar-progress rc-bar--${tier}`}
+                  value={score}
+                  max={100}
+                  aria-label={`Match score ${score} out of 100`}
+                />
               )}
 
               {(candidate.matchScore?.reason || candidate.profile_score != null) && (
@@ -935,7 +935,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                 <div className="dd-col-label">Summary</div>
                 <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
 
-                <div className="dd-col-label" style={{ marginTop: '16px' }}>Key facts</div>
+                <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
                 <div className="dd-facts">
                   {candidate.years_experience != null && (
                     <div className="dd-fact">
@@ -957,7 +957,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   )}
                 </div>
 
-                <div className="dd-col-label" style={{ marginTop: '16px' }}>Recent experience</div>
+                <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
                 {experienceEntries.map((job, idx) => (
                   <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
                     <div className="dd-job-title">{job.title}</div>
@@ -978,7 +978,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
                 </div>
 
-                <div className="dd-col-label" style={{ marginTop: '14px' }}>Considerations</div>
+                <div className="dd-col-label dd-col-label--mt-14">Considerations</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
                   {candidateConsiderations.length > 0
                     ? candidateConsiderations.map((consideration, idx) => (
