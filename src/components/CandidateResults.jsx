@@ -71,6 +71,22 @@ function parseUploadDate(candidate) {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
+const toTenScale = (score) => {
+  if (score == null) return null
+  return (score / 10).toFixed(1)
+}
+
+const scoreTier = (score) => {
+  if (score == null) return 'unscored'
+  if (score >= 80) return 'strong'
+  if (score >= 60) return 'possible'
+  return 'low'
+}
+
+const activeScore = (candidate) => (
+  candidate?.matchScore?.score ?? candidate?.profile_score ?? null
+)
+
 function filterAndSortCandidates(candidates, filters) {
   const {
     searchText = '',
@@ -383,22 +399,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds)
-  const activeScore = useCallback((candidate) => {
-    const jdScore = candidate?.matchScore?.score
-    const profileScore = candidate?.profile_score ?? candidate?.score
-    const resolved = hasJobDescription ? jdScore : profileScore
-    return Number(resolved ?? 0)
-  }, [hasJobDescription])
 
   const avgScore = filtered.length
-    ? Math.round(filtered.reduce((sum, candidate) => sum + activeScore(candidate), 0) / filtered.length)
+    ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
     : 0
   const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
   const sortedCandidates = useMemo(() => (
     [...visibleCandidates].sort((a, b) => {
-      const sA = a.matchScore?.score ?? a.profile_score ?? 0
-      const sB = b.matchScore?.score ?? b.profile_score ?? 0
-      return sB - sA
+      return (activeScore(b) ?? -1) - (activeScore(a) ?? -1)
     })
   ), [visibleCandidates])
 
@@ -411,13 +419,15 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   }
 
   const handleCardClick = (id) => {
-    setExpandedId((currentExpandedId) => (currentExpandedId === id ? null : id))
-    setTimeout(() => {
-      document.getElementById('candidate-detail')?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    }, 100)
+    setExpandedId((previousId) => {
+      const nextId = previousId === id ? null : id
+      if (nextId === id) {
+        setTimeout(() => {
+          document.getElementById('detail-drawer')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }, 50)
+      }
+      return nextId
+    })
   }
 
   const exportCSV = async (selected) => {
@@ -753,10 +763,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
       <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
-          const score = candidate.matchScore?.score ?? candidate.profile_score
+          const score = activeScore(candidate)
+          const tier = scoreTier(score)
+          const displayScore = toTenScale(score)
           const isExpanded = expandedId === candidate.id
-          const scoreTone = score >= 80 ? 'strong' : score >= 60 ? 'good' : score != null ? 'possible' : 'unscored'
-          const fitLabel = score >= 80 ? 'Strong match' : score >= 60 ? 'Good match' : score != null ? 'Possible match' : 'Not scored'
           const initials = String(candidate?.name || '')
             .split(' ')
             .map((part) => part[0] || '')
@@ -773,42 +783,88 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           return (
             <div
               key={candidate._bulkKey}
-              className={`result-card${isExpanded ? ' result-card--active' : ''}`}
+              className={`result-card result-card--${tier}${isExpanded ? ' result-card--open' : ''}`}
               onClick={() => handleCardClick(candidate.id)}
             >
               <div className="rc-rank">#{index + 1}</div>
-              <div className={`rc-avatar rc-avatar--${scoreTone}`}>
-                {initials || 'NA'}
+
+              <div className="rc-top">
+                <div className="rc-avatar">{initials || 'NA'}</div>
+                <div className="rc-identity">
+                  <div className="rc-name">{toDisplayText(candidate.name)}</div>
+                  <div className="rc-meta">
+                    {[candidate.current_title, candidate.location].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <div className="rc-score-block">
+                  {displayScore != null ? (
+                    <>
+                      <div className="rc-score-num">
+                        {displayScore}
+                        <span className="rc-score-denom">/10</span>
+                      </div>
+                      <div className={`rc-fit-label rc-fit--${tier}`}>
+                        {tier === 'strong'
+                          ? 'Strong match'
+                          : tier === 'possible'
+                            ? 'Possible match'
+                            : 'Low match'}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rc-score-empty">Not scored</div>
+                  )}
+                </div>
               </div>
-              <div className="rc-name">{toDisplayText(candidate.name)}</div>
-              <div className="rc-role">
-                {[candidate.current_title, candidate.years_experience ? `${candidate.years_experience}y` : null].filter(Boolean).join(' · ')}
-              </div>
-              <div className="rc-location">{candidate.location || 'Location unavailable'}</div>
-              <div className={`rc-score rc-score--${scoreTone}`}>
-                {score != null ? `${score}%` : '—'}
-              </div>
-              <div className="rc-score-track">
-                {/* inline-style-allow runtime-dimension */}
-                <div className={`rc-score-fill rc-score-fill--${scoreTone}`} style={{
-                  width: `${score ?? 0}%`,
-                }}
-                />
-              </div>
-              <div className={`rc-fit rc-fit--${scoreTone}`}>{fitLabel}</div>
+
+              {score != null && (
+                <div className="rc-bar-track">
+                  <div
+                    className={`rc-bar-fill rc-bar--${tier}`}
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+              )}
+
+              {(candidate.matchScore?.reason || candidate.profile_score != null) && (
+                <div className="rc-reasoning">
+                  <div className="rc-reasoning-label">
+                    <span className="rc-reasoning-dot" />
+                    AI reasoning
+                  </div>
+                  <div className="rc-reasoning-text">
+                    {candidate.matchScore?.reason
+                      ?? 'General profile score based on experience depth, skill breadth, and career progression.'}
+                  </div>
+                </div>
+              )}
+
               <div className="rc-skills">
                 {topSkills.slice(0, 3).map((skill) => (
-                  <span className="rc-skill-tag" key={`${candidate._bulkKey}-${String(formatSkillLabel(skill))}`}>
+                  <span className="rc-skill" key={`${candidate._bulkKey}-${String(formatSkillLabel(skill))}`}>
                     {formatSkillLabel(skill)}
                   </span>
                 ))}
+                {topSkills.length > 3 && (
+                  <span className="rc-skill-more">+{topSkills.length - 3}</span>
+                )}
               </div>
-              <div className="rc-expand-hint">
-                {isExpanded ? 'Click to collapse ↑' : 'Click to expand ↓'}
+
+              <div className="rc-footer">
+                <span className="rc-footer-meta">
+                  {[
+                    candidate.years_experience != null ? `${candidate.years_experience} yrs exp` : null,
+                    candidate.seniority_level,
+                  ].filter(Boolean).join(' · ')}
+                </span>
+                <span className="rc-expand-hint">
+                  {isExpanded ? '↑ collapse' : '↓ expand'}
+                </span>
               </div>
+
               <input
                 type="checkbox"
-                className="rc-check"
+                className="rc-checkbox"
                 checked={selected}
                 onChange={(event) => {
                   event.stopPropagation()
@@ -824,8 +880,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
       {expandedCandidate && (() => {
         const candidate = expandedCandidate
-        const score = candidate.matchScore?.score ?? candidate.profile_score
-        const scoreTone = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'possible'
+        const score = activeScore(candidate)
+        const tier = scoreTier(score)
+        const displayScore = toTenScale(score)
         const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
           ? candidate.strengths
           : Array.isArray(candidate.achievements)
@@ -842,7 +899,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           .toUpperCase()
 
         return (
-          <div id="candidate-detail" className="detail-drawer">
+          <div id="detail-drawer" className="detail-drawer">
             <div className="dd-header">
               <div className="dd-avatar">{initials || 'NA'}</div>
               <div className="dd-header-info">
@@ -851,45 +908,56 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                   {[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}
                 </div>
               </div>
-              {score != null && (
-                <div className={`dd-score-badge dd-score-badge--${scoreTone}`}>
-                  {score}%
+              {displayScore != null && (
+                <div className={`dd-score dd-score--${tier}`}>
+                  {displayScore}<span>/10</span>
                 </div>
               )}
-              <div className="dd-actions">
+              <div className="dd-header-actions">
                 <button className="dd-btn-primary" type="button">Schedule Interview</button>
                 <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
+                <button
+                  className="dd-btn-ghost"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    window.location.href = `/candidates/${candidate.id}`
+                  }}
+                >
+                  View full profile →
+                </button>
               </div>
               <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
             </div>
 
             <div className="dd-body">
               <div className="dd-col">
-                <div className="dd-section-label">Summary</div>
+                <div className="dd-col-label">Summary</div>
                 <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
 
+                <div className="dd-col-label" style={{ marginTop: '16px' }}>Key facts</div>
                 <div className="dd-facts">
                   {candidate.years_experience != null && (
                     <div className="dd-fact">
-                      <span className="dd-fact-label">Experience</span>
-                      <span className="dd-fact-val">{candidate.years_experience} years</span>
+                      <span className="dd-fact-k">Experience</span>
+                      <span className="dd-fact-v">{candidate.years_experience} years</span>
                     </div>
                   )}
                   {candidate.seniority_level && (
                     <div className="dd-fact">
-                      <span className="dd-fact-label">Seniority</span>
-                      <span className="dd-fact-val">{candidate.seniority_level}</span>
+                      <span className="dd-fact-k">Seniority</span>
+                      <span className="dd-fact-v">{candidate.seniority_level}</span>
                     </div>
                   )}
                   {candidate.email && (
                     <div className="dd-fact">
-                      <span className="dd-fact-label">Email</span>
+                      <span className="dd-fact-k">Email</span>
                       <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
                     </div>
                   )}
                 </div>
 
-                <div className="dd-section-label dd-section-label--spaced">Recent experience</div>
+                <div className="dd-col-label" style={{ marginTop: '16px' }}>Recent experience</div>
                 {experienceEntries.map((job, idx) => (
                   <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
                     <div className="dd-job-title">{job.title}</div>
@@ -901,8 +969,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               </div>
 
               <div className="dd-col">
-                <div className="dd-section-label">Strengths</div>
-                <div className="dd-analysis-box dd-strengths">
+                <div className="dd-col-label">Strengths</div>
+                <div className="dd-analysis-box dd-analysis-box--green">
                   {candidateStrengths.length > 0
                     ? candidateStrengths.map((strength, idx) => (
                       <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>
@@ -910,8 +978,8 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
                 </div>
 
-                <div className="dd-section-label dd-section-label--considerations">Considerations</div>
-                <div className="dd-analysis-box dd-considerations">
+                <div className="dd-col-label" style={{ marginTop: '14px' }}>Considerations</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
                   {candidateConsiderations.length > 0
                     ? candidateConsiderations.map((consideration, idx) => (
                       <div className="dd-analysis-item" key={`${candidate._bulkKey}-consideration-${idx}`}>{consideration}</div>
@@ -929,10 +997,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               </div>
 
               <div className="dd-col">
-                <div className="dd-section-label">Top skills</div>
+                <div className="dd-col-label">Top skills</div>
                 <div className="dd-top-skills">
                   {topSkills.map((skill) => (
-                    <span className="dd-top-skill-tag" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
+                    <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
                       {formatSkillLabel(skill)}
                     </span>
                   ))}
@@ -961,17 +1029,6 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
                     ))}
                   </>
                 )}
-
-                <button
-                  className="dd-view-full"
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    window.location.href = `/candidates/${candidate.id}`
-                  }}
-                >
-                  View full profile →
-                </button>
               </div>
             </div>
           </div>
