@@ -17,6 +17,7 @@ const OPENAI_MODEL_CAPABILITIES = {
     supportsTemperature: false,
   },
 }
+const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
 
 let claudeTokensUsed = {
   input: 0,
@@ -441,7 +442,7 @@ function providerSupportsMimeType(provider, mimeType) {
   const normalizedProvider = String(provider || '').trim().toLowerCase()
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
   if (normalizedProvider === 'anthropic') {
-    return normalizedMimeType === 'application/pdf'
+    return ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'].includes(normalizedMimeType)
   }
   return true
 }
@@ -598,6 +599,7 @@ export async function analyzeWithAnthropic(
       },
     ],
   })
+
 
   const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
   if (tokenUsage.usageAvailable) {
@@ -762,13 +764,20 @@ export async function analyzeWithOpenAI(
     return payload
   }
 
-  let payload = await callOpenAi(2000)
-  let responseStatus = String(payload?.status || '').toLowerCase()
-  let incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
-  if (responseStatus === 'incomplete' && incompleteReason.toLowerCase() === 'max_output_tokens') {
-    payload = await callOpenAi(4000)
+  let payload = null
+  let responseStatus = ''
+  let incompleteReason = ''
+  for (const maxOutputTokens of OPENAI_OUTPUT_TOKEN_LADDER) {
+    payload = await callOpenAi(maxOutputTokens)
     responseStatus = String(payload?.status || '').toLowerCase()
     incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
+
+    const shouldRetryForTokenCeiling = responseStatus === 'incomplete' && incompleteReason.toLowerCase() === 'max_output_tokens'
+    if (shouldRetryForTokenCeiling) {
+      continue
+    }
+
+    break
   }
 
   if (responseStatus && responseStatus !== 'completed') {
@@ -777,7 +786,7 @@ export async function analyzeWithOpenAI(
         category: 'response_truncated_error',
         provider: 'openai',
         model,
-        technicalDetails: `Provider output was truncated before valid JSON completion (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}).`,
+        technicalDetails: `Provider output was truncated before valid JSON completion after retries (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${OPENAI_OUTPUT_TOKEN_LADDER.join('->')}).`,
       })
     }
 

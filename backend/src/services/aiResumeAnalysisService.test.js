@@ -151,6 +151,33 @@ test('analyzeWithAnthropic embeds JD mode contract in request payload', async ()
   assert.equal(capturedPrompt.includes('Analysis Mode: WITHOUT_JOB_DESCRIPTION'), true)
 })
 
+
+test('analyzeWithAnthropic sends document payload for word uploads', async () => {
+  let capturedRequest = null
+  const anthropicClientFactory = () => ({
+    messages: {
+      create: async (request) => {
+        capturedRequest = request
+        return {
+          usage: { input_tokens: 1, output_tokens: 1 },
+          content: [{ type: 'text', text: '{"candidates":[{"id":"cand-word"}]}' }],
+        }
+      },
+    },
+  })
+
+  const response = await analyzeWithAnthropic('d29yayBleHBlcmllbmNlIHNraWxscw==', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'resume.docx', {
+    apiKey: 'anth-key',
+    model: 'claude-sonnet-4',
+    systemPromptConfig: { systemPrompt: 'Base prompt' },
+    anthropicClientFactory,
+  })
+
+  assert.equal(response.result.candidates[0].id, 'cand-word')
+  assert.equal(capturedRequest.messages[0].content[0].type, 'document')
+  assert.equal(capturedRequest.messages[0].content[0].source.media_type, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+})
+
 test('analyzeWithOpenAI embeds JD mode contract in request payload', async () => {
   let capturedPrompt = ''
   let capturedBody = null
@@ -334,7 +361,7 @@ test('analyzeWithOpenAI surfaces provider status failures before parse fallback'
   )
 })
 
-test('analyzeWithOpenAI retries once with higher max_output_tokens for incomplete responses', async () => {
+test('analyzeWithOpenAI retries with higher max_output_tokens for incomplete responses', async () => {
   let callCount = 0
   const response = await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
     apiKey: 'oa-key',
@@ -370,22 +397,30 @@ test('analyzeWithOpenAI retries once with higher max_output_tokens for incomplet
   assert.equal(response.result.candidates[0].id, 'cand-openai-retry')
 })
 
-test('analyzeWithOpenAI surfaces truncated error when retry is still incomplete', async () => {
+test('analyzeWithOpenAI surfaces truncated error when all max_output_tokens retries are still incomplete', async () => {
+  let callCount = 0
   await assert.rejects(
     () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
       apiKey: 'oa-key',
       model: 'gpt-5-nano-2025-08-07',
-      fetchImpl: async () => ({
-        ok: true,
-        json: async () => ({
-          id: 'resp_456',
-          status: 'incomplete',
-          incomplete_details: { reason: 'max_output_tokens' },
-        }),
-      }),
+      fetchImpl: async (_url, request) => {
+        callCount += 1
+        const body = JSON.parse(request.body)
+        assert.equal(body.max_output_tokens, [2000, 4000, 8000][callCount - 1])
+        return {
+          ok: true,
+          json: async () => ({
+            id: `resp_${callCount}`,
+            status: 'incomplete',
+            incomplete_details: { reason: 'max_output_tokens' },
+          }),
+        }
+      },
     }),
     /response_truncated_error::/,
   )
+
+  assert.equal(callCount, 3)
 })
 
 test('analyzeWithAnthropic categorizes truncated output failures', async () => {
@@ -475,7 +510,7 @@ test('analyzeResumeWithConfiguredFallback records failure categories for failove
   assert.equal(response.attempts[1].success, true)
 })
 
-test('analyzeResumeWithConfiguredFallback skips anthropic for non-pdf mime types and fails over to openai', async () => {
+test('analyzeResumeWithConfiguredFallback allows anthropic for docx mime types', async () => {
   const credentials = {
     activeProvider: 'anthropic',
     providers: {
@@ -490,6 +525,7 @@ test('analyzeResumeWithConfiguredFallback skips anthropic for non-pdf mime types
   }
 
   let anthropicCalled = false
+  let openAiCalled = false
   const response = await analyzeResumeWithConfiguredFallback(
     'ZmFrZQ==',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -500,23 +536,27 @@ test('analyzeResumeWithConfiguredFallback skips anthropic for non-pdf mime types
       analyzeWithAnthropic: async () => {
         anthropicCalled = true
         return {
-          result: { candidates: [{ id: 'should-not-run' }] },
+          result: { candidates: [{ id: 'cand-anthropic-docx' }] },
           provider: 'anthropic-primary',
           model: 'claude-sonnet-4',
           tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
         }
       },
-      analyzeWithOpenAI: async () => ({
-        result: { candidates: [{ id: 'cand-openai' }] },
-        provider: 'openai-primary',
-        model: 'gpt-4.1-mini',
-        tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
-      }),
+      analyzeWithOpenAI: async () => {
+        openAiCalled = true
+        return {
+          result: { candidates: [{ id: 'cand-openai' }] },
+          provider: 'openai-primary',
+          model: 'gpt-4.1-mini',
+          tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+        }
+      },
     },
   )
 
-  assert.equal(anthropicCalled, false)
-  assert.equal(response.result.candidates[0].id, 'cand-openai')
+  assert.equal(anthropicCalled, true)
+  assert.equal(openAiCalled, false)
+  assert.equal(response.result.candidates[0].id, 'cand-anthropic-docx')
   assert.equal(response.attempts.length, 1)
   assert.equal(response.attempts[0].success, true)
 })
