@@ -76,6 +76,13 @@ JSON schema to return:
       "rationale": "string",
       "notes": ["string"]
     },
+    "matchScore": {
+      "score": "number|null",
+      "score_out_of_ten": "number|null",
+      "fit": "string|null",
+      "reason": "string|null",
+      "breakdown": "object|null"
+    },
     "confidence": {
       "name": 0.0,
       "email": 0.0,
@@ -105,6 +112,8 @@ IMPORTANT RULES:
 12) skills categorisation and deduplication: tools_and_platforms are specific named software, tools, SaaS products, programming languages, cloud services; methodologies are processes, frameworks, and ways of working; domain_expertise is business and functional domain knowledge; soft_skills are interpersonal and leadership capabilities; top_skills must contain exactly the 5 skills that best represent this candidate from across all categories. DEDUPLICATION: before including any skill, check if a semantically equivalent skill is already in the list and keep only one normalized form (e.g., "Agile (Scrum)" over "Agile Scrum", "Jira" over "JIRA").
 13) seniority_level: classify based on years of experience and role titles: Junior = 0-2 years, Mid = 3-5 years, Senior = 6-10 years, Lead = 10+ years with team/project leadership, Executive = VP/Director/C-suite titles.
 14) tags: 2-4 short category labels describing the candidate's profile for quick filtering. Use the candidate's actual domain, not generic labels.
+15) score_out_of_ten: always equal to (score / 10) rounded to 1 decimal place. If score is 82, score_out_of_ten is 8.2. If score is null, score_out_of_ten is null. This is a convenience field for display — it must always match the score field exactly.
+16) matchScore.reason: REQUIRED when a JD is provided. It must be 2-3 sentences explaining specifically WHY the candidate received their score — reference actual skills, years of experience, and job titles from the resume. If no JD is provided, set reason to a 1-2 sentence general profile summary instead of null.
 
 JD-aware behavior:
 - If job_description_context is AVAILABLE, compute fit_assessment scores from explicit evidence only.

@@ -67,6 +67,13 @@ JSON schema to return:
       "rationale": "string",
       "notes": ["string"]
     },
+    "matchScore": {
+      "score": "number|null",
+      "score_out_of_ten": "number|null",
+      "fit": "string|null",
+      "reason": "string|null",
+      "breakdown": "object|null"
+    },
     "confidence": {
       "name": 0.0,
       "email": 0.0,
@@ -80,6 +87,10 @@ JSON schema to return:
     }
   }]
 }
+
+IMPORTANT RULES:
+1) score_out_of_ten: always equal to (score / 10) rounded to 1 decimal place. If score is 82, score_out_of_ten is 8.2. If score is null, score_out_of_ten is null. This is a convenience field for display — it must always match the score field exactly.
+2) matchScore.reason: REQUIRED when a JD is provided. It must be 2-3 sentences explaining specifically WHY the candidate received their score — reference actual skills, years of experience, and job titles from the resume. If no JD is provided, set reason to a 1-2 sentence general profile summary instead of null.
 
 JD-aware behavior:
 - If job_description_context is AVAILABLE, compute fit_assessment scores from explicit evidence only.
