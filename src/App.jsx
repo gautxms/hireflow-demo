@@ -157,7 +157,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const params = new URLSearchParams(window.location.search)
-    const isResultsRoute = pathname === '/results'
+    const resolvedPathname = resolveUserSectionPath(pathname)
+    const isResultsRoute = resolvedPathname === '/results'
     const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
 
     if (isResultsRoute && currentPage !== 'results') {
