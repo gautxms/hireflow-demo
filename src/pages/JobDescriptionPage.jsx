@@ -4,6 +4,7 @@ import JobDescriptionList from '../components/JobDescriptionList'
 import { serializeJobDescriptionForm } from '../components/jobDescriptionFormState'
 import { shouldResetAfterSave } from './jobDescriptionSubmissionState'
 import API_BASE from '../config/api'
+import '../styles/job-description.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const ROUTE_STATES = ['active', 'draft', 'archived']
@@ -181,24 +182,16 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }
 
   return (
-    <section style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem 1rem' }}>
-      <header style={{ marginBottom: '1rem' }}>
-        <h1 style={{ marginBottom: '0.35rem' }}>Job Descriptions</h1>
-        <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>
+    <section className="job-description-page">
+      <header className="job-description-page__header">
+        <h1 className="job-description-page__title">Job Descriptions</h1>
+        <p className="job-description-page__subtitle">
           Upload/paste job descriptions, keep drafts, and choose an active JD for resume screening.
         </p>
       </header>
 
       {error && (
-        <div
-          style={{
-            marginBottom: '1rem',
-            border: '1px solid var(--color-error)',
-            color: 'var(--color-error)',
-            borderRadius: 8,
-            padding: '0.8rem',
-          }}
-        >
+        <div className="job-description-page__error">
           {error}
         </div>
       )}
@@ -212,20 +205,16 @@ export default function JobDescriptionPage({ onRequireAuth }) {
       />
 
       {isLoading ? (
-        <p style={{ color: 'var(--color-text-muted)' }}>Loading job descriptions...</p>
+        <p className="job-description-page__loading">Loading job descriptions...</p>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          <div className="job-description-page__route-controls">
             {ROUTE_STATES.map((state) => (
               <button
                 key={state}
                 type="button"
                 onClick={() => setRouteState(state)}
-                style={{
-                  ...secondaryButton,
-                  borderColor: routeState === state ? 'var(--color-accent-green)' : 'var(--border)',
-                  color: routeState === state ? 'var(--color-accent-green)' : '#fff',
-                }}
+                className={`job-description-page__route-button ${routeState === state ? 'job-description-page__route-button--active' : ''}`}
               >
                 {capitalize(state)} ({routeCounts[state] || 0})
               </button>
@@ -237,10 +226,10 @@ export default function JobDescriptionPage({ onRequireAuth }) {
             placeholder="Search title, description, skills, location..."
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
-            style={{ ...inputStyle, marginBottom: '1rem' }}
+            className="job-description-page__search"
           />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 360px)', gap: '1rem' }}>
+          <div className="job-description-page__content">
             <JobDescriptionList
               items={visibleItems}
               onEdit={setActiveItem}
@@ -251,24 +240,24 @@ export default function JobDescriptionPage({ onRequireAuth }) {
               selectedItemId={selectedItem?.id || ''}
             />
 
-            <aside style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', alignSelf: 'start', position: 'sticky', top: '1rem' }}>
+            <aside className="job-description-page__panel">
               {selectedItem ? (
                 <>
-                  <h3 style={{ marginTop: 0, marginBottom: '0.5rem' }}>{selectedItem.title}</h3>
-                  <p style={{ marginTop: 0, color: 'var(--color-text-secondary)' }}>{selectedItem.description || 'No description available.'}</p>
-                  <p style={metaStyle}><strong>Status:</strong> {selectedItem.status || 'draft'}</p>
-                  {selectedItem.requirements ? <p style={metaStyle}><strong>Requirements:</strong> {selectedItem.requirements}</p> : null}
-                  {selectedItem.location ? <p style={metaStyle}><strong>Location:</strong> {selectedItem.location}</p> : null}
-                  {selectedItem.skills?.length ? <p style={metaStyle}><strong>Skills:</strong> {selectedItem.skills.join(', ')}</p> : null}
-                  {selectedItem.department ? <p style={metaStyle}><strong>Department:</strong> {selectedItem.department}</p> : null}
-                  {selectedItem.employmentType ? <p style={metaStyle}><strong>Employment type:</strong> {selectedItem.employmentType}</p> : null}
-                  {selectedItem.priority !== undefined && selectedItem.priority !== null ? <p style={metaStyle}><strong>Priority:</strong> {selectedItem.priority}</p> : null}
-                  {selectedItem.archivedReason ? <p style={metaStyle}><strong>Archived reason:</strong> {selectedItem.archivedReason}</p> : null}
-                  {selectedItem.sourceType ? <p style={metaStyle}><strong>Source:</strong> {selectedItem.sourceType}</p> : null}
-                  {selectedItem.version ? <p style={metaStyle}><strong>Version:</strong> {selectedItem.version}</p> : null}
+                  <h3 className="job-description-page__panel-title">{selectedItem.title}</h3>
+                  <p className="job-description-page__panel-description">{selectedItem.description || 'No description available.'}</p>
+                  <p className="job-description-page__meta"><strong>Status:</strong> {selectedItem.status || 'draft'}</p>
+                  {selectedItem.requirements ? <p className="job-description-page__meta"><strong>Requirements:</strong> {selectedItem.requirements}</p> : null}
+                  {selectedItem.location ? <p className="job-description-page__meta"><strong>Location:</strong> {selectedItem.location}</p> : null}
+                  {selectedItem.skills?.length ? <p className="job-description-page__meta"><strong>Skills:</strong> {selectedItem.skills.join(', ')}</p> : null}
+                  {selectedItem.department ? <p className="job-description-page__meta"><strong>Department:</strong> {selectedItem.department}</p> : null}
+                  {selectedItem.employmentType ? <p className="job-description-page__meta"><strong>Employment type:</strong> {selectedItem.employmentType}</p> : null}
+                  {selectedItem.priority !== undefined && selectedItem.priority !== null ? <p className="job-description-page__meta"><strong>Priority:</strong> {selectedItem.priority}</p> : null}
+                  {selectedItem.archivedReason ? <p className="job-description-page__meta"><strong>Archived reason:</strong> {selectedItem.archivedReason}</p> : null}
+                  {selectedItem.sourceType ? <p className="job-description-page__meta"><strong>Source:</strong> {selectedItem.sourceType}</p> : null}
+                  {selectedItem.version ? <p className="job-description-page__meta"><strong>Version:</strong> {selectedItem.version}</p> : null}
                 </>
               ) : (
-                <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+                <p className="job-description-page__empty-panel">
                   No job descriptions match the current route state and filters.
                 </p>
               )}
@@ -282,28 +271,4 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
 function capitalize(value) {
   return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-const secondaryButton = {
-  background: 'transparent',
-  border: '1px solid var(--border)',
-  color: '#fff',
-  borderRadius: 8,
-  padding: '0.45rem 0.7rem',
-  cursor: 'pointer',
-}
-
-const inputStyle = {
-  width: '100%',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  background: '#111827',
-  color: '#fff',
-  padding: '0.65rem 0.8rem',
-}
-
-const metaStyle = {
-  marginTop: '0.55rem',
-  marginBottom: 0,
-  color: 'var(--color-text-secondary)',
 }
