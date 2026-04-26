@@ -45,3 +45,12 @@ test('sortCandidates treats match_score as score and keeps name ascending', () =
   const forcedNameAsc = sortCandidates(candidates, 'name', 'desc')
   assert.deepEqual(forcedNameAsc.map((candidate) => candidate.name), ['Ava', 'Lia', 'Mia'])
 })
+
+test('normalizeCandidate returns canonical adapter fields for candidate and resume ids', () => {
+  const resumeId = '550e8400-e29b-41d4-a716-446655440000'
+  const normalized = normalizeCandidate({ id: 'parsed-2', resume_id: resumeId })
+
+  assert.equal(normalized.id, 'parsed-2')
+  assert.equal(normalized.candidateId, 'parsed-2')
+  assert.equal(normalized.resumeId, resumeId)
+})

@@ -7,6 +7,7 @@ import { normalizeTags } from './candidateTagsState.js'
 import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
 import { applyJobDescriptionScoringMode } from '../jobs/parseResumeJob.js'
 import { syncCandidateProfilesForUser } from '../services/candidateProfilesService.js'
+import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 
 const router = Router()
 
@@ -85,9 +86,15 @@ function normalizeNumberFilter(value) {
 function normalizeCandidateFromAnalysis(candidate, resumeId, fallbackName = 'resume') {
   const skillsStructured = normalizeStructuredSkills(candidate?.skills)
   const skillsFlat = flattenStructuredSkills(skillsStructured)
+  const identity = resolveCanonicalCandidateIdentity(
+    candidate,
+    `${String(resumeId || fallbackName).toLowerCase()}-1`,
+  )
 
   return {
-    id: candidate?.id || `${String(resumeId || fallbackName).toLowerCase()}-1`,
+    id: identity.id,
+    candidateId: identity.candidateId,
+    resumeId: identity.resumeId || String(resumeId || ''),
     ...candidate,
     years_experience: normalizeNullableNumber(candidate?.years_experience),
     profile_score: normalizeNullableNumber(candidate?.profile_score),
@@ -441,7 +448,8 @@ router.post('/match', requireAuth, async (req, res) => {
 router.post('/tags/bulk', requireAuth, async (req, res) => {
   const operation = ['add', 'remove', 'replace'].includes(req.body?.operation) ? req.body.operation : null
   const tags = normalizeTags(req.body?.tags)
-  const resumeIds = [...new Set((Array.isArray(req.body?.resumeIds) ? req.body.resumeIds : []).map((id) => String(id || '').trim()).filter(Boolean))]
+  const rawResumeIds = Array.isArray(req.body?.resumeIds) ? req.body.resumeIds : []
+  const resumeIds = [...new Set(rawResumeIds.map((value) => resolveCandidateResumeUuid(value)).filter(Boolean))]
 
   if (!operation) {
     return res.status(400).json({ error: 'operation must be add, remove, or replace' })

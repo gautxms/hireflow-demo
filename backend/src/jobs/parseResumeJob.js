@@ -4,6 +4,7 @@ import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysi
 import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
+import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -431,8 +432,14 @@ async function runParse(job) {
         const fallbackSkills = normalizeSkills(candidate?.skills)
         const flattenedSkills = flattenStructuredSkills(skillsStructured)
         const resolvedSkillsFlat = flattenedSkills.length > 0 ? flattenedSkills : fallbackSkills
+        const identity = resolveCanonicalCandidateIdentity(
+          candidate,
+          `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
+        )
         return {
-          id: candidate?.id || `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
+          id: identity.id,
+          candidateId: identity.candidateId,
+          resumeId: identity.resumeId || String(resumeId || ''),
           ...candidate,
           years_experience: normalizeNullableNumber(candidate?.years_experience),
           profile_score: normalizeNullableNumber(candidate?.profile_score),
