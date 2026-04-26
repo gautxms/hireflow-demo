@@ -12,6 +12,7 @@ test('failed parse keeps UI interactive with stable actions', () => {
 
 test('route state remains valid after analyze exception', () => {
   assert.equal(resolveSafeAnalyzeRoute({ currentPage: 'uploader' }), 'uploader')
+  assert.equal(resolveSafeAnalyzeRoute({ currentPage: 'results' }), 'results')
   assert.equal(resolveSafeAnalyzeRoute({ currentPage: 'nonexistent' }), 'uploader')
   assert.equal(resolveSafeAnalyzeRoute({}), 'uploader')
 })
