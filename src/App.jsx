@@ -57,7 +57,7 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
-import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isSharedResultsPath } from './utils/resultsRouteContract'
+import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -195,7 +195,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     const params = new URLSearchParams(window.location.search)
     const resolvedPathname = resolveUserSectionPath(pathname)
-    const isResultsRoute = resolvedPathname === '/results'
+    const isResultsRoute = isResultsRootPath(resolvedPathname)
     const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
 
     if (isResultsRoute && currentPage !== 'results') {
@@ -431,7 +431,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <BillingPage />
     }
 
-    if (resolvedPathname === '/results') {
+    if (isResultsRootPath(resolvedPathname)) {
       const canAccessResults = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view candidate analysis results.',

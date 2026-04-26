@@ -19,6 +19,11 @@ test('shared token parsing decodes URL encoding and rejects deeper paths', () =>
   assert.equal(getSharedResultsToken('/results/abc/def'), '')
 })
 
+test('shared token parsing fails closed on malformed encoding', () => {
+  assert.equal(getSharedResultsToken('/results/%E0%A4%A'), '')
+  assert.equal(isSharedResultsPath('/results/%E0%A4%A'), false)
+})
+
 test('results empty-state copy remains contract-stable', () => {
   assert.deepEqual(RESULTS_EMPTY_STATE_COPY, {
     title: 'No recent analysis found',

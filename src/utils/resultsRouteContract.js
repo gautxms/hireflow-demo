@@ -23,7 +23,11 @@ export function getSharedResultsToken(pathname = '') {
     return ''
   }
 
-  return decodeURIComponent(match[1])
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return ''
+  }
 }
 
 export function isSharedResultsPath(pathname = '') {
