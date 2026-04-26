@@ -27,6 +27,7 @@ const migrationFiles = [
   '023-add-job-description-metadata-columns',
   '024-add-parse-jobs-updated-at-indexes',
   '025-add-candidate-profiles',
+  '026-add-analyses',
 ]
 
 async function ensureMigrationsTable(client) {
