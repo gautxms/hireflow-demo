@@ -65,6 +65,23 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
+function parseStringList(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => String(entry || '').split(',')).map((entry) => entry.trim()).filter(Boolean)
+  }
+
+  return String(value || '').split(',').map((entry) => entry.trim()).filter(Boolean)
+}
+
+function normalizeNumberFilter(value) {
+  if (value === undefined || value === null || value === '') {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function normalizeCandidateFromAnalysis(candidate, resumeId, fallbackName = 'resume') {
   const skillsStructured = normalizeStructuredSkills(candidate?.skills)
   const skillsFlat = flattenStructuredSkills(skillsStructured)
@@ -269,6 +286,130 @@ router.get('/profiles', requireAuth, async (req, res) => {
   }
 })
 
+router.get('/directory', requireAuth, async (req, res) => {
+  try {
+    await syncCandidateProfilesForUser(req.userId)
+
+    const filters = {
+      skills: parseStringList(req.query.skills).map((skill) => skill.toLowerCase()),
+      tags: parseStringList(req.query.tags).map((tag) => tag.toLowerCase()),
+      experienceMin: normalizeNumberFilter(req.query.experienceMin),
+      experienceMax: normalizeNumberFilter(req.query.experienceMax),
+      scoreMin: normalizeNumberFilter(req.query.scoreMin),
+      scoreMax: normalizeNumberFilter(req.query.scoreMax),
+      sourceJobId: normalizeString(req.query.sourceJobId),
+      sourceAnalysisId: normalizeString(req.query.sourceAnalysisId),
+    }
+
+    const result = await pool.query(
+      `SELECT cp.resume_id,
+              cp.profile,
+              cp.source_parse_job_id,
+              cp.source_updated_at,
+              cp.updated_at,
+              r.filename,
+              r.profile_score,
+              r.years_experience,
+              r.job_description_id,
+              jd.title AS job_title,
+              COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
+       FROM candidate_profiles cp
+       INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
+       LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
+       LEFT JOIN LATERAL (
+         SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
+         FROM candidate_tags ct
+         WHERE ct.user_id = cp.user_id
+           AND ct.resume_id = cp.resume_id
+       ) tag_agg ON TRUE
+       WHERE cp.user_id = $1
+       ORDER BY cp.source_updated_at DESC, cp.updated_at DESC`,
+      [req.userId],
+    )
+
+    const profiles = result.rows
+      .map((row) => {
+        const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
+        const skills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
+        const profileScore = normalizeNullableNumber(profile.profile_score) ?? normalizeNullableNumber(row.profile_score)
+        const yearsExperience = normalizeNullableNumber(profile.years_experience) ?? normalizeNullableNumber(row.years_experience)
+        const tags = normalizeStringArray(row.tags)
+
+        return {
+          resumeId: String(row.resume_id),
+          profile,
+          name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
+          skills,
+          profileScore,
+          yearsExperience,
+          tags,
+          sourceParseJobId: row.source_parse_job_id || null,
+          sourceUpdatedAt: row.source_updated_at,
+          associatedJob: row.job_description_id
+            ? {
+                id: String(row.job_description_id),
+                title: normalizeString(row.job_title) || 'Untitled job',
+              }
+            : null,
+        }
+      })
+      .filter((entry) => {
+        if (filters.skills.length > 0) {
+          const candidateSkills = entry.skills.map((skill) => skill.toLowerCase())
+          if (!filters.skills.some((skill) => candidateSkills.includes(skill))) {
+            return false
+          }
+        }
+
+        if (filters.tags.length > 0) {
+          const candidateTags = entry.tags.map((tag) => tag.toLowerCase())
+          if (!filters.tags.some((tag) => candidateTags.includes(tag))) {
+            return false
+          }
+        }
+
+        if (filters.experienceMin !== null && (entry.yearsExperience ?? -Infinity) < filters.experienceMin) {
+          return false
+        }
+
+        if (filters.experienceMax !== null && (entry.yearsExperience ?? Infinity) > filters.experienceMax) {
+          return false
+        }
+
+        if (filters.scoreMin !== null && (entry.profileScore ?? -Infinity) < filters.scoreMin) {
+          return false
+        }
+
+        if (filters.scoreMax !== null && (entry.profileScore ?? Infinity) > filters.scoreMax) {
+          return false
+        }
+
+        if (filters.sourceJobId && entry.associatedJob?.id !== filters.sourceJobId) {
+          return false
+        }
+
+        if (filters.sourceAnalysisId && entry.sourceParseJobId !== filters.sourceAnalysisId) {
+          return false
+        }
+
+        return true
+      })
+
+    return res.json({
+      candidates: profiles,
+      total: profiles.length,
+      filtersApplied: {
+        ...filters,
+        sourceJobId: filters.sourceJobId || null,
+        sourceAnalysisId: filters.sourceAnalysisId || null,
+      },
+    })
+  } catch (error) {
+    console.error('[Candidates] Failed to fetch candidates directory:', error)
+    return res.status(500).json({ error: 'Unable to fetch candidates directory' })
+  }
+})
+
 router.post('/match', requireAuth, async (req, res) => {
   try {
     const candidates = Array.isArray(req.body?.candidates) ? req.body.candidates : []
@@ -370,5 +511,85 @@ router.post('/tags/bulk', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'Unable to update candidate tags' })
   }
 })
+
+router.get('/:resumeId', requireAuth, async (req, res) => {
+  const resumeId = normalizeString(req.params.resumeId)
+  if (!resumeId) {
+    return res.status(400).json({ error: 'resumeId is required' })
+  }
+
+  try {
+    await syncCandidateProfilesForUser(req.userId)
+
+    const result = await pool.query(
+      `SELECT cp.resume_id,
+              cp.profile,
+              cp.source_parse_job_id,
+              cp.source_updated_at,
+              cp.created_at,
+              cp.updated_at,
+              r.filename,
+              r.profile_score,
+              r.years_experience,
+              r.job_description_id,
+              jd.title AS job_title,
+              COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
+       FROM candidate_profiles cp
+       INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
+       LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
+       LEFT JOIN LATERAL (
+         SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
+         FROM candidate_tags ct
+         WHERE ct.user_id = cp.user_id
+           AND ct.resume_id = cp.resume_id
+       ) tag_agg ON TRUE
+       WHERE cp.user_id = $1
+         AND cp.resume_id = $2
+       LIMIT 1`,
+      [req.userId, resumeId],
+    )
+
+    const row = result.rows[0]
+    if (!row) {
+      return res.status(404).json({ error: 'Candidate not found' })
+    }
+
+    const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
+
+    return res.json({
+      resumeId: String(row.resume_id),
+      profile,
+      fields: {
+        name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
+        email: normalizeString(profile.email),
+        phone: normalizeString(profile.phone),
+        summary: normalizeString(profile.summary),
+        location: normalizeString(profile.location),
+        skills: flattenStructuredSkills(normalizeStructuredSkills(profile.skills)),
+        strengths: normalizeStringArray(profile.strengths),
+        considerations: normalizeStringArray(profile.considerations),
+        yearsExperience: normalizeNullableNumber(profile.years_experience) ?? normalizeNullableNumber(row.years_experience),
+        profileScore: normalizeNullableNumber(profile.profile_score) ?? normalizeNullableNumber(row.profile_score),
+        tags: normalizeStringArray(row.tags),
+      },
+      provenance: {
+        latestAnalysisTimestamp: row.source_updated_at,
+        sourceAnalysisId: row.source_parse_job_id || null,
+        associatedJob: row.job_description_id
+          ? {
+              id: String(row.job_description_id),
+              title: normalizeString(row.job_title) || 'Untitled job',
+            }
+          : null,
+      },
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })
+  } catch (error) {
+    console.error('[Candidates] Failed to fetch candidate detail:', error)
+    return res.status(500).json({ error: 'Unable to fetch candidate detail' })
+  }
+})
+
 
 export default router
