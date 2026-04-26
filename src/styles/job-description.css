@@ -1,0 +1,171 @@
+.job-description-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.job-description-page__header {
+  margin-bottom: 1rem;
+}
+
+.job-description-page__title {
+  margin-bottom: 0.35rem;
+}
+
+.job-description-page__subtitle,
+.job-description-page__loading {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.job-description-page__error {
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+  border-radius: 8px;
+  padding: 0.8rem;
+}
+
+.job-description-page__route-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.job-description-page__route-button,
+.job-description-list__action {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.job-description-page__route-button--active {
+  border-color: var(--color-accent-green);
+  color: var(--color-accent-green);
+}
+
+.job-description-page__search {
+  width: 100%;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #111827;
+  color: #fff;
+  padding: 0.65rem 0.8rem;
+}
+
+.job-description-page__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 1rem;
+}
+
+.job-description-page__panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  align-self: start;
+  position: sticky;
+  top: 1rem;
+}
+
+.job-description-page__panel-title {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.job-description-page__panel-description,
+.job-description-page__empty-panel,
+.job-description-page__meta {
+  color: var(--color-text-secondary);
+}
+
+.job-description-page__panel-description {
+  margin-top: 0;
+}
+
+.job-description-page__meta {
+  margin-top: 0.55rem;
+  margin-bottom: 0;
+}
+
+.job-description-page__empty-panel {
+  margin: 0;
+}
+
+.job-description-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.job-description-list__empty,
+.job-description-list__card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.job-description-list__empty,
+.job-description-list__meta,
+.job-description-list__description {
+  color: var(--color-text-secondary);
+}
+
+.job-description-list__card {
+  cursor: pointer;
+}
+
+.job-description-list__card--selected {
+  border-color: var(--color-accent-green);
+}
+
+.job-description-list__content {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.job-description-list__title {
+  margin: 0;
+}
+
+.job-description-list__description {
+  margin: 0.4rem 0;
+}
+
+.job-description-list__meta {
+  font-size: 0.88rem;
+}
+
+.job-description-list__status {
+  color: #fff;
+}
+
+.job-description-list__actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.job-description-list__action--danger {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+@media (max-width: 960px) {
+  .job-description-page__content {
+    grid-template-columns: 1fr;
+  }
+
+  .job-description-page__panel {
+    position: static;
+  }
+}

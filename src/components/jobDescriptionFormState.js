@@ -24,8 +24,32 @@ export function validateJobDescriptionForm(formValues) {
 }
 
 export function serializeJobDescriptionForm(formValues) {
+  const toOptionalTrimmed = (value) => {
+    if (value === undefined || value === null) {
+      return undefined
+    }
+
+    const normalized = String(value).trim()
+    return normalized ? normalized : undefined
+  }
+
+  const toOptionalInt = (value) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined
+    }
+
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? Math.round(parsed) : undefined
+  }
+
   return {
     ...formValues,
     salaryCurrency: normalizeSalaryCurrency(formValues.salaryCurrency),
+    department: toOptionalTrimmed(formValues.department),
+    employmentType: toOptionalTrimmed(formValues.employmentType),
+    priority: toOptionalInt(formValues.priority),
+    archivedReason: toOptionalTrimmed(formValues.archivedReason),
+    sourceType: toOptionalTrimmed(formValues.sourceType),
+    version: toOptionalInt(formValues.version),
   }
 }
