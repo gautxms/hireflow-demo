@@ -6,6 +6,7 @@ import { pool } from '../db/client.js'
 import { normalizeTags } from './candidateTagsState.js'
 import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
 import { applyJobDescriptionScoringMode } from '../jobs/parseResumeJob.js'
+import { syncCandidateProfilesForUser } from '../services/candidateProfilesService.js'
 
 const router = Router()
 
@@ -218,6 +219,8 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
       [req.userId, JSON.stringify({ candidates: updatedCandidates })],
     )
 
+    await syncCandidateProfilesForUser(req.userId)
+
     return res.json({
       ok: true,
       updatedCount: resumeResult.rows.length,
@@ -226,6 +229,43 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('[Candidates] Failed to reanalyse candidates:', error)
     return res.status(500).json({ error: 'Unable to reanalyse candidates' })
+  }
+})
+
+router.get('/profiles', requireAuth, async (req, res) => {
+  try {
+    await syncCandidateProfilesForUser(req.userId)
+
+    const result = await pool.query(
+      `SELECT user_id,
+              resume_id,
+              profile,
+              source_parse_job_id,
+              source_updated_at,
+              schema_version,
+              created_at,
+              updated_at
+       FROM candidate_profiles
+       WHERE user_id = $1
+       ORDER BY source_updated_at DESC, updated_at DESC`,
+      [req.userId],
+    )
+
+    return res.json({
+      profiles: result.rows.map((row) => ({
+        userId: Number(row.user_id),
+        resumeId: String(row.resume_id),
+        profile: row.profile || {},
+        sourceParseJobId: row.source_parse_job_id || null,
+        sourceUpdatedAt: row.source_updated_at,
+        schemaVersion: row.schema_version || null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+    })
+  } catch (error) {
+    console.error('[Candidates] Failed to fetch candidate profiles:', error)
+    return res.status(500).json({ error: 'Unable to fetch candidate profiles' })
   }
 })
 

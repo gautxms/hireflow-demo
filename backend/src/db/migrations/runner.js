@@ -26,6 +26,7 @@ const migrationFiles = [
   '022-add-resume-ai-profile-fields',
   '023-add-job-description-metadata-columns',
   '024-add-parse-jobs-updated-at-indexes',
+  '025-add-candidate-profiles',
 ]
 
 async function ensureMigrationsTable(client) {

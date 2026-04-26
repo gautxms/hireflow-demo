@@ -23,6 +23,19 @@ CREATE TABLE resumes (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE candidate_profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  profile JSONB NOT NULL,
+  source_parse_job_id TEXT,
+  source_updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  schema_version TEXT NOT NULL DEFAULT 'v1',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (user_id, resume_id)
+);
+
 CREATE TABLE subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
