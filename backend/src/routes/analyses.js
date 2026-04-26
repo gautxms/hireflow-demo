@@ -77,9 +77,16 @@ router.get('/:id/status', requireAuth, async (req, res) => {
     for (const row of itemsResult.rows) {
       let queueState = null
       if (row.parse_job_id) {
-        const queueJob = await parseQueue.getJob(String(row.parse_job_id))
-        if (queueJob) {
-          queueState = await queueJob.getState()
+        try {
+          const queueJob = await parseQueue.getJob(String(row.parse_job_id))
+          if (queueJob) {
+            queueState = await queueJob.getState()
+          }
+        } catch (queueLookupError) {
+          console.warn(
+            `[Analyses] Failed queue lookup for parse job ${String(row.parse_job_id)}; using persisted status fallback.`,
+            queueLookupError,
+          )
         }
       }
 
