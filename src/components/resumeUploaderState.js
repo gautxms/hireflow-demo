@@ -5,7 +5,7 @@ export function toOptionalJobDescriptionId(selectedJobDescriptionId) {
   return normalized || undefined
 }
 
-export function buildChunkInitPayload({ filename, fileSize, mimeType, selectedJobDescriptionId }) {
+export function buildChunkInitPayload({ filename, fileSize, mimeType, selectedJobDescriptionId, analysisId }) {
   const payload = {
     filename,
     fileSize,
@@ -15,6 +15,10 @@ export function buildChunkInitPayload({ filename, fileSize, mimeType, selectedJo
   const optionalJobDescriptionId = toOptionalJobDescriptionId(selectedJobDescriptionId)
   if (optionalJobDescriptionId) {
     payload.jobDescriptionId = optionalJobDescriptionId
+  }
+  const optionalAnalysisId = String(analysisId || '').trim()
+  if (optionalAnalysisId) {
+    payload.analysisId = optionalAnalysisId
   }
 
   return payload

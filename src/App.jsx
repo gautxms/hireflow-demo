@@ -30,6 +30,8 @@ const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage'))
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage'))
+const AnalysesPage = lazy(() => import('./pages/AnalysesPage'))
+const AnalysisDetailPage = lazy(() => import('./pages/AnalysisDetailPage'))
 import PublicFooter from './components/PublicFooter'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
@@ -66,7 +68,7 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 const USER_SHELL_ROUTE_PATHS = new Set(['/account', '/settings', '/billing', '/account/payment-method'])
-const USER_SHELL_DISABLED_PATHS = new Set(['/results', '/job-descriptions'])
+const USER_SHELL_DISABLED_PATHS = new Set(['/results', '/job-descriptions', '/analyses'])
 
 function isUserShellEnabled() {
   if (import.meta.env.VITE_ENABLE_USER_APP_SHELL === 'true') {
@@ -470,6 +472,33 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           onBack={() => navigate('/')}
         />
       )
+    }
+
+
+    if (resolvedPathname === '/analyses') {
+      const canAccessAnalyses = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view analyses.',
+        onRequireAuth,
+      })
+      if (!canAccessAnalyses) {
+        return null
+      }
+
+      return <AnalysesPage />
+    }
+
+    if (pathname.startsWith('/analyses/')) {
+      const canAccessAnalysisDetail = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view analysis details.',
+        onRequireAuth,
+      })
+      if (!canAccessAnalysisDetail) {
+        return null
+      }
+
+      return <AnalysisDetailPage pathname={pathname} />
     }
 
     if (resolvedPathname === '/candidates') {
