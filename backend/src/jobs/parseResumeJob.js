@@ -2,6 +2,7 @@ import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
 import { triggerWebhook } from '../services/webhookService.js'
+import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 
 export function isTerminalJobFailure(job) {
@@ -514,6 +515,17 @@ async function runParse(job) {
     result: JSON.stringify(parseResult),
     error_message: null,
     attempts: job.attemptsMade + 1,
+  })
+
+  await upsertCandidateProfile({
+    userId: job.data.userId,
+    resumeId,
+    profile: primaryCandidate,
+    sourceParseJobId: job.id,
+    sourceUpdatedAt: new Date(),
+    schemaVersion: CANDIDATE_PROFILE_SCHEMA_VERSION,
+  }).catch((error) => {
+    console.warn('[Parse] Failed to upsert candidate profile snapshot:', error.message)
   })
 
   await cacheJobResult(String(job.id), {
