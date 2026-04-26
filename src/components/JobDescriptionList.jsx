@@ -1,4 +1,12 @@
-export default function JobDescriptionList({ items, onEdit, onDuplicate, onArchive, onDelete }) {
+export default function JobDescriptionList({
+  items,
+  onEdit,
+  onDuplicate,
+  onArchive,
+  onDelete,
+  onSelect,
+  selectedItemId,
+}) {
   if (!items.length) {
     return (
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem', color: 'var(--color-text-secondary)' }}>
@@ -10,7 +18,25 @@ export default function JobDescriptionList({ items, onEdit, onDuplicate, onArchi
   return (
     <div style={{ display: 'grid', gap: '0.75rem' }}>
       {items.map((item) => (
-        <div key={item.id} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem' }}>
+        <div
+          key={item.id}
+          onClick={() => onSelect?.(item)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              onSelect?.(item)
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          style={{
+            background: 'var(--card)',
+            border: selectedItemId === item.id ? '1px solid var(--color-accent-green)' : '1px solid var(--border)',
+            borderRadius: 12,
+            padding: '1rem',
+            cursor: 'pointer',
+          }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
             <div>
               <h3 style={{ margin: 0 }}>{item.title}</h3>
@@ -25,12 +51,12 @@ export default function JobDescriptionList({ items, onEdit, onDuplicate, onArchi
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'start', flexWrap: 'wrap' }}>
-              <button onClick={() => onEdit(item)} style={secondaryButton}>Edit</button>
-              <button onClick={() => onDuplicate(item)} style={secondaryButton}>Duplicate</button>
+              <button onClick={(event) => { event.stopPropagation(); onEdit(item) }} style={secondaryButton}>Edit</button>
+              <button onClick={(event) => { event.stopPropagation(); onDuplicate(item) }} style={secondaryButton}>Duplicate</button>
               {item.status !== 'archived' && (
-                <button onClick={() => onArchive(item)} style={secondaryButton}>Archive</button>
+                <button onClick={(event) => { event.stopPropagation(); onArchive(item) }} style={secondaryButton}>Archive</button>
               )}
-              <button onClick={() => onDelete(item)} style={dangerButton}>Delete</button>
+              <button onClick={(event) => { event.stopPropagation(); onDelete(item) }} style={dangerButton}>Delete</button>
             </div>
           </div>
         </div>
