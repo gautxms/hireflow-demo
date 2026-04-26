@@ -210,7 +210,7 @@ router.get('/', async (req, res) => {
         `SELECT jd.*,
                 COUNT(DISTINCT r.id)::int AS resume_count,
                 COUNT(pj.id)::int AS parse_job_count,
-                COUNT(pj.id) FILTER (WHERE pj.status = 'completed')::int AS completed_count,
+                COUNT(pj.id) FILTER (WHERE pj.status = 'complete')::int AS completed_count,
                 COUNT(pj.id) FILTER (WHERE pj.status IN ('failed', 'stalled'))::int AS failed_count,
                 COUNT(pj.id) FILTER (WHERE pj.status IN ('pending', 'processing', 'retrying'))::int AS in_progress_count,
                 MAX(pj.updated_at) AS latest_parse_job_updated_at
