@@ -30,6 +30,7 @@ const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 import PublicFooter from './components/PublicFooter'
 import PageSeo from './components/PageSeo'
+import UserAppShell from './components/app-shell/UserAppShell'
 import API_BASE from './config/api'
 import IntentLandingPage from './pages/seo/IntentLandingPage'
 import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
@@ -59,6 +60,20 @@ import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysi
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
+const USER_SHELL_ROUTE_PATHS = new Set(['/account', '/settings', '/billing', '/account/payment-method'])
+const USER_SHELL_DISABLED_PATHS = new Set(['/results', '/job-descriptions'])
+
+function isUserShellEnabled() {
+  if (import.meta.env.VITE_ENABLE_USER_APP_SHELL === 'true') {
+    return true
+  }
+
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.localStorage.getItem('hireflow_enable_user_shell') === '1'
+}
 
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
@@ -87,6 +102,26 @@ function navigate(pathname, options = {}) {
     window.history.pushState(options.state ?? {}, '', pathname)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
+}
+
+function shouldDisableUserShell(pathname) {
+  if (USER_SHELL_DISABLED_PATHS.has(pathname)) {
+    return true
+  }
+
+  return pathname.startsWith('/results/')
+}
+
+function shouldRenderWithinUserShell(pathname, isAuthenticated) {
+  if (!isUserShellEnabled() || !isAuthenticated) {
+    return false
+  }
+
+  if (shouldDisableUserShell(pathname)) {
+    return false
+  }
+
+  return USER_SHELL_ROUTE_PATHS.has(pathname)
 }
 
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
@@ -750,6 +785,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       {getPageContent()}
     </Suspense>
   )
+  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated)
 
   if (isAdminPath) {
     return (
@@ -757,6 +793,17 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         <PageSeo pathname={pathname} currentPage={currentPage} />
         <main>{pageContent}</main>
       </div>
+    )
+  }
+
+  if (useUserShellLayout) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <UserAppShell pathname={pathname} onNavigate={navigate}>
+          {pageContent}
+        </UserAppShell>
+      </>
     )
   }
 
