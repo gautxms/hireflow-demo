@@ -2,7 +2,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
   { key: 'jobs', label: 'Jobs', path: '/job-descriptions' },
   { key: 'analyses', label: 'Analyses', path: '/results' },
-  { key: 'candidates', label: 'Candidates', path: '/results' },
+  { key: 'candidates', label: 'Candidates', path: '/candidates' },
   { key: 'shortlists', label: 'Shortlists', path: '/results' },
   { key: 'reports', label: 'Reports', path: '/billing' },
   { key: 'settings', label: 'Settings', path: '/settings' },

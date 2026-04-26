@@ -28,6 +28,8 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
 const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
+const CandidatesPage = lazy(() => import('./pages/CandidatesPage'))
+const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage'))
 import PublicFooter from './components/PublicFooter'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
@@ -468,6 +470,32 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           onBack={() => navigate('/')}
         />
       )
+    }
+
+    if (resolvedPathname === '/candidates') {
+      const canAccessCandidates = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view candidates.',
+        onRequireAuth,
+      })
+      if (!canAccessCandidates) {
+        return null
+      }
+
+      return <CandidatesPage />
+    }
+
+    if (pathname.startsWith('/candidates/')) {
+      const canAccessCandidateDetail = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view candidate profiles.',
+        onRequireAuth,
+      })
+      if (!canAccessCandidateDetail) {
+        return null
+      }
+
+      return <CandidateDetailPage pathname={pathname} />
     }
 
     if (resolvedPathname === '/job-descriptions') {

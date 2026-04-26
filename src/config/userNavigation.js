@@ -7,6 +7,13 @@ export const USER_SECTION_NAVIGATION = [
     requiresAuth: true,
   },
   {
+    key: 'candidates',
+    label: 'Candidates',
+    href: '/candidates',
+    aliases: ['/candidates', '/account/candidates'],
+    requiresAuth: true,
+  },
+  {
     key: 'jobDescriptions',
     label: 'Job descriptions',
     href: '/job-descriptions',
