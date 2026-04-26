@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
+import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 
 const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -111,6 +112,7 @@ export function getExperienceLevel(candidate) {
 }
 
 export function normalizeCandidate(candidate = {}) {
+  const { id, candidateId, resumeId } = resolveCanonicalCandidateIdentity(candidate)
   const experienceValue = Array.isArray(candidate.experience)
     ? candidate.experience.map((entry) => entry?.duration).filter(Boolean).join(' | ')
     : candidate.experience
@@ -130,7 +132,9 @@ export function normalizeCandidate(candidate = {}) {
         })
 
   return {
-    id: candidate.id || crypto.randomUUID(),
+    id,
+    candidateId,
+    resumeId,
     name: candidate.name || 'Unknown Candidate',
     email: candidate.email || '',
     phone: candidate.phone || '',

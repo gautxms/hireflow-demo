@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { resolveCandidateResumeUuid } from '../utils/candidateIdentity.js'
 
 const router = Router()
 
@@ -102,7 +103,9 @@ router.get('/:id', async (req, res) => {
 })
 
 router.post('/:id/candidates', async (req, res) => {
-  const resumeId = String(req.body?.resumeId || '').trim()
+  const resumeId = resolveCandidateResumeUuid(req.body?.resumeId)
+    || resolveCandidateResumeUuid(req.body?.candidateId)
+    || resolveCandidateResumeUuid(req.body)
   const notes = req.body?.notes ? String(req.body.notes).trim() : null
   const parsedRating = Number(req.body?.rating)
   const rating = Number.isInteger(parsedRating) ? parsedRating : null
@@ -159,6 +162,7 @@ router.post('/:id/candidates', async (req, res) => {
 
 router.delete('/:id/candidates/:resumeId', async (req, res) => {
   try {
+    const resolvedResumeId = resolveCandidateResumeUuid(req.params.resumeId) || String(req.params.resumeId || '').trim()
     const ownerCheck = await pool.query(
       `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 LIMIT 1`,
       [req.params.id, req.userId],
@@ -172,7 +176,7 @@ router.delete('/:id/candidates/:resumeId', async (req, res) => {
       `DELETE FROM shortlist_candidates
        WHERE shortlist_id = $1 AND resume_id = $2
        RETURNING id`,
-      [req.params.id, req.params.resumeId],
+      [req.params.id, resolvedResumeId],
     )
 
     if (result.rowCount === 0) {
