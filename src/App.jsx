@@ -57,6 +57,7 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
+import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isSharedResultsPath } from './utils/resultsRouteContract'
 import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -171,6 +172,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const handleFileUploaded = (candidateResults) => {
+    // Contract: uploader success transitions into `/results` (latest authenticated analysis view).
     setUploadedFiles(candidateResults)
     setResultsRecoveryAttempted(false)
     handleNavigate('results')
@@ -235,9 +237,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
 
   useEffect(() => {
-    const match = pathname.match(/^\/results\/([^/]+)$/)
+    const shareToken = getSharedResultsToken(pathname)
 
-    if (!match) {
+    if (!shareToken) {
       setSharedResults(null)
       setSharedResultsError('')
       setSharedResultsLoading(false)
@@ -245,7 +247,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const controller = new AbortController()
-    const shareToken = decodeURIComponent(match[1])
 
     const loadSharedResults = async () => {
       try {
@@ -316,7 +317,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const resolvedPathname = resolveUserSectionPath(pathname)
 
   const getPageContent = () => {
-    if (pathname.match(/^\/results\/[^/]+$/)) {
+    // Contract: `/results/:token` always resolves through the shared-results loading path.
+    if (isSharedResultsPath(pathname)) {
       if (sharedResultsError) {
         return (
           <main className="route-state route-state--shared-error">
@@ -444,15 +446,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           <main className="route-state route-state--results-empty">
             <StatePattern
               kind="empty"
-              title="No recent analysis found"
-              description="We couldn’t find a recent resume analysis for your account. Upload resumes to start a new analysis."
+              title={RESULTS_EMPTY_STATE_COPY.title}
+              description={RESULTS_EMPTY_STATE_COPY.description}
               action={(
                 <button
                   type="button"
                   onClick={() => navigate('/')}
                   className="route-state-card__action"
                 >
-                  Go to uploader
+                  {RESULTS_EMPTY_STATE_COPY.action}
                 </button>
               )}
             />
@@ -719,15 +721,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
               <main className="route-state route-state--results-empty">
                 <StatePattern
                   kind="empty"
-                  title="No recent analysis found"
-                  description="We couldn’t find a recent resume analysis for your account. Upload resumes to start a new analysis."
+                  title={RESULTS_EMPTY_STATE_COPY.title}
+                  description={RESULTS_EMPTY_STATE_COPY.description}
                   action={(
                     <button
                       type="button"
                       onClick={() => handleNavigate('uploader')}
                       className="route-state-card__action"
                     >
-                      Go to uploader
+                      {RESULTS_EMPTY_STATE_COPY.action}
                     </button>
                   )}
                 />

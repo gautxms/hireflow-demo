@@ -60,3 +60,23 @@ test('buildFileSnapshot preserves retry context fingerprints', () => {
   assert.equal(snapshot.length, 1)
   assert.equal(snapshot[0].fingerprint, 'candidate.docx::2048::171000')
 })
+
+test('resume analysis recoverability contract is unchanged for terminal parse states', () => {
+  assert.equal(isSessionRecoverable({ jobId: 'job-1', parseStatus: 'processing' }), true)
+  assert.equal(isSessionRecoverable({ jobId: 'job-1', parseStatus: 'complete' }), false)
+  assert.equal(isSessionRecoverable({ jobId: 'job-1', parseStatus: 'failed' }), false)
+  assert.equal(isSessionRecoverable({ jobId: 'job-1', parseStatus: 'cancelled' }), false)
+})
+
+test('resume analysis session recovery keeps jobIds fallback behavior', () => {
+  const storage = createStorageMock()
+  storage.setItem('hireflow_resume_analysis_session_v1', JSON.stringify({
+    version: 1,
+    jobId: 'job-fallback',
+    parseStatus: 'processing',
+  }))
+
+  const session = readResumeAnalysisSession(storage)
+  assert.deepEqual(session.jobIds, ['job-fallback'])
+  assert.equal(isSessionRecoverable(session), true)
+})
