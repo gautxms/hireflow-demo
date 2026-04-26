@@ -28,6 +28,7 @@ const migrationFiles = [
   '024-add-parse-jobs-updated-at-indexes',
   '025-add-candidate-profiles',
   '026-add-analyses',
+  '027-add-dashboard-kpi-indexes',
 ]
 
 async function ensureMigrationsTable(client) {
