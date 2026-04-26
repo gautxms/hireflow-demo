@@ -20,13 +20,32 @@ function pickPrimaryCandidate(payload) {
   return null
 }
 
-function resolveProfilePayload({ resumeParseResult, parseJobResult }) {
+function resolveProfilePayload({
+  resumeParseResult,
+  resumeUpdatedAt,
+  parseJobResult,
+  parseJobUpdatedAt,
+  parseJobId,
+}) {
   const fromResume = pickPrimaryCandidate(resumeParseResult)
   if (fromResume) {
-    return fromResume
+    return {
+      profile: fromResume,
+      sourceParseJobId: null,
+      sourceUpdatedAt: resumeUpdatedAt || new Date(),
+    }
   }
 
-  return pickPrimaryCandidate(parseJobResult)
+  const fromParseJob = pickPrimaryCandidate(parseJobResult)
+  if (!fromParseJob) {
+    return null
+  }
+
+  return {
+    profile: fromParseJob,
+    sourceParseJobId: parseJobId || null,
+    sourceUpdatedAt: parseJobUpdatedAt || resumeUpdatedAt || new Date(),
+  }
 }
 
 export async function upsertCandidateProfile({
@@ -100,21 +119,30 @@ export async function syncCandidateProfilesForUser(userId) {
   let syncedCount = 0
 
   for (const row of resumeRows.rows) {
-    const profile = resolveProfilePayload({
+    const resolvedProfile = resolveProfilePayload({
       resumeParseResult: row.resume_parse_result,
+      resumeUpdatedAt: row.resume_updated_at,
       parseJobResult: row.parse_job_result,
+      parseJobUpdatedAt: row.parse_job_updated_at,
+      parseJobId: row.source_parse_job_id,
     })
 
-    if (!profile) {
+    if (!resolvedProfile) {
+      await pool.query(
+        `DELETE FROM candidate_profiles
+         WHERE user_id = $1
+           AND resume_id = $2`,
+        [userId, row.resume_id],
+      )
       continue
     }
 
     await upsertCandidateProfile({
       userId,
       resumeId: row.resume_id,
-      profile,
-      sourceParseJobId: row.source_parse_job_id,
-      sourceUpdatedAt: row.parse_job_updated_at || row.resume_updated_at || new Date(),
+      profile: resolvedProfile.profile,
+      sourceParseJobId: resolvedProfile.sourceParseJobId,
+      sourceUpdatedAt: resolvedProfile.sourceUpdatedAt,
       schemaVersion: CANDIDATE_PROFILE_SCHEMA_VERSION,
     })
 
