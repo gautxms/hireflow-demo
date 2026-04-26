@@ -8,6 +8,7 @@ import { sanitizeFilename } from '../utils/sanitize.js'
 const router = Router()
 const uploadDirectory = path.join(process.cwd(), 'backend', 'uploads', 'job-descriptions')
 const MAX_FILE_SIZE = 20 * 1024 * 1024
+const JOB_DESCRIPTION_USAGE_SUMMARY_FLAG = String(process.env.JOB_DESCRIPTION_USAGE_SUMMARY_ENABLED || '').trim() === 'true'
 const ALLOWED_FILE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -85,6 +86,8 @@ async function ensureSchema() {
       ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
 
     CREATE INDEX IF NOT EXISTS idx_resumes_job_description_id ON resumes(job_description_id);
+    CREATE INDEX IF NOT EXISTS idx_parse_jobs_updated_at ON parse_jobs(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_parse_jobs_resume_id_updated_at ON parse_jobs(resume_id, updated_at DESC);
   `)
 
   schemaReady = true
@@ -137,8 +140,23 @@ function toIntOrDefault(value, fallback) {
   return Number.isFinite(parsed) ? Math.round(parsed) : fallback
 }
 
-function mapRecord(row) {
+function mapUsageSummary(row) {
+  if (!row || row.resume_count === undefined) {
+    return undefined
+  }
+
   return {
+    resumeCount: Number(row.resume_count || 0),
+    parseJobCount: Number(row.parse_job_count || 0),
+    completedCount: Number(row.completed_count || 0),
+    failedCount: Number(row.failed_count || 0),
+    inProgressCount: Number(row.in_progress_count || 0),
+    latestParseJobUpdatedAt: row.latest_parse_job_updated_at || null,
+  }
+}
+
+function mapRecord(row, options = {}) {
+  const mapped = {
     id: row.id,
     title: row.title,
     description: row.description || '',
@@ -160,6 +178,12 @@ function mapRecord(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+
+  if (options.includeUsageSummary) {
+    mapped.usageSummary = mapUsageSummary(row)
+  }
+
+  return mapped
 }
 
 router.get('/files/:filename', async (req, res) => {
@@ -178,16 +202,40 @@ router.get('/', async (req, res) => {
     await ensureSchema()
 
     const includeArchived = String(req.query.includeArchived || 'false') === 'true'
-    const result = await pool.query(
-      `SELECT *
-       FROM job_descriptions
-       WHERE user_id = $1
-         AND ($2::boolean = true OR status <> 'archived')
-       ORDER BY updated_at ASC`,
-      [req.userId, includeArchived],
-    )
+    const includeUsageSummary = JOB_DESCRIPTION_USAGE_SUMMARY_FLAG
+      && String(req.query.includeUsageSummary || 'false') === 'true'
 
-    return res.json({ items: result.rows.map(mapRecord) })
+    const result = includeUsageSummary
+      ? await pool.query(
+        `SELECT jd.*,
+                COUNT(DISTINCT r.id)::int AS resume_count,
+                COUNT(pj.id)::int AS parse_job_count,
+                COUNT(pj.id) FILTER (WHERE pj.status = 'completed')::int AS completed_count,
+                COUNT(pj.id) FILTER (WHERE pj.status IN ('failed', 'stalled'))::int AS failed_count,
+                COUNT(pj.id) FILTER (WHERE pj.status IN ('pending', 'processing', 'retrying'))::int AS in_progress_count,
+                MAX(pj.updated_at) AS latest_parse_job_updated_at
+         FROM job_descriptions jd
+         LEFT JOIN resumes r
+           ON r.job_description_id = jd.id
+          AND r.user_id = jd.user_id
+         LEFT JOIN parse_jobs pj
+           ON pj.resume_id = r.id
+         WHERE jd.user_id = $1
+           AND ($2::boolean = true OR jd.status <> 'archived')
+         GROUP BY jd.id
+         ORDER BY jd.updated_at ASC`,
+        [req.userId, includeArchived],
+      )
+      : await pool.query(
+        `SELECT jd.*
+         FROM job_descriptions jd
+         WHERE jd.user_id = $1
+           AND ($2::boolean = true OR jd.status <> 'archived')
+         ORDER BY jd.updated_at ASC`,
+        [req.userId, includeArchived],
+      )
+
+    return res.json({ items: result.rows.map((row) => mapRecord(row, { includeUsageSummary })) })
   } catch (error) {
     console.error('[JobDescriptions] list failed:', error)
     return res.status(500).json({ error: 'Unable to list job descriptions' })
