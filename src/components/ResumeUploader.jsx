@@ -31,6 +31,7 @@ const CHUNK_SIZE = 5 * 1024 * 1024
 const MAX_CHUNK_RETRIES = 3
 const MAX_QUEUE_RETRIES = 3
 const BASE_QUEUE_RETRY_DELAY_MS = 5000
+const ANALYSIS_LEVEL_POLLING_ENABLED = import.meta.env.VITE_ENABLE_ANALYSIS_LEVEL_POLLING === 'true'
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -332,7 +333,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       throw new Error('No parse job ID returned from upload request')
     }
 
-    return { primaryJobId }
+    return {
+      primaryJobId,
+      analysisId: String(payload.analysisId || '').trim(),
+    }
   }
 
   const handleAnalyze = async ({ isAutomaticRetry = false } = {}) => {
@@ -371,6 +375,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
 
       const queuedJobs = []
+      let analysisId = ''
 
       try {
         for (const entry of uploadedFiles) {
@@ -389,6 +394,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               fileSize: file.size,
               mimeType: inferResumeMimeType(file),
               selectedJobDescriptionId,
+              analysisId,
             })),
           })
 
@@ -403,6 +409,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
           const initPayload = await parseJsonSafe(initResponse)
           const uploadId = initPayload.uploadId
+          analysisId = analysisId || String(initPayload.analysisId || '').trim()
           const uploadedChunks = new Set(initPayload.uploadedChunks || [])
 
           const cache = readUploadCache()
@@ -458,6 +465,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             filename: file.name,
             status: 'processing',
           })
+          analysisId = analysisId || String(completePayload.analysisId || '').trim()
 
           const nextCache = readUploadCache()
           delete nextCache[fingerprint]
@@ -477,6 +485,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           filename: uploadedFiles[0]?.name || '',
           status: 'processing',
         })
+        analysisId = analysisId || String(legacyQueued.analysisId || '').trim()
         setUploadProgress({ completed: totalChunksAllFiles, total: totalChunksAllFiles })
       }
 
@@ -489,13 +498,18 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       writeResumeAnalysisSession({
         jobId: primaryJobId,
         jobIds: validQueuedJobs.map((job) => job.jobId),
+        analysisId,
         parseStatus: 'processing',
         parseProgress: 5,
         selectedJobDescriptionId,
         fileSnapshots: buildFileSnapshot(uploadedFiles),
       })
 
-      await trackParseStatus({ token, jobs: validQueuedJobs })
+      if (ANALYSIS_LEVEL_POLLING_ENABLED && analysisId) {
+        await trackAnalysisStatus({ token, analysisId, jobs: validQueuedJobs })
+      } else {
+        await trackParseStatus({ token, jobs: validQueuedJobs, analysisId })
+      }
     } catch (err) {
       if (err?.name === 'AbortError') {
         return
@@ -563,7 +577,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     }
   }
 
-  const trackParseStatus = useCallback(async ({ token, jobs }) => {
+  const trackParseStatus = useCallback(async ({ token, jobs, analysisId = '' }) => {
     const queuedJobs = (Array.isArray(jobs) ? jobs : [])
       .map((job) => ({
         jobId: String(job?.jobId || '').trim(),
@@ -664,6 +678,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       writeResumeAnalysisSession({
         jobId: primaryJobId,
         jobIds: queuedJobs.map((job) => job.jobId),
+        analysisId,
         parseStatus: nextStatus,
         parseProgress: nextProgress,
         selectedJobDescriptionId,
@@ -707,6 +722,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         writeResumeAnalysisSession({
           jobId: primaryJobId,
           jobIds: queuedJobs.map((job) => job.jobId),
+          analysisId,
           parseStatus: hasFailedJobs ? 'partial' : 'complete',
           parseProgress: 100,
           selectedJobDescriptionId,
@@ -715,6 +731,116 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         writeResumeAnalysisResult({
           ...latestResult,
           jobId: primaryJobId,
+        }, resumeAnalysisOwnerKey)
+
+        onFileUploaded(latestResult)
+        clearResumeAnalysisSession()
+        return
+      }
+
+      await waitWithAbort(pollDelayMs, abortController.signal)
+    }
+
+    throw new Error('Resume parsing timed out. Please try again.')
+  }, [onFileUploaded, resumeAnalysisOwnerKey, selectedJobDescriptionId, uploadedFiles])
+
+  const trackAnalysisStatus = useCallback(async ({ token, analysisId, jobs = [] }) => {
+    const pollDelayMs = 2000
+    const maxPollAttempts = 300
+    const fallbackJobs = Array.isArray(jobs) ? jobs : []
+    const abortController = new AbortController()
+    activePollAbortControllerRef.current = abortController
+
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+      if (shouldSkipStateUpdate({ mounted: mountedRef.current, signal: abortController.signal })) {
+        throw new DOMException('Polling aborted', 'AbortError')
+      }
+
+      const response = await fetch(`${API_BASE}/analyses/${analysisId}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: abortController.signal,
+      })
+
+      const payload = await parseJsonSafe(response)
+      if (!response.ok) {
+        throw withErrorContext(new Error(payload.error || 'Unable to fetch analysis status'), {
+          stage: 'analysis_status',
+          endpoint: '/analyses/:id',
+          status: response.status,
+        })
+      }
+
+      const items = Array.isArray(payload.items) ? payload.items : []
+      const nextJobStatuses = items.map((item) => ({
+        jobId: String(item.parseJobId || '').trim(),
+        resumeId: String(item.resumeId || '').trim(),
+        filename: String(item.filename || '').trim(),
+        status: String(item.status || 'processing').trim() || 'processing',
+        progress: Number(item.progress || 0),
+        error: item.error ? String(item.error) : '',
+      }))
+
+      const effectiveJobStatuses = nextJobStatuses.length > 0
+        ? nextJobStatuses
+        : fallbackJobs
+
+      if (mountedRef.current) {
+        setJobStatuses(effectiveJobStatuses)
+      }
+
+      const totalProgress = effectiveJobStatuses.reduce((sum, job) => sum + Number(job.progress || 0), 0)
+      const nextProgress = Math.round(totalProgress / Math.max(1, effectiveJobStatuses.length))
+      const hasFailedJobs = effectiveJobStatuses.some((job) => job.status === 'failed')
+      const hasPendingJobs = effectiveJobStatuses.some((job) => job.status !== 'complete' && job.status !== 'failed')
+      const nextStatus = hasPendingJobs ? 'processing' : (hasFailedJobs ? 'partial' : 'complete')
+
+      writeResumeAnalysisSession({
+        jobId: String(effectiveJobStatuses[0]?.jobId || ''),
+        jobIds: effectiveJobStatuses.map((job) => job.jobId).filter(Boolean),
+        analysisId,
+        parseStatus: nextStatus,
+        parseProgress: nextProgress,
+        selectedJobDescriptionId,
+        fileSnapshots: buildFileSnapshot(uploadedFiles),
+      })
+
+      if (mountedRef.current) {
+        setParseStatus(nextStatus)
+        setParseProgress(nextProgress)
+      }
+
+      if (!hasPendingJobs) {
+        const completedEntries = items.flatMap((item) => {
+          const parseResult = item?.result || {}
+          const candidates = Array.isArray(parseResult.candidates) ? parseResult.candidates : []
+          return candidates.map((candidate) => ({
+            resumeId: item.resumeId || candidate?.resumeId || candidate?.resume_id || '',
+            filename: item.filename || '',
+            candidate,
+          }))
+        })
+        const mergedByResume = mergeCandidatesByResumeId({}, completedEntries)
+        const completedCandidates = Object.values(mergedByResume)
+
+        if (completedCandidates.length === 0) {
+          throw withErrorContext(new Error('Resume parsing finished, but no candidates were returned'), {
+            stage: 'all_failed',
+          })
+        }
+
+        const latestResult = {
+          candidates: completedCandidates,
+          parseMeta: {
+            hasJobDescription: Boolean(payload?.jobDescriptionId),
+            methodUsed: 'ai-extraction',
+          },
+          jobStatuses: effectiveJobStatuses,
+        }
+
+        writeResumeAnalysisResult({
+          ...latestResult,
+          jobId: String(effectiveJobStatuses[0]?.jobId || ''),
         }, resumeAnalysisOwnerKey)
 
         onFileUploaded(latestResult)
@@ -747,6 +873,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         : [recoverableJobId]
       await trackParseStatus({
         token,
+        analysisId: String(cachedSession?.analysisId || recoverableSession?.analysisId || '').trim(),
         jobs: jobIds.map((jobId) => ({ jobId })),
       })
     } catch (resumeError) {
@@ -919,13 +1046,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               Upload progress: {uploadPercent}% ({uploadProgress.completed}/{uploadProgress.total} chunks)
             </p>
             <div className="resume-upload-progress-bar">
-              <div
-                className="resume-upload-progress-fill"
-                // inline-style-allow runtime-dimension
-                style={{
-                  width: `${uploadPercent}%`,
-                }}
-              />
+              <progress className="resume-upload-progress-meter" value={uploadPercent} max={100} />
             </div>
           </div>
         )}

@@ -32,3 +32,15 @@ test('chunk payload omits jobDescriptionId when selection is empty', () => {
   assert.equal('jobDescriptionId' in payload, false)
   assert.equal(toOptionalJobDescriptionId(''), undefined)
 })
+
+test('chunk payload includes analysisId when provided', () => {
+  const payload = buildChunkInitPayload({
+    filename: 'resume.pdf',
+    fileSize: 100,
+    mimeType: 'application/pdf',
+    selectedJobDescriptionId: '',
+    analysisId: 'analysis-123',
+  })
+
+  assert.equal(payload.analysisId, 'analysis-123')
+})

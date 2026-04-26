@@ -26,6 +26,7 @@ test('resume analysis session restores in-progress parse from localStorage', () 
   writeResumeAnalysisSession({
     jobId: 'job-123',
     jobIds: ['job-123', 'job-124'],
+    analysisId: 'analysis-42',
     parseStatus: 'processing',
     parseProgress: 37,
     selectedJobDescriptionId: 'jd-1',
@@ -35,6 +36,7 @@ test('resume analysis session restores in-progress parse from localStorage', () 
   const session = readResumeAnalysisSession(storage)
   assert.equal(session.jobId, 'job-123')
   assert.deepEqual(session.jobIds, ['job-123', 'job-124'])
+  assert.equal(session.analysisId, 'analysis-42')
   assert.equal(session.parseStatus, 'processing')
   assert.equal(isSessionRecoverable(session), true)
 })

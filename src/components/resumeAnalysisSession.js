@@ -96,6 +96,7 @@ export function readResumeAnalysisSession(storage = localStorage) {
     version: 1,
     jobId,
     jobIds: jobIds.length > 0 ? jobIds : [jobId],
+    analysisId: String(parsed.analysisId || '').trim(),
     selectedJobDescriptionId: String(parsed.selectedJobDescriptionId || '').trim(),
     parseStatus: String(parsed.parseStatus || 'processing').trim() || 'processing',
     parseProgress: Number(parsed.parseProgress || 0),
