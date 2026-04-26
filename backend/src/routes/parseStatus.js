@@ -2,15 +2,11 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
 import { getCachedJobResult, parseQueue } from '../services/jobQueue.js'
+import { normalizeParseStatus } from '../services/parseStatusMapper.js'
+
+export { normalizeParseStatus } from '../services/parseStatusMapper.js'
 
 const router = Router()
-
-export function normalizeParseStatus(queueStatus, fallbackStatus) {
-  if (queueStatus === 'completed') return 'complete'
-  if (queueStatus === 'failed') return 'failed'
-  if (queueStatus === 'active') return 'processing'
-  return fallbackStatus
-}
 
 router.get('/:id/parse-status', requireAuth, async (req, res) => {
   const { id } = req.params
