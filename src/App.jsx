@@ -55,6 +55,8 @@ const AdminRouteFallback = lazy(() => import('./admin/components/AdminRouteFallb
 import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
+import { resolveUserSectionPath } from './config/userNavigation'
+import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -124,7 +126,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (page === 'uploader' && isAuthenticated) {
       const storedSubscriptionStatus = getStoredSubscriptionStatus()
-      if (storedSubscriptionStatus !== 'active' && storedSubscriptionStatus !== 'trialing') {
+      if (!hasActiveSubscription(storedSubscriptionStatus)) {
         navigate('/pricing?reason=upgrade_required')
         return
       }
@@ -272,9 +274,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [isProfileMenuOpen])
 
   const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
-  const isActiveSubscriber = normalizedSubscriptionStatus === 'active'
+  const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
+  const resolvedPathname = resolveUserSectionPath(pathname)
 
   const getPageContent = () => {
     if (pathname.match(/^\/results\/[^/]+$/)) {
@@ -308,7 +311,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       )
     }
 
-    if (pathname === '/pricing') {
+    if (resolvedPathname === '/pricing') {
       if (isAuthenticated && isActiveSubscriber) {
         navigate('/billing')
         return null
@@ -316,31 +319,31 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
-    if (pathname === '/about') {
+    if (resolvedPathname === '/about') {
       return <AboutPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
-    if (pathname === '/contact') {
+    if (resolvedPathname === '/contact') {
       return <ContactPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
-    if (pathname === '/help') {
+    if (resolvedPathname === '/help') {
       return <HelpPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
-    if (pathname === '/demo') {
+    if (resolvedPathname === '/demo') {
       return <DemoBookingPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
-    if (pathname === '/terms') {
+    if (resolvedPathname === '/terms') {
       return <Terms />
     }
 
-    if (pathname === '/privacy') {
+    if (resolvedPathname === '/privacy') {
       return <PrivacyPage />
     }
 
-    if (pathname === '/refund-policy') {
+    if (resolvedPathname === '/refund-policy') {
       return <RefundPolicy />
     }
 
@@ -348,43 +351,55 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <IntentLandingPage pathname={pathname} />
     }
 
-    if (pathname === '/billing/success') {
+    if (resolvedPathname === '/billing/success') {
       return <BillingSuccess />
     }
 
-    if (pathname === '/billing/cancel') {
+    if (resolvedPathname === '/billing/cancel') {
       return <BillingCancel />
     }
 
-    if (pathname === '/checkout') {
+    if (resolvedPathname === '/checkout') {
       return <Checkout onAuthSuccess={onAuthSuccess} />
     }
 
-    if (pathname === '/account') {
-      if (!isAuthenticated) {
-        onRequireAuth('Please login or sign up to manage your account settings.')
+    if (resolvedPathname === '/account') {
+      const canAccessAccount = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login or sign up to manage your account settings.',
+        onRequireAuth,
+      })
+      if (!canAccessAccount) {
         return null
       }
 
       return <AccountPage token={localStorage.getItem(TOKEN_STORAGE_KEY) || ''} user={userProfile} onLogout={onLogout} onUserProfileUpdate={onUserProfileUpdate} />
     }
 
-    if (pathname === '/settings') {
-      if (!isAuthenticated) {
-        onRequireAuth('Please login or sign up to manage your account settings.')
+    if (resolvedPathname === '/settings') {
+      const canAccessSettings = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login or sign up to manage your account settings.',
+        onRequireAuth,
+      })
+      if (!canAccessSettings) {
         return null
       }
 
       return <AccountSettingsPage />
     }
 
-    if (pathname === '/billing') {
+    if (resolvedPathname === '/billing') {
       return <BillingPage />
     }
 
-    if (pathname === '/results') {
-      if (!isAuthenticated) {
-        onRequireAuth('Please login to view candidate analysis results.')
+    if (resolvedPathname === '/results') {
+      const canAccessResults = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view candidate analysis results.',
+        onRequireAuth,
+      })
+      if (!canAccessResults) {
         return null
       }
 
@@ -417,14 +432,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       )
     }
 
-    if (pathname === '/job-descriptions') {
-      if (!isAuthenticated) {
-        onRequireAuth('Please login to manage job descriptions.')
-        return null
-      }
-
-      if (!isActiveSubscriber) {
-        navigate('/pricing?reason=upgrade_required')
+    if (resolvedPathname === '/job-descriptions') {
+      const canAccessJobDescriptions = guardSubscriptionRoute({
+        isAuthenticated,
+        subscriptionStatus,
+        onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
+        authPromptMessage: 'Please login to manage job descriptions.',
+      })
+      if (!canAccessJobDescriptions) {
         return null
       }
 
