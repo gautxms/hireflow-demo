@@ -76,6 +76,14 @@ async function ensureSchema() {
     ALTER TABLE job_descriptions
       ADD COLUMN IF NOT EXISTS salary_currency TEXT NOT NULL DEFAULT 'USD';
 
+    ALTER TABLE job_descriptions
+      ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS employment_type TEXT NOT NULL DEFAULT 'unspecified',
+      ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS archived_reason TEXT,
+      ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'manual',
+      ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+
     CREATE INDEX IF NOT EXISTS idx_resumes_job_description_id ON resumes(job_description_id);
   `)
 
@@ -120,6 +128,15 @@ function toIntOrNull(value) {
   return Number.isFinite(parsed) ? Math.round(parsed) : null
 }
 
+function toIntOrDefault(value, fallback) {
+  if (value === '' || value === null || value === undefined) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.round(parsed) : fallback
+}
+
 function mapRecord(row) {
   return {
     id: row.id,
@@ -132,6 +149,12 @@ function mapRecord(row) {
     salaryMin: row.salary_min,
     salaryMax: row.salary_max,
     salaryCurrency: row.salary_currency || 'USD',
+    department: row.department,
+    employmentType: row.employment_type,
+    priority: row.priority,
+    archivedReason: row.archived_reason,
+    sourceType: row.source_type,
+    version: row.version,
     fileUrl: row.file_url,
     status: row.status,
     createdAt: row.created_at,
@@ -230,10 +253,16 @@ router.post('/', (req, res, next) => {
          salary_min,
          salary_max,
          salary_currency,
+         department,
+         employment_type,
+         priority,
+         archived_reason,
+         source_type,
+         version,
          file_url,
          status,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, NOW())
+       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
        RETURNING *`,
       [
         req.userId,
@@ -246,6 +275,12 @@ router.post('/', (req, res, next) => {
         toIntOrNull(req.body.salaryMin),
         toIntOrNull(req.body.salaryMax),
         String(req.body.salaryCurrency || 'USD').trim().toUpperCase() || 'USD',
+        req.body.department === undefined ? '' : String(req.body.department || '').trim(),
+        req.body.employmentType === undefined ? 'unspecified' : String(req.body.employmentType || 'unspecified').trim(),
+        toIntOrDefault(req.body.priority, 0),
+        req.body.archivedReason || null,
+        req.body.sourceType === undefined ? 'manual' : String(req.body.sourceType || 'manual').trim(),
+        toIntOrDefault(req.body.version, 1),
         fileUrl,
         status,
       ],
@@ -308,8 +343,14 @@ router.put('/:id', (req, res, next) => {
            salary_min = $9,
            salary_max = $10,
            salary_currency = $11,
-           file_url = $12,
-           status = $13,
+           department = $12,
+           employment_type = $13,
+           priority = $14,
+           archived_reason = $15,
+           source_type = $16,
+           version = $17,
+           file_url = $18,
+           status = $19,
            updated_at = NOW()
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
@@ -327,6 +368,16 @@ router.put('/:id', (req, res, next) => {
         req.body.salaryCurrency === undefined
           ? (prev.salary_currency || 'USD')
           : (String(req.body.salaryCurrency || 'USD').trim().toUpperCase() || 'USD'),
+        req.body.department === undefined ? prev.department : String(req.body.department || '').trim(),
+        req.body.employmentType === undefined
+          ? (prev.employment_type || 'unspecified')
+          : (String(req.body.employmentType || 'unspecified').trim()),
+        req.body.priority === undefined ? prev.priority : toIntOrDefault(req.body.priority, prev.priority),
+        req.body.archivedReason === undefined ? prev.archived_reason : (req.body.archivedReason || null),
+        req.body.sourceType === undefined
+          ? (prev.source_type || 'manual')
+          : (String(req.body.sourceType || 'manual').trim()),
+        req.body.version === undefined ? prev.version : toIntOrDefault(req.body.version, prev.version),
         fileUrl,
         status,
       ],
@@ -402,10 +453,16 @@ router.post('/:id/duplicate', async (req, res) => {
         salary_min,
         salary_max,
         salary_currency,
+        department,
+        employment_type,
+        priority,
+        archived_reason,
+        source_type,
+        version,
         file_url,
         status,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, 'draft', NOW())
+      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'draft', NOW())
       RETURNING *`,
       [
         req.userId,
@@ -418,6 +475,12 @@ router.post('/:id/duplicate', async (req, res) => {
         sourceRow.salary_min,
         sourceRow.salary_max,
         sourceRow.salary_currency || 'USD',
+        sourceRow.department || '',
+        sourceRow.employment_type || 'unspecified',
+        sourceRow.priority ?? 0,
+        sourceRow.archived_reason || null,
+        sourceRow.source_type || 'manual',
+        sourceRow.version ?? 1,
         sourceRow.file_url,
       ],
     )

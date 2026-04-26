@@ -24,6 +24,7 @@ const migrationFiles = [
   '020-add-admin-ai-model-registry',
   '021-admin-ai-actor-columns-text-compat',
   '022-add-resume-ai-profile-fields',
+  '023-add-job-description-metadata-columns',
 ]
 
 async function ensureMigrationsTable(client) {
