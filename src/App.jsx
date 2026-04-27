@@ -65,6 +65,7 @@ import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysi
 import { resolveUserSectionPath } from './config/userNavigation'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
+import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -72,16 +73,8 @@ const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings']
 const USER_SHELL_ROUTE_PATHS = new Set(['/account', '/settings', '/billing', '/reports', '/account/payment-method'])
 const USER_SHELL_DISABLED_PATHS = new Set(['/results', '/job-descriptions', '/analyses'])
 
-function isUserShellEnabled() {
-  if (import.meta.env.VITE_ENABLE_USER_APP_SHELL === 'true') {
-    return true
-  }
-
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  return window.localStorage.getItem('hireflow_enable_user_shell') === '1'
+function isUserShellEnabled(userProfile) {
+  return isFeatureEnabled(FEATURE_KEYS.sidebarShell, { userProfile })
 }
 
 function getStoredToken() {
@@ -121,8 +114,8 @@ function shouldDisableUserShell(pathname) {
   return pathname.startsWith('/results/')
 }
 
-function shouldRenderWithinUserShell(pathname, isAuthenticated) {
-  if (!isUserShellEnabled() || !isAuthenticated) {
+function shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile) {
+  if (!isUserShellEnabled(userProfile) || !isAuthenticated) {
     return false
   }
 
@@ -317,6 +310,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [isProfileMenuOpen])
 
   const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
+  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile })
+  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile })
+  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile })
   const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
@@ -351,6 +347,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           candidates={sharedResults?.candidates || []}
           onBack={() => navigate('/')}
           isSharedLoading={sharedResultsLoading}
+          userProfile={userProfile}
         />
       )
     }
@@ -388,6 +385,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       if (!canAccessDashboard) {
         return null
       }
+      if (!dashboardReportsEnabled) {
+        return <LegacyOperationsDashboard onNavigate={handleNavigate} />
+      }
+
       return <OperationsDashboard onNavigate={handleNavigate} />
     }
 
@@ -462,6 +463,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/reports') {
+      if (!dashboardReportsEnabled) {
+        navigate('/dashboard/legacy')
+        return null
+      }
+
       const canAccessReports = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view reports.',
@@ -509,12 +515,18 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         <CandidateResults
           candidates={uploadedFiles}
           onBack={() => navigate('/')}
+          userProfile={userProfile}
         />
       )
     }
 
 
     if (resolvedPathname === '/analyses') {
+      if (!analysesModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
       const canAccessAnalyses = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view analyses.',
@@ -528,6 +540,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname.startsWith('/analyses/')) {
+      if (!analysesModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
       const canAccessAnalysisDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view analysis details.',
@@ -541,6 +558,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/candidates') {
+      if (!candidateModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
       const canAccessCandidates = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view candidates.',
@@ -554,6 +576,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (pathname.startsWith('/candidates/')) {
+      if (!candidateModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
       const canAccessCandidateDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view candidate profiles.',
@@ -835,13 +862,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
               <CandidateResults
                 candidates={uploadedFiles}
                 onBack={() => handleNavigate('uploader')}
+                userProfile={userProfile}
               />
               )
           )
         )}
 
         {currentPage === 'dashboard' && (
-          <OperationsDashboard onNavigate={handleNavigate} />
+          dashboardReportsEnabled
+            ? <OperationsDashboard onNavigate={handleNavigate} />
+            : <LegacyOperationsDashboard onNavigate={handleNavigate} />
         )}
 
         {currentPage === 'settings' && (
@@ -895,12 +925,25 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     navigate('/ai-resume-screening')
   }
 
+
+  const userShellNavItems = useMemo(() => {
+    return [
+      { key: 'dashboard', label: 'Dashboard', path: '/' },
+      { key: 'jobs', label: 'Jobs', path: '/job-descriptions' },
+      ...(analysesModuleEnabled ? [{ key: 'analyses', label: 'Analyses', path: '/analyses' }] : []),
+      ...(candidateModuleEnabled ? [{ key: 'candidates', label: 'Candidates', path: '/candidates' }] : []),
+      { key: 'shortlists', label: 'Shortlists', path: '/results' },
+      ...(dashboardReportsEnabled ? [{ key: 'reports', label: 'Reports', path: '/reports' }] : []),
+      { key: 'settings', label: 'Settings', path: '/settings' },
+    ]
+  }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
+
   const pageContent = (
     <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>Loading…</div>}>
       {getPageContent()}
     </Suspense>
   )
-  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated)
+  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile)
 
   if (isAdminPath) {
     return (
@@ -915,7 +958,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     return (
       <>
         <PageSeo pathname={pathname} currentPage={currentPage} />
-        <UserAppShell pathname={pathname} onNavigate={navigate}>
+        <UserAppShell pathname={pathname} onNavigate={navigate} navItems={userShellNavItems}>
           {pageContent}
         </UserAppShell>
       </>

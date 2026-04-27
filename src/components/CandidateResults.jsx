@@ -15,6 +15,7 @@ import {
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
+import { FEATURE_KEYS, isFeatureEnabled } from '../config/featureFlags'
 import {
   computeAllVisibleSelected,
   getSelectedCandidates,
@@ -141,7 +142,7 @@ function filterAndSortCandidates(candidates, filters) {
   })
 }
 
-export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0 }) {
+export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null }) {
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
@@ -162,6 +163,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [shortlistError, setShortlistError] = useState('')
   const [tagDraft, setTagDraft] = useState('')
   const [candidateTags, setCandidateTags] = useState({})
+  const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
   const rawCandidates = useMemo(() => (
     Array.isArray(candidates)
@@ -380,16 +382,20 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
 
   useEffect(() => {
+    if (!shortlistV2Enabled) {
+      return
+    }
+
     loadShortlists()
-  }, [loadShortlists])
+  }, [loadShortlists, shortlistV2Enabled])
 
   useEffect(() => {
-    if (!selectedShortlistId) {
+    if (!shortlistV2Enabled || !selectedShortlistId) {
       return
     }
 
     loadShortlistDetails(selectedShortlistId)
-  }, [loadShortlistDetails, selectedShortlistId])
+  }, [loadShortlistDetails, selectedShortlistId, shortlistV2Enabled])
   const candidateRows = useMemo(() => {
     if (!Array.isArray(displayCandidates)) {
       return []
@@ -514,6 +520,22 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     }
 
     try {
+      if (!shortlistV2Enabled) {
+        let fallbackSuccessCount = 0
+        for (const candidate of selected) {
+          // Preserve legacy single-candidate shortlist flow when v2 is disabled.
+          const ok = await addCandidateToShortlist(candidate)
+          if (ok) {
+            fallbackSuccessCount += 1
+          }
+        }
+
+        if (fallbackSuccessCount > 0) {
+          alert(`Added ${fallbackSuccessCount} candidate(s) to shortlist.`)
+        }
+        return
+      }
+
       const payload = await addCandidatesToShortlistBatch(selected)
       const succeeded = Number(payload?.summary?.succeeded || 0)
       const failed = Number(payload?.summary?.failed || 0)
@@ -544,10 +566,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       }
 
       if (fallbackSuccessCount > 0) {
-      await Promise.all([
-        loadShortlists(),
-        loadShortlistDetails(selectedShortlistId),
-      ])
+        await Promise.all([
+          loadShortlists(),
+          loadShortlistDetails(selectedShortlistId),
+        ])
         alert(`Added ${fallbackSuccessCount} candidate(s) to shortlist.`)
       }
     }
@@ -723,6 +745,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       </div>
 
       <CandidateFilters
+        shortlistEnabled={shortlistV2Enabled}
         candidates={displayCandidates}
         searchText={searchText}
         selectedSkills={selectedSkills}
@@ -736,7 +759,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
         onToggleShortlist={setShortlistOpen}
       />
 
-      {shortlistOpen && (
+      {shortlistV2Enabled && shortlistOpen && (
         <>
           <div className="panel-overlay" onClick={() => setShortlistOpen(false)} aria-hidden="true" />
           <div className="shortlist-panel" role="dialog" aria-modal="true" aria-label="Candidate shortlists">
