@@ -1,0 +1,121 @@
+.new-dashboard {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  font-family: var(--font-body);
+  padding: 2rem;
+}
+
+.new-dashboard__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.new-dashboard__title {
+  margin: 0;
+}
+
+.new-dashboard__subtitle {
+  color: var(--color-text-secondary);
+}
+
+.new-dashboard__header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.new-dashboard__button {
+  padding: 0.6rem 0.9rem;
+}
+
+.new-dashboard__panel,
+.new-dashboard__kpi-card,
+.new-dashboard__trend-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.new-dashboard__panel,
+.new-dashboard__kpis {
+  margin-bottom: 1rem;
+}
+
+.new-dashboard__filters {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.new-dashboard__select {
+  display: block;
+  margin-top: 4px;
+}
+
+.new-dashboard__select--job {
+  min-width: 220px;
+}
+
+.new-dashboard__report-period {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.new-dashboard__error {
+  color: var(--color-error);
+  margin-top: 0.5rem;
+}
+
+.new-dashboard__kpis {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.new-dashboard__kpi-label {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.new-dashboard__kpi-value {
+  margin: 0.4rem 0 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.new-dashboard__trends {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.new-dashboard__trend-title {
+  margin-top: 0;
+}
+
+.new-dashboard__muted,
+.new-dashboard__trend-range {
+  color: var(--color-text-secondary);
+}
+
+.new-dashboard__chart {
+  width: 100%;
+  height: 180px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+}
+
+.new-dashboard__trend-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}

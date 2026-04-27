@@ -70,74 +70,110 @@ function formatRate(numerator, denominator) {
   return Number(((numerator / denominator) * 100).toFixed(2))
 }
 
+function csvEscape(value) {
+  if (value === null || value === undefined) return '""'
+  return `"${String(value).replace(/"/g, '""')}"`
+}
+
 router.use(requireAuth)
 
 router.get('/dashboard/kpis', async (req, res) => {
   try {
     const { startDate, endDate, effectiveRangeDays } = resolveDashboardDateRange(req.query)
     const bucketTrunc = resolveBucketTrunc(req.query.granularity, effectiveRangeDays)
+    const jobDescriptionId = typeof req.query.jobDescriptionId === 'string' && req.query.jobDescriptionId.trim()
+      ? req.query.jobDescriptionId.trim()
+      : null
+    const exportFormat = typeof req.query.export === 'string' ? req.query.export.trim().toLowerCase() : ''
 
     const filters = {
       userId: req.user.id,
       startDate: startDate.toISOString(),
       endDateExclusive: new Date(endDate.getTime() + (24 * 60 * 60 * 1000)).toISOString(),
       bucketTrunc,
+      jobDescriptionId,
     }
 
-    const [summaryResult, timeSeriesResult, topJobsResult] = await Promise.all([
+    const [summaryResult, timeSeriesResult, topJobsResult, jobOptionsResult] = await Promise.all([
       pool.query(
         `WITH analysis_window AS (
-           SELECT id, status
-           FROM analyses
-           WHERE user_id = $1
-             AND created_at >= $2::timestamptz
-             AND created_at < $3::timestamptz
+           SELECT a.id, a.status, ai.resume_id
+           FROM analyses a
+           INNER JOIN analysis_items ai ON ai.analysis_id = a.id
+           WHERE a.user_id = $1
+             AND a.created_at >= $2::timestamptz
+             AND a.created_at < $3::timestamptz
+             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
          ),
          resume_window AS (
-           SELECT id, profile_score
-           FROM resumes
-           WHERE user_id = $1
-             AND created_at >= $2::timestamptz
-             AND created_at < $3::timestamptz
+           SELECT r.id, r.profile_score
+           FROM resumes r
+           WHERE r.user_id = $1
+             AND r.created_at >= $2::timestamptz
+             AND r.created_at < $3::timestamptz
+             AND EXISTS (
+               SELECT 1
+               FROM analysis_window aw
+               WHERE aw.resume_id = r.id
+             )
          ),
          shortlist_window AS (
            SELECT DISTINCT sc.resume_id
            FROM shortlist_candidates sc
            INNER JOIN shortlists s ON s.id = sc.shortlist_id
+           INNER JOIN analysis_window aw ON aw.resume_id = sc.resume_id
            WHERE s.user_id = $1
              AND sc.added_at >= $2::timestamptz
              AND sc.added_at < $3::timestamptz
          )
          SELECT
-           (SELECT COUNT(*)::int FROM analysis_window) AS analyses_run_count,
-           (SELECT COUNT(*)::int FROM analysis_window WHERE status = 'complete') AS analyses_completed_count,
+           (SELECT COUNT(DISTINCT id)::int FROM analysis_window) AS analyses_run_count,
+           (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status = 'complete') AS analyses_completed_count,
            (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM resume_window WHERE profile_score IS NOT NULL) AS avg_score,
            (SELECT COUNT(*)::int FROM resume_window) AS resumes_count,
            (SELECT COUNT(*)::int FROM shortlist_window) AS shortlisted_count`,
-        [filters.userId, filters.startDate, filters.endDateExclusive],
+        [filters.userId, filters.startDate, filters.endDateExclusive, filters.bucketTrunc, filters.jobDescriptionId],
       ),
       pool.query(
         `WITH days AS (
            SELECT generate_series($2::date, ($3::date - interval '1 day')::date, interval '1 day') AS day
          ),
+         filtered_analysis_items AS (
+           SELECT DISTINCT
+             a.id AS analysis_id,
+             a.status,
+             a.created_at,
+             ai.resume_id
+           FROM analyses a
+           INNER JOIN analysis_items ai ON ai.analysis_id = a.id
+           WHERE a.user_id = $1
+             AND a.created_at >= $2::timestamptz
+             AND a.created_at < $3::timestamptz
+             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
+         ),
+         filtered_resumes AS (
+           SELECT DISTINCT resume_id
+           FROM filtered_analysis_items
+         ),
          analyses_by_day AS (
            SELECT date_trunc('day', created_at)::date AS day,
                   COUNT(*)::int AS analyses_run,
                   COUNT(*) FILTER (WHERE status = 'complete')::int AS analyses_completed
-           FROM analyses
-           WHERE user_id = $1
-             AND created_at >= $2::timestamptz
-             AND created_at < $3::timestamptz
+           FROM (
+             SELECT DISTINCT analysis_id, status, created_at
+             FROM filtered_analysis_items
+           ) analyses_for_counts
            GROUP BY 1
          ),
          scores_by_day AS (
-           SELECT date_trunc('day', created_at)::date AS day,
-                  ROUND(AVG(profile_score)::numeric, 2) AS avg_score
-           FROM resumes
-           WHERE user_id = $1
-             AND created_at >= $2::timestamptz
-             AND created_at < $3::timestamptz
-             AND profile_score IS NOT NULL
+           SELECT date_trunc('day', r.created_at)::date AS day,
+                  ROUND(AVG(r.profile_score)::numeric, 2) AS avg_score
+           FROM resumes r
+           INNER JOIN filtered_resumes fr ON fr.resume_id = r.id
+           WHERE r.user_id = $1
+             AND r.created_at >= $2::timestamptz
+             AND r.created_at < $3::timestamptz
+             AND r.profile_score IS NOT NULL
            GROUP BY 1
          ),
          shortlists_by_day AS (
@@ -145,18 +181,20 @@ router.get('/dashboard/kpis', async (req, res) => {
                   COUNT(DISTINCT sc.resume_id)::int AS shortlisted_resumes
            FROM shortlist_candidates sc
            INNER JOIN shortlists s ON s.id = sc.shortlist_id
+           INNER JOIN filtered_resumes fr ON fr.resume_id = sc.resume_id
            WHERE s.user_id = $1
              AND sc.added_at >= $2::timestamptz
              AND sc.added_at < $3::timestamptz
            GROUP BY 1
          ),
          resumes_by_day AS (
-           SELECT date_trunc('day', created_at)::date AS day,
+           SELECT date_trunc('day', r.created_at)::date AS day,
                   COUNT(*)::int AS resumes_uploaded
-           FROM resumes
-           WHERE user_id = $1
-             AND created_at >= $2::timestamptz
-             AND created_at < $3::timestamptz
+           FROM resumes r
+           INNER JOIN filtered_resumes fr ON fr.resume_id = r.id
+           WHERE r.user_id = $1
+             AND r.created_at >= $2::timestamptz
+             AND r.created_at < $3::timestamptz
            GROUP BY 1
          ),
          base_daily AS (
@@ -182,7 +220,7 @@ router.get('/dashboard/kpis', async (req, res) => {
          FROM base_daily
          GROUP BY 1
          ORDER BY 1 ASC`,
-        [filters.userId, filters.startDate, filters.endDateExclusive, filters.bucketTrunc],
+        [filters.userId, filters.startDate, filters.endDateExclusive, filters.bucketTrunc, filters.jobDescriptionId],
       ),
       pool.query(
         `SELECT
@@ -196,10 +234,18 @@ router.get('/dashboard/kpis', async (req, res) => {
          WHERE a.user_id = $1
            AND a.created_at >= $2::timestamptz
            AND a.created_at < $3::timestamptz
+           AND ($4::text IS NULL OR a.job_description_id::text = $4::text)
          GROUP BY jd.id, jd.title
          ORDER BY analyses_run DESC, latest_activity_at DESC
          LIMIT 5`,
-        [filters.userId, filters.startDate, filters.endDateExclusive],
+        [filters.userId, filters.startDate, filters.endDateExclusive, filters.jobDescriptionId],
+      ),
+      pool.query(
+        `SELECT id, title
+         FROM job_descriptions
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [filters.userId],
       ),
     ])
 
@@ -245,7 +291,7 @@ router.get('/dashboard/kpis', async (req, res) => {
       }
     })
 
-    return res.json({
+    const payload = {
       schemaVersion: KPI_SCHEMA_VERSION,
       range: {
         startDate: startDate.toISOString().slice(0, 10),
@@ -253,12 +299,45 @@ router.get('/dashboard/kpis', async (req, res) => {
         days: effectiveRangeDays,
         granularity: bucketTrunc,
       },
+      filters: {
+        jobDescriptionId,
+      },
       kpis,
       charts: {
         overview: timeSeries,
       },
       topJobActivity,
-    })
+      jobOptions: jobOptionsResult.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+      })),
+    }
+
+    if (exportFormat === 'csv') {
+      const header = ['period_start', 'analyses_run_count', 'completion_rate', 'avg_score', 'shortlisted_rate', 'resumes_uploaded']
+      const rows = payload.charts.overview.map((row) => [
+        row.periodStart,
+        row.analysesRunCount,
+        row.completionRate,
+        row.avgScore,
+        row.shortlistedRate,
+        row.resumesUploaded,
+      ])
+      const csv = [header, ...rows].map((line) => line.map(csvEscape).join(',')).join('\n')
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename="dashboard-kpis-${payload.range.startDate}-to-${payload.range.endDate}.csv"`)
+      return res.status(200).send(csv)
+    }
+
+    if (exportFormat === 'report') {
+      return res.json({
+        generatedAt: new Date().toISOString(),
+        reportType: 'dashboard_kpis',
+        ...payload,
+      })
+    }
+
+    return res.json(payload)
   } catch (error) {
     if (error.message?.includes('Invalid') || error.message?.includes('Date range') || error.message?.includes('startDate')) {
       return res.status(400).json({ error: error.message })

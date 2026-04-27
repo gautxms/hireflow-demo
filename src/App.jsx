@@ -4,7 +4,8 @@ const LandingPage = lazy(() => import('./components/LandingPage'))
 const Pricing = lazy(() => import('./pages/Pricing'))
 const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
 const CandidateResults = lazy(() => import('./components/CandidateResults'))
-const OperationsDashboard = lazy(() => import('./components/Dashboard'))
+const OperationsDashboard = lazy(() => import('./components/NewDashboard'))
+const LegacyOperationsDashboard = lazy(() => import('./components/Dashboard'))
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
 const HelpPage = lazy(() => import('./components/HelpPage'))
 const AboutPage = lazy(() => import('./components/AboutPage'))
@@ -375,6 +376,30 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (resolvedPathname === '/demo') {
       return <DemoBookingPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+    }
+
+    if (resolvedPathname === '/dashboard') {
+      const canAccessDashboard = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view the dashboard.',
+        onRequireAuth,
+      })
+      if (!canAccessDashboard) {
+        return null
+      }
+      return <OperationsDashboard onNavigate={handleNavigate} />
+    }
+
+    if (resolvedPathname === '/dashboard/legacy') {
+      const canAccessDashboard = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view the dashboard.',
+        onRequireAuth,
+      })
+      if (!canAccessDashboard) {
+        return null
+      }
+      return <LegacyOperationsDashboard onNavigate={handleNavigate} />
     }
 
     if (resolvedPathname === '/terms') {
