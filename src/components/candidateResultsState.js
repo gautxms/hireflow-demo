@@ -220,6 +220,55 @@ export function resolveTierState(tier, score) {
   return resolveCandidateScoreState(score)
 }
 
+
+
+function parseSkillList(skills) {
+  if (skills && typeof skills === 'object' && !Array.isArray(skills)) {
+    return [
+      ...(Array.isArray(skills.tools_and_platforms) ? skills.tools_and_platforms : []),
+      ...(Array.isArray(skills.methodologies) ? skills.methodologies : []),
+      ...(Array.isArray(skills.domain_expertise) ? skills.domain_expertise : []),
+      ...(Array.isArray(skills.soft_skills) ? skills.soft_skills : []),
+    ]
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean)
+  }
+
+  if (Array.isArray(skills)) {
+    return skills
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean)
+  }
+
+  return String(skills || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+export function resolveActiveCandidateScore(candidate = {}) {
+  const score = candidate?.matchScore?.score ?? candidate?.profile_score ?? null
+  return Number.isFinite(Number(score)) ? Number(score) : null
+}
+
+export function buildCandidateRenderContract(candidate = {}) {
+  const score = resolveActiveCandidateScore(candidate)
+  const scoreTenPoint = score == null ? null : (score / 10).toFixed(1)
+  const scoreTier = score == null ? 'unscored' : score >= 80 ? 'strong' : score >= 60 ? 'possible' : 'low'
+  const topSkills = Array.isArray(candidate?.top_skills) && candidate.top_skills.length > 0
+    ? candidate.top_skills
+    : parseSkillList(candidate?.skills)
+
+  return {
+    name: toDisplayText(candidate?.name),
+    location: toDisplayText(candidate?.location),
+    yearsExperience: candidate?.years_experience != null ? `${candidate.years_experience} yrs exp` : '',
+    score,
+    scoreTenPoint,
+    scoreTier,
+    topSkills: topSkills.slice(0, 3),
+  }
+}
 export function toDisplayText(value, fallback = 'N/A') {
   if (value === null || value === undefined) {
     return fallback
