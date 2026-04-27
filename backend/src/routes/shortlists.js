@@ -86,6 +86,11 @@ router.get('/:id', async (req, res) => {
               sc.notes,
               sc.rating,
               sc.added_at,
+              sc.analysis_id,
+              sc.candidate_snapshot,
+              sc.decision_status,
+              sc.created_at,
+              sc.updated_at,
               r.filename,
               r.created_at AS resume_created_at
        FROM shortlist_candidates sc
@@ -109,6 +114,11 @@ router.post('/:id/candidates', async (req, res) => {
   const notes = req.body?.notes ? String(req.body.notes).trim() : null
   const parsedRating = Number(req.body?.rating)
   const rating = Number.isInteger(parsedRating) ? parsedRating : null
+  const analysisId = resolveCandidateResumeUuid(req.body?.analysisId) || null
+  const candidateSnapshot = req.body?.candidateSnapshot && typeof req.body.candidateSnapshot === 'object'
+    ? req.body.candidateSnapshot
+    : null
+  const decisionStatus = req.body?.decisionStatus ? String(req.body.decisionStatus).trim().slice(0, 64) : null
 
   if (!resumeId) {
     return res.status(400).json({ error: 'resumeId is required' })
@@ -144,13 +154,33 @@ router.post('/:id/candidates', async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO shortlist_candidates (
+         shortlist_id,
+         resume_id,
+         notes,
+         rating,
+         analysis_id,
+         candidate_snapshot,
+         decision_status
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (shortlist_id, resume_id)
        DO UPDATE SET notes = EXCLUDED.notes,
-                     rating = EXCLUDED.rating
-       RETURNING id, shortlist_id, resume_id, notes, rating, added_at`,
-      [req.params.id, resumeId, notes ? notes.slice(0, 1000) : null, rating],
+                     rating = EXCLUDED.rating,
+                     analysis_id = COALESCE(EXCLUDED.analysis_id, shortlist_candidates.analysis_id),
+                     candidate_snapshot = COALESCE(EXCLUDED.candidate_snapshot, shortlist_candidates.candidate_snapshot),
+                     decision_status = COALESCE(EXCLUDED.decision_status, shortlist_candidates.decision_status),
+                     updated_at = NOW()
+       RETURNING id, shortlist_id, resume_id, notes, rating, added_at, analysis_id, candidate_snapshot, decision_status, created_at, updated_at`,
+      [
+        req.params.id,
+        resumeId,
+        notes ? notes.slice(0, 1000) : null,
+        rating,
+        analysisId,
+        candidateSnapshot,
+        decisionStatus,
+      ],
     )
 
     return res.status(201).json({ candidate: result.rows[0] })
