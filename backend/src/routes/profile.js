@@ -97,20 +97,25 @@ router.get('/dashboard/kpis', async (req, res) => {
     const [summaryResult, timeSeriesResult, topJobsResult, jobOptionsResult] = await Promise.all([
       pool.query(
         `WITH analysis_window AS (
-           SELECT id, status, resume_id
-           FROM analyses
-           WHERE user_id = $1
-             AND created_at >= $2::timestamptz
-             AND created_at < $3::timestamptz
-             AND ($5::text IS NULL OR job_description_id::text = $5::text)
+           SELECT a.id, a.status, ai.resume_id
+           FROM analyses a
+           INNER JOIN analysis_items ai ON ai.analysis_id = a.id
+           WHERE a.user_id = $1
+             AND a.created_at >= $2::timestamptz
+             AND a.created_at < $3::timestamptz
+             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
          ),
          resume_window AS (
            SELECT r.id, r.profile_score
            FROM resumes r
-           INNER JOIN analysis_window aw ON aw.resume_id = r.id
            WHERE r.user_id = $1
              AND r.created_at >= $2::timestamptz
              AND r.created_at < $3::timestamptz
+             AND EXISTS (
+               SELECT 1
+               FROM analysis_window aw
+               WHERE aw.resume_id = r.id
+             )
          ),
          shortlist_window AS (
            SELECT DISTINCT sc.resume_id
@@ -122,8 +127,8 @@ router.get('/dashboard/kpis', async (req, res) => {
              AND sc.added_at < $3::timestamptz
          )
          SELECT
-           (SELECT COUNT(*)::int FROM analysis_window) AS analyses_run_count,
-           (SELECT COUNT(*)::int FROM analysis_window WHERE status = 'complete') AS analyses_completed_count,
+           (SELECT COUNT(DISTINCT id)::int FROM analysis_window) AS analyses_run_count,
+           (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status = 'complete') AS analyses_completed_count,
            (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM resume_window WHERE profile_score IS NOT NULL) AS avg_score,
            (SELECT COUNT(*)::int FROM resume_window) AS resumes_count,
            (SELECT COUNT(*)::int FROM shortlist_window) AS shortlisted_count`,
@@ -133,27 +138,42 @@ router.get('/dashboard/kpis', async (req, res) => {
         `WITH days AS (
            SELECT generate_series($2::date, ($3::date - interval '1 day')::date, interval '1 day') AS day
          ),
+         filtered_analysis_items AS (
+           SELECT DISTINCT
+             a.id AS analysis_id,
+             a.status,
+             a.created_at,
+             ai.resume_id
+           FROM analyses a
+           INNER JOIN analysis_items ai ON ai.analysis_id = a.id
+           WHERE a.user_id = $1
+             AND a.created_at >= $2::timestamptz
+             AND a.created_at < $3::timestamptz
+             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
+         ),
+         filtered_resumes AS (
+           SELECT DISTINCT resume_id
+           FROM filtered_analysis_items
+         ),
          analyses_by_day AS (
            SELECT date_trunc('day', created_at)::date AS day,
                   COUNT(*)::int AS analyses_run,
                   COUNT(*) FILTER (WHERE status = 'complete')::int AS analyses_completed
-           FROM analyses
-           WHERE user_id = $1
-             AND created_at >= $2::timestamptz
-             AND created_at < $3::timestamptz
-             AND ($5::text IS NULL OR job_description_id::text = $5::text)
+           FROM (
+             SELECT DISTINCT analysis_id, status, created_at
+             FROM filtered_analysis_items
+           ) analyses_for_counts
            GROUP BY 1
          ),
          scores_by_day AS (
            SELECT date_trunc('day', r.created_at)::date AS day,
                   ROUND(AVG(r.profile_score)::numeric, 2) AS avg_score
            FROM resumes r
-           INNER JOIN analyses a ON a.resume_id = r.id
+           INNER JOIN filtered_resumes fr ON fr.resume_id = r.id
            WHERE r.user_id = $1
              AND r.created_at >= $2::timestamptz
              AND r.created_at < $3::timestamptz
              AND r.profile_score IS NOT NULL
-             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
            GROUP BY 1
          ),
          shortlists_by_day AS (
@@ -161,22 +181,20 @@ router.get('/dashboard/kpis', async (req, res) => {
                   COUNT(DISTINCT sc.resume_id)::int AS shortlisted_resumes
            FROM shortlist_candidates sc
            INNER JOIN shortlists s ON s.id = sc.shortlist_id
-           INNER JOIN analyses a ON a.resume_id = sc.resume_id
+           INNER JOIN filtered_resumes fr ON fr.resume_id = sc.resume_id
            WHERE s.user_id = $1
              AND sc.added_at >= $2::timestamptz
              AND sc.added_at < $3::timestamptz
-             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
            GROUP BY 1
          ),
          resumes_by_day AS (
            SELECT date_trunc('day', r.created_at)::date AS day,
                   COUNT(*)::int AS resumes_uploaded
            FROM resumes r
-           INNER JOIN analyses a ON a.resume_id = r.id
+           INNER JOIN filtered_resumes fr ON fr.resume_id = r.id
            WHERE r.user_id = $1
              AND r.created_at >= $2::timestamptz
              AND r.created_at < $3::timestamptz
-             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
            GROUP BY 1
          ),
          base_daily AS (
