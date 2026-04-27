@@ -322,6 +322,37 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     }
   }, [authHeaders, selectedShortlistId])
 
+  const addCandidatesToShortlistBatch = useCallback(async (selected) => {
+    if (!selectedShortlistId) {
+      throw new Error('Create or select a shortlist first')
+    }
+
+    const resumeIds = selected
+      .map((candidate) => candidate?.resumeId || candidate?.resume_id || candidate?.id)
+      .map((resumeId) => String(resumeId || '').trim())
+      .filter(Boolean)
+
+    if (resumeIds.length === 0) {
+      throw new Error('No valid resume IDs found in the selected candidates')
+    }
+
+    const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        resumeIds,
+        notes: `Added from ranking in bulk (${new Date().toISOString()})`,
+      }),
+    })
+
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to add candidates to shortlist')
+    }
+
+    return payload
+  }, [authHeaders, selectedShortlistId])
+
   const removeCandidateFromShortlist = useCallback(async (resumeId) => {
     try {
       if (!selectedShortlistId || !resumeId) {
@@ -330,9 +361,10 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
       setShortlistLoading(true)
       setShortlistError('')
-      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/${resumeId}`, {
-        method: 'DELETE',
+      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`, {
+        method: 'POST',
         headers: authHeaders(),
+        body: JSON.stringify({ resumeIds: [resumeId] }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -484,20 +516,43 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
       return
     }
 
-    let successCount = 0
-    for (const candidate of selected) {
-      const ok = await addCandidateToShortlist(candidate)
-      if (ok) {
-        successCount += 1
-      }
-    }
+    try {
+      const payload = await addCandidatesToShortlistBatch(selected)
+      const succeeded = Number(payload?.summary?.succeeded || 0)
+      const failed = Number(payload?.summary?.failed || 0)
+      const added = Number(payload?.summary?.added || 0)
+      const updated = Number(payload?.summary?.updated || 0)
 
-    if (successCount > 0) {
+      if (succeeded > 0) {
+        await Promise.all([
+          loadShortlists(),
+          loadShortlistDetails(selectedShortlistId),
+        ])
+      }
+
+      if (failed > 0) {
+        setShortlistError(`Added/updated ${succeeded} candidate(s); ${failed} failed. Check shortlist diagnostics for details.`)
+      }
+
+      alert(`Shortlist sync complete: ${added} added, ${updated} updated, ${failed} failed.`)
+    } catch (error) {
+      setShortlistError(error.message || 'Unable to add candidates to shortlist')
+      let fallbackSuccessCount = 0
+      for (const candidate of selected) {
+        // Legacy endpoint fallback if the API has not rolled out batch yet.
+        const ok = await addCandidateToShortlist(candidate)
+        if (ok) {
+          fallbackSuccessCount += 1
+        }
+      }
+
+      if (fallbackSuccessCount > 0) {
       await Promise.all([
         loadShortlists(),
         loadShortlistDetails(selectedShortlistId),
       ])
-      alert(`Added ${successCount} candidate(s) to shortlist.`)
+        alert(`Added ${fallbackSuccessCount} candidate(s) to shortlist.`)
+      }
     }
   }
 
