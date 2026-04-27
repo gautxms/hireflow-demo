@@ -4,7 +4,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'analyses', label: 'Analyses', path: '/analyses' },
   { key: 'candidates', label: 'Candidates', path: '/candidates' },
   { key: 'shortlists', label: 'Shortlists', path: '/results' },
-  { key: 'reports', label: 'Reports', path: '/billing' },
+  { key: 'reports', label: 'Reports', path: '/reports' },
   { key: 'settings', label: 'Settings', path: '/settings' },
 ]
 

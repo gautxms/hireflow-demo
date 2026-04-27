@@ -23,6 +23,7 @@ import jobDescriptionsRoutes from './routes/jobDescriptions.js'
 import inquiriesRoutes from './routes/inquiries.js'
 import notificationsRoutes from './routes/notifications.js'
 import analysesRoutes from './routes/analyses.js'
+import reportsRoutes from './routes/reports.js'
 import adminRoutes from './routes/admin.js'
 import adminSubscriptionsRoutes from './routes/admin/subscriptions.js'
 import adminPaymentsRoutes from './routes/admin/payments.js'
@@ -121,6 +122,7 @@ app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, requireActi
 app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/notifications', requireAuth, generalApiLimiterAuth, notificationsRoutes)
 app.use('/api/analyses', requireAuth, generalApiLimiterAuth, analysesRoutes)
+app.use('/api/reports', requireAuth, generalApiLimiterAuth, reportsRoutes)
 app.use('/api/admin', requireAdminAuth, adminActionAuditMiddleware, adminRoutes)
 app.use('/api/admin/subscriptions', requireAdminAuth, adminActionAuditMiddleware, adminSubscriptionsRoutes)
 app.use('/api/admin/payments', requireAdminAuth, adminActionAuditMiddleware, adminPaymentsRoutes)
