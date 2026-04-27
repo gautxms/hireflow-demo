@@ -35,6 +35,7 @@ export default function CandidateFilters({
   onSort,
   shortlistOpen = false,
   onToggleShortlist,
+  shortlistEnabled = true,
 }) {
   const [skillSearch, setSkillSearch] = useState('')
   const [showAllSkills, setShowAllSkills] = useState(false)
@@ -129,9 +130,11 @@ export default function CandidateFilters({
           )}
         </button>
 
-        <button type="button" className="touch-target filter-shortlist-btn" onClick={() => onToggleShortlist?.(!shortlistOpen)}>
-          Shortlists
-        </button>
+        {shortlistEnabled && (
+          <button type="button" className="touch-target filter-shortlist-btn" onClick={() => onToggleShortlist?.(!shortlistOpen)}>
+            Shortlists
+          </button>
+        )}
       </div>
 
       {filterOpen && (
