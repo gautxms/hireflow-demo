@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import './NewDashboard.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -125,23 +126,23 @@ export default function NewDashboard({ onNavigate }) {
   const series = useMemo(() => dashboardData?.charts?.overview || [], [dashboardData])
 
   return (
-    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
+    <div className="new-dashboard">
+      <div className="new-dashboard__header">
         <div>
-          <h1 style={{ margin: 0 }}>Recruiting Dashboard</h1>
-          <p style={{ color: 'var(--color-text-secondary)' }}>KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
+          <h1 className="new-dashboard__title">Recruiting Dashboard</h1>
+          <p className="new-dashboard__subtitle">KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button type="button" onClick={() => onNavigate?.('landing')} className="touch-target" style={{ padding: '0.6rem 0.9rem' }}>Home</button>
-          <button type="button" onClick={openLegacyDashboard} className="touch-target" style={{ padding: '0.6rem 0.9rem' }}>Legacy dashboard fallback</button>
+        <div className="new-dashboard__header-actions">
+          <button type="button" onClick={() => onNavigate?.('landing')} className="touch-target new-dashboard__button">Home</button>
+          <button type="button" onClick={openLegacyDashboard} className="touch-target new-dashboard__button">Legacy dashboard fallback</button>
         </div>
       </div>
 
-      <section style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '1rem', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'end', flexWrap: 'wrap' }}>
+      <section className="new-dashboard__panel">
+        <div className="new-dashboard__filters">
           <label>
             Date range
-            <select value={rangeDays} onChange={(event) => setRangeDays(event.target.value)} style={{ display: 'block', marginTop: 4 }}>
+            <select value={rangeDays} onChange={(event) => setRangeDays(event.target.value)} className="new-dashboard__select">
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
@@ -149,61 +150,61 @@ export default function NewDashboard({ onNavigate }) {
           </label>
           <label>
             Job
-            <select value={jobDescriptionId} onChange={(event) => setJobDescriptionId(event.target.value)} style={{ display: 'block', marginTop: 4, minWidth: 220 }}>
+            <select value={jobDescriptionId} onChange={(event) => setJobDescriptionId(event.target.value)} className="new-dashboard__select new-dashboard__select--job">
               <option value="">All jobs</option>
               {(dashboardData?.jobOptions || []).map((job) => (
                 <option key={job.id} value={job.id}>{job.title}</option>
               ))}
             </select>
           </label>
-          <button type="button" onClick={loadDashboard} disabled={loading} style={{ padding: '0.6rem 0.9rem' }}>{loading ? 'Refreshing…' : 'Apply filters'}</button>
-          <button type="button" onClick={exportCsv} disabled={exportLoading || loading} style={{ padding: '0.6rem 0.9rem' }}>{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
+          <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button">{loading ? 'Refreshing…' : 'Apply filters'}</button>
+          <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
         </div>
-        <p style={{ marginTop: '0.75rem', marginBottom: 0, color: 'var(--color-text-secondary)', fontSize: 13 }}>Report period: {reportPeriod}</p>
-        {error ? <p style={{ color: 'var(--color-error)', marginTop: '0.5rem' }}>{error}</p> : null}
-        {exportError ? <p style={{ color: 'var(--color-error)', marginTop: '0.5rem' }}>{exportError}</p> : null}
+        <p className="new-dashboard__report-period">Report period: {reportPeriod}</p>
+        {error ? <p className="new-dashboard__error">{error}</p> : null}
+        {exportError ? <p className="new-dashboard__error">{exportError}</p> : null}
       </section>
 
-      <section style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: '1rem' }}>
+      <section className="new-dashboard__kpis">
         {[
           ['Analyses Run', kpis.analysesRunCount],
           ['Completion Rate', formatPercent(kpis.completionRate)],
           ['Average Score', Number(kpis.avgScore || 0).toFixed(2)],
           ['Shortlisted Rate', formatPercent(kpis.shortlistedRate)],
         ].map(([label, value]) => (
-          <article key={label} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '1rem' }}>
-            <p style={{ margin: 0, color: 'var(--color-text-secondary)', fontSize: 13 }}>{label}</p>
-            <p style={{ margin: '0.4rem 0 0', fontSize: 24, fontWeight: 700 }}>{value}</p>
+          <article key={label} className="new-dashboard__kpi-card">
+            <p className="new-dashboard__kpi-label">{label}</p>
+            <p className="new-dashboard__kpi-value">{value}</p>
           </article>
         ))}
       </section>
 
-      <section style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
-        <article style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '1rem' }}>
-          <h3 style={{ marginTop: 0 }}>Analyses trend</h3>
+      <section className="new-dashboard__trends">
+        <article className="new-dashboard__trend-card">
+          <h3 className="new-dashboard__trend-title">Analyses trend</h3>
           {loading ? <p>Loading trend data…</p> : null}
-          {!loading && series.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>No chart data for selected filters.</p> : null}
+          {!loading && series.length === 0 ? <p className="new-dashboard__muted">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
-            <svg viewBox="0 0 100 100" style={{ width: '100%', height: 180, background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+            <svg viewBox="0 0 100 100" className="new-dashboard__chart">
               <polyline fill="none" stroke="var(--color-accent-green)" strokeWidth="2" points={buildPolyline(series, 'analysesRunCount')} />
             </svg>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <div className="new-dashboard__trend-range">
             <span>{series[0] ? formatDateLabel(series[0].periodStart) : '-'}</span>
             <span>{series.at(-1) ? formatDateLabel(series.at(-1).periodStart) : '-'}</span>
           </div>
         </article>
 
-        <article style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '1rem' }}>
-          <h3 style={{ marginTop: 0 }}>Average score trend</h3>
+        <article className="new-dashboard__trend-card">
+          <h3 className="new-dashboard__trend-title">Average score trend</h3>
           {loading ? <p>Loading trend data…</p> : null}
-          {!loading && series.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>No chart data for selected filters.</p> : null}
+          {!loading && series.length === 0 ? <p className="new-dashboard__muted">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
-            <svg viewBox="0 0 100 100" style={{ width: '100%', height: 180, background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+            <svg viewBox="0 0 100 100" className="new-dashboard__chart">
               <polyline fill="none" stroke="var(--color-accent-green-hover)" strokeWidth="2" points={buildPolyline(series, 'avgScore')} />
             </svg>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <div className="new-dashboard__trend-range">
             <span>{series[0] ? formatDateLabel(series[0].periodStart) : '-'}</span>
             <span>{series.at(-1) ? formatDateLabel(series.at(-1).periodStart) : '-'}</span>
           </div>
