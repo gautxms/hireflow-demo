@@ -7,6 +7,24 @@ const router = Router()
 
 router.use(requireAuth)
 
+function normalizeBatchResumeIds(input) {
+  const list = Array.isArray(input) ? input : []
+  const unique = new Set()
+
+  for (const value of list) {
+    const resolved = resolveCandidateResumeUuid(value)
+      || resolveCandidateResumeUuid(value?.resumeId)
+      || resolveCandidateResumeUuid(value?.candidateId)
+      || String(value || '').trim()
+
+    if (resolved) {
+      unique.add(resolved)
+    }
+  }
+
+  return [...unique]
+}
+
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
@@ -160,6 +178,101 @@ router.post('/:id/candidates', async (req, res) => {
   }
 })
 
+router.post('/:id/candidates/batch', async (req, res) => {
+  const resumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
+
+  if (resumeIds.length === 0) {
+    return res.status(400).json({ error: 'resumeIds must include at least one resume ID' })
+  }
+
+  const parsedRating = Number(req.body?.rating)
+  const rating = Number.isInteger(parsedRating) ? parsedRating : null
+  if (rating !== null && (rating < 1 || rating > 5)) {
+    return res.status(400).json({ error: 'rating must be between 1 and 5' })
+  }
+
+  const notes = req.body?.notes ? String(req.body.notes).trim().slice(0, 1000) : null
+
+  try {
+    const ownerCheck = await pool.query(
+      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [req.params.id, req.userId],
+    )
+    if (!ownerCheck.rows[0]) {
+      return res.status(404).json({ error: 'Shortlist not found' })
+    }
+
+    const visibleResumesResult = await pool.query(
+      `SELECT id
+       FROM resumes
+       WHERE user_id = $1
+         AND id = ANY($2::uuid[])`,
+      [req.userId, resumeIds],
+    )
+    const visibleResumeIds = new Set(visibleResumesResult.rows.map((row) => row.id))
+    const invalidIds = resumeIds.filter((resumeId) => !visibleResumeIds.has(resumeId))
+
+    let existingIds = new Set()
+    if (visibleResumeIds.size > 0) {
+      const existingResult = await pool.query(
+        `SELECT resume_id
+         FROM shortlist_candidates
+         WHERE shortlist_id = $1
+           AND resume_id = ANY($2::uuid[])`,
+        [req.params.id, [...visibleResumeIds]],
+      )
+      existingIds = new Set(existingResult.rows.map((row) => row.resume_id))
+
+      await pool.query(
+        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating)
+         SELECT $1, resume_id, $3, $4
+         FROM unnest($2::uuid[]) AS resume_id
+         ON CONFLICT (shortlist_id, resume_id)
+         DO UPDATE SET notes = EXCLUDED.notes,
+                       rating = EXCLUDED.rating`,
+        [req.params.id, [...visibleResumeIds], notes, rating],
+      )
+    }
+
+    const outcomes = resumeIds.map((resumeId) => {
+      if (!visibleResumeIds.has(resumeId)) {
+        return {
+          resumeId,
+          ok: false,
+          code: 'resume_not_found',
+          message: 'Resume not found for this user',
+        }
+      }
+      return {
+        resumeId,
+        ok: true,
+        code: existingIds.has(resumeId) ? 'updated' : 'added',
+      }
+    })
+
+    const successCount = outcomes.filter((item) => item.ok).length
+    const failureCount = outcomes.length - successCount
+
+    return res.json({
+      shortlistId: req.params.id,
+      ok: failureCount === 0,
+      partialFailure: failureCount > 0,
+      summary: {
+        requested: resumeIds.length,
+        succeeded: successCount,
+        failed: failureCount,
+        added: outcomes.filter((item) => item.code === 'added').length,
+        updated: outcomes.filter((item) => item.code === 'updated').length,
+        invalid: invalidIds.length,
+      },
+      outcomes,
+    })
+  } catch (error) {
+    console.error('[Shortlists] Failed to batch add candidates:', error)
+    return res.status(500).json({ error: 'Unable to batch add candidates to shortlist' })
+  }
+})
+
 router.delete('/:id/candidates/:resumeId', async (req, res) => {
   try {
     const resolvedResumeId = resolveCandidateResumeUuid(req.params.resumeId) || String(req.params.resumeId || '').trim()
@@ -187,6 +300,56 @@ router.delete('/:id/candidates/:resumeId', async (req, res) => {
   } catch (error) {
     console.error('[Shortlists] Failed to remove candidate from shortlist:', error)
     return res.status(500).json({ error: 'Unable to remove candidate from shortlist' })
+  }
+})
+
+router.post('/:id/candidates/batch-remove', async (req, res) => {
+  const resumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
+
+  if (resumeIds.length === 0) {
+    return res.status(400).json({ error: 'resumeIds must include at least one resume ID' })
+  }
+
+  try {
+    const ownerCheck = await pool.query(
+      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [req.params.id, req.userId],
+    )
+
+    if (!ownerCheck.rows[0]) {
+      return res.status(404).json({ error: 'Shortlist not found' })
+    }
+
+    const deletedResult = await pool.query(
+      `DELETE FROM shortlist_candidates
+       WHERE shortlist_id = $1
+         AND resume_id = ANY($2::uuid[])
+       RETURNING resume_id`,
+      [req.params.id, resumeIds],
+    )
+    const removed = new Set(deletedResult.rows.map((row) => row.resume_id))
+
+    const outcomes = resumeIds.map((resumeId) => ({
+      resumeId,
+      ok: true,
+      code: removed.has(resumeId) ? 'removed' : 'not_present',
+    }))
+    const removedCount = outcomes.filter((item) => item.code === 'removed').length
+
+    return res.json({
+      shortlistId: req.params.id,
+      ok: true,
+      partialFailure: false,
+      summary: {
+        requested: resumeIds.length,
+        removed: removedCount,
+        notPresent: resumeIds.length - removedCount,
+      },
+      outcomes,
+    })
+  } catch (error) {
+    console.error('[Shortlists] Failed to batch remove candidates:', error)
+    return res.status(500).json({ error: 'Unable to batch remove candidates from shortlist' })
   }
 })
 
