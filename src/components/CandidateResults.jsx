@@ -9,6 +9,7 @@ import {
   normalizeNumericRange,
   normalizeSortBy,
   paginateCandidates,
+  resolveActiveCandidateScore,
   resolveCandidateResumeUuid,
   toDisplayText,
 } from './candidateResultsState'
@@ -82,10 +83,6 @@ const scoreTier = (score) => {
   if (score >= 60) return 'possible'
   return 'low'
 }
-
-const activeScore = (candidate) => (
-  candidate?.matchScore?.score ?? candidate?.profile_score ?? null
-)
 
 function filterAndSortCandidates(candidates, filters) {
   const {
@@ -819,7 +816,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
       <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
-          const score = activeScore(candidate)
+          const score = resolveActiveCandidateScore(candidate)
           const tier = scoreTier(score)
           const displayScore = toTenScale(score)
           const isExpanded = expandedId === candidate.id
@@ -936,7 +933,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
 
       {expandedCandidate && (() => {
         const candidate = expandedCandidate
-        const score = activeScore(candidate)
+        const score = resolveActiveCandidateScore(candidate)
         const tier = scoreTier(score)
         const displayScore = toTenScale(score)
         const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0

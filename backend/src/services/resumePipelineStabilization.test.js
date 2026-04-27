@@ -5,6 +5,7 @@ import { hasCompleteChunkSet } from './fileUploadService.js'
 import { isScanResultSafe } from './virusScanService.js'
 import { shouldUseOcrFallback } from '../jobs/ocrFallbackJob.js'
 import { applyJobDescriptionScoringMode, buildJobDescriptionContext, isTerminalJobFailure } from '../jobs/parseResumeJob.js'
+import { SCORING_MODE_FIXTURES } from '../jobs/__fixtures__/scoringModeFixtures.js'
 import { normalizeQueueCounts } from '../routes/admin/health.js'
 import { redactValue } from '../routes/admin/logs.js'
 
@@ -76,24 +77,26 @@ test('job description context marks missing JD when parse request has no JD row'
   })
 })
 
-test('no-JD scoring mode nulls match score and annotates missing-JD reason', () => {
-  const [candidate] = applyJobDescriptionScoringMode([{
-    id: 'cand-1',
-    matchScore: { score: 84, fit: 'good' },
-    fit_assessment: {
-      notes: ['existing_note'],
-      overall_fit_score: 84,
-    },
-  }], {
-    hasContext: false,
-    missingReason: 'job_description_missing',
-  })
+test('fixture: scoring mode preserves score when job-description context exists', () => {
+  const { candidates, jobDescriptionContext } = SCORING_MODE_FIXTURES.withJobDescriptionContext
+  const [candidate] = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
+
+  assert.deepEqual(candidate.matchScore, { score: 91, reason: 'Excellent role alignment' })
+  assert.equal(candidate.fit_assessment.has_job_description_context, true)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 91)
+})
+
+test('fixture: no-JD scoring mode nulls score fields and adds missing context reason exactly once', () => {
+  const { candidates, jobDescriptionContext } = SCORING_MODE_FIXTURES.missingJobDescriptionContext
+  const [candidate] = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
 
   assert.equal(candidate.matchScore, null)
   assert.equal(candidate.matchScoreReason, 'job_description_missing')
   assert.equal(candidate.fit_assessment.has_job_description_context, false)
   assert.equal(candidate.fit_assessment.overall_fit_score, null)
-  assert.equal(candidate.fit_assessment.notes.includes('job_description_missing'), true)
+  assert.equal(candidate.fit_assessment.skill_match_score, null)
+  assert.equal(candidate.fit_assessment.experience_match_score, null)
+  assert.equal(candidate.fit_assessment.notes.filter((note) => note === 'job_description_missing').length, 1)
 })
 
 test('health queue response normalizes numeric counts safely', () => {

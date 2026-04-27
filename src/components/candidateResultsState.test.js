@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { CANDIDATE_RESULTS_PAYLOAD_FIXTURES } from './__fixtures__/candidateResultsPayloadFixtures.js'
 import {
   buildResultsQueryParams,
   hasRenderableCandidates,
@@ -7,6 +8,7 @@ import {
   normalizeNumericRange,
   normalizeSortBy,
   paginateCandidates,
+  buildCandidateRenderContract,
   resolveCandidateResumeUuid,
   toDisplayText,
   toSafeScore,
@@ -87,4 +89,45 @@ test('normalizeCandidateForResults defaults malformed skills to empty string', (
 test('hasRenderableCandidates returns false when no valid candidate objects exist', () => {
   assert.equal(hasRenderableCandidates([]), false)
   assert.equal(hasRenderableCandidates([null, undefined]), false)
+})
+
+
+test('buildCandidateRenderContract returns stable display fields for legacy payload candidates', () => {
+  const [legacyCandidate] = CANDIDATE_RESULTS_PAYLOAD_FIXTURES.legacyPayload
+  const contract = buildCandidateRenderContract(legacyCandidate)
+
+  assert.deepEqual(contract, {
+    name: 'Alex Rivera',
+    location: 'Austin, TX',
+    yearsExperience: '6 yrs exp',
+    score: 88,
+    scoreTenPoint: '8.8',
+    scoreTier: 'strong',
+    topSkills: ['React', 'Node.js', 'TypeScript'],
+  })
+})
+
+test('no-diff gate: buildCandidateRenderContract score-related fields are identical for legacy and modern payload variants', () => {
+  const [legacyCandidate] = CANDIDATE_RESULTS_PAYLOAD_FIXTURES.legacyPayload
+  const [modernCandidate] = CANDIDATE_RESULTS_PAYLOAD_FIXTURES.modernPayload
+
+  const legacyContract = buildCandidateRenderContract(legacyCandidate)
+  const modernContract = buildCandidateRenderContract(modernCandidate)
+
+  assert.deepEqual(
+    {
+      score: legacyContract.score,
+      scoreTenPoint: legacyContract.scoreTenPoint,
+      scoreTier: legacyContract.scoreTier,
+      yearsExperience: legacyContract.yearsExperience,
+      topSkills: legacyContract.topSkills,
+    },
+    {
+      score: modernContract.score,
+      scoreTenPoint: modernContract.scoreTenPoint,
+      scoreTier: modernContract.scoreTier,
+      yearsExperience: modernContract.yearsExperience,
+      topSkills: modernContract.topSkills,
+    },
+  )
 })
