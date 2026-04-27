@@ -22,7 +22,7 @@ const chunkUpload = multer({
 
 router.post('/init', requireAuth, async (req, res) => {
   try {
-    const { filename, fileSize, mimeType, jobDescriptionId } = req.body || {}
+    const { filename, fileSize, mimeType, jobDescriptionId, analysisId } = req.body || {}
     console.log(
       '[HireFlow] JD received at endpoint:',
       jobDescriptionId ? `${String(jobDescriptionId).slice(0, 80)}...` : 'NONE',
@@ -48,6 +48,7 @@ router.post('/init', requireAuth, async (req, res) => {
       fileSize: parsedSize,
       mimeType,
       jobDescriptionId: jobDescriptionId || null,
+      analysisId: analysisId || null,
     })
 
     return res.json(session)

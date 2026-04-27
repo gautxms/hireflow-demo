@@ -7,6 +7,13 @@ export const USER_SECTION_NAVIGATION = [
     requiresAuth: true,
   },
   {
+    key: 'analyses',
+    label: 'Analyses',
+    href: '/analyses',
+    aliases: ['/analyses', '/account/analyses'],
+    requiresAuth: true,
+  },
+  {
     key: 'candidates',
     label: 'Candidates',
     href: '/candidates',
