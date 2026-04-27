@@ -4,19 +4,20 @@ export async function up(pool) {
       ADD COLUMN IF NOT EXISTS analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS candidate_snapshot JSONB,
       ADD COLUMN IF NOT EXISTS decision_status TEXT,
-      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
   `)
 
   await pool.query(`
     UPDATE shortlist_candidates
-    SET created_at = COALESCE(created_at, added_at, NOW()),
-        updated_at = COALESCE(updated_at, added_at, NOW())
-    WHERE created_at IS NULL OR updated_at IS NULL
+    SET created_at = COALESCE(added_at, NOW()),
+        updated_at = COALESCE(added_at, NOW())
   `)
 
   await pool.query(`
     ALTER TABLE shortlist_candidates
+      ALTER COLUMN created_at SET DEFAULT NOW(),
+      ALTER COLUMN updated_at SET DEFAULT NOW(),
       ALTER COLUMN created_at SET NOT NULL,
       ALTER COLUMN updated_at SET NOT NULL
   `)
