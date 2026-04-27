@@ -699,6 +699,7 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
               shortlistDetails={shortlistDetails}
               onSelectShortlist={setSelectedShortlistId}
               onCreateShortlist={createShortlist}
+              currentSort={shortlistSort}
               onChangeSort={async (sortOption) => {
                 setShortlistSort(sortOption)
                 await loadShortlistDetails(selectedShortlistId, sortOption)
