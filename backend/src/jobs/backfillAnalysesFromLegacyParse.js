@@ -37,7 +37,7 @@ function parseCliArgs(argv = process.argv.slice(2)) {
 }
 
 function deriveAnalysisStatus(parseJobStatus) {
-  if (parseJobStatus === 'complete') {
+  if (parseJobStatus === 'complete' || parseJobStatus === 'completed') {
     return 'complete'
   }
 

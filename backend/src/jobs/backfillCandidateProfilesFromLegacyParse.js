@@ -114,7 +114,7 @@ export async function backfillCandidateProfilesFromLegacyParse({ dryRun = true, 
        FROM parse_jobs
        WHERE resume_id = r.id
          AND user_id = r.user_id
-         AND status = 'complete'
+         AND status IN ('complete', 'completed')
        ORDER BY updated_at DESC
        LIMIT 1
      ) pj ON TRUE
