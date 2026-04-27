@@ -6,6 +6,7 @@ import {
   getDecisionStatus,
   getRatingValue,
 } from './shortlistState'
+import './ShortlistManager.css'
 
 function toCsv(rows) {
   if (!rows.length) {
@@ -66,7 +67,7 @@ export default function ShortlistManager({
     [shortlists, selectedShortlistId],
   )
 
-  const allCandidates = shortlistDetails?.candidates || []
+  const allCandidates = useMemo(() => shortlistDetails?.candidates || [], [shortlistDetails?.candidates])
 
   const filterOptions = useMemo(() => {
     const decisionStatuses = [...new Set(allCandidates.map((candidate) => getDecisionStatus(candidate)))].sort()
@@ -96,55 +97,47 @@ export default function ShortlistManager({
   const exportRows = useMemo(() => createShortlistExportRows(filteredCandidates), [filteredCandidates])
 
   return (
-    <section style={{ maxWidth: '1200px', margin: '0 auto 2rem', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: '1.2rem', fontFamily: 'var(--font-display)' }}>Candidate Shortlists</h2>
+    <section className="shortlist-manager">
+      <div className="shortlist-manager__header">
+        <h2 className="shortlist-manager__title">Candidate Shortlists</h2>
         <button
           onClick={onRefresh}
-          className="touch-target"
-          style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--color-accent-green)', borderRadius: '6px', padding: '0.4rem 0.75rem', cursor: 'pointer' }}
+          className="touch-target shortlist-manager__button shortlist-manager__button--accent"
         >
           Refresh
         </button>
       </div>
 
-      <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.75rem', marginBottom: '1rem' }}>
+      <form onSubmit={handleCreate} className="shortlist-manager__create-form">
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="New shortlist name"
-          style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.6rem 0.75rem' }}
+          className="shortlist-manager__input"
         />
         <input
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="Description (optional)"
-          style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.6rem 0.75rem' }}
+          className="shortlist-manager__input"
         />
         <button
           type="submit"
           disabled={loading}
-          style={{ minHeight: 44, background: 'var(--color-accent-green)', color: 'var(--color-bg-primary)', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', padding: '0 1rem' }}
+          className="shortlist-manager__create-button"
         >
           Create
         </button>
       </form>
 
-      {error ? <p style={{ color: '#ef4444', marginTop: 0 }}>{error}</p> : null}
+      {error ? <p className="shortlist-manager__error">{error}</p> : null}
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+      <div className="shortlist-manager__pills">
         {shortlists.map((list) => (
           <button
             key={list.id}
             onClick={() => onSelectShortlist(list.id)}
-            style={{
-              background: list.id === selectedShortlistId ? 'var(--color-accent-green)' : 'transparent',
-              color: list.id === selectedShortlistId ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
-              border: '1px solid var(--border)',
-              borderRadius: '999px',
-              padding: '0.35rem 0.8rem',
-              cursor: 'pointer',
-            }}
+            className={`shortlist-manager__pill ${list.id === selectedShortlistId ? 'is-selected' : ''}`}
           >
             {list.name} ({list.candidate_count || 0})
           </button>
@@ -153,17 +146,17 @@ export default function ShortlistManager({
 
       {selectedShortlist ? (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          <div className="shortlist-manager__selected-header">
             <div>
-              <h3 style={{ margin: '0 0 0.35rem 0' }}>{selectedShortlist.name}</h3>
-              <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{selectedShortlist.description || 'No description provided'}</p>
+              <h3 className="shortlist-manager__selected-title">{selectedShortlist.name}</h3>
+              <p className="shortlist-manager__muted-text">{selectedShortlist.description || 'No description provided'}</p>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)' }}>
+            <label className="shortlist-manager__sort-label">
               Sort
               <select
                 value={currentSort}
                 onChange={(event) => onChangeSort(event.target.value)}
-                style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.4rem 0.5rem' }}
+                className="shortlist-manager__select"
               >
                 <option value="rating_desc">Rating (High to Low)</option>
                 <option value="rating_asc">Rating (Low to High)</option>
@@ -173,31 +166,31 @@ export default function ShortlistManager({
             </label>
           </div>
 
-          <div style={{ marginBottom: '0.75rem' }}>
+          <div className="shortlist-manager__advanced-toggle">
             <button
               type="button"
               onClick={() => setShowAdvanced((current) => !current)}
-              style={{ background: 'transparent', color: 'var(--color-accent-green)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.35rem 0.6rem', cursor: 'pointer' }}
+              className="shortlist-manager__button shortlist-manager__button--accent"
             >
               {showAdvanced ? 'Hide advanced controls' : 'Show advanced controls'}
             </button>
           </div>
 
           {showAdvanced ? (
-            <div style={{ display: 'grid', gap: '0.6rem', marginBottom: '0.9rem', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.8rem' }}>
-              <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
-                <label style={{ display: 'grid', gap: '0.2rem', fontSize: '0.86rem', color: 'var(--color-text-secondary)' }}>
+            <div className="shortlist-manager__advanced-panel">
+              <div className="shortlist-manager__filter-grid">
+                <label className="shortlist-manager__filter-label">
                   Decision status
-                  <select value={filters.decisionStatus} onChange={(event) => setFilters((current) => ({ ...current, decisionStatus: event.target.value }))}>
+                  <select className="shortlist-manager__select" value={filters.decisionStatus} onChange={(event) => setFilters((current) => ({ ...current, decisionStatus: event.target.value }))}>
                     <option value="all">All decision states</option>
                     {filterOptions.decisionStatuses.map((status) => (
                       <option key={status} value={status}>{status}</option>
                     ))}
                   </select>
                 </label>
-                <label style={{ display: 'grid', gap: '0.2rem', fontSize: '0.86rem', color: 'var(--color-text-secondary)' }}>
+                <label className="shortlist-manager__filter-label">
                   Rating
-                  <select value={filters.rating} onChange={(event) => setFilters((current) => ({ ...current, rating: event.target.value }))}>
+                  <select className="shortlist-manager__select" value={filters.rating} onChange={(event) => setFilters((current) => ({ ...current, rating: event.target.value }))}>
                     <option value="all">All ratings</option>
                     <option value="rated">Rated only</option>
                     <option value="unrated">Unrated only</option>
@@ -208,9 +201,9 @@ export default function ShortlistManager({
                     <option value="1">1/5</option>
                   </select>
                 </label>
-                <label style={{ display: 'grid', gap: '0.2rem', fontSize: '0.86rem', color: 'var(--color-text-secondary)' }}>
+                <label className="shortlist-manager__filter-label">
                   Analysis source
-                  <select value={filters.analysisSource} onChange={(event) => setFilters((current) => ({ ...current, analysisSource: event.target.value }))}>
+                  <select className="shortlist-manager__select" value={filters.analysisSource} onChange={(event) => setFilters((current) => ({ ...current, analysisSource: event.target.value }))}>
                     <option value="all">All sources</option>
                     {filterOptions.analysisSources.map((source) => (
                       <option key={source} value={source}>{source}</option>
@@ -219,12 +212,12 @@ export default function ShortlistManager({
                 </label>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <div className="shortlist-manager__actions">
                 <button
                   type="button"
                   disabled={!exportRows.length}
                   onClick={() => triggerDownload(`shortlist-${selectedShortlist.name}-export.csv`, toCsv(exportRows), 'text/csv;charset=utf-8')}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.35rem 0.6rem', cursor: 'pointer' }}
+                  className="shortlist-manager__button shortlist-manager__button--neutral"
                 >
                   Export CSV
                 </button>
@@ -232,7 +225,7 @@ export default function ShortlistManager({
                   type="button"
                   disabled={!exportRows.length}
                   onClick={() => triggerDownload(`shortlist-${selectedShortlist.name}-export.json`, JSON.stringify(exportRows, null, 2), 'application/json;charset=utf-8')}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--color-text-primary)', borderRadius: '6px', padding: '0.35rem 0.6rem', cursor: 'pointer' }}
+                  className="shortlist-manager__button shortlist-manager__button--neutral"
                 >
                   Export JSON
                 </button>
@@ -240,31 +233,31 @@ export default function ShortlistManager({
             </div>
           ) : null}
 
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'grid', gap: '0.5rem' }}>
+          <div className="shortlist-manager__candidate-list">
             {filteredCandidates.map((candidate) => {
               const rating = getRatingValue(candidate)
               const decisionStatus = getDecisionStatus(candidate)
               const analysisSource = getAnalysisSource(candidate)
 
               return (
-                <div key={candidate.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.6rem', background: 'var(--color-bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.7rem 0.85rem' }}>
+                <div key={candidate.id} className="shortlist-manager__candidate-card">
                   <div>
-                    <div style={{ fontWeight: 600 }}>{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.86rem', marginTop: '0.2rem' }}>{candidate.notes || 'No notes for this entry (legacy-safe fallback).'}</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.45rem', fontSize: '0.78rem' }}>
-                      <span style={{ border: '1px solid var(--border)', borderRadius: '999px', padding: '0.15rem 0.5rem' }}>Decision: {decisionStatus}</span>
-                      <span style={{ border: '1px solid var(--border)', borderRadius: '999px', padding: '0.15rem 0.5rem' }}>Rating: {rating ? `${rating}/5` : 'Unrated'}</span>
-                      <span style={{ border: '1px solid var(--border)', borderRadius: '999px', padding: '0.15rem 0.5rem' }}>Source: {analysisSource}</span>
+                    <div className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</div>
+                    <div className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes for this entry (legacy-safe fallback).'}</div>
+                    <div className="shortlist-manager__chip-list">
+                      <span className="shortlist-manager__chip">Decision: {decisionStatus}</span>
+                      <span className="shortlist-manager__chip">Rating: {rating ? `${rating}/5` : 'Unrated'}</span>
+                      <span className="shortlist-manager__chip">Source: {analysisSource}</span>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gap: '0.4rem', justifyItems: 'end' }}>
-                    <div style={{ alignSelf: 'center', color: 'var(--color-accent-green)', fontSize: '0.82rem' }}>
+                  <div className="shortlist-manager__candidate-actions">
+                    <div className="shortlist-manager__added-at">
                       {candidate.added_at ? new Date(candidate.added_at).toLocaleDateString() : 'Added date unavailable'}
                     </div>
                     <button
                       type="button"
                       onClick={() => onRemoveCandidate(candidate.resume_id)}
-                      style={{ background: 'transparent', color: '#ef4444', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
+                      className="shortlist-manager__button shortlist-manager__button--danger"
                     >
                       Remove
                     </button>
@@ -273,12 +266,12 @@ export default function ShortlistManager({
               )
             })}
             {!filteredCandidates.length ? (
-              <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>No candidates match the current shortlist filters.</p>
+              <p className="shortlist-manager__muted-text shortlist-manager__muted-text--flush">No candidates match the current shortlist filters.</p>
             ) : null}
           </div>
         </div>
       ) : (
-        <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Create a shortlist or select one to view candidates.</p>
+        <p className="shortlist-manager__muted-text shortlist-manager__muted-text--flush">Create a shortlist or select one to view candidates.</p>
       )}
     </section>
   )
