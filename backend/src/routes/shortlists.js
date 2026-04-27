@@ -185,9 +185,10 @@ router.post('/:id/candidates/batch', async (req, res) => {
     return res.status(400).json({ error: 'resumeIds must include at least one resume ID' })
   }
 
+  const hasRating = Object.prototype.hasOwnProperty.call(req.body || {}, 'rating')
   const parsedRating = Number(req.body?.rating)
-  const rating = Number.isInteger(parsedRating) ? parsedRating : null
-  if (rating !== null && (rating < 1 || rating > 5)) {
+  const rating = hasRating && Number.isInteger(parsedRating) ? parsedRating : null
+  if (hasRating && rating !== null && (rating < 1 || rating > 5)) {
     return res.status(400).json({ error: 'rating must be between 1 and 5' })
   }
 
@@ -229,8 +230,11 @@ router.post('/:id/candidates/batch', async (req, res) => {
          FROM unnest($2::uuid[]) AS resume_id
          ON CONFLICT (shortlist_id, resume_id)
          DO UPDATE SET notes = EXCLUDED.notes,
-                       rating = EXCLUDED.rating`,
-        [req.params.id, [...visibleResumeIds], notes, rating],
+                       rating = CASE
+                         WHEN $5::boolean THEN EXCLUDED.rating
+                         ELSE shortlist_candidates.rating
+                       END`,
+        [req.params.id, [...visibleResumeIds], notes, rating, hasRating],
       )
     }
 
