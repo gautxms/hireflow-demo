@@ -20,6 +20,7 @@ import RefundPolicy from './pages/RefundPolicy'
 const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
 const BillingCancel = lazy(() => import('./pages/BillingCancel'))
 const BillingPage = lazy(() => import('./pages/BillingPage'))
+const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const UpdatePaymentMethodPage = lazy(() => import('./pages/UpdatePaymentMethodPage'))
 const Checkout = lazy(() => import('./pages/Checkout'))
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
@@ -67,7 +68,7 @@ import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
-const USER_SHELL_ROUTE_PATHS = new Set(['/account', '/settings', '/billing', '/account/payment-method'])
+const USER_SHELL_ROUTE_PATHS = new Set(['/account', '/settings', '/billing', '/reports', '/account/payment-method'])
 const USER_SHELL_DISABLED_PATHS = new Set(['/results', '/job-descriptions', '/analyses'])
 
 function isUserShellEnabled() {
@@ -433,6 +434,19 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (resolvedPathname === '/billing') {
       return <BillingPage />
+    }
+
+    if (resolvedPathname === '/reports') {
+      const canAccessReports = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view reports.',
+        onRequireAuth,
+      })
+      if (!canAccessReports) {
+        return null
+      }
+
+      return <ReportsPage />
     }
 
     if (isResultsRootPath(resolvedPathname)) {

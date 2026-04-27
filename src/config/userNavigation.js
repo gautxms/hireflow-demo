@@ -29,6 +29,13 @@ export const USER_SECTION_NAVIGATION = [
     requiresActiveSubscription: true,
   },
   {
+    key: 'reports',
+    label: 'Reports',
+    href: '/reports',
+    aliases: ['/reports', '/account/reports'],
+    requiresAuth: true,
+  },
+  {
     key: 'billing',
     label: 'Billing',
     href: '/billing',

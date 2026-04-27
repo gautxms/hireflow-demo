@@ -29,6 +29,7 @@ const migrationFiles = [
   '025-add-candidate-profiles',
   '026-add-analyses',
   '027-add-dashboard-kpi-indexes',
+  '028-add-report-definitions',
 ]
 
 async function ensureMigrationsTable(client) {
