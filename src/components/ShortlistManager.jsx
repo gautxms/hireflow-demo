@@ -13,7 +13,11 @@ function toCsv(rows) {
   }
 
   const headers = Object.keys(rows[0])
-  const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
+  const neutralizeFormulaCell = (value) => {
+    const text = String(value ?? '')
+    return /^[\t\r ]*[=+\-@]/.test(text) ? `'${text}` : text
+  }
+  const escape = (value) => `"${neutralizeFormulaCell(value).replaceAll('"', '""')}"`
   const lines = [headers.join(',')]
 
   for (const row of rows) {
