@@ -461,6 +461,116 @@ body {
 
 .user-app-shell__content {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.user-app-shell__page-content {
+  min-width: 0;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.app-header__title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--color-text-primary);
+}
+
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.app-header__pro-badge {
+  border: 1px solid var(--color-accent-alpha-20);
+  background: var(--color-accent-alpha-08);
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+  padding: 0.3rem 0.55rem;
+}
+
+.app-header__icon-button {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+}
+
+.app-header__icon-button:hover {
+  color: var(--color-text-primary);
+  background: var(--color-white-alpha-08);
+}
+
+.app-header__free-plan-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-white-alpha-03);
+  padding: 0.3rem 0.35rem 0.3rem 0.65rem;
+}
+
+.app-header__free-plan-label {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.app-header__upgrade-cta {
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-bg-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.35rem 0.7rem;
+}
+
+.app-header__avatar {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  width: 2rem;
+  height: 2rem;
+  background: var(--color-white-alpha-05);
+  color: var(--color-text-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-header__avatar:hover {
+  background: var(--color-white-alpha-10);
+}
+
+@media (max-width: 860px) {
+  .app-header {
+    padding: 0.85rem 1rem;
+  }
+
+  .app-header__free-plan-label {
+    display: none;
+  }
 }
 
 .user-app-shell.is-collapsed .user-app-shell__sidebar {

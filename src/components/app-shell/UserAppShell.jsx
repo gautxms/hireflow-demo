@@ -1,3 +1,4 @@
+import AppHeader from '../AppHeader'
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
 
@@ -152,7 +153,13 @@ export default function UserAppShell({
         ) : null}
       </aside>
       <main className="user-app-shell__content">
-        {children}
+        <AppHeader
+          pathname={pathname}
+          onNavigate={onNavigate}
+          subscriptionStatus={subscriptionStatus}
+          userProfile={userProfile}
+        />
+        <div className="user-app-shell__page-content">{children}</div>
       </main>
     </div>
   )

@@ -979,6 +979,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           onNavigate={navigate}
           navItems={userShellNavItems}
           subscriptionStatus={subscriptionStatus}
+          userProfile={userProfile}
           showUpgradeCta={canViewUpgradePricing}
         >
           {pageContent}
