@@ -70,11 +70,22 @@ import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
-const USER_SHELL_ROUTE_PATHS = new Set(['/account', '/settings', '/billing', '/reports', '/account/payment-method'])
-const USER_SHELL_DISABLED_PATHS = new Set(['/results', '/job-descriptions', '/analyses'])
+const USER_SHELL_ROUTE_PATHS = new Set([
+  '/',
+  '/dashboard',
+  '/results',
+  '/job-descriptions',
+  '/analyses',
+  '/candidates',
+  '/reports',
+  '/account',
+  '/settings',
+  '/billing',
+  '/account/payment-method',
+])
 
-function isUserShellEnabled(userProfile) {
-  return isFeatureEnabled(FEATURE_KEYS.sidebarShell, { userProfile })
+function isUserShellEnabled(userProfile, subscriptionStatus) {
+  return isFeatureEnabled(FEATURE_KEYS.sidebarShell, { userProfile, subscriptionStatus })
 }
 
 function getStoredToken() {
@@ -107,23 +118,21 @@ function navigate(pathname, options = {}) {
 }
 
 function shouldDisableUserShell(pathname) {
-  if (USER_SHELL_DISABLED_PATHS.has(pathname)) {
-    return true
-  }
-
-  return pathname.startsWith('/results/')
+  return isSharedResultsPath(pathname)
 }
 
-function shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile) {
-  if (!isUserShellEnabled(userProfile) || !isAuthenticated) {
+function shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, subscriptionStatus) {
+  if (!isUserShellEnabled(userProfile, subscriptionStatus) || !isAuthenticated) {
     return false
   }
 
-  if (shouldDisableUserShell(pathname)) {
+  const resolvedPathname = resolveUserSectionPath(pathname)
+
+  if (shouldDisableUserShell(resolvedPathname)) {
     return false
   }
 
-  return USER_SHELL_ROUTE_PATHS.has(pathname)
+  return USER_SHELL_ROUTE_PATHS.has(resolvedPathname)
 }
 
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
@@ -310,9 +319,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [isProfileMenuOpen])
 
   const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
-  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile })
-  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile })
-  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile })
+  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus })
+  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus })
+  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus })
   const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
@@ -943,7 +952,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       {getPageContent()}
     </Suspense>
   )
-  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile)
+  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, subscriptionStatus)
 
   if (isAdminPath) {
     return (
