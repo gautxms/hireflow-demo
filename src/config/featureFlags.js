@@ -15,6 +15,12 @@ const FEATURE_ENV_PREFIX = {
 }
 
 const OVERRIDE_PREFIX = 'hireflow_ff_'
+const SUBSCRIPTION_GATED_FEATURES = new Set([
+  FEATURE_KEYS.sidebarShell,
+  FEATURE_KEYS.analysesPages,
+  FEATURE_KEYS.candidateModule,
+  FEATURE_KEYS.dashboardReports,
+])
 
 function normalizeList(value) {
   return String(value || '')
@@ -85,7 +91,14 @@ function isExplicitlyDisabled(rawValue) {
   return normalized === 'off' || normalized === 'false' || normalized === '0' || normalized === 'disabled'
 }
 
-export function isFeatureEnabled(featureKey, { userProfile = null } = {}) {
+export function isFeatureEnabled(featureKey, { userProfile = null, subscriptionStatus = 'inactive' } = {}) {
+  const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
+  const isSubscribedUser = normalizedSubscriptionStatus === 'active' || normalizedSubscriptionStatus === 'trialing'
+
+  if (isSubscribedUser && SUBSCRIPTION_GATED_FEATURES.has(featureKey)) {
+    return true
+  }
+
   const localOverride = readLocalOverride(featureKey)
   if (localOverride !== null) {
     return localOverride
