@@ -30,6 +30,8 @@ export default function UserAppShell({
   children,
   pathname,
   onNavigate,
+  onLogout,
+  userProfile = null,
   navItems = DEFAULT_NAV_ITEMS,
   subscriptionStatus = 'inactive',
   showUpgradeCta = false,
@@ -40,6 +42,11 @@ export default function UserAppShell({
   const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
   const isPremiumUser = normalizedSubscriptionStatus === 'active'
   const isExpanded = isPinned || isHoverExpanded
+  const appHeaderTitle = useMemo(() => {
+    const activeItem = navItems.find((item) => item.path === pathname)
+    return activeItem?.label || 'Workspace'
+  }, [navItems, pathname])
+  const userDisplayName = userProfile?.name?.trim() || userProfile?.email?.trim() || 'User'
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -151,9 +158,32 @@ export default function UserAppShell({
           </div>
         ) : null}
       </aside>
-      <main className="user-app-shell__content">
-        {children}
-      </main>
+      <div className="user-app-shell__main-column">
+        <header className="user-app-shell__header">
+          <div className="user-app-shell__header-content">
+            <div>
+              <p className="user-app-shell__header-eyebrow">Authenticated workspace</p>
+              <h1 className="user-app-shell__header-title">{appHeaderTitle}</h1>
+            </div>
+            <div className="user-app-shell__header-actions">
+              <span className="user-app-shell__header-user">{userDisplayName}</span>
+              {onLogout ? (
+                <button type="button" className="user-app-shell__header-logout" onClick={onLogout}>
+                  Log out
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </header>
+        <main className="user-app-shell__content">
+          <div className="user-app-shell__content-inner">
+            {children}
+          </div>
+        </main>
+        <footer className="user-app-shell__footer">
+          <p>HireFlow workspace</p>
+        </footer>
+      </div>
     </div>
   )
 }
