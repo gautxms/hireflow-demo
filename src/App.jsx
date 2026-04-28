@@ -961,6 +961,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   )
   const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, subscriptionStatus)
 
+  useEffect(() => {
+    document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
+
+    return () => {
+      document.body.classList.remove('user-app-shell-active')
+    }
+  }, [useUserShellLayout])
+
   if (isAdminPath) {
     return (
       <div className="admin-app-root">
@@ -977,6 +985,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         <UserAppShell
           pathname={pathname}
           onNavigate={navigate}
+          onLogout={onLogout}
+          userProfile={userProfile}
           navItems={userShellNavItems}
           subscriptionStatus={subscriptionStatus}
           userProfile={userProfile}

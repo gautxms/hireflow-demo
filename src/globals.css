@@ -297,8 +297,9 @@ body {
 .user-app-shell {
   display: grid;
   grid-template-columns: 88px 1fr;
-  min-height: 100vh;
+  height: 100vh;
   transition: grid-template-columns 0.2s ease;
+  overflow: hidden;
 }
 
 .user-app-shell.is-expanded {
@@ -314,6 +315,7 @@ body {
   gap: 1rem;
   transition: width 0.2s ease;
   overflow: hidden;
+  min-height: 0;
 }
 
 .user-app-shell__sidebar-header {
@@ -459,6 +461,62 @@ body {
   cursor: pointer;
 }
 
+.user-app-shell__main-column {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.user-app-shell__header {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+}
+
+.user-app-shell__header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+}
+
+.user-app-shell__header-eyebrow {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.user-app-shell__header-title {
+  margin-top: 0.2rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.user-app-shell__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-app-shell__header-user {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.user-app-shell__header-logout {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-primary);
+  border-radius: 0.45rem;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+.user-app-shell__header-logout:hover {
+  background: var(--color-white-alpha-08);
+}
+
 .user-app-shell__content {
   min-width: 0;
   display: flex;
@@ -595,6 +653,10 @@ body {
 .user-app-shell.is-collapsed .user-app-shell__pin-toggle {
   margin-left: auto;
   margin-right: auto;
+}
+
+body.user-app-shell-active {
+  overflow: hidden;
 }
 .mobile-nav-toggle {
   background: transparent;
