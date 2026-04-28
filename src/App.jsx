@@ -967,7 +967,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     return (
       <>
         <PageSeo pathname={pathname} currentPage={currentPage} />
-        <UserAppShell pathname={pathname} onNavigate={navigate} navItems={userShellNavItems}>
+        <UserAppShell
+          pathname={pathname}
+          onNavigate={navigate}
+          navItems={userShellNavItems}
+          subscriptionStatus={subscriptionStatus}
+          userProfile={userProfile}
+        >
           {pageContent}
         </UserAppShell>
       </>

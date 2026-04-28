@@ -1,3 +1,5 @@
+import AppHeader from '../AppHeader'
+
 const DEFAULT_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
   { key: 'jobs', label: 'Jobs', path: '/job-descriptions' },
@@ -8,7 +10,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'settings', label: 'Settings', path: '/settings' },
 ]
 
-export default function UserAppShell({ children, pathname, onNavigate, navItems = DEFAULT_NAV_ITEMS }) {
+export default function UserAppShell({ children, pathname, onNavigate, subscriptionStatus, userProfile, navItems = DEFAULT_NAV_ITEMS }) {
   return (
     <div className="user-app-shell">
       <aside className="user-app-shell__sidebar" aria-label="App sections">
@@ -41,7 +43,13 @@ export default function UserAppShell({ children, pathname, onNavigate, navItems 
         </nav>
       </aside>
       <main className="user-app-shell__content">
-        {children}
+        <AppHeader
+          pathname={pathname}
+          onNavigate={onNavigate}
+          subscriptionStatus={subscriptionStatus}
+          userProfile={userProfile}
+        />
+        <div className="user-app-shell__page-content">{children}</div>
       </main>
     </div>
   )
