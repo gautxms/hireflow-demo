@@ -115,8 +115,15 @@ export default function UserAppShell({
                 key={item.key}
                 type="button"
                 className={`user-app-shell__nav-item ${isActive ? 'is-active' : ''} ${isLocked ? 'is-locked' : ''}`}
-                onClick={() => onNavigate(item.path)}
+                onClick={() => {
+                  if (isLocked) {
+                    return
+                  }
+
+                  onNavigate(item.path)
+                }}
                 aria-current={isActive ? 'page' : undefined}
+                aria-disabled={isLocked ? 'true' : undefined}
                 title={!isExpanded ? item.label : undefined}
               >
                 <span className="user-app-shell__nav-item-icon-wrap">
