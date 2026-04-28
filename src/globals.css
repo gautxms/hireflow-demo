@@ -296,35 +296,84 @@ body {
 
 .user-app-shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 88px 1fr;
   min-height: 100vh;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.user-app-shell.is-expanded {
+  grid-template-columns: 240px 1fr;
 }
 
 .user-app-shell__sidebar {
   border-right: 1px solid var(--color-border);
-  padding: 1.2rem;
+  padding: 1rem 0.7rem;
   background: var(--color-bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+
+.user-app-shell__sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .user-app-shell__brand {
-  display: inline-block;
-  margin-bottom: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--color-text-primary);
   text-decoration: none;
   font-weight: 700;
+  min-width: 0;
+}
+
+.user-app-shell__brand-icon {
+  flex: 0 0 auto;
+}
+
+.user-app-shell__brand-wordmark {
+  white-space: nowrap;
 }
 
 .user-app-shell__brand span {
   color: var(--color-accent);
 }
 
+.user-app-shell__pin-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.user-app-shell__pin-toggle:hover {
+  background: var(--color-white-alpha-08);
+  color: var(--color-text-primary);
+}
+
 .user-app-shell__nav {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  flex: 1;
 }
 
 .user-app-shell__nav-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
   text-align: left;
   border: 0;
   border-radius: 0.6rem;
@@ -332,6 +381,38 @@ body {
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
+  gap: 0.6rem;
+  position: relative;
+}
+
+.user-app-shell__nav-item-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-app-shell__nav-item-lock {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  background: var(--color-bg-secondary);
+  border-radius: 999px;
+}
+
+.user-app-shell__nav-item-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-app-shell__nav-item-badge {
+  margin-left: auto;
+  border: 1px solid var(--color-warning-text);
+  color: var(--color-warning-text);
+  font-size: 0.7rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
 }
 
 .user-app-shell__nav-item:hover,
@@ -340,6 +421,43 @@ body {
   color: var(--color-text-primary);
 }
 
+.user-app-shell__nav-item.is-active {
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.user-app-shell__nav-item.is-locked {
+  color: var(--color-warning-text);
+}
+
+.user-app-shell__upgrade-box {
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-warning-text);
+  background: var(--color-warning-alpha-12);
+}
+
+.user-app-shell__upgrade-title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.user-app-shell__upgrade-copy {
+  margin: 0.35rem 0 0.6rem;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.user-app-shell__upgrade-button {
+  width: 100%;
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: #081327;
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 
 .user-app-shell__content {
   min-width: 0;
@@ -455,6 +573,29 @@ body {
   }
 }
 
+.user-app-shell.is-collapsed .user-app-shell__sidebar {
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
+}
+
+.user-app-shell.is-collapsed .user-app-shell__brand-wordmark,
+.user-app-shell.is-collapsed .user-app-shell__nav-item-label,
+.user-app-shell.is-collapsed .user-app-shell__nav-item-badge,
+.user-app-shell.is-collapsed .user-app-shell__upgrade-box {
+  opacity: 0;
+  width: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.user-app-shell.is-collapsed .user-app-shell__nav-item {
+  justify-content: center;
+}
+
+.user-app-shell.is-collapsed .user-app-shell__pin-toggle {
+  margin-left: auto;
+  margin-right: auto;
+}
 .mobile-nav-toggle {
   background: transparent;
   border: 1px solid var(--color-border);

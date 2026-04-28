@@ -937,13 +937,20 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const userShellNavItems = useMemo(() => {
     return [
-      { key: 'dashboard', label: 'Dashboard', path: '/' },
-      { key: 'jobs', label: 'Jobs', path: '/job-descriptions' },
-      ...(analysesModuleEnabled ? [{ key: 'analyses', label: 'Analyses', path: '/analyses' }] : []),
-      ...(candidateModuleEnabled ? [{ key: 'candidates', label: 'Candidates', path: '/candidates' }] : []),
-      { key: 'shortlists', label: 'Shortlists', path: '/results' },
-      ...(dashboardReportsEnabled ? [{ key: 'reports', label: 'Reports', path: '/reports' }] : []),
-      { key: 'settings', label: 'Settings', path: '/settings' },
+      { key: 'dashboard', label: 'Dashboard', path: '/', icon: 'home' },
+      { key: 'jobs', label: 'Jobs', path: '/job-descriptions', icon: 'file' },
+      { key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'target', isLocked: !analysesModuleEnabled },
+      { key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'users', isLocked: !candidateModuleEnabled },
+      { key: 'shortlists', label: 'Shortlists', path: '/results', icon: 'chart' },
+      {
+        key: 'reports',
+        label: 'Reports',
+        path: '/reports',
+        icon: 'chart',
+        isLocked: !dashboardReportsEnabled,
+        badge: !dashboardReportsEnabled ? 'Pro' : '',
+      },
+      { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
     ]
   }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
 
@@ -973,6 +980,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           navItems={userShellNavItems}
           subscriptionStatus={subscriptionStatus}
           userProfile={userProfile}
+          showUpgradeCta={canViewUpgradePricing}
         >
           {pageContent}
         </UserAppShell>
