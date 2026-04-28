@@ -1,3 +1,4 @@
+import AppHeader from '../AppHeader'
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
 
@@ -158,32 +159,15 @@ export default function UserAppShell({
           </div>
         ) : null}
       </aside>
-      <div className="user-app-shell__main-column">
-        <header className="user-app-shell__header">
-          <div className="user-app-shell__header-content">
-            <div>
-              <p className="user-app-shell__header-eyebrow">Authenticated workspace</p>
-              <h1 className="user-app-shell__header-title">{appHeaderTitle}</h1>
-            </div>
-            <div className="user-app-shell__header-actions">
-              <span className="user-app-shell__header-user">{userDisplayName}</span>
-              {onLogout ? (
-                <button type="button" className="user-app-shell__header-logout" onClick={onLogout}>
-                  Log out
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </header>
-        <main className="user-app-shell__content">
-          <div className="user-app-shell__content-inner">
-            {children}
-          </div>
-        </main>
-        <footer className="user-app-shell__footer">
-          <p>HireFlow workspace</p>
-        </footer>
-      </div>
+      <main className="user-app-shell__content">
+        <AppHeader
+          pathname={pathname}
+          onNavigate={onNavigate}
+          subscriptionStatus={subscriptionStatus}
+          userProfile={userProfile}
+        />
+        <div className="user-app-shell__page-content">{children}</div>
+      </main>
     </div>
   )
 }
