@@ -1040,68 +1040,71 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         </div>
         <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
           {isAuthenticated ? (
-            <div className="site-profile-menu" ref={profileMenuRef}>
-              <button
-                onClick={() => setIsProfileMenuOpen((open) => !open)}
-                aria-haspopup="menu"
-                aria-expanded={isProfileMenuOpen}
-                aria-label="Open user menu"
-                className="site-profile-menu__trigger"
-              >
-                {profileInitial}
-              </button>
-
-              {isProfileMenuOpen && (
-                <div
-                  role="menu"
-                  className="site-profile-menu__list"
+            <>
+              {isActiveSubscriber && (
+                <button
+                  type="button"
+                  className="site-dashboard-shortcut"
+                  onClick={() => {
+                    setIsMobileNavOpen(false)
+                    setIsProfileMenuOpen(false)
+                    navigate('/dashboard')
+                  }}
                 >
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false)
-                      navigate('/account')
-                    }}
-                    className="site-profile-menu__item"
+                  Dashboard
+                </button>
+              )}
+              <div className="site-profile-menu" ref={profileMenuRef}>
+                <button
+                  onClick={() => setIsProfileMenuOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={isProfileMenuOpen}
+                  aria-label="Open user menu"
+                  className="site-profile-menu__trigger"
+                >
+                  {profileInitial}
+                </button>
+
+                {isProfileMenuOpen && (
+                  <div
+                    role="menu"
+                    className="site-profile-menu__list"
                   >
-                    Account
-                  </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false)
-                      navigate('/billing')
-                    }}
-                    className="site-profile-menu__item"
-                  >
-                    Billing
-                  </button>
-                  {isActiveSubscriber && (
                     <button
                       role="menuitem"
                       onClick={() => {
                         setIsProfileMenuOpen(false)
-                        navigate('/job-descriptions')
+                        navigate('/account')
                       }}
                       className="site-profile-menu__item"
                     >
-                      Job descriptions
+                      Account
                     </button>
-                  )}
-                  <div className="site-profile-menu__divider" />
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false)
-                      onLogout()
-                    }}
-                    className="site-profile-menu__item site-profile-menu__item--danger"
-                  >
-                    Log out
-                  </button>
-                </div>
-              )}
-            </div>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        navigate('/billing')
+                      }}
+                      className="site-profile-menu__item"
+                    >
+                      Billing
+                    </button>
+                    <div className="site-profile-menu__divider" />
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        onLogout()
+                      }}
+                      className="site-profile-menu__item site-profile-menu__item--danger"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
             <>
               <button type="button" className="btn-ghost btn-ghost--accent" onClick={() => { setIsMobileNavOpen(false); navigate('/login') }}>Login</button>
