@@ -476,6 +476,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <BillingPage />
     }
 
+    if (resolvedPathname === '/uploader') {
+      navigate('/analyses')
+      return null
+    }
+
     if (resolvedPathname === '/reports') {
       if (!dashboardReportsEnabled) {
         navigate('/dashboard/legacy')

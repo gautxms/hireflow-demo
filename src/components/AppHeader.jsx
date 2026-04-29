@@ -1,5 +1,6 @@
 import { Icon } from './Icon'
 import { hasActiveSubscription } from '../utils/routeGuards'
+import { Bell } from 'lucide-react'
 
 const PAGE_TITLE_RULES = [
   { matches: (pathname) => pathname === '/' || pathname === '/dashboard', title: 'Dashboard' },
@@ -41,7 +42,7 @@ export default function AppHeader({ pathname, onNavigate, subscriptionStatus, us
               className="app-header__icon-button"
               aria-label="Notifications"
             >
-              <Icon name="chat" size="sm" />
+              <Bell size={15} strokeWidth={1.5} />
             </button>
           </>
         ) : (

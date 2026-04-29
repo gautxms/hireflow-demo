@@ -1,17 +1,20 @@
 import AppHeader from '../AppHeader'
-import { useEffect, useMemo, useState } from 'react'
+import { createElement, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
+import {
+  LayoutDashboard, Briefcase, ScanSearch, Users, ClipboardCheck, BarChart2, Settings2, Pin, ChevronLeft, ChevronRight
+} from 'lucide-react'
 
 const SIDEBAR_PINNED_STORAGE_KEY = 'hireflow_user_sidebar_pinned'
 
 const DEFAULT_NAV_ITEMS = [
-  { key: 'dashboard', label: 'Dashboard', path: '/', icon: 'home' },
-  { key: 'jobs', label: 'Jobs', path: '/job-descriptions', icon: 'file' },
-  { key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'target' },
-  { key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'users' },
-  { key: 'shortlists', label: 'Shortlists', path: '/results', icon: 'chart' },
-  { key: 'reports', label: 'Reports', path: '/reports', icon: 'chart' },
-  { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
+  { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { key: 'jobs', label: 'Jobs', path: '/job-descriptions', icon: Briefcase },
+  { key: 'analyses', label: 'Analyses', path: '/analyses', icon: ScanSearch },
+  { key: 'candidates', label: 'Candidates', path: '/candidates', icon: Users },
+  { key: 'shortlists', label: 'Shortlists', path: '/results', icon: ClipboardCheck },
+  { key: 'reports', label: 'Reports', path: '/reports', icon: BarChart2 },
+  { key: 'settings', label: 'Settings', path: '/settings', icon: Settings2 },
 ]
 
 function readStoredPinnedState() {
@@ -104,7 +107,7 @@ export default function UserAppShell({
             aria-label={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
             title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
           >
-            <Icon name={isPinned ? 'link' : 'menu'} size="sm" />
+            {isPinned ? <Pin size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />}
             <span className="user-app-shell__pin-indicator">{isPinned ? 'Pinned' : 'Hover to expand'}</span>
           </button>
         </div>
@@ -133,7 +136,11 @@ export default function UserAppShell({
                 aria-label={`${item.label}${isLocked ? ' (Locked)' : ''}`}
               >
                 <span className="user-app-shell__nav-item-icon-wrap">
-                  <Icon name={item.icon || 'file'} size="sm" className="user-app-shell__nav-item-icon" />
+                  {typeof item.icon === 'string'
+                    ? <Icon name={item.icon} size="sm" className="user-app-shell__nav-item-icon" />
+                    : item.icon
+                      ? createElement(item.icon, { size: 18, strokeWidth: 1.5, className: 'user-app-shell__nav-item-icon' })
+                      : <LayoutDashboard size={18} strokeWidth={1.5} className="user-app-shell__nav-item-icon" />}
                   {isLocked ? <Icon name="lock" size="xs" className="user-app-shell__nav-item-lock" /> : null}
                 </span>
                 <span className="user-app-shell__nav-item-label">{item.label}</span>

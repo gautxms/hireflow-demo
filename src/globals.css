@@ -1664,3 +1664,36 @@ footer {
 .user-app-shell__footer-link:hover {
   color: var(--color-accent-green);
 }
+
+
+.app-header__dashboard-button {
+  border: 1px solid var(--color-accent);
+  background: transparent;
+  color: var(--color-text-primary);
+  border-radius: 10px;
+  padding: 0.45rem 1rem;
+  font-family: var(--font-family-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-header__dashboard-button:hover {
+  background: var(--color-accent-alpha-08);
+}
+
+.user-app-shell__footer {
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  color: var(--color-text-nav);
+  font-size: 0.75rem;
+}
+
+.user-app-shell__footer-link {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-nav);
+  cursor: pointer;
+}
