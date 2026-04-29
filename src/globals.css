@@ -120,7 +120,7 @@ body {
 }
 
 
-.site-logo,
+.site-header__logo,
 .public-footer__brand {
   font-family: var(--font-family-display);
   font-weight: 800;
@@ -129,22 +129,22 @@ body {
   text-decoration: none;
 }
 
-.site-logo span,
+.site-header__logo span,
 .public-footer__brand span {
   color: var(--color-accent-green);
 }
 
-.site-nav-button {
+.site-header__nav-button {
   font-family: var(--font-family-base);
 }
 
-.nav-links {
+.site-header__nav-links {
   display: flex;
   gap: 2.5rem;
   list-style: none;
 }
 
-.nav-links a {
+.site-header__nav-links a {
   text-decoration: none;
   color: var(--color-text-secondary);
   font-size: var(--type-nav-size);
@@ -156,11 +156,11 @@ body {
   transition: color 0.2s;
 }
 
-.nav-links a:hover {
+.site-header__nav-links a:hover {
   color: var(--color-text-primary);
 }
 
-.nav-links button {
+.site-header__nav-links button {
   text-decoration: none;
   color: var(--color-text-secondary);
   font-size: var(--type-nav-size);
@@ -173,7 +173,7 @@ body {
   padding: 0;
 }
 
-.nav-links button:hover {
+.site-header__nav-links button:hover {
   color: var(--color-text-primary);
 }
 
@@ -422,14 +422,14 @@ body {
   border-bottom: none;
 }
 
-/* Shared desktop navigation styles used by the main App header. */
-.nav-links {
+/* Shared desktop navigation styles used by the public App header. */
+.site-header__nav-links {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.nav-links button {
+.site-header__nav-links button {
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
@@ -443,8 +443,8 @@ body {
   padding: 0.35rem 0.25rem;
 }
 
-.nav-links button:hover,
-.nav-links button:focus-visible {
+.site-header__nav-links button:hover,
+.site-header__nav-links button:focus-visible {
   color: var(--color-text-primary);
 }
 
@@ -465,7 +465,7 @@ body {
 }
 
 @media (max-width: 767px) {
-  .mobile-nav-toggle {
+  .site-header__mobile-toggle {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
@@ -479,13 +479,13 @@ body {
     flex-wrap: wrap;
   }
 
-  .nav-links,
-  .site-auth-actions {
+  .site-header__nav-links,
+  .site-header__auth-actions {
     display: none !important;
   }
 
-  .nav-links.is-open,
-  .site-auth-actions.is-open {
+  .site-header__nav-links.is-open,
+  .site-header__auth-actions.is-open {
     display: flex !important;
     width: 100%;
     flex-direction: column;
@@ -494,8 +494,8 @@ body {
     align-items: stretch;
   }
 
-  .nav-links.is-open button,
-  .site-auth-actions.is-open button {
+  .site-header__nav-links.is-open button,
+  .site-header__auth-actions.is-open button {
     min-height: 44px;
     width: 100%;
     text-align: left;
