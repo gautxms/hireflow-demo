@@ -16,7 +16,6 @@ function Toast({ type, message }) {
         right: 16,
         padding: '0.75rem 1rem',
         borderRadius: 8,
-        color: '#fff',
         background: type === 'error' ? '#b91c1c' : '#166534',
         zIndex: 50,
       }}
@@ -242,10 +241,10 @@ export default function AccountSettingsPage() {
         <h2 className="type-h2" style={{ marginTop: 0 }}>Privacy & Data</h2>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="type-button" onClick={handleDownloadData}>Download personal data (JSON)</button>
-          <button className="type-button" onClick={handleDeleteAccount} style={{ background: '#dc2626', color: '#fff' }}>Delete account</button>
+          <button className="type-button" onClick={handleDeleteAccount} style={{ background: '#dc2626'}}>Delete account</button>
         </div>
         {profile.deletion_scheduled_for && (
-          <p className="type-small" style={{ marginTop: 12, color: '#fca5a5' }}>
+          <p className="type-small" style={{ marginTop: 12}}>
             Deletion scheduled for: {new Date(profile.deletion_scheduled_for).toLocaleString()}
           </p>
         )}
