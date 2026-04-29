@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { hasActiveSubscription } from '../utils/routeGuards'
 
 const PAGE_TITLE_RULES = [
@@ -28,23 +29,24 @@ export default function AppHeader({ pathname, onNavigate, subscriptionStatus, us
   return (
     <header className="app-header" aria-label="Workspace header">
       <div className="app-header__left">
+        <div className="app-header__eyebrow">Workspace</div>
         <h1 className="app-header__title">{pageTitle}</h1>
       </div>
       <div className="app-header__right">
         {isProSubscriber ? (
           <>
-            <span className="app-header__pro-badge" aria-label="Pro plan">Pro</span>
+            <span className="app-header__plan-badge" aria-label="Current plan">{isProSubscriber ? 'Pro plan' : 'Free plan'}</span>
             <button
               type="button"
               className="app-header__icon-button"
               aria-label="Notifications"
             >
-              🔔
+              <Icon name="chat" size="sm" />
             </button>
           </>
         ) : (
           <div className="app-header__free-plan-strip" role="status" aria-live="polite">
-            <span className="app-header__free-plan-label">Free plan</span>
+            <span className="app-header__plan-badge">Free plan</span>
             <button
               type="button"
               className="app-header__upgrade-cta"

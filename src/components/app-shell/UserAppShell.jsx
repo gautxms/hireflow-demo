@@ -31,7 +31,6 @@ export default function UserAppShell({
   children,
   pathname,
   onNavigate,
-  onLogout,
   userProfile = null,
   navItems = DEFAULT_NAV_ITEMS,
   subscriptionStatus = 'inactive',
@@ -43,11 +42,6 @@ export default function UserAppShell({
   const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
   const isPremiumUser = normalizedSubscriptionStatus === 'active'
   const isExpanded = isPinned || isHoverExpanded
-  const appHeaderTitle = useMemo(() => {
-    const activeItem = navItems.find((item) => item.path === pathname)
-    return activeItem?.label || 'Workspace'
-  }, [navItems, pathname])
-  const userDisplayName = userProfile?.name?.trim() || userProfile?.email?.trim() || 'User'
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -102,6 +96,7 @@ export default function UserAppShell({
           <button
             type="button"
             className="user-app-shell__pin-toggle"
+            aria-pressed={isPinned}
             onClick={() => {
               setIsPinned((current) => !current)
               setIsHoverExpanded(false)
@@ -110,6 +105,7 @@ export default function UserAppShell({
             title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
           >
             <Icon name={isPinned ? 'link' : 'menu'} size="sm" />
+            <span className="user-app-shell__pin-indicator">{isPinned ? 'Pinned' : 'Hover to expand'}</span>
           </button>
         </div>
 
@@ -123,6 +119,7 @@ export default function UserAppShell({
                 key={item.key}
                 type="button"
                 className={`user-app-shell__nav-item ${isActive ? 'is-active' : ''} ${isLocked ? 'is-locked' : ''}`}
+                data-tooltip={!isExpanded ? item.label : undefined}
                 onClick={() => {
                   if (isLocked) {
                     return
@@ -167,6 +164,10 @@ export default function UserAppShell({
           userProfile={userProfile}
         />
         <div className="user-app-shell__page-content">{children}</div>
+        <footer className="user-app-shell__footer">
+          <span>© {new Date().getFullYear()} HireFlow</span>
+          <button type="button" onClick={() => onNavigate('/help')} className="user-app-shell__footer-link">Help</button>
+        </footer>
       </main>
     </div>
   )
