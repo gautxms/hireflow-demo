@@ -764,8 +764,6 @@ export default function Checkout({ onAuthSuccess }) {
               marginTop: '16px',
               background: '#CCFF00',
               color: '#000000',
-              border: 'none',
-              borderRadius: '6px',
             }}
           >
             Retry checkout
