@@ -10,18 +10,7 @@ function Toast({ type, message }) {
   if (!message) return null
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 16,
-        right: 16,
-        padding: '0.75rem 1rem',
-        borderRadius: 8,
-        color: 'var(--color-text-primary)',
-        background: type === 'error' ? 'var(--color-error)' : 'var(--color-success)',
-        zIndex: 50,
-      }}
-    >
+    <div className={`account-settings-page__toast account-settings-page__toast--${type === 'error' ? 'error' : 'success'}`}>
       {message}
     </div>
   )
@@ -201,7 +190,7 @@ export default function AccountSettingsPage() {
       <p className="account-settings-page__subtitle">Manage your profile and security settings.</p>
 
       <section className="account-settings-page__card">
-        <h2 style={{ marginTop: 0 }}>Profile</h2>
+        <h2 className="account-settings-page__section-title">Profile</h2>
         <form onSubmit={handleProfileSave} className="account-settings-page__form">
           <label>
             Company
@@ -219,34 +208,34 @@ export default function AccountSettingsPage() {
             Subscription Status (read-only)
             <input value={profile.subscription_status || 'inactive'} disabled className="account-settings-page__input account-settings-page__input--readonly" />
           </label>
-          <div style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+          <div className="account-settings-page__meta">
             To change subscription, visit <a href="/pricing">Billing</a>.
           </div>
-          <div style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+          <div className="account-settings-page__meta">
             Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
           </div>
-          <button type="submit" style={{ width: 'fit-content' }}>Save profile</button>
+          <button type="submit" className="account-settings-page__button">Save profile</button>
         </form>
       </section>
 
       <section className="account-settings-page__card">
-        <h2 style={{ marginTop: 0 }}>Change Password</h2>
+        <h2 className="account-settings-page__section-title">Change Password</h2>
         <form onSubmit={handlePasswordChange} className="account-settings-page__form">
           <input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} placeholder="Old password" required />
           <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="New password" required minLength={8} />
           <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm new password" required minLength={8} />
-          <button type="submit" style={{ width: 'fit-content' }}>Change password</button>
+          <button type="submit" className="account-settings-page__button">Change password</button>
         </form>
       </section>
 
       <section className="account-settings-page__card">
-        <h2 style={{ marginTop: 0 }}>Privacy & Data</h2>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <h2 className="account-settings-page__section-title">Privacy & Data</h2>
+        <div className="account-settings-page__privacy-actions">
           <button onClick={handleDownloadData}>Download personal data (JSON)</button>
-          <button onClick={handleDeleteAccount} style={{ background: 'var(--color-error)', color: 'var(--color-text-primary)' }}>Delete account</button>
+          <button onClick={handleDeleteAccount} className="account-settings-page__delete">Delete account</button>
         </div>
         {profile.deletion_scheduled_for && (
-          <p style={{ marginTop: 12, color: 'var(--color-error)' }}>
+          <p className="account-settings-page__deletion-note">
             Deletion scheduled for: {new Date(profile.deletion_scheduled_for).toLocaleString()}
           </p>
         )}

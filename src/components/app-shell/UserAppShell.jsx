@@ -31,7 +31,6 @@ export default function UserAppShell({
   children,
   pathname,
   onNavigate,
-  onLogout,
   userProfile = null,
   navItems = DEFAULT_NAV_ITEMS,
   subscriptionStatus = 'inactive',
@@ -43,11 +42,6 @@ export default function UserAppShell({
   const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
   const isPremiumUser = normalizedSubscriptionStatus === 'active'
   const isExpanded = isPinned || isHoverExpanded
-  const appHeaderTitle = useMemo(() => {
-    const activeItem = navItems.find((item) => item.path === pathname)
-    return activeItem?.label || 'Workspace'
-  }, [navItems, pathname])
-  const userDisplayName = userProfile?.name?.trim() || userProfile?.email?.trim() || 'User'
 
   useEffect(() => {
     if (typeof window === 'undefined') {
