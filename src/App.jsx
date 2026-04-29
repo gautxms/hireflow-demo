@@ -1009,6 +1009,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setIsMobileNavOpen(false)
     navigate('/ai-resume-screening')
   }
+  const handleDashboardShortcutClick = () => {
+    setIsMobileNavOpen(false)
+    setIsProfileMenuOpen(false)
+    navigate('/dashboard')
+  }
 
 
   const userShellNavItems = useMemo(() => {
@@ -1115,11 +1120,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                 <button
                   type="button"
                   className="btn-ghost btn-ghost--accent"
-                  onClick={() => {
-                    setIsMobileNavOpen(false)
-                    setIsProfileMenuOpen(false)
-                    navigate('/dashboard')
-                  }}
+                  onClick={handleDashboardShortcutClick}
                 >
                   Dashboard
                 </button>
@@ -1169,7 +1170,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                       }}
                       className="site-profile-menu__item site-profile-menu__item--danger"
                     >
-                      Log out
+                      Logout
                     </button>
                   </div>
                 )}
