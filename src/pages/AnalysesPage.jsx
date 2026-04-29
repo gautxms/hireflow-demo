@@ -76,8 +76,7 @@ export default function AnalysesPage() {
   return (
     <main className="route-state">
       <section className="route-state-card">
-        <h1>Analyses</h1>
-        <p>Historical upload analyses and their latest live statuses.</p>
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary" onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Create analysis</button></div>
 
         {loading && <p>Loading analyses…</p>}
         {!loading && error && <p role="alert">{error}</p>}
