@@ -847,21 +847,113 @@ footer {
   font-size: 0.875rem;
 }
 
+.public-footer {
+  padding: 2.5rem clamp(1rem, 4vw, 4rem);
+  border-top: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.public-footer__grid {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.public-footer__column {
+  min-width: 0;
+}
+
+.public-footer__brand {
+  display: inline-block;
+  font-family: var(--font-family-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.public-footer__tagline {
+  margin-top: 0.75rem;
+  color: var(--color-text-secondary);
+  max-width: 28ch;
+  line-height: 1.5;
+}
+
+.public-footer__heading {
+  margin: 0 0 0.65rem;
+  color: var(--color-text-primary);
+  font-size: var(--type-small-size);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.public-footer__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
 .public-footer__link {
-  color: var(--color-accent-green);
+  color: var(--color-text-secondary);
   text-decoration: none;
   transition: var(--motion-transition-color);
 }
 
-.public-footer__intent-links {
-  margin-top: var(--spacing-md);
-}
-
 .public-footer__link:hover,
 .public-footer__link:focus-visible {
-  color: var(--color-accent-green-hover);
+  color: var(--color-text-primary);
   text-decoration: underline;
   text-underline-offset: 0.18em;
+}
+
+.public-footer__copyright {
+  max-width: var(--content-max-width);
+  margin: 1.5rem auto 0;
+  color: var(--color-text-nav);
+  font-size: var(--type-small-size);
+}
+
+.public-footer__intent-links {
+  max-width: var(--content-max-width);
+  margin: 1rem auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.1rem;
+}
+
+.public-footer__seo-link {
+  color: #1e1e1e;
+  text-decoration: none;
+  transition: color 180ms ease;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.public-footer__seo-link:hover,
+.public-footer__seo-link:focus-visible {
+  color: #2a2a2a;
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .public-footer__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .public-footer {
+    text-align: left;
+  }
+
+  .public-footer__grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
 }
 
 .page-content {
