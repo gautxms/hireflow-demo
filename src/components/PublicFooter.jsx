@@ -11,7 +11,7 @@ export default function PublicFooter() {
       <div className="public-footer__grid">
         <section className="public-footer__column" aria-label="Brand">
           <a className="public-footer__brand" href="/" aria-label="Hireflow home">
-            Hireflow
+            Hire<span>Flow</span>
           </a>
           <p className="public-footer__tagline">
             AI-powered resume screening for faster, fairer hiring decisions.
