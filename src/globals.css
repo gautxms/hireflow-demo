@@ -682,3 +682,131 @@ body.user-app-shell-active .app-header {
     align-items: flex-start;
   }
 }
+
+/* ---- PUBLIC FOOTER ---- */
+.public-footer {
+  border-top: 1px solid var(--color-border, #1e1e1e);
+  margin-top: 6rem;
+  padding: 3.5rem 4rem 2rem;
+  background: var(--color-bg-primary, #0a0a0a);
+  color: #aaaaaa;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.public-footer__grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(3, minmax(120px, 1fr));
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.public-footer__column {
+  min-width: 0;
+}
+
+.public-footer__brand {
+  display: inline-block;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.public-footer__tagline {
+  margin-top: 0.85rem;
+  max-width: 34ch;
+  color: #888888;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+.public-footer__heading {
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+.public-footer__list {
+  list-style: none;
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.public-footer__link {
+  color: #888888;
+  text-decoration: none;
+  font-size: 0.94rem;
+  line-height: 1.5;
+  font-weight: 400;
+  transition: color 0.2s ease;
+}
+
+.public-footer__link:hover,
+.public-footer__brand:hover {
+  color: #ffffff;
+}
+
+.public-footer__link:focus-visible,
+.public-footer__brand:focus-visible,
+.public-footer__seo-link:focus-visible {
+  outline: 2px solid #c8ff00;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.public-footer__copyright {
+  max-width: 1200px;
+  margin: 2.25rem auto 0;
+  padding-top: 1.1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: #888888;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.public-footer__intent-links {
+  max-width: 1200px;
+  margin: 0.35rem auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+}
+
+.public-footer__seo-link {
+  color: #888888;
+  opacity: 0.12;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.public-footer__seo-link:hover,
+.public-footer__seo-link:focus-visible {
+  opacity: 0.45;
+  color: #aaaaaa;
+}
+
+@media (max-width: 900px) {
+  .public-footer {
+    padding: 3rem 1.5rem 2rem;
+  }
+
+  .public-footer__grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+    gap: 2rem 1.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .public-footer__grid {
+    grid-template-columns: 1fr;
+  }
+}
