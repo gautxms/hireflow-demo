@@ -1,5 +1,5 @@
 import AppHeader from '../AppHeader'
-import { useEffect, useMemo, useState } from 'react'
+import { createElement, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
 import {
   LayoutDashboard, Briefcase, ScanSearch, Users, ClipboardCheck, BarChart2, Settings2, Pin, ChevronLeft, ChevronRight
@@ -136,7 +136,11 @@ export default function UserAppShell({
                 aria-label={`${item.label}${isLocked ? ' (Locked)' : ''}`}
               >
                 <span className="user-app-shell__nav-item-icon-wrap">
-                  {item.icon ? <item.icon size={18} strokeWidth={1.5} className="user-app-shell__nav-item-icon" /> : <LayoutDashboard size={18} strokeWidth={1.5} className="user-app-shell__nav-item-icon" />}
+                  {typeof item.icon === 'string'
+                    ? <Icon name={item.icon} size="sm" className="user-app-shell__nav-item-icon" />
+                    : item.icon
+                      ? createElement(item.icon, { size: 18, strokeWidth: 1.5, className: 'user-app-shell__nav-item-icon' })
+                      : <LayoutDashboard size={18} strokeWidth={1.5} className="user-app-shell__nav-item-icon" />}
                   {isLocked ? <Icon name="lock" size="xs" className="user-app-shell__nav-item-lock" /> : null}
                 </span>
                 <span className="user-app-shell__nav-item-label">{item.label}</span>
