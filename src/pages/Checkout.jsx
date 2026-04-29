@@ -619,13 +619,8 @@ export default function Checkout({ onAuthSuccess }) {
   }
 
   return (
-    <main style={{
-      background: '#0a0a0a',
-      minHeight: '100vh',
-      padding: '40px 20px',
-      color: '#ffffff',
-    }}>
-      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <main>
+      <div>
         <button
           type="button"
           onClick={() => window.history.back()}
@@ -634,23 +629,23 @@ export default function Checkout({ onAuthSuccess }) {
           ← Back to Home
         </button>
 
-        <h1 className="type-h1" style={{ marginBottom: '12px' }}>
+        <h1 className="type-h1">
           Checkout
         </h1>
 
-        <p className="type-body" style={{ color: '#a3a3a3', marginBottom: '40px' }}>
+        <p className="type-body">
           You selected the <strong>{selectedPlan}</strong> subscription.
         </p>
 
         {isReactivation && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-              <span style={{ fontSize: '24px' }}>⚡</span>
+            <div>
+              <span>⚡</span>
               <div>
                 <h3 className="type-h3">
                   Reactivate Your Subscription
                 </h3>
-                <p className="type-small" style={{ color: '#a3a3a3', marginBottom: '16px' }}>
+                <p className="type-small">
                   Your subscription was cancelled. Reactivate now to regain access to resume analysis and full features.
                 </p>
                 <button
@@ -668,8 +663,8 @@ export default function Checkout({ onAuthSuccess }) {
         )}
 
         {status === 'action_required' && requiredAction === 'past_due' && (
-          <div style={{ background: '#1a1a1a', border: '1px solid #333333', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-            <p style={{ margin: 0, color: '#a3a3a3' }}>
+          <div>
+            <p>
               Your previous payment needs attention. Please update your payment method from the billing portal.
             </p>
             <a href="/billing" className="checkout-page__notice-link">Open billing portal</a>
@@ -677,9 +672,9 @@ export default function Checkout({ onAuthSuccess }) {
         )}
 
         {(errorMessage || successMessage) && (
-          <div style={{ marginBottom: '24px' }}>
+          <div>
             {!!errorMessage && (
-              <p style={{ margin: '0 0 8px', color: '#ff8f8f' }}>
+              <p>
                 Error: {errorMessage}
                 {status === 'error' && (
                   <>
@@ -692,7 +687,7 @@ export default function Checkout({ onAuthSuccess }) {
               </p>
             )}
             {!!successMessage && <p className="type-small">{successMessage}</p>}
-            {!errorMessage && <p style={{ margin: '8px 0 0', color: '#a3a3a3' }}>{getStatusMessage()}</p>}
+            {!errorMessage && <p>{getStatusMessage()}</p>}
           </div>
         )}
 
@@ -701,16 +696,16 @@ export default function Checkout({ onAuthSuccess }) {
           />
 
         {!checkoutOpen && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#a3a3a3' }}>
-            <p style={{ marginBottom: '8px' }}>Loading secure checkout...</p>
-            <div style={{ animation: 'pulse 2s infinite', display: 'inline-block' }}>
-              <span style={{ fontSize: '24px' }}>🔐</span>
+          <div>
+            <p>Loading secure checkout...</p>
+            <div>
+              <span>🔐</span>
             </div>
           </div>
         )}
 
         {status === 'opened' && transactionId && (
-          <p className="type-small" style={{ color: '#a3a3a3', marginTop: '12px' }}>
+          <p className="type-small">
             Transaction reference: {transactionId}
           </p>
         )}
