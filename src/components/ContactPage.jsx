@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import API_BASE from '../config/api'
 import { Icon } from './Icon'
+import PublicPageLayout from './public/PublicPageLayout'
 
 const OFFICES = [
   { city: 'San Francisco', address: '123 Tech Street', state: 'San Francisco, CA 94103', phone: '+1 (555) 123-4567', hours: 'Mon-Fri: 9am-6pm PT' },

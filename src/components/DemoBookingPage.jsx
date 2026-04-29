@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import API_BASE from '../config/api'
+import PublicPageLayout from './public/PublicPageLayout'
 
 const TIME_SLOTS = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM']
 const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']

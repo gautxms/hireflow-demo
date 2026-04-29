@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import BackButton from './BackButton'
 import { filterHelpArticles, parseHelpCenterLocation, resolveVisibleSelection, updateHelpCenterHistory } from './helpCenterState'
 import { Icon } from './Icon'
+import PublicPageLayout from './public/PublicPageLayout'
 
 const HELP_ARTICLES = {
   'getting-started': [

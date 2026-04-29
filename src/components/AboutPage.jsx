@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Icon } from './Icon'
+import PublicPageLayout from './public/PublicPageLayout'
 
 export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
