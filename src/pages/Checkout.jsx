@@ -9,6 +9,7 @@ const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
 const PADDLE_LAST_TRANSACTION_STORAGE_KEY = 'paddle_last_transaction'
 const PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY = 'paddle_checkout_active'
+const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -25,6 +26,15 @@ function getPlanFromQuery() {
   const params = new URLSearchParams(window.location.search)
   const plan = params.get('plan')
   return plan === 'monthly' || plan === 'annual' ? plan : 'monthly'
+}
+
+
+function markCreateAnalysisIntent() {
+  const intent = {
+    id: crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    createdAt: Date.now(),
+  }
+  sessionStorage.setItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY, JSON.stringify(intent))
 }
 
 function navigate(pathname, options = {}) {
@@ -212,8 +222,8 @@ export default function Checkout({ onAuthSuccess }) {
 
         if (isActive) {
           console.log('[Checkout] User already subscribed, redirecting to dashboard')
+          markCreateAnalysisIntent()
           persistActiveSubscription(token, user, '/uploader')
-          navigate('/uploader', { replace: true })
           return
         }
 

@@ -69,6 +69,7 @@ import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
+const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 const PUBLIC_ROUTE_PATHS = new Set(['/', '/login', '/signup', '/pricing'])
 const USER_SHELL_ROUTE_PATHS = new Set([
@@ -118,6 +119,31 @@ function navigate(pathname, options = {}) {
   }
 }
 
+function markCreateAnalysisIntent() {
+  const intent = {
+    id: crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    createdAt: Date.now(),
+  }
+  sessionStorage.setItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY, JSON.stringify(intent))
+}
+
+function consumeCreateAnalysisIntent() {
+  try {
+    const rawIntent = sessionStorage.getItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY)
+    if (!rawIntent) {
+      return false
+    }
+    const parsedIntent = JSON.parse(rawIntent)
+    const maxAgeMs = 10 * 60 * 1000
+    const isFreshIntent = parsedIntent?.createdAt && (Date.now() - parsedIntent.createdAt) <= maxAgeMs
+    sessionStorage.removeItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY)
+    return Boolean(isFreshIntent)
+  } catch {
+    sessionStorage.removeItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY)
+    return false
+  }
+}
+
 function shouldDisableUserShell(pathname) {
   return isSharedResultsPath(pathname)
 }
@@ -151,6 +177,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
   const lastResultsValidatedOwnerKeyRef = useRef(null)
+  const uploaderIntentAccessRef = useRef({ pathname: '', allowed: null })
   const { logout: logoutAdmin } = useAdminAuth()
   const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
 
@@ -189,6 +216,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setUploadedFiles(candidateResults)
     setResultsRecoveryAttempted(false)
     handleNavigate('results')
+  }
+
+  const handleCreateAnalysis = () => {
+    markCreateAnalysisIntent()
+    navigate('/uploader')
   }
 
 
@@ -477,7 +509,41 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/uploader') {
-      navigate('/analyses')
+      if (uploaderIntentAccessRef.current.pathname !== pathname) {
+        uploaderIntentAccessRef.current = {
+          pathname,
+          allowed: consumeCreateAnalysisIntent(),
+        }
+      }
+
+      if (!uploaderIntentAccessRef.current.allowed) {
+        navigate('/analyses')
+        return null
+      }
+
+      const canAccessUploader = guardSubscriptionRoute({
+        isAuthenticated,
+        subscriptionStatus,
+        onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
+      })
+      if (!canAccessUploader) {
+        return null
+      }
+      return (
+        <ResumeUploader
+          onFileUploaded={handleFileUploaded}
+          onBack={() => navigate('/analyses')}
+          isAuthenticated={isAuthenticated}
+          onRequireAuth={onRequireAuth}
+          subscriptionStatus={subscriptionStatus}
+          userProfile={userProfile}
+        />
+      )
+    }
+
+    if (resolvedPathname === '/create-analysis') {
+      handleCreateAnalysis()
       return null
     }
 
@@ -555,7 +621,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      return <AnalysesPage />
+      return <AnalysesPage onCreateAnalysis={handleCreateAnalysis} />
     }
 
     if (pathname.startsWith('/analyses/')) {
@@ -840,7 +906,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       <>
         {currentPage === 'landing' && (
           <LandingPage
-            onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : handleNavigate('uploader', 'Please sign up to try the resume screening demo.'))}
+            onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
             ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
           />
         )}
@@ -868,7 +934,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                   action={(
                     <button
                       type="button"
-                      onClick={() => handleNavigate('uploader')}
+                      onClick={() => navigate('/analyses')}
                       className="route-state-card__action"
                     >
                       {RESULTS_EMPTY_STATE_COPY.action}
@@ -880,7 +946,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             : (
               <CandidateResults
                 candidates={uploadedFiles}
-                onBack={() => handleNavigate('uploader')}
+                onBack={() => navigate('/analyses')}
                 userProfile={userProfile}
               />
               )
