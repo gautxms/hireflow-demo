@@ -448,6 +448,11 @@ body {
   color: var(--color-text-primary);
 }
 
+.app-route-loading-fallback {
+  padding: 1rem;
+  color: var(--color-text-secondary);
+}
+
 @media (max-width: 1439px) {
   .hero,
   .features,

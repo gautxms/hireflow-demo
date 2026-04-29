@@ -1038,7 +1038,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
 
   const pageContent = (
-    <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>Loading…</div>}>
+    <Suspense fallback={<div className="app-route-loading-fallback">Loading…</div>}>
       {getPageContent()}
     </Suspense>
   )
@@ -1195,19 +1195,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 }
 
 export default function App() {
-  const [token, setToken] = useState('')
-  const [isAuthInitialized, setIsAuthInitialized] = useState(false)
+  const [token, setToken] = useState(() => getStoredToken())
+  const [isAuthInitialized] = useState(true)
   const [pathname, setPathname] = useState(window.location.pathname)
   const [authPrompt, setAuthPrompt] = useState('')
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY) || ''
-    setToken(storedToken)
-    setIsAuthInitialized(true)
-  }, [])
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
