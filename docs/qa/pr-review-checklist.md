@@ -17,6 +17,7 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] Color and font styling in JSX use canonical tokens from `src/styles/variables.css`.
 - [ ] Zero legacy alias token usage (`--ink*`, `--accent*`, `--text`, `--muted`) in `src/`.
 - [ ] In `src/pages`, `src/components`, and `src/admin`, inline styles are runtime-only width/height/position values, data-driven, and explicitly allowlisted via `inline-style-allow` marker when retained.
+- [ ] App-wide CSS files (for example `src/globals.css`) do not style bare structural tags (`header`, `nav`, `main`, `section`, `footer`) unless it is a reset-only rule; use scoped classes like `.site-header` / `.site-footer` instead.
 
 ### Visual QA evidence
 - [ ] Before/after screenshots attached for any visual-impact change.
