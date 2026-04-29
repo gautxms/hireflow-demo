@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import '../styles/account-settings.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -186,37 +187,37 @@ export default function AccountSettingsPage() {
   }
 
   if (loading) {
-    return <div style={{ padding: '2rem' }}>Loading account settings...</div>
+    return <div className="account-settings-page">Loading account settings...</div>
   }
 
   if (!profile) {
-    return <div style={{ padding: '2rem' }}>Unable to load profile.</div>
+    return <div className="account-settings-page">Unable to load profile.</div>
   }
 
   return (
-    <main style={{ maxWidth: 860, margin: '0 auto', padding: '2rem 1rem 3rem', color: 'var(--color-text-primary)' }}>
+    <main className="account-settings-page">
       <Toast type={toast.type} message={toast.message} />
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', marginBottom: '0.5rem' }}>Account Settings</h1>
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.75rem' }}>Manage your profile and security settings.</p>
+      <h1 className="account-settings-page__title">Account Settings</h1>
+      <p className="account-settings-page__subtitle">Manage your profile and security settings.</p>
 
-      <section style={{ border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-bg-secondary)', padding: '1.2rem', marginBottom: '1rem' }}>
+      <section className="account-settings-page__card">
         <h2 style={{ marginTop: 0 }}>Profile</h2>
-        <form onSubmit={handleProfileSave} style={{ display: 'grid', gap: '0.9rem' }}>
+        <form onSubmit={handleProfileSave} className="account-settings-page__form">
           <label>
             Company
-            <input value={company} onChange={(event) => setCompany(event.target.value)} maxLength={100} style={{ width: '100%', marginTop: 6 }} />
+            <input value={company} onChange={(event) => setCompany(event.target.value)} maxLength={100} className="account-settings-page__input" />
           </label>
           <label>
             Phone (E.164)
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+14155552671" style={{ width: '100%', marginTop: 6 }} />
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+14155552671" className="account-settings-page__input" />
           </label>
           <label>
             Email (read-only)
-            <input value={profile.email || ''} disabled style={{ width: '100%', marginTop: 6, opacity: 0.7 }} />
+            <input value={profile.email || ''} disabled className="account-settings-page__input account-settings-page__input--readonly" />
           </label>
           <label>
             Subscription Status (read-only)
-            <input value={profile.subscription_status || 'inactive'} disabled style={{ width: '100%', marginTop: 6, opacity: 0.7 }} />
+            <input value={profile.subscription_status || 'inactive'} disabled className="account-settings-page__input account-settings-page__input--readonly" />
           </label>
           <div style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
             To change subscription, visit <a href="/pricing">Billing</a>.
@@ -228,9 +229,9 @@ export default function AccountSettingsPage() {
         </form>
       </section>
 
-      <section style={{ border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-bg-secondary)', padding: '1.2rem', marginBottom: '1rem' }}>
+      <section className="account-settings-page__card">
         <h2 style={{ marginTop: 0 }}>Change Password</h2>
-        <form onSubmit={handlePasswordChange} style={{ display: 'grid', gap: '0.9rem' }}>
+        <form onSubmit={handlePasswordChange} className="account-settings-page__form">
           <input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} placeholder="Old password" required />
           <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="New password" required minLength={8} />
           <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm new password" required minLength={8} />
@@ -238,7 +239,7 @@ export default function AccountSettingsPage() {
         </form>
       </section>
 
-      <section style={{ border: '1px solid var(--color-border)', borderRadius: 12, background: 'var(--color-bg-secondary)', padding: '1.2rem' }}>
+      <section className="account-settings-page__card">
         <h2 style={{ marginTop: 0 }}>Privacy & Data</h2>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={handleDownloadData}>Download personal data (JSON)</button>

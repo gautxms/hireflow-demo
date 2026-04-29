@@ -132,7 +132,8 @@ export default function UserAppShell({
                 }}
                 aria-current={isActive ? 'page' : undefined}
                 aria-disabled={isLocked ? 'true' : undefined}
-                title={!isExpanded ? item.label : undefined}
+                title={!isExpanded ? `${item.label}${isLocked ? ' (Locked)' : ''}` : undefined}
+                aria-label={`${item.label}${isLocked ? ' (Locked)' : ''}`}
               >
                 <span className="user-app-shell__nav-item-icon-wrap">
                   <Icon name={item.icon || 'file'} size="sm" className="user-app-shell__nav-item-icon" />
