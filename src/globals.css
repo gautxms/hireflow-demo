@@ -129,9 +129,14 @@ nav {
 .nav-links a {
   text-decoration: none;
   color: var(--color-text-secondary);
+<<<<<<< HEAD
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
+=======
+  font-size: 0.9rem;
+  font-weight: 400;
+>>>>>>> main
   letter-spacing: 0.02em;
   transition: color 0.2s;
 }
@@ -143,9 +148,14 @@ nav {
 .nav-links button {
   text-decoration: none;
   color: var(--color-text-secondary);
+<<<<<<< HEAD
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
+=======
+  font-size: 0.9rem;
+  font-weight: 400;
+>>>>>>> main
   letter-spacing: 0.02em;
   transition: color 0.2s;
   padding: 0;
@@ -168,9 +178,13 @@ nav {
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
   font-family: var(--font-family-base);
+<<<<<<< HEAD
   font-size: var(--type-button-size);
   font-weight: var(--type-button-weight);
   line-height: var(--type-button-line-height);
+=======
+  font-size: 0.875rem;
+>>>>>>> main
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s;
 }
@@ -186,9 +200,14 @@ nav {
   padding: 0.55rem 1.35rem;
   border-radius: 6px;
   font-family: var(--font-family-base);
+<<<<<<< HEAD
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
   line-height: var(--type-button-line-height);
+=======
+  font-weight: 500;
+  font-size: 0.875rem;
+>>>>>>> main
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
 }
@@ -256,9 +275,15 @@ nav {
 
 .hero h1 {
   font-family: var(--font-family-display);
+<<<<<<< HEAD
   font-weight: var(--type-h1-weight);
   font-size: var(--type-h1-size);
   line-height: var(--type-h1-line-height);
+=======
+  font-weight: 800;
+  font-size: clamp(3rem, 8vw, 5rem);
+  line-height: 1.1;
+>>>>>>> main
   letter-spacing: -0.02em;
   margin-bottom: 1.5rem;
 }
@@ -313,9 +338,13 @@ nav {
 
 .feature-card h3 {
   font-family: var(--font-family-display);
+<<<<<<< HEAD
   font-weight: var(--type-h3-weight);
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line-height);
+=======
+  font-weight: 700;
+>>>>>>> main
   margin-bottom: 1rem;
   color: var(--color-text-primary);
 }
