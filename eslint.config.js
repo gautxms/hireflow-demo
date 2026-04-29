@@ -24,6 +24,20 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-duplicate-imports': 'error',
+    },
+  },
+  {
+    files: ['src/pages/**/*.jsx', 'src/components/**/*.jsx', 'src/admin/**/*.jsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: "JSXAttribute[name.name='style']",
+          message:
+            'Inline styles are restricted. Keep runtime-only width/height/position values data-driven, otherwise move styles to className/CSS tokens.',
+        },
+      ],
     },
   },
 ])

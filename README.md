@@ -60,21 +60,26 @@ npm run preview
 
 ```
 src/
-├── components/
-│   ├── LandingPage.jsx      # Hero & feature section
-│   ├── Dashboard.jsx         # Main app container
-│   ├── ResumeUploader.jsx    # File upload form
-│   ├── CandidateRanking.jsx  # Results dashboard
-│   └── CandidateCard.jsx     # Individual candidate card
+├── components/               # Candidate and marketing UI
+├── pages/                    # Route-level pages
+├── admin/                    # Admin pages/components/hooks
+├── styles/                   # Shared frontend styles/tokens
 ├── App.jsx                   # Main routing
-├── main.jsx                  # Entry point
-└── index.css                 # TailwindCSS imports
+├── main.jsx                  # Vite entry point
+└── index.css                 # Global CSS entry
 
+backend/src/                  # Express API
 public/
-vercel.json                   # Vercel deployment config
-tailwind.config.js            # TailwindCSS customization
 vite.config.js                # Vite bundler config
 ```
+
+## 🧭 Frontend Source of Truth
+
+The canonical frontend code lives in the repository-root `src/` tree.
+
+- ✅ Use `src/` for all pages, components, admin UI, and styles.
+- ❌ Do not create or reintroduce `frontend/src` mirrors.
+- ✅ Treat `frontend/README.md` as the deprecation guardrail for this historical path.
 
 ## 🛠 Tech Stack
 

@@ -225,4 +225,73 @@ router.get('/webhooks', async (req, res) => {
   }
 })
 
+router.get('/audit-trail', async (req, res) => {
+  const page = toInt(req.query.page, 1)
+  const pageSize = toInt(req.query.pageSize, 25, { min: 5, max: 100 })
+  const offset = (page - 1) * pageSize
+  const search = String(req.query.search || '').trim()
+  const category = String(req.query.category || 'ai_governance').trim()
+  const aiGovernanceActions = [
+    'admin_system_prompt_updated',
+    'admin_ai_provider_switched',
+    'admin_ai_key_rotated',
+    'admin_ai_model_changed',
+    'admin_ai_settings_updated',
+    'admin_ai_governance_updated',
+  ]
+
+  const actionTypes = category === 'all' ? null : aiGovernanceActions
+
+  try {
+    const result = await pool.query(
+      `WITH filtered AS (
+        SELECT
+          aa.id,
+          aa.admin_id,
+          aa.action_type,
+          aa.target_id,
+          aa.details,
+          aa.ip_address,
+          aa.created_at,
+          u.email AS admin_email,
+          COUNT(*) OVER () AS total_count
+        FROM admin_actions aa
+        LEFT JOIN users u ON u.id = aa.admin_id
+        WHERE ($1::text IS NULL OR aa.action_type = ANY($1::text[]))
+          AND (
+            $2 = ''
+            OR aa.action_type ILIKE '%' || $2 || '%'
+            OR COALESCE(u.email, '') ILIKE '%' || $2 || '%'
+          )
+      )
+      SELECT *
+      FROM filtered
+      ORDER BY created_at DESC
+      LIMIT $3 OFFSET $4`,
+      [actionTypes, search, pageSize, offset],
+    )
+
+    const total = result.rows[0] ? Number(result.rows[0].total_count) : 0
+    return res.json({
+      page,
+      pageSize,
+      total,
+      pages: Math.ceil(total / pageSize) || 1,
+      items: result.rows.map((row) => ({
+        id: row.id,
+        actionType: row.action_type,
+        adminId: row.admin_id,
+        adminEmail: row.admin_email || null,
+        targetId: row.target_id || null,
+        details: redactValue(row.details || {}),
+        ipAddress: row.ip_address || null,
+        createdAt: row.created_at,
+      })),
+    })
+  } catch (error) {
+    console.error('[Admin logs] failed to fetch audit trail', error)
+    return res.status(500).json({ error: 'Failed to fetch audit trail' })
+  }
+})
+
 export default router

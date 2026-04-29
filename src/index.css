@@ -12,3 +12,112 @@ body {
 .font-display {
   font-family: var(--font-family-display);
 }
+
+.type-display,
+.type-h1,
+.type-h2,
+.type-h3 {
+  font-family: var(--font-family-display);
+}
+
+.type-body,
+.type-small,
+.type-nav,
+.type-button {
+  font-family: var(--font-family-base);
+}
+
+.type-display {
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line-height);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
+}
+
+.type-h1 {
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line-height);
+  font-weight: var(--type-h1-weight);
+  letter-spacing: var(--type-h1-tracking);
+}
+
+.type-h2 {
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line-height);
+  font-weight: var(--type-h2-weight);
+  letter-spacing: var(--type-h2-tracking);
+}
+
+.type-h3 {
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line-height);
+  font-weight: var(--type-h3-weight);
+  letter-spacing: var(--type-h3-tracking);
+}
+
+.type-body {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
+  font-weight: var(--type-body-weight);
+  letter-spacing: var(--type-body-tracking);
+}
+
+.type-small {
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line-height);
+  font-weight: var(--type-small-weight);
+  letter-spacing: var(--type-small-tracking);
+}
+
+.type-nav {
+  font-size: var(--type-nav-size);
+  line-height: var(--type-nav-line-height);
+  font-weight: var(--type-nav-weight);
+  letter-spacing: var(--type-nav-tracking);
+}
+
+.type-button {
+  font-size: var(--type-button-size);
+  line-height: var(--type-button-line-height);
+  font-weight: var(--type-button-weight);
+  letter-spacing: var(--type-button-tracking);
+}
+
+
+.hf-icon {
+  --hf-icon-size: var(--icon-size-md);
+  --hf-icon-stroke: var(--icon-stroke-regular);
+  --hf-icon-color: currentColor;
+  width: var(--hf-icon-size);
+  height: var(--hf-icon-size);
+  color: var(--hf-icon-color);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.hf-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+
+.hf-icon--size-xs { --hf-icon-size: var(--icon-size-xs); }
+.hf-icon--size-sm { --hf-icon-size: var(--icon-size-sm); }
+.hf-icon--size-md { --hf-icon-size: var(--icon-size-md); }
+.hf-icon--size-lg { --hf-icon-size: var(--icon-size-lg); }
+.hf-icon--size-xl { --hf-icon-size: var(--icon-size-xl); }
+
+.hf-icon--stroke-thin { --hf-icon-stroke: var(--icon-stroke-thin); }
+.hf-icon--stroke-regular { --hf-icon-stroke: var(--icon-stroke-regular); }
+.hf-icon--stroke-bold { --hf-icon-stroke: var(--icon-stroke-bold); }
+
+.hf-icon--tone-default { --hf-icon-color: var(--icon-color-default); }
+.hf-icon--tone-muted { --hf-icon-color: var(--icon-color-muted); }
+.hf-icon--tone-accent { --hf-icon-color: var(--icon-color-accent); }
+.hf-icon--tone-info { --hf-icon-color: var(--icon-color-info); }
+.hf-icon--tone-success { --hf-icon-color: var(--icon-color-success); }
+.hf-icon--tone-warning { --hf-icon-color: var(--icon-color-warning); }
+.hf-icon--tone-danger { --hf-icon-color: var(--icon-color-danger); }
+.hf-icon--tone-current { --hf-icon-color: currentColor; }

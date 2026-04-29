@@ -1,672 +1,265 @@
 import { useState } from 'react'
+import API_BASE from '../config/api'
+
+const TIME_SLOTS = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM']
+const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
+
+function generateDates() {
+  const dates = []
+  const today = new Date()
+  for (let i = 1; i <= 14; i += 1) {
+    const date = new Date(today)
+    date.setDate(date.getDate() + i)
+    if (date.getDay() !== 0 && date.getDay() !== 6) dates.push({ date, formatted: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) })
+  }
+  return dates
+}
 
 export default function DemoBookingPage({ onBack }) {
-  const [step, setStep] = useState('info') // 'info', 'calendar', 'confirmation'
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    company: '',
-    companySize: '',
-    phone: '',
-    message: ''
-  })
+  const [step, setStep] = useState('info')
+  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', company: '', companySize: '', phone: '', message: '' })
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
   const [errors, setErrors] = useState({})
-  const [submitted, setSubmitted] = useState(false)
-
-  const availableTimeSlots = [
-    '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-    '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM'
-  ]
-
-  const companySizes = [
-    '1-10',
-    '11-50',
-    '51-200',
-    '201-500',
-    '501-1000',
-    '1000+'
-  ]
-
-  // Generate next 14 days
-  const generateDates = () => {
-    const dates = []
-    const today = new Date()
-    for (let i = 1; i <= 14; i++) {
-      const date = new Date(today)
-      date.setDate(date.getDate() + i)
-      // Skip weekends
-      if (date.getDay() !== 0 && date.getDay() !== 6) {
-        dates.push({
-          date: date,
-          formatted: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-        })
-      }
-    }
-    return dates
-  }
+  const [submitError, setSubmitError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const availableDates = generateDates()
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }))
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }))
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
+    if (submitError) setSubmitError('')
   }
 
   const validateStep1 = () => {
-    const newErrors = {}
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name required'
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name required'
-    if (!formData.email.trim()) newErrors.email = 'Email required'
-    if (!formData.email.includes('@')) newErrors.email = 'Valid email required'
-    if (!formData.company.trim()) newErrors.company = 'Company name required'
-    if (!formData.companySize) newErrors.companySize = 'Company size required'
-    if (!formData.phone.trim()) newErrors.phone = 'Phone number required'
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    const next = {}
+    if (!formData.firstName.trim()) next.firstName = 'First name required'
+    if (!formData.lastName.trim()) next.lastName = 'Last name required'
+    if (!formData.email.trim()) next.email = 'Email required'
+    if (!formData.email.includes('@')) next.email = 'Valid email required'
+    if (!formData.company.trim()) next.company = 'Company name required'
+    if (!formData.companySize) next.companySize = 'Company size required'
+    if (!formData.phone.trim()) next.phone = 'Phone number required'
+    setErrors(next)
+    return Object.keys(next).length === 0
   }
 
-  const handleContinue = () => {
-    if (validateStep1()) {
-      setStep('calendar')
-    }
-  }
+  const submitDemoRequest = async () => {
+    if (!selectedDate || !selectedTime || isSubmitting) return
 
-  const handleSelectDate = (date) => {
-    setSelectedDate(date.formatted)
-    setSelectedTime(null)
-  }
+    setIsSubmitting(true)
+    setSubmitError('')
 
-  const handleSelectTime = (time) => {
-    setSelectedTime(time)
-  }
+    try {
+      const response = await fetch(`${API_BASE}/inquiries/demo-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          email: formData.email,
+          company: formData.company,
+          companySize: formData.companySize,
+          phone: formData.phone,
+          message: formData.message || `Requested demo booking for ${selectedDate} at ${selectedTime} EST.`,
+          selectedDate,
+          selectedTime,
+        }),
+      })
 
-  const handleConfirmBooking = () => {
-    if (selectedDate && selectedTime) {
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to confirm booking right now.')
+      }
+
       setStep('confirmation')
-      setSubmitted(true)
-      // In a real app, send data to backend/email service
-      setTimeout(() => {
-        // Could redirect or show success message
-      }, 1000)
+    } catch (error) {
+      setSubmitError(error?.message || 'Unable to confirm booking right now.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  const handleReset = () => {
-    setStep('info')
-    setSelectedDate(null)
-    setSelectedTime(null)
-    setSubmitted(false)
-  }
+  const stepState = {
+    info: [true, false, false],
+    calendar: [true, true, false],
+    confirmation: [true, true, true]
+  }[step]
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem' }}>
-        <button
-          onClick={onBack}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: 'var(--accent)',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginBottom: '1rem',
-            fontSize: '0.9rem'
-          }}
-        >
-          ← Back
-        </button>
+    <div className="public-page">
+      <div className="public-page-header">
+        <button onClick={onBack} className="public-page-back-button public-nav-text">← Back</button>
       </div>
 
-      {/* Main Content */}
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '3rem 2rem' }}>
-        {/* Hero */}
+      <main className="public-page-main public-section">
+        <div className="public-page-hero public-hero-compact">
+          <h1 className="public-page-title">{step === 'info' ? 'See Hireflow in action — free 30-minute demo' : step === 'calendar' ? 'Pick a Time' : 'Demo Confirmed!'}</h1>
+          <p className="public-page-subtitle">
+            {step === 'info' && 'Book a personalized walkthrough to see how Hireflow handles resume intake, ranking, and shortlist collaboration for your team. We focus the session on your hiring goals and current process so you leave with clear next steps.'}
+            {step === 'calendar' && 'Select a date and time that works best for you (All times in EST)'}
+            {step === 'confirmation' && 'Your booking is confirmed. We emailed your meeting details.'}
+          </p>
+        </div>
+
+        <div className="demo-stepper">
+          {['Your Info', 'Pick Time', 'Confirm'].map((label, idx) => (
+            <div key={label} className="demo-step-group">
+              <div className={`demo-step ${stepState[idx] ? 'active' : ''}`}><div className="demo-step-dot">{stepState[idx] ? '✓' : idx + 1}</div><span className="public-nav-text">{label}</span></div>
+              {idx < 2 && <div className={`demo-step-line ${stepState[idx + 1] ? 'active' : ''}`} />}
+            </div>
+          ))}
+        </div>
+
         {step === 'info' && (
           <>
-            <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-              <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-                Schedule Your Demo
-              </h1>
-              <p style={{ color: 'var(--muted)', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>
-                See HireFlow in action. Our team will show you how to reduce hiring time by 60% and make better hiring decisions.
-              </p>
-            </div>
+            <div className="demo-info-layout">
+              <section className="public-card demo-content-stack">
+                <h2 className="public-section-title demo-content-title">See Hireflow in action — free 30-minute demo</h2>
+                <p className="public-copy">
+                  In your live demo, we walk through the full resume screening workflow in Hireflow, from creating a role to reviewing ranked candidates.
+                  You will see how the platform helps teams triage high-volume applicant pipelines faster without losing context.
+                  This session is designed for recruiters, HR managers, and hiring teams who want a clearer, more consistent evaluation process.
+                  We tailor the walkthrough to your hiring motion, role types, and current screening bottlenecks so the conversation stays practical.
+                </p>
 
-            {/* Step Indicator */}
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '3rem', justifyContent: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  ✓
-                </div>
-                <span style={{ fontSize: '0.9rem' }}>Your Info</span>
-              </div>
-              <div style={{ width: '30px', height: '2px', background: 'var(--border)', marginTop: '15px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: 'var(--border)',
-                  color: 'var(--muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  2
-                </div>
-                <span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>Pick Time</span>
-              </div>
-              <div style={{ width: '30px', height: '2px', background: 'var(--border)', marginTop: '15px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: 'var(--border)',
-                  color: 'var(--muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  3
-                </div>
-                <span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>Confirm</span>
-              </div>
-            </div>
-
-            {/* Form */}
-            <div style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '2rem',
-              marginBottom: '2rem'
-            }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleInputChange}
-                    placeholder="John"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: errors.firstName ? '1px solid #ef4444' : '1px solid var(--border)',
-                      borderRadius: '6px',
-                      color: 'var(--text)',
-                      fontFamily: 'var(--font-body)'
-                    }}
-                  />
-                  {errors.firstName && <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '0.25rem' }}>{errors.firstName}</div>}
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleInputChange}
-                    placeholder="Smith"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: errors.lastName ? '1px solid #ef4444' : '1px solid var(--border)',
-                      borderRadius: '6px',
-                      color: 'var(--text)',
-                      fontFamily: 'var(--font-body)'
-                    }}
-                  />
-                  {errors.lastName && <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '0.25rem' }}>{errors.lastName}</div>}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                  Work Email *
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="john@company.com"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: errors.email ? '1px solid #ef4444' : '1px solid var(--border)',
-                    borderRadius: '6px',
-                    color: 'var(--text)',
-                    fontFamily: 'var(--font-body)'
-                  }}
-                />
-                {errors.email && <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '0.25rem' }}>{errors.email}</div>}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                    Company Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="company"
-                    value={formData.company}
-                    onChange={handleInputChange}
-                    placeholder="TechCorp Inc"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: errors.company ? '1px solid #ef4444' : '1px solid var(--border)',
-                      borderRadius: '6px',
-                      color: 'var(--text)',
-                      fontFamily: 'var(--font-body)'
-                    }}
-                  />
-                  {errors.company && <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '0.25rem' }}>{errors.company}</div>}
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                    Company Size *
-                  </label>
-                  <select
-                    name="companySize"
-                    value={formData.companySize}
-                    onChange={handleInputChange}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: errors.companySize ? '1px solid #ef4444' : '1px solid var(--border)',
-                      borderRadius: '6px',
-                      color: 'var(--text)',
-                      fontFamily: 'var(--font-body)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="">Select size</option>
-                    {companySizes.map(size => (
-                      <option key={size} value={size}>{size} employees</option>
-                    ))}
-                  </select>
-                  {errors.companySize && <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '0.25rem' }}>{errors.companySize}</div>}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                  Phone Number *
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  placeholder="+1 (555) 123-4567"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: errors.phone ? '1px solid #ef4444' : '1px solid var(--border)',
-                    borderRadius: '6px',
-                    color: 'var(--text)',
-                    fontFamily: 'var(--font-body)'
-                  }}
-                />
-                {errors.phone && <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '0.25rem' }}>{errors.phone}</div>}
-              </div>
+                <section className="demo-content-section">
+                  <h3 className="public-card-title">What you&apos;ll learn in your demo</h3>
+                  <ul className="demo-content-list public-copy">
+                    <li>How to upload resumes in bulk and automatically score candidates against a specific role.</li>
+                    <li>How Hireflow&apos;s AI ranking surfaces stronger-fit candidates and highlights supporting evidence.</li>
+                    <li>How to configure role-specific scoring criteria so the ranking reflects your real hiring priorities.</li>
+                    <li>How to build and export shortlists for hiring manager review and downstream interview planning.</li>
+                    <li>How to fit Hireflow into your existing stack using exports and handoff-friendly workflows.</li>
+                  </ul>
+                </section>
+              </section>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                  Additional Notes (Optional)
-                </label>
-                <textarea
-                  name="message"
-                  value={formData.message}
-                  onChange={handleInputChange}
-                  placeholder="Tell us about your hiring challenges..."
-                  rows="4"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    color: 'var(--text)',
-                    fontFamily: 'var(--font-body)',
-                    resize: 'vertical'
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Button */}
-            <div style={{ textAlign: 'center' }}>
-              <button
-                onClick={handleContinue}
-                style={{
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  border: 'none',
-                  padding: '0.75rem 3rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  fontSize: '1rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Continue to Calendar →
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Calendar Step */}
-        {step === 'calendar' && (
-          <>
-            <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-              <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-                Pick a Time
-              </h1>
-              <p style={{ color: 'var(--muted)', fontSize: '1.1rem' }}>
-                Select a date and time that works best for you (All times in EST)
-              </p>
-            </div>
-
-            {/* Step Indicator */}
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '3rem', justifyContent: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  ✓
-                </div>
-                <span style={{ fontSize: '0.9rem' }}>Your Info</span>
-              </div>
-              <div style={{ width: '30px', height: '2px', background: 'var(--accent)', marginTop: '15px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  ✓
-                </div>
-                <span style={{ fontSize: '0.9rem' }}>Pick Time</span>
-              </div>
-              <div style={{ width: '30px', height: '2px', background: 'var(--border)', marginTop: '15px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: 'var(--border)',
-                  color: 'var(--muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
-                  3
-                </div>
-                <span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>Confirm</span>
-              </div>
-            </div>
-
-            {/* Calendar */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
-              {/* Dates */}
-              <div>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Select Date</h3>
-                <div style={{ display: 'grid', gap: '0.75rem' }}>
-                  {availableDates.map((d, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleSelectDate(d)}
-                      style={{
-                        background: selectedDate === d.formatted ? 'var(--accent)' : 'var(--card)',
-                        color: selectedDate === d.formatted ? 'var(--ink)' : 'var(--text)',
-                        border: selectedDate === d.formatted ? 'none' : '1px solid var(--border)',
-                        padding: '1rem',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontWeight: selectedDate === d.formatted ? 'bold' : 'normal',
-                        transition: 'all 0.2s',
-                        textAlign: 'left'
-                      }}
-                    >
-                      {d.formatted}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Times */}
-              <div>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>
-                  {selectedDate ? `Available Times on ${selectedDate}` : 'Select a date first'}
-                </h3>
-                {selectedDate && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                    {availableTimeSlots.map((time, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSelectTime(time)}
-                        style={{
-                          background: selectedTime === time ? 'var(--accent)' : 'var(--card)',
-                          color: selectedTime === time ? 'var(--ink)' : 'var(--text)',
-                          border: selectedTime === time ? 'none' : '1px solid var(--border)',
-                          padding: '0.75rem',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          fontWeight: selectedTime === time ? 'bold' : 'normal',
-                          transition: 'all 0.2s',
-                          textAlign: 'center'
-                        }}
-                      >
-                        {time}
-                      </button>
+                <form className="public-form public-form-grid">
+                  <div className="public-form-grid cols-2">
+                    {[
+                      ['firstName', 'First Name *', 'text', 'John'],
+                      ['lastName', 'Last Name *', 'text', 'Smith']
+                    ].map(([name, label, type, placeholder]) => (
+                      <div key={name} className={`public-form-field ${errors[name] ? 'has-error' : ''}`}>
+                        <label htmlFor={name}>{label}</label>
+                        <input id={name} type={type} name={name} value={formData[name]} onChange={handleInputChange} placeholder={placeholder} />
+                        {errors[name] && <div className="public-form-error">{errors[name]}</div>}
+                      </div>
                     ))}
                   </div>
-                )}
+
+                  {[
+                    ['email', 'Work Email *', 'email', 'john@company.com'],
+                    ['phone', 'Phone Number *', 'tel', '+1 (555) 123-4567']
+                  ].map(([name, label, type, placeholder]) => (
+                    <div key={name} className={`public-form-field ${errors[name] ? 'has-error' : ''}`}>
+                      <label htmlFor={name}>{label}</label>
+                      <input id={name} type={type} name={name} value={formData[name]} onChange={handleInputChange} placeholder={placeholder} />
+                      {errors[name] && <div className="public-form-error">{errors[name]}</div>}
+                    </div>
+                  ))}
+
+                  <div className="public-form-grid cols-2">
+                    <div className={`public-form-field ${errors.company ? 'has-error' : ''}`}>
+                      <label htmlFor="company">Company Name *</label>
+                      <input id="company" type="text" name="company" value={formData.company} onChange={handleInputChange} placeholder="TechCorp Inc" />
+                      {errors.company && <div className="public-form-error">{errors.company}</div>}
+                    </div>
+                    <div className={`public-form-field ${errors.companySize ? 'has-error' : ''}`}>
+                      <label htmlFor="companySize">Company Size *</label>
+                      <select id="companySize" name="companySize" value={formData.companySize} onChange={handleInputChange}>
+                        <option value="">Select size</option>
+                        {COMPANY_SIZES.map((size) => <option key={size} value={size}>{size} employees</option>)}
+                      </select>
+                      {errors.companySize && <div className="public-form-error">{errors.companySize}</div>}
+                    </div>
+                  </div>
+
+                  <div className="public-form-field">
+                    <label htmlFor="message">Additional Notes (Optional)</label>
+                    <textarea id="message" name="message" rows="4" value={formData.message} onChange={handleInputChange} placeholder="Tell us about your hiring challenges..." />
+                  </div>
+                </form>
+
+                <div className="public-button-row center public-mt-md">
+                  <button className="public-btn-primary" onClick={() => validateStep1() && setStep('calendar')}>Continue to Calendar →</button>
+                </div>
               </div>
             </div>
 
-            {/* Summary */}
-            {selectedDate && selectedTime && (
-              <div style={{
-                background: 'rgba(232,255,90,0.1)',
-                border: '1px solid var(--accent)',
-                borderRadius: '8px',
-                padding: '1.5rem',
-                marginBottom: '2rem'
-              }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>📅 Your Demo is Scheduled for:</div>
-                <div style={{ color: 'var(--accent)', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                  {selectedDate} at {selectedTime} EST
+            <div className="demo-lower-content">
+              <section className="public-card demo-content-section">
+                <h3 className="public-card-title">What our customers say</h3>
+                <div className="public-faq-grid">
+                  <p className="public-copy">&ldquo;Before Hireflow, we spent hours manually sorting resumes for every open role. Now our team starts each week with a ranked shortlist and fewer back-and-forths with hiring managers.&rdquo; — Sarah, HR Manager at a 200-person SaaS company</p>
+                  <p className="public-copy">&ldquo;The biggest win is consistency. We align on role criteria up front, and Hireflow applies that logic to every applicant so our screening decisions are easier to explain.&rdquo; — Marcus, Talent Lead at a multi-location healthcare group</p>
+                  <p className="public-copy">&ldquo;We hire across operations and customer support, and volume can spike fast. Hireflow helps us quickly spot qualified applicants without missing strong candidates buried in the queue.&rdquo; — Priya, People Operations Manager at a logistics company</p>
                 </div>
-                <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
-                  A confirmation email will be sent to {formData.email}
-                </div>
-              </div>
-            )}
+              </section>
 
-            {/* Buttons */}
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => setStep('info')}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text)',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                ← Back
-              </button>
-              <button
-                onClick={handleConfirmBooking}
-                disabled={!selectedDate || !selectedTime}
-                style={{
-                  background: !selectedDate || !selectedTime ? 'var(--muted)' : 'var(--accent)',
-                  color: 'var(--ink)',
-                  border: 'none',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: !selectedDate || !selectedTime ? 'not-allowed' : 'pointer',
-                  opacity: !selectedDate || !selectedTime ? 0.5 : 1
-                }}
-              >
-                Confirm Booking →
-              </button>
+              <section className="public-card demo-content-section">
+                <h3 className="public-card-title">Before your demo</h3>
+                <ul className="demo-content-list public-copy">
+                  <li>Have a current job description ready so we can tailor examples to a real role.</li>
+                  <li>Think about your current screening bottlenecks, especially where decisions slow down.</li>
+                  <li>Invite your hiring manager if possible so alignment can start during the session.</li>
+                </ul>
+              </section>
+
+              <p className="public-copy center">No hard sell, no obligation — and you can cancel or reschedule anytime.</p>
             </div>
           </>
         )}
 
-        {/* Confirmation Step */}
-        {step === 'confirmation' && (
-          <div style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
-            {/* Success Animation */}
-            <div style={{ fontSize: '5rem', marginBottom: '2rem' }}>
-              ✓
-            </div>
-
-            <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)', color: 'var(--accent-2)' }}>
-              Demo Confirmed!
-            </h1>
-
-            {/* Confirmation Details */}
-            <div style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '2rem',
-              marginBottom: '2rem'
-            }}>
-              <div style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Date & Time</div>
-                <div style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>
-                  {selectedDate} at {selectedTime} EST
+        {step === 'calendar' && (
+          <>
+            <div className="public-grid-2">
+              <section>
+                <h3 className="public-card-title">Select Date</h3>
+                <div className="demo-slot-grid">
+                  {availableDates.map((d) => (
+                    <button key={d.formatted} className={`demo-slot-btn ${selectedDate === d.formatted ? 'selected' : ''}`} onClick={() => { setSelectedDate(d.formatted); setSelectedTime(null) }}>{d.formatted}</button>
+                  ))}
                 </div>
-              </div>
+              </section>
 
-              <div style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Your Name</div>
-                <div style={{ fontSize: '1.1rem' }}>
-                  {formData.firstName} {formData.lastName}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
-                <div style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Company</div>
-                <div style={{ fontSize: '1.1rem' }}>
-                  {formData.company}
-                </div>
-              </div>
+              <section>
+                <h3 className="public-card-title">{selectedDate ? `Available Times on ${selectedDate}` : 'Select a date first'}</h3>
+                {selectedDate && (
+                  <div className="demo-slot-grid cols-2">
+                    {TIME_SLOTS.map((time) => <button key={time} className={`demo-slot-btn ${selectedTime === time ? 'selected' : ''}`} onClick={() => setSelectedTime(time)}>{time}</button>)}
+                  </div>
+                )}
+              </section>
             </div>
 
-            {/* Next Steps */}
-            <div style={{
-              background: 'rgba(90,255,184,0.1)',
-              border: '1px solid var(--accent-2)',
-              borderRadius: '8px',
-              padding: '1.5rem',
-              marginBottom: '2rem',
-              textAlign: 'left'
-            }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>What Happens Next:</div>
-              <ol style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: '1.8', paddingLeft: '1.5rem' }}>
-                <li>📧 Check your email for a calendar invite and Zoom link</li>
-                <li>👥 Our team will walk you through HireFlow live</li>
-                <li>🎯 We'll discuss your specific hiring challenges</li>
-                <li>💬 Q&A time at the end - ask anything!</li>
-              </ol>
-            </div>
+            {selectedDate && selectedTime && <div className="status-message status-message--info">📅 Demo scheduled for <strong>{selectedDate} at {selectedTime} EST</strong>. A confirmation email will be sent to {formData.email}.</div>}
+            {submitError && <div className="status-message status-message--error">{submitError}</div>}
 
-            {/* CTA */}
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => window.location.href = '/'}
-                style={{
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  border: 'none',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                Back to Home
-              </button>
-              <button
-                onClick={handleReset}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text)',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                Schedule Another Demo
-              </button>
+            <div className="public-button-row center">
+              <button className="public-btn-secondary" onClick={() => setStep('info')}>← Back</button>
+              <button className="public-btn-primary" disabled={!selectedDate || !selectedTime || isSubmitting} onClick={submitDemoRequest}>{isSubmitting ? 'Submitting...' : 'Confirm Booking →'}</button>
             </div>
-          </div>
+          </>
         )}
-      </div>
+
+        {step === 'confirmation' && (
+          <section className="public-form demo-confirm-card">
+            <div className="status-message status-message--success">✅ Your demo is confirmed.</div>
+            <div className="public-faq-grid">
+              <p className="public-copy"><strong>Date & Time:</strong> {selectedDate} at {selectedTime} EST</p>
+              <p className="public-copy"><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
+              <p className="public-copy"><strong>Company:</strong> {formData.company}</p>
+            </div>
+            <div className="public-button-row center">
+              <button className="public-btn-secondary" onClick={() => { setStep('info'); setSelectedDate(null); setSelectedTime(null); setSubmitError('') }}>Book Another Demo</button>
+            </div>
+          </section>
+        )}
+      </main>
     </div>
   )
 }

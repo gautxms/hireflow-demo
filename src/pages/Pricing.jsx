@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
+import '../styles/pricing.css'
 
 const PLAN_FEATURES = [
   'Unlimited resume uploads',
@@ -35,6 +35,38 @@ const PRICING = {
   },
 }
 
+const SHARED_PLAN_FEATURES = [
+  'Unlimited AI resume analysis with no per-resume upload fees on active plans.',
+  'AI-powered candidate screening to help surface stronger matches faster.',
+  'Bias-reduced scoring signals designed to support more consistent shortlisting decisions.',
+  'Bulk resume upload support so teams can process high-volume intake in fewer steps.',
+  'Secure data handling built into the platform workflows used for parsing and analysis.',
+  'Email support for setup, billing, and day-to-day product questions.',
+]
+
+const PRICING_FAQ = [
+  {
+    question: 'Can I change my plan later?',
+    answer: 'Yes. You can switch between monthly and annual billing as your hiring needs change. If your team hires in cycles, many customers start monthly and move to annual once usage is predictable. Your access to the product remains the same core experience, and billing updates are applied at the next billing cycle so changes are straightforward and easy to plan around.',
+  },
+  {
+    question: 'Is there a free trial?',
+    answer: 'Yes. Both plans include a 7-day free trial so you can test Hireflow with real hiring workflows before you commit. The trial is intended to give you enough time to upload resumes, review AI scoring output, and confirm the platform fits your process. If you cancel during the trial window, you are not charged for the subscription.',
+  },
+  {
+    question: 'How does billing work?',
+    answer: 'Hireflow offers two billing schedules: monthly billing at $99 per month, or annual billing at an effective $79 per month billed as $948 per year. The annual option is discounted compared with paying month-to-month for a full year. Your selected billing cadence is shown clearly during checkout so your finance or operations team can review totals before purchase.',
+  },
+  {
+    question: 'What happens when I reach my resume limit?',
+    answer: 'For the plans shown on this page, resume uploads are unlimited, so there is no hard per-resume cap to hit during normal usage. That means your team can continue screening candidates without interruption when hiring volume increases. If your organization has unique governance, procurement, or scale requirements, you can still contact the team to discuss a tailored arrangement.',
+  },
+  {
+    question: 'Do you offer discounts for annual plans?',
+    answer: 'Yes. Annual billing is discounted and saves $240 per year versus paying monthly for 12 months. Teams that know they will be hiring regularly often choose annual billing for the lower effective monthly cost and simpler budget planning. If you prefer more flexibility in the short term, monthly billing remains available and you can switch later.',
+  },
+]
+
 function navigate(pathname) {
   if (window.location.pathname !== pathname) {
     window.history.pushState({}, '', pathname)
@@ -45,66 +77,32 @@ function navigate(pathname) {
 function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
   return (
     <article
-      style={{
-        border: selected ? '2px solid var(--accent)' : '1px solid var(--border)',
-        borderRadius: '14px',
-        padding: '2rem',
-        background: 'var(--card)',
-        boxShadow: selected ? '0 10px 24px rgba(0, 0, 0, 0.18)' : 'none',
-        transform: emphasized ? 'scale(1.03)' : 'scale(1)',
-        position: 'relative',
-      }}
+      className={`pricing-card ${selected ? 'is-selected' : ''} ${emphasized ? 'is-emphasized' : ''}`}
       aria-label={plan.name}
     >
-      {plan.badge && (
-        <span
-          style={{
-            position: 'absolute',
-            top: '-12px',
-            right: '18px',
-            background: 'var(--accent)',
-            color: 'var(--ink)',
-            fontWeight: 700,
-            fontSize: '0.8rem',
-            borderRadius: '999px',
-            padding: '0.35rem 0.75rem',
-          }}
-        >
-          {plan.badge}
-        </span>
-      )}
+      {plan.badge && <span className="pricing-card__badge">{plan.badge}</span>}
 
-      <h2 style={{ fontSize: '1.45rem', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>{plan.name}</h2>
+      <h2 className="pricing-card__title">{plan.name}</h2>
 
-      <p style={{ fontSize: '2.5rem', fontWeight: 700, margin: '0.2rem 0' }}>
+      <p className="pricing-card__price">
         {plan.price}
-        <span style={{ fontSize: '1rem', color: 'var(--muted)' }}>{plan.period}</span>
+        <span className="pricing-card__period">{plan.period}</span>
       </p>
 
-      <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0.8rem' }}>{plan.billing}</p>
-      {plan.savings && <p style={{ color: 'var(--accent-2)', fontWeight: 600, marginBottom: '1rem' }}>{plan.savings}</p>}
-      <p style={{ color: 'var(--muted)', marginBottom: '1.25rem' }}>{plan.trial}</p>
+      <p className="pricing-card__billing">{plan.billing}</p>
+      {plan.savings && <p className="pricing-card__savings">{plan.savings}</p>}
+      <p className="pricing-card__trial">{plan.trial}</p>
 
       <button
         type="button"
         onClick={() => onStartCheckout(plan.id)}
         disabled={loading}
-        style={{
-          width: '100%',
-          borderRadius: '8px',
-          padding: '0.8rem 1rem',
-          border: selected ? 'none' : '1px solid var(--accent)',
-          background: selected ? 'var(--accent)' : 'transparent',
-          color: selected ? 'var(--ink)' : 'var(--text)',
-          fontWeight: 700,
-          cursor: loading ? 'not-allowed' : 'pointer',
-          opacity: loading ? 0.7 : 1,
-        }}
+        className={`pricing-card__cta ${selected ? 'is-selected' : ''}`}
       >
         {loading ? 'Preparing checkout…' : plan.cta}
       </button>
 
-      <ul style={{ marginTop: '1.4rem', paddingLeft: '1.1rem', display: 'grid', gap: '0.55rem', color: 'var(--muted)' }}>
+      <ul className="pricing-card__features">
         {PLAN_FEATURES.map((feature) => (
           <li key={feature}>{feature}</li>
         ))}
@@ -114,8 +112,6 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
 }
 
 export default function Pricing({ isAuthenticated, onRequireAuth }) {
-  usePageSeo('HireFlow Pricing', 'Choose monthly or yearly pricing plans for HireFlow. Start with a 7-day free trial and cancel anytime.')
-
   const [selectedBilling, setSelectedBilling] = useState('annual')
 
   const startCheckout = (plan) => {
@@ -128,43 +124,35 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--ink)', color: 'var(--text)' }}>
-      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '3rem 1rem 1rem' }}>
-        <div style={{ marginBottom: '1.25rem' }}>
+    <main className="pricing-page">
+      <section className="pricing-page__content">
+        <div className="pricing-page__back">
           <BackButton />
         </div>
 
-        <h1 style={{ textAlign: 'center', fontSize: '2.3rem', marginBottom: '0.8rem', fontFamily: 'var(--font-display)' }}>
-          Choose your plan
-        </h1>
-        <p style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: '1.5rem' }}>
+        <h1 className="pricing-page__title">Choose your plan</h1>
+        <p className="pricing-page__subtitle">
           7-day free trial, cancel anytime.
         </p>
+        <p className="pricing-page__intro">
+          Hireflow gives recruiting teams a straightforward way to evaluate candidates with AI support, without confusing add-ons or hidden pricing mechanics.
+          Our pricing is designed to stay simple as you grow, whether you are handling a handful of roles or ongoing, high-volume hiring.
+          You get the same core platform experience across plans, with billing options that match how your team prefers to budget.
+          No per-resume upload fees, no surprise platform charges, and clear plan terms from day one.
+        </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.7rem' }}>
+        <div className="pricing-page__toggle-wrap">
           <div
             role="tablist"
             aria-label="Billing frequency"
-            style={{
-              display: 'inline-flex',
-              border: '1px solid var(--border)',
-              borderRadius: '999px',
-              overflow: 'hidden',
-            }}
+            className="pricing-page__toggle"
           >
             <button
               type="button"
               role="tab"
               aria-selected={selectedBilling === 'monthly'}
               onClick={() => setSelectedBilling('monthly')}
-              style={{
-                border: 'none',
-                background: selectedBilling === 'monthly' ? 'var(--accent)' : 'transparent',
-                color: selectedBilling === 'monthly' ? 'var(--ink)' : 'var(--text)',
-                padding: '0.6rem 1rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
+              className={`pricing-page__toggle-button ${selectedBilling === 'monthly' ? 'is-selected' : ''}`}
             >
               Monthly
             </button>
@@ -173,32 +161,18 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
               role="tab"
               aria-selected={selectedBilling === 'annual'}
               onClick={() => setSelectedBilling('annual')}
-              style={{
-                border: 'none',
-                background: selectedBilling === 'annual' ? 'var(--accent)' : 'transparent',
-                color: selectedBilling === 'annual' ? 'var(--ink)' : 'var(--text)',
-                padding: '0.6rem 1rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
+              className={`pricing-page__toggle-button ${selectedBilling === 'annual' ? 'is-selected' : ''}`}
             >
               Annual
             </button>
           </div>
         </div>
 
-        <p style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: '1.9rem' }}>
+        <p className="pricing-page__price-note">
           {selectedBilling === 'annual' ? '$79/month (billed annually at $948/year)' : '$99/month billed monthly'}
         </p>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            alignItems: 'stretch',
-            gap: '1.2rem',
-          }}
-        >
+        <div className="pricing-page__grid">
           <PricingCard
             plan={PRICING.annual}
             selected={selectedBilling === 'annual'}
@@ -214,6 +188,51 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
             loading={false}
           />
         </div>
+
+        <section className="pricing-page__section" aria-labelledby="shared-features-heading">
+          <h2 id="shared-features-heading" className="pricing-page__section-title">What&apos;s included in each plan</h2>
+          <p className="pricing-page__section-copy">
+            Every paid Hireflow plan includes the same essential recruiting workflow capabilities so you can focus on hiring outcomes, not feature gates.
+            The main difference is billing cadence, not access to core value.
+          </p>
+          <ul className="pricing-page__section-list">
+            {SHARED_PLAN_FEATURES.map((feature) => (
+              <li key={feature}>{feature}</li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="pricing-page__section" aria-labelledby="fit-heading">
+          <h2 id="fit-heading" className="pricing-page__section-title">Is Hireflow right for me?</h2>
+          <p className="pricing-page__section-copy">
+            <strong>Solo recruiters and small teams:</strong> If you are wearing multiple hats and need to move faster, Hireflow helps you screen resumes consistently without adding heavy process.
+            You can upload candidates in bulk, review AI-assisted scoring, and spend more of your time on interviews and stakeholder coordination instead of manual triage.
+          </p>
+          <p className="pricing-page__section-copy">
+            <strong>Growing HR departments:</strong> If your company is scaling and hiring demand changes month to month, Hireflow provides a predictable platform with transparent billing.
+            Teams can standardize candidate review criteria, reduce bottlenecks in early-stage screening, and keep hiring operations organized as requisition volume increases.
+          </p>
+          <p className="pricing-page__section-copy">
+            <strong>Recruitment agencies:</strong> If you support multiple clients and need repeatable quality across different roles, Hireflow can streamline intake and first-pass evaluation.
+            The unlimited upload model is especially helpful for agencies that need flexibility while maintaining delivery speed and consistent screening standards.
+          </p>
+        </section>
+
+        <section className="pricing-page__section" aria-labelledby="pricing-faq-heading">
+          <h2 id="pricing-faq-heading" className="pricing-page__section-title">Frequently asked questions about pricing</h2>
+          <div className="pricing-page__faq-list">
+            {PRICING_FAQ.map((item) => (
+              <article key={item.question} className="pricing-page__faq-item">
+                <h3 className="pricing-page__faq-question">{item.question}</h3>
+                <p className="pricing-page__faq-answer">{item.answer}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <p className="pricing-page__trust-line">
+          Trusted by hiring teams that want transparent pricing and reliable AI-assisted screening workflows.
+        </p>
       </section>
 
     </main>

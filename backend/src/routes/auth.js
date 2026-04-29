@@ -25,25 +25,12 @@ import {
 } from '../services/twoFactor.js'
 import { triggerWebhook } from '../services/webhookService.js'
 import { requireAuth } from '../middleware/auth.js'
+import { hashPassword, verifyPassword } from '../services/passwordHash.js'
 
 const router = Router()
 const resendVerificationAttemptsByEmail = new Map()
 const ADMIN_SETUP_TOKEN_TTL_MS = 10 * 60 * 1000
 const TOTP_PERIOD_SECONDS = 30
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16)
-  const hash = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256')
-  return `$pbkdf2$${salt.toString('hex')}$${hash.toString('hex')}`
-}
-
-function verifyPassword(password, hash) {
-  const [_, __, saltHex, hashHex] = hash.split('$')
-  if (!saltHex || !hashHex) return false
-  const salt = Buffer.from(saltHex, 'hex')
-  const computed = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex')
-  return computed === hashHex
-}
 
 function setAuthCookie(res, token) {
   res.cookie('token', token, {

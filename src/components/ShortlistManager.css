@@ -1,0 +1,221 @@
+.shortlist-manager {
+  max-width: 1200px;
+  margin: 0 auto 2rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.shortlist-manager__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.shortlist-manager__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-family: var(--font-display);
+}
+
+.shortlist-manager__button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  background: transparent;
+}
+
+.shortlist-manager__button:disabled,
+.shortlist-manager__create-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shortlist-manager__button--accent {
+  color: var(--color-accent-green);
+}
+
+.shortlist-manager__button--neutral {
+  color: var(--color-text-primary);
+}
+
+.shortlist-manager__button--danger {
+  color: var(--color-error);
+  padding: 0.2rem 0.5rem;
+}
+
+.shortlist-manager__create-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.shortlist-manager__input,
+.shortlist-manager__select {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border);
+  color: var(--color-text-primary);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+}
+
+.shortlist-manager__select {
+  padding: 0.4rem 0.5rem;
+}
+
+.shortlist-manager__create-button {
+  min-height: 44px;
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 1rem;
+}
+
+.shortlist-manager__error {
+  color: var(--color-error);
+  margin-top: 0;
+}
+
+.shortlist-manager__pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.shortlist-manager__pill {
+  background: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+.shortlist-manager__pill.is-selected {
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+}
+
+.shortlist-manager__selected-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.shortlist-manager__selected-title {
+  margin: 0 0 0.35rem 0;
+}
+
+.shortlist-manager__muted-text {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.shortlist-manager__muted-text--flush {
+  margin: 0;
+}
+
+.shortlist-manager__sort-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-secondary);
+}
+
+.shortlist-manager__advanced-toggle {
+  margin-bottom: 0.75rem;
+}
+
+.shortlist-manager__advanced-panel {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem;
+}
+
+.shortlist-manager__filter-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.shortlist-manager__filter-label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.86rem;
+  color: var(--color-text-secondary);
+}
+
+.shortlist-manager__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.shortlist-manager__candidate-list {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.shortlist-manager__candidate-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+}
+
+.shortlist-manager__candidate-name {
+  font-weight: 600;
+}
+
+.shortlist-manager__candidate-notes {
+  color: var(--color-text-secondary);
+  font-size: 0.86rem;
+  margin-top: 0.2rem;
+}
+
+.shortlist-manager__chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+}
+
+.shortlist-manager__chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.shortlist-manager__candidate-actions {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: end;
+}
+
+.shortlist-manager__added-at {
+  align-self: center;
+  color: var(--color-accent-green);
+  font-size: 0.82rem;
+}

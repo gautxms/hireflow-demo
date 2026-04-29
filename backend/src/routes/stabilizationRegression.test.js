@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { isoOrNull, money } from './subscriptions.js'
 import { normalizeParseStatus } from './parseStatus.js'
+import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
 import { getSupportedWebhookEvents } from '../services/webhookService.js'
 import { buildResultsQueryParams, normalizeNumericRange } from '../../../src/components/candidateResultsState.js'
 
@@ -118,4 +119,12 @@ test('integration webhook catalog exposes stable supported events', () => {
   assert.equal(events.includes('*'), false)
   assert.equal(events.includes('parse.completed'), true)
   assert.equal(events.includes('subscription.activated'), true)
+})
+
+
+test('shared parse status mapper resolves queue and parse-job states to canonical values', () => {
+  assert.equal(resolveCanonicalParseStatus({ queueState: 'waiting', parseJobState: 'pending' }), 'queued')
+  assert.equal(resolveCanonicalParseStatus({ queueState: 'active', parseJobState: 'retrying' }), 'processing')
+  assert.equal(resolveCanonicalParseStatus({ queueState: null, parseJobState: 'retrying' }), 'retrying')
+  assert.equal(resolveCanonicalParseStatus({ queueState: null, parseJobState: 'complete' }), 'complete')
 })

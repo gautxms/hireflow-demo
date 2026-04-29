@@ -16,16 +16,16 @@ function SortButton({ label, field, currentSort, onSortChange }) {
         onSortChange({ field, direction: nextDirection })
       }}
     >
-      {label} <span className="text-slate-400">{arrow}</span>
+      {label} <span className="text-[var(--admin-text-muted)]">{arrow}</span>
     </button>
   )
 }
 
 export default function SubscriptionsTable({ subscriptions, loading, sort, onSortChange, onView, onRefund }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-50 text-slate-600">
+    <div className="admin-table-surface overflow-hidden">
+      <table className="admin-table text-left text-sm">
+        <thead className="">
           <tr>
             <th className="px-4 py-3"><SortButton label="User email" field="email" currentSort={sort} onSortChange={onSortChange} /></th>
             <th className="px-4 py-3"><SortButton label="Plan" field="plan" currentSort={sort} onSortChange={onSortChange} /></th>
@@ -38,17 +38,17 @@ export default function SubscriptionsTable({ subscriptions, loading, sort, onSor
           {loading ? (
             <TableSkeleton columns={5} rows={5} />
           ) : subscriptions.map((subscription) => (
-            <tr key={subscription.id} className="border-t border-slate-100">
+            <tr key={subscription.id} className="">
               <td className="px-4 py-3">{subscription.email}</td>
               <td className="px-4 py-3 capitalize">{subscription.plan || '—'}</td>
               <td className="px-4 py-3 capitalize">{subscription.status || '—'}</td>
               <td className="px-4 py-3">{dateLabel(subscription.renewalDate)}</td>
               <td className="px-4 py-3">
                 <div className="flex justify-end gap-2">
-                  <button type="button" className="rounded-md border border-slate-300 px-3 py-1.5" onClick={() => onView(subscription)}>
+                  <button type="button" className="ui-btn ui-btn--ghost" onClick={() => onView(subscription)}>
                     Details
                   </button>
-                  <button type="button" className="rounded-md bg-rose-600 px-3 py-1.5 text-white" onClick={() => onRefund(subscription)}>
+                  <button type="button" className="ui-btn ui-btn--primary" onClick={() => onRefund(subscription)}>
                     Refund
                   </button>
                 </div>

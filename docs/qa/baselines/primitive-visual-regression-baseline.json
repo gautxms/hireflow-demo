@@ -1,0 +1,575 @@
+{
+  "release": "2026.04.0",
+  "reviewedAt": "2026-04-20",
+  "reviewedBy": "design-systems-qa",
+  "phaseDependency": "PH8-T2",
+  "notes": "Primitive-level component contract visual baseline covering shared and admin primitives.",
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1024
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "componentVariants": [
+    {
+      "component": "alert",
+      "variant": "inline",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "badge",
+      "variant": "neutral",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "badge",
+      "variant": "status",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "button",
+      "variant": "destructive",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "button",
+      "variant": "ghost",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "button",
+      "variant": "primary",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "card",
+      "variant": "default",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "input",
+      "variant": "default",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "modal-shell",
+      "variant": "centered",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "modal-shell",
+      "variant": "end",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    },
+    {
+      "component": "table-shell",
+      "variant": "default",
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled"
+      ],
+      "contexts": [
+        "success",
+        "warning",
+        "error",
+        "info"
+      ]
+    }
+  ],
+  "snapshotMatrix": [
+    {
+      "id": "primitive-alert-inline-desktop-context-strip",
+      "component": "alert",
+      "variant": "inline",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/alert-inline-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-alert-inline-desktop-state-strip",
+      "component": "alert",
+      "variant": "inline",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/alert-inline-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-alert-inline-mobile-context-strip",
+      "component": "alert",
+      "variant": "inline",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/alert-inline-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-alert-inline-mobile-state-strip",
+      "component": "alert",
+      "variant": "inline",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/alert-inline-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-badge-neutral-desktop-context-strip",
+      "component": "badge",
+      "variant": "neutral",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-neutral-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-badge-neutral-desktop-state-strip",
+      "component": "badge",
+      "variant": "neutral",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-neutral-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-badge-neutral-mobile-context-strip",
+      "component": "badge",
+      "variant": "neutral",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-neutral-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-badge-neutral-mobile-state-strip",
+      "component": "badge",
+      "variant": "neutral",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-neutral-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-badge-status-desktop-context-strip",
+      "component": "badge",
+      "variant": "status",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-status-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-badge-status-desktop-state-strip",
+      "component": "badge",
+      "variant": "status",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-status-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-badge-status-mobile-context-strip",
+      "component": "badge",
+      "variant": "status",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-status-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-badge-status-mobile-state-strip",
+      "component": "badge",
+      "variant": "status",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/badge-status-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-button-destructive-desktop-context-strip",
+      "component": "button",
+      "variant": "destructive",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-destructive-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-button-destructive-desktop-state-strip",
+      "component": "button",
+      "variant": "destructive",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-destructive-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-button-destructive-mobile-context-strip",
+      "component": "button",
+      "variant": "destructive",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-destructive-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-button-destructive-mobile-state-strip",
+      "component": "button",
+      "variant": "destructive",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-destructive-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-button-ghost-desktop-context-strip",
+      "component": "button",
+      "variant": "ghost",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-ghost-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-button-ghost-desktop-state-strip",
+      "component": "button",
+      "variant": "ghost",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-ghost-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-button-ghost-mobile-context-strip",
+      "component": "button",
+      "variant": "ghost",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-ghost-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-button-ghost-mobile-state-strip",
+      "component": "button",
+      "variant": "ghost",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-ghost-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-button-primary-desktop-context-strip",
+      "component": "button",
+      "variant": "primary",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-primary-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-button-primary-desktop-state-strip",
+      "component": "button",
+      "variant": "primary",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-primary-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-button-primary-mobile-context-strip",
+      "component": "button",
+      "variant": "primary",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-primary-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-button-primary-mobile-state-strip",
+      "component": "button",
+      "variant": "primary",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/button-primary-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-card-default-desktop-context-strip",
+      "component": "card",
+      "variant": "default",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/card-default-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-card-default-desktop-state-strip",
+      "component": "card",
+      "variant": "default",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/card-default-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-card-default-mobile-context-strip",
+      "component": "card",
+      "variant": "default",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/card-default-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-card-default-mobile-state-strip",
+      "component": "card",
+      "variant": "default",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/card-default-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-input-default-desktop-context-strip",
+      "component": "input",
+      "variant": "default",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/input-default-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-input-default-desktop-state-strip",
+      "component": "input",
+      "variant": "default",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/input-default-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-input-default-mobile-context-strip",
+      "component": "input",
+      "variant": "default",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/input-default-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-input-default-mobile-state-strip",
+      "component": "input",
+      "variant": "default",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/input-default-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-centered-desktop-context-strip",
+      "component": "modal-shell",
+      "variant": "centered",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-centered-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-centered-desktop-state-strip",
+      "component": "modal-shell",
+      "variant": "centered",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-centered-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-centered-mobile-context-strip",
+      "component": "modal-shell",
+      "variant": "centered",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-centered-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-centered-mobile-state-strip",
+      "component": "modal-shell",
+      "variant": "centered",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-centered-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-end-desktop-context-strip",
+      "component": "modal-shell",
+      "variant": "end",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-end-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-end-desktop-state-strip",
+      "component": "modal-shell",
+      "variant": "end",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-end-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-end-mobile-context-strip",
+      "component": "modal-shell",
+      "variant": "end",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-end-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-modal-shell-end-mobile-state-strip",
+      "component": "modal-shell",
+      "variant": "end",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/modal-shell-end-mobile-state-strip.png"
+    },
+    {
+      "id": "primitive-table-shell-default-desktop-context-strip",
+      "component": "table-shell",
+      "variant": "default",
+      "viewport": "desktop",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/table-shell-default-desktop-context-strip.png"
+    },
+    {
+      "id": "primitive-table-shell-default-desktop-state-strip",
+      "component": "table-shell",
+      "variant": "default",
+      "viewport": "desktop",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/table-shell-default-desktop-state-strip.png"
+    },
+    {
+      "id": "primitive-table-shell-default-mobile-context-strip",
+      "component": "table-shell",
+      "variant": "default",
+      "viewport": "mobile",
+      "capture": "context-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/table-shell-default-mobile-context-strip.png"
+    },
+    {
+      "id": "primitive-table-shell-default-mobile-state-strip",
+      "component": "table-shell",
+      "variant": "default",
+      "viewport": "mobile",
+      "capture": "state-strip",
+      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/table-shell-default-mobile-state-strip.png"
+    }
+  ],
+  "updateProtocol": {
+    "reviewerSignoffRequired": true,
+    "requiredReviewers": [
+      "design-systems",
+      "qa"
+    ],
+    "baselineUpdateProcess": [
+      "Capture before and after primitive snapshots for each impacted variant across desktop and mobile.",
+      "Attach context-strip and state-strip evidence paths in this baseline for every impacted variant.",
+      "Document intentional visual deltas in PR notes and request reviewer sign-off from Design Systems + QA.",
+      "Update release/review metadata in this file and run npm run qa:primitive-visual-baseline before merge."
+    ]
+  }
+}

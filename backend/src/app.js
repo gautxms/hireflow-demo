@@ -22,6 +22,8 @@ import candidatesRoutes from './routes/candidates.js'
 import jobDescriptionsRoutes from './routes/jobDescriptions.js'
 import inquiriesRoutes from './routes/inquiries.js'
 import notificationsRoutes from './routes/notifications.js'
+import analysesRoutes from './routes/analyses.js'
+import reportsRoutes from './routes/reports.js'
 import adminRoutes from './routes/admin.js'
 import adminSubscriptionsRoutes from './routes/admin/subscriptions.js'
 import adminPaymentsRoutes from './routes/admin/payments.js'
@@ -35,6 +37,7 @@ import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
+import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
 
 const app = express()
 
@@ -80,7 +83,19 @@ app.use(express.json())
 app.use(cookieParser())
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' })
+  const aiModelWarnings = []
+  const defaultModel = String(AI_MODEL_CONFIG.defaultModel || '').trim()
+
+  if (!defaultModel || !isValidModelFormat(defaultModel)) {
+    aiModelWarnings.push({
+      type: 'invalid_default_model_format',
+      source: 'env.ANTHROPIC_RESUME_MODEL',
+      model: defaultModel || null,
+      message: 'Configured default Anthropic model does not match expected provider model format.',
+    })
+  }
+
+  res.json({ status: 'ok', warnings: aiModelWarnings })
 })
 
 app.use('/api', generalApiLimiterUnauth)
@@ -106,6 +121,8 @@ app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
 app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, requireActiveSubscription, jobDescriptionsRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/notifications', requireAuth, generalApiLimiterAuth, notificationsRoutes)
+app.use('/api/analyses', requireAuth, generalApiLimiterAuth, analysesRoutes)
+app.use('/api/reports', requireAuth, generalApiLimiterAuth, reportsRoutes)
 app.use('/api/admin', requireAdminAuth, adminActionAuditMiddleware, adminRoutes)
 app.use('/api/admin/subscriptions', requireAdminAuth, adminActionAuditMiddleware, adminSubscriptionsRoutes)
 app.use('/api/admin/payments', requireAdminAuth, adminActionAuditMiddleware, adminPaymentsRoutes)

@@ -629,7 +629,7 @@ export default function Checkout({ onAuthSuccess }) {
         <button
           type="button"
           onClick={() => window.history.back()}
-          className="type-button"
+          className="hf-btn hf-btn--primary"
           style={{
             background: 'transparent',
             color: '#CCFF00',
@@ -672,7 +672,7 @@ export default function Checkout({ onAuthSuccess }) {
                 <button
                   type="button"
                   onClick={handleReactivateSubscription}
-                  className="type-button"
+                  className="hf-btn hf-btn--primary"
                   style={{
                     background: '#CCFF00',
                     color: '#000000',
@@ -697,7 +697,7 @@ export default function Checkout({ onAuthSuccess }) {
             <p style={{ margin: 0, color: '#a3a3a3' }}>
               Your previous payment needs attention. Please update your payment method from the billing portal.
             </p>
-            <a href="/billing" className="type-nav" style={{ color: '#CCFF00', marginTop: '10px', display: 'inline-block' }}>Open billing portal</a>
+            <a href="/billing" className="checkout-page__notice-link">Open billing portal</a>
           </div>
         )}
 
@@ -761,7 +761,7 @@ export default function Checkout({ onAuthSuccess }) {
                 setRequiredAction(null)
               }
             }}
-            className="type-button"
+            className="hf-btn hf-btn--primary"
             style={{
               marginTop: '16px',
               background: '#CCFF00',

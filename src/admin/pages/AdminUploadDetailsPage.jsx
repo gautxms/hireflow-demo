@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import UploadPreview from '../components/UploadPreview'
 import StateAlert from '../components/StateAlert'
 import { EmptyState } from '../components/WidgetState'
+import StatePattern from '../../components/state/StatePattern'
 import { useAdminUploadDetails } from '../hooks/useAdminUploads'
 
 function inferUploadIdFromPath() {
@@ -23,7 +24,7 @@ export default function AdminUploadDetailsPage({ uploadId: uploadIdProp }) {
     reload,
   } = useAdminUploadDetails(uploadId)
 
-  if (loading) return <div className="admin-page"><div className="text-sm">Loading upload details…</div></div>
+  if (loading) return <div className="admin-page"><StatePattern kind="loading" title="Loading upload details…" description="Fetching parse attempts, token usage, and diagnostics." /></div>
   if (!upload) return <div className="admin-page">{error ? <StateAlert state={error} onRetry={() => void reload()} /> : <EmptyState title="Upload not found" description="This upload may have been removed or is unavailable." />}</div>
 
   return (

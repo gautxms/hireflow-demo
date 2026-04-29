@@ -1,7 +1,6 @@
 import multer from 'multer'
 import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
-import { sanitizeFilename } from '../utils/sanitize.js'
 import {
   CHUNK_SIZE_BYTES,
   MAX_FILE_SIZE_BYTES,
@@ -23,7 +22,11 @@ const chunkUpload = multer({
 
 router.post('/init', requireAuth, async (req, res) => {
   try {
-    const { filename, fileSize, mimeType, jobDescriptionId } = req.body || {}
+    const { filename, fileSize, mimeType, jobDescriptionId, analysisId } = req.body || {}
+    console.log(
+      '[HireFlow] JD received at endpoint:',
+      jobDescriptionId ? `${String(jobDescriptionId).slice(0, 80)}...` : 'NONE',
+    )
 
     if (!filename || !fileSize) {
       return res.status(400).json({ error: 'filename and fileSize are required' })
@@ -41,10 +44,11 @@ router.post('/init', requireAuth, async (req, res) => {
 
     const session = await initChunkUpload({
       userId: req.userId,
-      filename: sanitizeFilename(filename),
+      filename,
       fileSize: parsedSize,
       mimeType,
       jobDescriptionId: jobDescriptionId || null,
+      analysisId: analysisId || null,
     })
 
     return res.json(session)

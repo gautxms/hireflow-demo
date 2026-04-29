@@ -16,6 +16,8 @@ export const CHUNK_SIZE_BYTES = 5 * 1024 * 1024
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 let uploadTablesReady = false
+const PDF_EXTENSION_PATTERN = /\.pdf$/i
+const DOCX_EXTENSION_PATTERN = /\.docx$/i
 
 const s3Bucket = process.env.AWS_S3_BUCKET
 const s3Client = new S3Client({
@@ -48,6 +50,29 @@ function ensureS3Configured() {
   }
 }
 
+function normalizeMimeType(filename, mimeType) {
+  const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
+  if (normalizedMimeType === 'application/pdf') {
+    return 'application/pdf'
+  }
+  if (
+    normalizedMimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || normalizedMimeType === 'application/msword'
+  ) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+
+  const safeFilename = String(filename || '').trim()
+  if (PDF_EXTENSION_PATTERN.test(safeFilename)) {
+    return 'application/pdf'
+  }
+  if (DOCX_EXTENSION_PATTERN.test(safeFilename)) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+
+  return normalizedMimeType || null
+}
+
 async function ensureUploadChunkTables() {
   if (uploadTablesReady) {
     return
@@ -73,6 +98,7 @@ async function ensureUploadChunkTables() {
       parse_job_id TEXT,
       job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL,
       expires_at TIMESTAMP NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
+      analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
@@ -90,10 +116,35 @@ async function ensureUploadChunkTables() {
       ADD COLUMN IF NOT EXISTS job_description_id UUID;
 
     ALTER TABLE upload_chunks
-      ADD COLUMN IF NOT EXISTS job_description_id UUID;
+      ADD COLUMN IF NOT EXISTS job_description_id UUID,
+      ADD COLUMN IF NOT EXISTS analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL;
   `)
 
   uploadTablesReady = true
+}
+
+
+async function ensureAnalysisTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS analyses (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMP,
+      error_summary TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS analysis_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      analysis_id UUID NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+      resume_id UUID NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+      parse_job_id TEXT REFERENCES parse_jobs(job_id) ON DELETE SET NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE (analysis_id, resume_id)
+    );
+  `)
 }
 
 function buildPrefix(uploadId) {
@@ -127,9 +178,10 @@ export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
   return true
 }
 
-export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null }) {
+export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null }) {
   ensureS3Configured()
   await ensureUploadChunkTables()
+  await ensureAnalysisTables()
 
   if (!Number.isFinite(fileSize) || fileSize <= 0) {
     throw new Error('Invalid file size')
@@ -140,7 +192,9 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   }
 
   const totalChunks = Math.ceil(fileSize / CHUNK_SIZE_BYTES)
-  const safeFilename = sanitizeFilename(filename)
+  const originalFilename = String(filename || '').trim()
+  const safeFilename = sanitizeFilename(originalFilename)
+  const normalizedMimeType = normalizeMimeType(originalFilename, mimeType)
 
   if (jobDescriptionId) {
     const jdResult = await pool.query(
@@ -158,6 +212,30 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     }
   }
 
+  let resolvedAnalysisId = String(analysisId || '').trim()
+  if (resolvedAnalysisId) {
+    const analysisResult = await pool.query(
+      `SELECT id
+         FROM analyses
+        WHERE id = $1
+          AND user_id = $2
+        LIMIT 1`,
+      [resolvedAnalysisId, userId],
+    )
+
+    if (!analysisResult.rows[0]) {
+      throw new Error('Invalid analysis context for upload')
+    }
+  } else {
+    const createdAnalysis = await pool.query(
+      `INSERT INTO analyses (user_id, job_description_id, status)
+       VALUES ($1, $2, 'pending')
+       RETURNING id`,
+      [userId, jobDescriptionId],
+    )
+    resolvedAnalysisId = createdAnalysis.rows[0]?.id || ''
+  }
+
   const existingResult = await pool.query(
     `SELECT upload_id, uploaded_chunks, total_chunks
      FROM upload_chunks
@@ -166,9 +244,10 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
        AND file_size = $3
        AND status = 'uploading'
        AND expires_at > NOW()
+       AND analysis_id = $4
      ORDER BY created_at DESC
      LIMIT 1`,
-    [userId, safeFilename, fileSize],
+    [userId, safeFilename, fileSize, resolvedAnalysisId],
   )
 
   if (existingResult.rows[0]) {
@@ -177,6 +256,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
       totalChunks: Number(existingResult.rows[0].total_chunks),
       uploadedChunks: existingResult.rows[0].uploaded_chunks || [],
       resumed: true,
+      analysisId: resolvedAnalysisId,
     }
   }
 
@@ -185,10 +265,10 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
 
   await pool.query(
     `INSERT INTO upload_chunks
-      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, expires_at)
+      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, analysis_id, expires_at)
      VALUES
-      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, NOW() + INTERVAL '24 hours')`,
-    [uploadId, userId, safeFilename, fileSize, mimeType, totalChunks, [], prefix, jobDescriptionId],
+      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, $10, NOW() + INTERVAL '24 hours')`,
+    [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId, resolvedAnalysisId],
   )
 
   return {
@@ -196,6 +276,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     totalChunks,
     uploadedChunks: [],
     resumed: false,
+    analysisId: resolvedAnalysisId,
   }
 }
 
@@ -277,7 +358,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
   ensureS3Configured()
 
   const result = await pool.query(
-    `SELECT upload_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id, resume_id
+    `SELECT upload_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id, resume_id, analysis_id
      FROM upload_chunks
      WHERE upload_id = $1 AND user_id = $2
      LIMIT 1`,
@@ -326,12 +407,13 @@ export async function completeChunkUpload({ userId, uploadId }) {
 
   const assembledHash = crypto.createHash('sha256').update(assembledBuffer).digest('hex')
   const assembledKey = `${buildPrefix(uploadId)}/assembled/${row.filename}`
+  const normalizedMimeType = normalizeMimeType(row.filename, row.mime_type)
 
   await s3Client.send(new PutObjectCommand({
     Bucket: s3Bucket,
     Key: assembledKey,
     Body: assembledBuffer,
-    ContentType: row.mime_type || 'application/octet-stream',
+    ContentType: normalizedMimeType || 'application/octet-stream',
   }))
 
   const scanResult = await scanFileBuffer(assembledBuffer, row.filename)
@@ -376,7 +458,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
         `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, job_description_id, updated_at)
          VALUES ($1, $2, '', $3, $4, 'pending', $5, NOW())
          RETURNING id`,
-        [userId, row.filename, row.file_size, row.mime_type, row.job_description_id],
+        [userId, row.filename, row.file_size, normalizedMimeType, row.job_description_id],
       )
       resumeId = resumeInsertResult.rows[0].id
     }
@@ -418,7 +500,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
     resumeId: finalizedUpload.resumeId,
     userId,
     filename: row.filename,
-    mimeType: row.mime_type,
+    mimeType: normalizedMimeType,
     fileSize: row.file_size,
     fileBufferBase64: assembledBuffer.toString('base64'),
     jobDescriptionId: row.job_description_id,
@@ -432,6 +514,16 @@ export async function completeChunkUpload({ userId, uploadId }) {
     [uploadId, String(parseJob.id)],
   )
 
+  if (row.analysis_id) {
+    await pool.query(
+      `INSERT INTO analysis_items (analysis_id, resume_id, parse_job_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (analysis_id, resume_id)
+       DO UPDATE SET parse_job_id = EXCLUDED.parse_job_id`,
+      [row.analysis_id, finalizedUpload.resumeId, String(parseJob.id)],
+    )
+  }
+
   await deleteChunkObjects(uploadId, totalChunks)
 
   return {
@@ -441,6 +533,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
     jobId: String(parseJob.id),
     scan: finalizedUpload.scan,
     sha256: finalizedUpload.sha256,
+    analysisId: row.analysis_id || null,
   }
 }
 
@@ -492,6 +585,7 @@ async function deletePrefix(prefix) {
 export async function cleanupExpiredChunkUploads() {
   ensureS3Configured()
   await ensureUploadChunkTables()
+  await ensureAnalysisTables()
 
   const result = await pool.query(
     `SELECT upload_id, s3_prefix

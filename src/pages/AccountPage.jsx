@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import ProfileCard from '../components/ProfileCard'
 import SubscriptionCard from '../components/SubscriptionCard'
 import BillingCard from '../components/BillingCard'
+import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
+import '../styles/account.css'
+import '../styles/checkout.css'
 
 export default function AccountPage({ token, user, onLogout, onUserProfileUpdate }) {
   const [loading, setLoading] = useState(true)
@@ -74,114 +77,50 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
 
   if (loading) {
     return (
-      <div style={{ background: '#0a0a0a', color: '#a3a3a3', minHeight: '100vh', padding: '24px' }}>
-        Loading account...
+      <div className="account-page__loading route-state">
+        <StatePattern
+          kind="loading"
+          title="Loading account…"
+          description="Please wait while we load your profile and billing details."
+        />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div style={{ background: '#0a0a0a', color: '#ef4444', minHeight: '100vh', padding: '24px' }}>
-        Error: {error}
+      <div className="account-page__error route-state route-state--shared-error">
+        <StatePattern
+          kind="error"
+          title="Account unavailable"
+          description={`Error: ${error}`}
+        />
       </div>
     )
   }
 
   return (
-    <main
-      style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        padding: '60px 20px',
-        background: '#0a0a0a',
-        minHeight: '100vh',
-      }}
-    >
-      <div style={{ marginBottom: '60px' }}>
-        <h1
-          style={{
-            fontSize: '40px',
-            fontWeight: '700',
-            color: '#ffffff',
-            marginBottom: '12px',
-          }}
-        >
-          Account Settings
-        </h1>
-        <p
-          style={{
-            fontSize: '16px',
-            color: '#a3a3a3',
-          }}
-        >
-          Manage your profile, subscription, and billing preferences
-        </p>
+    <main className="account-page">
+      <div className="account-page__header">
+        <h1 className="account-page__title">Account Settings</h1>
+        <p className="account-page__subtitle">Manage your profile, subscription, and billing preferences</p>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
-          gap: '24px',
-          marginBottom: '60px',
-        }}
-      >
+      <div className="account-page__grid">
         <ProfileCard user={userData} token={token} onRefresh={fetchUserData} />
         <SubscriptionCard user={userData} token={token} onRefresh={fetchUserData} subscription={subscriptionData} />
         <BillingCard user={userData} token={token} />
       </div>
 
-      <div
-        style={{
-          background: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          borderRadius: '12px',
-          padding: '32px',
-          marginTop: '60px',
-        }}
-      >
-        <h3
-          style={{
-            color: '#ef4444',
-            marginBottom: '16px',
-            fontSize: '18px',
-            fontWeight: '600',
-          }}
-        >
-          Danger Zone
-        </h3>
-        <p
-          style={{
-            color: '#a3a3a3',
-            marginBottom: '20px',
-            lineHeight: '1.6',
-          }}
-        >
-          Once you delete your account, there is no going back. Please be certain.
-        </p>
+      <div className="account-page__danger-zone">
+        <h3 className="account-page__danger-title">Danger Zone</h3>
+        <p className="account-page__danger-description">Once you delete your account, there is no going back. Please be certain.</p>
         <button
+          className="hf-btn hf-btn--destructive"
           onClick={() => {
             if (window.confirm('Are you absolutely sure? This action cannot be undone.')) {
               deleteAccount()
             }
-          }}
-          style={{
-            background: '#ef4444',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '12px 24px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            fontSize: '14px',
-            transition: 'background 0.2s',
-          }}
-          onMouseEnter={(event) => {
-            event.target.style.background = '#dc2626'
-          }}
-          onMouseLeave={(event) => {
-            event.target.style.background = '#ef4444'
           }}
         >
           Delete Account

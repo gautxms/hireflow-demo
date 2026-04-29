@@ -96,7 +96,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
         {errors.salaryCurrency && <p style={errorStyle}>{errors.salaryCurrency}</p>}
         {errors.salaryMin && <p style={errorStyle}>{errors.salaryMin}</p>}
 
-        <label style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
           Upload JD file (PDF/DOCX)
           <input
             type="file"
@@ -106,7 +106,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
           />
         </label>
 
-        <label style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
           Status
           <select value={formState.status} onChange={handleChange('status')} style={{ ...inputStyle, marginTop: '0.4rem' }}>
             <option value="draft">Draft</option>
@@ -118,7 +118,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
 
       <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem' }}>
         <button type="submit" disabled={isSubmitting} style={primaryButtonStyle}>
-          {isSubmitting ? 'Saving...' : (initialValue ? 'Save changes' : 'Create JD')}
+          {isSubmitting ? 'Saving…' : (initialValue ? 'Save changes' : 'Create job description')}
         </button>
         {onCancel && (
           <button type="button" onClick={onCancel} style={secondaryButtonStyle}>Cancel</button>
@@ -138,7 +138,7 @@ const inputStyle = {
 }
 
 const primaryButtonStyle = {
-  background: 'var(--accent)',
+  background: 'var(--color-accent-green)',
   border: 'none',
   color: '#111827',
   fontWeight: 700,

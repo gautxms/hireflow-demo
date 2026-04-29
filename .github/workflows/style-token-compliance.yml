@@ -1,0 +1,35 @@
+name: style-token-compliance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  style-token-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Style-token compliance scan
+        run: npm run lint:style-tokens
+
+      - name: Primitive composition scan
+        run: npm run lint:primitives
+
+      - name: Duplicate import lint check
+        run: npm run lint:duplicate-imports
+
+      - name: Primitive visual regression baseline contract
+        run: npm run qa:primitive-visual-baseline

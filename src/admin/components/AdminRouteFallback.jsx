@@ -4,8 +4,8 @@ export default function AdminRouteFallback({ title = 'Section unavailable', desc
   return (
     <div className="admin-page">
       <section className="ui-card p-6">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        <p className="mt-2 text-sm text-slate-600">{description}</p>
+        <h2 className="text-lg font-semibold text-admin-strong">{title}</h2>
+        <p className="mt-2 text-sm text-admin-body">{description}</p>
         <button
           type="button"
           className="ui-btn mt-4"

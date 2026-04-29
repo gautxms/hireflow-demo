@@ -18,15 +18,17 @@
 =======
   /* Color tokens */
   --color-bg-primary: #0a0a0a;
-  --color-bg-secondary: #1a1a1f;
-  --color-accent-green: #b8ff00;
-  --color-accent-green-hover: #a8ee00;
-  --color-accent-green-active: #98dc00;
+  --color-bg-secondary: #111111;
+  --color-accent-green: #c8ff00;
+  --color-accent-green-hover: #b8ee00;
+  --color-accent-green-active: #a8dc00;
+  --color-hero-accent-start: #c8ff00;
+  --color-hero-accent-end: #39ff9f;
   --color-text-primary: #ffffff;
-  --color-text-secondary: #7a7a8d;
-  --color-text-nav: #9999aa;
-  --color-text-muted: #888899;
-  --color-border: #2a2a2f;
+  --color-text-secondary: #aaaaaa;
+  --color-text-nav: #888888;
+  --color-text-muted: #888888;
+  --color-border: #1e1e1e;
   --color-success: #10b981;
   --color-error: #ef4444;
   --color-info: #3b82f6;
@@ -43,25 +45,95 @@
   --color-white-alpha-08: rgba(255, 255, 255, 0.08);
   --color-white-alpha-10: rgba(255, 255, 255, 0.1);
   --color-white-alpha-20: rgba(255, 255, 255, 0.2);
-  --color-accent-alpha-02: rgba(184, 255, 0, 0.02);
-  --color-accent-alpha-06: rgba(184, 255, 0, 0.06);
-  --color-accent-alpha-08: rgba(184, 255, 0, 0.08);
-  --color-accent-alpha-10: rgba(184, 255, 0, 0.1);
-  --color-accent-alpha-15: rgba(184, 255, 0, 0.15);
+  --color-accent-alpha-02: rgba(200, 255, 0, 0.02);
+  --color-accent-alpha-06: rgba(200, 255, 0, 0.06);
+  --color-accent-alpha-08: rgba(200, 255, 0, 0.08);
+  --color-accent-alpha-10: rgba(200, 255, 0, 0.1);
+  --color-accent-alpha-15: rgba(200, 255, 0, 0.15);
   --color-danger-alpha-15: rgba(239, 68, 68, 0.15);
   --color-danger-alpha-35: rgba(239, 68, 68, 0.35);
   --color-warning-alpha-12: rgba(251, 191, 36, 0.12);
   --color-warning-alpha-35: rgba(251, 191, 36, 0.35);
   --color-success-alpha-12: rgba(16, 185, 129, 0.12);
   --color-success-alpha-35: rgba(16, 185, 129, 0.35);
+  --color-info-alpha-16: rgba(59, 130, 246, 0.16);
+  --color-focus-ring: var(--color-accent-green);
+  --color-focus-ring-inner: var(--color-bg-primary);
+
+
+  /* Iconography */
+  --icon-size-xs: 12px;
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+  --icon-size-xl: 32px;
+  --icon-stroke-thin: 1.25;
+  --icon-stroke-regular: 1.75;
+  --icon-stroke-bold: 2.25;
+  --icon-color-default: var(--color-text-primary);
+  --icon-color-muted: var(--color-text-secondary);
+  --icon-color-accent: var(--color-accent-green);
+  --icon-color-info: var(--color-info);
+  --icon-color-success: var(--color-success);
+  --icon-color-warning: var(--color-warning-text);
+  --icon-color-danger: var(--color-error);
 
   /* Typography */
-  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  --font-family-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-family-base: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-family-display: 'Syne', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
+
+  /* Semantic typography contract */
+  --type-display-size: clamp(3rem, 8vw, 5rem);
+  --type-display-line-height: 1.1;
+  --type-display-weight: var(--font-weight-bold);
+  --type-display-tracking: -0.02em;
+  --type-display: var(--type-display-weight) var(--type-display-size) / var(--type-display-line-height) var(--font-family-display);
+
+  --type-h1-size: clamp(2.2rem, 4vw, 3rem);
+  --type-h1-line-height: 1.15;
+  --type-h1-weight: var(--font-weight-bold);
+  --type-h1-tracking: -0.015em;
+  --type-h1: var(--type-h1-weight) var(--type-h1-size) / var(--type-h1-line-height) var(--font-family-display);
+
+  --type-h2-size: clamp(1.625rem, 2.3vw, 2rem);
+  --type-h2-line-height: 1.2;
+  --type-h2-weight: var(--font-weight-bold);
+  --type-h2-tracking: -0.012em;
+  --type-h2: var(--type-h2-weight) var(--type-h2-size) / var(--type-h2-line-height) var(--font-family-display);
+
+  --type-h3-size: 1.1rem;
+  --type-h3-line-height: 1.35;
+  --type-h3-weight: var(--font-weight-semibold);
+  --type-h3-tracking: -0.006em;
+  --type-h3: var(--type-h3-weight) var(--type-h3-size) / var(--type-h3-line-height) var(--font-family-display);
+
+  --type-body-size: 1rem;
+  --type-body-line-height: 1.6;
+  --type-body-weight: var(--font-weight-regular);
+  --type-body-tracking: 0;
+  --type-body: var(--type-body-weight) var(--type-body-size) / var(--type-body-line-height) var(--font-family-base);
+
+  --type-small-size: 0.875rem;
+  --type-small-line-height: 1.45;
+  --type-small-weight: var(--font-weight-medium);
+  --type-small-tracking: 0.01em;
+  --type-small: var(--type-small-weight) var(--type-small-size) / var(--type-small-line-height) var(--font-family-base);
+
+  --type-nav-size: 0.9rem;
+  --type-nav-line-height: 1.2;
+  --type-nav-weight: var(--font-weight-medium);
+  --type-nav-tracking: 0.02em;
+  --type-nav: var(--type-nav-weight) var(--type-nav-size) / var(--type-nav-line-height) var(--font-family-base);
+
+  --type-button-size: 0.9375rem;
+  --type-button-line-height: 1.2;
+  --type-button-weight: var(--font-weight-semibold);
+  --type-button-tracking: 0.01em;
+  --type-button: var(--type-button-weight) var(--type-button-size) / var(--type-button-line-height) var(--font-family-base);
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -73,11 +145,22 @@
   --spacing-2xl: 48px;
   --spacing-3xl: 64px;
 
+  /* Semantic spacing tiers */
+  --spacing-inline: var(--spacing-sm);
+  --spacing-stack: var(--spacing-base);
+  --spacing-card: var(--spacing-lg);
+  --spacing-section: var(--spacing-xl);
+
   /* Radius */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+
+  /* Semantic radius tiers */
+  --radius-interactive: var(--radius-md);
+  --radius-surface: var(--radius-lg);
+  --radius-dialog: var(--radius-lg);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -85,18 +168,36 @@
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.5);
 
+  /* Semantic shadow tiers */
+  --shadow-surface: var(--shadow-sm);
+  --shadow-elevated: var(--shadow-md);
+  --shadow-overlay: var(--shadow-xl);
+
+  /* Motion */
+  --motion-duration-instant: 0ms;
+  --motion-duration-fast: 140ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-slow: 300ms;
+  --motion-duration-emphasized: 600ms;
+  --motion-duration-loop-base: 2s;
+  --motion-duration-loop-slow: 6s;
+  --motion-ease-standard: ease;
+  --motion-ease-emphasized: ease-in-out;
+  --motion-transition-color:
+    color var(--motion-duration-base) var(--motion-ease-standard),
+    border-color var(--motion-duration-base) var(--motion-ease-standard),
+    background-color var(--motion-duration-base) var(--motion-ease-standard);
+  --motion-transition-emphasis:
+    transform var(--motion-duration-slow) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-slow) var(--motion-ease-standard);
+  --motion-transition-drawer: transform var(--motion-duration-base) var(--motion-ease-standard);
+
   /* Layout */
   --content-max-width: 1280px;
 
-  /* Legacy aliases (backward compatibility during token migration) */
-  --ink: var(--color-bg-primary);
-  --ink-2: var(--color-bg-secondary);
-  --text: var(--color-text-primary);
-  --muted: var(--color-text-secondary);
+  /* Compatibility aliases */
   --border: var(--color-border);
   --card: var(--color-bg-secondary);
-  --accent: var(--color-accent-green);
-  --accent-2: var(--color-accent-green-hover);
   --font-body: var(--font-family-base);
   --font-display: var(--font-family-display);
 >>>>>>> main

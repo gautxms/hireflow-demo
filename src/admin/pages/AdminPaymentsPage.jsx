@@ -162,9 +162,9 @@ export default function AdminPaymentsPage() {
       />
 
       <section className="ui-card p-4">
-        <h2 className="text-lg font-medium text-slate-900">Refund history</h2>
+        <h2 className="text-lg font-medium text-[var(--admin-text)]">Refund history</h2>
         <ul className="mt-3 space-y-2 text-sm">
-          {(data.auditTrail || []).map((item) => <li key={item.id} className="rounded border border-slate-100 p-2">{dateLabel(item.createdAt)} · tx: {item.transactionId} · {item.reason} · {money(item.amountCents)} · admin: {item.adminId}</li>)}
+          {(data.auditTrail || []).map((item) => <li key={item.id} className="rounded border border-[var(--admin-border)] p-2">{dateLabel(item.createdAt)} · tx: {item.transactionId} · {item.reason} · {money(item.amountCents)} · admin: {item.adminId}</li>)}
           {!data.auditTrail?.length ? <li><EmptyState title="No refund events" description="No refunds have been recorded yet." /></li> : null}
         </ul>
       </section>

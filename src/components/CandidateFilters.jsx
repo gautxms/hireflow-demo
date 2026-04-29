@@ -1,8 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 function parseSkills(rawSkills) {
   if (Array.isArray(rawSkills)) {
     return rawSkills
+      .map((skill) => (typeof skill === 'object' && skill !== null
+        ? skill.name || skill.label || JSON.stringify(skill)
+        : skill))
       .map((skill) => String(skill || '').trim())
       .filter(Boolean)
   }
@@ -13,17 +16,31 @@ function parseSkills(rawSkills) {
     .filter(Boolean)
 }
 
+function normalizeSkillKey(skill) {
+  return String(skill || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s*[()]/g, '')
+}
+
 export default function CandidateFilters({
   candidates = [],
   searchText = '',
   selectedSkills = [],
   expRange = { min: '0', max: '50' },
-  sortBy = 'name',
+  sortBy = 'score',
   onSearch,
   onSkillsFilter,
   onExperienceFilter,
   onSort,
+  shortlistOpen = false,
+  onToggleShortlist,
+  shortlistEnabled = true,
 }) {
+  const [skillSearch, setSkillSearch] = useState('')
+  const [showAllSkills, setShowAllSkills] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+
   const allSkills = useMemo(() => {
     const skills = new Set()
 
@@ -31,111 +48,175 @@ export default function CandidateFilters({
       parseSkills(candidate?.skills).forEach((skill) => skills.add(skill))
     })
 
-    return [...skills].sort((a, b) => a.localeCompare(b))
+    return [...skills]
   }, [candidates])
+
+  const dedupedSkills = useMemo(() => {
+    const uniqueByKey = new Map()
+
+    allSkills
+      .map((skill) => skill.trim())
+      .forEach((skill) => {
+        const key = normalizeSkillKey(skill)
+        if (!key || uniqueByKey.has(key)) return
+        uniqueByKey.set(key, skill)
+      })
+
+    return [...uniqueByKey.entries()]
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [allSkills])
 
   const experienceMin = Number(expRange?.min || 0)
   const experienceMax = Number(expRange?.max || 50)
+  const activeFilterCount = [
+    selectedSkills.length > 0,
+    experienceMin > 0 || experienceMax < 50,
+  ].filter(Boolean).length
 
-  const toggleSkill = (skill) => {
-    const alreadySelected = selectedSkills.includes(skill)
+  const toggleSkill = (skillKey) => {
+    const alreadySelected = selectedSkills.includes(skillKey)
     const next = alreadySelected
-      ? selectedSkills.filter((selected) => selected !== skill)
-      : [...selectedSkills, skill]
+      ? selectedSkills.filter((selected) => selected !== skillKey)
+      : [...selectedSkills, skillKey]
 
     onSkillsFilter?.(next)
   }
 
+  const clearAllFilters = () => {
+    onSkillsFilter?.([])
+    onExperienceFilter?.({ min: '0', max: '50' })
+    setSkillSearch('')
+    setShowAllSkills(false)
+  }
+
   return (
-    <div className="candidate-results-controls" style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem', display: 'grid', gap: '1rem' }}>
-      <div>
-        <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Search</label>
-        <input
-          type="text"
-          value={searchText}
-          onChange={(event) => onSearch?.(event.target.value)}
-          placeholder="Search name, email, or phone"
-          className="touch-target"
-          style={{
-            width: '100%',
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            color: 'var(--text)',
-            padding: '0.5rem 0.75rem',
-            borderRadius: '6px',
-          }}
-        />
+    <>
+      <div className="filter-bar">
+        <div className="filter-bar-search">
+          <svg className="filter-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            className="touch-target filter-search-input"
+            placeholder="Search candidates..."
+            value={searchText}
+            onChange={(event) => onSearch?.(event.target.value)}
+          />
+        </div>
+
+        <select
+          className="touch-target filter-sort-select"
+          value={sortBy}
+          onChange={(event) => onSort?.(event.target.value)}
+        >
+          <option value="score">Best match</option>
+          <option value="name">Name A–Z</option>
+          <option value="experience">Most experienced</option>
+          <option value="upload_date">Recently added</option>
+        </select>
+
+        <button type="button" className="touch-target filter-filters-btn" onClick={() => setFilterOpen((open) => !open)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14" aria-hidden="true">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+            <line x1="11" y1="18" x2="13" y2="18" />
+          </svg>
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="filter-active-count">{activeFilterCount}</span>
+          )}
+        </button>
+
+        {shortlistEnabled && (
+          <button type="button" className="touch-target filter-shortlist-btn" onClick={() => onToggleShortlist?.(!shortlistOpen)}>
+            Shortlists
+          </button>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-        <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>
-            Experience years: {experienceMin} - {experienceMax}
-          </label>
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
+      {filterOpen && (
+        <div className="filter-popover">
+          <div className="fp-section">
+            <div className="fp-label">Experience (years)</div>
+            <div className="fp-range-display">
+              {experienceMin}
+              {' '}
+              –
+              {' '}
+              {experienceMax}
+            </div>
             <input
+              className="touch-target"
               type="range"
               min="0"
               max="50"
               step="1"
               value={experienceMin}
-              onChange={(event) => onExperienceFilter?.({ min: event.target.value, max: String(Math.max(Number(event.target.value), experienceMax)) })}
-              className="touch-target"
+              onChange={(event) => {
+                const nextMin = Number(event.target.value)
+                onExperienceFilter?.({ min: String(nextMin), max: String(Math.max(nextMin, experienceMax)) })
+              }}
             />
             <input
+              className="touch-target"
               type="range"
               min="0"
               max="50"
               step="1"
               value={experienceMax}
-              onChange={(event) => onExperienceFilter?.({ min: String(Math.min(experienceMin, Number(event.target.value))), max: event.target.value })}
-              className="touch-target"
+              onChange={(event) => {
+                const nextMax = Number(event.target.value)
+                onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
+              }}
             />
           </div>
-        </div>
 
-        <div>
-          <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Sort by</label>
-          <select
-            value={sortBy}
-            onChange={(event) => onSort?.(event.target.value)}
-            className="touch-target"
-            style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.5rem', borderRadius: '6px' }}
-          >
-            <option value="name">Name (A-Z)</option>
-            <option value="experience">Experience (high-low)</option>
-            <option value="upload_date">Upload date (newest)</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label style={{ color: 'var(--muted)', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Skills</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-          {allSkills.length === 0 && <span style={{ color: 'var(--muted)' }}>No skills available</span>}
-          {allSkills.map((skill) => {
-            const active = selectedSkills.includes(skill)
-            return (
-              <button
-                type="button"
-                key={skill}
-                onClick={() => toggleSkill(skill)}
-                className="touch-target"
-                style={{
-                  background: active ? 'rgba(90,255,184,0.2)' : 'var(--card)',
-                  border: '1px solid var(--border)',
-                  color: active ? 'var(--accent-2)' : 'var(--text)',
-                  borderRadius: '999px',
-                  padding: '0.35rem 0.8rem',
-                  cursor: 'pointer',
-                }}
-              >
-                {skill}
+          <div className="fp-section">
+            <div className="fp-label">Skills</div>
+            <input
+              type="text"
+              className="touch-target fp-skill-search"
+              placeholder="Search skills..."
+              value={skillSearch}
+              onChange={(event) => {
+                setSkillSearch(event.target.value)
+                setShowAllSkills(false)
+              }}
+            />
+            <div className="fp-skill-grid">
+              {dedupedSkills
+                .filter((skill) => skill.label.toLowerCase().includes(skillSearch.toLowerCase()))
+                .slice(0, showAllSkills ? undefined : 20)
+                .map((skill) => (
+                  <button
+                    type="button"
+                    key={skill.key}
+                    className={`touch-target fp-skill-pill${selectedSkills.includes(skill.key) ? ' active' : ''}`}
+                    onClick={() => toggleSkill(skill.key)}
+                  >
+                    {skill.label}
+                  </button>
+                ))}
+              {dedupedSkills.length === 0 && <span className="candidate-filter-empty-skills">No skills available</span>}
+            </div>
+            {dedupedSkills.length > 20 && !showAllSkills && (
+              <button type="button" className="touch-target fp-show-more" onClick={() => setShowAllSkills(true)}>
+                +{dedupedSkills.length - 20} more skills
               </button>
-            )
-          })}
+            )}
+          </div>
+
+          <div className="fp-footer">
+            <button type="button" className="touch-target fp-clear" onClick={clearAllFilters}>Clear all</button>
+            <button type="button" className="touch-target fp-apply" onClick={() => setFilterOpen(false)}>
+              Apply filters
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   )
 }

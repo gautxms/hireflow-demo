@@ -22,7 +22,7 @@ function getBrandingValues() {
 
   return {
     companyName: process.env.COMPANY_NAME || 'HireFlow',
-    supportEmail: process.env.SUPPORT_EMAIL || 'support@hireflow.dev',
+    supportEmail: process.env.SUPPORT_EMAIL || 'hello@gfactai.com',
     logoUrl: process.env.COMPANY_LOGO_URL || `${appUrl}/vite.svg`,
     appUrl,
     year: String(new Date().getUTCFullYear()),
@@ -385,7 +385,7 @@ export async function sendPasswordResetConfirmationEmail({ to, firstName }) {
     text: `Hi ${values.firstName}, your password was reset successfully. If this wasn't you, contact support immediately.`,
     values: {
       ...values,
-      dashboardUrl: `${getAppUrl()}/settings/security`,
+      dashboardUrl: `${getAppUrl()}/login`,
     },
   })
 }

@@ -166,7 +166,7 @@ export default function ResetPasswordPage({ onGoToLogin }) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
+                <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 13 }}>
                   Password strength: <strong>{passwordStrength}</strong>
                 </p>
 
@@ -181,7 +181,7 @@ export default function ResetPasswordPage({ onGoToLogin }) {
                 />
 
                 {error && <p className="auth-error">{error}</p>}
-                {success && <p style={{ color: '#047857', margin: 0 }}>{success}</p>}
+                {success && <p style={{ color: 'var(--color-success)', margin: 0 }}>{success}</p>}
 
                 <button className="auth-submit" type="submit" disabled={loading}>
                   {loading ? 'Resetting password...' : 'Reset Password'}

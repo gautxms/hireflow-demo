@@ -3,19 +3,138 @@
   "reviewedAt": "2026-04-19",
   "reviewedBy": "qa-team",
   "notes": "Post rapid-fix baseline for auth/admin shell and major admin pages.",
+  "uiRegressionChecks": [
+    {
+      "id": "admin-analytics-layering-desktop",
+      "path": "/admin/analytics",
+      "viewport": "desktop",
+      "state": "default",
+      "assertions": [
+        "admin-shell header remains layered above scroll content",
+        "no full-screen dark overlay is visible"
+      ]
+    },
+    {
+      "id": "admin-analytics-mobile-drawer-closed",
+      "path": "/admin/analytics",
+      "viewport": "mobile",
+      "state": "drawer-closed",
+      "assertions": [
+        "bottom tab nav is visible",
+        "no full-screen dark overlay is visible"
+      ]
+    },
+    {
+      "id": "admin-analytics-mobile-drawer-open",
+      "path": "/admin/analytics",
+      "viewport": "mobile",
+      "state": "drawer-open",
+      "assertions": [
+        "drawer scrim is visible behind the panel",
+        "overlay does not obscure the full app when drawer is closed"
+      ]
+    }
+  ],
   "viewports": [
-    { "name": "desktop", "width": 1440, "height": 1024 },
-    { "name": "mobile", "width": 390, "height": 844 }
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1024
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844
+    }
   ],
   "snapshotMatrix": [
-    { "id": "admin-login", "path": "/admin/login", "tags": ["auth", "eula", "2fa", "session-timer", "logout"] },
-    { "id": "admin-shell-overview", "path": "/admin/overview", "tags": ["shell", "overview"] },
-    { "id": "admin-users", "path": "/admin/users", "tags": ["tab", "users"] },
-    { "id": "admin-billing", "path": "/admin/billing", "tags": ["tab", "billing"] },
-    { "id": "admin-uploads", "path": "/admin/uploads", "tags": ["tab", "uploads"] },
-    { "id": "admin-analytics", "path": "/admin/analytics", "tags": ["tab", "analytics"] },
-    { "id": "admin-logs", "path": "/admin/logs", "tags": ["tab", "logs"] },
-    { "id": "admin-health", "path": "/admin/health", "tags": ["tab", "health"] },
-    { "id": "admin-security", "path": "/admin/security", "tags": ["tab", "security"] }
-  ]
+    {
+      "id": "admin-login",
+      "path": "/admin/login",
+      "tags": [
+        "auth",
+        "eula",
+        "2fa",
+        "session-timer",
+        "logout"
+      ]
+    },
+    {
+      "id": "admin-shell-overview",
+      "path": "/admin/overview",
+      "tags": [
+        "shell",
+        "overview"
+      ]
+    },
+    {
+      "id": "admin-users",
+      "path": "/admin/users",
+      "tags": [
+        "tab",
+        "users"
+      ]
+    },
+    {
+      "id": "admin-billing",
+      "path": "/admin/billing",
+      "tags": [
+        "tab",
+        "billing"
+      ]
+    },
+    {
+      "id": "admin-uploads",
+      "path": "/admin/uploads",
+      "tags": [
+        "tab",
+        "uploads"
+      ]
+    },
+    {
+      "id": "admin-analytics",
+      "path": "/admin/analytics",
+      "tags": [
+        "tab",
+        "analytics"
+      ]
+    },
+    {
+      "id": "admin-logs",
+      "path": "/admin/logs",
+      "tags": [
+        "tab",
+        "logs"
+      ]
+    },
+    {
+      "id": "admin-health",
+      "path": "/admin/health",
+      "tags": [
+        "tab",
+        "health"
+      ]
+    },
+    {
+      "id": "admin-security",
+      "path": "/admin/security",
+      "tags": [
+        "tab",
+        "security"
+      ]
+    }
+  ],
+  "screenshotEvidence": {
+    "beforeAfterRequired": true,
+    "requiredViewports": [
+      "desktop",
+      "mobile"
+    ],
+    "baselineUpdateProcess": [
+      "Capture before and after screenshots for impacted routes.",
+      "Annotate expected visual diffs in PR notes.",
+      "Update release/review metadata in this file.",
+      "Run npm run qa:admin-visual-baseline before merge."
+    ]
+  }
 }

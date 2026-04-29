@@ -74,3 +74,27 @@ Railway redeploys automatically after variable updates.
 - Includes `userId` and `email` in `custom_data`, and redirects to:
   - success: `/billing/success`
   - cancel: `/billing/cancel`
+
+## Legacy parse data backfill jobs
+
+Use these scripts to derive `analyses`/`analysis_items` and `candidate_profiles` from historical `parse_jobs` and `resumes`.
+
+- Dry-run (default behavior in npm scripts):
+  ```bash
+  npm --prefix backend run backfill:legacy-parse
+  ```
+- Execute writes:
+  ```bash
+  npm --prefix backend run backfill:legacy-parse:execute
+  ```
+
+Optional flags for both direct job scripts and the combined runner:
+- `--user-id <id>`: limit reconciliation/backfill to one user.
+- `--limit <n>`: cap processed rows for staged rollouts.
+
+Reconciliation output includes:
+- counts by user,
+- missing links (for example mismatched or missing parse/resume relationships),
+- failed rows (row-level insert/upsert failures).
+
+These backfills do **not** delete or mutate legacy parse data in `parse_jobs` or `resumes`; they only insert/upsert into `analyses`, `analysis_items`, and `candidate_profiles`.

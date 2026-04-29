@@ -78,7 +78,7 @@ export default function AdminUsersPage() {
     <div className="admin-page">
 
       {error ? <StateAlert state={error} onRetry={() => void loadUsers()} /> : null}
-      {actionFeedback ? <p className="text-sm text-emerald-700">{actionFeedback}</p> : null}
+      {actionFeedback ? <p className="text-sm text-admin-success">{actionFeedback}</p> : null}
 
       <AdminDataTable
         title="Users"

@@ -1,9 +1,11 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import StatePattern from './components/state/StatePattern'
 const LandingPage = lazy(() => import('./components/LandingPage'))
 const Pricing = lazy(() => import('./pages/Pricing'))
 const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
 const CandidateResults = lazy(() => import('./components/CandidateResults'))
-const OperationsDashboard = lazy(() => import('./components/Dashboard'))
+const OperationsDashboard = lazy(() => import('./components/NewDashboard'))
+const LegacyOperationsDashboard = lazy(() => import('./components/Dashboard'))
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
 const HelpPage = lazy(() => import('./components/HelpPage'))
 const AboutPage = lazy(() => import('./components/AboutPage'))
@@ -19,6 +21,7 @@ import RefundPolicy from './pages/RefundPolicy'
 const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
 const BillingCancel = lazy(() => import('./pages/BillingCancel'))
 const BillingPage = lazy(() => import('./pages/BillingPage'))
+const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const UpdatePaymentMethodPage = lazy(() => import('./pages/UpdatePaymentMethodPage'))
 const Checkout = lazy(() => import('./pages/Checkout'))
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
@@ -27,8 +30,18 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
 const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
+const CandidatesPage = lazy(() => import('./pages/CandidatesPage'))
+const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage'))
+const AnalysesPage = lazy(() => import('./pages/AnalysesPage'))
+const AnalysisDetailPage = lazy(() => import('./pages/AnalysisDetailPage'))
 import PublicFooter from './components/PublicFooter'
+import PageSeo from './components/PageSeo'
+import UserAppShell from './components/app-shell/UserAppShell'
 import API_BASE from './config/api'
+import IntentLandingPage from './pages/seo/IntentLandingPage'
+import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
+import { trackIntentLanding } from './seo/organicTracking'
+import './styles/app-route-states.css'
 const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
 const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
 const AdminAnalyticsPage = lazy(() => import('./admin/pages/AdminAnalyticsPage'))
@@ -40,15 +53,41 @@ const AdminUploadsPage = lazy(() => import('./admin/pages/AdminUploadsPage'))
 const AdminUploadDetailsPage = lazy(() => import('./admin/pages/AdminUploadDetailsPage'))
 const AdminUserDetailsPage = lazy(() => import('./admin/pages/AdminUserDetailsPage'))
 const AdminSecurityPage = lazy(() => import('./admin/pages/AdminSecurityPage'))
+const AdminInquiriesPage = lazy(() => import('./admin/pages/AdminInquiriesPage'))
 const AdminLoginPage = lazy(() => import('./admin/pages/AdminLoginPage'))
 const AdminSetup2FA = lazy(() => import('./admin/pages/AdminSetup2FA'))
 const AdminShell = lazy(() => import('./admin/components/AdminShell'))
 const AdminPageFeedbackWidget = lazy(() => import('./admin/components/AdminPageFeedbackWidget'))
 const AdminRouteFallback = lazy(() => import('./admin/components/AdminRouteFallback'))
+import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
+const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
+import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
+import { resolveUserSectionPath } from './config/userNavigation'
+import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
+import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
+import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
+const PUBLIC_ROUTE_PATHS = new Set(['/', '/login', '/signup', '/pricing'])
+const USER_SHELL_ROUTE_PATHS = new Set([
+  '/dashboard',
+  '/dashboard/legacy',
+  '/results',
+  '/job-descriptions',
+  '/analyses',
+  '/candidates',
+  '/reports',
+  '/account',
+  '/settings',
+  '/billing',
+  '/account/payment-method',
+])
+
+function isUserShellEnabled(userProfile, subscriptionStatus) {
+  return isFeatureEnabled(FEATURE_KEYS.sidebarShell, { userProfile, subscriptionStatus })
+}
 
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
@@ -79,15 +118,53 @@ function navigate(pathname, options = {}) {
   }
 }
 
+function shouldDisableUserShell(pathname) {
+  return isSharedResultsPath(pathname)
+}
+
+function shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, subscriptionStatus) {
+  if (!isUserShellEnabled(userProfile, subscriptionStatus) || !isAuthenticated) {
+    return false
+  }
+
+  const resolvedPathname = resolveUserSectionPath(pathname)
+
+  if (shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
+    return false
+  }
+
+  if (USER_SHELL_ROUTE_PATHS.has(resolvedPathname)) {
+    return true
+  }
+
+  return resolvedPathname.startsWith('/analyses/') || resolvedPathname.startsWith('/candidates/')
+}
+
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
+  const [resultsRecoveryAttempted, setResultsRecoveryAttempted] = useState(false)
   const [sharedResults, setSharedResults] = useState(null)
   const [sharedResultsLoading, setSharedResultsLoading] = useState(false)
   const [sharedResultsError, setSharedResultsError] = useState('')
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
+  const lastResultsValidatedOwnerKeyRef = useRef(null)
+  const { logout: logoutAdmin } = useAdminAuth()
+  const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
+
+  const hasCandidateResults = (value) => {
+    if (Array.isArray(value)) {
+      return value.length > 0
+    }
+
+    if (value && typeof value === 'object' && Array.isArray(value.candidates)) {
+      return value.candidates.length > 0
+    }
+
+    return false
+  }
 
   const handleNavigate = (page, promptMessage = 'Please login or sign up to continue.') => {
     if (!isAuthenticated && PROTECTED_PAGES.has(page)) {
@@ -98,7 +175,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (page === 'uploader' && isAuthenticated) {
       const storedSubscriptionStatus = getStoredSubscriptionStatus()
-      if (storedSubscriptionStatus !== 'active' && storedSubscriptionStatus !== 'trialing') {
+      if (!hasActiveSubscription(storedSubscriptionStatus)) {
         navigate('/pricing?reason=upgrade_required')
         return
       }
@@ -108,7 +185,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const handleFileUploaded = (candidateResults) => {
+    // Contract: uploader success transitions into `/results` (latest authenticated analysis view).
     setUploadedFiles(candidateResults)
+    setResultsRecoveryAttempted(false)
     handleNavigate('results')
   }
 
@@ -120,11 +199,60 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
   }, [currentPage, isAuthenticated, onRequireAuth])
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setResultsRecoveryAttempted(false)
+      lastResultsValidatedOwnerKeyRef.current = null
+      return
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const resolvedPathname = resolveUserSectionPath(pathname)
+    const isResultsRoute = isResultsRootPath(resolvedPathname)
+    const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
+
+    if (isResultsRoute && currentPage !== 'results') {
+      setCurrentPage('results')
+    }
+
+    const isResultsContext = currentPage === 'results' || isResultsRoute
+    const shouldRevalidateForOwner = isResultsContext && lastResultsValidatedOwnerKeyRef.current !== resumeAnalysisOwnerKey
+    const shouldTryRecovery = hasResumeAnalysisFlag
+      || shouldRevalidateForOwner
+      || (currentPage === 'results' && !hasCandidateResults(uploadedFiles))
+      || (isResultsRoute && !hasCandidateResults(uploadedFiles))
+
+    if (!shouldTryRecovery) {
+      return
+    }
+
+    const latestResult = readResumeAnalysisResult(resumeAnalysisOwnerKey)
+
+    if (latestResult && Array.isArray(latestResult.candidates) && latestResult.candidates.length > 0) {
+      setUploadedFiles({
+        candidates: latestResult.candidates,
+        parseMeta: latestResult.parseMeta || null,
+      })
+      setResultsRecoveryAttempted(false)
+    } else {
+      setUploadedFiles(null)
+      setResultsRecoveryAttempted(true)
+    }
+    lastResultsValidatedOwnerKeyRef.current = resumeAnalysisOwnerKey
+
+    if (hasResumeAnalysisFlag) {
+      params.delete('resumeAnalysis')
+      const nextQuery = params.toString()
+      const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname
+      window.history.replaceState(window.history.state || {}, '', nextUrl)
+    }
+  }, [currentPage, isAuthenticated, pathname, resumeAnalysisOwnerKey, uploadedFiles])
+
 
   useEffect(() => {
-    const match = pathname.match(/^\/results\/([^/]+)$/)
+    const shareToken = getSharedResultsToken(pathname)
 
-    if (!match) {
+    if (!shareToken) {
       setSharedResults(null)
       setSharedResultsError('')
       setSharedResultsLoading(false)
@@ -132,7 +260,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const controller = new AbortController()
-    const shareToken = decodeURIComponent(match[1])
 
     const loadSharedResults = async () => {
       try {
@@ -197,25 +324,34 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [isProfileMenuOpen])
 
   const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
-  const isActiveSubscriber = normalizedSubscriptionStatus === 'active'
+  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus })
+  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus })
+  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus })
+  const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
+  const isAdminPath = pathname.startsWith('/admin')
+  const resolvedPathname = resolveUserSectionPath(pathname)
 
   const getPageContent = () => {
-    if (pathname.match(/^\/results\/[^/]+$/)) {
+    // Contract: `/results/:token` always resolves through the shared-results loading path.
+    if (isSharedResultsPath(pathname)) {
       if (sharedResultsError) {
         return (
-          <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', padding: '2rem' }}>
-            <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '1.5rem', maxWidth: '520px', width: '100%', color: '#fff' }}>
-              <h1 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.3rem' }}>Shared results unavailable</h1>
-              <p style={{ marginTop: 0, marginBottom: '1rem', color: 'rgba(255,255,255,0.8)' }}>{sharedResultsError}</p>
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 8, padding: '0.55rem 0.9rem', fontWeight: 600, cursor: 'pointer' }}
-              >
-                Go to home
-              </button>
-            </div>
+          <main className="route-state route-state--shared-error">
+            <StatePattern
+              kind="error"
+              title="Shared results unavailable"
+              description={sharedResultsError}
+              action={(
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="route-state-card__action"
+                >
+                  Go to home
+                </button>
+              )}
+            />
           </main>
         )
       }
@@ -225,11 +361,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           candidates={sharedResults?.candidates || []}
           onBack={() => navigate('/')}
           isSharedLoading={sharedResultsLoading}
+          userProfile={userProfile}
         />
       )
     }
 
-    if (pathname === '/pricing') {
+    if (resolvedPathname === '/pricing') {
       if (isAuthenticated && isActiveSubscriber) {
         navigate('/billing')
         return null
@@ -237,64 +374,253 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
     }
 
-    if (pathname === '/about') {
+    if (resolvedPathname === '/about') {
       return <AboutPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
     }
 
-    if (pathname === '/terms') {
+    if (resolvedPathname === '/contact') {
+      return <ContactPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+    }
+
+    if (resolvedPathname === '/help') {
+      return <HelpPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+    }
+
+    if (resolvedPathname === '/demo') {
+      return <DemoBookingPage onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+    }
+
+    if (resolvedPathname === '/dashboard') {
+      const canAccessDashboard = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view the dashboard.',
+        onRequireAuth,
+      })
+      if (!canAccessDashboard) {
+        return null
+      }
+      if (!dashboardReportsEnabled) {
+        return <LegacyOperationsDashboard onNavigate={handleNavigate} />
+      }
+
+      return <OperationsDashboard onNavigate={handleNavigate} />
+    }
+
+    if (resolvedPathname === '/dashboard/legacy') {
+      const canAccessDashboard = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view the dashboard.',
+        onRequireAuth,
+      })
+      if (!canAccessDashboard) {
+        return null
+      }
+      return <LegacyOperationsDashboard onNavigate={handleNavigate} />
+    }
+
+    if (resolvedPathname === '/terms') {
       return <Terms />
     }
 
-    if (pathname === '/privacy') {
+    if (resolvedPathname === '/privacy') {
       return <PrivacyPage />
     }
 
-    if (pathname === '/refund-policy') {
+    if (resolvedPathname === '/refund-policy') {
       return <RefundPolicy />
     }
 
-    if (pathname === '/billing/success') {
+    if (INTENT_PAGE_ORDER.includes(pathname)) {
+      return <IntentLandingPage pathname={pathname} />
+    }
+
+    if (resolvedPathname === '/billing/success') {
       return <BillingSuccess />
     }
 
-    if (pathname === '/billing/cancel') {
+    if (resolvedPathname === '/billing/cancel') {
       return <BillingCancel />
     }
 
-    if (pathname === '/checkout') {
+    if (resolvedPathname === '/checkout') {
       return <Checkout onAuthSuccess={onAuthSuccess} />
     }
 
-    if (pathname === '/account') {
-      if (!isAuthenticated) {
-        onRequireAuth('Please login or sign up to manage your account settings.')
+    if (resolvedPathname === '/account') {
+      const canAccessAccount = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login or sign up to manage your account settings.',
+        onRequireAuth,
+      })
+      if (!canAccessAccount) {
         return null
       }
 
       return <AccountPage token={localStorage.getItem(TOKEN_STORAGE_KEY) || ''} user={userProfile} onLogout={onLogout} onUserProfileUpdate={onUserProfileUpdate} />
     }
 
-    if (pathname === '/settings') {
-      if (!isAuthenticated) {
-        onRequireAuth('Please login or sign up to manage your account settings.')
+    if (resolvedPathname === '/settings') {
+      const canAccessSettings = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login or sign up to manage your account settings.',
+        onRequireAuth,
+      })
+      if (!canAccessSettings) {
         return null
       }
 
       return <AccountSettingsPage />
     }
 
-    if (pathname === '/billing') {
+    if (resolvedPathname === '/billing') {
       return <BillingPage />
     }
 
-    if (pathname === '/job-descriptions') {
-      if (!isAuthenticated) {
-        onRequireAuth('Please login to manage job descriptions.')
+    if (resolvedPathname === '/uploader') {
+      navigate('/analyses')
+      return null
+    }
+
+    if (resolvedPathname === '/reports') {
+      if (!dashboardReportsEnabled) {
+        navigate('/dashboard/legacy')
         return null
       }
 
-      if (!isActiveSubscriber) {
-        navigate('/pricing?reason=upgrade_required')
+      const canAccessReports = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view reports.',
+        onRequireAuth,
+      })
+      if (!canAccessReports) {
+        return null
+      }
+
+      return <ReportsPage />
+    }
+
+    if (isResultsRootPath(resolvedPathname)) {
+      const canAccessResults = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view candidate analysis results.',
+        onRequireAuth,
+      })
+      if (!canAccessResults) {
+        return null
+      }
+
+      if (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted) {
+        return (
+          <main className="route-state route-state--results-empty">
+            <StatePattern
+              kind="empty"
+              title={RESULTS_EMPTY_STATE_COPY.title}
+              description={RESULTS_EMPTY_STATE_COPY.description}
+              action={(
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="route-state-card__action"
+                >
+                  {RESULTS_EMPTY_STATE_COPY.action}
+                </button>
+              )}
+            />
+          </main>
+        )
+      }
+
+      return (
+        <CandidateResults
+          candidates={uploadedFiles}
+          onBack={() => navigate('/')}
+          userProfile={userProfile}
+        />
+      )
+    }
+
+
+    if (resolvedPathname === '/analyses') {
+      if (!analysesModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
+      const canAccessAnalyses = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view analyses.',
+        onRequireAuth,
+      })
+      if (!canAccessAnalyses) {
+        return null
+      }
+
+      return <AnalysesPage />
+    }
+
+    if (pathname.startsWith('/analyses/')) {
+      if (!analysesModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
+      const canAccessAnalysisDetail = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view analysis details.',
+        onRequireAuth,
+      })
+      if (!canAccessAnalysisDetail) {
+        return null
+      }
+
+      return <AnalysisDetailPage pathname={pathname} />
+    }
+
+    if (resolvedPathname === '/candidates') {
+      if (!candidateModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
+      const canAccessCandidates = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view candidates.',
+        onRequireAuth,
+      })
+      if (!canAccessCandidates) {
+        return null
+      }
+
+      return <CandidatesPage />
+    }
+
+    if (pathname.startsWith('/candidates/')) {
+      if (!candidateModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
+      const canAccessCandidateDetail = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view candidate profiles.',
+        onRequireAuth,
+      })
+      if (!canAccessCandidateDetail) {
+        return null
+      }
+
+      return <CandidateDetailPage pathname={pathname} />
+    }
+
+    if (resolvedPathname === '/job-descriptions') {
+      const canAccessJobDescriptions = guardSubscriptionRoute({
+        isAuthenticated,
+        subscriptionStatus,
+        onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
+        authPromptMessage: 'Please login to manage job descriptions.',
+      })
+      if (!canAccessJobDescriptions) {
         return null
       }
 
@@ -309,9 +635,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <UpdatePaymentMethodPage />
     }
 
-    const isAdminPath = pathname.startsWith('/admin')
-    const hasStoredAdminSession = Boolean(localStorage.getItem('admin_session'))
-
     if (pathname === '/admin/login') {
       return <AdminLoginPage />
     }
@@ -320,28 +643,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <AdminSetup2FA />
     }
 
-    const logoutAdmin = async () => {
-      await fetch(`${API_BASE}/auth/admin/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      }).catch(() => {})
-
-      localStorage.removeItem('admin_session')
-      localStorage.removeItem('admin_id')
-      navigate('/admin/login')
-    }
-
     const renderAdminSection = (sectionProps, page) => (
-      <AdminShell key={pathname} onLogout={logoutAdmin} {...sectionProps}>
-        {page}
-        <AdminPageFeedbackWidget routeContext={pathname} />
-      </AdminShell>
+      <AdminRouteGuard>
+        <AdminShell key={pathname} routePath={pathname} onLogout={logoutAdmin} {...sectionProps}>
+          {page}
+          <AdminPageFeedbackWidget routeContext={pathname} />
+        </AdminShell>
+      </AdminRouteGuard>
     )
-
-    if (isAdminPath && !hasStoredAdminSession) {
-      navigate('/admin/login')
-      return null
-    }
 
     if (pathname === '/admin' || pathname === '/admin/overview') {
       return renderAdminSection({
@@ -438,6 +747,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminAnalyticsPage />)
     }
 
+    if (pathname === '/admin/inquiries') {
+      return renderAdminSection({
+        sectionKey: 'inquiries',
+        title: 'Inquiries',
+        subtitle: 'Review inbound contact and demo requests.',
+        purpose: 'Use this page to triage incoming inquiries, inspect submission details, and mark items as reviewed.',
+        breadcrumbs: ['Admin', 'Inquiries'],
+      }, <AdminInquiriesPage />)
+    }
+
     if (pathname === '/admin/security') {
       return renderAdminSection({
         sectionKey: 'security',
@@ -499,28 +818,20 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (pathname === '/verify-email/success') {
       return (
-        <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
-          <div style={{ background: 'white', padding: '40px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '400px' }}>
-            <div style={{ fontSize: '60px', color: '#22c55e', marginBottom: '20px' }}>✓</div>
-            <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '10px' }}>Email verified!</h1>
-            <p style={{ fontSize: '16px', color: '#333', marginBottom: '30px', lineHeight: '1.6' }}>
-              Your email has been successfully verified. You can now log in to your account.
-            </p>
-            <button
-              onClick={() => navigate('/login')}
-              style={{
-                background: 'var(--accent)',
-                color: '#111',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '10px 20px',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
-            >
-              Go to login
-            </button>
-          </div>
+        <main className="route-state route-state--email-verified">
+          <StatePattern
+            kind="success"
+            title="Email verified!"
+            description="Your email has been successfully verified. You can now log in to your account."
+            action={(
+              <button
+                onClick={() => navigate('/login')}
+                className="route-state-card__action"
+              >
+                Go to login
+              </button>
+            )}
+          />
         </main>
       )
     }
@@ -529,8 +840,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       <>
         {currentPage === 'landing' && (
           <LandingPage
-            onStartDemo={() => handleNavigate('uploader', 'Please sign up to try the resume screening demo.')}
-            ctaLabel={isActiveSubscriber ? 'Analyze Resumes' : 'View Plans'}
+            onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : handleNavigate('uploader', 'Please sign up to try the resume screening demo.'))}
+            ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
           />
         )}
 
@@ -542,18 +853,44 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             isAuthenticated={isAuthenticated}
             onRequireAuth={onRequireAuth}
             subscriptionStatus={subscriptionStatus}
+            userProfile={userProfile}
           />
         )}
 
         {currentPage === 'results' && (
-          <CandidateResults
-            candidates={uploadedFiles}
-            onBack={() => handleNavigate('uploader')}
-          />
+          (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted
+            ? (
+              <main className="route-state route-state--results-empty">
+                <StatePattern
+                  kind="empty"
+                  title={RESULTS_EMPTY_STATE_COPY.title}
+                  description={RESULTS_EMPTY_STATE_COPY.description}
+                  action={(
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('uploader')}
+                      className="route-state-card__action"
+                    >
+                      {RESULTS_EMPTY_STATE_COPY.action}
+                    </button>
+                  )}
+                />
+              </main>
+              )
+            : (
+              <CandidateResults
+                candidates={uploadedFiles}
+                onBack={() => handleNavigate('uploader')}
+                userProfile={userProfile}
+              />
+              )
+          )
         )}
 
         {currentPage === 'dashboard' && (
-          <OperationsDashboard onNavigate={handleNavigate} />
+          dashboardReportsEnabled
+            ? <OperationsDashboard onNavigate={handleNavigate} />
+            : <LegacyOperationsDashboard onNavigate={handleNavigate} />
         )}
 
         {currentPage === 'settings' && (
@@ -580,7 +917,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
-  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/verify-email-info' || pathname === '/verify-email/success' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/reset-password/')
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     setIsMobileNavOpen(false)
@@ -603,10 +939,78 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setIsMobileNavOpen(false)
     navigate('/about')
   }
+  const handleSolutionsClick = () => {
+    setIsMobileNavOpen(false)
+    navigate('/ai-resume-screening')
+  }
+
+
+  const userShellNavItems = useMemo(() => {
+    return [
+      { key: 'dashboard', label: 'Dashboard', path: '/', icon: 'home' },
+      { key: 'jobs', label: 'Jobs', path: '/job-descriptions', icon: 'file' },
+      { key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'target', isLocked: !analysesModuleEnabled },
+      { key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'users', isLocked: !candidateModuleEnabled },
+      { key: 'shortlists', label: 'Shortlists', path: '/results', icon: 'chart' },
+      {
+        key: 'reports',
+        label: 'Reports',
+        path: '/reports',
+        icon: 'chart',
+        isLocked: !dashboardReportsEnabled,
+        badge: !dashboardReportsEnabled ? 'Pro' : '',
+      },
+      { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
+    ]
+  }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
+
+  const pageContent = (
+    <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>Loading…</div>}>
+      {getPageContent()}
+    </Suspense>
+  )
+  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, subscriptionStatus)
+
+  useEffect(() => {
+    document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
+
+    return () => {
+      document.body.classList.remove('user-app-shell-active')
+    }
+  }, [useUserShellLayout])
+
+  if (isAdminPath) {
+    return (
+      <div className="admin-app-root">
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main>{pageContent}</main>
+      </div>
+    )
+  }
+
+  if (useUserShellLayout) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <UserAppShell
+          pathname={pathname}
+          onNavigate={navigate}
+          onLogout={onLogout}
+          userProfile={userProfile}
+          navItems={userShellNavItems}
+          subscriptionStatus={subscriptionStatus}
+          showUpgradeCta={canViewUpgradePricing}
+        >
+          {pageContent}
+        </UserAppShell>
+      </>
+    )
+  }
 
   return (
     <>
-      <header className="site-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 16px', background: 'rgba(10,10,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, zIndex: 200 }}>
+      <PageSeo pathname={pathname} currentPage={currentPage} />
+      <header className="site-header">
         <a
           href="/"
           onClick={(event) => {
@@ -614,10 +1018,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             setIsMobileNavOpen(false)
             navigate('/')
           }}
-          className="logo"
-          style={{ color: '#fff', textDecoration: 'none', fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '1.2rem', padding: 0, height: 'auto' }}
+          className="site-logo"
         >
-          Hire<span style={{ color: 'var(--accent)' }}>Flow</span>
+          Hire<span>Flow</span>
         </a>
         <button
           type="button"
@@ -625,116 +1028,97 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           aria-label="Toggle main navigation"
           aria-expanded={isMobileNavOpen}
           onClick={() => setIsMobileNavOpen((open) => !open)}
-          style={{ background: 'transparent', border: '1px solid var(--border)', color: '#fff', borderRadius: 8, display: 'none' }}
         >
           ☰
         </button>
         <div className={`nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
-          <button onClick={handleFeaturesClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Features</button>
+          <button type="button" className="site-nav-button" onClick={handleFeaturesClick}>Features</button>
+          <button type="button" className="site-nav-button" onClick={handleSolutionsClick}>Solutions</button>
           {canViewUpgradePricing && (
-            <button onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>
+            <button type="button" className="site-nav-button" onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }}>
               {isAuthenticated ? 'Upgrade' : 'Pricing'}
             </button>
           )}
-          <button onClick={handleAboutClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>About</button>
-          <button onClick={handleHelpClick} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer' }}>Help</button>
+          <button type="button" className="site-nav-button" onClick={handleAboutClick}>About</button>
+          <button type="button" className="site-nav-button" onClick={handleHelpClick}>Help</button>
         </div>
-        <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`} style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
           {isAuthenticated ? (
-            <div style={{ position: 'relative' }} ref={profileMenuRef}>
-              <button
-                onClick={() => setIsProfileMenuOpen((open) => !open)}
-                aria-haspopup="menu"
-                aria-expanded={isProfileMenuOpen}
-                aria-label="Open user menu"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: '50%',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: '#111827',
-                  color: '#fff',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {profileInitial}
-              </button>
-
-              {isProfileMenuOpen && (
-                <div
-                  role="menu"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    right: 0,
-                    minWidth: 180,
-                    background: '#171723',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 8,
-                    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
-                    padding: 6,
-                    zIndex: 20,
+            <>
+              {isActiveSubscriber && (
+                <button
+                  type="button"
+                  className="btn-ghost btn-ghost--accent"
+                  onClick={() => {
+                    setIsMobileNavOpen(false)
+                    setIsProfileMenuOpen(false)
+                    navigate('/dashboard')
                   }}
                 >
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false)
-                      navigate('/account')
-                    }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                  Dashboard
+                </button>
+              )}
+              <div className="site-profile-menu" ref={profileMenuRef}>
+                <button
+                  onClick={() => setIsProfileMenuOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={isProfileMenuOpen}
+                  aria-label="Open user menu"
+                  className="site-profile-menu__trigger"
+                >
+                  {profileInitial}
+                </button>
+
+                {isProfileMenuOpen && (
+                  <div
+                    role="menu"
+                    className="site-profile-menu__list"
                   >
-                    Account
-                  </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false)
-                      navigate('/billing')
-                    }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
-                  >
-                    Billing
-                  </button>
-                  {isActiveSubscriber && (
                     <button
                       role="menuitem"
                       onClick={() => {
                         setIsProfileMenuOpen(false)
-                        navigate('/job-descriptions')
+                        navigate('/account')
                       }}
-                      style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', color: '#fff', padding: '8px 10px', borderRadius: 6, cursor: 'pointer' }}
+                      className="site-profile-menu__item"
                     >
-                      Job descriptions
+                      Account
                     </button>
-                  )}
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.14)', margin: '6px 0' }} />
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false)
-                      onLogout()
-                    }}
-                    style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: '#b91c1c' }}
-                  >
-                    Log out
-                  </button>
-                </div>
-              )}
-            </div>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        navigate('/billing')
+                      }}
+                      className="site-profile-menu__item"
+                    >
+                      Billing
+                    </button>
+                    <div className="site-profile-menu__divider" />
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        onLogout()
+                      }}
+                      className="site-profile-menu__item site-profile-menu__item--danger"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
             <>
-              <button onClick={() => { setIsMobileNavOpen(false); navigate('/login') }} style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'transparent', color: '#fff', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>Login</button>
-              <button onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }} style={{ border: 'none', background: 'var(--accent)', color: '#111', borderRadius: 6, padding: '8px 12px', cursor: 'pointer', fontWeight: 600 }}>Sign up</button>
+              <button type="button" className="btn-ghost btn-ghost--accent" onClick={() => { setIsMobileNavOpen(false); navigate('/login') }}>Login</button>
+              <button type="button" className="btn-primary" onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }}>Sign up</button>
             </>
           )}
         </div>
       </header>
       <main>
-        <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--muted)' }}>Loading…</div>}>
-          {getPageContent()}
-        </Suspense>
+        {pageContent}
       </main>
       <PublicFooter />
     </>
@@ -805,6 +1189,7 @@ export default function App() {
   }
 
   const logout = async () => {
+    clearResumeAnalysisResult()
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     localStorage.removeItem('subscription_status')
     localStorage.removeItem(USER_STORAGE_KEY)
@@ -831,17 +1216,72 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined
+    }
+
+    const verifyUserSession = async () => {
+      const activeToken = getStoredToken()
+
+      if (!activeToken) {
+        return
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+          headers: { Authorization: `Bearer ${activeToken}` },
+        })
+
+        if (response.status !== 401) {
+          return
+        }
+      } catch {
+        return
+      }
+
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+      localStorage.removeItem('subscription_status')
+      localStorage.removeItem(USER_STORAGE_KEY)
+      clearResumeAnalysisResult()
+      setToken('')
+      setSubscriptionStatus('inactive')
+      setUserProfile(null)
+      setAuthPrompt('Your session expired while you were away. Please log in again.')
+      navigate('/login')
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void verifyUserSession()
+      }
+    }
+
+    window.addEventListener('focus', handleVisibilityChange)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityChange)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
     if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
       navigate('/')
     }
   }, [isAuthenticated, pathname])
+
+  useEffect(() => {
+    trackIntentLanding(pathname)
+  }, [pathname])
 
   if (!isAuthInitialized) {
     return null
   }
 
   return (
-    <MainSite
+    <AdminAuthProvider>
+      <MainSite
       isAuthenticated={isAuthenticated}
       onLogout={logout}
       onRequireAuth={requireAuth}
@@ -855,5 +1295,6 @@ export default function App() {
       pendingVerificationEmail={pendingVerificationEmail}
       setPendingVerificationEmail={setPendingVerificationEmail}
     />
+    </AdminAuthProvider>
   )
 }

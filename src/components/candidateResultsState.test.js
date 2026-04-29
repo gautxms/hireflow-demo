@@ -1,11 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { CANDIDATE_RESULTS_PAYLOAD_FIXTURES } from './__fixtures__/candidateResultsPayloadFixtures.js'
 import {
   buildResultsQueryParams,
+  hasRenderableCandidates,
+  normalizeCandidateForResults,
   normalizeNumericRange,
   normalizeSortBy,
   paginateCandidates,
+  buildCandidateRenderContract,
   resolveCandidateResumeUuid,
+  toDisplayText,
+  toSafeScore,
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
@@ -48,4 +54,80 @@ test('resolveCandidateResumeUuid only returns valid UUID values', () => {
   assert.equal(resolveCandidateResumeUuid({ resumeId: resumeUuid }), resumeUuid)
   assert.equal(resolveCandidateResumeUuid({ id: 'parsed-1' }), null)
   assert.equal(resolveCandidateResumeUuid({ resume_id: '123' }), null)
+})
+
+test('toDisplayText normalizes object/array candidate fields into safe renderable text', () => {
+  assert.equal(toDisplayText({ text: 'Senior engineer' }), 'Senior engineer')
+  assert.equal(toDisplayText({ value: 'Remote' }), 'Remote')
+  assert.equal(toDisplayText({ nested: true }, 'No summary available'), 'No summary available')
+  assert.equal(toDisplayText(['React', { text: 'Node.js' }, 7]), 'React, Node.js, 7')
+})
+
+test('toSafeScore constrains malformed or out-of-range values for chart rendering', () => {
+  assert.equal(toSafeScore({ score: 90 }, 0), 0)
+  assert.equal(toSafeScore('95'), 95)
+  assert.equal(toSafeScore(999), 100)
+  assert.equal(toSafeScore(-12), 0)
+})
+
+test('hasRenderableCandidates allows mixed-validity arrays when at least one candidate is valid', () => {
+  const mixedCandidates = [
+    null,
+    normalizeCandidateForResults(undefined, 0),
+    normalizeCandidateForResults({ id: 'c-1', name: 'Valid User', skills: null }, 1),
+  ]
+
+  assert.equal(hasRenderableCandidates(mixedCandidates), true)
+})
+
+test('normalizeCandidateForResults defaults malformed skills to empty string', () => {
+  const normalized = normalizeCandidateForResults({ id: 'c-2', skills: { primary: 'React' } }, 0)
+  assert.equal(normalized.skills, '')
+  assert.equal(normalized._isRenderable, true)
+})
+
+test('hasRenderableCandidates returns false when no valid candidate objects exist', () => {
+  assert.equal(hasRenderableCandidates([]), false)
+  assert.equal(hasRenderableCandidates([null, undefined]), false)
+})
+
+
+test('buildCandidateRenderContract returns stable display fields for legacy payload candidates', () => {
+  const [legacyCandidate] = CANDIDATE_RESULTS_PAYLOAD_FIXTURES.legacyPayload
+  const contract = buildCandidateRenderContract(legacyCandidate)
+
+  assert.deepEqual(contract, {
+    name: 'Alex Rivera',
+    location: 'Austin, TX',
+    yearsExperience: '6 yrs exp',
+    score: 88,
+    scoreTenPoint: '8.8',
+    scoreTier: 'strong',
+    topSkills: ['React', 'Node.js', 'TypeScript'],
+  })
+})
+
+test('no-diff gate: buildCandidateRenderContract score-related fields are identical for legacy and modern payload variants', () => {
+  const [legacyCandidate] = CANDIDATE_RESULTS_PAYLOAD_FIXTURES.legacyPayload
+  const [modernCandidate] = CANDIDATE_RESULTS_PAYLOAD_FIXTURES.modernPayload
+
+  const legacyContract = buildCandidateRenderContract(legacyCandidate)
+  const modernContract = buildCandidateRenderContract(modernCandidate)
+
+  assert.deepEqual(
+    {
+      score: legacyContract.score,
+      scoreTenPoint: legacyContract.scoreTenPoint,
+      scoreTier: legacyContract.scoreTier,
+      yearsExperience: legacyContract.yearsExperience,
+      topSkills: legacyContract.topSkills,
+    },
+    {
+      score: modernContract.score,
+      scoreTenPoint: modernContract.scoreTenPoint,
+      scoreTier: modernContract.scoreTier,
+      yearsExperience: modernContract.yearsExperience,
+      topSkills: modernContract.topSkills,
+    },
+  )
 })

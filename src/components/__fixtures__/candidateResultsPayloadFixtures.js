@@ -1,0 +1,41 @@
+export const CANDIDATE_RESULTS_PAYLOAD_FIXTURES = Object.freeze({
+  legacyPayload: [{
+    id: 'cand-legacy-1',
+    name: 'Alex Rivera',
+    location: 'Austin, TX',
+    score: 88,
+    profile_score: 88,
+    years_experience: 6,
+    seniority_level: 'senior',
+    skills: 'React, Node.js, TypeScript',
+    top_skills: ['React', 'Node.js', 'TypeScript'],
+  }],
+  modernPayload: [{
+    id: 'cand-modern-1',
+    candidateId: 'cand-modern-1',
+    resumeId: '550e8400-e29b-41d4-a716-446655440000',
+    name: 'Alex Rivera',
+    location: 'Austin, TX',
+    score: 88,
+    matchScore: {
+      score: 88,
+      reason: 'Strong fit for role requirements',
+    },
+    profile_score: 88,
+    years_experience: 6,
+    seniority_level: 'senior',
+    skills: {
+      tools_and_platforms: ['React', 'Node.js', 'TypeScript'],
+      methodologies: ['Agile'],
+      domain_expertise: ['SaaS'],
+      soft_skills: ['Mentorship'],
+    },
+    skills_flat: ['React', 'Node.js', 'TypeScript'],
+    top_skills: ['React', 'Node.js', 'TypeScript'],
+    fit_assessment: {
+      overall_fit_score: 88,
+      skill_match_score: 86,
+      experience_match_score: 90,
+    },
+  }],
+})

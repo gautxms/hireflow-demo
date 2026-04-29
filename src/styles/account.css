@@ -1,0 +1,92 @@
+.account-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-3xl) var(--spacing-base);
+  background: var(--color-bg-primary);
+  min-height: 100vh;
+}
+
+.account-page__loading,
+.account-page__error {
+  min-height: 100vh;
+  padding: var(--spacing-lg);
+  background: var(--color-bg-primary);
+}
+
+.account-page__loading {
+  color: var(--color-text-secondary);
+}
+
+.account-page__error {
+  color: var(--color-error);
+}
+
+.account-page__header {
+  margin-bottom: var(--spacing-3xl);
+}
+
+.account-page__title {
+  font-size: clamp(2rem, 4vw, 40px);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.account-page__subtitle {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+}
+
+.account-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-3xl);
+}
+
+.account-page__danger-zone {
+  background: var(--color-danger-alpha-15);
+  border: 1px solid var(--color-danger-alpha-35);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  margin-top: var(--spacing-3xl);
+}
+
+.account-page__danger-title {
+  color: var(--color-error);
+  margin-bottom: var(--spacing-base);
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.account-page__danger-description {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-base);
+  line-height: 1.6;
+}
+
+.subscription-card__cta {
+  width: 100%;
+}
+
+.subscription-card__cta--primary {
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+  border-color: var(--color-accent-green);
+}
+
+.subscription-card__cta--primary:hover {
+  background: var(--color-accent-green-hover);
+  border-color: var(--color-accent-green-hover);
+}
+
+.subscription-card__cta--cancel {
+  background: var(--color-danger-alpha-15);
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.subscription-card__cta--cancel:hover {
+  background: var(--color-error);
+  color: var(--color-text-primary);
+}

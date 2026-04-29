@@ -1,6 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
+import { buildRoleSafeErrorView, isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
+import {
+  ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL,
+  buildChunkInitPayload,
+  resolveSelectedJobDescriptionId,
+  toOptionalJobDescriptionId,
+} from './resumeUploaderState'
+import {
+  buildFileSnapshot,
+  clearResumeAnalysisResult,
+  clearResumeAnalysisSession,
+  getResumeAnalysisOwnerKey,
+  isSessionRecoverable,
+  readResumeAnalysisResult,
+  readResumeAnalysisSession,
+  writeResumeAnalysisResult,
+  writeResumeAnalysisSession,
+} from './resumeAnalysisSession'
+import { buildFailedAnalysisState } from './resumeUploaderRecoveryState'
+import { shouldSkipStateUpdate, waitWithAbort } from './abortableAsync'
+import { mergeCandidatesByResumeId, summarizeJobStatus } from './resumeAnalysisAggregation'
+import '../styles/resume-uploader.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
@@ -9,21 +31,25 @@ const CHUNK_SIZE = 5 * 1024 * 1024
 const MAX_CHUNK_RETRIES = 3
 const MAX_QUEUE_RETRIES = 3
 const BASE_QUEUE_RETRY_DELAY_MS = 5000
+const ANALYSIS_LEVEL_POLLING_ENABLED = import.meta.env.VITE_ENABLE_ANALYSIS_LEVEL_POLLING === 'true'
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ])
+const DOCX_EXTENSION_PATTERN = /\.docx$/i
+const PDF_EXTENSION_PATTERN = /\.pdf$/i
 
 function sanitizeForDisplay(message) {
   return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
 }
 
-function isInfrastructureConfigError(message) {
-  const normalizedMessage = String(message || '').toLowerCase()
-  return normalizedMessage.includes('aws_s3_bucket')
-    || normalizedMessage.includes('s3')
-    || normalizedMessage.includes('credentials')
-    || normalizedMessage.includes('access denied')
+function withErrorContext(error, context = {}) {
+  const nextError = error instanceof Error ? error : new Error(String(error || 'unknown_error'))
+  nextError.context = {
+    ...(nextError.context && typeof nextError.context === 'object' ? nextError.context : {}),
+    ...context,
+  }
+  return nextError
 }
 
 function formatMultiLineError(lines) {
@@ -39,11 +65,38 @@ function formatUploadError(message) {
 }
 
 function formatParseError(reason = 'File format not recognized') {
-  return formatMultiLineError([
-    '⚠️ Parse Failed',
-    `Reason: ${reason}`,
-    'Next: Try a different format (PDF/DOCX)',
-  ])
+  return `Parse failed: ${reason}. Please upload a PDF or DOCX file and retry.`
+}
+
+function inferResumeMimeType(fileLike = {}) {
+  const explicitType = String(fileLike?.type || '').trim().toLowerCase()
+  if (ACCEPTED_TYPES.has(explicitType)) {
+    return explicitType
+  }
+
+  const fileName = String(fileLike?.name || '').trim()
+  if (DOCX_EXTENSION_PATTERN.test(fileName)) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+  if (PDF_EXTENSION_PATTERN.test(fileName)) {
+    return 'application/pdf'
+  }
+
+  return explicitType
+}
+
+function toUserFriendlyJobError(rawError) {
+  const message = String(rawError || '').trim()
+  if (!message) {
+    return 'Could not analyze this resume. Please retry.'
+  }
+
+  if (message.toLowerCase().includes('file format')) {
+    return 'Unsupported or unreadable file format. Upload a valid PDF or DOCX and retry.'
+  }
+
+  const normalized = mapProviderError(message)
+  return normalized?.userMessage || 'Could not analyze this resume. Please retry.'
 }
 
 async function parseJsonSafe(response) {
@@ -66,8 +119,10 @@ function writeUploadCache(next) {
   localStorage.setItem(RESUME_UPLOAD_STATE_KEY, JSON.stringify(next))
 }
 
-export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus }) {
+export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false, userProfile = null }) {
   const fileInputRef = useRef(null)
+  const mountedRef = useRef(true)
+  const activePollAbortControllerRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -75,9 +130,18 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [parseStatus, setParseStatus] = useState('')
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
   const [error, setError] = useState('')
+  const [technicalErrorDetails, setTechnicalErrorDetails] = useState('')
+  const [providerErrorGuidance, setProviderErrorGuidance] = useState(null)
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
+  const [recoverableSession, setRecoverableSession] = useState(null)
+  const [showRecoveryPrompt, setShowRecoveryPrompt] = useState(false)
+  const [failedAnalysisState, setFailedAnalysisState] = useState(null)
+  const [jobStatuses, setJobStatuses] = useState([])
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
+  const isDevelopment = import.meta.env.DEV
+  const canViewAdminDiagnostics = isAdmin || isDevelopment
+  const resumeAnalysisOwnerKey = getResumeAnalysisOwnerKey(userProfile)
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -89,6 +153,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       handleAuthRedirect()
     }
   }, [handleAuthRedirect, isAuthenticated])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      activePollAbortControllerRef.current?.abort()
+    }
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -112,18 +184,34 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         const eligible = items.filter((item) => item.status === 'active' || item.status === 'draft')
         setJobDescriptions(eligible)
 
-        if (!selectedJobDescriptionId && eligible[0]?.id) {
-          setSelectedJobDescriptionId(eligible[0].id)
-        }
+        setSelectedJobDescriptionId((currentSelection) => resolveSelectedJobDescriptionId(currentSelection, eligible))
       })
       .catch(() => {
         setJobDescriptions([])
       })
   }, [isAuthenticated])
 
-  if (!isAuthenticated) {
-    return null
-  }
+  useEffect(() => {
+    const cachedSession = readResumeAnalysisSession()
+    if (!isSessionRecoverable(cachedSession)) {
+      return
+    }
+
+    setRecoverableSession(cachedSession)
+    setShowRecoveryPrompt(true)
+    if (Array.isArray(cachedSession.fileSnapshots) && cachedSession.fileSnapshots.length > 0) {
+      setUploadedFiles(
+        cachedSession.fileSnapshots.map((fileSnapshot) => ({
+          ...fileSnapshot,
+          file: null,
+          restoredFromSession: true,
+        })),
+      )
+    }
+    if (cachedSession.selectedJobDescriptionId) {
+      setSelectedJobDescriptionId(cachedSession.selectedJobDescriptionId)
+    }
+  }, [])
 
   const handleDragOver = (e) => {
     e.preventDefault()
@@ -140,7 +228,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     const rejected = []
 
     normalizedFiles.forEach((file) => {
-      const isAllowedType = ACCEPTED_TYPES.has(file.type)
+      const isAllowedType = ACCEPTED_TYPES.has(inferResumeMimeType(file))
       const isAllowedSize = file.size <= MAX_FILE_SIZE
 
       if (!isAllowedType) {
@@ -158,8 +246,12 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
     if (rejected.length > 0) {
       setError(sanitizeForDisplay(rejected.join(' ')))
+      setTechnicalErrorDetails('')
+      setProviderErrorGuidance(null)
     } else {
       setError('')
+      setTechnicalErrorDetails('')
+      setProviderErrorGuidance(null)
     }
 
     if (allowed.length > 0) {
@@ -196,7 +288,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       if (attempt === MAX_CHUNK_RETRIES) {
         const errorPayload = await response.json().catch(() => ({}))
-        throw new Error(errorPayload.error || `Chunk upload failed at chunk ${chunkIndex + 1}`)
+        throw withErrorContext(new Error(errorPayload.error || `Chunk upload failed at chunk ${chunkIndex + 1}`), {
+          stage: 'upload_chunk',
+          endpoint: '/uploads/chunks/:uploadId/chunk',
+          status: response.status,
+        })
       }
 
       await new Promise((resolve) => setTimeout(resolve, 500 * attempt))
@@ -209,8 +305,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     uploadedFiles.forEach(({ file }) => {
       formData.append('resumes', file)
     })
-    if (selectedJobDescriptionId) {
-      formData.append('jobDescriptionId', selectedJobDescriptionId)
+    const optionalJobDescriptionId = toOptionalJobDescriptionId(selectedJobDescriptionId)
+    if (optionalJobDescriptionId) {
+      formData.append('jobDescriptionId', optionalJobDescriptionId)
     }
 
     const response = await fetch(`${API_BASE}/uploads`, {
@@ -222,7 +319,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     const payload = await parseJsonSafe(response)
 
     if (!response.ok) {
-      throw new Error(payload.error || 'Unable to queue upload request')
+      throw withErrorContext(new Error(payload.error || 'Unable to queue upload request'), {
+        stage: 'upload_init',
+        endpoint: '/uploads',
+        status: response.status,
+      })
     }
 
     const jobs = Array.isArray(payload.jobs) ? payload.jobs : []
@@ -232,14 +333,26 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       throw new Error('No parse job ID returned from upload request')
     }
 
-    return { primaryJobId }
+    return {
+      primaryJobId,
+      analysisId: String(payload.analysisId || '').trim(),
+    }
   }
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async ({ isAutomaticRetry = false } = {}) => {
     if (uploadedFiles.length === 0) return
+    if (uploadedFiles.some((item) => !item.file)) {
+      setError('Please re-select files before retrying analysis.')
+      return
+    }
 
     setIsAnalyzing(true)
     setError('')
+    setTechnicalErrorDetails('')
+    setProviderErrorGuidance(null)
+    setFailedAnalysisState(null)
+    setJobStatuses([])
+    clearResumeAnalysisResult()
 
     try {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -248,11 +361,21 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         throw new Error('Authentication required. Please log in first.')
       }
 
+      const selectedJobDescription = jobDescriptions.find((jd) => jd.id === selectedJobDescriptionId)
+      const jobDescriptionLogSnippet = selectedJobDescription
+        ? `${selectedJobDescription.title || selectedJobDescriptionId}`.slice(0, 80)
+        : ''
+      console.log(
+        '[HireFlow] Sending JD to backend:',
+        jobDescriptionLogSnippet ? `${jobDescriptionLogSnippet}...` : 'NONE — no JD set',
+      )
+
       const totalChunksAllFiles = uploadedFiles.reduce((sum, item) => sum + Math.ceil(item.file.size / CHUNK_SIZE), 0)
       let uploadedChunkCount = 0
       setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
 
-      let primaryJobId = ''
+      const queuedJobs = []
+      let analysisId = ''
 
       try {
         for (const entry of uploadedFiles) {
@@ -266,21 +389,27 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
+            body: JSON.stringify(buildChunkInitPayload({
               filename: file.name,
               fileSize: file.size,
-              mimeType: file.type,
-              jobDescriptionId: selectedJobDescriptionId || undefined,
-            }),
+              mimeType: inferResumeMimeType(file),
+              selectedJobDescriptionId,
+              analysisId,
+            })),
           })
 
           if (!initResponse.ok) {
             const payload = await parseJsonSafe(initResponse)
-            throw new Error(payload.error || `Failed to start chunk upload for ${file.name}`)
+            throw withErrorContext(new Error(payload.error || `Failed to start chunk upload for ${file.name}`), {
+              stage: 'upload_init',
+              endpoint: '/uploads/chunks/init',
+              status: initResponse.status,
+            })
           }
 
           const initPayload = await parseJsonSafe(initResponse)
           const uploadId = initPayload.uploadId
+          analysisId = analysisId || String(initPayload.analysisId || '').trim()
           const uploadedChunks = new Set(initPayload.uploadedChunks || [])
 
           const cache = readUploadCache()
@@ -319,14 +448,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           const completePayload = await parseJsonSafe(completeResponse)
 
           if (!completeResponse.ok) {
-            throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
+            throw withErrorContext(new Error(completePayload.error || `Failed to finalize upload for ${file.name}`), {
+              stage: 'upload_complete',
+              endpoint: '/uploads/chunks/:uploadId/complete',
+              status: completeResponse.status,
+            })
           }
 
           if (completePayload.scan?.malicious) {
             throw new Error(`Upload rejected for ${file.name}: malware detected`)
           }
 
-          primaryJobId = primaryJobId || completePayload.jobId
+          queuedJobs.push({
+            jobId: String(completePayload.jobId || ''),
+            resumeId: String(completePayload.resumeId || ''),
+            filename: file.name,
+            status: 'processing',
+          })
+          analysisId = analysisId || String(completePayload.analysisId || '').trim()
 
           const nextCache = readUploadCache()
           delete nextCache[fingerprint]
@@ -335,108 +474,425 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       } catch (uploadError) {
         const fallbackMessage = sanitizeForDisplay(uploadError.message || '')
-        if (!isInfrastructureConfigError(fallbackMessage)) {
+        if (!isStorageInfrastructureError(fallbackMessage)) {
           throw uploadError
         }
 
         const legacyQueued = await queueLegacyUpload({ token })
-        primaryJobId = legacyQueued.primaryJobId
+        queuedJobs.push({
+          jobId: String(legacyQueued.primaryJobId || ''),
+          resumeId: '',
+          filename: uploadedFiles[0]?.name || '',
+          status: 'processing',
+        })
+        analysisId = analysisId || String(legacyQueued.analysisId || '').trim()
         setUploadProgress({ completed: totalChunksAllFiles, total: totalChunksAllFiles })
       }
 
-      if (!primaryJobId) {
-        throw new Error('No parse job ID returned from upload request')
+      const validQueuedJobs = queuedJobs.filter((job) => job.jobId)
+      if (validQueuedJobs.length === 0) {
+        throw new Error('No parse job IDs returned from upload request')
       }
+      const primaryJobId = validQueuedJobs[0].jobId
+      setJobStatuses(validQueuedJobs)
+      writeResumeAnalysisSession({
+        jobId: primaryJobId,
+        jobIds: validQueuedJobs.map((job) => job.jobId),
+        analysisId,
+        parseStatus: 'processing',
+        parseProgress: 5,
+        selectedJobDescriptionId,
+        fileSnapshots: buildFileSnapshot(uploadedFiles),
+      })
 
-      setParseStatus('processing')
-      setParseProgress(5)
-
-      const pollDelayMs = 2000
-      const maxPollAttempts = 300
-      let queueRetryAttempt = 0
-
-      for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-        const statusResponse = await fetch(`${API_BASE}/uploads/${primaryJobId}/parse-status`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (!statusResponse.ok) {
-          const isQueueBusy = [429, 503, 504].includes(statusResponse.status)
-          if (isQueueBusy && queueRetryAttempt < MAX_QUEUE_RETRIES) {
-            queueRetryAttempt += 1
-            const retryDelayMs = BASE_QUEUE_RETRY_DELAY_MS * queueRetryAttempt
-            setError(
-              formatMultiLineError([
-                `Queue is busy. Retrying in ${Math.round(retryDelayMs / 1000)} seconds...`,
-                `(attempt ${queueRetryAttempt}/${MAX_QUEUE_RETRIES})`,
-              ]),
-            )
-            await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
-            continue
-          }
-          throw new Error(`Polling failed (${statusResponse.status})`)
-        }
-
-        queueRetryAttempt = 0
-        setError('')
-        const statusPayload = await statusResponse.json()
-        setParseStatus(statusPayload.status || 'processing')
-        setParseProgress(Number(statusPayload.progress || 0))
-
-        if (statusPayload.status === 'complete') {
-          const parseResult = statusPayload.result || {}
-          const candidates = parseResult.candidates || []
-
-          if (candidates.length === 0) {
-            throw new Error('Resume parsing finished, but no candidates were returned')
-          }
-
-          onFileUploaded({
-            candidates,
-            parseMeta: {
-              methodUsed: parseResult.methodUsed || 'ai-extraction',
-              confidence: Number(parseResult.confidence || 0),
-              attempts: Array.isArray(parseResult.attempts) ? parseResult.attempts : [],
-              requiresManualCorrection: Boolean(parseResult.requiresManualCorrection),
-              feedback: parseResult.feedback || null,
-            },
-          })
-          return
-        }
-
-        if (statusPayload.status === 'failed') {
-          throw new Error(statusPayload.error || 'File format not recognized')
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
+      if (ANALYSIS_LEVEL_POLLING_ENABLED && analysisId) {
+        await trackAnalysisStatus({ token, analysisId, jobs: validQueuedJobs })
+      } else {
+        await trackParseStatus({ token, jobs: validQueuedJobs, analysisId })
       }
-
-      throw new Error('Resume parsing timed out. Please try again.')
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        return
+      }
       console.error('Upload error:', err)
       setIsAnalyzing(false)
       setParseStatus('')
       setParseProgress(0)
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
+      const errorContext = err?.context && typeof err.context === 'object' ? err.context : {}
+      if (errorContext.stage === 'all_failed' && !isAutomaticRetry) {
+        setError('All resumes failed with the current provider. Retrying automatically with fallback configuration.')
+        await handleAnalyze({ isAutomaticRetry: true })
+        return
+      }
+
+      const currentSession = readResumeAnalysisSession()
+      if (currentSession?.jobId) {
+        writeResumeAnalysisSession({
+          ...currentSession,
+          parseStatus: 'failed',
+        })
+      }
+      const normalizedProviderError = mapProviderError(errorMessage)
+      const isUploadStage = String(errorContext.stage || '').startsWith('upload')
+      const isParseStatusStage = errorContext.stage === 'parse_status'
 
       if (errorMessage.includes('Subscription') || errorMessage.includes('trial') || errorMessage.includes('inactive') || errorMessage.includes('malware')) {
         setError(errorMessage)
-      } else if (isInfrastructureConfigError(errorMessage)) {
-        setError(formatUploadError('AWS S3 not configured'))
+        setTechnicalErrorDetails('')
+        setProviderErrorGuidance(null)
+      } else if (isUploadStage && isStorageInfrastructureError(errorMessage)) {
+        setError(formatUploadError('Storage service is unavailable'))
+        setTechnicalErrorDetails('')
+        setProviderErrorGuidance(null)
       } else if (
-        errorMessage.toLowerCase().includes('parse')
-        || errorMessage.toLowerCase().includes('no candidates')
-        || errorMessage.toLowerCase().includes('format')
+        !isParseStatusStage
+        && (
+          errorMessage.toLowerCase().includes('parse')
+          || errorMessage.toLowerCase().includes('no candidates')
+          || errorMessage.toLowerCase().includes('format')
+        )
       ) {
+        const safeView = buildRoleSafeErrorView(normalizedProviderError, {
+          isAdmin,
+          isDevelopment,
+        })
         setError(formatParseError('File format not recognized'))
+        setTechnicalErrorDetails(canViewAdminDiagnostics ? errorMessage : '')
+        setProviderErrorGuidance(safeView.providerErrorGuidance)
       } else {
-        setError(formatUploadError(errorMessage))
+        const safeView = buildRoleSafeErrorView(normalizedProviderError, {
+          isAdmin,
+          isDevelopment,
+        })
+        setError(safeView.userMessage)
+        setTechnicalErrorDetails(safeView.technicalErrorDetails)
+        setProviderErrorGuidance(safeView.providerErrorGuidance)
       }
+
+      setFailedAnalysisState(buildFailedAnalysisState(errorMessage))
     } finally {
       setIsAnalyzing(false)
     }
+  }
+
+  const trackParseStatus = useCallback(async ({ token, jobs, analysisId = '' }) => {
+    const queuedJobs = (Array.isArray(jobs) ? jobs : [])
+      .map((job) => ({
+        jobId: String(job?.jobId || '').trim(),
+        resumeId: String(job?.resumeId || '').trim(),
+        filename: String(job?.filename || '').trim(),
+        status: String(job?.status || 'processing').trim() || 'processing',
+        error: '',
+      }))
+      .filter((job) => job.jobId)
+
+    if (queuedJobs.length === 0) {
+      throw new Error('No parse jobs available for status tracking')
+    }
+
+    const primaryJobId = queuedJobs[0].jobId
+    setParseStatus('processing')
+    setParseProgress(5)
+    setShowRecoveryPrompt(false)
+    setRecoverableSession(null)
+    setJobStatuses(queuedJobs)
+
+    const pollDelayMs = 2000
+    const maxPollAttempts = 300
+    let queueRetryAttempt = 0
+    const abortController = new AbortController()
+    activePollAbortControllerRef.current = abortController
+
+    let resultsByResumeId = {}
+    let hasJobDescription = false
+
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+      if (shouldSkipStateUpdate({ mounted: mountedRef.current, signal: abortController.signal })) {
+        throw new DOMException('Polling aborted', 'AbortError')
+      }
+
+      const statusResponses = await Promise.all(
+        queuedJobs.map(async (job) => {
+          const response = await fetch(`${API_BASE}/uploads/${job.jobId}/parse-status`, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+            signal: abortController.signal,
+          })
+          return { job, response }
+        }),
+      )
+
+      const firstFailed = statusResponses.find(({ response }) => !response.ok)
+
+      if (firstFailed) {
+        const isQueueBusy = [429, 503, 504].includes(firstFailed.response.status)
+        if (isQueueBusy && queueRetryAttempt < MAX_QUEUE_RETRIES) {
+          queueRetryAttempt += 1
+          const retryDelayMs = BASE_QUEUE_RETRY_DELAY_MS * queueRetryAttempt
+          if (mountedRef.current) {
+            setError(
+              formatMultiLineError([
+                `Queue is busy. Retrying in ${Math.round(retryDelayMs / 1000)} seconds...`,
+                `(attempt ${queueRetryAttempt}/${MAX_QUEUE_RETRIES})`,
+              ]),
+            )
+          }
+          await waitWithAbort(retryDelayMs, abortController.signal)
+          continue
+        }
+        throw withErrorContext(new Error(`Polling failed (${firstFailed.response.status})`), {
+          stage: 'parse_status',
+          endpoint: '/uploads/:jobId/parse-status',
+          status: firstFailed.response.status,
+        })
+      }
+
+      queueRetryAttempt = 0
+      if (mountedRef.current) {
+        setError('')
+      }
+      const statusPayloadByJob = await Promise.all(
+        statusResponses.map(async ({ job, response }) => ({
+          ...job,
+          payload: await response.json(),
+        })),
+      )
+      const nextJobStatuses = statusPayloadByJob.map(({ jobId, resumeId, filename, payload }) => ({
+        jobId,
+        resumeId: String(payload?.resumeId || resumeId || '').trim(),
+        filename: payload?.filename || filename,
+        status: String(payload?.status || 'processing').trim() || 'processing',
+        progress: Number(payload?.progress || 0),
+        error: payload?.error ? String(payload.error) : '',
+      }))
+      setJobStatuses(nextJobStatuses)
+
+      const totalProgress = nextJobStatuses.reduce((sum, job) => sum + Number(job.progress || 0), 0)
+      const nextProgress = Math.round(totalProgress / Math.max(1, nextJobStatuses.length))
+      const hasFailedJobs = nextJobStatuses.some((job) => job.status === 'failed')
+      const hasPendingJobs = nextJobStatuses.some((job) => job.status !== 'complete' && job.status !== 'failed')
+      const nextStatus = hasPendingJobs ? 'processing' : (hasFailedJobs ? 'partial' : 'complete')
+
+      writeResumeAnalysisSession({
+        jobId: primaryJobId,
+        jobIds: queuedJobs.map((job) => job.jobId),
+        analysisId,
+        parseStatus: nextStatus,
+        parseProgress: nextProgress,
+        selectedJobDescriptionId,
+        fileSnapshots: buildFileSnapshot(uploadedFiles),
+      })
+
+      if (mountedRef.current) {
+        setParseStatus(nextStatus)
+        setParseProgress(nextProgress)
+      }
+
+      const completedEntries = statusPayloadByJob.flatMap(({ payload, resumeId, filename }) => {
+        const parseResult = payload?.result || {}
+        const candidates = Array.isArray(parseResult?.candidates) ? parseResult.candidates : []
+        hasJobDescription = hasJobDescription || Boolean(parseResult?.jobDescriptionContextUsed || parseResult?.jobDescriptionId)
+        return candidates.map((candidate) => ({
+          resumeId: resumeId || payload?.resumeId || candidate?.resumeId || candidate?.resume_id || '',
+          filename: parseResult?.filename || filename || '',
+          candidate,
+        }))
+      })
+      resultsByResumeId = mergeCandidatesByResumeId(resultsByResumeId, completedEntries)
+
+      if (!hasPendingJobs) {
+        const mergedCandidates = Object.values(resultsByResumeId)
+        if (mergedCandidates.length === 0) {
+          throw withErrorContext(new Error('Resume parsing finished, but no candidates were returned'), {
+            stage: 'all_failed',
+          })
+        }
+
+        const latestResult = {
+          candidates: mergedCandidates,
+          parseMeta: {
+            hasJobDescription,
+            methodUsed: 'ai-extraction',
+          },
+          jobStatuses: nextJobStatuses,
+        }
+
+        writeResumeAnalysisSession({
+          jobId: primaryJobId,
+          jobIds: queuedJobs.map((job) => job.jobId),
+          analysisId,
+          parseStatus: hasFailedJobs ? 'partial' : 'complete',
+          parseProgress: 100,
+          selectedJobDescriptionId,
+          fileSnapshots: buildFileSnapshot(uploadedFiles),
+        })
+        writeResumeAnalysisResult({
+          ...latestResult,
+          jobId: primaryJobId,
+        }, resumeAnalysisOwnerKey)
+
+        onFileUploaded(latestResult)
+        clearResumeAnalysisSession()
+        return
+      }
+
+      await waitWithAbort(pollDelayMs, abortController.signal)
+    }
+
+    throw new Error('Resume parsing timed out. Please try again.')
+  }, [onFileUploaded, resumeAnalysisOwnerKey, selectedJobDescriptionId, uploadedFiles])
+
+  const trackAnalysisStatus = useCallback(async ({ token, analysisId, jobs = [] }) => {
+    const pollDelayMs = 2000
+    const maxPollAttempts = 300
+    const fallbackJobs = Array.isArray(jobs) ? jobs : []
+    const abortController = new AbortController()
+    activePollAbortControllerRef.current = abortController
+
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+      if (shouldSkipStateUpdate({ mounted: mountedRef.current, signal: abortController.signal })) {
+        throw new DOMException('Polling aborted', 'AbortError')
+      }
+
+      const response = await fetch(`${API_BASE}/analyses/${analysisId}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: abortController.signal,
+      })
+
+      const payload = await parseJsonSafe(response)
+      if (!response.ok) {
+        throw withErrorContext(new Error(payload.error || 'Unable to fetch analysis status'), {
+          stage: 'analysis_status',
+          endpoint: '/analyses/:id',
+          status: response.status,
+        })
+      }
+
+      const items = Array.isArray(payload.items) ? payload.items : []
+      const nextJobStatuses = items.map((item) => ({
+        jobId: String(item.parseJobId || '').trim(),
+        resumeId: String(item.resumeId || '').trim(),
+        filename: String(item.filename || '').trim(),
+        status: String(item.status || 'processing').trim() || 'processing',
+        progress: Number(item.progress || 0),
+        error: item.error ? String(item.error) : '',
+      }))
+
+      const effectiveJobStatuses = nextJobStatuses.length > 0
+        ? nextJobStatuses
+        : fallbackJobs
+
+      if (mountedRef.current) {
+        setJobStatuses(effectiveJobStatuses)
+      }
+
+      const totalProgress = effectiveJobStatuses.reduce((sum, job) => sum + Number(job.progress || 0), 0)
+      const nextProgress = Math.round(totalProgress / Math.max(1, effectiveJobStatuses.length))
+      const hasFailedJobs = effectiveJobStatuses.some((job) => job.status === 'failed')
+      const hasPendingJobs = effectiveJobStatuses.some((job) => job.status !== 'complete' && job.status !== 'failed')
+      const nextStatus = hasPendingJobs ? 'processing' : (hasFailedJobs ? 'partial' : 'complete')
+
+      writeResumeAnalysisSession({
+        jobId: String(effectiveJobStatuses[0]?.jobId || ''),
+        jobIds: effectiveJobStatuses.map((job) => job.jobId).filter(Boolean),
+        analysisId,
+        parseStatus: nextStatus,
+        parseProgress: nextProgress,
+        selectedJobDescriptionId,
+        fileSnapshots: buildFileSnapshot(uploadedFiles),
+      })
+
+      if (mountedRef.current) {
+        setParseStatus(nextStatus)
+        setParseProgress(nextProgress)
+      }
+
+      if (!hasPendingJobs) {
+        const completedEntries = items.flatMap((item) => {
+          const parseResult = item?.result || {}
+          const candidates = Array.isArray(parseResult.candidates) ? parseResult.candidates : []
+          return candidates.map((candidate) => ({
+            resumeId: item.resumeId || candidate?.resumeId || candidate?.resume_id || '',
+            filename: item.filename || '',
+            candidate,
+          }))
+        })
+        const mergedByResume = mergeCandidatesByResumeId({}, completedEntries)
+        const completedCandidates = Object.values(mergedByResume)
+
+        if (completedCandidates.length === 0) {
+          throw withErrorContext(new Error('Resume parsing finished, but no candidates were returned'), {
+            stage: 'all_failed',
+          })
+        }
+
+        const latestResult = {
+          candidates: completedCandidates,
+          parseMeta: {
+            hasJobDescription: Boolean(payload?.jobDescriptionId),
+            methodUsed: 'ai-extraction',
+          },
+          jobStatuses: effectiveJobStatuses,
+        }
+
+        writeResumeAnalysisResult({
+          ...latestResult,
+          jobId: String(effectiveJobStatuses[0]?.jobId || ''),
+        }, resumeAnalysisOwnerKey)
+
+        onFileUploaded(latestResult)
+        clearResumeAnalysisSession()
+        return
+      }
+
+      await waitWithAbort(pollDelayMs, abortController.signal)
+    }
+
+    throw new Error('Resume parsing timed out. Please try again.')
+  }, [onFileUploaded, resumeAnalysisOwnerKey, selectedJobDescriptionId, uploadedFiles])
+
+  const handleResumeTracking = async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    const recoverableJobId = recoverableSession?.jobId || readResumeAnalysisResult(resumeAnalysisOwnerKey)?.jobId
+    if (!token || !recoverableJobId) {
+      setShowRecoveryPrompt(false)
+      return
+    }
+    setIsAnalyzing(true)
+    setError('')
+    setTechnicalErrorDetails('')
+    setProviderErrorGuidance(null)
+    setFailedAnalysisState(null)
+    try {
+      const cachedSession = readResumeAnalysisSession()
+      const jobIds = Array.isArray(cachedSession?.jobIds) && cachedSession.jobIds.length > 0
+        ? cachedSession.jobIds
+        : [recoverableJobId]
+      await trackParseStatus({
+        token,
+        analysisId: String(cachedSession?.analysisId || recoverableSession?.analysisId || '').trim(),
+        jobs: jobIds.map((jobId) => ({ jobId })),
+      })
+    } catch (resumeError) {
+      if (resumeError?.name !== 'AbortError') {
+        setError(sanitizeForDisplay(resumeError.message || 'Unable to resume analysis.'))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsAnalyzing(false)
+      }
+    }
+  }
+
+  const handleDiscardRecovery = () => {
+    clearResumeAnalysisSession()
+    setRecoverableSession(null)
+    setShowRecoveryPrompt(false)
+    setParseStatus('')
+    setParseProgress(0)
   }
 
   const removeFile = (index) => {
@@ -447,72 +903,59 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
     : 0
 
+  if (!isAuthenticated) {
+    return null
+  }
+
   return (
-    <div className="resume-uploader-page" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      <div className="resume-uploader-header" style={{ maxWidth: '900px', margin: '0 auto', marginBottom: '3rem' }}>
+    <div className="resume-uploader-page">
+      <div className="resume-uploader-header">
         {onBack && (
           <button
-            className="touch-target"
+            className="touch-target resume-uploader-back-button"
             onClick={onBack}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              color: 'var(--accent)',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginBottom: '1rem',
-              fontSize: '0.9rem',
-            }}
           >
             ← Back
           </button>
         )}
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
+        <h1 className="resume-uploader-title">
           Upload Resumes
         </h1>
-        <p style={{ color: 'var(--muted)', fontSize: '1rem' }}>
+        <p className="resume-uploader-subtitle">
           Upload one or multiple resumes. Our AI will analyze and rank candidates automatically.
         </p>
       </div>
 
-      <div className="resume-uploader-content" style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <div className="resume-uploader-content">
         {subscriptionStatus === 'trialing' && (
-          <div
-            style={{
-              background: 'rgba(251, 191, 36, 0.1)',
-              border: '1px solid #fbbf24',
-              color: '#f59e0b',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-              textAlign: 'center',
-            }}
-          >
+          <div className="resume-uploader-trial-banner">
             <strong>Your 7-day trial is active.</strong> After this period, upgrade your plan to continue screening resumes.
           </div>
         )}
+        {showRecoveryPrompt && recoverableSession && (
+          <div className="resume-uploader-trial-banner" role="status">
+            <strong>Unfinished analysis detected.</strong> Resume your previous run or discard it and start fresh.
+            <div className="resume-actions resume-actions--recovery-prompt">
+              <button type="button" className="touch-target resume-analyze-button" onClick={handleResumeTracking}>
+                Resume tracking
+              </button>
+              <button type="button" className="touch-target resume-remove-file-button" onClick={handleDiscardRecovery}>
+                Discard and start fresh
+              </button>
+            </div>
+          </div>
+        )}
         <div
-          className="resume-drop-zone"
+          className={`resume-drop-zone ${isDragging ? 'resume-drop-zone--dragging' : ''}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          style={{
-            border: isDragging ? '2px solid var(--accent)' : '2px dashed var(--border)',
-            borderRadius: '12px',
-            padding: '3rem',
-            textAlign: 'center',
-            background: isDragging ? 'rgba(232,255,90,0.05)' : 'var(--card)',
-            transition: 'all 0.3s',
-            cursor: 'pointer',
-            marginBottom: '2rem',
-          }}
         >
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📄</div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+          <div className="resume-drop-zone-icon">📄</div>
+          <h3 className="resume-drop-zone-title">
             Drop resumes here
           </h3>
-          <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
+          <p className="resume-drop-zone-subtitle">
             or click to select files (PDF or DOCX, up to 100MB each)
           </p>
           <input
@@ -520,40 +963,29 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             type="file"
             multiple
             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            style={{ display: 'none' }}
+            className="resume-file-input"
             onChange={addFiles}
           />
           <button
-            className="touch-target"
             type="button"
             onClick={handleFileSelect}
-            style={{
-              background: 'var(--accent)',
-              color: 'var(--ink)',
-              border: 'none',
-              padding: '0.75rem 2rem',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-            }}
+            className="touch-target resume-select-files-button"
           >
             Select Files
           </button>
         </div>
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--muted)' }}>
+        <div className="resume-jd-selector">
+          <label className="resume-jd-selector-label">
             Select job description for this upload
           </label>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="resume-jd-selector-row">
             <select
               value={selectedJobDescriptionId}
               onChange={(event) => setSelectedJobDescriptionId(event.target.value)}
-              style={{ minWidth: 280, border: '1px solid var(--border)', borderRadius: 8, background: '#111827', color: '#fff', padding: '0.6rem' }}
+              className="resume-jd-select"
             >
-              {jobDescriptions.length === 0 && (
-                <option value="">No active/draft JD found</option>
-              )}
+              <option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>
               {jobDescriptions.map((jd) => (
                 <option key={jd.id} value={jd.id}>
                   {jd.title} ({jd.status})
@@ -561,54 +993,44 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               ))}
             </select>
             {isActiveSubscriber && (
-              <a href="/job-descriptions" style={{ color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
+              <a href="/job-descriptions" className="resume-manage-jd-link">
                 Manage job descriptions
               </a>
             )}
           </div>
+          <p className="resume-jd-selector-helper">
+            No JD selected = extract candidate profiles only; fit scoring will be limited.
+          </p>
         </div>
 
         {uploadedFiles.length > 0 && (
-          <div className="resume-file-list" style={{ marginBottom: '2rem' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+          <div className="resume-file-list">
+            <h3 className="resume-file-list-title">
               Selected Files ({uploadedFiles.length})
             </h3>
-            <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <div className="resume-file-list-grid">
               {uploadedFiles.map((f, i) => (
                 <div
                   className="resume-file-row"
                   key={i}
-                  style={{
-                    background: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    padding: '1rem',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
                 >
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <span style={{ fontSize: '1.5rem' }}>📄</span>
+                  <div className="resume-file-meta">
+                    <span className="resume-file-icon">📄</span>
                     <div>
-                      <div style={{ fontWeight: 'bold' }}>{f.name}</div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                      <div className="resume-file-name">{f.name}</div>
+                      <div className="resume-file-size">
                         {(f.size / 1024 / 1024).toFixed(2)} MB
                       </div>
+                      {f.restoredFromSession && (
+                        <div className="resume-file-size">
+                          Restored from previous session — re-select file to re-upload if retrying.
+                        </div>
+                      )}
                     </div>
                   </div>
                   <button
-                    className="touch-target"
+                    className="resume-remove-file-button"
                     onClick={() => removeFile(i)}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid var(--border)',
-                      color: 'var(--muted)',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                    }}
                   >
                     Remove
                   </button>
@@ -619,62 +1041,96 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         )}
 
         {isAnalyzing && uploadProgress.total > 0 && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ color: 'var(--muted)', textAlign: 'center', marginBottom: '0.5rem' }}>
+          <div className="resume-upload-progress">
+            <p className="resume-upload-progress-label">
               Upload progress: {uploadPercent}% ({uploadProgress.completed}/{uploadProgress.total} chunks)
             </p>
-            <div style={{ height: '10px', borderRadius: '999px', background: 'var(--border)', overflow: 'hidden' }}>
-              <div
-                style={{
-                  width: `${uploadPercent}%`,
-                  height: '100%',
-                  background: 'var(--accent)',
-                  transition: 'width 0.2s ease',
-                }}
-              />
+            <div className="resume-upload-progress-bar">
+              <progress className="resume-upload-progress-meter" value={uploadPercent} max={100} />
             </div>
           </div>
         )}
 
         {error && (
-          <div
-            style={{
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid #ef4444',
-              color: '#ef4444',
-              padding: '1rem',
-              borderRadius: '8px',
-              marginBottom: '1.5rem',
-              textAlign: 'left',
-              whiteSpace: 'pre-line',
-            }}
-          >
+          <div className="resume-error-banner">
             {error}
+            {providerErrorGuidance && (
+              <div className="resume-error-guidance">
+                <p>
+                  {providerErrorGuidance.provider || providerErrorGuidance.model
+                    ? `Provider context: ${[providerErrorGuidance.provider, providerErrorGuidance.model].filter(Boolean).join(' / ')}`
+                    : 'Provider context: check the active AI provider configuration.'}
+                </p>
+                {providerErrorGuidance.remediationSteps.length > 0 && (
+                  <ol>
+                    {providerErrorGuidance.remediationSteps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                )}
+                <a href={providerErrorGuidance.adminPath || '/admin/security'}>
+                  {providerErrorGuidance.actionHint || 'Go to Admin Security'}
+                </a>
+              </div>
+            )}
+            {canViewAdminDiagnostics && technicalErrorDetails && (
+              <details className="resume-error-details">
+                <summary className="resume-error-details-summary">Technical details</summary>
+                <pre className="resume-error-details-pre">
+                  {technicalErrorDetails}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
+
+        {failedAnalysisState && !jobStatuses.some((job) => job.status === 'failed') && (
+          <div className="resume-error-banner" role="alert">
+            <strong>{failedAnalysisState.message}</strong>
+            <p>{failedAnalysisState.detail}</p>
+            <div className="resume-actions resume-actions--failure">
+              <button type="button" className="touch-target resume-analyze-button" onClick={() => handleAnalyze()}>
+                Retry
+              </button>
+              <a href="/contact" className="touch-target resume-manage-jd-link">
+                Contact support
+              </a>
+            </div>
           </div>
         )}
 
         {isAnalyzing && parseStatus && (
-          <p style={{ color: 'var(--muted)', textAlign: 'center', marginBottom: '1rem' }}>
-            Parsing status: {parseStatus} ({parseProgress}%)
-          </p>
+          <>
+            <p className="resume-parse-status">
+              Parsing status: {parseStatus} ({parseProgress}%)
+            </p>
+            {jobStatuses.length > 0 && (
+              <p className="resume-parse-status">
+                Uploaded: {summarizeJobStatus(jobStatuses).uploaded} · Analyzed: {summarizeJobStatus(jobStatuses).analyzed} · Failed: {summarizeJobStatus(jobStatuses).failed} · Pending: {summarizeJobStatus(jobStatuses).pending}
+              </p>
+            )}
+          </>
         )}
 
-        <div className="resume-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+        {!isAnalyzing && jobStatuses.some((job) => job.status === 'failed') && (
+          <div className="resume-error-banner" role="status">
+            <strong>Some resumes failed to analyze.</strong>
+            <ul>
+              {jobStatuses.filter((job) => job.status === 'failed').map((job) => (
+                <li key={`failed-${job.jobId}`}>{job.filename || job.jobId}: {toUserFriendlyJobError(job.error)}</li>
+              ))}
+            </ul>
+            <button type="button" className="touch-target resume-analyze-button" onClick={() => handleAnalyze()}>
+              Retry failed resumes
+            </button>
+          </div>
+        )}
+
+        <div className="resume-actions">
           <button
-            className="touch-target"
-            onClick={handleAnalyze}
+            className={`touch-target resume-analyze-button ${uploadedFiles.length === 0 ? 'resume-analyze-button--disabled' : ''}`}
+            onClick={() => handleAnalyze()}
             disabled={uploadedFiles.length === 0 || isAnalyzing}
-            style={{
-              background: uploadedFiles.length === 0 ? 'var(--muted)' : 'var(--accent)',
-              color: 'var(--ink)',
-              border: 'none',
-              padding: '1rem 3rem',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              cursor: uploadedFiles.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: uploadedFiles.length === 0 ? 0.5 : 1,
-            }}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
           </button>

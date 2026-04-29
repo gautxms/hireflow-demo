@@ -13,14 +13,21 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
+    "build": "node scripts/generate-sitemap.mjs && vite build && node scripts/prerender-public-routes.mjs",
+    "lint": "eslint . && npm run lint:primitives",
+    "lint:duplicate-imports": "eslint \"backend/src/**/*.js\" --no-config-lookup --parser-options '{\"ecmaVersion\":\"latest\",\"sourceType\":\"module\"}' --rule \"no-duplicate-imports:error\"",
     "qa:admin-smoke": "node scripts/admin-smoke-checks.mjs",
     "preview": "vite preview",
     "backend:dev": "node --watch backend/src/index.js",
     "backend:start": "node backend/src/index.js",
     "start": "node ./backend/src/index.js",
-    "qa:admin-visual-baseline": "node scripts/verify-admin-visual-baseline.mjs"
+    "qa:admin-visual-baseline": "node scripts/verify-admin-visual-baseline.mjs",
+    "lint:style-tokens": "node scripts/check-style-token-compliance.mjs",
+    "lint:style-tokens:baseline": "node scripts/check-style-token-compliance.mjs --write-baseline",
+    "qa:contrast-a11y": "node scripts/audit-accessibility-contrast.mjs",
+    "lint:primitives": "node scripts/check-primitive-composition.mjs",
+    "lint:primitives:baseline": "node scripts/check-primitive-composition.mjs --write-baseline",
+    "qa:primitive-visual-baseline": "node scripts/verify-primitive-visual-baseline.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
@@ -42,7 +49,8 @@
     "nodemailer": "^6.10.1",
     "pg": "^8.16.3",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "lucide-react": "^0.542.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

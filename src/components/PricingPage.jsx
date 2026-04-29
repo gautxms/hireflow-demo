@@ -1,5 +1,13 @@
 import usePageSeo from '../hooks/usePageSeo'
 import PublicFooter from './PublicFooter'
+import '../styles/pricing-page-marketing.css'
+
+const FAQ_ITEMS = [
+  { q: 'Can I change plans anytime?', a: 'Yes, you can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.' },
+  { q: 'What if I need more resumes?', a: 'Contact our sales team for custom volume packages. We offer discounts for high-volume users.' },
+  { q: 'Is there a free trial?', a: 'Yes! Start with 14 days free on any plan. No credit card required.' },
+  { q: 'Do you offer annual billing?', a: 'Yes, save 20% with annual billing. Available on all plans.' }
+]
 
 export default function PricingPage() {
   usePageSeo('HireFlow Pricing', 'Explore HireFlow pricing plans for teams of every size, from starter recruiting workflows to enterprise hiring operations.')
@@ -59,139 +67,67 @@ export default function PricingPage() {
   ]
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '4rem 2rem', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-          Simple, Transparent Pricing
-        </h1>
-        <p style={{ fontSize: '1.1rem', color: 'var(--muted)', maxWidth: '600px', margin: '0 auto' }}>
-          Choose the plan that fits your hiring needs. Scale up anytime.
-        </p>
-      </div>
+    <div className="pricing-marketing-page">
+      <header className="pricing-marketing-page__header">
+        <h1 className="pricing-marketing-page__title">Simple, Transparent Pricing</h1>
+        <p className="pricing-marketing-page__subtitle">Choose the plan that fits your hiring needs. Scale up anytime.</p>
+      </header>
 
-      {/* Pricing Cards */}
-      <div style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
-          {plans.map(plan => (
-            <div
+      <section className="pricing-marketing-page__cards-section">
+        <div className="pricing-marketing-page__cards-grid">
+          {plans.map((plan) => (
+            <article
               key={plan.id}
-              style={{
-                border: plan.highlighted ? '2px solid var(--accent)' : '1px solid var(--border)',
-                borderRadius: '12px',
-                padding: '2.5rem',
-                background: plan.highlighted ? 'rgba(232,255,90,0.05)' : 'var(--card)',
-                position: 'relative',
-                transform: plan.highlighted ? 'scale(1.05)' : 'scale(1)',
-                transition: 'transform 0.3s ease'
-              }}
+              className={`pricing-marketing-card ${plan.highlighted ? 'pricing-marketing-card--highlighted' : ''}`}
             >
-              {plan.highlighted && (
-                <div style={{
-                  position: 'absolute',
-                  top: '-12px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: 'var(--accent)',
-                  color: 'var(--ink)',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '4px',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold'
-                }}>
-                  MOST POPULAR
-                </div>
-              )}
+              {plan.highlighted && <div className="pricing-marketing-card__badge">MOST POPULAR</div>}
 
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                {plan.name}
-              </h3>
-              <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-                {plan.description}
+              <h3 className="pricing-marketing-card__title">{plan.name}</h3>
+              <p className="pricing-marketing-card__description">{plan.description}</p>
+
+              <p className="pricing-marketing-card__price">
+                {plan.price}
+                <span className="pricing-marketing-card__period">{plan.period}</span>
               </p>
 
-              <div style={{ marginBottom: '2rem' }}>
-                <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>
-                  {plan.price}
-                  <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{plan.period}</span>
-                </div>
-              </div>
-
               <button
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  marginBottom: '2rem',
-                  background: plan.highlighted ? 'var(--accent)' : 'transparent',
-                  color: plan.highlighted ? 'var(--ink)' : 'var(--accent)',
-                  border: plan.highlighted ? 'none' : '2px solid var(--accent)',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  transition: 'all 0.2s'
-                }}
+                type="button"
+                className={`pricing-marketing-card__cta ${plan.highlighted ? 'pricing-marketing-card__cta--highlighted' : ''}`}
               >
                 {plan.cta}
               </button>
 
-              <div style={{ display: 'grid', gap: '1rem' }}>
-                {plan.features.map((feature, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                    <span style={{ color: 'var(--accent-2)', marginTop: '2px' }}>✓</span>
-                    <span style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>{feature}</span>
-                  </div>
+              <ul className="pricing-marketing-card__features">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="pricing-marketing-card__feature-item">
+                    <span className="pricing-marketing-card__check" aria-hidden="true">✓</span>
+                    <span className="pricing-marketing-card__feature-text">{feature}</span>
+                  </li>
                 ))}
-              </div>
+              </ul>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="pricing-marketing-page__faq-section">
+        <h2 className="pricing-marketing-page__section-title">Frequently Asked Questions</h2>
+
+        <div className="pricing-marketing-page__faq-list">
+          {FAQ_ITEMS.map((item) => (
+            <div key={item.q} className="pricing-marketing-page__faq-item">
+              <h4 className="pricing-marketing-page__faq-question">{item.q}</h4>
+              <p className="pricing-marketing-page__faq-answer">{item.a}</p>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* FAQ Section */}
-      <div style={{ padding: '4rem 2rem', borderTop: '1px solid var(--border)', background: 'var(--ink-2)' }}>
-        <h2 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '3rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
-          Frequently Asked Questions
-        </h2>
-
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'grid', gap: '2rem' }}>
-          {[
-            { q: 'Can I change plans anytime?', a: 'Yes, you can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.' },
-            { q: 'What if I need more resumes?', a: 'Contact our sales team for custom volume packages. We offer discounts for high-volume users.' },
-            { q: 'Is there a free trial?', a: 'Yes! Start with 14 days free on any plan. No credit card required.' },
-            { q: 'Do you offer annual billing?', a: 'Yes, save 20% with annual billing. Available on all plans.' }
-          ].map((item, i) => (
-            <div key={i} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1.5rem' }}>
-              <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>{item.q}</h4>
-              <p style={{ color: 'var(--muted)', lineHeight: '1.6' }}>{item.a}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-          Ready to hire smarter?
-        </h2>
-        <p style={{ color: 'var(--muted)', marginBottom: '2rem', fontSize: '1.1rem' }}>
-          Start your free trial today. No credit card required.
-        </p>
-        <button
-          style={{
-            background: 'var(--accent)',
-            color: 'var(--ink)',
-            border: 'none',
-            padding: '0.75rem 2rem',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            cursor: 'pointer'
-          }}
-        >
-          Start Free Trial
-        </button>
-      </div>
+      <section className="pricing-marketing-page__cta-section">
+        <h2 className="pricing-marketing-page__section-title">Ready to hire smarter?</h2>
+        <p className="pricing-marketing-page__cta-copy">Start your free trial today. No credit card required.</p>
+        <button type="button" className="pricing-marketing-page__cta-button">Start Free Trial</button>
+      </section>
 
       <PublicFooter />
     </div>

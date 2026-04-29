@@ -1,28 +1,14 @@
 import { useEffect } from 'react'
+import { applySeoToDocument, resolvePageSeo } from '../seo/pageSeo'
 
 export default function usePageSeo(title, description) {
   useEffect(() => {
-    const previousTitle = document.title
-    document.title = title
+    const seo = resolvePageSeo({ pathname: window.location.pathname, siteUrl: window.location.origin })
 
-    let descriptionTag = document.querySelector('meta[name="description"]')
-    const createdTag = !descriptionTag
-
-    if (!descriptionTag) {
-      descriptionTag = document.createElement('meta')
-      descriptionTag.name = 'description'
-      document.head.appendChild(descriptionTag)
-    }
-
-    const previousDescription = descriptionTag.getAttribute('content') || ''
-    descriptionTag.setAttribute('content', description)
-
-    return () => {
-      document.title = previousTitle
-      descriptionTag?.setAttribute('content', previousDescription)
-      if (createdTag && descriptionTag?.parentNode) {
-        descriptionTag.parentNode.removeChild(descriptionTag)
-      }
-    }
+    applySeoToDocument(document, {
+      ...seo,
+      title: title || seo.title,
+      description: description || seo.description,
+    })
   }, [description, title])
 }

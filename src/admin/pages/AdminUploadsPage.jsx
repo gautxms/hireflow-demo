@@ -104,16 +104,16 @@ export default function AdminUploadsPage({ onOpenDetails }) {
   return (
     <div className="admin-page">
 
-      {loadingStats ? <p className="text-sm text-slate-500">Loading stats…</p> : null}
+      {loadingStats ? <p className="text-sm text-admin-muted">Loading stats…</p> : null}
       {stats ? (
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="Total parses" value={stats.totalParses} />
-          <StatCard label="Success %" value={`${Number(stats.successRate || 0).toFixed(2)}%`} valueClassName="text-emerald-700" />
+          <StatCard label="Success %" value={`${Number(stats.successRate || 0).toFixed(2)}%`} valueClassName="admin-text-success" />
           <StatCard label="Total tokens" value={Number(stats.tokenUsage?.totalTokens || 0).toLocaleString()} />
           <StatCard label="Avg tokens/resume" value={Number(stats.tokenUsage?.avgTokensPerResume || 0).toLocaleString()} />
           <StatCard label="Token cost" value={`$${Number(stats.tokenUsage?.totalEstimatedCostUsd || 0).toFixed(4)}`} />
           <StatCard label="Avg parse time" value={`${Number(stats.avgTimeSeconds || 0).toFixed(2)}s`} />
-          <StatCard label="Failure count" value={stats.failures?.total || 0} valueClassName="text-rose-700" />
+          <StatCard label="Failure count" value={stats.failures?.total || 0} valueClassName="admin-text-danger" />
           <StatCard label="Usage missing" value={stats.tokenUsage?.usageUnavailableCount || 0} />
         </div>
       ) : null}
@@ -186,10 +186,10 @@ export default function AdminUploadsPage({ onOpenDetails }) {
   )
 }
 
-function StatCard({ label, value, valueClassName = 'text-slate-900' }) {
+function StatCard({ label, value, valueClassName = 'text-[var(--admin-text)]' }) {
   return (
     <div className="ui-card p-4">
-      <p className="text-sm text-slate-500">{label}</p>
+      <p className="text-sm text-admin-muted">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${valueClassName}`}>{value}</p>
     </div>
   )

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import BlockUserModal from '../components/BlockUserModal'
 import UserModal from '../components/UserModal'
 import useAdminUsers from '../hooks/useAdminUsers'
+import StatePattern from '../../components/state/StatePattern'
 
 function getPathUserId() {
   const segments = window.location.pathname.split('/').filter(Boolean)
@@ -30,9 +31,9 @@ export default function AdminUserDetailsPage({ userId: userIdProp }) {
     void loadUsers()
   }, [loadUsers])
 
-  if (loading) return <div className="admin-page"><div className="text-sm">Loading user…</div></div>
-  if (error) return <div className="admin-page"><div className="text-sm text-rose-500">{error}</div></div>
-  if (!user) return <div className="admin-page"><div className="text-sm">User not found.</div></div>
+  if (loading) return <div className="admin-page"><StatePattern kind="loading" title="Loading user…" description="Preparing profile, access, and subscription details." /></div>
+  if (error) return <div className="admin-page"><StatePattern kind="error" title="User details unavailable" description={error} /></div>
+  if (!user) return <div className="admin-page"><StatePattern kind="empty" title="User not found" description="This account may have been deleted or you may not have permission to view it." /></div>
 
   return (
     <>

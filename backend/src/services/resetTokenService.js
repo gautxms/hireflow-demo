@@ -76,7 +76,7 @@ export async function getValidResetTokenRecord(token) {
   return result.rows[0] || null
 }
 
-export async function markTokenUsedAndResetPassword({ tokenId, userId, newPassword }) {
+export async function markTokenUsedAndResetPassword({ tokenId, userId, passwordHash }) {
   const client = await pool.connect()
 
   try {
@@ -84,9 +84,9 @@ export async function markTokenUsedAndResetPassword({ tokenId, userId, newPasswo
 
     await client.query(
       `UPDATE users
-       SET password_hash = crypt($1, gen_salt('bf', 10))
+       SET password_hash = $1
        WHERE id = $2`,
-      [newPassword, userId],
+      [passwordHash, userId],
     )
 
     await client.query(

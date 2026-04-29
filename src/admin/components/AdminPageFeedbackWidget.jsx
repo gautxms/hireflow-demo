@@ -39,25 +39,27 @@ export default function AdminPageFeedbackWidget({ routeContext }) {
   }
 
   return (
-    <section className="ui-card p-4" style={{ marginTop: 20 }}>
-      <h2 className="text-base font-semibold text-slate-900">Was this page useful?</h2>
-      <p className="mt-1 text-sm text-slate-600">Feedback is tied to <code>{routeContext}</code> for weekly UX triage.</p>
-      <form className="mt-3 space-y-3" onSubmit={onSubmit}>
-        <div className="flex gap-2">
-          <button type="button" className={`ui-btn ${choice === true ? 'bg-slate-900 text-white' : ''}`} onClick={() => setChoice(true)}>Yes</button>
-          <button type="button" className={`ui-btn ${choice === false ? 'bg-slate-900 text-white' : ''}`} onClick={() => setChoice(false)}>No</button>
+    <section className="ui-card ui-card--card-spacing admin-feedback">
+      <h2 className="admin-section-title">Was this page useful?</h2>
+      <p className="admin-page__subtitle">Feedback is tied to <code>{routeContext}</code> for weekly UX triage.</p>
+      <form className="admin-feedback__form" onSubmit={onSubmit}>
+        <div className="admin-feedback__choice-group" role="group" aria-label="Feedback choice">
+          <button type="button" className={`ui-btn ${choice === true ? 'ui-btn--primary' : ''}`} onClick={() => setChoice(true)}>Yes</button>
+          <button type="button" className={`ui-btn ${choice === false ? 'ui-btn--primary' : ''}`} onClick={() => setChoice(false)}>No</button>
         </div>
         <textarea
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="ui-input admin-feedback__comment"
           rows={3}
           placeholder="Optional: what was confusing or missing?"
           value={comment}
           onChange={(event) => setComment(event.target.value)}
         />
-        <button className="ui-btn" type="submit" disabled={submitting}>{submitting ? 'Sending…' : 'Send feedback'}</button>
+        <div className="admin-feedback__submit-row">
+          <button className="ui-btn ui-btn--primary" type="submit" disabled={submitting}>{submitting ? 'Sending…' : 'Send feedback'}</button>
+        </div>
       </form>
-      {status ? <p className="mt-2 text-sm text-sky-700">{status}</p> : null}
-      {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+      {status ? <p className="admin-inline-alert admin-inline-alert--info">{status}</p> : null}
+      {error ? <p className="admin-inline-alert admin-inline-alert--error">{error}</p> : null}
     </section>
   )
 }

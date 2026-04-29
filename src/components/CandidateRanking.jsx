@@ -56,45 +56,54 @@ const MOCK_CANDIDATES = [
   },
 ]
 
+const STATS = [
+  {
+    value: '3',
+    label: 'Candidates Analyzed',
+    classes: 'bg-[var(--color-accent-alpha-08)] border-[color:var(--color-accent-alpha-15)] text-[var(--color-accent-green)]',
+  },
+  {
+    value: '1',
+    label: 'Strong Matches',
+    classes: 'bg-[var(--color-success-alpha-12)] border-[color:var(--color-success-alpha-35)] text-[var(--color-success-text)]',
+  },
+  {
+    value: '86%',
+    label: 'Average Quality',
+    classes: 'bg-[var(--color-white-alpha-04)] border-[var(--border)] text-[var(--color-text-primary)]',
+  },
+]
+
 export default function CandidateRanking() {
   return (
     <div className="space-y-8 pb-8">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl border border-indigo-200 p-6 text-center hover:shadow-lg transition">
-          <div className="text-4xl font-black text-indigo-600 mb-2">3</div>
-          <p className="text-sm font-semibold text-indigo-700">Candidates Analyzed</p>
-        </div>
-        <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200 p-6 text-center hover:shadow-lg transition">
-          <div className="text-4xl font-black text-green-600 mb-2">1</div>
-          <p className="text-sm font-semibold text-green-700">Strong Matches</p>
-        </div>
-        <div className="bg-gradient-to-br from-blue-50 to-cyan-100 rounded-xl border border-blue-200 p-6 text-center hover:shadow-lg transition">
-          <div className="text-4xl font-black text-blue-600 mb-2">86%</div>
-          <p className="text-sm font-semibold text-blue-700">Average Quality</p>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {STATS.map((stat) => (
+          <div key={stat.label} className={`rounded-[var(--radius-lg)] border p-6 text-center shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)] ${stat.classes}`}>
+            <div className="mb-2 text-4xl font-black">{stat.value}</div>
+            <p className="text-sm font-semibold">{stat.label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* AI Summary Box */}
-      <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl p-8 shadow-xl text-white">
+      <div className="rounded-[var(--radius-lg)] border border-[color:var(--color-accent-alpha-15)] bg-[var(--color-accent-alpha-08)] p-8 shadow-[var(--shadow-md)] text-[var(--color-text-primary)]">
         <div className="flex items-start gap-4">
-          <div className="text-4xl flex-shrink-0">✨</div>
+          <div className="shrink-0 text-4xl">✨</div>
           <div>
-            <h2 className="text-2xl font-bold mb-3">
+            <h2 className="mb-3 text-2xl font-bold">
               AI-Powered Summary
             </h2>
-            <p className="text-indigo-100 leading-relaxed text-base">
-              Sarah Chen stands out as the <span className="font-semibold text-white">top match</span> with exceptional full-stack capabilities. Marcus brings strong backend expertise, ideal for infrastructure work. Elena offers enterprise experience. We recommend starting interviews with Sarah and Marcus.
+            <p className="text-base leading-relaxed text-[var(--color-text-secondary)]">
+              Sarah Chen stands out as the <span className="font-semibold text-[var(--color-text-primary)]">top match</span> with exceptional full-stack capabilities. Marcus brings strong backend expertise, ideal for infrastructure work. Elena offers enterprise experience. We recommend starting interviews with Sarah and Marcus.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Candidate Rankings */}
       <div className="space-y-4">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-3xl font-bold text-slate-900">Top Candidates</h2>
-          <span className="text-sm text-slate-600">Ranked by fit</span>
+          <h2 className="text-3xl font-bold text-[var(--color-text-primary)]">Top Candidates</h2>
+          <span className="text-sm text-[var(--color-text-secondary)]">Ranked by fit</span>
         </div>
         <div className="space-y-4">
           {MOCK_CANDIDATES.map((candidate, index) => (
@@ -107,26 +116,24 @@ export default function CandidateRanking() {
         </div>
       </div>
 
-      {/* Next Steps CTA */}
-      <div className="bg-white rounded-2xl border-2 border-slate-200 p-8 text-center hover:shadow-xl transition">
-        <h3 className="text-2xl font-bold text-slate-900 mb-3">
+      <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--card)] p-8 text-center shadow-[var(--shadow-md)] transition hover:shadow-[var(--shadow-lg)]">
+        <h3 className="mb-3 text-2xl font-bold text-[var(--color-text-primary)]">
           Ready to Move Forward?
         </h3>
-        <p className="text-slate-600 mb-6 max-w-2xl mx-auto">
+        <p className="mx-auto mb-6 max-w-2xl text-[var(--color-text-secondary)]">
           This is just the beginning. HireFlow can help you schedule interviews, send candidate feedback, and track your hiring pipeline in real time.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 shadow-lg">
+        <div className="flex flex-col justify-center gap-4 sm:flex-row">
+          <button className="rounded-[var(--radius-lg)] bg-[var(--color-accent-green)] px-6 py-3 font-bold text-[var(--color-bg-primary)] transition hover:brightness-95">
             Schedule Interviews
           </button>
-          <button className="border-2 border-slate-300 hover:border-indigo-600 text-slate-700 hover:text-indigo-600 font-bold py-3 px-6 rounded-xl transition">
+          <button className="rounded-[var(--radius-lg)] border border-[var(--color-accent-green)] px-6 py-3 font-bold text-[var(--color-accent-green)] transition hover:bg-[var(--color-accent-alpha-08)]">
             View Full Reports
           </button>
         </div>
       </div>
 
-      {/* Footer Note */}
-      <div className="text-center text-sm text-slate-500">
+      <div className="text-center text-sm text-[var(--color-text-secondary)]">
         <p>This is a demo. Real scoring uses AI to analyze 20+ dimensions: skills, culture fit, experience, communication, and more.</p>
       </div>
     </div>

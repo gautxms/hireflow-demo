@@ -14,9 +14,9 @@ const COLUMNS = [
 
 export default function UsersTable({ users, loading, sortBy, sortDirection, onSort, onSelectUser, onToggleBlock }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-50 text-slate-600">
+    <div className="admin-table-surface overflow-hidden">
+      <table className="admin-table text-left text-sm">
+        <thead className="">
           <tr>
             {COLUMNS.map((column) => (
               <th key={column.key} className="px-4 py-3">
@@ -32,13 +32,13 @@ export default function UsersTable({ users, loading, sortBy, sortDirection, onSo
         {loading ? <TableSkeleton columns={5} rows={5} /> : (
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => onSelectUser(user)}>
+              <tr key={user.id} className="cursor-pointer  hover:bg-[var(--color-white-alpha-03)]" onClick={() => onSelectUser(user)}>
                 <td className="px-4 py-3">{user.email}</td>
                 <td className="px-4 py-3">{user.company || '—'}</td>
                 <td className="px-4 py-3">{user.subscription_status || '—'}</td>
                 <td className="px-4 py-3">{formatDate(user.created_at)}</td>
                 <td className="px-4 py-3">
-                  <button className={`rounded-md px-3 py-1.5 text-xs font-medium text-white ${user.status === 'blocked' ? 'bg-emerald-600' : 'bg-rose-600'}`} onClick={(event) => { event.stopPropagation(); onToggleBlock(user) }}>
+                  <button className="ui-btn ui-btn--primary text-xs" onClick={(event) => { event.stopPropagation(); onToggleBlock(user) }}>
                     {user.status === 'blocked' ? 'Unblock' : 'Block'}
                   </button>
                 </td>

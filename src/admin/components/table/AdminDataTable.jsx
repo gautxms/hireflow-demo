@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { EmptyState, TableSkeleton } from '../WidgetState'
 
 function SortIndicator({ active, direction }) {
@@ -10,10 +10,10 @@ function DetailsDrawer({ title, row, onClose, renderDetails }) {
   if (!row) return null
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/45" role="dialog" aria-modal="true" aria-label={`${title} details`}>
-      <div className="ui-card h-full w-full max-w-xl overflow-y-auto p-5">
+    <div className="ui-modal ui-modal--end" role="dialog" aria-modal="true" aria-label={`${title} details`}>
+      <div className="ui-card ui-card--card-spacing ui-modal__dialog h-full w-full max-w-xl overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">{title} details</h3>
+          <h3 className="text-lg font-semibold text-admin-strong">{title} details</h3>
           <button type="button" className="ui-btn" onClick={onClose}>Close</button>
         </div>
         {renderDetails(row)}
@@ -59,13 +59,22 @@ export default function AdminDataTable({
   const totalColumns = columns.length
   const visibleRows = useMemo(() => rows || [], [rows])
 
+  useEffect(() => {
+    const handleRouteChange = () => setSelectedRow(null)
+
+    window.addEventListener('popstate', handleRouteChange)
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange)
+    }
+  }, [])
+
   return (
     <section className="ui-card space-y-4 p-4 md:p-5">
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-slate-950">{title}</h2>
-            {subtitle ? <p className="text-sm text-slate-700">{subtitle}</p> : null}
+            <h2 className="text-xl font-semibold text-admin-strong">{title}</h2>
+            {subtitle ? <p className="text-sm text-admin-body">{subtitle}</p> : null}
           </div>
           <div className="flex flex-wrap gap-2">
             {csvExportUrl ? <a href={csvExportUrl} className="ui-btn">Export CSV</a> : null}
@@ -163,7 +172,7 @@ export default function AdminDataTable({
       </div>
 
       {pagination ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-admin-body">
           <span>
             Page {pagination.page} of {pagination.totalPages}
             {typeof pagination.total === 'number' ? ` · ${pagination.total} records` : ''}

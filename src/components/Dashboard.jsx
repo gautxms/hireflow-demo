@@ -72,35 +72,35 @@ export default function Dashboard({ onNavigate }) {
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'DONE': return 'bg-emerald-500 bg-opacity-20 text-emerald-300'
-      case 'IN_PROGRESS': return 'bg-blue-500 bg-opacity-20 text-blue-300'
-      case 'PENDING': return 'bg-amber-500 bg-opacity-20 text-amber-300'
-      default: return 'bg-gray-500 bg-opacity-20 text-gray-300'
+      case 'DONE': return 'bg-[var(--color-success-alpha-12)] text-[var(--color-success-text)]'
+      case 'IN_PROGRESS': return 'bg-[var(--color-accent-alpha-08)] text-[var(--color-accent-green)]'
+      case 'PENDING': return 'bg-[var(--color-warning-alpha-12)] text-[var(--color-warning-text)]'
+      default: return 'bg-[var(--color-white-alpha-08)] text-[var(--color-text-secondary)]'
     }
   }
 
   const getPriorityColor = (priority) => {
     switch(priority) {
-      case 'CRITICAL': return 'text-red-400'
-      case 'HIGH': return 'text-orange-400'
-      case 'MEDIUM': return 'text-yellow-400'
-      default: return 'text-gray-400'
+      case 'CRITICAL': return 'text-[var(--color-error)]'
+      case 'HIGH': return 'text-[var(--color-warning-text)]'
+      case 'MEDIUM': return 'text-[var(--color-accent-green)]'
+      default: return 'text-[var(--color-text-secondary)]'
     }
   }
 
   return (
-    <div style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>HireFlow Operations</h1>
-          <p style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>Goal: 5 beta customers by week 8 | Current: Week 1 (warm outreach)</p>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>Goal: 5 beta customers by week 8 | Current: Week 1 (warm outreach)</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button onClick={() => onNavigate?.('settings')} style={{
             background: 'transparent',
             border: '1px solid var(--border)',
-            color: 'var(--accent)',
+            color: 'var(--color-accent-green)',
             padding: '0.5rem 1rem',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -111,7 +111,7 @@ export default function Dashboard({ onNavigate }) {
           <button onClick={() => onNavigate?.('landing')} style={{
             background: 'transparent',
             border: '1px solid var(--border)',
-            color: 'var(--muted)',
+            color: 'var(--color-text-secondary)',
             padding: '0.5rem 1rem',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -137,22 +137,22 @@ export default function Dashboard({ onNavigate }) {
             }}>
               <div>
                 <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>{agent.name}</div>
-                <div style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>{agent.role}</div>
+                <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{agent.role}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--muted)' }}>Status</div>
-                <div style={{ color: 'var(--accent-2)', fontWeight: 'bold' }}>{agent.status}</div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Status</div>
+                <div style={{ color: 'var(--color-accent-green-hover)', fontWeight: 'bold' }}>{agent.status}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--muted)' }}>Done</div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Done</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{agent.tasksDone}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--muted)' }}>In Progress</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--accent)' }}>{agent.tasksInProgress}</div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>In Progress</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-accent-green)' }}>{agent.tasksInProgress}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--muted)' }}>Assigned</div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Assigned</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{agent.tasksAssigned}</div>
               </div>
             </div>
@@ -175,9 +175,9 @@ export default function Dashboard({ onNavigate }) {
                 <div>
                   <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '1.05rem' }}>{task.title}</div>
                   <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem' }}>
-                    <span style={{ color: 'var(--muted)' }}>Agent: {task.agent}</span>
+                    <span style={{ color: 'var(--color-text-secondary)' }}>Agent: {task.agent}</span>
                     <span className={getPriorityColor(task.priority)}>Priority: {task.priority}</span>
-                    <span style={{ color: 'var(--muted)' }}>Due: {task.dueDate}</span>
+                    <span style={{ color: 'var(--color-text-secondary)' }}>Due: {task.dueDate}</span>
                   </div>
                 </div>
                 <span className={getStatusColor(task.status)} style={{ padding: '0.5rem 1rem', borderRadius: '4px', fontSize: '0.875rem', fontWeight: 'bold' }}>
@@ -187,13 +187,13 @@ export default function Dashboard({ onNavigate }) {
               {/* Progress bar */}
               <div style={{ background: 'rgba(0,0,0,0.3)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{
-                  background: task.progress === 100 ? 'var(--accent-2)' : 'var(--accent)',
+                  background: task.progress === 100 ? 'var(--color-accent-green-hover)' : 'var(--color-accent-green)',
                   height: '100%',
                   width: `${task.progress}%`,
-                  transition: 'width 0.3s ease'
+                  transition: 'width var(--motion-duration-slow) var(--motion-ease-standard)'
                 }} />
               </div>
-              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--muted)' }}>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
                 {task.progress}% complete
               </div>
             </div>
@@ -217,20 +217,20 @@ export default function Dashboard({ onNavigate }) {
           ].map(item => (
             <div key={item.week} style={{
               background: item.status === 'IN_PROGRESS' ? 'rgba(232,255,90,0.1)' : 'var(--card)',
-              border: item.status === 'IN_PROGRESS' ? '1px solid var(--accent)' : '1px solid var(--border)',
+              border: item.status === 'IN_PROGRESS' ? '1px solid var(--color-accent-green)' : '1px solid var(--border)',
               borderRadius: '8px',
               padding: '1rem',
               textAlign: 'center'
             }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--accent)' }}>W{item.week}</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--muted)', lineHeight: '1.3' }}>{item.milestone}</div>
+              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--color-accent-green)' }}>W{item.week}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: '1.3' }}>{item.milestone}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Footer */}
-      <div style={{ padding: '2rem 4rem', borderTop: '1px solid var(--border)', textAlign: 'center', color: 'var(--muted)', fontSize: '0.875rem' }}>
+      <div style={{ padding: '2rem 4rem', borderTop: '1px solid var(--border)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
         Last updated: {new Date().toLocaleString()}
       </div>
     </div>

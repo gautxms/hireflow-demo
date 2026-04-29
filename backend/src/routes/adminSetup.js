@@ -1,14 +1,8 @@
 import { Router } from 'express'
-import crypto from 'crypto'
 import { pool } from '../db/client.js'
+import { hashPassword } from '../services/passwordHash.js'
 
 const router = Router()
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16)
-  const hash = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256')
-  return `$pbkdf2$${salt.toString('hex')}$${hash.toString('hex')}`
-}
 
 async function adminExists() {
   const result = await pool.query('SELECT 1 FROM users WHERE is_admin = true LIMIT 1')

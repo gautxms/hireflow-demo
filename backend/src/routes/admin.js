@@ -5,8 +5,143 @@ import { getRateLimitStats } from '../middleware/rateLimiter.js'
 import { createPasswordResetToken, generateResetToken } from '../services/resetTokenService.js'
 import { sendPasswordResetEmail } from '../utils/mailer.js'
 import { createAdminSession, listAdminSessions, revokeOtherAdminSessions, setAdminCookie } from '../middleware/adminAuth.js'
+import {
+  getAdminAiProviderSettings,
+  KEY_LABELS,
+  SUPPORTED_PROVIDERS,
+  getActiveAiProviderCredentials,
+  upsertAdminAiProviderKeys,
+  validateAiProviderModelConfiguration,
+  syncProviderModelRegistry,
+} from '../services/aiProviderConfigService.js'
+import {
+  getAdminSystemPrompt,
+  resetAdminSystemPromptToDefault,
+  upsertAdminSystemPrompt,
+  validateSystemPromptInput,
+} from '../services/adminSystemPromptService.js'
+import { isValidModelFormat } from '../config/aiModels.js'
 
 const router = Router()
+const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = [...SUPPORTED_PROVIDERS]
+const CONNECTION_TEST_TIMEOUT_MS = 15000
+
+function normalizeProviderError(error) {
+  const status = Number(error?.status || error?.statusCode || 0)
+  const message = String(error?.message || 'Unknown provider error')
+  const lower = message.toLowerCase()
+  const normalizedCode = status === 401 || lower.includes('authentication') || lower.includes('invalid api key')
+    ? 'auth_error'
+    : status === 404 || lower.includes('model not found') || lower.includes('not found')
+      ? 'invalid_model'
+      : status === 429 || lower.includes('rate limit')
+        ? 'rate_limit'
+        : lower.includes('timeout')
+          ? 'timeout'
+          : 'unknown'
+
+  return {
+    code: normalizedCode,
+    status: Number.isFinite(status) && status > 0 ? status : null,
+    message,
+  }
+}
+
+function remediationStepsForProviderError(provider, keyLabel, providerError = {}) {
+  const code = String(providerError?.code || '').trim().toLowerCase()
+  if (code === 'auth_error') {
+    return [
+      `Update the ${provider} ${keyLabel} API key and verify it has model access.`,
+      'Retry the connection test after rotating the key.',
+    ]
+  }
+  if (code === 'invalid_model') {
+    return [
+      'Confirm the model id is correct and available for your account.',
+      `Sync ${provider} models in Admin and re-run the connection test.`,
+    ]
+  }
+  if (code === 'rate_limit') {
+    return [
+      'Retry after provider rate limits reset.',
+      'If this persists, reduce test frequency or review provider quota limits.',
+    ]
+  }
+  if (code === 'timeout') {
+    return [
+      'Retry the connection test to rule out transient network issues.',
+      'If failures continue, verify provider status and outbound network access.',
+    ]
+  }
+  return [
+    'Review provider error details and retry the connection test.',
+    `If the issue persists, switch to a known working ${provider} model.`,
+  ]
+}
+
+async function runProviderConnectionTest({ provider, apiKey, model }) {
+  const baseHeaders = {
+    'Content-Type': 'application/json',
+  }
+  const headers = provider === 'anthropic'
+    ? {
+        ...baseHeaders,
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      }
+    : {
+        ...baseHeaders,
+        Authorization: `Bearer ${apiKey}`,
+      }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), CONNECTION_TEST_TIMEOUT_MS)
+
+  try {
+    const requestBody = provider === 'anthropic'
+      ? {
+          model,
+          max_tokens: 8,
+          messages: [{ role: 'user', content: 'Respond with: ok' }],
+        }
+      : {
+          model,
+          max_output_tokens: 8,
+          input: 'Respond with: ok',
+        }
+
+    const response = await fetch(
+      provider === 'anthropic' ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/responses',
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) {
+      let body = null
+      try {
+        body = await response.json()
+      } catch {
+        body = null
+      }
+      throw {
+        status: response.status,
+        message: body?.error?.message || body?.message || `HTTP ${response.status}`,
+      }
+    }
+
+    return { ok: true }
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      return { ok: false, error: { code: 'timeout', status: null, message: 'Connection test timed out.' } }
+    }
+    return { ok: false, error: normalizeProviderError(error) }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 function getMonthStart(inputDate) {
   const date = inputDate ? new Date(inputDate) : new Date()
@@ -19,6 +154,68 @@ function toIso(value) {
 
 function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+}
+
+function buildConnectionTestMetaKey(provider, keyLabel, model) {
+  return `${provider}:${keyLabel}:${String(model || '').trim()}`
+}
+
+async function persistSuccessfulConnectionTest({ provider, keyLabel, model, successfulAt, adminId = null }) {
+  if (!provider || !keyLabel || !model || !successfulAt) return
+
+  const metaKey = buildConnectionTestMetaKey(provider, keyLabel, model)
+
+  await pool.query(
+    `INSERT INTO admin_ai_settings (id, active_provider, settings_metadata, updated_by)
+     VALUES (
+       true,
+       COALESCE((SELECT active_provider FROM admin_ai_settings WHERE id = true), 'anthropic'),
+       jsonb_build_object('connectionTestsByModel', jsonb_build_object($1::text, to_jsonb($2::text))),
+       $3
+     )
+     ON CONFLICT (id) DO UPDATE
+       SET settings_metadata = jsonb_set(
+             COALESCE(admin_ai_settings.settings_metadata, '{}'::jsonb),
+             ARRAY['connectionTestsByModel', $1::text],
+             to_jsonb($2::text),
+             true
+           ),
+           updated_by = EXCLUDED.updated_by,
+           updated_at = NOW()`,
+    [metaKey, successfulAt, adminId || null],
+  )
+}
+
+function collectProviderConfigChanges(updateFlags = {}) {
+  const keyRotations = []
+  const modelChanges = []
+  const providers = updateFlags?.providers && typeof updateFlags.providers === 'object' ? updateFlags.providers : {}
+
+  for (const [provider, providerFlags] of Object.entries(providers)) {
+    if (providerFlags?.primaryKeyUpdated) keyRotations.push(`${provider}:primary`)
+    if (providerFlags?.fallbackKeyUpdated) keyRotations.push(`${provider}:fallback`)
+    if (providerFlags?.primaryModelUpdated) modelChanges.push(`${provider}:primary`)
+    if (providerFlags?.fallbackModelUpdated) modelChanges.push(`${provider}:fallback`)
+  }
+
+  return { keyRotations, modelChanges }
+}
+
+function buildChangedFields(updateFlags = {}) {
+  const changedFields = []
+  if (updateFlags?.activeProviderUpdated) changedFields.push('activeProvider')
+  if (updateFlags?.aiEnabledUpdated) changedFields.push('governance.aiEnabled')
+  if (updateFlags?.workflowTogglesUpdated) changedFields.push('governance.workflowToggles.resumeAnalysisEnabled')
+
+  const providers = updateFlags?.providers && typeof updateFlags.providers === 'object' ? updateFlags.providers : {}
+  for (const [provider, providerFlags] of Object.entries(providers)) {
+    if (providerFlags?.primaryKeyUpdated) changedFields.push(`providers.${provider}.primary.apiKey`)
+    if (providerFlags?.primaryModelUpdated) changedFields.push(`providers.${provider}.primary.model`)
+    if (providerFlags?.fallbackKeyUpdated) changedFields.push(`providers.${provider}.fallback.apiKey`)
+    if (providerFlags?.fallbackModelUpdated) changedFields.push(`providers.${provider}.fallback.model`)
+  }
+
+  return changedFields
 }
 
 function buildResetUrl(token) {
@@ -45,6 +242,530 @@ async function recordAdminAction({ adminId, actionType, targetId, details = {}, 
     [adminId, actionType, targetId || null, JSON.stringify(details || {}), ipAddress],
   )
 }
+
+
+function normalizeInquiryRow(row) {
+  return {
+    id: row.id,
+    inquiry_type: row.inquiry_type,
+    status: row.status,
+    name: row.name,
+    email: row.email,
+    company: row.company,
+    phone: row.phone,
+    subject: row.subject,
+    message: row.message,
+    metadata: row.metadata || {},
+    created_at: toIso(row.created_at),
+    updated_at: toIso(row.updated_at),
+    reviewed_at: toIso(row.reviewed_at),
+    reviewed_by: row.reviewed_by || null,
+  }
+}
+
+router.get('/ai-settings', async (_req, res) => {
+  try {
+    const [settings, modelValidation] = await Promise.all([
+      getAdminAiProviderSettings(),
+      validateAiProviderModelConfiguration(),
+    ])
+    return res.json({
+      ...settings,
+      modelWarnings: Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : [],
+      allowedModelsByProvider: modelValidation?.allowedModelsByProvider || {},
+    })
+  } catch (error) {
+    console.error('[Admin ai-settings] get failed:', error)
+    return res.status(500).json({ error: 'Unable to load AI settings' })
+  }
+})
+
+router.post('/ai-settings/test-connection', async (req, res) => {
+  const provider = String(req.body?.provider || '').trim().toLowerCase()
+  const keyLabel = String(req.body?.keyLabel || 'primary').trim().toLowerCase()
+  const model = String(req.body?.model || '').trim()
+  const directApiKey = String(req.body?.apiKey || '').trim()
+
+  if (!SUPPORTED_PROVIDERS.includes(provider)) {
+    return res.status(400).json({ error: `provider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}` })
+  }
+  if (!KEY_LABELS.includes(keyLabel)) {
+    return res.status(400).json({ error: `keyLabel must be one of: ${KEY_LABELS.join(', ')}` })
+  }
+  if (!model) {
+    return res.status(400).json({ error: 'model is required.' })
+  }
+
+  try {
+    const credentials = await getActiveAiProviderCredentials()
+    const persistedApiKey = credentials?.providers?.[provider]?.[keyLabel]?.apiKey || ''
+    const apiKey = directApiKey || persistedApiKey
+    if (!apiKey) {
+      return res.status(400).json({ error: `No API key configured for ${provider} ${keyLabel}.` })
+    }
+
+    const testResult = await runProviderConnectionTest({ provider, apiKey, model })
+    if (!testResult.ok) {
+      const providerError = testResult?.error || {}
+      return res.status(400).json({
+        ok: false,
+        provider,
+        keyLabel,
+        model,
+        validationTier: 'provider_rejected',
+        remediationSteps: remediationStepsForProviderError(provider, keyLabel, providerError),
+        ...testResult,
+      })
+    }
+
+    const successfulAt = new Date().toISOString()
+    await persistSuccessfulConnectionTest({
+      provider,
+      keyLabel,
+      model,
+      successfulAt,
+      adminId: req.admin?.id || null,
+    })
+
+    return res.json({
+      ok: true,
+      provider,
+      keyLabel,
+      model,
+      testedAt: successfulAt,
+      successfulAt,
+      message: 'Connection successful.',
+    })
+  } catch (error) {
+    console.error('[Admin ai-settings] connection test failed:', error)
+    return res.status(500).json({ error: 'Unable to test provider connection.' })
+  }
+})
+
+router.post('/ai-settings/sync-models', async (req, res) => {
+  const provider = String(req.query?.provider || '').trim().toLowerCase()
+  if (!SUPPORTED_PROVIDERS.includes(provider)) {
+    return res.status(400).json({ error: `provider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}` })
+  }
+
+  try {
+    const syncResult = await syncProviderModelRegistry({
+      provider,
+      adminId: req.adminUser?.id || null,
+    })
+    await recordAdminAction({
+      adminId: req.adminUser?.id || null,
+      actionType: 'admin_ai_model_registry_synced',
+      targetId: provider,
+      details: syncResult,
+      ipAddress: req.ip || null,
+    })
+
+    const [settings, modelValidation] = await Promise.all([
+      getAdminAiProviderSettings(),
+      validateAiProviderModelConfiguration(),
+    ])
+
+    return res.json({
+      ok: true,
+      ...syncResult,
+      settings,
+      modelWarnings: Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : [],
+      allowedModelsByProvider: modelValidation?.allowedModelsByProvider || {},
+    })
+  } catch (error) {
+    return res.status(502).json({
+      ok: false,
+      provider,
+      error: String(error?.message || 'Unable to sync provider models.'),
+      fallbackManualEntry: true,
+    })
+  }
+})
+
+router.put('/ai-settings', async (req, res) => {
+  const activeProvider = String(req.body?.activeProvider || req.body?.provider || 'anthropic').trim().toLowerCase()
+  const providers = req.body?.providers
+
+  try {
+    const existingSettings = await getAdminAiProviderSettings()
+    const hasConfiguredKey = SUPPORTED_PROVIDERS.some((provider) => {
+      const config = existingSettings?.providers?.[provider]
+      return Boolean(config?.primary?.configured || config?.fallback?.configured)
+    })
+
+    const payload = providers && typeof providers === 'object'
+      ? req.body
+      : {
+          activeProvider,
+          providers: {
+            anthropic: {
+              primary: {
+                apiKey: req.body?.primaryApiKey,
+                model: req.body?.primaryModel,
+              },
+              fallback: {
+                apiKey: req.body?.fallbackApiKey,
+                model: req.body?.fallbackModel,
+              },
+            },
+          },
+        }
+
+    const normalizedActiveProvider = String(payload?.activeProvider || 'anthropic').trim().toLowerCase()
+    if (!SUPPORTED_PROVIDERS.includes(normalizedActiveProvider)) {
+      return res.status(400).json({ error: `activeProvider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}` })
+    }
+    if (!RUNTIME_SUPPORTED_ACTIVE_PROVIDERS.includes(normalizedActiveProvider)) {
+      return res.status(400).json({
+        error: `activeProvider=${normalizedActiveProvider} is not available yet. Currently supported: ${RUNTIME_SUPPORTED_ACTIVE_PROVIDERS.join(', ')}`,
+      })
+    }
+
+    const governance = payload?.governance && typeof payload.governance === 'object'
+      ? payload.governance
+      : existingSettings?.governance || {}
+
+    const incomingProviders = payload?.providers
+    if (!incomingProviders || typeof incomingProviders !== 'object') {
+      return res.status(400).json({ error: 'providers object is required.' })
+    }
+
+    const invalidProviderKeys = Object.keys(incomingProviders).filter((provider) => !SUPPORTED_PROVIDERS.includes(provider))
+    if (invalidProviderKeys.length > 0) {
+      return res.status(400).json({ error: `Unsupported provider(s): ${invalidProviderKeys.join(', ')}` })
+    }
+
+    let hasIncomingKey = false
+    const providerValidationResults = Array.isArray(payload?.providerValidationResults)
+      ? payload.providerValidationResults
+      : []
+    const validationPolicy = payload?.validationPolicy && typeof payload.validationPolicy === 'object'
+      ? payload.validationPolicy
+      : {}
+    for (const provider of Object.keys(incomingProviders)) {
+      const providerPayload = incomingProviders[provider]
+      if (!providerPayload || typeof providerPayload !== 'object') {
+        return res.status(400).json({ error: `providers.${provider} must be an object.` })
+      }
+
+      for (const keyLabel of KEY_LABELS) {
+        const entry = providerPayload[keyLabel]
+        if (!entry || typeof entry !== 'object') continue
+
+        const apiKey = String(entry.apiKey || '').trim()
+        const hasModelField = Object.prototype.hasOwnProperty.call(entry, 'model')
+        const model = String(entry.model || '').trim()
+        if (apiKey) hasIncomingKey = true
+        if (hasModelField && !model) {
+          return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model cannot be empty when provided.` })
+        }
+
+        if (!apiKey && !hasModelField) {
+          continue
+        }
+
+        if (model && !isValidModelFormat(model)) {
+          return res.status(400).json({ error: `providers.${provider}.${keyLabel}.model has invalid format.` })
+        }
+      }
+    }
+
+    if (!hasConfiguredKey && !hasIncomingKey) {
+      return res.status(400).json({ error: 'At least one API key (primary or fallback) is required.' })
+    }
+
+    const providerRejectedWarnings = providerValidationResults
+      .map((entry) => {
+        const provider = String(entry?.provider || '').trim().toLowerCase()
+        const keyLabel = String(entry?.keyLabel || '').trim().toLowerCase()
+        const model = String(entry?.model || '').trim()
+        const state = String(entry?.state || '').trim().toLowerCase()
+        const providerError = entry?.error && typeof entry.error === 'object' ? entry.error : null
+        if (!provider || !SUPPORTED_PROVIDERS.includes(provider) || !keyLabel || !KEY_LABELS.includes(keyLabel) || !model) {
+          return null
+        }
+        if (state !== 'error' || !providerError) return null
+        return {
+          provider,
+          source: 'connection-test',
+          keyLabel,
+          model,
+          reason: 'provider_rejected',
+          validationTier: 'provider_rejected',
+          detail: providerError?.code || 'unknown',
+          remediationSteps: remediationStepsForProviderError(provider, keyLabel, providerError),
+          providerError,
+        }
+      })
+      .filter(Boolean)
+
+    if (validationPolicy?.blockOnProviderRejected === true && providerRejectedWarnings.length > 0) {
+      return res.status(400).json({
+        error: 'Provider connection test failed for one or more configured models.',
+        validationTier: 'provider_rejected',
+        providerValidationWarnings: providerRejectedWarnings,
+      })
+    }
+
+    const updateFlags = await upsertAdminAiProviderKeys({
+      payload: {
+        ...payload,
+        governance,
+      },
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_ai_settings_updated',
+      details: {
+        ...updateFlags,
+        activeProvider: normalizedActiveProvider,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    const providerConfigChanges = collectProviderConfigChanges(updateFlags)
+    if (updateFlags.activeProviderUpdated) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_provider_switched',
+        details: { activeProvider: normalizedActiveProvider },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
+
+    if (providerConfigChanges.keyRotations.length > 0) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_key_rotated',
+        details: { keys: providerConfigChanges.keyRotations },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
+
+    if (providerConfigChanges.modelChanges.length > 0) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_model_changed',
+        details: { models: providerConfigChanges.modelChanges },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
+
+    if (updateFlags.governanceUpdated) {
+      await recordAdminAction({
+        adminId: req.admin?.id,
+        actionType: 'admin_ai_governance_updated',
+        details: {
+          aiEnabled: !updateFlags.aiEnabledUpdated ? existingSettings?.governance?.aiEnabled : governance?.aiEnabled,
+          resumeAnalysisEnabled: !updateFlags.workflowTogglesUpdated
+            ? existingSettings?.governance?.workflowToggles?.resumeAnalysisEnabled
+            : governance?.workflowToggles?.resumeAnalysisEnabled,
+        },
+        ipAddress: req.admin?.ipAddress || null,
+      })
+    }
+
+    const settings = await getAdminAiProviderSettings()
+    const modelValidation = await validateAiProviderModelConfiguration()
+    const modelWarnings = Array.isArray(modelValidation?.warnings) ? modelValidation.warnings : []
+    const warnings = [...modelWarnings, ...providerRejectedWarnings]
+
+    return res.json({
+      ok: true,
+      settings,
+      modelWarnings: warnings,
+      warning: warnings.length > 0 ? 'One or more configured models should be reviewed.' : null,
+      changedFields: buildChangedFields(updateFlags),
+      ...updateFlags,
+    })
+  } catch (error) {
+    console.error('[Admin ai-settings] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update AI settings' })
+  }
+})
+
+router.get('/system-prompt', async (_req, res) => {
+  try {
+    const prompt = await getAdminSystemPrompt()
+    return res.json(prompt)
+  } catch (error) {
+    console.error('[Admin system-prompt] get failed:', error)
+    return res.status(500).json({ error: 'Unable to load system prompt' })
+  }
+})
+
+router.put('/system-prompt', async (req, res) => {
+  try {
+    const systemPrompt = validateSystemPromptInput(req.body?.systemPrompt)
+    const prompt = await upsertAdminSystemPrompt({
+      systemPrompt,
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_system_prompt_updated',
+      details: {
+        promptVersion: prompt.promptVersion,
+        promptLength: prompt.systemPrompt.length,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({ ok: true, prompt })
+  } catch (error) {
+    if (/systemPrompt/i.test(String(error?.message || ''))) {
+      return res.status(400).json({ error: error.message })
+    }
+    const dbErrorCode = String(error?.code || '').trim()
+    const dbDetails = String(error?.detail || '').trim()
+    const details = String(error?.message || '').trim()
+    const queryErrorCodes = new Set(['42P18', '42601', '42883', '42P01', '42703'])
+
+    console.error('[Admin system-prompt] update failed:', {
+      code: dbErrorCode || null,
+      message: details || null,
+      detail: dbDetails || null,
+      stack: error?.stack || null,
+    })
+
+    if (queryErrorCodes.has(dbErrorCode)) {
+      return res.status(500).json({
+        error: 'System prompt save failed due to a database query issue. Please retry or contact support.',
+        details: dbErrorCode,
+      })
+    }
+
+    return res.status(500).json({
+      error: 'Unable to update system prompt',
+      details: details || 'unknown_error',
+    })
+  }
+})
+
+router.post('/system-prompt/reset', async (req, res) => {
+  try {
+    const prompt = await resetAdminSystemPromptToDefault({
+      adminId: req.admin?.id || null,
+    })
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'admin_system_prompt_reset',
+      details: {
+        promptVersion: prompt.promptVersion,
+        promptLength: prompt.systemPrompt.length,
+      },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({ ok: true, prompt })
+  } catch (error) {
+    console.error('[Admin system-prompt] reset failed:', error)
+    return res.status(500).json({ error: 'Unable to reset system prompt' })
+  }
+})
+
+router.get('/inquiries', async (req, res) => {
+  const search = String(req.query.search || '').trim()
+  const typeFilter = String(req.query.type || 'all').toLowerCase()
+  const statusFilter = String(req.query.status || 'all').toLowerCase()
+  const fromDate = String(req.query.from || '').trim()
+  const toDate = String(req.query.to || '').trim()
+
+  const where = []
+  const params = []
+
+  if (typeFilter !== 'all') {
+    params.push(typeFilter)
+    where.push(`inquiry_type = $${params.length}`)
+  }
+
+  if (statusFilter !== 'all') {
+    params.push(statusFilter)
+    where.push(`status = $${params.length}`)
+  }
+
+  if (search) {
+    params.push(`%${search}%`)
+    where.push(`(
+      email ILIKE $${params.length}
+      OR name ILIKE $${params.length}
+      OR COALESCE(company, '') ILIKE $${params.length}
+      OR COALESCE(subject, '') ILIKE $${params.length}
+    )`)
+  }
+
+  if (fromDate) {
+    params.push(fromDate)
+    where.push(`created_at >= $${params.length}::timestamp`)
+  }
+
+  if (toDate) {
+    params.push(toDate)
+    where.push(`created_at < ($${params.length}::date + INTERVAL '1 day')`)
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+  try {
+    const result = await pool.query(
+      `SELECT id, inquiry_type, status, name, email, company, phone, subject, message, metadata, created_at, updated_at, reviewed_at, reviewed_by
+       FROM inquiries
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT 500`,
+      params,
+    )
+
+    return res.json({ inquiries: result.rows.map(normalizeInquiryRow) })
+  } catch (error) {
+    console.error('[Admin inquiries] list failed:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.patch('/inquiries/:id', async (req, res) => {
+  const { id } = req.params
+  const status = String(req.body?.status || '').trim().toLowerCase()
+
+  if (!['new', 'reviewed'].includes(status)) {
+    return res.status(400).json({ error: 'Valid status is required.' })
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE inquiries
+       SET status = $2,
+           reviewed_at = CASE WHEN $2 = 'reviewed' THEN NOW() ELSE NULL END,
+           reviewed_by = CASE WHEN $2 = 'reviewed' THEN $3 ELSE NULL END
+       WHERE id::text = $1
+       RETURNING id, inquiry_type, status, name, email, company, phone, subject, message, metadata, created_at, updated_at, reviewed_at, reviewed_by`,
+      [id, status, req.admin?.id || null],
+    )
+
+    const inquiry = result.rows[0]
+    if (!inquiry) {
+      return res.status(404).json({ error: 'Inquiry not found' })
+    }
+
+    await recordAdminAction({
+      adminId: req.admin?.id,
+      actionType: 'inquiry_status_updated',
+      targetId: String(id),
+      details: { status },
+      ipAddress: req.admin?.ipAddress || null,
+    })
+
+    return res.json({ ok: true, inquiry: normalizeInquiryRow(inquiry) })
+  } catch (error) {
+    console.error('[Admin inquiries] update failed:', error)
+    return res.status(500).json({ error: 'Unable to update inquiry' })
+  }
+})
 
 router.get('/users', async (req, res) => {
   const search = String(req.query.search || '').trim()

@@ -10,6 +10,7 @@ import {
   recordResetAttempt,
   markTokenUsedAndResetPassword,
 } from '../services/resetTokenService.js'
+import { hashPassword } from '../services/passwordHash.js'
 import { sendPasswordResetConfirmationEmail, sendPasswordResetEmail } from '../utils/mailer.js'
 
 const router = Router()
@@ -96,7 +97,7 @@ router.post('/reset-password', resetTokenAuth(), async (req, res) => {
     await markTokenUsedAndResetPassword({
       tokenId: req.resetTokenRecord.id,
       userId: req.resetTokenRecord.user_id,
-      newPassword,
+      passwordHash: hashPassword(newPassword),
     })
 
     await sendPasswordResetConfirmationEmail({

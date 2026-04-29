@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
+import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 
 const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -55,6 +56,17 @@ function parseUploadedAt(candidate = {}) {
 }
 
 function parseSkills(skills) {
+  if (skills && typeof skills === 'object' && !Array.isArray(skills)) {
+    return [
+      ...(Array.isArray(skills.tools_and_platforms) ? skills.tools_and_platforms : []),
+      ...(Array.isArray(skills.methodologies) ? skills.methodologies : []),
+      ...(Array.isArray(skills.domain_expertise) ? skills.domain_expertise : []),
+      ...(Array.isArray(skills.soft_skills) ? skills.soft_skills : []),
+    ]
+      .map((skill) => String(skill || '').trim())
+      .filter(Boolean)
+  }
+
   if (Array.isArray(skills)) {
     return skills
       .map((skill) => String(skill || '').trim())
@@ -100,6 +112,7 @@ export function getExperienceLevel(candidate) {
 }
 
 export function normalizeCandidate(candidate = {}) {
+  const { id, candidateId, resumeId } = resolveCanonicalCandidateIdentity(candidate)
   const experienceValue = Array.isArray(candidate.experience)
     ? candidate.experience.map((entry) => entry?.duration).filter(Boolean).join(' | ')
     : candidate.experience
@@ -107,16 +120,37 @@ export function normalizeCandidate(candidate = {}) {
     ? candidate.education.map((entry) => `${entry?.degree || ''}${entry?.school ? `, ${entry.school}` : ''}`.trim()).filter(Boolean).join(' | ')
     : candidate.education
 
+  const normalizedSkillsObject = candidate.skills_structured && typeof candidate.skills_structured === 'object'
+    ? candidate.skills_structured
+    : (candidate.skills && typeof candidate.skills === 'object' && !Array.isArray(candidate.skills)
+      ? candidate.skills
+      : {
+          tools_and_platforms: Array.isArray(candidate.skills) ? candidate.skills : parseSkills(candidate.skills),
+          methodologies: [],
+          domain_expertise: [],
+          soft_skills: [],
+        })
+
   return {
-    id: candidate.id || crypto.randomUUID(),
+    id,
+    candidateId,
+    resumeId,
     name: candidate.name || 'Unknown Candidate',
     email: candidate.email || '',
     phone: candidate.phone || '',
     score: Number(candidate.score || 0),
     summary: candidate.summary || '',
-    skills: parseSkills(candidate.skills),
+    skills: normalizedSkillsObject,
+    skills_flat: Array.isArray(candidate.skills_flat) ? candidate.skills_flat : parseSkills(candidate.skills),
+    skills_structured: normalizedSkillsObject,
+    top_skills: Array.isArray(candidate.top_skills) ? candidate.top_skills : [],
     strengths: Array.isArray(candidate.pros) ? candidate.pros : Array.isArray(candidate.strengths) ? candidate.strengths : [],
+    considerations: Array.isArray(candidate.considerations) ? candidate.considerations : [],
     cons: Array.isArray(candidate.cons) ? candidate.cons : [],
+    profile_score: Number.isFinite(Number(candidate.profile_score)) ? Number(candidate.profile_score) : null,
+    years_experience: Number.isFinite(Number(candidate.years_experience)) ? Number(candidate.years_experience) : null,
+    seniority_level: candidate.seniority_level || null,
+    tags: Array.isArray(candidate.tags) ? candidate.tags : [],
     location: candidate.location || 'Unknown',
     experience: experienceValue || '0 years',
     experience_years: Number.isFinite(Number(candidate.experience_years))

@@ -38,12 +38,12 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
       const payload = await parseResponsePayload(response)
 
       if (!response.ok) {
-        setError(payload?.error || `Login failed (${response.status})`)
+        setError(payload?.error || `Unable to log in (${response.status})`)
         return
       }
 
       if (!payload?.token) {
-        setError('Login succeeded but token was missing from response')
+        setError('Log in succeeded, but a token was missing from the response.')
         return
       }
 
@@ -56,7 +56,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
 
       onAuthSuccess(payload.token, payload?.user?.subscription_status || 'inactive', payload?.user || null)
     } catch {
-      setError('Unable to connect to auth server. Check backend URL / CORS settings.')
+      setError('Unable to connect to the auth server. Check the backend URL and CORS settings.')
     } finally {
       setLoading(false)
     }
@@ -70,7 +70,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
         <section className="auth-panel">
           <p className="auth-brand">Hire<span>Flow</span></p>
           <h1 className="auth-title">Verify your email</h1>
-          <p className="auth-subtitle">You must verify your email address before logging in.</p>
+          <p className="auth-subtitle">You must verify your email address before you can log in.</p>
 
           <div className="auth-form">
             <p style={{ color: '#9ca3af', marginBottom: '1rem' }}>
@@ -96,7 +96,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
               onClick={() => setEmailNotVerified(false)}
               style={{ display: 'block', width: '100%', textAlign: 'center', marginTop: '1rem' }}
             >
-              Back to login
+              Back to log in
             </button>
           </div>
         </section>
@@ -129,7 +129,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
           {error && <p className="auth-error">{error}</p>}
 
           <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Logging in…' : 'Log in'}
           </button>
         </form>
 

@@ -98,13 +98,13 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
           setFieldErrors(nextFieldErrors)
         }
 
-        setError(sanitizeForDisplay(payload?.error || `Signup failed (${response.status})`))
+        setError(sanitizeForDisplay(payload?.error || `Unable to sign up (${response.status})`))
         return
       }
 
       onSignupSuccess(email.trim().toLowerCase())
     } catch {
-      setError('Unable to connect to auth server. Check backend URL / CORS settings.')
+      setError('Unable to connect to the auth server. Check the backend URL and CORS settings.')
     } finally {
       setLoading(false)
     }
@@ -161,12 +161,12 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
           {error && <p className="auth-error">{error}</p>}
 
           <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? 'Creating account...' : 'Sign up'}
+            {loading ? 'Creating account…' : 'Sign up'}
           </button>
         </form>
 
         <p className="auth-switch">
-          Already have an account? <button className="auth-link" type="button" onClick={onGoToLogin}>Login</button>
+          Already have an account? <button className="auth-link" type="button" onClick={onGoToLogin}>Log in</button>
         </p>
       </section>
     </main>

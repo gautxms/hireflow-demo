@@ -63,7 +63,15 @@ export async function getCachedJobResult(jobId) {
   }
 }
 
-export async function enqueueParseJob({ resumeId, userId, filename, mimeType, fileSize, fileBufferBase64 }) {
+export async function enqueueParseJob({
+  resumeId,
+  userId,
+  filename,
+  mimeType,
+  fileSize,
+  fileBufferBase64,
+  jobDescriptionId = null,
+}) {
   const existing = await pool.query(
     `SELECT job_id
      FROM parse_jobs
@@ -89,6 +97,7 @@ export async function enqueueParseJob({ resumeId, userId, filename, mimeType, fi
       mimeType,
       fileSize,
       fileBufferBase64,
+      jobDescriptionId,
     },
     {
       jobId: `resume:${resumeId}`,

@@ -1,196 +1,178 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import BackButton from './BackButton'
-import {
-  filterHelpArticles,
-  parseHelpCenterLocation,
-  resolveVisibleSelection,
-  updateHelpCenterHistory,
-} from './helpCenterState'
+import { filterHelpArticles, parseHelpCenterLocation, resolveVisibleSelection, updateHelpCenterHistory } from './helpCenterState'
+import { Icon } from './Icon'
 
 const HELP_ARTICLES = {
-    'getting-started': [
-      {
-        id: 1,
-        title: 'Getting Started with HireFlow',
-        desc: 'Learn the basics of uploading resumes and analyzing candidates',
-        content: [
-          'Start by creating a project with a clear job title and role requirements. This gives HireFlow context for better resume matching.',
-          'Upload your first batch of resumes and let the parser extract experience, skills, and qualifications automatically.',
-          'Review the ranked candidate list and open each profile to see detailed score breakdowns, strengths, and potential concerns.'
-        ]
-      },
-      {
-        id: 2,
-        title: 'Creating Your First Project',
-        desc: 'Set up a new hiring project in 5 minutes',
-        content: [
-          'From your dashboard, click New Project and choose a role template or start from scratch.',
-          'Add must-have requirements, preferred skills, and any deal-breakers so the AI can prioritize candidates accurately.',
-          'Invite teammates to collaborate and align on score thresholds before you begin shortlisting.'
-        ]
-      },
-      {
-        id: 3,
-        title: 'Understanding Candidate Scores',
-        desc: 'How our AI scoring system works',
-        content: [
-          'Each candidate receives an overall score plus category scores for skills match, experience fit, and role alignment.',
-          'Use the score rationale panel to understand why points were added or deducted.',
-          'Scores are decision support, not automatic decisions. Combine them with human review for the best outcomes.'
-        ]
-      }
-    ],
-    'uploading': [
-      {
-        id: 4,
-        title: 'Upload Resumes',
-        desc: 'Accepted formats and best practices',
-        content: [
-          'Upload PDF resumes directly from your local device or drag-and-drop into an active project.',
-          'For best parsing quality, use text-based PDFs instead of scanned images when possible.',
-          'Tag uploads by source (job board, referral, career page) to track candidate pipeline performance later.'
-        ]
-      },
-      {
-        id: 5,
-        title: 'Bulk Import',
-        desc: 'Upload multiple resumes at once',
-        content: [
-          'Use Bulk Import when processing large applicant batches for a single role.',
-          'Drop multiple files in one action and monitor import progress in the project activity feed.',
-          'After processing, sort by score or filter by must-have criteria to review top candidates first.'
-        ]
-      },
-      {
-        id: 6,
-        title: 'Resume Parsing',
-        desc: 'How we extract candidate information',
-        content: [
-          'HireFlow extracts structured data like work history, education, skills, and certifications.',
-          'Ambiguous text is flagged for manual review so your team can quickly verify details.',
-          'Parser quality improves over time through feedback signals from recruiter actions.'
-        ]
-      }
-    ],
-    'analysis': [
-      {
-        id: 7,
-        title: 'Scoring Dimensions',
-        desc: 'The 20+ factors we evaluate',
-        content: [
-          'Scoring dimensions include experience depth, role relevance, technical alignment, and trajectory.',
-          'Every dimension has a configurable weight, so you can tailor results to each hiring workflow.',
-          'Hover over a score to see evidence snippets taken directly from the candidate resume.'
-        ]
-      },
-      {
-        id: 8,
-        title: 'Custom Scoring Rules',
-        desc: 'Create scoring rules for your specific needs',
-        content: [
-          'Create rules that boost candidates with specific credentials or years of experience.',
-          'Add negative weights for disqualifying factors to reduce manual triage workload.',
-          'Test rule changes on existing candidate pools before applying them broadly.'
-        ]
-      },
-      {
-        id: 9,
-        title: 'Candidate Comparison',
-        desc: 'Compare candidates side by side',
-        content: [
-          'Open two or more candidates in compare mode to review strengths across shared criteria.',
-          'Use normalized score bars to quickly identify where each candidate stands out.',
-          'Export comparison summaries for interview panel prep and stakeholder reviews.'
-        ]
-      }
-    ],
-    'integrations': [
-      {
-        id: 10,
-        title: 'Slack Integration',
-        desc: 'Get notifications in your Slack workspace',
-        content: [
-          'Connect Slack to receive alerts when new top-ranked candidates are available.',
-          'Route notifications to team channels by role or department for faster response.',
-          'Include deep links in alerts so reviewers can jump straight into candidate profiles.'
-        ]
-      },
-      {
-        id: 11,
-        title: 'Email Integration',
-        desc: 'Forward resumes directly to HireFlow',
-        content: [
-          'Set up your project inbox to forward resumes directly from email into HireFlow.',
-          'Use role-specific forwarding aliases to keep candidate pipelines organized.',
-          'Automatic duplicate checks prevent candidates from being added multiple times.'
-        ]
-      },
-      {
-        id: 12,
-        title: 'API Documentation',
-        desc: 'Build custom integrations with our API',
-        content: [
-          'Use API endpoints to push candidate data into HireFlow from external systems.',
-          'Webhooks notify your ATS or CRM when scores, status, or shortlist decisions change.',
-          'Generate scoped API keys per integration and rotate them regularly for security.'
-        ]
-      }
-    ],
-    'billing': [
-      {
-        id: 13,
-        title: 'Plans and Pricing',
-        desc: 'Understand our billing structure',
-        content: [
-          'Choose a plan based on monthly resume volume, team size, and integration requirements.',
-          'You can upgrade at any time, and plan changes take effect immediately for new usage.',
-          'Annual billing options provide discounts for teams with predictable hiring volume.'
-        ]
-      },
-      {
-        id: 14,
-        title: 'Invoices and Receipts',
-        desc: 'Access your billing history',
-        content: [
-          'All invoices are available in the Billing tab with download links for accounting records.',
-          'Billing admins can add purchase order references and tax details where required.',
-          'Receipts are generated automatically after each successful payment.'
-        ]
-      },
-      {
-        id: 15,
-        title: 'Refund Policy',
-        desc: 'Learn about our refund terms',
-        content: [
-          'Refund eligibility depends on plan type, billing cycle, and recent usage levels.',
-          'For any billing issue, contact support with your workspace ID and invoice number.',
-          'Enterprise agreements may include custom terms defined in your service contract.'
-        ]
-      }
-    ]
-  }
+  'getting-started': [
+    {
+      id: 1,
+      title: 'Create your account and sign in',
+      desc: 'Start with signup, login, and email verification basics',
+      content: [
+        'Create an account from the signup page, then verify your email before continuing to protected areas.',
+        'Use Login once your account is verified. If your session expires, sign in again to continue your work.',
+        'If you forget your password, use Forgot Password and complete Reset Password from the emailed link.',
+      ],
+    },
+    {
+      id: 2,
+      title: 'Set up before your first upload',
+      desc: 'Subscription and job description steps that unlock uploading',
+      content: [
+        'Resume uploads require an active or trialing subscription status in your account.',
+        'Open Job Descriptions to create or select an active draft before starting analysis.',
+        'Once setup is done, go to Uploader and add one file or a batch in the same session.',
+      ],
+    },
+    {
+      id: 3,
+      title: 'Troubleshoot account access',
+      desc: 'Common sign-in and access blockers',
+      content: [
+        'If a page asks you to log in, sign in again and retry the action from the same browser tab.',
+        'If billing pages fail to load, confirm you are logged in before opening Subscription Management.',
+        'For persistent issues, contact support with your workspace ID and a short description of the error.',
+      ],
+    },
+  ],
+  uploading: [
+    {
+      id: 4,
+      title: 'Supported file formats and size limits',
+      desc: 'Exactly what upload accepts today',
+      content: [
+        'HireFlow currently accepts PDF and DOCX resumes only.',
+        'Each file must be 100MB or smaller.',
+        'If a file type is rejected, convert it to PDF or DOCX and upload again.',
+      ],
+    },
+    {
+      id: 5,
+      title: 'Bulk upload and progress tracking',
+      desc: 'Upload many resumes in one run',
+      content: [
+        'You can drag and drop multiple resumes at once or select multiple files from your device.',
+        'Large uploads run in chunks and show progress as completed chunks over total chunks.',
+        'If a temporary network issue occurs, upload retries run automatically before showing an error.',
+      ],
+    },
+    {
+      id: 6,
+      title: 'Parse status and error messages',
+      desc: 'Understand processing states after upload',
+      content: [
+        'After upload, parsing status updates while HireFlow processes candidate data.',
+        'A parse failure message includes a reason and recommends retrying with PDF or DOCX.',
+        'When upload cannot be completed, the error panel explains the reason and next action.',
+      ],
+    },
+  ],
+  analysis: [
+    {
+      id: 7,
+      title: 'Review candidate scores and details',
+      desc: 'How to work through ranked results',
+      content: [
+        'Candidate results include match score, skills, experience, and upload date for each profile.',
+        'Use search, skill filters, and experience range to narrow large candidate lists quickly.',
+        'Sort by score, name, experience, or upload date depending on your review goal.',
+      ],
+    },
+    {
+      id: 8,
+      title: 'Build and manage shortlists',
+      desc: 'Create lists and add candidates for team review',
+      content: [
+        'Create shortlist collections, then add candidates directly from results.',
+        'Review shortlist details and sort shortlist entries by rating or added date.',
+        'Use shortlist notes and ratings to keep hiring manager context in one place.',
+      ],
+    },
+    {
+      id: 9,
+      title: 'Tag candidates and export CSV',
+      desc: 'Share actionable outputs with stakeholders',
+      content: [
+        'Apply tags to candidates so your team can track hiring themes and follow-up actions.',
+        'Use bulk actions to select candidates and export their data as a CSV file.',
+        'CSV export is useful for handoffs, reporting, and offline review workflows.',
+      ],
+    },
+  ],
+  billing: [
+    {
+      id: 10,
+      title: 'Manage plans and subscription status',
+      desc: 'View current plan and change cadence',
+      content: [
+        'Billing shows your current plan, status, renewal date, and next billing date.',
+        'You can switch between monthly and annual plans from Subscription Management.',
+        'Plan changes refresh billing details after confirmation.',
+      ],
+    },
+    {
+      id: 11,
+      title: 'Invoices and download history',
+      desc: 'Access billing records for accounting',
+      content: [
+        'Billing history lists invoice entries from recent billing cycles.',
+        'Use Download PDF on available rows to save invoice documents.',
+        'If no invoice appears, billing history will update after a successful billing cycle.',
+      ],
+    },
+    {
+      id: 12,
+      title: 'Cancellations and refund policy',
+      desc: 'What happens when you cancel or request help',
+      content: [
+        'Canceling a subscription keeps access active through the current billing period.',
+        'Use the in-app refund policy page for official terms and support expectations.',
+        'If you have a billing dispute, contact support with invoice details and workspace ID.',
+      ],
+    },
+  ],
+}
 
 const HELP_CATEGORIES = [
-    { id: 'getting-started', name: 'Getting Started', icon: '🚀' },
-    { id: 'uploading', name: 'Uploading Resumes', icon: '📄' },
-    { id: 'analysis', name: 'Analysis & Scoring', icon: '⚙️' },
-    { id: 'integrations', name: 'Integrations', icon: '🔗' },
-    { id: 'billing', name: 'Billing & Plans', icon: '💳' }
-  ]
+  { id: 'getting-started', name: 'Getting Started', icon: 'rocket' },
+  { id: 'uploading', name: 'Uploading Resumes', icon: 'file' },
+  { id: 'analysis', name: 'Analysis & Results', icon: 'settings' },
+  { id: 'billing', name: 'Billing & Plans', icon: 'creditCard' },
+]
 
 const HELP_FAQS = [
-    { q: 'How many resumes can I upload?', a: 'Depends on your plan. Starter: 50/month, Pro: 500/month, Enterprise: Unlimited' },
-    { q: 'What file formats are supported?', a: 'We support PDF resumes. Attach as email or upload directly on the platform' },
-    { q: 'How accurate is the AI scoring?', a: 'Our system has 94% accuracy. Results are constantly improving as we learn from your feedback' },
-    { q: 'Can I export candidate data?', a: 'Yes, you can export as CSV or integrate with your ATS via our API' },
-    { q: 'What happens to my data after I delete it?', a: 'Your data is permanently deleted within 30 days. We follow GDPR and CCPA compliance' },
-    { q: 'Do you offer custom integrations?', a: 'Yes, contact our sales team for enterprise custom integrations' }
-  ]
+  {
+    q: 'What file types can I upload right now?',
+    a: 'Upload supports PDF and DOCX resumes. Other file types must be converted before uploading.',
+  },
+  {
+    q: 'Is there a file size limit?',
+    a: 'Yes. Each resume file must be 100MB or less.',
+  },
+  {
+    q: 'Can I upload resumes in bulk?',
+    a: 'Yes. You can upload multiple files in one session, and progress is shown while chunks upload and parse.',
+  },
+  {
+    q: 'Can I export candidate results?',
+    a: 'Yes. Results support CSV export, including bulk selection workflows.',
+  },
+  {
+    q: 'Do shortlists exist in the app?',
+    a: 'Yes. You can create shortlists, add candidates, and sort shortlist entries by rating or added date.',
+  },
+  {
+    q: 'Where do I manage invoices and subscription changes?',
+    a: 'Open Billing to view plan details, billing history, and available invoice downloads.',
+  },
+]
 
 export default function HelpPage({ onBack }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('getting-started')
   const [selectedArticleId, setSelectedArticleId] = useState(null)
+  const articleTriggerRefs = useRef({})
 
   useEffect(() => {
     const syncStateFromUrl = () => {
@@ -201,12 +183,27 @@ export default function HelpPage({ onBack }) {
 
     syncStateFromUrl()
     window.addEventListener('popstate', syncStateFromUrl)
-
     return () => window.removeEventListener('popstate', syncStateFromUrl)
   }, [])
 
   const filteredArticles = useMemo(() => filterHelpArticles(HELP_ARTICLES[activeCategory], searchQuery), [activeCategory, searchQuery])
   const visibleSelectedArticleId = resolveVisibleSelection(selectedArticleId, filteredArticles)
+
+  useEffect(() => {
+    if (!visibleSelectedArticleId) {
+      return
+    }
+
+    const triggerElement = articleTriggerRefs.current[visibleSelectedArticleId]
+    if (!triggerElement) {
+      return
+    }
+
+    const navOffset = 96
+    const triggerTop = triggerElement.getBoundingClientRect().top + window.scrollY - navOffset
+    window.scrollTo({ top: Math.max(triggerTop, 0), behavior: 'smooth' })
+    triggerElement.focus({ preventScroll: true })
+  }, [visibleSelectedArticleId])
 
   const openArticle = (article) => {
     const nextId = visibleSelectedArticleId === article.id ? null : article.id
@@ -215,185 +212,128 @@ export default function HelpPage({ onBack }) {
   }
 
   return (
-    <div className="page-content" style={{ background: 'var(--ink)', color: 'var(--text)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '3rem 2rem', textAlign: 'center' }}>
-        <div style={{ marginBottom: '1rem' }}>
-          <BackButton onBack={onBack} />
-        </div>
-
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-          Help Center
-        </h1>
-        <p style={{ color: 'var(--muted)', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>
-          Find answers and learn how to get the most out of HireFlow
-        </p>
+    <div className="public-page page-content">
+      <div className="public-page-hero">
+        <div className="public-copy center public-mb-md"><BackButton onBack={onBack} /></div>
+        <h1 className="public-page-title">Help Center</h1>
+        <p className="public-page-subtitle">Find product documentation, troubleshooting steps, and billing support resources.</p>
       </div>
 
-      {/* Search */}
-      <div style={{ padding: '2rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
-        <input
-          type="text"
-          placeholder="Search help articles..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            width: '100%',
-            maxWidth: '600px',
-            padding: '0.75rem 1rem',
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            color: 'var(--text)',
-            fontFamily: 'var(--font-body)',
-            fontSize: '1rem'
-          }}
-        />
-      </div>
+      <section className="public-section help-search-wrap">
+        <input type="text" className="public-form-search" placeholder="Search help articles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+      </section>
 
-      {/* Categories & Articles */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '3rem 2rem', display: 'grid', gridTemplateColumns: '250px 1fr', gap: '3rem' }}>
-        {/* Sidebar */}
-        <div style={{ borderRight: '1px solid var(--border)', paddingRight: '2rem' }}>
-          {HELP_CATEGORIES.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => {
-                setActiveCategory(cat.id)
-                setSelectedArticleId(null)
-                updateHelpCenterHistory(null, window.location.href, { replace: true })
-              }}
-              aria-pressed={activeCategory === cat.id}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                background: activeCategory === cat.id ? 'rgba(232,255,90,0.1)' : 'transparent',
-                border: activeCategory === cat.id ? '1px solid var(--accent)' : '1px solid transparent',
-                color: activeCategory === cat.id ? 'var(--accent)' : 'var(--muted)',
-                padding: '0.75rem 1rem',
-                borderRadius: '6px',
-                marginBottom: '0.5rem',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                transition: 'all 0.2s'
-              }}
-            >
-              <span style={{ marginRight: '0.5rem' }}>{cat.icon}</span>
-              {cat.name}
-            </button>
-          ))}
-        </div>
+      <section className="public-section public-page-main">
+        <div className="help-layout">
+          <aside className="help-sidebar">
+            {HELP_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  setActiveCategory(cat.id)
+                  setSelectedArticleId(null)
+                  updateHelpCenterHistory(null, window.location.href, { replace: true })
+                }}
+                aria-pressed={activeCategory === cat.id}
+                className={`help-category-btn ${activeCategory === cat.id ? 'active' : ''}`}
+              >
+                <span className="help-category-icon"><Icon name={cat.icon} size="sm" tone="current" /></span>{cat.name}
+              </button>
+            ))}
+          </aside>
 
-        {/* Articles */}
-        <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>
-            {HELP_CATEGORIES.find(c => c.id === activeCategory)?.name}
-          </h2>
-
-          <div style={{ display: 'grid', gap: '1rem', marginBottom: '3rem' }}>
-            {filteredArticles.map(article => (
-              <div key={article.id} style={{ display: 'grid', gap: '1rem' }}>
-                <button
-                  onClick={() => openArticle(article)}
-                  aria-expanded={visibleSelectedArticleId === article.id}
-                  aria-controls={`help-article-${article.id}`}
-                  style={{
-                    background: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    padding: '1.5rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto',
-                    width: '100%',
-                    textAlign: 'left',
-                    color: 'var(--text)'
-                  }}
-                >
-                  <div>
-                    <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{article.title}</h3>
-                    <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>{article.desc}</p>
-                  </div>
-                  <div style={{ color: 'var(--accent)', fontSize: '1.2rem' }}>→</div>
-                </button>
-
-                {visibleSelectedArticleId === article.id && (
-                  <div id={`help-article-${article.id}`} role="region" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '2rem' }}>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
-                      {article.title}
-                    </h3>
-                    <div style={{ display: 'grid', gap: '0.75rem' }}>
-                      {article.content.map((paragraph, index) => (
-                        <p key={index} style={{ color: 'var(--muted)', lineHeight: '1.7', margin: 0 }}>
-                          {paragraph}
-                        </p>
-                      ))}
+          <div>
+            <h2 className="public-section-title">{HELP_CATEGORIES.find((c) => c.id === activeCategory)?.name}</h2>
+            <div className="public-faq-grid">
+              {filteredArticles.map((article) => (
+                <div key={article.id} className={`help-article-item ${visibleSelectedArticleId === article.id ? 'is-expanded' : ''}`}>
+                  <button
+                    id={`help-article-trigger-${article.id}`}
+                    ref={(element) => {
+                      if (element) {
+                        articleTriggerRefs.current[article.id] = element
+                      }
+                    }}
+                    onClick={() => openArticle(article)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        openArticle(article)
+                      }
+                    }}
+                    aria-expanded={visibleSelectedArticleId === article.id}
+                    aria-controls={`help-article-${article.id}`}
+                    className="public-card help-article-trigger"
+                  >
+                    <div>
+                      <h3 className="public-card-title">{article.title}</h3>
+                      <p className="public-card-copy">{article.desc}</p>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                    <div className="contact-accent-title">→</div>
+                  </button>
+
+                  {visibleSelectedArticleId === article.id && (
+                    <div
+                      id={`help-article-${article.id}`}
+                      role="region"
+                      aria-labelledby={`help-article-trigger-${article.id}`}
+                      className="public-card help-article-panel"
+                    >
+                      <h3 className="public-card-title">{article.title}</h3>
+                      <div className="public-faq-grid">
+                        {article.content.map((paragraph, index) => <p key={index} className="public-card-copy">{paragraph}</p>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* FAQ Section */}
-      <div style={{ background: 'var(--ink-2)', padding: '3rem 2rem' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '2rem', textAlign: 'center', fontFamily: 'var(--font-display)' }}>
-            Frequently Asked Questions
-          </h2>
+      <section className="public-section public-section-alt">
+        <div className="public-page-main">
+          <h2 className="public-section-title center">Support quick links</h2>
+          <div className="public-feature-grid public-max-800">
+            <article className="public-card">
+              <h3 className="public-card-title">Account and access issues</h3>
+              <p className="public-card-copy">Use Getting Started for login, signup, verification, and password reset troubleshooting.</p>
+            </article>
+            <article className="public-card">
+              <h3 className="public-card-title">Upload and results questions</h3>
+              <p className="public-card-copy">Review Uploading Resumes and Analysis &amp; Results for file limits, parse states, shortlist workflows, and exports.</p>
+            </article>
+            <article className="public-card">
+              <h3 className="public-card-title">Billing and subscription support</h3>
+              <p className="public-card-copy">Visit Billing &amp; Plans for invoices, plan changes, cancellation flow, and refund policy links.</p>
+            </article>
+          </div>
+        </div>
+      </section>
 
-          <div style={{ display: 'grid', gap: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
+      <section className="public-section">
+        <div className="public-page-main">
+          <h2 className="public-section-title center">Frequently Asked Questions</h2>
+          <div className="public-faq-grid public-max-800">
             {HELP_FAQS.map((faq, i) => (
-              <div key={i} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1.5rem' }}>
-                <h4 style={{ fontWeight: 'bold', marginBottom: '0.75rem', color: 'var(--accent)' }}>
-                  Q: {faq.q}
-                </h4>
-                <p style={{ color: 'var(--muted)', lineHeight: '1.6' }}>
-                  A: {faq.a}
-                </p>
-              </div>
+              <article key={i} className="public-card">
+                <h4 className="public-card-title contact-accent-title">Q: {faq.q}</h4>
+                <p className="public-card-copy">A: {faq.a}</p>
+              </article>
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Contact Support */}
-      <div style={{ padding: '3rem 2rem', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', fontFamily: 'var(--font-display)' }}>
-          Can't find what you're looking for?
-        </h2>
-        <p style={{ color: 'var(--muted)', marginBottom: '2rem' }}>
-          Our support team is here to help
-        </p>
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-          <button style={{
-            background: 'var(--accent)',
-            color: 'var(--ink)',
-            border: 'none',
-            padding: '0.75rem 2rem',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}>
-            Contact Support
-          </button>
-          <button style={{
-            background: 'transparent',
-            color: 'var(--accent)',
-            border: '1px solid var(--accent)',
-            padding: '0.75rem 2rem',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}>
-            Schedule a Call
-          </button>
+      <footer className="public-cta-footer">
+        <h2 className="public-section-title">Get unstuck faster</h2>
+        <p className="public-copy center">Talk to support for issue resolution or book a walkthrough to improve your workflow.</p>
+        <div className="public-button-row center">
+          <a className="public-btn-primary" href="/contact">Contact support</a>
+          <a className="public-btn-secondary" href="/demo">Schedule demo</a>
         </div>
-      </div>
+      </footer>
     </div>
   )
 }

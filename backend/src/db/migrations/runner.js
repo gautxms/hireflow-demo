@@ -16,6 +16,21 @@ const migrationFiles = [
   '013-fix-admin-email-verification',
   '014-add-admin-ux-feedback',
   '015-add-resume-analysis-token-usage',
+  '016-add-inquiries',
+  '020-fix-admin-ai-user-reference-types',
+  '017-add-admin-ai-provider-keys',
+  '018-generalize-admin-ai-provider-config',
+  '019-add-admin-system-prompt',
+  '020-add-admin-ai-model-registry',
+  '021-admin-ai-actor-columns-text-compat',
+  '022-add-resume-ai-profile-fields',
+  '023-add-job-description-metadata-columns',
+  '024-add-parse-jobs-updated-at-indexes',
+  '025-add-candidate-profiles',
+  '026-add-analyses',
+  '027-add-dashboard-kpi-indexes',
+  '029-add-shortlist-candidate-metadata',
+  '028-add-report-definitions',
 ]
 
 async function ensureMigrationsTable(client) {

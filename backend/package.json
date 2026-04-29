@@ -3,6 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "backfill:legacy-parse": "node src/jobs/runLegacyParseBackfill.js --dry-run",
+    "backfill:legacy-parse:execute": "node src/jobs/runLegacyParseBackfill.js --execute",
+    "backfill:analyses": "node src/jobs/backfillAnalysesFromLegacyParse.js --dry-run",
+    "backfill:analyses:execute": "node src/jobs/backfillAnalysesFromLegacyParse.js --execute",
+    "backfill:candidate-profiles": "node src/jobs/backfillCandidateProfilesFromLegacyParse.js --dry-run",
+    "backfill:candidate-profiles:execute": "node src/jobs/backfillCandidateProfilesFromLegacyParse.js --execute",
     "perf:load": "autocannon -c 50 -d 20 -p 10 http://localhost:4000/health",
     "perf:profile": "clinic doctor -- node src/index.js",
     "perf:queries": "node --trace-gc src/index.js"

@@ -10,18 +10,18 @@ function formatDate(value) {
 
 export default function PaymentsList({ failedPayments, retryingId, onRetry }) {
   return (
-    <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-4">
-      <h2 className="text-lg font-medium text-amber-900">Failed payments</h2>
+    <div className="admin-inline-alert admin-inline-alert--warning p-4">
+      <h2 className="text-lg font-medium">Failed payments</h2>
       <ul className="mt-3 space-y-2 text-sm">
         {(failedPayments || []).map((payment) => (
-          <li key={payment.id} className="rounded border border-amber-200 bg-white p-3">
+          <li key={payment.id} className="rounded border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p><strong>{payment.transactionId}</strong> · {payment.customerEmail || 'Unknown customer'} · {formatCurrency(payment.amount)} · {payment.status}</p>
               <button type="button" className="ui-btn ui-btn--primary disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onRetry(payment.transactionId)} disabled={retryingId === payment.transactionId}>
                 {retryingId === payment.transactionId ? 'Retrying…' : 'Retry payment'}
               </button>
             </div>
-            <p className="mt-1 text-xs text-slate-600">Last attempt failed · Next retry: {formatDate(payment.nextRetryAt)}</p>
+            <p className="mt-1 text-xs text-[var(--admin-text-muted)]">Last attempt failed · Next retry: {formatDate(payment.nextRetryAt)}</p>
           </li>
         ))}
         {!failedPayments?.length ? <li><EmptyState title="No failed payments" description="There are no recoverable failures right now." /></li> : null}
