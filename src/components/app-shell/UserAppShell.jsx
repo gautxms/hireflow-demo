@@ -136,10 +136,10 @@ export default function UserAppShell({
                 aria-label={`${item.label}${isLocked ? ' (Locked)' : ''}`}
               >
                 <span className="user-app-shell__nav-item-icon-wrap">
-                  {typeof item.icon === 'function'
-                    ? createElement(item.icon, { size: 18, strokeWidth: 1.5, className: 'user-app-shell__nav-item-icon' })
+                  {typeof item.icon === 'string'
+                    ? <Icon name={item.icon} size="sm" className="user-app-shell__nav-item-icon" />
                     : item.icon
-                      ? <Icon name={item.icon} size="sm" className="user-app-shell__nav-item-icon" />
+                      ? createElement(item.icon, { size: 18, strokeWidth: 1.5, className: 'user-app-shell__nav-item-icon' })
                       : <LayoutDashboard size={18} strokeWidth={1.5} className="user-app-shell__nav-item-icon" />}
                   {isLocked ? <Icon name="lock" size="xs" className="user-app-shell__nav-item-lock" /> : null}
                 </span>
