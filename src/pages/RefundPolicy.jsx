@@ -1,9 +1,10 @@
 import BackButton from '../components/BackButton'
+import PublicPageLayout from '../components/public/PublicPageLayout'
 
 export default function RefundPolicy() {
   return (
-    <div className="policy-page">
-      <main className="policy-page__main">
+    <PublicPageLayout>
+      <section className="public-section policy-page__main">
         <div className="policy-page__back-button-wrap">
           <BackButton />
         </div>
@@ -26,7 +27,7 @@ export default function RefundPolicy() {
             This policy complies with Paddle’s merchant and billing requirements.
           </p>
         </article>
-      </main>
-    </div>
+      </section>
+    </PublicPageLayout>
   )
 }

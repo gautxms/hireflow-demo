@@ -1,0 +1,41 @@
+.public-page-layout {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.public-page-layout__header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--color-bg-primary) 90%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.public-page-main {
+  width: min(1200px, 100% - 3rem);
+  margin-inline: auto;
+}
+
+.public-page-main > .public-section {
+  padding-block: 3rem;
+}
+
+.public-page-main > .public-section:first-child {
+  padding-top: 2.5rem;
+}
+
+.public-page-main > .public-section:last-child {
+  padding-bottom: 4rem;
+}
+
+@media (max-width: 767px) {
+  .public-page-main {
+    width: min(1200px, 100% - 2rem);
+  }
+
+  .public-page-main > .public-section {
+    padding-block: 2.25rem;
+  }
+}

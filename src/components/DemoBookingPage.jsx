@@ -88,10 +88,7 @@ export default function DemoBookingPage({ onBack }) {
   }[step]
 
   return (
-    <div className="public-page">
-      <div className="public-page-header">
-        <button onClick={onBack} className="public-page-back-button public-nav-text">← Back</button>
-      </div>
+    <PublicPageLayout header={<div className="public-page-header"><button onClick={onBack} className="public-page-back-button public-nav-text">← Back</button></div>}>
 
       <main className="public-page-main public-section">
         <div className="public-page-hero public-hero-compact">
@@ -260,6 +257,6 @@ export default function DemoBookingPage({ onBack }) {
           </section>
         )}
       </main>
-    </div>
+    </PublicPageLayout>
   )
 }

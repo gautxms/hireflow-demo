@@ -27,7 +27,7 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
   }, [])
 
   return (
-    <>
+    <PublicPageLayout>
       <div className="landing-mobile-header">
         <button
           type="button"
@@ -259,6 +259,6 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
           </div>
         </footer>
       </section>
-    </>
+    </PublicPageLayout>
   )
 }

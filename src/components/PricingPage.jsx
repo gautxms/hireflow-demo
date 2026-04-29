@@ -1,5 +1,5 @@
 import usePageSeo from '../hooks/usePageSeo'
-import PublicFooter from './PublicFooter'
+import PublicPageLayout from './public/PublicPageLayout'
 import '../styles/pricing-page-marketing.css'
 
 const FAQ_ITEMS = [
@@ -67,13 +67,13 @@ export default function PricingPage() {
   ]
 
   return (
-    <div className="pricing-marketing-page">
-      <header className="pricing-marketing-page__header">
+    <PublicPageLayout>
+      <section className="public-section pricing-marketing-page__header">
         <h1 className="pricing-marketing-page__title">Simple, Transparent Pricing</h1>
         <p className="pricing-marketing-page__subtitle">Choose the plan that fits your hiring needs. Scale up anytime.</p>
-      </header>
+      </section>
 
-      <section className="pricing-marketing-page__cards-section">
+      <section className="public-section pricing-marketing-page__cards-section">
         <div className="pricing-marketing-page__cards-grid">
           {plans.map((plan) => (
             <article
@@ -110,7 +110,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="pricing-marketing-page__faq-section">
+      <section className="public-section pricing-marketing-page__faq-section">
         <h2 className="pricing-marketing-page__section-title">Frequently Asked Questions</h2>
 
         <div className="pricing-marketing-page__faq-list">
@@ -123,13 +123,12 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="pricing-marketing-page__cta-section">
+      <section className="public-section pricing-marketing-page__cta-section">
         <h2 className="pricing-marketing-page__section-title">Ready to hire smarter?</h2>
         <p className="pricing-marketing-page__cta-copy">Start your free trial today. No credit card required.</p>
         <button type="button" className="pricing-marketing-page__cta-button">Start Free Trial</button>
       </section>
 
-      <PublicFooter />
-    </div>
+    </PublicPageLayout>
   )
 }

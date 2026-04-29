@@ -80,10 +80,7 @@ export default function ContactPage({ onBack }) {
   }
 
   return (
-    <div className="public-page contact-page">
-      <div className="public-page-header">
-        <button onClick={onBack} className="public-page-back-button public-nav-text">← Back</button>
-      </div>
+    <PublicPageLayout className="contact-page" header={<div className="public-page-header"><button onClick={onBack} className="public-page-back-button public-nav-text">← Back</button></div>}>
 
       <section className="public-page-hero">
         <h1 className="public-page-title">Get in Touch</h1>
@@ -173,6 +170,6 @@ export default function ContactPage({ onBack }) {
           </div>
         </div>
       </section>
-    </div>
+    </PublicPageLayout>
   )
 }

@@ -212,7 +212,7 @@ export default function HelpPage({ onBack }) {
   }
 
   return (
-    <div className="public-page page-content">
+    <PublicPageLayout className="page-content">
       <div className="public-page-hero">
         <div className="public-copy center public-mb-md"><BackButton onBack={onBack} /></div>
         <h1 className="public-page-title">Help Center</h1>
@@ -334,6 +334,6 @@ export default function HelpPage({ onBack }) {
           <a className="public-btn-secondary" href="/demo">Schedule demo</a>
         </div>
       </footer>
-    </div>
+    </PublicPageLayout>
   )
 }
