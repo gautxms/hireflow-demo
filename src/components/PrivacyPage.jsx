@@ -1,9 +1,10 @@
 import BackButton from './BackButton'
+import PublicPageLayout from './public/PublicPageLayout'
 
 export default function PrivacyPage() {
   return (
-    <div className="policy-page">
-      <main className="policy-page__main">
+    <PublicPageLayout>
+      <section className="public-section policy-page__main">
         <div className="policy-page__back-button-wrap">
           <BackButton />
         </div>
@@ -19,7 +20,7 @@ export default function PrivacyPage() {
         <p>We apply technical and organizational safeguards to protect data and retain information only as long as necessary for legitimate business or legal needs.</p>
         <h2>Your Choices</h2>
         <p>You may request access, correction, or deletion of personal information where applicable law grants these rights by contacting privacy@hireflow.example.</p>
-      </main>
-    </div>
+      </section>
+    </PublicPageLayout>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import BackButton from './BackButton'
 import { filterHelpArticles, parseHelpCenterLocation, resolveVisibleSelection, updateHelpCenterHistory } from './helpCenterState'
 import { Icon } from './Icon'
+import PublicPageLayout from './public/PublicPageLayout'
 
 const HELP_ARTICLES = {
   'getting-started': [
@@ -212,7 +213,7 @@ export default function HelpPage({ onBack }) {
   }
 
   return (
-    <div className="public-page page-content">
+    <PublicPageLayout className="page-content">
       <div className="public-page-hero">
         <div className="public-copy center public-mb-md"><BackButton onBack={onBack} /></div>
         <h1 className="public-page-title">Help Center</h1>
@@ -334,6 +335,6 @@ export default function HelpPage({ onBack }) {
           <a className="public-btn-secondary" href="/demo">Schedule demo</a>
         </div>
       </footer>
-    </div>
+    </PublicPageLayout>
   )
 }

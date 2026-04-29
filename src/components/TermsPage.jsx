@@ -1,12 +1,12 @@
 import usePageSeo from '../hooks/usePageSeo'
-import PublicFooter from './PublicFooter'
+import PublicPageLayout from './public/PublicPageLayout'
 
 export default function TermsPage() {
   usePageSeo('HireFlow Terms of Service', 'Review the HireFlow Terms of Service for using our resume screening platform and related features.')
 
   return (
-    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '4rem 1.5rem', lineHeight: 1.7 }}>
+    <PublicPageLayout>
+      <section className="public-section" style={{ maxWidth: 900, margin: '0 auto', lineHeight: 1.7 }}>
         <h1 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-display)' }}>Terms of Service</h1>
         <p>By accessing HireFlow, you agree to use the service for lawful hiring operations and internal recruiting workflows only.</p>
         <h2>Acceptable Use</h2>
@@ -19,8 +19,7 @@ export default function TermsPage() {
         <p>HireFlow is provided on an "as is" basis to the maximum extent permitted by law. Our aggregate liability is limited to fees paid for the service in the preceding 12 months.</p>
         <h2>Contact</h2>
         <p>Questions about these terms can be sent to legal@hireflow.example.</p>
-      </main>
-      <PublicFooter />
-    </div>
+      </section>
+    </PublicPageLayout>
   )
 }

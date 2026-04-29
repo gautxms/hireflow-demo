@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import '../styles/landing.css'
+import PublicPageLayout from './public/PublicPageLayout'
 
 export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -27,7 +28,7 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
   }, [])
 
   return (
-    <>
+    <PublicPageLayout>
       <div className="landing-mobile-header">
         <button
           type="button"
@@ -259,6 +260,6 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
           </div>
         </footer>
       </section>
-    </>
+    </PublicPageLayout>
   )
 }
