@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
-import '../styles/account-settings.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -10,7 +9,14 @@ function Toast({ type, message }) {
   if (!message) return null
 
   return (
-    <div className={`account-settings-page__toast account-settings-page__toast--${type === 'error' ? 'error' : 'success'}`}>
+    <div
+      className={[
+        'account-settings-toast',
+        type === 'error' ? 'account-settings-toast--error' : 'account-settings-toast--success',
+      ].join(' ')}
+      role="status"
+      aria-live="polite"
+    >
       {message}
     </div>
   )
@@ -176,66 +182,119 @@ export default function AccountSettingsPage() {
   }
 
   if (loading) {
-    return <div className="account-settings-page">Loading account settings...</div>
+    return <div className="type-body account-settings-state">Loading account settings...</div>
   }
 
   if (!profile) {
-    return <div className="account-settings-page">Unable to load profile.</div>
+    return <div className="type-body account-settings-state">Unable to load profile.</div>
   }
 
   return (
     <main className="account-settings-page">
       <Toast type={toast.type} message={toast.message} />
-      <h1 className="account-settings-page__title">Account Settings</h1>
-      <p className="account-settings-page__subtitle">Manage your profile and security settings.</p>
 
-      <section className="account-settings-page__card">
-        <h2 className="account-settings-page__section-title">Profile</h2>
-        <form onSubmit={handleProfileSave} className="account-settings-page__form">
-          <label>
-            Company
-            <input value={company} onChange={(event) => setCompany(event.target.value)} maxLength={100} className="account-settings-page__input" />
+      <h1 className="type-h1 account-settings-title">Account Settings</h1>
+      <p className="type-body account-settings-subtitle">Manage your profile and security settings.</p>
+
+      <section className="account-settings-card">
+        <h2 className="type-h2 account-settings-card-title">Profile</h2>
+        <form onSubmit={handleProfileSave} className="account-settings-form">
+          <label className="account-settings-label">
+            <span>Company</span>
+            <input
+              className="account-settings-input"
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              maxLength={100}
+            />
           </label>
-          <label>
-            Phone (E.164)
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+14155552671" className="account-settings-page__input" />
+
+          <label className="account-settings-label">
+            <span>Phone (E.164)</span>
+            <input
+              className="account-settings-input"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="+14155552671"
+            />
           </label>
-          <label>
-            Email (read-only)
-            <input value={profile.email || ''} disabled className="account-settings-page__input account-settings-page__input--readonly" />
+
+          <label className="account-settings-label">
+            <span>Email (read-only)</span>
+            <input className="account-settings-input account-settings-input--readonly" value={profile.email || ''} disabled />
           </label>
-          <label>
-            Subscription Status (read-only)
-            <input value={profile.subscription_status || 'inactive'} disabled className="account-settings-page__input account-settings-page__input--readonly" />
+
+          <label className="account-settings-label">
+            <span>Subscription Status (read-only)</span>
+            <input
+              className="account-settings-input account-settings-input--readonly"
+              value={profile.subscription_status || 'inactive'}
+              disabled
+            />
           </label>
-          <div className="account-settings-page__meta">
+
+          <div className="type-small account-settings-note">
             To change subscription, visit <a href="/pricing">Billing</a>.
           </div>
-          <div className="account-settings-page__meta">
+
+          <div className="type-small account-settings-note">
             Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
           </div>
-          <button type="submit" className="account-settings-page__button">Save profile</button>
+
+          <button type="submit" className="type-button account-settings-button account-settings-button--fit">
+            Save profile
+          </button>
         </form>
       </section>
 
-      <section className="account-settings-page__card">
-        <h2 className="account-settings-page__section-title">Change Password</h2>
-        <form onSubmit={handlePasswordChange} className="account-settings-page__form">
-          <input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} placeholder="Old password" required />
-          <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="New password" required minLength={8} />
-          <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm new password" required minLength={8} />
-          <button type="submit" className="account-settings-page__button">Change password</button>
+      <section className="account-settings-card">
+        <h2 className="type-h2 account-settings-card-title">Change Password</h2>
+        <form onSubmit={handlePasswordChange} className="account-settings-form">
+          <input
+            className="account-settings-input"
+            type="password"
+            value={oldPassword}
+            onChange={(event) => setOldPassword(event.target.value)}
+            placeholder="Old password"
+            required
+          />
+          <input
+            className="account-settings-input"
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder="New password"
+            required
+            minLength={8}
+          />
+          <input
+            className="account-settings-input"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="Confirm new password"
+            required
+            minLength={8}
+          />
+          <button type="submit" className="type-button account-settings-button account-settings-button--fit">
+            Change password
+          </button>
         </form>
       </section>
 
-      <section className="account-settings-page__card">
-        <h2 className="account-settings-page__section-title">Privacy & Data</h2>
-        <div className="account-settings-page__privacy-actions">
-          <button onClick={handleDownloadData}>Download personal data (JSON)</button>
-          <button onClick={handleDeleteAccount} className="account-settings-page__delete">Delete account</button>
+      <section className="account-settings-card">
+        <h2 className="type-h2 account-settings-card-title">Privacy & Data</h2>
+        <div className="account-settings-actions">
+          <button className="type-button account-settings-button" onClick={handleDownloadData}>
+            Download personal data (JSON)
+          </button>
+          <button className="type-button account-settings-button account-settings-button--danger" onClick={handleDeleteAccount}>
+            Delete account
+          </button>
         </div>
+
         {profile.deletion_scheduled_for && (
-          <p className="account-settings-page__deletion-note">
+          <p className="type-small account-settings-warning">
             Deletion scheduled for: {new Date(profile.deletion_scheduled_for).toLocaleString()}
           </p>
         )}

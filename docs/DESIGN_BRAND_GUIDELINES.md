@@ -87,6 +87,22 @@ HireFlow uses a **modern dark theme** with **high-contrast lime-green accents**.
 | **Display / Hero** | **Syne** | 400, 600, 700, **800** |
 | **UI / Body / Nav / Buttons** | **DM Sans** | 300, 400, 500 (+ italic variants) |
 
+### 2.5 Typography Token Enforcement (Lint Guidance)
+
+- Do **not** declare `fontFamily` directly in JSX inline styles.
+- Prefer shared typography classes/tokens (`.type-h1`, `.type-h2`, `.type-h3`, `.type-body`, `.type-small`, `.type-nav`, `.type-button`).
+- ESLint enforcement pattern:
+
+```js
+'no-restricted-syntax': [
+  'error',
+  {
+    selector: "JSXAttribute[name.name='style'] Property[key.name='fontFamily']",
+    message: 'Use typography tokens/classes instead of inline fontFamily declarations.',
+  },
+]
+```
+
 ---
 
 ### 2.1 Display Font — Syne

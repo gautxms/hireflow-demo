@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
-import '../styles/checkout.css'
 
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -620,34 +619,42 @@ export default function Checkout({ onAuthSuccess }) {
   }
 
   return (
-    <main className="checkout-page">
-      <div className="checkout-page__content">
-        <div className="checkout-page__back">
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="hf-btn hf-btn--secondary checkout-page__back-button"
-          >
-            ← Back to Home
-          </button>
-        </div>
+    <main>
+      <div>
+        <button
+          type="button"
+          onClick={() => window.history.back()}
+          className="hf-btn hf-btn--primary"          
+        >
+          ← Back to Home
+        </button>
 
-        <h1 className="checkout-page__title">Checkout</h1>
+        <h1 className="type-h1">
+          Checkout
+        </h1>
 
-        <p className="checkout-page__subtitle">
-          You selected the <strong className="checkout-page__plan-name">{selectedPlan}</strong> subscription.
+        <p className="type-body">
+          You selected the <strong>{selectedPlan}</strong> subscription.
         </p>
 
         {isReactivation && (
-          <div className="checkout-page__reactivate">
-            <div className="checkout-page__reactivate-content">
-              <span className="checkout-page__reactivate-icon">⚡</span>
+          <div>
+            <div>
+              <span>⚡</span>
               <div>
-                <h3 className="checkout-page__reactivate-title">Reactivate Your Subscription</h3>
-                <p className="checkout-page__reactivate-text">
+                <h3 className="type-h3">
+                  Reactivate Your Subscription
+                </h3>
+                <p className="type-small">
                   Your subscription was cancelled. Reactivate now to regain access to resume analysis and full features.
                 </p>
-                <button type="button" onClick={handleReactivateSubscription} className="hf-btn hf-btn--primary">
+                <button
+                  type="button"
+                  onClick={handleReactivateSubscription}
+                  className="hf-btn hf-btn--primary"
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+                >
                   Reactivate Now
                 </button>
               </div>
@@ -656,8 +663,8 @@ export default function Checkout({ onAuthSuccess }) {
         )}
 
         {status === 'action_required' && requiredAction === 'past_due' && (
-          <div className="checkout-page__notice">
-            <p className="checkout-page__notice-text">
+          <div>
+            <p>
               Your previous payment needs attention. Please update your payment method from the billing portal.
             </p>
             <a href="/billing" className="checkout-page__notice-link">Open billing portal</a>
@@ -665,38 +672,42 @@ export default function Checkout({ onAuthSuccess }) {
         )}
 
         {(errorMessage || successMessage) && (
-          <div className="checkout-page__messages">
+          <div>
             {!!errorMessage && (
-              <p className="checkout-page__message checkout-page__message--error">
+              <p>
                 Error: {errorMessage}
                 {status === 'error' && (
                   <>
                     <br />
-                    <a href="/pricing" className="checkout-page__message-link">
+                    <a href="/pricing">
                       ← Back to Pricing
                     </a>
                   </>
                 )}
               </p>
             )}
-            {!!successMessage && <p className="checkout-page__message checkout-page__message--success">{successMessage}</p>}
-            {!errorMessage && <p className="checkout-page__message checkout-page__message--status">{getStatusMessage()}</p>}
+            {!!successMessage && <p className="type-small">{successMessage}</p>}
+            {!errorMessage && <p>{getStatusMessage()}</p>}
           </div>
         )}
 
-        <div id="paddle-container" className="checkout-page__paddle-container" />
+        <div
+          id="paddle-container"
+          />
 
         {!checkoutOpen && (
-          <div className="checkout-page__loading-shell">
-            <p className="checkout-page__loading-text">Loading secure checkout...</p>
-            <div className="checkout-page__loading-icon">
+          <div>
+            <p>Loading secure checkout...</p>
+            <div>
               <span>🔐</span>
             </div>
           </div>
         )}
 
         {status === 'opened' && transactionId && (
-          <p className="checkout-page__transaction">Transaction reference: {transactionId}</p>
+          <p className="type-small">
+            Transaction reference: {transactionId}
+          </p>
         )}
 
         {showRetry && !hasSuccessfulTransaction && (
@@ -713,11 +724,18 @@ export default function Checkout({ onAuthSuccess }) {
                 setRequiredAction(null)
               }
             }}
-            className="hf-btn hf-btn--primary"
+            className="hf-btn hf-btn--primary"      
           >
             Retry checkout
           </button>
         )}
+
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+        `}</style>
       </div>
     </main>
   )
