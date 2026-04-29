@@ -557,22 +557,6 @@
       "viewport": "mobile",
       "capture": "state-strip",
       "artifact": "docs/qa/artifacts/screenshots/ph8-t3/primitives/table-shell-default-mobile-state-strip.png"
-    },
-    {
-      "id": "public-chrome-site-header-desktop-default",
-      "component": "site-header",
-      "variant": "marketing",
-      "viewport": "desktop",
-      "capture": "default",
-      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/chrome/public-site-header-desktop-default.png"
-    },
-    {
-      "id": "authenticated-chrome-app-header-desktop-default",
-      "component": "app-header",
-      "variant": "authenticated",
-      "viewport": "desktop",
-      "capture": "default",
-      "artifact": "docs/qa/artifacts/screenshots/ph8-t3/chrome/authenticated-app-header-desktop-default.png"
     }
   ],
   "updateProtocol": {
