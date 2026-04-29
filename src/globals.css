@@ -398,6 +398,32 @@ footer {
   border-bottom: none;
 }
 
+/* Shared desktop navigation styles used by the main App header. */
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-links button {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-base);
+  font-size: var(--type-nav-size);
+  font-weight: var(--type-nav-weight);
+  line-height: var(--type-nav-line-height);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  padding: 0.35rem 0.25rem;
+}
+
+.nav-links button:hover,
+.nav-links button:focus-visible {
+  color: var(--color-text-primary);
+}
+
 @media (max-width: 1439px) {
   .hero,
   .features,
