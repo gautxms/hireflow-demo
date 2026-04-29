@@ -20,7 +20,7 @@ function normalizeStatus(status) {
   return String(status || 'pending').toLowerCase()
 }
 
-export default function AnalysesPage() {
+export default function AnalysesPage({ onCreateAnalysis }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [items, setItems] = useState([])
@@ -76,7 +76,7 @@ export default function AnalysesPage() {
   return (
     <main className="route-state">
       <section className="route-state-card">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary" onClick={() => { window.history.pushState({}, '', '/dashboard'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Create analysis</button></div>
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary" onClick={onCreateAnalysis}>Create analysis</button></div>
 
         {loading && <p>Loading analyses…</p>}
         {!loading && error && <p role="alert">{error}</p>}
