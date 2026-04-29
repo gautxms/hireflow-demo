@@ -1038,7 +1038,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
 
   const pageContent = (
-    <Suspense fallback={<div style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>Loading…</div>}>
+    <Suspense fallback={<div className="app-route-loading-fallback">Loading…</div>}>
       {getPageContent()}
     </Suspense>
   )
@@ -1091,31 +1091,31 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             setIsMobileNavOpen(false)
             navigate('/')
           }}
-          className="site-logo"
+          className="site-header__logo"
         >
           Hire<span>Flow</span>
         </a>
         <button
           type="button"
-          className="mobile-nav-toggle touch-target"
+          className="site-header__mobile-toggle touch-target"
           aria-label="Toggle main navigation"
           aria-expanded={isMobileNavOpen}
           onClick={() => setIsMobileNavOpen((open) => !open)}
         >
           ☰
         </button>
-        <div className={`nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
-          <button type="button" className="site-nav-button" onClick={handleFeaturesClick}>Features</button>
-          <button type="button" className="site-nav-button" onClick={handleSolutionsClick}>Solutions</button>
+        <div className={`site-header__nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
+          <button type="button" className="site-header__nav-button" onClick={handleFeaturesClick}>Features</button>
+          <button type="button" className="site-header__nav-button" onClick={handleSolutionsClick}>Solutions</button>
           {canViewUpgradePricing && (
-            <button type="button" className="site-nav-button" onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }}>
+            <button type="button" className="site-header__nav-button" onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }}>
               {isAuthenticated ? 'Upgrade' : 'Pricing'}
             </button>
           )}
-          <button type="button" className="site-nav-button" onClick={handleAboutClick}>About</button>
-          <button type="button" className="site-nav-button" onClick={handleHelpClick}>Help</button>
+          <button type="button" className="site-header__nav-button" onClick={handleAboutClick}>About</button>
+          <button type="button" className="site-header__nav-button" onClick={handleHelpClick}>Help</button>
         </div>
-        <div className={`site-auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
+        <div className={`site-header__auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
           {isAuthenticated ? (
             <>
               {isActiveSubscriber && (
@@ -1195,19 +1195,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 }
 
 export default function App() {
-  const [token, setToken] = useState('')
-  const [isAuthInitialized, setIsAuthInitialized] = useState(false)
+  const [token, setToken] = useState(() => getStoredToken())
+  const [isAuthInitialized] = useState(true)
   const [pathname, setPathname] = useState(window.location.pathname)
   const [authPrompt, setAuthPrompt] = useState('')
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY) || ''
-    setToken(storedToken)
-    setIsAuthInitialized(true)
-  }, [])
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)

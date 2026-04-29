@@ -25,3 +25,9 @@ The repository-root `src/` tree is the single canonical frontend implementation.
 
 - New frontend work must be added under root `src/` only.
 - If a temporary fork/migration is ever required, document a time-bounded plan in `README.md` before creating any parallel tree.
+
+## Chrome architecture note: public vs authenticated
+
+- **Public chrome (marketing shell):** top-level marketing routes rendered from `src/App.jsx` use `site-header__*` classes only for header structure and interactions.
+- **Authenticated chrome (application shell):** signed-in workspace layout is rendered via `src/components/app-shell/UserAppShell.jsx` with `src/components/AppHeader.jsx` and uses `app-header__*` / `user-app-shell__*` namespaces only.
+- **Isolation rule:** no authenticated header styles should depend on `site-header__*`, and no public header styles should depend on `app-header__*` or `user-app-shell__*`.
