@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 export default function PublicFooter() {
   const seoLinks = [
     { href: '/ai-resume-screening', label: 'AI Resume Screening' },
@@ -5,6 +7,19 @@ export default function PublicFooter() {
     { href: '/resume-scoring-ai', label: 'Resume Scoring AI' },
     { href: '/automated-candidate-shortlisting', label: 'Automated Candidate Shortlisting' },
   ]
+  const [isSeoExpanded, setIsSeoExpanded] = useState(false)
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 601px)')
+    const updateExpandedState = (event) => {
+      setIsSeoExpanded(event.matches)
+    }
+
+    setIsSeoExpanded(mediaQuery.matches)
+    mediaQuery.addEventListener('change', updateExpandedState)
+
+    return () => mediaQuery.removeEventListener('change', updateExpandedState)
+  }, [])
 
   return (
     <footer className="public-footer" aria-label="Hireflow site footer">
@@ -46,12 +61,27 @@ export default function PublicFooter() {
 
       <p className="public-footer__copyright">© 2026 Hireflow. All rights reserved.</p>
 
-      <div className="public-footer__intent-links" aria-label="SEO utility links">
-        {seoLinks.map(({ href, label }) => (
-          <a key={href} className="public-footer__seo-link" href={href}>
-            {label}
-          </a>
-        ))}
+      <div className="public-footer__intent" aria-label="SEO utility links">
+        <button
+          type="button"
+          className="public-footer__intent-toggle"
+          aria-expanded={isSeoExpanded}
+          aria-controls="public-footer-intent-links"
+          onClick={() => setIsSeoExpanded((expanded) => !expanded)}
+        >
+          SEO links
+        </button>
+
+        <div
+          id="public-footer-intent-links"
+          className={`public-footer__intent-links ${isSeoExpanded ? 'public-footer__intent-links--expanded' : ''}`.trim()}
+        >
+          {seoLinks.map(({ href, label }) => (
+            <a key={href} className="public-footer__seo-link" href={href}>
+              {label}
+            </a>
+          ))}
+        </div>
       </div>
     </footer>
   )
