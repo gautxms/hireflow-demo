@@ -678,8 +678,6 @@ export default function Checkout({ onAuthSuccess }) {
                     color: '#000000',
                     border: 'none',
                     borderRadius: '6px',
-                    padding: '12px 24px',
-                    cursor: 'pointer',
                     transition: 'opacity 0.2s',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
@@ -768,8 +766,6 @@ export default function Checkout({ onAuthSuccess }) {
               color: '#000000',
               border: 'none',
               borderRadius: '6px',
-              padding: '12px 24px',
-              cursor: 'pointer',
             }}
           >
             Retry checkout
