@@ -121,3 +121,30 @@ body {
 .hf-icon--tone-warning { --hf-icon-color: var(--icon-color-warning); }
 .hf-icon--tone-danger { --hf-icon-color: var(--icon-color-danger); }
 .hf-icon--tone-current { --hf-icon-color: currentColor; }
+
+
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-interactive);
+  font: var(--type-button);
+  cursor: pointer;
+  transition: var(--motion-transition-color);
+}
+
+.btn-ghost:hover { border-color: var(--color-white-alpha-20); }
+
+.btn-primary {
+  background: var(--color-accent-green);
+  color: var(--color-bg-primary);
+  border: none;
+  padding: 0.55rem 1.35rem;
+  border-radius: var(--radius-interactive);
+  font: var(--type-button);
+  cursor: pointer;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard), transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }

@@ -205,7 +205,7 @@ body {
   transform: translateY(-1px);
 }
 
-/* ---- HERO ---- */
+/ * ---- HERO ---- * /
 .hero {
   min-height: 100vh;
   display: flex;
@@ -294,7 +294,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* ---- FEATURES ---- */
+/ * ---- FEATURES ---- * /
 .features {
   padding: 6rem 4rem;
   background: var(--color-bg-secondary);
@@ -345,6 +345,8 @@ body {
   font-size: 0.875rem;
 }
 
+*/
+
 .page-content {
   padding-top: 80px;
 }
@@ -392,6 +394,32 @@ body {
 
 .candidate-results-table tr:last-child td {
   border-bottom: none;
+}
+
+/* Shared desktop navigation styles used by the main App header. */
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-links button {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-base);
+  font-size: var(--type-nav-size);
+  font-weight: var(--type-nav-weight);
+  line-height: var(--type-nav-line-height);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  padding: 0.35rem 0.25rem;
+}
+
+.nav-links button:hover,
+.nav-links button:focus-visible {
+  color: var(--color-text-primary);
 }
 
 @media (max-width: 1439px) {
@@ -448,64 +476,6 @@ body {
     padding: 0.65rem 0.75rem !important;
     border: 1px solid var(--color-border) !important;
     border-radius: 8px;
-  }
-
-  .landing-mobile-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem 0;
-  }
-
-  .landing-menu-toggle {
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-text-primary);
-  }
-
-  .landing-mobile-cta {
-    min-height: 44px;
-  }
-
-  .landing-mobile-menu {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem 0;
-  }
-
-  .landing-mobile-menu a,
-  .landing-mobile-menu button {
-    min-height: 44px;
-    width: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .hero {
-    min-height: auto;
-    padding: 6.5rem 1rem 3rem;
-  }
-
-  .hero p {
-    font-size: 1rem;
-  }
-
-  .features {
-    padding: 3rem 1rem;
-  }
-
-  .features-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .feature-card {
-    padding: 1.25rem;
   }
 
   .resume-uploader-page,
@@ -594,17 +564,6 @@ body {
 
   .candidate-cta-row button {
     width: 100%;
-  }
-}
-
-@media (max-width: 374px) {
-  .hero {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-
-  .hero h1 {
-    font-size: 2.1rem;
   }
 }
 
