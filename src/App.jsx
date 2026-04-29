@@ -1044,7 +1044,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
               {isActiveSubscriber && (
                 <button
                   type="button"
-                  className="site-dashboard-shortcut"
+                  className="btn-ghost btn-ghost--accent"
                   onClick={() => {
                     setIsMobileNavOpen(false)
                     setIsProfileMenuOpen(false)
