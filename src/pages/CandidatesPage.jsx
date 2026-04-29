@@ -15,6 +15,59 @@ const emptyFilters = {
   sourceAnalysisId: '',
 }
 
+const candidateFilterFieldConfig = {
+  skills: {
+    label: 'Skills',
+    placeholder: 'e.g. React, SQL',
+  },
+  experienceMin: {
+    label: 'Min experience',
+    placeholder: 'e.g. 3',
+    type: 'number',
+    inputMode: 'decimal',
+    min: '0',
+    step: '0.5',
+  },
+  experienceMax: {
+    label: 'Max experience',
+    placeholder: 'e.g. 12',
+    type: 'number',
+    inputMode: 'decimal',
+    min: '0',
+    step: '0.5',
+  },
+  scoreMin: {
+    label: 'Min score (/10)',
+    placeholder: 'e.g. 7',
+    type: 'number',
+    inputMode: 'decimal',
+    min: '0',
+    max: '10',
+    step: '0.1',
+  },
+  scoreMax: {
+    label: 'Max score (/10)',
+    placeholder: 'e.g. 9.5',
+    type: 'number',
+    inputMode: 'decimal',
+    min: '0',
+    max: '10',
+    step: '0.1',
+  },
+  tags: {
+    label: 'Tags',
+    placeholder: 'e.g. frontend, leadership',
+  },
+  sourceJobId: {
+    label: 'Source job ID',
+    placeholder: 'e.g. job_123',
+  },
+  sourceAnalysisId: {
+    label: 'Source analysis ID',
+    placeholder: 'e.g. parse_456',
+  },
+}
+
 function formatDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -177,11 +230,16 @@ export default function CandidatesPage() {
       <section className="candidates-directory__filters" aria-label="Candidate filters">
         {Object.entries(emptyFilters).map(([key]) => (
           <label key={key} className="candidates-directory__filter-field">
-            <span>{key}</span>
+            <span>{candidateFilterFieldConfig[key]?.label || key}</span>
             <input
+              type={candidateFilterFieldConfig[key]?.type || 'text'}
+              inputMode={candidateFilterFieldConfig[key]?.inputMode}
+              min={candidateFilterFieldConfig[key]?.min}
+              max={candidateFilterFieldConfig[key]?.max}
+              step={candidateFilterFieldConfig[key]?.step}
               value={filters[key]}
               onChange={(event) => setFilters((prev) => ({ ...prev, [key]: event.target.value }))}
-              placeholder={`Filter by ${key}`}
+              placeholder={candidateFilterFieldConfig[key]?.placeholder || `Filter by ${key}`}
             />
           </label>
         ))}
@@ -189,7 +247,7 @@ export default function CandidatesPage() {
 
       <section className="candidates-directory__filters" aria-label="Bulk shortlist actions">
         <label className="candidates-directory__filter-field">
-          <span>shortlist</span>
+          <span>Shortlist</span>
           <select
             value={selectedShortlistId}
             onChange={(event) => setSelectedShortlistId(event.target.value)}
