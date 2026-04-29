@@ -629,17 +629,7 @@ export default function Checkout({ onAuthSuccess }) {
         <button
           type="button"
           onClick={() => window.history.back()}
-          className="hf-btn hf-btn--primary"
-          style={{
-            background: 'transparent',
-            color: '#CCFF00',
-            border: 'none',
-            cursor: 'pointer',
-            marginBottom: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
+          className="hf-btn hf-btn--primary"          
         >
           ← Back to Home
         </button>
@@ -649,21 +639,15 @@ export default function Checkout({ onAuthSuccess }) {
         </h1>
 
         <p className="type-body" style={{ color: '#a3a3a3', marginBottom: '40px' }}>
-          You selected the <strong style={{ color: '#CCFF00' }}>{selectedPlan}</strong> subscription.
+          You selected the <strong>{selectedPlan}</strong> subscription.
         </p>
 
         {isReactivation && (
-          <div style={{
-            background: 'rgba(204, 255, 0, 0.15)',
-            border: '2px solid #CCFF00',
-            borderRadius: '12px',
-            padding: '24px',
-            marginBottom: '32px',
-          }}>
+          <div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
               <span style={{ fontSize: '24px' }}>⚡</span>
               <div>
-                <h3 className="type-h3" style={{ color: '#CCFF00', marginBottom: '8px' }}>
+                <h3 className="type-h3">
                   Reactivate Your Subscription
                 </h3>
                 <p className="type-small" style={{ color: '#a3a3a3', marginBottom: '16px' }}>
@@ -673,12 +657,6 @@ export default function Checkout({ onAuthSuccess }) {
                   type="button"
                   onClick={handleReactivateSubscription}
                   className="hf-btn hf-btn--primary"
-                  style={{
-                    background: '#CCFF00',
-                    border: 'none',
-                    borderRadius: '6px',
-                    transition: 'opacity 0.2s',
-                  }}
                   onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
                   onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
                 >
@@ -706,28 +684,21 @@ export default function Checkout({ onAuthSuccess }) {
                 {status === 'error' && (
                   <>
                     <br />
-                    <a href="/pricing" style={{ color: '#CCFF00', textDecoration: 'none', marginTop: '1rem', display: 'inline-block' }}>
+                    <a href="/pricing">
                       ← Back to Pricing
                     </a>
                   </>
                 )}
               </p>
             )}
-            {!!successMessage && <p className="type-small" style={{ margin: 0, color: '#CCFF00', fontWeight: 600 }}>{successMessage}</p>}
+            {!!successMessage && <p className="type-small">{successMessage}</p>}
             {!errorMessage && <p style={{ margin: '8px 0 0', color: '#a3a3a3' }}>{getStatusMessage()}</p>}
           </div>
         )}
 
         <div
           id="paddle-container"
-          style={{
-            background: '#1a1a1a',
-            borderRadius: '12px',
-            padding: '32px',
-            border: '1px solid #333333',
-            minHeight: '500px',
-          }}
-        />
+          />
 
         {!checkoutOpen && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#a3a3a3' }}>
@@ -758,11 +729,7 @@ export default function Checkout({ onAuthSuccess }) {
                 setRequiredAction(null)
               }
             }}
-            className="hf-btn hf-btn--primary"
-            style={{
-              marginTop: '16px',
-              background: '#CCFF00',
-            }}
+            className="hf-btn hf-btn--primary"      
           >
             Retry checkout
           </button>
