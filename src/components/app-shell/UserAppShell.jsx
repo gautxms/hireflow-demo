@@ -2,7 +2,7 @@ import AppHeader from '../AppHeader'
 import { createElement, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
 import {
-  LayoutDashboard, Briefcase, ScanSearch, Users, ClipboardCheck, BarChart2, Settings2, Pin, ChevronLeft, ChevronRight
+  LayoutDashboard, Briefcase, ScanSearch, Users, ClipboardCheck, BarChart2, Settings2, Pin, ChevronLeft, ChevronRight, Lock
 } from 'lucide-react'
 
 const SIDEBAR_PINNED_STORAGE_KEY = 'hireflow_user_sidebar_pinned'
@@ -107,8 +107,11 @@ export default function UserAppShell({
             aria-label={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
             title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
           >
-            {isPinned ? <Pin size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />}
-            <span className="user-app-shell__pin-indicator">{isPinned ? 'Pinned' : 'Hover to expand'}</span>
+            {isPinned ? <ChevronLeft size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />}
+            <span className="user-app-shell__pin-indicator">
+              {isPinned ? <Pin size={12} strokeWidth={1.7} /> : null}
+              {isPinned ? 'Pinned' : 'Hover to expand'}
+            </span>
           </button>
         </div>
 
@@ -141,7 +144,7 @@ export default function UserAppShell({
                     : item.icon
                       ? createElement(item.icon, { size: 18, strokeWidth: 1.5, className: 'user-app-shell__nav-item-icon' })
                       : <LayoutDashboard size={18} strokeWidth={1.5} className="user-app-shell__nav-item-icon" />}
-                  {isLocked ? <Icon name="lock" size="xs" className="user-app-shell__nav-item-lock" /> : null}
+                  {isLocked ? <Lock size={11} strokeWidth={1.7} className="user-app-shell__nav-item-lock" /> : null}
                 </span>
                 <span className="user-app-shell__nav-item-label">{item.label}</span>
                 {item.badge ? <span className="user-app-shell__nav-item-badge">{item.badge}</span> : null}

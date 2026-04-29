@@ -1,4 +1,3 @@
-import { Icon } from './Icon'
 import { hasActiveSubscription } from '../utils/routeGuards'
 import { Bell } from 'lucide-react'
 
