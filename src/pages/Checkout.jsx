@@ -675,7 +675,6 @@ export default function Checkout({ onAuthSuccess }) {
                   className="hf-btn hf-btn--primary"
                   style={{
                     background: '#CCFF00',
-                    color: '#000000',
                     border: 'none',
                     borderRadius: '6px',
                     transition: 'opacity 0.2s',
@@ -763,7 +762,6 @@ export default function Checkout({ onAuthSuccess }) {
             style={{
               marginTop: '16px',
               background: '#CCFF00',
-              color: '#000000',
             }}
           >
             Retry checkout
