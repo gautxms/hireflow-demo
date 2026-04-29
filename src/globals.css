@@ -412,6 +412,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.user-app-shell__nav-item-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: currentColor;
 }
 
 .user-app-shell__nav-item-lock {
@@ -420,6 +428,8 @@ body {
   bottom: -7px;
   background: var(--color-bg-secondary);
   border-radius: 999px;
+  color: var(--color-warning-text);
+  padding: 1px;
 }
 
 .user-app-shell__nav-item-label {
@@ -444,8 +454,13 @@ body {
 }
 
 .user-app-shell__nav-item.is-active {
+  color: var(--color-accent-green);
   box-shadow: inset 2px 0 0 var(--color-accent-green);
   border: 1px solid var(--color-accent-alpha-20);
+}
+
+.user-app-shell__nav-item.is-active .user-app-shell__nav-item-label {
+  color: var(--color-text-primary);
 }
 
 .user-app-shell__nav-item.is-locked {
@@ -594,6 +609,9 @@ body {
 }
 
 .app-header__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-secondary);
