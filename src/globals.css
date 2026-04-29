@@ -91,10 +91,8 @@ body {
   font-size: var(--type-button-size-lg);
 }
 
-/* Legacy landing/nav/button/hero/footer styles moved to src/styles/landing.css.
-   Quarantined to avoid duplicate global definitions.
-/ * ---- NAV ---- * /
-nav {
+/* ---- NAV ---- */
+.site-header {
   position: fixed;
   top: 0;
   left: 0;
@@ -338,8 +336,8 @@ nav {
   font-size: 0.95rem;
 }
 
-/ * ---- FOOTER ---- * /
-footer {
+/* ---- FOOTER ---- */
+.site-footer {
   padding: 3rem 4rem;
   border-top: 1px solid var(--color-border);
   text-align: center;
@@ -427,7 +425,7 @@ footer {
 @media (max-width: 1439px) {
   .hero,
   .features,
-  footer {
+  .site-footer {
     padding-left: 2.5rem;
     padding-right: 2.5rem;
   }
