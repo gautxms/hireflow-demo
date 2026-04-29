@@ -3,6 +3,17 @@ import usePageSeo from '../hooks/usePageSeo'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
+const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
+
+
+function markCreateAnalysisIntent() {
+  const intent = {
+    id: crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    createdAt: Date.now(),
+  }
+  sessionStorage.setItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY, JSON.stringify(intent))
+}
+
 function navigate(pathname, options = {}) {
   if (window.location.pathname !== pathname) {
     window.history.pushState(options.state ?? {}, '', pathname)
@@ -31,6 +42,7 @@ export default function BillingSuccess() {
       setCountdown((previousCountdown) => {
         if (previousCountdown <= 1) {
           window.clearInterval(timer)
+          markCreateAnalysisIntent()
           navigate('/uploader', { replace: true })
           return 0
         }
@@ -66,7 +78,14 @@ export default function BillingSuccess() {
 
         <p className="billing-shell__countdown">Redirecting to resume uploader in {countdown} seconds...</p>
 
-        <button type="button" onClick={() => navigate('/uploader', { replace: true })} className="hf-btn hf-btn--primary">
+        <button
+          type="button"
+          onClick={() => {
+            markCreateAnalysisIntent()
+            navigate('/uploader', { replace: true })
+          }}
+          className="hf-btn hf-btn--primary"
+        >
           Go to Resume Uploader
         </button>
       </div>

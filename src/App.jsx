@@ -177,6 +177,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
   const lastResultsValidatedOwnerKeyRef = useRef(null)
+  const uploaderIntentAccessRef = useRef({ pathname: '', allowed: null })
   const { logout: logoutAdmin } = useAdminAuth()
   const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
 
@@ -508,10 +509,18 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/uploader') {
-      if (!consumeCreateAnalysisIntent()) {
+      if (uploaderIntentAccessRef.current.pathname !== pathname) {
+        uploaderIntentAccessRef.current = {
+          pathname,
+          allowed: consumeCreateAnalysisIntent(),
+        }
+      }
+
+      if (!uploaderIntentAccessRef.current.allowed) {
         navigate('/analyses')
         return null
       }
+
       const canAccessUploader = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
