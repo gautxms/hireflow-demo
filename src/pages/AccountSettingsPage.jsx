@@ -10,15 +10,12 @@ function Toast({ type, message }) {
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 16,
-        right: 16,
-        padding: '0.75rem 1rem',
-        borderRadius: 8,
-        background: type === 'error' ? '#b91c1c' : '#166534',
-        zIndex: 50,
-      }}
+      className={[
+        'account-settings-toast',
+        type === 'error' ? 'account-settings-toast--error' : 'account-settings-toast--success',
+      ].join(' ')}
+      role="status"
+      aria-live="polite"
     >
       {message}
     </div>
@@ -185,66 +182,119 @@ export default function AccountSettingsPage() {
   }
 
   if (loading) {
-    return <div className="type-body" style={{ padding: '2rem' }}>Loading account settings...</div>
+    return <div className="type-body account-settings-state">Loading account settings...</div>
   }
 
   if (!profile) {
-    return <div className="type-body" style={{ padding: '2rem' }}>Unable to load profile.</div>
+    return <div className="type-body account-settings-state">Unable to load profile.</div>
   }
 
   return (
-    <main style={{ maxWidth: 860, margin: '0 auto', padding: '2rem 1rem 3rem', color: 'var(--text)' }}>
+    <main className="account-settings-page">
       <Toast type={toast.type} message={toast.message} />
-      <h1 className="type-h1" style={{ marginBottom: '0.5rem' }}>Account Settings</h1>
-      <p className="type-body" style={{ color: 'var(--muted)', marginBottom: '1.75rem' }}>Manage your profile and security settings.</p>
 
-      <section style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', padding: '1.2rem', marginBottom: '1rem' }}>
-        <h2 className="type-h2" style={{ marginTop: 0 }}>Profile</h2>
-        <form onSubmit={handleProfileSave} style={{ display: 'grid', gap: '0.9rem' }}>
-          <label>
-            Company
-            <input value={company} onChange={(event) => setCompany(event.target.value)} maxLength={100} style={{ width: '100%', marginTop: 6 }} />
+      <h1 className="type-h1 account-settings-title">Account Settings</h1>
+      <p className="type-body account-settings-subtitle">Manage your profile and security settings.</p>
+
+      <section className="account-settings-card">
+        <h2 className="type-h2 account-settings-card-title">Profile</h2>
+        <form onSubmit={handleProfileSave} className="account-settings-form">
+          <label className="account-settings-label">
+            <span>Company</span>
+            <input
+              className="account-settings-input"
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              maxLength={100}
+            />
           </label>
-          <label>
-            Phone (E.164)
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+14155552671" style={{ width: '100%', marginTop: 6 }} />
+
+          <label className="account-settings-label">
+            <span>Phone (E.164)</span>
+            <input
+              className="account-settings-input"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="+14155552671"
+            />
           </label>
-          <label>
-            Email (read-only)
-            <input value={profile.email || ''} disabled style={{ width: '100%', marginTop: 6, opacity: 0.7 }} />
+
+          <label className="account-settings-label">
+            <span>Email (read-only)</span>
+            <input className="account-settings-input account-settings-input--readonly" value={profile.email || ''} disabled />
           </label>
-          <label>
-            Subscription Status (read-only)
-            <input value={profile.subscription_status || 'inactive'} disabled style={{ width: '100%', marginTop: 6, opacity: 0.7 }} />
+
+          <label className="account-settings-label">
+            <span>Subscription Status (read-only)</span>
+            <input
+              className="account-settings-input account-settings-input--readonly"
+              value={profile.subscription_status || 'inactive'}
+              disabled
+            />
           </label>
-          <div className="type-small" style={{ color: 'var(--muted)' }}>
+
+          <div className="type-small account-settings-note">
             To change subscription, visit <a href="/pricing">Billing</a>.
           </div>
-          <div className="type-small" style={{ color: 'var(--muted)' }}>
+
+          <div className="type-small account-settings-note">
             Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
           </div>
-          <button type="submit" className="type-button" style={{ width: 'fit-content' }}>Save profile</button>
+
+          <button type="submit" className="type-button account-settings-button account-settings-button--fit">
+            Save profile
+          </button>
         </form>
       </section>
 
-      <section style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', padding: '1.2rem', marginBottom: '1rem' }}>
-        <h2 className="type-h2" style={{ marginTop: 0 }}>Change Password</h2>
-        <form onSubmit={handlePasswordChange} style={{ display: 'grid', gap: '0.9rem' }}>
-          <input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} placeholder="Old password" required />
-          <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="New password" required minLength={8} />
-          <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm new password" required minLength={8} />
-          <button type="submit" className="type-button" style={{ width: 'fit-content' }}>Change password</button>
+      <section className="account-settings-card">
+        <h2 className="type-h2 account-settings-card-title">Change Password</h2>
+        <form onSubmit={handlePasswordChange} className="account-settings-form">
+          <input
+            className="account-settings-input"
+            type="password"
+            value={oldPassword}
+            onChange={(event) => setOldPassword(event.target.value)}
+            placeholder="Old password"
+            required
+          />
+          <input
+            className="account-settings-input"
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder="New password"
+            required
+            minLength={8}
+          />
+          <input
+            className="account-settings-input"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="Confirm new password"
+            required
+            minLength={8}
+          />
+          <button type="submit" className="type-button account-settings-button account-settings-button--fit">
+            Change password
+          </button>
         </form>
       </section>
 
-      <section style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', padding: '1.2rem' }}>
-        <h2 className="type-h2" style={{ marginTop: 0 }}>Privacy & Data</h2>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="type-button" onClick={handleDownloadData}>Download personal data (JSON)</button>
-          <button className="type-button" onClick={handleDeleteAccount} style={{ background: '#dc2626'}}>Delete account</button>
+      <section className="account-settings-card">
+        <h2 className="type-h2 account-settings-card-title">Privacy & Data</h2>
+        <div className="account-settings-actions">
+          <button className="type-button account-settings-button" onClick={handleDownloadData}>
+            Download personal data (JSON)
+          </button>
+          <button className="type-button account-settings-button account-settings-button--danger" onClick={handleDeleteAccount}>
+            Delete account
+          </button>
         </div>
+
         {profile.deletion_scheduled_for && (
-          <p className="type-small" style={{ marginTop: 12}}>
+          <p className="type-small account-settings-warning">
             Deletion scheduled for: {new Date(profile.deletion_scheduled_for).toLocaleString()}
           </p>
         )}
