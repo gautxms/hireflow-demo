@@ -70,9 +70,10 @@ import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
+const PUBLIC_ROUTE_PATHS = new Set(['/', '/login', '/signup', '/pricing'])
 const USER_SHELL_ROUTE_PATHS = new Set([
-  '/',
   '/dashboard',
+  '/dashboard/legacy',
   '/results',
   '/job-descriptions',
   '/analyses',
@@ -128,11 +129,15 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, sub
 
   const resolvedPathname = resolveUserSectionPath(pathname)
 
-  if (shouldDisableUserShell(resolvedPathname)) {
+  if (shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
     return false
   }
 
-  return USER_SHELL_ROUTE_PATHS.has(resolvedPathname)
+  if (USER_SHELL_ROUTE_PATHS.has(resolvedPathname)) {
+    return true
+  }
+
+  return resolvedPathname.startsWith('/analyses/') || resolvedPathname.startsWith('/candidates/')
 }
 
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
