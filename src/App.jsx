@@ -553,10 +553,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      const canAccessReports = guardAuthenticatedRoute({
+      const canAccessReports = guardSubscriptionRoute({
         isAuthenticated,
-        promptMessage: 'Please login to view reports.',
+        subscriptionStatus,
         onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=reports_upgrade_required'),
+        authPromptMessage: 'Please login to view reports.',
       })
       if (!canAccessReports) {
         return null

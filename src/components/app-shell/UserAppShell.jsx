@@ -1,6 +1,7 @@
 import AppHeader from '../AppHeader'
 import { createElement, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon'
+import { hasActiveSubscription } from '../../utils/routeGuards'
 import {
   LayoutDashboard, Briefcase, ScanSearch, Users, ClipboardCheck, BarChart2, Settings2, Pin, ChevronLeft, ChevronRight, Lock
 } from 'lucide-react'
@@ -43,7 +44,7 @@ export default function UserAppShell({
   const [isHoverExpanded, setIsHoverExpanded] = useState(false)
 
   const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
-  const isPremiumUser = normalizedSubscriptionStatus === 'active'
+  const isPremiumUser = hasActiveSubscription(normalizedSubscriptionStatus)
   const isExpanded = isPinned || isHoverExpanded
 
   useEffect(() => {
