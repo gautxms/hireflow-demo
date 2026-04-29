@@ -91,7 +91,9 @@ body {
   font-size: var(--type-button-size-lg);
 }
 
-/* ---- NAV ---- */
+/* Legacy landing/nav/button/hero/footer styles moved to src/styles/landing.css.
+   Quarantined to avoid duplicate global definitions.
+/ * ---- NAV ---- * /
 nav {
   position: fixed;
   top: 0;
@@ -205,7 +207,7 @@ nav {
   transform: translateY(-1px);
 }
 
-/* ---- HERO ---- */
+/ * ---- HERO ---- * /
 .hero {
   min-height: 100vh;
   display: flex;
@@ -294,7 +296,7 @@ nav {
   flex-wrap: wrap;
 }
 
-/* ---- FEATURES ---- */
+/ * ---- FEATURES ---- * /
 .features {
   padding: 6rem 4rem;
   background: var(--color-bg-secondary);
@@ -336,7 +338,7 @@ nav {
   font-size: 0.95rem;
 }
 
-/* ---- FOOTER ---- */
+/ * ---- FOOTER ---- * /
 footer {
   padding: 3rem 4rem;
   border-top: 1px solid var(--color-border);
@@ -344,6 +346,8 @@ footer {
   color: var(--color-text-secondary);
   font-size: 0.875rem;
 }
+
+*/
 
 .page-content {
   padding-top: 80px;
@@ -450,64 +454,6 @@ footer {
     border-radius: 8px;
   }
 
-  .landing-mobile-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem 0;
-  }
-
-  .landing-menu-toggle {
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-text-primary);
-  }
-
-  .landing-mobile-cta {
-    min-height: 44px;
-  }
-
-  .landing-mobile-menu {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem 0;
-  }
-
-  .landing-mobile-menu a,
-  .landing-mobile-menu button {
-    min-height: 44px;
-    width: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .hero {
-    min-height: auto;
-    padding: 6.5rem 1rem 3rem;
-  }
-
-  .hero p {
-    font-size: 1rem;
-  }
-
-  .features {
-    padding: 3rem 1rem;
-  }
-
-  .features-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .feature-card {
-    padding: 1.25rem;
-  }
-
   .resume-uploader-page,
   .candidate-results-page {
     padding: 1rem !important;
@@ -594,17 +540,6 @@ footer {
 
   .candidate-cta-row button {
     width: 100%;
-  }
-}
-
-@media (max-width: 374px) {
-  .hero {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-
-  .hero h1 {
-    font-size: 2.1rem;
   }
 }
 

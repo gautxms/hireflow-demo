@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import '../globals.css'
+import '../styles/landing.css'
 
 export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
