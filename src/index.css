@@ -343,3 +343,37 @@ body {
   transition: color 0.15s;
 }
 .app-footer-bar a:hover { color: #444; }
+
+.app-shell-layout {
+  display: flex;
+  height: 100vh;
+  background: #0a0a0a;
+  overflow: hidden;
+}
+
+.app-sb-logo-icon {
+  flex-shrink: 0;
+}
+
+.app-sb-logo-text-hire {
+  color: #fff;
+}
+
+.app-sb-logo-text-flow {
+  color: #c8ff00;
+}
+
+.app-shell-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-shell-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+  background: #0a0a0a;
+}

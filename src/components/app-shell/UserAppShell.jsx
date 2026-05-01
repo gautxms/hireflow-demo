@@ -1,5 +1,5 @@
 import AppHeader from '../AppHeader'
-import { useEffect, useMemo, useState } from 'react'
+import { createElement, useMemo, useState } from 'react'
 import {
   LayoutDashboard,
   Briefcase,
@@ -38,19 +38,11 @@ const DEFAULT_NAV = [
 ]
 
 export default function UserAppShell({ children, pathname, onNavigate, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
-  const [expanded, setExpanded] = useState(true)
-  const [pinned, setPinned] = useState(true)
+  const getInitialPinned = () => localStorage.getItem('hf-sb-pinned') !== 'false'
+  const [pinned, setPinned] = useState(getInitialPinned)
+  const [expanded, setExpanded] = useState(getInitialPinned)
 
   const isSubscribed = hasActiveSubscription(String(subscriptionStatus || 'inactive').trim().toLowerCase())
-
-  useEffect(() => {
-    const saved = localStorage.getItem('hf-sb-pinned')
-    if (saved !== null) {
-      const val = saved === 'true'
-      setPinned(val)
-      setExpanded(val)
-    }
-  }, [])
 
   const normalizedNavItems = useMemo(() => {
     return (Array.isArray(navItems) ? navItems : DEFAULT_NAV).map((item) => {
@@ -85,15 +77,15 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#0a0a0a', overflow: 'hidden' }}>
+    <div className="app-shell-layout">
       <aside
         className={`app-sb ${expanded ? 'app-sb--open' : 'app-sb--closed'}`}
         onMouseEnter={() => { if (!pinned) setExpanded(true) }}
         onMouseLeave={() => { if (!pinned) setExpanded(false) }}
       >
         <div className="app-sb-logo">
-          <Grid2x2 size={20} strokeWidth={1.8} color="#c8ff00" style={{ flexShrink: 0 }} />
-          <span className="app-sb-logo-text"><span style={{ color: '#fff' }}>Hire</span><span style={{ color: '#c8ff00' }}>Flow</span></span>
+          <Grid2x2 size={20} strokeWidth={1.8} color="#c8ff00" className="app-sb-logo-icon" />
+          <span className="app-sb-logo-text"><span className="app-sb-logo-text-hire">Hire</span><span className="app-sb-logo-text-flow">Flow</span></span>
         </div>
 
         <nav className="app-sb-nav">
@@ -109,7 +101,7 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
                 title={!expanded ? label : undefined}
                 aria-current={isActive ? 'page' : undefined}
               >
-                <Icon size={18} strokeWidth={1.5} className="app-sb-icon" />
+                {createElement(Icon, { size: 18, strokeWidth: 1.5, className: 'app-sb-icon' })}
                 <span className="app-sb-label">
                   {label}
                   {badge && <span className="app-sb-badge">{badge}</span>}
@@ -140,9 +132,9 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
           </button>
         </div>
       </aside>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+      <div className="app-shell-content">
         <AppHeader pathname={pathname} onNavigate={onNavigate} subscriptionStatus={subscriptionStatus} userProfile={userProfile} />
-        <main style={{ flex: 1, overflowY: 'auto', padding: '28px 32px', background: '#0a0a0a' }}>
+        <main className="app-shell-main">
           {children}
         </main>
         <footer className="app-footer-bar">
