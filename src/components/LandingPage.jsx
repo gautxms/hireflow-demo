@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import '../styles/landing.css'
 import PublicPageLayout from './public/PublicPageLayout'
 
 export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-
   useEffect(() => {
     // Smooth scroll and interactive effects
     const anchors = document.querySelectorAll('a[href^="#"]')
@@ -29,37 +27,6 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
 
   return (
     <PublicPageLayout>
-      <div className="landing-mobile-header">
-        <button
-          type="button"
-          className="landing-menu-toggle"
-          aria-label="Toggle landing navigation"
-          aria-expanded={isMobileMenuOpen}
-          onClick={() => setIsMobileMenuOpen((open) => !open)}
-        >
-          ☰
-        </button>
-        <button type="button" className="btn-primary landing-mobile-cta" onClick={onStartDemo}>
-          Start Demo
-        </button>
-      </div>
-
-      {isMobileMenuOpen && (
-        <div className="landing-mobile-menu" aria-label="Mobile site links">
-          <a href="#features" onClick={() => setIsMobileMenuOpen(false)}>Features</a>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => {
-              setIsMobileMenuOpen(false)
-              onStartDemo()
-            }}
-          >
-            Try Demo
-          </button>
-        </div>
-      )}
-
       {/* Hero Section */}
       <section className="hero">
         <div className="orb-2"></div>

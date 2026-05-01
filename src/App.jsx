@@ -174,7 +174,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [sharedResultsLoading, setSharedResultsLoading] = useState(false)
   const [sharedResultsError, setSharedResultsError] = useState('')
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const profileMenuRef = useRef(null)
   const lastResultsValidatedOwnerKeyRef = useRef(null)
   const uploaderIntentAccessRef = useRef({ pathname: '', allowed: null })
@@ -987,7 +986,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
-    setIsMobileNavOpen(false)
     if (pathname !== '/') {
       navigate('/')
     }
@@ -997,22 +995,18 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }, 0)
   }
   const handleHelpClick = () => {
-    setIsMobileNavOpen(false)
     if (pathname !== '/') {
       navigate('/')
     }
     setCurrentPage('help')
   }
   const handleAboutClick = () => {
-    setIsMobileNavOpen(false)
     navigate('/about')
   }
   const handleSolutionsClick = () => {
-    setIsMobileNavOpen(false)
     navigate('/ai-resume-screening')
   }
   const handleDashboardShortcutClick = () => {
-    setIsMobileNavOpen(false)
     setIsProfileMenuOpen(false)
     navigate('/dashboard')
   }
@@ -1088,34 +1082,24 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           href="/"
           onClick={(event) => {
             event.preventDefault()
-            setIsMobileNavOpen(false)
-            navigate('/')
+                    navigate('/')
           }}
           className="site-header__logo"
         >
           Hire<span>Flow</span>
         </a>
-        <button
-          type="button"
-          className="site-header__mobile-toggle touch-target"
-          aria-label="Toggle main navigation"
-          aria-expanded={isMobileNavOpen}
-          onClick={() => setIsMobileNavOpen((open) => !open)}
-        >
-          ☰
-        </button>
-        <div className={`site-header__nav-links ${isMobileNavOpen ? 'is-open' : ''}`} aria-label="Primary">
+        <div className="site-header__nav-links" aria-label="Primary">
           <button type="button" className="site-header__nav-button" onClick={handleFeaturesClick}>Features</button>
           <button type="button" className="site-header__nav-button" onClick={handleSolutionsClick}>Solutions</button>
           {canViewUpgradePricing && (
-            <button type="button" className="site-header__nav-button" onClick={() => { setIsMobileNavOpen(false); handlePricingClick() }}>
+            <button type="button" className="site-header__nav-button" onClick={handlePricingClick}>
               {isAuthenticated ? 'Upgrade' : 'Pricing'}
             </button>
           )}
           <button type="button" className="site-header__nav-button" onClick={handleAboutClick}>About</button>
           <button type="button" className="site-header__nav-button" onClick={handleHelpClick}>Help</button>
         </div>
-        <div className={`site-header__auth-actions ${isMobileNavOpen ? 'is-open' : ''}`}>
+        <div className="site-header__auth-actions">
           {isAuthenticated ? (
             <>
               {isActiveSubscriber && (
@@ -1180,8 +1164,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             </>
           ) : (
             <>
-              <button type="button" className="btn-ghost btn-ghost--accent" onClick={() => { setIsMobileNavOpen(false); navigate('/login') }}>Login</button>
-              <button type="button" className="btn-primary" onClick={() => { setIsMobileNavOpen(false); navigate('/signup') }}>Sign up</button>
+              <button type="button" className="btn-ghost btn-ghost--accent" onClick={() => navigate('/login')}>Login</button>
+              <button type="button" className="btn-primary" onClick={() => navigate('/signup')}>Sign up</button>
             </>
           )}
         </div>
