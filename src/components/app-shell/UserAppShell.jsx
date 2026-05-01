@@ -12,10 +12,22 @@ import {
   ChevronLeft,
   ChevronRight,
   Grid2x2,
+  Home,
+  FileText,
+  Target,
 } from 'lucide-react'
 import { hasActiveSubscription } from '../../utils/routeGuards'
 
-const NAV = [
+const ICONS_BY_KEY = {
+  home: Home,
+  file: FileText,
+  target: Target,
+  users: Users,
+  chart: BarChart2,
+  settings: Settings2,
+}
+
+const DEFAULT_NAV = [
   { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard },
   { label: 'Jobs', path: '/job-descriptions', Icon: Briefcase },
   { label: 'Analyses', path: '/analyses', Icon: ScanSearch },
@@ -25,7 +37,7 @@ const NAV = [
   { label: 'Settings', path: '/settings', Icon: Settings2 },
 ]
 
-export default function UserAppShell({ children, pathname, onNavigate, userProfile = null, subscriptionStatus = 'inactive' }) {
+export default function UserAppShell({ children, pathname, onNavigate, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
   const [expanded, setExpanded] = useState(true)
   const [pinned, setPinned] = useState(true)
 
@@ -40,7 +52,18 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
     }
   }, [])
 
-  const navItems = useMemo(() => NAV, [])
+  const normalizedNavItems = useMemo(() => {
+    return (Array.isArray(navItems) ? navItems : DEFAULT_NAV).map((item) => {
+      if (item.Icon) {
+        return item
+      }
+
+      return {
+        ...item,
+        Icon: ICONS_BY_KEY[item.icon] || LayoutDashboard,
+      }
+    })
+  }, [navItems])
 
   const pin = () => {
     const next = !pinned
@@ -74,8 +97,8 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
         </div>
 
         <nav className="app-sb-nav">
-          {navItems.map(({ label, path, Icon, badge, proOnly }) => {
-            const locked = proOnly && !isSubscribed
+          {normalizedNavItems.map(({ label, path, Icon, badge, proOnly, isLocked }) => {
+            const locked = Boolean(isLocked || (proOnly && !isSubscribed))
             const isActive = pathname === path
             return (
               <button
@@ -90,7 +113,7 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
                 <span className="app-sb-label">
                   {label}
                   {badge && <span className="app-sb-badge">{badge}</span>}
-                  {locked && <span className="app-sb-badge app-sb-badge--pro">Pro</span>}
+                  {locked && !badge && <span className="app-sb-badge app-sb-badge--pro">Pro</span>}
                 </span>
               </button>
             )
