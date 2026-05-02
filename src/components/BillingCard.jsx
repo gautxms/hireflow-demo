@@ -1,36 +1,14 @@
+import './accountCards.css'
+
 export default function BillingCard() {
   return (
-    <div
-      style={{
-        background: 'var(--hf-surface-card)',
-        border: '1px solid var(--hf-border-subtle)',
-        borderRadius: '12px',
-        padding: '28px',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: 'var(--hf-text-primary)',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-      >
-        <span style={{ fontSize: '20px' }}>💳</span>
+    <div className="hf-account-card">
+      <h2 className="hf-account-card__title">
+        <span className="hf-account-card__icon">💳</span>
         Billing
       </h2>
 
-      <p
-        style={{
-          color: 'var(--hf-text-secondary)',
-          marginBottom: '24px',
-          lineHeight: '1.6',
-          fontSize: '14px',
-        }}
-      >
+      <p className="hf-billing-card__description">
         Manage your billing information, view invoices, and update payment methods.
       </p>
 
@@ -38,26 +16,7 @@ export default function BillingCard() {
         onClick={() => {
           window.location.href = '/billing'
         }}
-        style={{
-          display: 'block',
-          width: '100%',
-          padding: '12px 20px',
-          marginBottom: '12px',
-          background: 'var(--hf-accent-primary)',
-          color: 'var(--hf-text-inverse)',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          fontWeight: '600',
-          fontSize: '14px',
-          transition: 'opacity var(--motion-duration-base) var(--motion-ease-standard)',
-        }}
-        onMouseEnter={(event) => {
-          event.target.style.opacity = '0.9'
-        }}
-        onMouseLeave={(event) => {
-          event.target.style.opacity = '1'
-        }}
+        className="hf-billing-card__button hf-billing-card__button--primary"
       >
         View Billing Details
       </button>
@@ -66,25 +25,7 @@ export default function BillingCard() {
         onClick={() => {
           window.location.href = '/account/payment-method'
         }}
-        style={{
-          display: 'block',
-          width: '100%',
-          padding: '12px 20px',
-          background: 'var(--hf-surface-muted)',
-          color: 'var(--hf-text-primary)',
-          border: '1px solid var(--hf-border-muted)',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          fontWeight: '600',
-          fontSize: '14px',
-          transition: 'background-color var(--motion-duration-base) var(--motion-ease-standard)',
-        }}
-        onMouseEnter={(event) => {
-          event.target.style.background = 'var(--hf-surface-muted-hover)'
-        }}
-        onMouseLeave={(event) => {
-          event.target.style.background = 'var(--hf-surface-muted)'
-        }}
+        className="hf-billing-card__button hf-billing-card__button--secondary"
       >
         Update Payment Method
       </button>

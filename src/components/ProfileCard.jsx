@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import API_BASE from '../config/api'
+import './accountCards.css'
 
 export default function ProfileCard({ user, token, onRefresh }) {
   const [editing, setEditing] = useState(false)
@@ -49,86 +50,35 @@ export default function ProfileCard({ user, token, onRefresh }) {
   }
 
   return (
-    <div
-      style={{
-        background: 'var(--hf-surface-card)',
-        border: '1px solid var(--hf-border-subtle)',
-        borderRadius: '12px',
-        padding: '28px',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: 'var(--hf-text-primary)',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-      >
-        <span style={{ fontSize: '20px' }}>👤</span>
+    <div className="hf-account-card">
+      <h2 className="hf-account-card__title">
+        <span className="hf-account-card__icon">👤</span>
         Profile
       </h2>
       {message ? (
-        <p style={{ color: messageType === 'success' ? 'var(--hf-status-success)' : 'var(--hf-status-error)', fontSize: '13px', marginBottom: '14px' }}>
+        <p className={`hf-account-card__message ${messageType === 'success' ? 'hf-account-card__message--success' : 'hf-account-card__message--error'}`}>
           {message}
         </p>
       ) : null}
 
       {!editing ? (
         <>
-          <div style={{ marginBottom: '16px' }}>
-            <p
-              style={{
-                fontSize: '12px',
-                color: 'var(--hf-text-secondary)',
-                marginBottom: '4px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Email
-            </p>
-            <p style={{ color: 'var(--hf-text-primary)', fontSize: '14px' }}>{user?.email}</p>
+          <div className="hf-account-card__section">
+            <p className="hf-account-card__label">Email</p>
+            <p className="hf-account-card__value">{user?.email}</p>
           </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <p
-              style={{
-                fontSize: '12px',
-                color: 'var(--hf-text-secondary)',
-                marginBottom: '4px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Company
-            </p>
-            <p style={{ color: user?.company ? 'var(--hf-text-primary)' : 'var(--hf-text-muted)', fontSize: '14px' }}>{user?.company || 'Not set'}</p>
+          <div className="hf-account-card__section">
+            <p className="hf-account-card__label">Company</p>
+            <p className={`hf-account-card__value ${user?.company ? '' : 'hf-account-card__value--muted'}`}>{user?.company || 'Not set'}</p>
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
-            <p
-              style={{
-                fontSize: '12px',
-                color: 'var(--hf-text-secondary)',
-                marginBottom: '4px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Phone
-            </p>
-            <p style={{ color: user?.phone ? 'var(--hf-text-primary)' : 'var(--hf-text-muted)', fontSize: '14px' }}>{user?.phone || 'Not set'}</p>
+          <div className="hf-account-card__section hf-account-card__section--last">
+            <p className="hf-account-card__label">Phone</p>
+            <p className={`hf-account-card__value ${user?.phone ? '' : 'hf-account-card__value--muted'}`}>{user?.phone || 'Not set'}</p>
           </div>
 
-          <button onClick={() => setEditing(true)} style={{ background: 'var(--hf-accent-primary)', color: 'var(--hf-text-inverse)', border: 'none', borderRadius: '6px', padding: '10px 20px', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'opacity var(--motion-duration-base) var(--motion-ease-standard)' }} onMouseEnter={(event) => {
-            event.target.style.opacity = '0.9'
-          }} onMouseLeave={(event) => {
-            event.target.style.opacity = '1'
-          }}>
+          <button onClick={() => setEditing(true)} className="hf-account-card__button hf-account-card__button--primary">
             Edit Profile
           </button>
         </>
@@ -138,19 +88,19 @@ export default function ProfileCard({ user, token, onRefresh }) {
             value={formData.company}
             onChange={(event) => setFormData({ ...formData, company: event.target.value })}
             placeholder="Company name"
-            style={{ display: 'block', width: '100%', marginBottom: '12px', padding: '10px 12px', background: 'var(--hf-surface-input)', border: '1px solid var(--hf-border-subtle)', borderRadius: '6px', color: 'var(--hf-text-primary)', fontSize: '14px' }}
+            className="hf-account-card__input"
           />
           <input
             value={formData.phone}
             onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
             placeholder="Phone number"
-            style={{ display: 'block', width: '100%', marginBottom: '16px', padding: '10px 12px', background: 'var(--hf-surface-input)', border: '1px solid var(--hf-border-subtle)', borderRadius: '6px', color: 'var(--hf-text-primary)', fontSize: '14px' }}
+            className="hf-account-card__input hf-account-card__input--last"
           />
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={handleSave} style={{ flex: 1, padding: '10px 20px', background: 'var(--hf-accent-primary)', color: 'var(--hf-text-inverse)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '14px' }}>
+          <div className="hf-account-card__button-row">
+            <button onClick={handleSave} className="hf-account-card__button hf-account-card__button--primary hf-account-card__button--split">
               Save Changes
             </button>
-            <button onClick={() => setEditing(false)} style={{ flex: 1, padding: '10px 20px', background: 'var(--hf-surface-muted)', color: 'var(--hf-text-primary)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '14px' }}>
+            <button onClick={() => setEditing(false)} className="hf-account-card__button hf-account-card__button--secondary hf-account-card__button--split">
               Cancel
             </button>
           </div>

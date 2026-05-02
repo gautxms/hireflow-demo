@@ -1,17 +1,7 @@
 import API_BASE from '../config/api'
+import './accountCards.css'
+
 export default function SubscriptionCard({ user, token, onRefresh, subscription }) {
-  const getStatusColor = (status) => {
-    const colors = {
-      active: 'var(--hf-accent-primary)',
-      trialing: 'var(--hf-status-info)',
-      cancelled: 'var(--hf-status-error)',
-      past_due: 'var(--hf-status-warning)',
-    }
-
-    return colors[status] || 'var(--hf-status-neutral)'
-  }
-
-  const getStatusTextColor = (status) => (status === 'active' ? 'var(--hf-text-inverse)' : 'var(--hf-text-primary)')
 
   const handleCancelSubscription = async () => {
     if (!window.confirm('Cancel subscription? You\'ll lose access after the current period.')) return
@@ -40,88 +30,30 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
   const plan = subscription?.plan || user?.subscription_plan || 'N/A'
   const startedAt = subscription?.started_date || user?.subscription_started_at || null
   const hasSubscription = Boolean(subscription || user?.subscription_plan || user?.subscription_status === 'active' || user?.subscription_status === 'trialing')
+  const statusClass = ['active', 'trialing', 'cancelled', 'past_due', 'inactive'].includes(status) ? status : 'inactive'
 
   return (
-    <div
-      style={{
-        background: 'var(--hf-surface-card)',
-        border: '1px solid var(--hf-border-subtle)',
-        borderRadius: '12px',
-        padding: '28px',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: 'var(--hf-text-primary)',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-      >
-        <span style={{ fontSize: '20px' }}>📦</span>
+    <div className="hf-account-card">
+      <h2 className="hf-account-card__title">
+        <span className="hf-account-card__icon">📦</span>
         Subscription
       </h2>
 
-      <div style={{ marginBottom: '16px' }}>
-        <p
-          style={{
-            fontSize: '12px',
-            color: 'var(--hf-text-secondary)',
-            marginBottom: '8px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
-          Status
-        </p>
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '6px 16px',
-            background: getStatusColor(status),
-            color: getStatusTextColor(status),
-            borderRadius: '20px',
-            fontSize: '12px',
-            fontWeight: '700',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-          }}
-        >
+      <div className="hf-account-card__section">
+        <p className="hf-account-card__label hf-account-card__label--status">Status</p>
+        <span className={`hf-account-card__status-badge hf-account-card__status-badge--${statusClass} ${status === 'active' ? 'hf-account-card__status-badge--active-text' : 'hf-account-card__status-badge--default-text'}`}>
           {status}
         </span>
       </div>
 
-      <div style={{ marginBottom: '16px' }}>
-        <p
-          style={{
-            fontSize: '12px',
-            color: 'var(--hf-text-secondary)',
-            marginBottom: '4px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
-          Plan
-        </p>
-        <p style={{ color: 'var(--hf-text-primary)', fontSize: '14px', textTransform: 'capitalize' }}>{plan || 'N/A'}</p>
+      <div className="hf-account-card__section">
+        <p className="hf-account-card__label">Plan</p>
+        <p className="hf-account-card__value hf-account-card__value--capitalize">{plan || 'N/A'}</p>
       </div>
 
-      <div style={{ marginBottom: '24px' }}>
-        <p
-          style={{
-            fontSize: '12px',
-            color: 'var(--hf-text-secondary)',
-            marginBottom: '4px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
-          Started
-        </p>
-        <p style={{ color: 'var(--hf-text-primary)', fontSize: '14px' }}>
+      <div className="hf-account-card__section hf-account-card__section--last">
+        <p className="hf-account-card__label">Started</p>
+        <p className="hf-account-card__value">
           {startedAt
             ? new Date(startedAt).toLocaleDateString('en-US', {
                 year: 'numeric',
@@ -133,10 +65,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
       </div>
 
       {hasSubscription && status === 'active' && (
-        <button
-          className="hf-btn subscription-card__cta subscription-card__cta--cancel"
-          onClick={handleCancelSubscription}
-        >
+        <button className="hf-btn subscription-card__cta subscription-card__cta--cancel" onClick={handleCancelSubscription}>
           Cancel Subscription
         </button>
       )}
