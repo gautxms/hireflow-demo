@@ -1,0 +1,140 @@
+.hf-account-card {
+  background: var(--hf-surface-card);
+  border: 1px solid var(--hf-border-subtle);
+  border-radius: 12px;
+  padding: 28px;
+}
+
+.hf-account-card__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--hf-text-primary);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hf-account-card__label {
+  font-size: 12px;
+  color: var(--hf-text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hf-account-card__value {
+  color: var(--hf-text-primary);
+  font-size: 14px;
+}
+
+.hf-account-card__value--muted {
+  color: var(--hf-text-muted);
+}
+
+.hf-account-card__message {
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.hf-account-card__message--success { color: var(--hf-status-success); }
+.hf-account-card__message--error { color: var(--hf-status-error); }
+
+.hf-account-card__input {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--hf-surface-input);
+  border: 1px solid var(--hf-border-subtle);
+  border-radius: 6px;
+  color: var(--hf-text-primary);
+  font-size: 14px;
+}
+.hf-account-card__input--last { margin-bottom: 16px; }
+
+.hf-account-card__button-row {
+  display: flex;
+  gap: 12px;
+}
+
+.hf-account-card__button {
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.hf-account-card__button--primary {
+  background: var(--hf-accent-primary);
+  color: var(--hf-text-inverse);
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+.hf-account-card__button--primary:hover { opacity: 0.9; }
+
+.hf-account-card__button--secondary {
+  background: var(--hf-surface-muted);
+  color: var(--hf-text-primary);
+}
+
+.hf-account-card__button--split { flex: 1; }
+
+.hf-account-card__status-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.hf-billing-card__description {
+  color: var(--hf-text-secondary);
+  margin-bottom: 24px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.hf-billing-card__button {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.hf-billing-card__button--primary {
+  margin-bottom: 12px;
+  background: var(--hf-accent-primary);
+  color: var(--hf-text-inverse);
+  border: none;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+.hf-billing-card__button--primary:hover { opacity: 0.9; }
+
+.hf-billing-card__button--secondary {
+  background: var(--hf-surface-muted);
+  color: var(--hf-text-primary);
+  border: 1px solid var(--hf-border-muted);
+  transition: background-color var(--motion-duration-base) var(--motion-ease-standard);
+}
+.hf-billing-card__button--secondary:hover { background: var(--hf-surface-muted-hover); }
+
+.hf-account-card__icon { font-size: 20px; }
+.hf-account-card__section { margin-bottom: 16px; }
+.hf-account-card__section--last { margin-bottom: 24px; }
+.hf-account-card__label--status { margin-bottom: 8px; }
+.hf-account-card__value--capitalize { text-transform: capitalize; }
+
+.hf-account-card__status-badge--active { background: var(--hf-accent-primary); }
+.hf-account-card__status-badge--trialing { background: var(--hf-status-info); }
+.hf-account-card__status-badge--cancelled { background: var(--hf-status-error); }
+.hf-account-card__status-badge--past_due { background: var(--hf-status-warning); }
+.hf-account-card__status-badge--inactive { background: var(--hf-status-neutral); }
+.hf-account-card__status-badge--default-text { color: var(--hf-text-primary); }
+.hf-account-card__status-badge--active-text { color: var(--hf-text-inverse); }

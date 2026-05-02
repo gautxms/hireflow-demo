@@ -1,5 +1,29 @@
 @import './styles/variables.css';
 
+:root {
+  --hf-surface-card: var(--color-bg-secondary);
+  --hf-surface-input: var(--color-bg-primary);
+  --hf-surface-muted: #333333;
+  --hf-surface-muted-hover: #444444;
+  --hf-border-subtle: var(--color-border);
+  --hf-border-muted: #555555;
+  --hf-text-primary: var(--color-text-primary);
+  --hf-text-secondary: var(--color-text-secondary);
+  --hf-text-muted: #666666;
+  --hf-text-inverse: #000000;
+  --hf-text-strong: #333333;
+  --hf-accent-primary: var(--color-accent-green);
+  --hf-status-success: var(--color-success);
+  --hf-status-error: var(--color-error);
+  --hf-status-info: var(--color-info);
+  --hf-status-warning: #f59e0b;
+  --hf-status-neutral: #9ca3af;
+  --hf-status-info-soft: #e5e7eb;
+  --hf-status-track: #0f172a;
+  --hf-surface-page-light: #f9fafb;
+  --hf-surface-card-light: #ffffff;
+}
+
 html { scroll-behavior: smooth; }
 
 body {
