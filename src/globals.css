@@ -726,7 +726,7 @@ body.user-app-shell-active .app-header {
 }
 
 .public-footer__intent-toggle {
-  display: none;
+  display: none !important;
   border: none;
   background: none;
   color: #aaaaaa;
@@ -737,7 +737,7 @@ body.user-app-shell-active .app-header {
 }
 
 .public-footer__intent-links {
-  display: flex;
+  display: flex !important;
   flex-wrap: wrap;
   gap: 0.5rem 0.85rem;
 }
@@ -770,7 +770,7 @@ body.user-app-shell-active .app-header {
 }
 
 .public-footer__seo-link {
-  color: #1e1e1e;
+  color: #0d0d0d !important;
   opacity: 1;
   font-size: 11px;
   line-height: 1.2;
@@ -805,16 +805,16 @@ body.user-app-shell-active .app-header {
   }
 
   .public-footer__intent-toggle {
-    display: inline-flex;
+    display: none !important;
     margin-bottom: 0.45rem;
   }
 
   .public-footer__intent-links {
-    display: none;
+    display: flex !important;
   }
 
   .public-footer__intent-links--expanded {
-    display: flex;
+    display: flex !important;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.45rem;
