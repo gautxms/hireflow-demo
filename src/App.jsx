@@ -1102,15 +1102,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         <div className="site-header__auth-actions">
           {isAuthenticated ? (
             <>
-              {isActiveSubscriber && (
-                <button
-                  type="button"
-                  className="btn-ghost btn-ghost--accent"
-                  onClick={handleDashboardShortcutClick}
-                >
-                  Dashboard
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn-ghost btn-ghost--accent"
+                onClick={handleDashboardShortcutClick}
+              >
+                Dashboard
+              </button>
               <div className="site-profile-menu" ref={profileMenuRef}>
                 <button
                   onClick={() => setIsProfileMenuOpen((open) => !open)}
