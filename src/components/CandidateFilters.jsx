@@ -1,3 +1,4 @@
+import { Search, SlidersHorizontal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 function parseSkills(rawSkills) {
@@ -94,10 +95,7 @@ export default function CandidateFilters({
     <>
       <div className="filter-bar">
         <div className="filter-bar-search">
-          <svg className="filter-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
+          <Search className="filter-search-icon" size={18} strokeWidth={1.5} aria-hidden="true" />
           <input
             type="text"
             className="touch-target filter-search-input"
@@ -119,11 +117,7 @@ export default function CandidateFilters({
         </select>
 
         <button type="button" className="touch-target filter-filters-btn" onClick={() => setFilterOpen((open) => !open)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="14" height="14" aria-hidden="true">
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="8" y1="12" x2="16" y2="12" />
-            <line x1="11" y1="18" x2="13" y2="18" />
-          </svg>
+          <SlidersHorizontal size={14} strokeWidth={1.5} aria-hidden="true" />
           Filters
           {activeFilterCount > 0 && (
             <span className="filter-active-count">{activeFilterCount}</span>
