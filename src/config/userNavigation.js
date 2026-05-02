@@ -2,7 +2,7 @@ export const USER_SECTION_NAVIGATION = [
   {
     key: 'results',
     label: 'Results',
-    href: '/shortlists',
+    href: '/results',
     aliases: ['/shortlists', '/results', '/account/results'],
     requiresAuth: true,
   },
@@ -23,7 +23,7 @@ export const USER_SECTION_NAVIGATION = [
   {
     key: 'jobDescriptions',
     label: 'Job descriptions',
-    href: '/jobs',
+    href: '/job-descriptions',
     aliases: ['/jobs', '/job-descriptions', '/account/job-descriptions'],
     requiresAuth: true,
     requiresActiveSubscription: true,
