@@ -2,8 +2,8 @@ export const USER_SECTION_NAVIGATION = [
   {
     key: 'results',
     label: 'Results',
-    href: '/results',
-    aliases: ['/results', '/account/results'],
+    href: '/shortlists',
+    aliases: ['/shortlists', '/results', '/account/results'],
     requiresAuth: true,
   },
   {
@@ -23,8 +23,8 @@ export const USER_SECTION_NAVIGATION = [
   {
     key: 'jobDescriptions',
     label: 'Job descriptions',
-    href: '/job-descriptions',
-    aliases: ['/job-descriptions', '/account/job-descriptions'],
+    href: '/jobs',
+    aliases: ['/jobs', '/job-descriptions', '/account/job-descriptions'],
     requiresAuth: true,
     requiresActiveSubscription: true,
   },

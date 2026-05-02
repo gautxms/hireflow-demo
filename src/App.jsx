@@ -76,7 +76,9 @@ const USER_SHELL_ROUTE_PATHS = new Set([
   '/dashboard',
   '/dashboard/legacy',
   '/results',
+  '/shortlists',
   '/job-descriptions',
+  '/jobs',
   '/analyses',
   '/candidates',
   '/reports',
@@ -1015,10 +1017,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const userShellNavItems = useMemo(() => {
     return [
       { key: 'dashboard', label: 'Dashboard', path: '/', icon: 'home' },
-      { key: 'jobs', label: 'Jobs', path: '/job-descriptions', icon: 'file' },
+      { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'file' },
       { key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'target', isLocked: !analysesModuleEnabled },
       { key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'users', isLocked: !candidateModuleEnabled },
-      { key: 'shortlists', label: 'Shortlists', path: '/results', icon: 'chart' },
+      { key: 'shortlists', label: 'Shortlists', path: '/shortlists', icon: 'chart' },
       {
         key: 'reports',
         label: 'Reports',
