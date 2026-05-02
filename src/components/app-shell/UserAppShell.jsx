@@ -147,6 +147,7 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
             <button type="button" onClick={() => onNavigate('/privacy')} className="user-app-shell__footer-link">Privacy</button>
           </div>
         </footer>
-      </div>
+      </main>
+    </div>
   )
 }
