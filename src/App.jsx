@@ -86,10 +86,6 @@ const USER_SHELL_ROUTE_PATHS = new Set([
   '/account/payment-method',
 ])
 
-function isUserShellEnabled(userProfile, subscriptionStatus) {
-  return isFeatureEnabled(FEATURE_KEYS.sidebarShell, { userProfile, subscriptionStatus })
-}
-
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -148,14 +144,14 @@ function shouldDisableUserShell(pathname) {
   return isSharedResultsPath(pathname)
 }
 
-function shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, subscriptionStatus) {
-  if (!isUserShellEnabled(userProfile, subscriptionStatus) || !isAuthenticated) {
+function shouldRenderWithinUserShell(pathname, isAuthenticated) {
+  if (!isAuthenticated) {
     return false
   }
 
   const resolvedPathname = resolveUserSectionPath(pathname)
 
-  if (shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
+  if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
     return false
   }
 
@@ -163,7 +159,11 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, sub
     return true
   }
 
-  return resolvedPathname.startsWith('/analyses/') || resolvedPathname.startsWith('/candidates/')
+  return resolvedPathname.startsWith('/analyses/')
+    || resolvedPathname.startsWith('/candidates/')
+    || resolvedPathname === '/uploader'
+    || resolvedPathname === '/create-analysis'
+    || resolvedPathname === '/account/payment-method'
 }
 
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
@@ -1036,7 +1036,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       {getPageContent()}
     </Suspense>
   )
-  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated, userProfile, subscriptionStatus)
+  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated)
 
   useEffect(() => {
     document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
