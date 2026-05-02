@@ -1,6 +1,22 @@
+import { useContext } from 'react'
 import { Bell } from 'lucide-react'
+import { UNSAFE_NavigationContext } from 'react-router-dom'
 
 export default function AppHeader({ user, isSubscribed, pageTitle }) {
+  const navigationContext = useContext(UNSAFE_NavigationContext)
+  const routerNavigate = navigationContext?.navigator?.push
+
+  const navigateTo = (path) => {
+    if (typeof routerNavigate === 'function') {
+      routerNavigate(path)
+      return
+    }
+
+    if (typeof window !== 'undefined' && window?.location) {
+      window.location.href = path
+    }
+  }
+
   const initials = user?.name
     ? user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()
     : 'U'
@@ -22,7 +38,7 @@ export default function AppHeader({ user, isSubscribed, pageTitle }) {
                 : 'Free plan'}
             </span>
             <button className="app-header-upgrade-btn"
-              onClick={() => window.location.href='/pricing'}>
+              onClick={() => navigateTo('/pricing')}>
               Upgrade
             </button>
           </div>
@@ -41,7 +57,7 @@ export default function AppHeader({ user, isSubscribed, pageTitle }) {
         {/* Avatar */}
         <div className="app-header-avatar"
           title={user?.name || 'Account'}
-          onClick={() => window.location.href='/settings'}>
+          onClick={() => navigateTo('/settings')}>
           {initials}
         </div>
 
