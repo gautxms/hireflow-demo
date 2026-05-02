@@ -105,7 +105,7 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
         onMouseLeave={() => { if (!pinned) setExpanded(false) }}
       >
         <div className="app-sb-logo">
-          <Grid2x2 size={20} strokeWidth={1.8} color="#c8ff00" className="app-sb-logo-icon" />
+          <Grid2x2 size={20} strokeWidth={1.8} className="app-sb-logo-icon" />
           <span className="app-sb-logo-text"><span className="app-sb-logo-text-hire">Hire</span><span className="app-sb-logo-text-flow">Flow</span></span>
         </div>
 

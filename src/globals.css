@@ -576,6 +576,19 @@ body {
   }
 }
 
+
+.app-sb-logo-icon {
+  color: var(--hf-lime);
+}
+
+.app-sb-logo-text-hire {
+  color: #ffffff;
+}
+
+.app-sb-logo-text-flow {
+  color: var(--hf-lime);
+}
+
 /* ---- USER APP SHELL HEADER + FOOTER ---- */
 body.user-app-shell-active .app-header {
   position: sticky;
