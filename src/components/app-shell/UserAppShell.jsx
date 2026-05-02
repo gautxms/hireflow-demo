@@ -29,10 +29,10 @@ const ICONS_BY_KEY = {
 
 const DEFAULT_NAV = [
   { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard },
-  { label: 'Jobs', path: '/job-descriptions', Icon: Briefcase },
+  { label: 'Jobs', path: '/jobs', Icon: Briefcase },
   { label: 'Analyses', path: '/analyses', Icon: ScanSearch },
   { label: 'Candidates', path: '/candidates', Icon: Users },
-  { label: 'Shortlists', path: '/results', Icon: ClipboardCheck },
+  { label: 'Shortlists', path: '/shortlists', Icon: ClipboardCheck },
   { label: 'Reports', path: '/reports', Icon: BarChart2, badge: 'New', proOnly: true },
   { label: 'Settings', path: '/settings', Icon: Settings2 },
 ]
