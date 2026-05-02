@@ -177,9 +177,9 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
         <footer className="user-app-shell__footer" aria-label="Workspace footer">
           <span className="user-app-shell__footer-copy">© {new Date().getFullYear()} HireFlow</span>
           <div className="user-app-shell__footer-links">
-            <button type="button" onClick={() => onNavigate('/help')} className="user-app-shell__footer-link">Help</button>
-            <button type="button" onClick={() => onNavigate('/about')} className="user-app-shell__footer-link">About</button>
             <button type="button" onClick={() => onNavigate('/privacy')} className="user-app-shell__footer-link">Privacy</button>
+            <button type="button" onClick={() => onNavigate('/terms')} className="user-app-shell__footer-link">Terms</button>
+            <button type="button" onClick={() => onNavigate('/help')} className="user-app-shell__footer-link">Help</button>
           </div>
         </footer>
       </main>
