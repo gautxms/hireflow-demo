@@ -132,16 +132,22 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
           </button>
         </div>
       </aside>
-      <div className="app-shell-content">
-        <AppHeader pathname={pathname} onNavigate={onNavigate} subscriptionStatus={subscriptionStatus} userProfile={userProfile} />
-        <main className="app-shell-main">
-          {children}
-        </main>
-        <footer className="app-footer-bar">
-          <span>© 2026 HireFlow</span>
-          <div><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/help">Help</a></div>
+      <main className="user-app-shell__content">
+        <AppHeader
+          user={userProfile}
+          isSubscribed={isPremiumUser}
+          pageTitle={pageTitle}
+        />
+        <div className="user-app-shell__page-content">{children}</div>
+        <footer className="user-app-shell__footer" aria-label="Workspace footer">
+          <span className="user-app-shell__footer-copy">© {new Date().getFullYear()} HireFlow</span>
+          <div className="user-app-shell__footer-links">
+            <button type="button" onClick={() => onNavigate('/help')} className="user-app-shell__footer-link">Help</button>
+            <button type="button" onClick={() => onNavigate('/about')} className="user-app-shell__footer-link">About</button>
+            <button type="button" onClick={() => onNavigate('/privacy')} className="user-app-shell__footer-link">Privacy</button>
+          </div>
         </footer>
-      </div>
+      </main>
     </div>
   )
 }

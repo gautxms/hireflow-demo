@@ -133,8 +133,6 @@ export default function NewDashboard({ onNavigate }) {
           <p className="new-dashboard__subtitle">KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
         </div>
         <div className="new-dashboard__header-actions">
-          <button type="button" onClick={() => onNavigate?.('landing')} className="touch-target new-dashboard__button">Home</button>
-          <button type="button" onClick={openLegacyDashboard} className="touch-target new-dashboard__button">Legacy dashboard fallback</button>
         </div>
       </div>
 
