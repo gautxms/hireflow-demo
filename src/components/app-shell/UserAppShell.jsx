@@ -71,6 +71,27 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
     })
   }, [navItems])
 
+  const pageTitle = useMemo(() => {
+    if (typeof pageTitleProp === 'string' && pageTitleProp.trim()) {
+      return pageTitleProp.trim()
+    }
+
+    const activeNavItem = normalizedNavItems.find((item) => item.path === pathname)
+    if (activeNavItem?.label) {
+      return activeNavItem.label
+    }
+
+    if (pathname === '/dashboard') {
+      return 'Dashboard'
+    }
+
+    if (pathname === '/') {
+      return 'Home'
+    }
+
+    return String(pathname || '/').split('/').filter(Boolean).map((segment) => segment.replace(/[-_]+/g, ' ')).map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1)).join(' • ') || 'Workspace'
+  }, [normalizedNavItems, pageTitleProp, pathname])
+
   const pin = () => {
     const next = !pinned
     setPinned(next)
@@ -149,7 +170,7 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
       <main className="user-app-shell__content">
         <AppHeader
           user={userProfile}
-          isSubscribed={isPremiumUser}
+          isSubscribed={isSubscribed}
           pageTitle={pageTitle}
         />
         <div className="user-app-shell__page-content">{children}</div>
