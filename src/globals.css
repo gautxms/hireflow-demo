@@ -755,7 +755,7 @@ body.user-app-shell-active .app-header {
 }
 
 .footer-seo a {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #1e1e1e;
   text-decoration: none;
