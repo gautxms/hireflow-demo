@@ -718,10 +718,11 @@ body.user-app-shell-active .app-header {
 .public-footer__intent {
   max-width: 1200px;
   margin: 0.75rem auto 0;
-  padding: 0.85rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.01);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .public-footer__intent-toggle {
@@ -741,19 +742,45 @@ body.user-app-shell-active .app-header {
   gap: 0.5rem 0.85rem;
 }
 
-.public-footer__seo-link {
-  color: #888888;
-  opacity: 0.18;
-  font-size: var(--type-small-size);
-  line-height: var(--type-small-line-height);
+
+.footer-seo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-top: 12px;
+}
+
+.footer-seo a {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #1e1e1e;
   text-decoration: none;
-  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.footer-seo a:hover {
+  color: #2a2a2a;
+}
+
+.footer-seo .sep {
+  color: #1e1e1e;
+}
+
+.public-footer__seo-link {
+  color: #1e1e1e;
+  opacity: 1;
+  font-size: 11px;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: color 0.2s ease;
 }
 
 .public-footer__seo-link:hover,
 .public-footer__seo-link:focus-visible {
-  opacity: 0.45;
-  color: #aaaaaa;
+  color: #2a2a2a;
 }
 
 @media (max-width: 900px) {
