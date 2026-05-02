@@ -8,6 +8,26 @@ import {
 
 const SIDEBAR_PINNED_STORAGE_KEY = 'hireflow_user_sidebar_pinned'
 
+const PAGE_TITLE_RULES = [
+  { matches: (value) => value === '/' || value === '/dashboard', title: 'Dashboard' },
+  { matches: (value) => value === '/job-descriptions', title: 'Jobs' },
+  { matches: (value) => value === '/analyses', title: 'Analyses' },
+  { matches: (value) => value.startsWith('/analyses/'), title: 'Analysis Details' },
+  { matches: (value) => value === '/candidates', title: 'Candidates' },
+  { matches: (value) => value.startsWith('/candidates/'), title: 'Candidate Details' },
+  { matches: (value) => value === '/results', title: 'Shortlists' },
+  { matches: (value) => value === '/reports', title: 'Reports' },
+  { matches: (value) => value === '/settings', title: 'Settings' },
+  { matches: (value) => value === '/account', title: 'Account' },
+  { matches: (value) => value === '/billing', title: 'Billing' },
+  { matches: (value) => value === '/account/payment-method', title: 'Payment Method' },
+]
+
+function getPageTitle(pathname) {
+  const match = PAGE_TITLE_RULES.find((rule) => rule.matches(pathname))
+  return match?.title || 'Dashboard'
+}
+
 const DEFAULT_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { key: 'jobs', label: 'Jobs', path: '/job-descriptions', icon: Briefcase },
@@ -46,6 +66,7 @@ export default function UserAppShell({
   const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
   const isPremiumUser = hasActiveSubscription(normalizedSubscriptionStatus)
   const isExpanded = isPinned || isHoverExpanded
+  const pageTitle = getPageTitle(pathname)
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -170,10 +191,9 @@ export default function UserAppShell({
       </aside>
       <main className="user-app-shell__content">
         <AppHeader
-          pathname={pathname}
-          onNavigate={onNavigate}
-          subscriptionStatus={subscriptionStatus}
-          userProfile={userProfile}
+          user={userProfile}
+          isSubscribed={isPremiumUser}
+          pageTitle={pageTitle}
         />
         <div className="user-app-shell__page-content">{children}</div>
         <footer className="user-app-shell__footer" aria-label="Workspace footer">
