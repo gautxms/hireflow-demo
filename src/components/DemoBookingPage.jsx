@@ -1,3 +1,4 @@
+import { Check, CheckCircle2, Info } from 'lucide-react'
 import { useState } from 'react'
 import API_BASE from '../config/api'
 import PublicPageLayout from './public/PublicPageLayout'
@@ -104,7 +105,7 @@ export default function DemoBookingPage({ onBack }) {
         <div className="demo-stepper">
           {['Your Info', 'Pick Time', 'Confirm'].map((label, idx) => (
             <div key={label} className="demo-step-group">
-              <div className={`demo-step ${stepState[idx] ? 'active' : ''}`}><div className="demo-step-dot">{stepState[idx] ? '✓' : idx + 1}</div><span className="public-nav-text">{label}</span></div>
+              <div className={`demo-step ${stepState[idx] ? 'active' : ''}`}><div className="demo-step-dot">{stepState[idx] ? <Check size={14} strokeWidth={2} aria-hidden="true" /> : idx + 1}</div><span className="public-nav-text">{label}</span></div>
               {idx < 2 && <div className={`demo-step-line ${stepState[idx + 1] ? 'active' : ''}`} />}
             </div>
           ))}
@@ -234,7 +235,7 @@ export default function DemoBookingPage({ onBack }) {
               </section>
             </div>
 
-            {selectedDate && selectedTime && <div className="status-message status-message--info">📅 Demo scheduled for <strong>{selectedDate} at {selectedTime} EST</strong>. A confirmation email will be sent to {formData.email}.</div>}
+            {selectedDate && selectedTime && <div className="status-message status-message--info"><Info size={16} strokeWidth={2} aria-hidden="true" /> <span>Demo scheduled for <strong>{selectedDate} at {selectedTime} EST</strong>. A confirmation email will be sent to {formData.email}.</span></div>}
             {submitError && <div className="status-message status-message--error">{submitError}</div>}
 
             <div className="public-button-row center">
@@ -246,7 +247,7 @@ export default function DemoBookingPage({ onBack }) {
 
         {step === 'confirmation' && (
           <section className="public-form demo-confirm-card">
-            <div className="status-message status-message--success">✅ Your demo is confirmed.</div>
+            <div className="status-message status-message--success"><CheckCircle2 size={16} strokeWidth={2} aria-hidden="true" /> <span>Your demo is confirmed.</span></div>
             <div className="public-faq-grid">
               <p className="public-copy"><strong>Date & Time:</strong> {selectedDate} at {selectedTime} EST</p>
               <p className="public-copy"><strong>Name:</strong> {formData.firstName} {formData.lastName}</p>
