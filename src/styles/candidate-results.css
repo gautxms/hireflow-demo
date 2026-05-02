@@ -93,7 +93,7 @@
   background: #111111;
   border: 1px solid #2a2a2a;
   color: #ffffff;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
 }
 
 .bulk-toolbar,
@@ -133,7 +133,7 @@
   background: transparent;
   border: 1px solid #2a2a2a;
   color: #888888;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   font-weight: 500;
   padding: 7px 14px;
@@ -157,7 +157,7 @@
 }
 
 .bulk-selected-label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #c8ff00;
   font-weight: 600;
@@ -178,7 +178,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 14px;
   font-weight: 500;
   color: #777777;
@@ -207,7 +207,7 @@
   background: #0d0d0d;
   border: 1px solid #2a2a2a;
   color: #ffffff;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 14px;
   padding: 12px 14px;
   border-radius: 8px;
@@ -235,7 +235,7 @@
 .jd-btn-apply {
   background: #c8ff00;
   color: #000000;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-weight: 700;
   font-size: 14px;
   padding: 11px 20px;
@@ -257,7 +257,7 @@
 .jd-btn-clear {
   background: transparent;
   color: #555555;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 14px;
   padding: 11px 16px;
   border-radius: 8px;
@@ -287,7 +287,7 @@
 }
 
 .ranking-stat-num {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-family-display);
   font-size: min(28px, 7vw);
   font-weight: 700;
   color: #ffffff;
@@ -299,7 +299,7 @@
 }
 
 .ranking-stat-label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #555555;
   margin-top: 4px;
@@ -340,7 +340,7 @@
 }
 
 .cand-rank {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-family-display);
   font-size: 14px;
   font-weight: 800;
   color: #2a2a2a;
@@ -354,7 +354,7 @@
   background: rgba(200, 255, 0, 0.08);
   border: 1px solid rgba(200, 255, 0, 0.15);
   color: #c8ff00;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   font-weight: 700;
   display: flex;
@@ -369,7 +369,7 @@
 }
 
 .cand-name {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 15px;
   font-weight: 600;
   color: #ffffff;
@@ -377,7 +377,7 @@
 }
 
 .cand-meta {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #666666;
   display: flex;
@@ -406,7 +406,7 @@
 }
 
 .cand-skill-pill {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #777777;
   background: #0d0d0d;
@@ -422,7 +422,7 @@
 }
 
 .cand-score-num {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-family-display);
   font-size: 22px;
   font-weight: 800;
   line-height: 1;
@@ -504,12 +504,12 @@
 }
 
 .cand-fit-label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
 }
 
 .cand-score-empty {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #333333;
 }
@@ -547,7 +547,7 @@
   background: #111111;
   border: 1px solid #2a2a2a;
   color: #666666;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   padding: 8px 16px;
   border-radius: 7px;
@@ -566,7 +566,7 @@
 }
 
 .page-info {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #555555;
   padding: 0 8px;
@@ -576,7 +576,7 @@
   background: #111111;
   border: 1px solid #2a2a2a;
   color: #888888;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   padding: 8px 28px 8px 12px;
   border-radius: 7px;
@@ -802,7 +802,7 @@
   background: rgba(200, 255, 0, 0.1);
   border: 1px solid rgba(200, 255, 0, 0.2);
   color: #c8ff00;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 16px;
   font-weight: 700;
   display: flex;
@@ -811,7 +811,7 @@
 }
 
 .profile-name {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 18px;
   font-weight: 700;
   color: #ffffff;
@@ -819,7 +819,7 @@
 }
 
 .profile-subtitle {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #666666;
 }
@@ -832,7 +832,7 @@
 }
 
 .profile-score-eyebrow {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -841,7 +841,7 @@
 }
 
 .profile-score-big {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-family-display);
   font-size: 44px;
   font-weight: 800;
   line-height: 1;
@@ -889,14 +889,14 @@
 .profile-score-bar-fill--low::-moz-progress-bar { background: #ffa500; }
 
 .profile-score-fit {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   font-weight: 600;
   text-transform: capitalize;
 }
 
 .profile-score-seniority {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #444444;
   margin-top: 4px;
@@ -905,7 +905,7 @@
 .profile-contact-block { display: flex; flex-direction: column; gap: 8px; }
 
 .profile-contact-item {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #777777;
   display: flex;
@@ -927,7 +927,7 @@
 .profile-tag-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .profile-cat-tag {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   font-weight: 600;
   color: #c8ff00;
@@ -942,7 +942,7 @@
 .profile-btn-primary {
   background: #c8ff00;
   color: #000000;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-weight: 700;
   font-size: 14px;
   padding: 12px;
@@ -958,7 +958,7 @@
 .profile-btn-ghost {
   background: transparent;
   color: #888888;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 14px;
   padding: 11px;
   border-radius: 8px;
@@ -976,7 +976,7 @@
 .profile-right { display: flex; flex-direction: column; gap: 32px; }
 
 .profile-section-heading {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -989,7 +989,7 @@
 .profile-heading-amber { color: rgba(255, 165, 0, 0.7); }
 
 .profile-section-body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 15px;
   color: #888888;
   line-height: 1.75;
@@ -1012,7 +1012,7 @@
 .profile-considerations-box { border-top: 2px solid rgba(255, 165, 0, 0.25); }
 
 .profile-analysis-row {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #888888;
   line-height: 1.65;
@@ -1023,7 +1023,7 @@
 .profile-analysis-row:last-child { border-bottom: none; }
 
 .profile-analysis-empty {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #333333;
   font-style: italic;
@@ -1032,7 +1032,7 @@
 .profile-skill-group { margin-bottom: 16px; }
 
 .profile-skill-cat-label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1044,7 +1044,7 @@
 .profile-skill-pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .profile-skill-pill {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #888888;
   background: #0d0d0d;
@@ -1068,27 +1068,27 @@
 }
 
 .profile-job-title {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 14px;
   font-weight: 600;
   color: #ffffff;
 }
 
 .profile-job-duration {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #444444;
 }
 
 .profile-job-company {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #555555;
   margin-bottom: 6px;
 }
 
 .profile-job-desc {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #666666;
   line-height: 1.65;
@@ -1108,21 +1108,21 @@
 }
 
 .profile-breakdown-label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #555555;
   margin-bottom: 4px;
 }
 
 .profile-breakdown-val {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-family-display);
   font-size: 20px;
   font-weight: 800;
   color: #ffffff;
 }
 
 .profile-match-reason {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #777777;
   line-height: 1.65;
@@ -1150,7 +1150,7 @@
   align-items: center;
   gap: 8px;
   color: #888888;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
 }
 
@@ -1185,7 +1185,7 @@
 .result-card--open { border-color: rgba(200, 255, 0, 0.3); }
 
 .rc-rank {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   font-weight: 600;
   color: #2a2a2a;
@@ -1206,7 +1206,7 @@
   background: rgba(200, 255, 0, 0.08);
   border: 1px solid rgba(200, 255, 0, 0.15);
   color: #c8ff00;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   font-weight: 700;
   display: flex;
@@ -1217,7 +1217,7 @@
 .rc-identity { flex: 1; min-width: 0; }
 
 .rc-name {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 14px;
   font-weight: 600;
   color: #ffffff;
@@ -1227,7 +1227,7 @@
 }
 
 .rc-meta {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #555555;
   margin-top: 2px;
@@ -1240,7 +1240,7 @@
 .rc-score-block { text-align: right; flex-shrink: 0; }
 
 .rc-score-num {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-family-display);
   font-size: 26px;
   font-weight: 700;
   line-height: 1;
@@ -1248,14 +1248,14 @@
 }
 
 .rc-score-denom {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   font-weight: 400;
   color: #555555;
 }
 
 .rc-fit-label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   font-weight: 600;
   margin-top: 3px;
@@ -1266,7 +1266,7 @@
 .rc-fit--unscored { color: #444444; }
 
 .rc-score-empty {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #333333;
 }
@@ -1311,7 +1311,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1329,7 +1329,7 @@
 }
 
 .rc-reasoning-text {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #777777;
   line-height: 1.6;
@@ -1343,7 +1343,7 @@
 .rc-skills { display: flex; gap: 5px; flex-wrap: wrap; }
 
 .rc-skill {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #666666;
   background: #0d0d0d;
@@ -1353,7 +1353,7 @@
 }
 
 .rc-skill-more {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #444444;
   padding: 2px 4px;
@@ -1370,13 +1370,13 @@
 }
 
 .rc-footer-meta {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #444444;
 }
 
 .rc-expand-hint {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #2a2a2a;
   transition: color 0.15s;
@@ -1435,7 +1435,7 @@
   background: rgba(200, 255, 0, 0.1);
   border: 1px solid rgba(200, 255, 0, 0.2);
   color: #c8ff00;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 15px;
   font-weight: 700;
   display: flex;
@@ -1446,28 +1446,28 @@
 .dd-header-info { flex: 1; min-width: 140px; }
 
 .dd-name {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 17px;
   font-weight: 700;
   color: #ffffff;
 }
 
 .dd-subtitle {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #666666;
 }
 
 /* Score in drawer header */
 .dd-score {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-family-display);
   font-size: 36px;
   font-weight: 700;
   line-height: 1;
   flex-shrink: 0;
 }
 .dd-score span {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 16px;
   font-weight: 400;
   color: #555555;
@@ -1481,7 +1481,7 @@
 .dd-btn-primary {
   background: #c8ff00;
   color: #000000;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-weight: 700;
   font-size: 13px;
   padding: 9px 18px;
@@ -1496,7 +1496,7 @@
 .dd-btn-ghost {
   background: transparent;
   color: #888888;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   padding: 8px 14px;
   border-radius: 8px;
@@ -1530,7 +1530,7 @@
 .dd-col { min-width: 0; }
 
 .dd-col-label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1542,7 +1542,7 @@
 .dd-col-label--mt-14 { margin-top: 14px; }
 
 .dd-summary {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   color: #777777;
   line-height: 1.7;
@@ -1556,18 +1556,18 @@
   align-items: baseline;
 }
 .dd-fact-k {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #444444;
 }
 .dd-fact-v {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #aaaaaa;
   font-weight: 500;
 }
 .dd-fact-link {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #888888;
   text-decoration: none;
@@ -1577,13 +1577,13 @@
 .dd-job { padding: 8px 0; border-bottom: 1px solid #111111; }
 .dd-job:last-child { border-bottom: none; }
 .dd-job-title {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 13px;
   font-weight: 600;
   color: #cccccc;
 }
 .dd-job-meta {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #555555;
   margin-top: 2px;
@@ -1600,7 +1600,7 @@
 .dd-analysis-box--amber { border-top-color: rgba(255, 165, 0, 0.2); }
 
 .dd-analysis-item {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #777777;
   line-height: 1.6;
@@ -1610,7 +1610,7 @@
 .dd-analysis-item:last-child { border-bottom: none; padding-bottom: 0; }
 
 .dd-analysis-empty {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #333333;
   font-style: italic;
@@ -1620,7 +1620,7 @@
 .dd-top-skills { display: flex; gap: 5px; flex-wrap: wrap; }
 
 .dd-top-skill {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 12px;
   color: #c8ff00;
   background: rgba(200, 255, 0, 0.07);
@@ -1630,7 +1630,7 @@
 }
 
 .dd-skill-cat {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1641,7 +1641,7 @@
 .dd-skill-row { display: flex; gap: 5px; flex-wrap: wrap; }
 
 .dd-skill-pill {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #666666;
   background: #111111;
@@ -1651,7 +1651,7 @@
 }
 
 .dd-skill-more {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-family-base);
   font-size: 11px;
   color: #333333;
   padding: 3px 4px;
