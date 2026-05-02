@@ -58,7 +58,7 @@ function formatMultiLineError(lines) {
 
 function formatUploadError(message) {
   return formatMultiLineError([
-    '❌ Unable to upload',
+    'Unable to upload',
     `Reason: ${message || 'Upload service unavailable'}`,
     'Action: Contact support or try again later',
   ])

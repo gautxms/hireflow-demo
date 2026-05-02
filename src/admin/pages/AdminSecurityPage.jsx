@@ -1,3 +1,4 @@
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../../config/api'
 import { navigateAdmin } from '../config/adminNavigation'
@@ -613,8 +614,9 @@ export default function AdminSecurityPage() {
           <p className="text-sm font-semibold text-admin-strong">Security & operations checklist</p>
           <ul className="mt-2 space-y-1 text-sm">
             {governanceChecklist.map((item) => (
-              <li key={item.label} className={item.ok ? 'text-admin-muted' : 'text-admin-danger'}>
-                {item.ok ? '✅' : '⚠️'} {item.label}
+              <li key={item.label} className={`flex items-center gap-2 ${item.ok ? 'text-admin-muted' : 'text-admin-danger'}`}>
+                {item.ok ? <CheckCircle2 size={14} strokeWidth={2} aria-hidden="true" /> : <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />}
+                <span>{item.label}</span>
               </li>
             ))}
           </ul>
