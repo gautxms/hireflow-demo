@@ -157,8 +157,8 @@ export default function NewDashboard({ onNavigate }) {
               ))}
             </select>
           </label>
-          <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button">{loading ? 'Refreshing…' : 'Apply filters'}</button>
-          <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
+          <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button new-dashboard__button--primary">{loading ? 'Refreshing…' : 'Apply filters'}</button>
+          <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button new-dashboard__button--secondary">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
         </div>
         <p className="new-dashboard__report-period">Report period: {reportPeriod}</p>
         {error ? <p className="new-dashboard__error">{error}</p> : null}
@@ -172,9 +172,9 @@ export default function NewDashboard({ onNavigate }) {
           ['Average Score', Number(kpis.avgScore || 0).toFixed(2)],
           ['Shortlisted Rate', formatPercent(kpis.shortlistedRate)],
         ].map(([label, value]) => (
-          <article key={label} className="new-dashboard__kpi-card">
-            <p className="new-dashboard__kpi-label">{label}</p>
-            <p className="new-dashboard__kpi-value">{value}</p>
+          <article key={label} className="new-dashboard__kpi-card kpi-card">
+            <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
+            <p className="new-dashboard__kpi-value kpi-card-value">{value}</p>
           </article>
         ))}
       </section>
