@@ -2,16 +2,16 @@ import API_BASE from '../config/api'
 export default function SubscriptionCard({ user, token, onRefresh, subscription }) {
   const getStatusColor = (status) => {
     const colors = {
-      active: '#CCFF00',
-      trialing: '#3b82f6',
-      cancelled: '#ef4444',
-      past_due: '#f59e0b',
+      active: 'var(--hf-accent-primary)',
+      trialing: 'var(--hf-status-info)',
+      cancelled: 'var(--hf-status-error)',
+      past_due: 'var(--hf-status-warning)',
     }
 
-    return colors[status] || '#9ca3af'
+    return colors[status] || 'var(--hf-status-neutral)'
   }
 
-  const getStatusTextColor = (status) => (status === 'active' ? '#000000' : '#ffffff')
+  const getStatusTextColor = (status) => (status === 'active' ? 'var(--hf-text-inverse)' : 'var(--hf-text-primary)')
 
   const handleCancelSubscription = async () => {
     if (!window.confirm('Cancel subscription? You\'ll lose access after the current period.')) return
@@ -44,8 +44,8 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
   return (
     <div
       style={{
-        background: '#1a1a1a',
-        border: '1px solid #333333',
+        background: 'var(--hf-surface-card)',
+        border: '1px solid var(--hf-border-subtle)',
         borderRadius: '12px',
         padding: '28px',
       }}
@@ -54,7 +54,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         style={{
           fontSize: '18px',
           fontWeight: '600',
-          color: '#ffffff',
+          color: 'var(--hf-text-primary)',
           marginBottom: '24px',
           display: 'flex',
           alignItems: 'center',
@@ -69,7 +69,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         <p
           style={{
             fontSize: '12px',
-            color: '#a3a3a3',
+            color: 'var(--hf-text-secondary)',
             marginBottom: '8px',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
@@ -98,7 +98,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         <p
           style={{
             fontSize: '12px',
-            color: '#a3a3a3',
+            color: 'var(--hf-text-secondary)',
             marginBottom: '4px',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
@@ -106,14 +106,14 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         >
           Plan
         </p>
-        <p style={{ color: '#ffffff', fontSize: '14px', textTransform: 'capitalize' }}>{plan || 'N/A'}</p>
+        <p style={{ color: 'var(--hf-text-primary)', fontSize: '14px', textTransform: 'capitalize' }}>{plan || 'N/A'}</p>
       </div>
 
       <div style={{ marginBottom: '24px' }}>
         <p
           style={{
             fontSize: '12px',
-            color: '#a3a3a3',
+            color: 'var(--hf-text-secondary)',
             marginBottom: '4px',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
@@ -121,7 +121,7 @@ export default function SubscriptionCard({ user, token, onRefresh, subscription 
         >
           Started
         </p>
-        <p style={{ color: '#ffffff', fontSize: '14px' }}>
+        <p style={{ color: 'var(--hf-text-primary)', fontSize: '14px' }}>
           {startedAt
             ? new Date(startedAt).toLocaleDateString('en-US', {
                 year: 'numeric',

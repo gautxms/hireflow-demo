@@ -132,15 +132,15 @@ const inputStyle = {
   width: '100%',
   border: '1px solid var(--border)',
   borderRadius: 8,
-  background: '#111827',
-  color: '#fff',
+  background: 'var(--hf-surface-input)',
+  color: 'var(--hf-text-primary)',
   padding: '0.65rem 0.8rem',
 }
 
 const primaryButtonStyle = {
   background: 'var(--color-accent-green)',
   border: 'none',
-  color: '#111827',
+  color: 'var(--hf-text-inverse)',
   fontWeight: 700,
   borderRadius: 8,
   padding: '0.7rem 1rem',
@@ -150,14 +150,14 @@ const primaryButtonStyle = {
 const secondaryButtonStyle = {
   background: 'transparent',
   border: '1px solid var(--border)',
-  color: '#fff',
+  color: 'var(--hf-text-primary)',
   borderRadius: 8,
   padding: '0.7rem 1rem',
   cursor: 'pointer',
 }
 
 const errorStyle = {
-  color: '#ef4444',
+  color: 'var(--hf-status-error)',
   margin: 0,
   fontSize: '0.9rem',
 }

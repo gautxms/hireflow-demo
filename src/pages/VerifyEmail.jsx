@@ -74,10 +74,10 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    background: '#f9fafb'
+    background: 'var(--hf-surface-page-light)'
   },
   card: {
-    background: 'white',
+    background: 'var(--hf-surface-card-light)',
     padding: '40px',
     borderRadius: '12px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
@@ -87,28 +87,28 @@ const styles = {
   spinner: {
     width: '50px',
     height: '50px',
-    border: '4px solid #e5e7eb',
-    borderTop: '4px solid #0f172a',
+    border: '4px solid var(--hf-status-info-soft)',
+    borderTop: '4px solid var(--hf-status-track)',
     borderRadius: '50%',
     animation: 'spin calc(var(--motion-duration-base) * 5) linear infinite',
     margin: '0 auto 20px'
   },
   checkmark: {
     fontSize: '60px',
-    color: '#22c55e',
+    color: 'var(--hf-status-success)',
     marginBottom: '20px'
   },
   errorIcon: {
     fontSize: '60px',
-    color: '#ef4444',
+    color: 'var(--hf-status-error)',
     marginBottom: '20px'
   },
   text: {
-    color: '#333',
+    color: 'var(--hf-text-strong)',
     marginBottom: '20px',
   },
   link: {
-    color: '#0f172a',
+    color: 'var(--hf-status-track)',
     textDecoration: 'none',
   }
 }
