@@ -1,17 +1,7 @@
-import { useContext } from 'react'
 import { Bell } from 'lucide-react'
-import { UNSAFE_NavigationContext } from 'react-router-dom'
 
 export default function AppHeader({ user, isSubscribed, pageTitle }) {
-  const navigationContext = useContext(UNSAFE_NavigationContext)
-  const routerNavigate = navigationContext?.navigator?.push
-
   const navigateTo = (path) => {
-    if (typeof routerNavigate === 'function') {
-      routerNavigate(path)
-      return
-    }
-
     if (typeof window !== 'undefined' && window?.location) {
       window.location.href = path
     }
