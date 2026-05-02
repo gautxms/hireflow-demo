@@ -148,6 +148,5 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
           </div>
         </footer>
       </div>
-    </div>
   )
 }
