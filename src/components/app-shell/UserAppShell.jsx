@@ -38,7 +38,21 @@ const DEFAULT_NAV = [
 ]
 
 export default function UserAppShell({ children, pathname, onNavigate, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
-  const getInitialPinned = () => localStorage.getItem('hf-sb-pinned') !== 'false'
+  const getInitialPinned = () => {
+    try {
+      return localStorage.getItem('hf-sb-pinned') !== 'false'
+    } catch {
+      return true
+    }
+  }
+
+  const persistPinned = (nextPinned) => {
+    try {
+      localStorage.setItem('hf-sb-pinned', String(nextPinned))
+    } catch {
+      // Ignore storage failures to keep sidebar behavior functional.
+    }
+  }
   const [pinned, setPinned] = useState(getInitialPinned)
   const [expanded, setExpanded] = useState(getInitialPinned)
 
@@ -61,19 +75,19 @@ export default function UserAppShell({ children, pathname, onNavigate, userProfi
     const next = !pinned
     setPinned(next)
     setExpanded(next)
-    localStorage.setItem('hf-sb-pinned', String(next))
+    persistPinned(next)
   }
 
   const collapse = () => {
     setExpanded(false)
     setPinned(false)
-    localStorage.setItem('hf-sb-pinned', 'false')
+    persistPinned(false)
   }
 
   const expand = () => {
     setExpanded(true)
     setPinned(true)
-    localStorage.setItem('hf-sb-pinned', 'true')
+    persistPinned(true)
   }
 
   return (
