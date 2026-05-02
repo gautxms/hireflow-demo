@@ -74,12 +74,15 @@ export default function PublicFooter() {
 
         <div
           id="public-footer-intent-links"
-          className={`public-footer__intent-links ${isSeoExpanded ? 'public-footer__intent-links--expanded' : ''}`.trim()}
+          className={`public-footer__intent-links footer-seo ${isSeoExpanded ? 'public-footer__intent-links--expanded' : ''}`.trim()}
         >
-          {seoLinks.map(({ href, label }) => (
-            <a key={href} className="public-footer__seo-link" href={href}>
-              {label}
-            </a>
+          {seoLinks.map(({ href, label }, index) => (
+            <span key={href}>
+              {index > 0 && <span className="sep" aria-hidden="true">|</span>}
+              <a className="public-footer__seo-link" href={href}>
+                {label}
+              </a>
+            </span>
           ))}
         </div>
       </div>
