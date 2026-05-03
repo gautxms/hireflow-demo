@@ -923,7 +923,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         {currentPage === 'landing' && (
           <LandingPage
             onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-            ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
+            ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
           />
         )}
 
@@ -1117,13 +1117,23 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         <div className="site-header__auth-actions">
           {isAuthenticated ? (
             <>
-              <button
-                type="button"
-                className="btn-ghost btn-ghost--accent"
-                onClick={handleDashboardShortcutClick}
-              >
-                Dashboard
-              </button>
+              {isActiveSubscriber ? (
+                <button
+                  type="button"
+                  className="btn-ghost btn-ghost--accent"
+                  onClick={handleDashboardShortcutClick}
+                >
+                  Dashboard
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-ghost btn-ghost--accent"
+                  onClick={handlePricingClick}
+                >
+                  View pricing
+                </button>
+              )}
               <div className="site-profile-menu" ref={profileMenuRef}>
                 <button
                   onClick={() => setIsProfileMenuOpen((open) => !open)}
