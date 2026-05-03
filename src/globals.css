@@ -108,8 +108,8 @@ body {
 }
 
 .nav-logo {
-  font-family: var(--font-family-display);
-  font-weight: 800;
+  font-family: var(--font-family-base);
+  font-weight: 700;
   font-size: 1.25rem;
   letter-spacing: -0.03em;
   color: var(--color-text-primary);
@@ -122,8 +122,8 @@ body {
 
 .site-header__logo,
 .public-footer__brand {
-  font-family: var(--font-family-display);
-  font-weight: 800;
+  font-family: var(--font-family-base);
+  font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--color-text-primary);
   text-decoration: none;
