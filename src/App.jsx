@@ -417,7 +417,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return (
         <LandingPage
           onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
+          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
         />
       )
     }
@@ -928,17 +928,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       )
     }
 
-    return (
-      <>
-        {currentPage === 'landing' && (
-          <LandingPage
-            onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-            ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
-          />
-        )}
-
-
-        {currentPage === 'uploader' && (
+    if (currentPage === 'uploader') {
+      return (
           <ResumeUploader
             onFileUploaded={handleFileUploaded}
             onBack={() => handleNavigate('landing')}
@@ -947,9 +938,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             subscriptionStatus={subscriptionStatus}
             userProfile={userProfile}
           />
-        )}
+      )
+    }
 
-        {currentPage === 'results' && (
+    if (currentPage === 'results') {
+      return (
           (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted
             ? (
               <main className="route-state route-state--results-empty">
@@ -977,34 +970,40 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
               />
               )
           )
-        )}
+      )
+    }
 
-        {currentPage === 'dashboard' && (
-          dashboardReportsEnabled
-            ? <OperationsDashboard onNavigate={handleNavigate} />
-            : <LegacyOperationsDashboard onNavigate={handleNavigate} />
-        )}
+    if (currentPage === 'dashboard') {
+      return dashboardReportsEnabled
+        ? <OperationsDashboard onNavigate={handleNavigate} />
+        : <LegacyOperationsDashboard onNavigate={handleNavigate} />
+    }
 
-        {currentPage === 'settings' && (
-          <SettingsPage onBack={() => handleNavigate('dashboard')} />
-        )}
+    if (currentPage === 'settings') {
+      return <SettingsPage onBack={() => handleNavigate('dashboard')} />
+    }
 
-        {currentPage === 'help' && (
-          <HelpPage onBack={() => handleNavigate('landing')} />
-        )}
+    if (currentPage === 'help') {
+      return <HelpPage onBack={() => handleNavigate('landing')} />
+    }
 
-        {currentPage === 'about' && (
-          <AboutPage onBack={() => handleNavigate('landing')} />
-        )}
+    if (currentPage === 'about') {
+      return <AboutPage onBack={() => handleNavigate('landing')} />
+    }
 
-        {currentPage === 'demo' && (
-          <DemoBookingPage onBack={() => handleNavigate('landing')} />
-        )}
+    if (currentPage === 'demo') {
+      return <DemoBookingPage onBack={() => handleNavigate('landing')} />
+    }
 
-        {currentPage === 'contact' && (
-          <ContactPage onBack={() => handleNavigate('landing')} />
-        )}
-      </>
+    if (currentPage === 'contact') {
+      return <ContactPage onBack={() => handleNavigate('landing')} />
+    }
+
+    return (
+      <LandingPage
+        onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
+        ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
+      />
     )
   }
 
