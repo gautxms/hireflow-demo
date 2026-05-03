@@ -13,9 +13,9 @@ Spacing⚠️Inconsistent vertical rhythm between sections and cards.
 UX✅Core CTA flow is clear (signup/demo) and discoverable.
 Polish⚠️No explicit loading/error/empty states for dynamic sections.
 Tasks:
-- TASK-LANDING-01: Replace emoji feature icons in src/components/LandingPage.jsx with lucide-react icons (size=18, strokeWidth=1.5) and align icon wrappers to constitution icon tokens.
-- TASK-LANDING-02: Normalize heading hierarchy so Syne 800 is used only for hero H1; move all other headings to DM Sans with constitution scale.
-- TASK-LANDING-03: Remove hardcoded color literals from src/styles/landing.css and map to shared CSS variables.
+- [x] TASK-LANDING-01: Replace emoji feature icons in src/components/LandingPage.jsx with lucide-react icons (size=18, strokeWidth=1.5) and align icon wrappers to constitution icon tokens.
+- [x] TASK-LANDING-02: Normalize heading hierarchy so Syne 800 is used only for hero H1; move all other headings to DM Sans with constitution scale.
+- [x] TASK-LANDING-03: Remove hardcoded color literals from src/styles/landing.css and map to shared CSS variables.
 Effort: Medium (30–90 min)
 Priority: P1 Critical
 

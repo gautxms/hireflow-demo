@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Brain, Target, BarChart3, Link2, HandCoins, ShieldCheck } from 'lucide-react'
 import '../styles/landing.css'
 import PublicPageLayout from './public/PublicPageLayout'
 
@@ -53,27 +54,45 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
       <section className="features" id="features">
         <div className="features-grid">
           <div className="feature-card">
-            <h3>⚡ AI Screening</h3>
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><Brain size={18} strokeWidth={1.5} /></span>
+              <h3>AI Screening</h3>
+            </div>
             <p>Automatically analyze and score resumes in seconds. Match candidates with roles using 20+ evaluation dimensions.</p>
           </div>
           <div className="feature-card">
-            <h3>🎯 Bias Removal</h3>
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><Target size={18} strokeWidth={1.5} /></span>
+              <h3>Bias Removal</h3>
+            </div>
             <p>Our AI evaluates candidates on merit, not on demographics. Fair, transparent, and legally defensible.</p>
           </div>
           <div className="feature-card">
-            <h3>📊 Smart Analytics</h3>
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><BarChart3 size={18} strokeWidth={1.5} /></span>
+              <h3>Smart Analytics</h3>
+            </div>
             <p>Track hiring metrics, time-to-hire, and candidate quality. Data-driven insights for continuous improvement.</p>
           </div>
           <div className="feature-card">
-            <h3>🔗 ATS Integration</h3>
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><Link2 size={18} strokeWidth={1.5} /></span>
+              <h3>ATS Integration</h3>
+            </div>
             <p>Works seamlessly with your existing tools. No workflow disruption, just smarter hiring.</p>
           </div>
           <div className="feature-card">
-            <h3>💰 Cost Savings</h3>
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><HandCoins size={18} strokeWidth={1.5} /></span>
+              <h3>Cost Savings</h3>
+            </div>
             <p>Reduce time-to-hire by 70%. Save $3-5K per hire by eliminating manual screening.</p>
           </div>
           <div className="feature-card">
-            <h3>🔐 Privacy First</h3>
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><ShieldCheck size={18} strokeWidth={1.5} /></span>
+              <h3>Privacy First</h3>
+            </div>
             <p>SOC 2 compliant. Your candidate data is encrypted and never shared. Enterprise-grade security.</p>
           </div>
         </div>
