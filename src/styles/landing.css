@@ -51,7 +51,7 @@
   line-height: 0.92;
   letter-spacing: -0.03em;
   font-weight: 800;
-  color: #fff;
+  color: var(--color-text-primary);
   margin-bottom: 1.5rem;
 }
 .hero-headline-line { display: block; }

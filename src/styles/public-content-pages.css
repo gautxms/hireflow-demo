@@ -38,7 +38,7 @@
 }
 
 .public-page-title {
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
   font-size: var(--type-h1-size);
   line-height: var(--type-h1-line-height);
   font-weight: var(--type-h1-weight);
@@ -64,7 +64,7 @@
 }
 
 .public-section-title {
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
   font-size: var(--type-h2-size);
   line-height: var(--type-h2-line-height);
   font-weight: var(--type-h2-weight);
@@ -432,13 +432,13 @@ a.public-card .public-copy {
 }
 
 .terms-page__title {
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
   margin-bottom: 1.5rem;
   line-height: var(--type-h1-line-height);
 }
 
 .terms-page__section-title {
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
   margin: 2rem 0 0.75rem;
   font-size: var(--type-h2-size);
   line-height: var(--type-h2-line-height);
@@ -470,7 +470,7 @@ a.public-card .public-copy {
 
 .policy-page__title {
   margin-bottom: 1.5rem;
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
   line-height: var(--type-h1-line-height);
 }
 

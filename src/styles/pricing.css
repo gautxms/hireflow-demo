@@ -18,7 +18,7 @@
   text-align: center;
   font-size: clamp(2rem, 5vw, 2.3rem);
   margin-bottom: var(--spacing-sm);
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
 }
 
 .pricing-page__subtitle,
@@ -110,7 +110,7 @@
 .pricing-card__title {
   font-size: 1.45rem;
   margin-bottom: 0.5rem;
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
 }
 
 .pricing-card__price {
@@ -178,7 +178,7 @@
 }
 
 .pricing-page__section-title {
-  font-family: var(--font-family-display);
+  font-family: var(--font-family-base);
   font-size: clamp(1.45rem, 3vw, 1.8rem);
   margin-bottom: var(--spacing-base);
 }
