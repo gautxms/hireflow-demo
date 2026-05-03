@@ -413,7 +413,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
 
-    if (resolvedPathname === '/' || resolvedPathname === '/ai-resume-screening') {
+    if (pathname === '/' || resolvedPathname === '/ai-resume-screening') {
       return (
         <LandingPage
           onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
