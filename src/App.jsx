@@ -1313,6 +1313,7 @@ export default function App() {
   }, [isAuthenticated])
 
   useEffect(() => {
+    // Authenticated users are intentionally redirected away from auth forms to the home route.
     if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
       navigate('/')
     }
