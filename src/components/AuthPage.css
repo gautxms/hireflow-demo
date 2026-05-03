@@ -66,13 +66,7 @@
 .auth-brand {
   font-family: var(--font-family-brand-display);
   font-size: 1.25rem;
-  font-weight: var(--font-weight-bold);
-  letter-spacing: -0.03em;
   margin-bottom: 1rem;
-}
-
-.auth-brand span {
-  color: var(--color-accent-green);
 }
 
 .auth-title {
@@ -169,6 +163,30 @@
   margin-bottom: 0;
 }
 
+
+.auth-help-text--compact {
+  margin-bottom: 1rem;
+}
+
+.auth-help-text--spaced {
+  margin-bottom: 1.5rem;
+}
+
+.auth-link--block {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.auth-row {
+  margin: 0;
+}
+
+.auth-row--right {
+  margin: -0.25rem 0 0.25rem;
+  text-align: right;
+}
 .auth-submit {
   margin-top: 0.5rem;
   background: linear-gradient(90deg, var(--color-accent-green), var(--color-accent-green-hover));
