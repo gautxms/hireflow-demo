@@ -1,64 +1,162 @@
 :root {
-  --color-bg-primary: #0a0a0f;
-  --color-bg-secondary: #15151f;
-  --color-bg-overlay-80: rgba(10, 10, 15, 0.8);
-  --color-border: rgba(255, 255, 255, 0.07);
-  --color-text-primary: #e8e8f0;
-  --color-text-secondary: #7070a0;
-  --color-accent-green: #e8ff5a;
-  --color-accent-green-hover: #5affb8;
-  --color-accent-alpha-08: rgba(232, 255, 90, 0.08);
-  --color-accent-alpha-06: rgba(90, 255, 184, 0.06);
-  --color-accent-alpha-02: rgba(232, 255, 90, 0.02);
-  --color-white-alpha-20: rgba(255, 255, 255, 0.25);
-  --color-white-alpha-03: rgba(255, 255, 255, 0.03);
-  /* Color tokens */
-  --color-bg-primary: #0a0a0a;
-  --color-bg-secondary: #111111;
-  --color-accent-green: #c8ff00;
-  --hf-lime: var(--color-accent-green);
-  --color-accent-green-hover: #b8ee00;
-  --color-accent-green-active: #a8dc00;
-  --color-hero-accent-start: #c8ff00;
-  --color-hero-accent-end: #39ff9f;
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #aaaaaa;
-  --color-text-nav: #888888;
-  --color-text-muted: #888888;
-  --color-border: #1e1e1e;
-  --color-success: #10b981;
-  --color-error: #ef4444;
-  --color-info: #3b82f6;
+  /* Canonical HireFlow dark theme tokens */
+  --hf-bg-primary: #0a0a0a;
+  --hf-bg-secondary: #111111;
+  --hf-bg-elevated: #121212;
+  --hf-bg-overlay-80: rgba(10, 10, 10, 0.8);
 
-  --color-warning-text: #fcd34d;
-  --color-success-text: #86efac;
+  --hf-text-primary: #ffffff;
+  --hf-text-secondary: #aaaaaa;
+  --hf-text-muted: #888888;
+  --hf-text-inverse: #000000;
+  --hf-text-nav: var(--hf-text-muted);
 
-  /* Shared alpha/utility colors */
+  --hf-accent-primary: #c8ff00;
+  --hf-accent-primary-hover: #b8ee00;
+  --hf-accent-primary-active: #a8dc00;
+  --hf-hero-accent-start: #c8ff00;
+  --hf-hero-accent-end: #39ff9f;
+
+  --hf-border-subtle: #1e1e1e;
+  --hf-border-muted: #555555;
+
+  --hf-status-success: #10b981;
+  --hf-status-success-text: #86efac;
+  --hf-status-error: #ef4444;
+  --hf-status-warning: #fcd34d;
+  --hf-status-info: #3b82f6;
+
+  --hf-alpha-white-03: rgba(255, 255, 255, 0.03);
+  --hf-alpha-white-04: rgba(255, 255, 255, 0.04);
+  --hf-alpha-white-08: rgba(255, 255, 255, 0.08);
+  --hf-alpha-white-10: rgba(255, 255, 255, 0.1);
+  --hf-alpha-white-20: rgba(255, 255, 255, 0.2);
+  --hf-alpha-black-35: rgba(0, 0, 0, 0.35);
+
+  --hf-alpha-accent-02: rgba(200, 255, 0, 0.02);
+  --hf-alpha-accent-06: rgba(200, 255, 0, 0.06);
+  --hf-alpha-accent-08: rgba(200, 255, 0, 0.08);
+  --hf-alpha-accent-10: rgba(200, 255, 0, 0.1);
+  --hf-alpha-accent-15: rgba(200, 255, 0, 0.15);
+  --hf-alpha-accent-40: rgba(200, 255, 0, 0.4);
+  --hf-alpha-danger-15: rgba(239, 68, 68, 0.15);
+  --hf-alpha-danger-35: rgba(239, 68, 68, 0.35);
+  --hf-alpha-warning-12: rgba(251, 191, 36, 0.12);
+  --hf-alpha-warning-35: rgba(251, 191, 36, 0.35);
+  --hf-alpha-success-12: rgba(16, 185, 129, 0.12);
+  --hf-alpha-success-35: rgba(16, 185, 129, 0.35);
+  --hf-alpha-info-16: rgba(59, 130, 246, 0.16);
+
+  --hf-focus-ring: var(--hf-accent-primary);
+  --hf-focus-ring-inner: var(--hf-bg-primary);
+
+  --hf-surface-card: var(--hf-bg-secondary);
+  --hf-surface-input: var(--hf-bg-primary);
+  --hf-surface-muted: #333333;
+  --hf-surface-muted-hover: #444444;
+  --hf-status-neutral: #9ca3af;
+  --hf-status-info-soft: #e5e7eb;
+  --hf-status-track: #0f172a;
+  --hf-surface-page-light: #f9fafb;
+  --hf-surface-card-light: #ffffff;
+
+  --hf-font-ui: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --hf-font-display: 'Syne', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-family-ui: var(--hf-font-ui);
+  --font-family-brand-display: var(--hf-font-display);
+  --font-family-base: var(--hf-font-ui);
+  --font-family-display: var(--hf-font-display);
+  --font-body: var(--hf-font-ui);
+  --font-display: var(--hf-font-display);
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --type-display-size: clamp(3rem, 8vw, 5rem);
+  --type-display-line-height: 1.1;
+  --type-display-weight: var(--font-weight-bold);
+  --type-display-tracking: -0.02em;
+  --type-display: var(--type-display-weight) var(--type-display-size) / var(--type-display-line-height) var(--font-family-display);
+  --type-h1-size: clamp(2.2rem, 4vw, 3rem);
+  --type-h1-line-height: 1.15;
+  --type-h1-weight: var(--font-weight-bold);
+  --type-h1-tracking: -0.015em;
+  --type-h2-size: clamp(1.625rem, 2.3vw, 2rem);
+  --type-h2-line-height: 1.2;
+  --type-h2-weight: var(--font-weight-bold);
+  --type-h2-tracking: -0.012em;
+  --type-h3-size: 1.1rem;
+  --type-h3-line-height: 1.35;
+  --type-h3-weight: var(--font-weight-semibold);
+  --type-h3-tracking: -0.006em;
+  --type-body-size: 1rem;
+  --type-body-line-height: 1.6;
+  --type-body-weight: var(--font-weight-regular);
+  --type-body-tracking: 0;
+  --type-small-size: 0.875rem;
+  --type-small-line-height: 1.45;
+  --type-small-weight: var(--font-weight-medium);
+  --type-small-tracking: 0.01em;
+  --type-nav-size: 0.9rem;
+  --type-nav-line-height: 1.2;
+  --type-nav-weight: var(--font-weight-medium);
+  --type-nav-tracking: 0.02em;
+  --type-button-size: 0.9375rem;
+  --type-button-size-lg: 1rem;
+  --type-button-line-height: 1.2;
+  --type-button-weight: var(--font-weight-semibold);
+  --type-button-tracking: 0.01em;
+
+  /* Compatibility aliases to keep existing CSS stable */
+  --color-bg-primary: var(--hf-bg-primary);
+  --color-bg-secondary: var(--hf-bg-secondary);
+  --color-bg-elevated: var(--hf-bg-elevated);
+  --color-bg-overlay-80: var(--hf-bg-overlay-80);
+  --color-text-primary: var(--hf-text-primary);
+  --color-text-secondary: var(--hf-text-secondary);
+  --color-text-nav: var(--hf-text-nav);
+  --color-text-muted: var(--hf-text-muted);
+  --color-accent-green: var(--hf-accent-primary);
+  --hf-lime: var(--hf-accent-primary);
+  --color-accent-green-hover: var(--hf-accent-primary-hover);
+  --color-accent-green-active: var(--hf-accent-primary-active);
+  --color-hero-accent-start: var(--hf-hero-accent-start);
+  --color-hero-accent-end: var(--hf-hero-accent-end);
+  --color-border: var(--hf-border-subtle);
+  --color-success: var(--hf-status-success);
+  --color-success-text: var(--hf-status-success-text);
+  --color-error: var(--hf-status-error);
+  --color-warning-text: var(--hf-status-warning);
+  --color-info: var(--hf-status-info);
   --color-black: #000000;
-  --color-bg-elevated: #121212;
-  --color-bg-overlay-80: rgba(10, 10, 10, 0.8);
-  --color-white-alpha-03: rgba(255, 255, 255, 0.03);
-  --color-white-alpha-04: rgba(255, 255, 255, 0.04);
-  --color-white-alpha-08: rgba(255, 255, 255, 0.08);
-  --color-white-alpha-10: rgba(255, 255, 255, 0.1);
-  --color-white-alpha-20: rgba(255, 255, 255, 0.2);
-  --color-accent-alpha-02: rgba(200, 255, 0, 0.02);
-  --color-accent-alpha-06: rgba(200, 255, 0, 0.06);
-  --color-accent-alpha-08: rgba(200, 255, 0, 0.08);
-  --color-accent-alpha-10: rgba(200, 255, 0, 0.1);
-  --color-accent-alpha-15: rgba(200, 255, 0, 0.15);
-  --color-danger-alpha-15: rgba(239, 68, 68, 0.15);
-  --color-danger-alpha-35: rgba(239, 68, 68, 0.35);
-  --color-warning-alpha-12: rgba(251, 191, 36, 0.12);
-  --color-warning-alpha-35: rgba(251, 191, 36, 0.35);
-  --color-success-alpha-12: rgba(16, 185, 129, 0.12);
-  --color-success-alpha-35: rgba(16, 185, 129, 0.35);
-  --color-info-alpha-16: rgba(59, 130, 246, 0.16);
-  --color-focus-ring: var(--color-accent-green);
-  --color-focus-ring-inner: var(--color-bg-primary);
+  --color-white-alpha-03: var(--hf-alpha-white-03);
+  --color-white-alpha-04: var(--hf-alpha-white-04);
+  --color-white-alpha-08: var(--hf-alpha-white-08);
+  --color-white-alpha-10: var(--hf-alpha-white-10);
+  --color-white-alpha-20: var(--hf-alpha-white-20);
+  --color-black-alpha-35: var(--hf-alpha-black-35);
+  --color-accent-alpha-02: var(--hf-alpha-accent-02);
+  --color-accent-alpha-06: var(--hf-alpha-accent-06);
+  --color-accent-alpha-08: var(--hf-alpha-accent-08);
+  --color-accent-alpha-10: var(--hf-alpha-accent-10);
+  --color-accent-alpha-15: var(--hf-alpha-accent-15);
+  --color-accent-alpha-40: var(--hf-alpha-accent-40);
+  --color-danger-alpha-15: var(--hf-alpha-danger-15);
+  --color-danger-alpha-35: var(--hf-alpha-danger-35);
+  --color-warning-alpha-12: var(--hf-alpha-warning-12);
+  --color-warning-alpha-35: var(--hf-alpha-warning-35);
+  --color-success-alpha-12: var(--hf-alpha-success-12);
+  --color-success-alpha-35: var(--hf-alpha-success-35);
+  --color-info-alpha-16: var(--hf-alpha-info-16);
+  --color-focus-ring: var(--hf-focus-ring);
+  --color-focus-ring-inner: var(--hf-focus-ring-inner);
+  --border: var(--hf-border-subtle);
+  --card: var(--hf-surface-card);
+}
 
-
-  /* Iconography */
+:root {
   --icon-size-xs: 12px;
   --icon-size-sm: 16px;
   --icon-size-md: 20px;
@@ -75,66 +173,6 @@
   --icon-color-warning: var(--color-warning-text);
   --icon-color-danger: var(--color-error);
 
-  /* Typography */
-  --font-family-ui: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  --font-family-brand-display: 'Syne', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  --font-family-base: var(--font-family-ui);
-  --font-family-display: var(--font-family-brand-display);
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  /* Semantic typography contract */
-  --type-display-size: clamp(3rem, 8vw, 5rem);
-  --type-display-line-height: 1.1;
-  --type-display-weight: var(--font-weight-bold);
-  --type-display-tracking: -0.02em;
-  --type-display: var(--type-display-weight) var(--type-display-size) / var(--type-display-line-height) var(--font-family-display);
-
-  --type-h1-size: clamp(2.2rem, 4vw, 3rem);
-  --type-h1-line-height: 1.15;
-  --type-h1-weight: var(--font-weight-bold);
-  --type-h1-tracking: -0.015em;
-  --type-h1: var(--type-h1-weight) var(--type-h1-size) / var(--type-h1-line-height) var(--font-family-display);
-
-  --type-h2-size: clamp(1.625rem, 2.3vw, 2rem);
-  --type-h2-line-height: 1.2;
-  --type-h2-weight: var(--font-weight-bold);
-  --type-h2-tracking: -0.012em;
-  --type-h2: var(--type-h2-weight) var(--type-h2-size) / var(--type-h2-line-height) var(--font-family-display);
-
-  --type-h3-size: 1.1rem;
-  --type-h3-line-height: 1.35;
-  --type-h3-weight: var(--font-weight-semibold);
-  --type-h3-tracking: -0.006em;
-  --type-h3: var(--type-h3-weight) var(--type-h3-size) / var(--type-h3-line-height) var(--font-family-display);
-
-  --type-body-size: 1rem;
-  --type-body-line-height: 1.6;
-  --type-body-weight: var(--font-weight-regular);
-  --type-body-tracking: 0;
-  --type-body: var(--type-body-weight) var(--type-body-size) / var(--type-body-line-height) var(--font-family-base);
-
-  --type-small-size: 0.875rem;
-  --type-small-line-height: 1.45;
-  --type-small-weight: var(--font-weight-medium);
-  --type-small-tracking: 0.01em;
-  --type-small: var(--type-small-weight) var(--type-small-size) / var(--type-small-line-height) var(--font-family-base);
-
-  --type-nav-size: 0.9rem;
-  --type-nav-line-height: 1.2;
-  --type-nav-weight: var(--font-weight-medium);
-  --type-nav-tracking: 0.02em;
-  --type-nav: var(--type-nav-weight) var(--type-nav-size) / var(--type-nav-line-height) var(--font-family-base);
-
-  --type-button-size: 0.9375rem;
-  --type-button-line-height: 1.2;
-  --type-button-weight: var(--font-weight-semibold);
-  --type-button-tracking: 0.01em;
-  --type-button: var(--type-button-weight) var(--type-button-size) / var(--type-button-line-height) var(--font-family-base);
-
-  /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
@@ -143,36 +181,27 @@
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
   --spacing-3xl: 64px;
-
-  /* Semantic spacing tiers */
   --spacing-inline: var(--spacing-sm);
   --spacing-stack: var(--spacing-base);
   --spacing-card: var(--spacing-lg);
   --spacing-section: var(--spacing-xl);
 
-  /* Radius */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-
-  /* Semantic radius tiers */
   --radius-interactive: var(--radius-md);
   --radius-surface: var(--radius-lg);
   --radius-dialog: var(--radius-lg);
 
-  /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.5);
-
-  /* Semantic shadow tiers */
   --shadow-surface: var(--shadow-sm);
   --shadow-elevated: var(--shadow-md);
   --shadow-overlay: var(--shadow-xl);
 
-  /* Motion */
   --motion-duration-instant: 0ms;
   --motion-duration-fast: 140ms;
   --motion-duration-base: 200ms;
@@ -191,12 +220,5 @@
     box-shadow var(--motion-duration-slow) var(--motion-ease-standard);
   --motion-transition-drawer: transform var(--motion-duration-base) var(--motion-ease-standard);
 
-  /* Layout */
   --content-max-width: 1280px;
-
-  /* Compatibility aliases */
-  --border: var(--color-border);
-  --card: var(--color-bg-secondary);
-  --font-body: var(--font-family-ui);
-  --font-display: var(--font-family-brand-display);
 }
