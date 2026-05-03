@@ -16,6 +16,16 @@ body {
   font-family: var(--font-family-display);
 }
 
+
+.kpi-value,
+.stat-value,
+.kpi-card-value,
+[class*="kpi-num"],
+[class*="stat-num"] {
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 700;
+}
+
 .type-display,
 .type-h1,
 .type-h2,

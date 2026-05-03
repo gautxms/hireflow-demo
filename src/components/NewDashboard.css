@@ -161,7 +161,7 @@
 }
 
 .kpi-card-value {
-  font-family: var(--font-family-display);
+  font-family: 'DM Sans', sans-serif;
   font-size: 32px;
   font-weight: 700;
   color: var(--color-text-primary);
