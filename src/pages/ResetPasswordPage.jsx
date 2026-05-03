@@ -167,7 +167,7 @@ export default function ResetPasswordPage({ onGoToLogin }) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <p className="auth-subtitle auth-status" style={{ fontSize: 13 }}>
+                <p className="auth-subtitle auth-status auth-meta">
                   Password strength: <strong>{passwordStrength}</strong>
                 </p>
 
