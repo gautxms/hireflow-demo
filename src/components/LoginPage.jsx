@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './AuthPage.css'
 import BackButton from './BackButton'
 import API_BASE from '../config/api'
+import BrandLogo from './BrandLogo'
 
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -68,7 +69,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
         <div className="auth-glow auth-glow--a" />
         <div className="auth-glow auth-glow--b" />
         <section className="auth-panel">
-          <p className="auth-brand">Hire<span>Flow</span></p>
+          <BrandLogo as="p" className="auth-brand" />
           <h1 className="auth-title">Verify your email</h1>
           <p className="auth-subtitle">You must verify your email address before you can log in.</p>
 
@@ -110,7 +111,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
         <BackButton />
-        <p className="auth-brand">Hire<span>Flow</span></p>
+        <BrandLogo as="p" className="auth-brand" />
         <h1 className="auth-title">Welcome back</h1>
         <p className="auth-subtitle">Sign in to continue screening candidates faster.</p>
         {promptMessage && <p className="auth-prompt">{promptMessage}</p>}

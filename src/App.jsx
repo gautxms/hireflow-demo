@@ -35,6 +35,7 @@ const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage'))
 const AnalysesPage = lazy(() => import('./pages/AnalysesPage'))
 const AnalysisDetailPage = lazy(() => import('./pages/AnalysisDetailPage'))
 import PublicFooter from './components/PublicFooter'
+import BrandLogo from './components/BrandLogo'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
 import API_BASE from './config/api'
@@ -1020,16 +1021,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     <>
       <PageSeo pathname={pathname} currentPage={currentPage} />
       <header className="site-header">
-        <a
-          href="/"
+        <BrandLogo
           onClick={(event) => {
             event.preventDefault()
             navigate('/')
           }}
           className="site-header__logo"
-        >
-          Hire<span>Flow</span>
-        </a>
+        />
         <div className="site-header__nav-links" aria-label="Primary">
           <button type="button" className="site-header__nav-button" onClick={handleFeaturesClick}>Features</button>
           <button type="button" className="site-header__nav-button" onClick={handleSolutionsClick}>Solutions</button>

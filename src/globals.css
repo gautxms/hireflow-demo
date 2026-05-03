@@ -95,15 +95,17 @@ body {
 }
 
 
+.brand-logo,
 .site-header__logo,
 .public-footer__brand {
-  font-family: 'Syne', sans-serif;
-  font-weight: 800;
+  font-family: var(--font-family-brand-display);
+  font-weight: var(--font-weight-bold);
   letter-spacing: -0.03em;
-  color: #ffffff;
+  color: var(--color-text-primary);
   text-decoration: none;
 }
 
+.brand-logo span,
 .site-header__logo span,
 .public-footer__brand span {
   color: var(--color-accent-green);

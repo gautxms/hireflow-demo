@@ -64,15 +64,8 @@
 }
 
 .auth-brand {
-  font-family: var(--font-display);
   font-size: 1.25rem;
-  font-weight: var(--font-weight-bold);
-  letter-spacing: -0.03em;
   margin-bottom: 1rem;
-}
-
-.auth-brand span {
-  color: var(--color-accent-green);
 }
 
 .auth-title {
