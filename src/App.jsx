@@ -1016,7 +1016,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const userShellNavItems = useMemo(() => {
     return [
-      { key: 'dashboard', label: 'Dashboard', path: '/', icon: 'home' },
+      { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'home' },
       { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'file' },
       { key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'target', isLocked: !analysesModuleEnabled },
       { key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'users', isLocked: !candidateModuleEnabled },
