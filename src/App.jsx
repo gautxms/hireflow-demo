@@ -39,7 +39,7 @@ import BrandLogo from './components/BrandLogo'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
 import PublicRouteChunkErrorBoundary from './components/PublicRouteChunkErrorBoundary'
-import { clearPublicRouteChunkReloadGuard, loadPublicRouteChunk } from './utils/lazyRouteLoader'
+import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
 import API_BASE from './config/api'
 import IntentLandingPage from './pages/seo/IntentLandingPage'
 import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
@@ -1063,9 +1063,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     ]
   }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
 
-  useEffect(() => {
-    clearPublicRouteChunkReloadGuard(resolvedPathname)
-  }, [resolvedPathname])
 
   useEffect(() => {
     if (!routeDiagnosticsEnabled) {

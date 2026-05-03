@@ -30,7 +30,10 @@ function trackPublicRouteChunkLoadFailure({ route, retryAttempted, error }) {
 }
 
 export function loadPublicRouteChunk(importer, { route }) {
-  return importer().catch((error) => {
+  return importer().then((module) => {
+    clearPublicRouteChunkReloadGuard(route)
+    return module
+  }).catch((error) => {
     if (!shouldHandleChunkLoadFailure(error)) {
       throw error
     }

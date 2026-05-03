@@ -23,6 +23,15 @@ describe('lazyRouteLoader', () => {
     await expect(loadPublicRouteChunk(importer, { route: '/help' })).rejects.toThrow('Failed to fetch dynamically imported module')
   })
 
+
+  it('clears existing guard only after chunk import succeeds', async () => {
+    sessionStorage.setItem('hireflow_chunk_reload_attempted:test:/help', '1')
+    const importer = vi.fn().mockResolvedValue({ default: () => null })
+
+    await expect(loadPublicRouteChunk(importer, { route: '/help' })).resolves.toEqual({ default: expect.any(Function) })
+    expect(sessionStorage.getItem('hireflow_chunk_reload_attempted:test:/help')).toBeNull()
+  })
+
   it('clears reload guard', () => {
     sessionStorage.setItem('hireflow_chunk_reload_attempted:test:/help', '1')
     clearPublicRouteChunkReloadGuard('/help')
