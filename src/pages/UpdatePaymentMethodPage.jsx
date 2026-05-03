@@ -81,9 +81,13 @@ export default function UpdatePaymentMethodPage() {
   return (
     <main className="billing-shell">
       <section className="billing-shell__section">
-        <BackButton />
-        <h1 className="billing-shell__title">Update Payment Method</h1>
-        <p className="billing-shell__subtitle">Enter your card details below. Your account will remain on the billing page after this update.</p>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Update Payment Method</h1>
+            <p className="page-subtitle">Enter your card details below. Your account will remain on the billing page after this update.</p>
+          </div>
+          <BackButton />
+        </div>
 
         <form onSubmit={handleSubmit} className="billing-shell__form">
           <label htmlFor="card-number" className="billing-shell__label">Card Number</label>

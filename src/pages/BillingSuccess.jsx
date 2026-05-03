@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import '../styles/billing.css'
 import '../styles/checkout.css'
+import BillingStatusLayout from '../components/BillingStatusLayout'
 
 const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
-
 
 function markCreateAnalysisIntent() {
   const intent = {
@@ -55,15 +55,12 @@ export default function BillingSuccess() {
   }, [])
 
   return (
-    <main className="billing-shell billing-shell--centered route-state">
-      <div className="billing-shell__card billing-shell__card--success route-state-card">
-        <div className="billing-shell__icon-wrap">✓</div>
-
-        <h1 className="billing-shell__title billing-shell__title--success">Payment Successful!</h1>
-
-        <p className="billing-shell__message">{message || 'Thank you for your subscription. Your account is now active.'}</p>
-
-        <div className="billing-shell__summary">
+    <BillingStatusLayout
+      status="success"
+      title="Payment successful"
+      subtitle={message || 'Thank you for your subscription. Your account is now active.'}
+      details={(
+        <>
           <div className="billing-shell__summary-row">
             <span className="billing-shell__summary-label">Plan:</span>
             <strong className="billing-shell__summary-value">{plan}</strong>
@@ -74,10 +71,10 @@ export default function BillingSuccess() {
               <code className="billing-shell__transaction">{transactionId}</code>
             </div>
           )}
-        </div>
-
-        <p className="billing-shell__countdown">Redirecting to resume uploader in {countdown} seconds...</p>
-
+        </>
+      )}
+      footer={`Redirecting to resume uploader in ${countdown} seconds...`}
+      actions={(
         <button
           type="button"
           onClick={() => {
@@ -88,7 +85,7 @@ export default function BillingSuccess() {
         >
           Go to Resume Uploader
         </button>
-      </div>
-    </main>
+      )}
+    />
   )
 }
