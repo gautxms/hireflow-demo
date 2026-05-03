@@ -1,16 +1,16 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import StatePattern from './components/state/StatePattern'
-const LandingPage = lazy(() => import('./components/LandingPage'))
-const Pricing = lazy(() => import('./pages/Pricing'))
+import LandingPage from './components/LandingPage'
+const Pricing = lazy(() => loadPublicRouteChunk(() => import('./pages/Pricing'), { route: '/pricing' }))
 const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
 const CandidateResults = lazy(() => import('./components/CandidateResults'))
 const OperationsDashboard = lazy(() => import('./components/NewDashboard'))
 const LegacyOperationsDashboard = lazy(() => import('./components/Dashboard'))
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
-const HelpPage = lazy(() => import('./components/HelpPage'))
-const AboutPage = lazy(() => import('./components/AboutPage'))
-const DemoBookingPage = lazy(() => import('./components/DemoBookingPage'))
-const ContactPage = lazy(() => import('./components/ContactPage'))
+const HelpPage = lazy(() => loadPublicRouteChunk(() => import('./components/HelpPage'), { route: '/help' }))
+const AboutPage = lazy(() => loadPublicRouteChunk(() => import('./components/AboutPage'), { route: '/about' }))
+const DemoBookingPage = lazy(() => loadPublicRouteChunk(() => import('./components/DemoBookingPage'), { route: '/demo' }))
+const ContactPage = lazy(() => loadPublicRouteChunk(() => import('./components/ContactPage'), { route: '/contact' }))
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
@@ -38,6 +38,8 @@ import PublicFooter from './components/PublicFooter'
 import BrandLogo from './components/BrandLogo'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
+import PublicRouteChunkErrorBoundary from './components/PublicRouteChunkErrorBoundary'
+import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
 import API_BASE from './config/api'
 import IntentLandingPage from './pages/seo/IntentLandingPage'
 import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
@@ -1061,6 +1063,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     ]
   }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
 
+
   useEffect(() => {
     if (!routeDiagnosticsEnabled) {
       return
@@ -1078,9 +1081,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled])
 
   const pageContent = (
-    <Suspense fallback={<div className="app-route-loading-fallback">Loading…</div>}>
-      {getPageContent()}
-    </Suspense>
+    <PublicRouteChunkErrorBoundary>
+      <Suspense fallback={<div className="app-route-loading-fallback">Loading…</div>}>
+        {getPageContent()}
+      </Suspense>
+    </PublicRouteChunkErrorBoundary>
   )
   const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated)
 
