@@ -412,6 +412,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       )
     }
 
+
+    if (resolvedPathname === '/' || resolvedPathname === '/ai-resume-screening') {
+      return (
+        <LandingPage
+          onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
+          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
+        />
+      )
+    }
+
     if (resolvedPathname === '/pricing') {
       if (isAuthenticated && isActiveSubscriber) {
         navigate('/billing')
@@ -1001,19 +1011,13 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
-    if (pathname !== '/') {
-      navigate('/')
-    }
-    setCurrentPage('landing')
+    navigate('/')
     window.setTimeout(() => {
       document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
     }, 0)
   }
   const handleHelpClick = () => {
-    if (pathname !== '/') {
-      navigate('/')
-    }
-    setCurrentPage('help')
+    navigate('/help')
   }
   const handleAboutClick = () => {
     navigate('/about')
@@ -1097,7 +1101,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           href="/"
           onClick={(event) => {
             event.preventDefault()
-                    navigate('/')
+            navigate('/')
           }}
           className="site-header__logo"
         >
