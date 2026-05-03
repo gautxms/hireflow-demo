@@ -45,3 +45,13 @@
     padding-block: 2.25rem;
   }
 }
+
+.public-page-layout .brand-logo {
+  font-family: var(--font-family-brand-display);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.03em;
+}
+
+.public-page-layout .brand-logo span {
+  color: var(--color-accent-green);
+}
