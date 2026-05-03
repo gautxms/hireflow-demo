@@ -448,6 +448,85 @@ body {
   color: var(--color-text-primary);
 }
 
+.site-header__auth-actions {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+}
+
+.site-profile-menu {
+  position: relative;
+}
+
+.site-profile-menu__trigger {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--color-accent-alpha-40);
+  background: var(--color-accent-alpha-08);
+  color: var(--color-accent-green);
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.site-profile-menu__list {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 10rem;
+  padding: 0.4rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  box-shadow: 0 12px 28px var(--color-black-alpha-35);
+  z-index: 120;
+}
+
+.site-profile-menu__item {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: left;
+  font-family: var(--font-family-base);
+  font-size: 0.875rem;
+  line-height: 1.2;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.site-profile-menu__item:hover,
+.site-profile-menu__item:focus-visible {
+  background: var(--color-white-alpha-08);
+}
+
+.site-profile-menu__item--danger {
+  color: var(--color-danger);
+}
+
+.site-profile-menu__item--danger:hover,
+.site-profile-menu__item--danger:focus-visible {
+  background: var(--color-danger-bg);
+}
+
+.site-profile-menu__divider {
+  height: 1px;
+  border: 0;
+  background: var(--color-border);
+  margin: 0.2rem 0;
+}
+
 .app-route-loading-fallback {
   padding: 1rem;
   color: var(--color-text-secondary);
@@ -480,11 +559,19 @@ body {
   .site-header__nav-links,
   .site-header__auth-actions {
     display: flex !important;
-    width: 100%;
     align-items: center;
     justify-content: center;
-    flex-wrap: wrap;
     gap: 0.65rem;
+  }
+
+  .site-header__nav-links {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .site-header__auth-actions {
+    width: auto;
+    flex-wrap: nowrap;
   }
 
   .resume-uploader-page,
