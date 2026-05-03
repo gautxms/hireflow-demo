@@ -64,7 +64,7 @@
 }
 
 .auth-brand {
-  font-family: var(--font-display);
+  font-family: 'Syne', var(--font-display), sans-serif;
   font-size: 1.25rem;
   font-weight: var(--font-weight-bold);
   letter-spacing: -0.03em;
@@ -76,7 +76,7 @@
 }
 
 .auth-title {
-  font-family: var(--font-display);
+  font-family: 'Syne', var(--font-display), sans-serif;
   font-size: 2rem;
   line-height: 1.1;
   margin-bottom: 0.4rem;
