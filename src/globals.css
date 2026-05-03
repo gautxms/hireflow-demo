@@ -98,7 +98,6 @@ body {
 .brand-logo,
 .site-header__logo,
 .public-footer__brand {
-  font-family: 'Syne', var(--font-display), sans-serif;
   font-size: 1.25rem;
   font-family: var(--font-family-brand-display);
   font-weight: var(--font-weight-bold);

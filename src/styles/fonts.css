@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&display=swap');
+
+@font-face {
+  font-family: 'Syne Local';
+  src: local('Syne SemiBold'), local('Syne-SemiBold'), local('Syne');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Syne Local';
+  src: local('Syne Bold'), local('Syne-Bold'), local('Syne');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Syne Local';
+  src: local('Syne ExtraBold'), local('Syne-ExtraBold'), local('Syne');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
