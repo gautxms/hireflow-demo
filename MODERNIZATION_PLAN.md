@@ -68,9 +68,9 @@ Spacing⚠️Intra-card spacing and section paddings are inconsistent.
 UX✅Main workflows are understandable and navigable.
 Polish⚠️Some states are polished; others appear utilitarian and uneven.
 Tasks:
-- TASK-APP-01: Unify card/button/input primitives across app pages by introducing shared utility classes/tokens and removing per-page drift.
-- TASK-APP-02: Replace decorative inline SVG usages in src/components/NewDashboard.jsx with standardized chart/component primitives aligned with design system.
-- TASK-APP-03: Audit all app page stylesheets for hardcoded hex/border values and replace with theme variables.
+- [x] TASK-APP-01: Unify card/button/input primitives across app pages by introducing shared utility classes/tokens and removing per-page drift.
+- [x] TASK-APP-02: Replace decorative inline SVG usages in src/components/NewDashboard.jsx with standardized chart/component primitives aligned with design system.
+- [x] TASK-APP-03: Audit all app page stylesheets for hardcoded hex/border values and replace with theme variables.
 Effort: Large (90+ min)
 Priority: P1 Critical
 
