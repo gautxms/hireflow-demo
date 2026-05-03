@@ -1,16 +1,16 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import StatePattern from './components/state/StatePattern'
-const LandingPage = lazy(() => import('./components/LandingPage'))
-const Pricing = lazy(() => import('./pages/Pricing'))
+import LandingPage from './components/LandingPage'
+const Pricing = lazy(() => loadPublicRouteChunk(() => import('./pages/Pricing'), { route: '/pricing' }))
 const ResumeUploader = lazy(() => import('./components/ResumeUploader'))
 const CandidateResults = lazy(() => import('./components/CandidateResults'))
 const OperationsDashboard = lazy(() => import('./components/NewDashboard'))
 const LegacyOperationsDashboard = lazy(() => import('./components/Dashboard'))
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
-const HelpPage = lazy(() => import('./components/HelpPage'))
-const AboutPage = lazy(() => import('./components/AboutPage'))
-const DemoBookingPage = lazy(() => import('./components/DemoBookingPage'))
-const ContactPage = lazy(() => import('./components/ContactPage'))
+const HelpPage = lazy(() => loadPublicRouteChunk(() => import('./components/HelpPage'), { route: '/help' }))
+const AboutPage = lazy(() => loadPublicRouteChunk(() => import('./components/AboutPage'), { route: '/about' }))
+const DemoBookingPage = lazy(() => loadPublicRouteChunk(() => import('./components/DemoBookingPage'), { route: '/demo' }))
+const ContactPage = lazy(() => loadPublicRouteChunk(() => import('./components/ContactPage'), { route: '/contact' }))
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
 import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
@@ -38,6 +38,8 @@ import PublicFooter from './components/PublicFooter'
 import BrandLogo from './components/BrandLogo'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
+import PublicRouteChunkErrorBoundary from './components/PublicRouteChunkErrorBoundary'
+import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
 import API_BASE from './config/api'
 import IntentLandingPage from './pages/seo/IntentLandingPage'
 import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
@@ -165,7 +167,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated) {
     return false
   }
 
-  const resolvedPathname = resolveUserSectionPath(pathname)
+  const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
 
   if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
     return false
@@ -254,7 +256,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const params = new URLSearchParams(window.location.search)
-    const resolvedPathname = resolveUserSectionPath(pathname)
+    const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
+  const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
     const isResultsRoute = isResultsRootPath(resolvedPathname)
     const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
 
@@ -377,11 +380,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
-  const resolvedPathname = resolveUserSectionPath(pathname)
+  const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
+  const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
 
   const getPageContent = () => {
     // Contract: `/results/:token` always resolves through the shared-results loading path.
-    if (isSharedResultsPath(pathname)) {
+    if (isSharedResultsPath(resolvedPathname)) {
       if (sharedResultsError) {
         return (
           <main className="route-state route-state--shared-error">
@@ -487,8 +491,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <RefundPolicy />
     }
 
-    if (INTENT_PAGE_ORDER.includes(pathname)) {
-      return <IntentLandingPage pathname={pathname} />
+    if (INTENT_PAGE_ORDER.includes(resolvedPathname)) {
+      return <IntentLandingPage pathname={resolvedPathname} />
     }
 
     if (resolvedPathname === '/billing/success') {
@@ -651,7 +655,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <AnalysesPage onCreateAnalysis={handleCreateAnalysis} />
     }
 
-    if (pathname.startsWith('/analyses/')) {
+    if (resolvedPathname.startsWith('/analyses/')) {
       if (!analysesModuleEnabled) {
         navigate('/results')
         return null
@@ -666,7 +670,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      return <AnalysisDetailPage pathname={pathname} />
+      return <AnalysisDetailPage pathname={resolvedPathname} />
     }
 
     if (resolvedPathname === '/candidates') {
@@ -687,7 +691,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <CandidatesPage />
     }
 
-    if (pathname.startsWith('/candidates/')) {
+    if (resolvedPathname.startsWith('/candidates/')) {
       if (!candidateModuleEnabled) {
         navigate('/results')
         return null
@@ -702,7 +706,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      return <CandidateDetailPage pathname={pathname} />
+      return <CandidateDetailPage pathname={resolvedPathname} />
     }
 
     if (resolvedPathname === '/job-descriptions') {
@@ -720,7 +724,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <JobDescriptionPage onRequireAuth={onRequireAuth} />
     }
 
-    if (pathname === '/account/payment-method') {
+    if (resolvedPathname === '/account/payment-method') {
       if (!isAuthenticated) {
         onRequireAuth('Please login to update your payment method.')
         return null
@@ -728,24 +732,24 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <UpdatePaymentMethodPage />
     }
 
-    if (pathname === '/admin/login') {
+    if (resolvedPathname === '/admin/login') {
       return <AdminLoginPage />
     }
 
-    if (pathname === '/admin/setup-2fa' || pathname === '/admin/setup') {
+    if (resolvedPathname === '/admin/setup-2fa' || resolvedPathname === '/admin/setup') {
       return <AdminSetup2FA />
     }
 
     const renderAdminSection = (sectionProps, page) => (
       <AdminRouteGuard>
-        <AdminShell key={pathname} routePath={pathname} onLogout={logoutAdmin} {...sectionProps}>
+        <AdminShell key={resolvedPathname} routePath={resolvedPathname} onLogout={logoutAdmin} {...sectionProps}>
           {page}
-          <AdminPageFeedbackWidget routeContext={pathname} />
+          <AdminPageFeedbackWidget routeContext={resolvedPathname} />
         </AdminShell>
       </AdminRouteGuard>
     )
 
-    if (pathname === '/admin' || pathname === '/admin/overview') {
+    if (resolvedPathname === '/admin' || resolvedPathname === '/admin/overview') {
       return renderAdminSection({
         sectionKey: 'overview',
         title: 'Overview',
@@ -755,7 +759,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminDashboard />)
     }
 
-    if (pathname === '/admin/users') {
+    if (resolvedPathname === '/admin/users') {
       return renderAdminSection({
         sectionKey: 'users',
         title: 'Users',
@@ -765,7 +769,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminUsersPage />)
     }
 
-    if (pathname.startsWith('/admin/users/')) {
+    if (resolvedPathname.startsWith('/admin/users/')) {
       return renderAdminSection({
         sectionKey: 'users',
         title: 'User details',
@@ -775,7 +779,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminUserDetailsPage />)
     }
 
-    if (pathname === '/admin/billing') {
+    if (resolvedPathname === '/admin/billing') {
       return renderAdminSection({
         sectionKey: 'billing',
         title: 'Billing',
@@ -790,7 +794,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       ))
     }
 
-    if (pathname === '/admin/uploads') {
+    if (resolvedPathname === '/admin/uploads') {
       return renderAdminSection({
         sectionKey: 'uploads',
         title: 'Uploads',
@@ -800,7 +804,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminUploadsPage />)
     }
 
-    if (pathname.startsWith('/admin/uploads/')) {
+    if (resolvedPathname.startsWith('/admin/uploads/')) {
       return renderAdminSection({
         sectionKey: 'uploads',
         title: 'Upload details',
@@ -810,7 +814,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminUploadDetailsPage />)
     }
 
-    if (pathname === '/admin/logs') {
+    if (resolvedPathname === '/admin/logs') {
       return renderAdminSection({
         sectionKey: 'logs',
         title: 'Logs',
@@ -820,7 +824,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminLogsPage />)
     }
 
-    if (pathname === '/admin/health') {
+    if (resolvedPathname === '/admin/health') {
       return renderAdminSection({
         sectionKey: 'health',
         title: 'Health',
@@ -830,7 +834,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminHealthPage />)
     }
 
-    if (pathname === '/admin/analytics') {
+    if (resolvedPathname === '/admin/analytics') {
       return renderAdminSection({
         sectionKey: 'analytics',
         title: 'Analytics',
@@ -840,7 +844,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminAnalyticsPage />)
     }
 
-    if (pathname === '/admin/inquiries') {
+    if (resolvedPathname === '/admin/inquiries') {
       return renderAdminSection({
         sectionKey: 'inquiries',
         title: 'Inquiries',
@@ -850,7 +854,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminInquiriesPage />)
     }
 
-    if (pathname === '/admin/security') {
+    if (resolvedPathname === '/admin/security') {
       return renderAdminSection({
         sectionKey: 'security',
         title: 'Security',
@@ -870,31 +874,31 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }, <AdminRouteFallback title="Section unavailable" description="The requested section is unavailable or still in progress." />)
     }
 
-    if (!isAuthenticated && pathname === '/signup') {
+    if (!isAuthenticated && resolvedPathname === '/signup') {
       return <SignupPage onSignupSuccess={onSignupSuccess} onGoToLogin={() => navigate('/login')} />
     }
 
-    if (pathname === '/login') {
+    if (resolvedPathname === '/login') {
       return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} onNavigateToVerifyEmail={(email) => {
         setPendingVerificationEmail(email)
         navigate('/verify-email-info')
       }} />
     }
 
-    if (!isAuthenticated && pathname === '/verify-email-info') {
+    if (!isAuthenticated && resolvedPathname === '/verify-email-info') {
       return <VerifyEmailInfoPage onBackToLogin={() => navigate('/login')} email={pendingVerificationEmail} />
     }
 
-    if (!isAuthenticated && pathname === '/forgot-password') {
+    if (!isAuthenticated && resolvedPathname === '/forgot-password') {
       return <ForgotPasswordPage onBackToLogin={() => navigate('/login')} />
     }
 
-    if (!isAuthenticated && pathname === '/reset-password') {
+    if (!isAuthenticated && resolvedPathname === '/reset-password') {
       return <ResetPasswordPage onGoToLogin={() => navigate('/login')} />
     }
 
-    if (!isAuthenticated && pathname.startsWith('/reset-password/')) {
-      const resetToken = pathname.replace('/reset-password/', '')
+    if (!isAuthenticated && resolvedPathname.startsWith('/reset-password/')) {
+      const resetToken = resolvedPathname.replace('/reset-password/', '')
       const url = new URL(window.location.href)
 
       if (!url.searchParams.get('token') && resetToken) {
@@ -905,11 +909,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <ResetPasswordPage onGoToLogin={() => navigate('/login')} />
     }
 
-    if (pathname === '/verify') {
+    if (resolvedPathname === '/verify') {
       return <VerifyEmail />
     }
 
-    if (pathname === '/verify-email/success') {
+    if (resolvedPathname === '/verify-email/success') {
       return (
         <main className="route-state route-state--email-verified">
           <StatePattern
@@ -926,6 +930,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
             )}
           />
         </main>
+      )
+    }
+
+    if (!isAuthenticated) {
+      return (
+        <LandingPage
+          onStartDemo={() => navigate('/pricing')}
+          ctaLabel="View pricing"
+        />
       )
     }
 
@@ -1050,10 +1063,29 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     ]
   }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
 
+
+  useEffect(() => {
+    if (!routeDiagnosticsEnabled) {
+      return
+    }
+
+    let matchedBranch = 'public:fallback-landing'
+
+    if (isSharedResultsPath(resolvedPathname)) matchedBranch = 'shared-results'
+    else if (resolvedPathname === '/' || resolvedPathname === '/ai-resume-screening') matchedBranch = 'public:landing'
+    else if (resolvedPathname === '/pricing') matchedBranch = 'public:pricing'
+    else if (resolvedPathname.startsWith('/admin')) matchedBranch = 'admin'
+    else if (isAuthenticated && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated)) matchedBranch = 'user-shell'
+
+    console.debug('[route-diagnostics]', { pathname, resolvedPathname, matchedBranch })
+  }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled])
+
   const pageContent = (
-    <Suspense fallback={<div className="app-route-loading-fallback">Loading…</div>}>
-      {getPageContent()}
-    </Suspense>
+    <PublicRouteChunkErrorBoundary>
+      <Suspense fallback={<div className="app-route-loading-fallback">Loading…</div>}>
+        {getPageContent()}
+      </Suspense>
+    </PublicRouteChunkErrorBoundary>
   )
   const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated)
 

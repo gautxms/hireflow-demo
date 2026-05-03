@@ -22,5 +22,22 @@ test('header features and logo clicks navigate to concrete public pathname', () 
 test('login-to-landing guard: landing is route-driven and login remains explicit', () => {
   assert.doesNotMatch(appSource, /currentPage === 'landing'/)
   assert.match(appSource, /if \(resolvedPathname === '\/' \|\| resolvedPathname === '\/ai-resume-screening'\) {[\s\S]*<LandingPage/)
-  assert.match(appSource, /if \(pathname === '\/login'\) {[\s\S]*return <LoginPage/)
+  assert.match(appSource, /if \(resolvedPathname === '\/login'\) {[\s\S]*return <LoginPage/)
+})
+
+
+test('logged-out public routes always resolve to concrete non-null content', () => {
+  assert.match(appSource, /if \(resolvedPathname === '\/' \|\| resolvedPathname === '\/ai-resume-screening'\) {[\s\S]*<LandingPage/)
+  assert.match(appSource, /if \(!isAuthenticated\) {[\s\S]*<LandingPage[\s\S]*ctaLabel="View pricing"/)
+})
+
+test('route diagnostics include pathname, resolvedPathname, and matched branch', () => {
+  assert.match(appSource, /console\.debug\('\[route-diagnostics\]', \{ pathname, resolvedPathname, matchedBranch \}\)/)
+})
+
+test('route matching in getPageContent consistently uses resolvedPathname', () => {
+  assert.match(appSource, /if \(resolvedPathname\.startsWith\('\/analyses\/'\)\)/)
+  assert.match(appSource, /if \(resolvedPathname\.startsWith\('\/candidates\/'\)\)/)
+  assert.doesNotMatch(appSource, /if \(pathname\.startsWith\('\/analyses\/'\)\)/)
+  assert.doesNotMatch(appSource, /if \(pathname\.startsWith\('\/candidates\/'\)\)/)
 })
