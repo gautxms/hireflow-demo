@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import BackButton from '../components/BackButton'
+import BrandLogo from '../components/BrandLogo'
 import '../components/AuthPage.css'
 import API_BASE from '../config/api'
 
@@ -15,21 +16,17 @@ async function parseResponsePayload(response) {
 
 export default function VerifyEmailPage({ onGoToLogin }) {
   const email = useMemo(() => new URLSearchParams(window.location.search).get('email') || '', [])
-  const [status, setStatus] = useState('verifying')
-  const [message, setMessage] = useState('Verifying your email...')
+  const [status, setStatus] = useState(email ? 'verifying' : 'error')
+  const [message, setMessage] = useState(email ? 'Verifying your email…' : 'Invalid verification link. Email was not found in the URL.')
 
   useEffect(() => {
     let isMounted = true
     let redirectTimer
 
-    if (!email) {
-      setStatus('error')
-      setMessage('Invalid verification link. Email was not found in the URL.')
-      return () => {
-        isMounted = false
-        if (redirectTimer) {
-          window.clearTimeout(redirectTimer)
-        }
+    if (!email) return () => {
+      isMounted = false
+      if (redirectTimer) {
+        window.clearTimeout(redirectTimer)
       }
     }
 
@@ -83,18 +80,18 @@ export default function VerifyEmailPage({ onGoToLogin }) {
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
         <BackButton />
-        <p className="auth-brand">Hire<span>Flow</span></p>
+        <BrandLogo as="p" className="auth-brand" />
         <h1 className="auth-title">Verify your email</h1>
         <p className="auth-subtitle">Please wait while we validate your verification link.</p>
 
-        {status === 'verifying' && <p>{message}</p>}
-        {status === 'success' && <p className="auth-success">{message}</p>}
-        {status === 'error' && <p className="auth-error">{message}</p>}
+        {status === 'verifying' && <p className="auth-subtitle auth-status">{message}</p>}
+        {status === 'success' && <p className="auth-success auth-status">{message}</p>}
+        {status === 'error' && <p className="auth-error auth-status">{message}</p>}
 
         {(status === 'success' || status === 'error') && (
           <p className="auth-switch">
             <button className="auth-link" type="button" onClick={onGoToLogin}>
-              Go to login
+              Go to log in
             </button>
           </p>
         )}

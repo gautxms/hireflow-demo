@@ -50,8 +50,8 @@ Spacing✅Reasonable form spacing and readability.
 UX⚠️Error/help messaging consistency varies by page.
 Polish⚠️Some pages feel minimally styled vs main marketing/app surfaces.
 Tasks:
-- TASK-AUTH-01: Consolidate auth form styles in src/components/AuthPage.css to exact typography, input, button, and color token standards.
-- TASK-AUTH-02: Normalize validation, loading, and error copy placement across all auth page components.
+- [x] TASK-AUTH-01: Consolidate auth form styles in src/components/AuthPage.css to exact typography, input, button, and color token standards.
+- [x] TASK-AUTH-02: Normalize validation, loading, and error copy placement across all auth page components.
 Effort: Medium (30–90 min)
 Priority: P2 High
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import BackButton from '../components/BackButton'
+import BrandLogo from '../components/BrandLogo'
 import '../components/AuthPage.css'
 import API_BASE from '../config/api'
 
@@ -124,7 +125,7 @@ export default function ResetPasswordPage({ onGoToLogin }) {
         return
       }
 
-      setSuccess('Password reset! Redirecting to login...')
+      setSuccess('Password reset! Redirecting to log in…')
       setPassword('')
       setConfirmPassword('')
       setIsTokenValid(false)
@@ -145,12 +146,12 @@ export default function ResetPasswordPage({ onGoToLogin }) {
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
         <BackButton />
-        <p className="auth-brand">Hire<span>Flow</span></p>
+        <BrandLogo as="p" className="auth-brand" />
         <h1 className="auth-title">Set a new password</h1>
         <p className="auth-subtitle">Choose a strong password you haven&apos;t used before.</p>
 
         {isCheckingToken ? (
-          <p>Verifying reset link...</p>
+          <p className="auth-subtitle auth-status">Verifying reset link…</p>
         ) : (
           <>
             {!isTokenValid && error && <p className="auth-error">{error}</p>}
@@ -166,7 +167,7 @@ export default function ResetPasswordPage({ onGoToLogin }) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 13 }}>
+                <p className="auth-subtitle auth-status auth-meta">
                   Password strength: <strong>{passwordStrength}</strong>
                 </p>
 
@@ -181,10 +182,10 @@ export default function ResetPasswordPage({ onGoToLogin }) {
                 />
 
                 {error && <p className="auth-error">{error}</p>}
-                {success && <p style={{ color: 'var(--color-success)', margin: 0 }}>{success}</p>}
+                {success && <p className="auth-success auth-status">{success}</p>}
 
                 <button className="auth-submit" type="submit" disabled={loading}>
-                  {loading ? 'Resetting password...' : 'Reset Password'}
+                  {loading ? 'Resetting password…' : 'Reset password'}
                 </button>
               </form>
             )}
@@ -193,7 +194,7 @@ export default function ResetPasswordPage({ onGoToLogin }) {
 
         <p className="auth-switch">
           <button className="auth-link" type="button" onClick={onGoToLogin}>
-            Back to login
+            Back to log in
           </button>
         </p>
       </section>

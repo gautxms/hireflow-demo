@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import BackButton from '../components/BackButton'
+import BrandLogo from '../components/BrandLogo'
 import '../components/AuthPage.css'
 import API_BASE from '../config/api'
 
@@ -55,7 +56,7 @@ export default function ForgotPasswordPage({ onBackToLogin }) {
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
         <BackButton />
-        <p className="auth-brand">Hire<span>Flow</span></p>
+        <BrandLogo as="p" className="auth-brand" />
         <h1 className="auth-title">Forgot your password?</h1>
         <p className="auth-subtitle">Enter your email and we&apos;ll send you a secure reset link.</p>
 
@@ -71,17 +72,17 @@ export default function ForgotPasswordPage({ onBackToLogin }) {
           />
 
           {error && <p className="auth-error">{error}</p>}
-          {success && <p style={{ color: 'var(--color-success)', margin: 0 }}>{success}</p>}
+          {success && <p className="auth-success auth-status">{success}</p>}
 
           <button className="auth-submit" type="submit" disabled={loading}>
-            {loading ? 'Sending reset link...' : 'Send Reset Link'}
+            {loading ? 'Sending reset link…' : 'Send reset link'}
           </button>
         </form>
 
         <p className="auth-switch">
           Remembered your password?{' '}
           <button className="auth-link" type="button" onClick={onBackToLogin}>
-            Back to login
+            Back to log in
           </button>
         </p>
       </section>
