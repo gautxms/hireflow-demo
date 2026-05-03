@@ -1,7 +1,13 @@
+
 .public-page-layout {
   min-height: 100vh;
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
+  padding-top: 80px;
+}
+
+.public-page-layout > .public-page-main > :is(.public-page-hero, .public-section):first-child {
+  padding-top: clamp(3rem, 6vw, 5rem);
 }
 
 .public-page-layout__header {
