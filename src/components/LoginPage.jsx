@@ -74,11 +74,11 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
           <p className="auth-subtitle">You must verify your email address before you can log in.</p>
 
           <div className="auth-form">
-            <p style={{ color: '#9ca3af', marginBottom: '1rem' }}>
+            <p className="auth-help-text auth-help-text--compact">
               We've sent a verification email to <strong>{unverifiedEmail}</strong>. Check your inbox and click the verification link to continue.
             </p>
 
-            <p style={{ color: '#9ca3af', marginBottom: '1.5rem' }}>
+            <p className="auth-help-text auth-help-text--spaced">
               If you don't see the email, check your spam folder or click below to resend it.
             </p>
 
@@ -86,16 +86,14 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
               className="auth-submit"
               type="button"
               onClick={() => onNavigateToVerifyEmail?.(unverifiedEmail)}
-              style={{ marginBottom: '1rem' }}
             >
               Resend verification email
             </button>
 
             <button
-              className="auth-link"
+              className="auth-link auth-link--block"
               type="button"
               onClick={() => setEmailNotVerified(false)}
-              style={{ display: 'block', width: '100%', textAlign: 'center', marginTop: '1rem' }}
             >
               Back to log in
             </button>
@@ -123,7 +121,7 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
           <label className="auth-label" htmlFor="login-password">Password</label>
           <input className="auth-input" id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
 
-          <p style={{ margin: '-0.25rem 0 0.25rem', textAlign: 'right' }}>
+          <p className="auth-row auth-row--right">
             <button className="auth-link" type="button" onClick={onForgotPassword}>Forgot password?</button>
           </p>
 
