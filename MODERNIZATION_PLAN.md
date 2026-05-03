@@ -32,8 +32,8 @@ Spacing⚠️Card gutters and section spacing vary across breakpoints.
 UX✅Plan selection and upgrade intent are clear.
 Polish⚠️State handling for failed billing/checkout transitions is light.
 Tasks:
-- TASK-PRICING-01: Audit src/pages/Pricing.jsx + src/styles/pricing.css for hardcoded colors and convert to theme variables.
-- TASK-PRICING-02: Standardize pricing card paddings, border radii, and button styles to constitution card/button patterns.
+- [x] TASK-PRICING-01: Audit src/pages/Pricing.jsx + src/styles/pricing.css for hardcoded colors and convert to theme variables.
+- [x] TASK-PRICING-02: Standardize pricing card paddings, border radii, and button styles to constitution card/button patterns.
 Effort: Medium (30–90 min)
 Priority: P2 High
 
