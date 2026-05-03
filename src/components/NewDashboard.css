@@ -2,7 +2,7 @@
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   min-height: 100vh;
-  padding: 2rem;
+  padding: 28px 32px;
 }
 
 .new-dashboard__header {
@@ -16,10 +16,15 @@
 
 .new-dashboard__title {
   margin: 0;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
 }
 
 .new-dashboard__subtitle {
-  color: var(--color-text-secondary);
+  font-size: 14px;
+  color: var(--color-text-muted);
 }
 
 .new-dashboard__header-actions {
@@ -28,25 +33,26 @@
 }
 
 .new-dashboard__button {
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   border-radius: 8px;
   cursor: pointer;
 }
 
 .new-dashboard__button--primary {
-  background: #c8ff00;
-  color: #000000;
+  background: var(--color-accent-green);
+  color: var(--color-black);
   font-weight: 700;
-  padding: 10px 20px;
+  padding: 10px 22px;
   border: none;
 }
 
 .new-dashboard__button--secondary {
   background: transparent;
   color: var(--color-text-secondary);
-  font-weight: 400;
-  padding: 9px 18px;
-  border: 1px solid #2a2a2a;
+  font-weight: 500;
+  padding: 10px 22px;
+  border: 1px solid var(--border-strong);
 }
 
 .new-dashboard__panel,
@@ -54,8 +60,8 @@
 .new-dashboard__trend-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1rem;
+  border-radius: 12px;
+  padding: 20px 24px;
 }
 
 .new-dashboard__panel,
@@ -73,8 +79,8 @@
 .new-dashboard__select {
   display: block;
   margin-top: 4px;
-  background: #111111;
-  border: 1px solid #2a2a2a;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--border-strong);
   color: var(--color-text-primary);
   font-size: 14px;
   padding: 9px 32px 9px 14px;
@@ -124,10 +130,7 @@
 }
 
 .new-dashboard__trend-card {
-  background: #111111;
-  border: 1px solid #1e1e1e;
-  border-radius: 12px;
-  padding: 20px 24px;
+  transition: border-color 0.15s ease;
 }
 
 .new-dashboard__muted,
@@ -140,13 +143,33 @@
   height: 180px;
   background: var(--color-bg-secondary);
   border-radius: 8px;
+  display: grid;
+  grid-auto-flow: column;
+  align-items: end;
+  gap: 8px;
+  padding: 12px;
+}
+
+.new-dashboard__bar-column {
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.new-dashboard__bar {
+  width: 100%;
+  border-radius: 6px 6px 2px 2px;
+}
+
+.new-dashboard__bar--primary {
+  background: var(--color-accent-green);
+}
+
+.new-dashboard__bar--secondary {
+  background: var(--color-accent-green-hover);
 }
 
 .kpi-card {
-  background: #111111;
-  border: 1px solid #1e1e1e;
-  border-radius: 12px;
-  padding: 20px 24px;
   transition: border-color 0.15s;
 }
 

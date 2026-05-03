@@ -17,20 +17,17 @@ function formatDateLabel(value) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function buildPolyline(series, key) {
-  if (!series.length) return ''
+function buildChartBars(series, key) {
+  if (!series.length) return []
   const values = series.map((item) => Number(item[key] || 0))
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const xStep = series.length > 1 ? 100 / (series.length - 1) : 100
+  const max = Math.max(...values, 1)
 
-  return series
-    .map((item, index) => {
-      const value = Number(item[key] || 0)
-      const y = max === min ? 50 : 100 - ((value - min) / (max - min)) * 100
-      return `${(index * xStep).toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
+  return values.map((value, index) => ({
+    id: `${key}-${series[index]?.periodStart ?? index}`,
+    height: Math.max((value / max) * 100, 8),
+    value,
+    label: formatDateLabel(series[index]?.periodStart),
+  }))
 }
 
 export default function NewDashboard({ onNavigate }) {
@@ -124,6 +121,8 @@ export default function NewDashboard({ onNavigate }) {
   }
 
   const series = useMemo(() => dashboardData?.charts?.overview || [], [dashboardData])
+  const analysesBars = useMemo(() => buildChartBars(series, 'analysesRunCount'), [series])
+  const averageScoreBars = useMemo(() => buildChartBars(series, 'avgScore'), [series])
 
   return (
     <div className="new-dashboard">
@@ -183,9 +182,13 @@ export default function NewDashboard({ onNavigate }) {
           {loading ? <p>Loading trend data…</p> : null}
           {!loading && series.length === 0 ? <p className="new-dashboard__muted">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
-            <svg viewBox="0 0 100 100" className="new-dashboard__chart">
-              <polyline fill="none" stroke="var(--color-accent-green)" strokeWidth="2" points={buildPolyline(series, 'analysesRunCount')} />
-            </svg>
+            <div className="new-dashboard__chart" role="img" aria-label="Analyses trend chart">
+              {analysesBars.map((bar) => (
+                <div key={bar.id} className="new-dashboard__bar-column">
+                  <div className="new-dashboard__bar new-dashboard__bar--primary" style={{ height: `${bar.height}%` }} title={`${bar.label}: ${bar.value}`} />
+                </div>
+              ))}
+            </div>
           )}
           <div className="new-dashboard__trend-range">
             <span>{series[0] ? formatDateLabel(series[0].periodStart) : '-'}</span>
@@ -198,9 +201,13 @@ export default function NewDashboard({ onNavigate }) {
           {loading ? <p>Loading trend data…</p> : null}
           {!loading && series.length === 0 ? <p className="new-dashboard__muted">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
-            <svg viewBox="0 0 100 100" className="new-dashboard__chart">
-              <polyline fill="none" stroke="var(--color-accent-green-hover)" strokeWidth="2" points={buildPolyline(series, 'avgScore')} />
-            </svg>
+            <div className="new-dashboard__chart" role="img" aria-label="Average score trend chart">
+              {averageScoreBars.map((bar) => (
+                <div key={bar.id} className="new-dashboard__bar-column">
+                  <div className="new-dashboard__bar new-dashboard__bar--secondary" style={{ height: `${bar.height}%` }} title={`${bar.label}: ${bar.value.toFixed(2)}`} />
+                </div>
+              ))}
+            </div>
           )}
           <div className="new-dashboard__trend-range">
             <span>{series[0] ? formatDateLabel(series[0].periodStart) : '-'}</span>
