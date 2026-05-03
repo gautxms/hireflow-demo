@@ -4,6 +4,7 @@ import './AuthPage.css'
 import BackButton from './BackButton'
 import API_BASE from '../config/api'
 import BrandLogo from './BrandLogo'
+import { Eye, EyeOff } from 'lucide-react'
 
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -144,7 +145,7 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
               title={isPasswordVisible ? 'Hide password fields' : 'Show password fields'}
               onClick={() => setIsPasswordVisible((visible) => !visible)}
             >
-              👁
+              {isPasswordVisible ? <EyeOff size={18} strokeWidth={1.5} /> : <Eye size={18} strokeWidth={1.5} />}
             </button>
           </div>
           {fieldErrors.password && <p className="auth-error">{fieldErrors.password}</p>}
