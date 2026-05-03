@@ -281,10 +281,10 @@ body {
 
 .hero-headline {
   font-family: var(--font-family-display);
-  font-size: clamp(3rem, 8vw, 5rem);
-  line-height: 1.05;
+  font-size: clamp(72px, 11vw, 120px);
+  line-height: 0.92;
   letter-spacing: -0.03em;
-  font-weight: var(--font-weight-bold);
+  font-weight: 800;
   margin-bottom: 1.5rem;
 }
 
@@ -293,14 +293,14 @@ body {
 }
 
 .hero-headline-line--accent {
-  background: linear-gradient(90deg, var(--color-accent-green) 0%, var(--color-accent-green-hover) 100%);
+  background: linear-gradient(90deg, var(--color-hero-accent-start) 0%, var(--color-hero-accent-end) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient {
-  background: linear-gradient(90deg, var(--color-accent-green) 0%, var(--color-accent-green-hover) 100%);
+  background: linear-gradient(90deg, var(--color-hero-accent-start) 0%, var(--color-hero-accent-end) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
