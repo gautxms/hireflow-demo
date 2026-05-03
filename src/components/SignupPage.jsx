@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import './AuthPage.css'
 import BackButton from './BackButton'
 import API_BASE from '../config/api'
+import BrandLogo from './BrandLogo'
 
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -116,7 +117,7 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
       <div className="auth-glow auth-glow--b" />
       <section className="auth-panel">
         <BackButton />
-        <p className="auth-brand">Hire<span>Flow</span></p>
+        <BrandLogo as="p" className="auth-brand" />
         <h1 className="auth-title">Create your account</h1>
         <p className="auth-subtitle">Start ranking resumes in minutes.</p>
 
