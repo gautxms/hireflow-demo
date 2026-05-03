@@ -65,7 +65,7 @@
   --font-family-ui: var(--hf-font-ui);
   --font-family-brand-display: var(--hf-font-display);
   --font-family-base: var(--hf-font-ui);
-  --font-family-display: var(--hf-font-display);
+  --font-family-display: 'Syne', sans-serif;
   --font-body: var(--hf-font-ui);
   --font-display: var(--hf-font-display);
 
