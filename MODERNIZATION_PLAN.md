@@ -87,8 +87,8 @@ Spacing⚠️Status cards and action areas have uneven vertical spacing.
 UX⚠️Recovery paths are present but could be clearer and more prominent.
 Polish⚠️Outcome pages feel less refined than primary app surfaces.
 Tasks:
-- TASK-BILLING-01: Create a shared billing-status layout component for success/cancel/update pages for consistent hierarchy and CTA placement.
-- TASK-BILLING-02: Refactor src/styles/billing.css and src/styles/checkout.css to use semantic color variables for status states.
+- [x] TASK-BILLING-01: Create a shared billing-status layout component for success/cancel/update pages for consistent hierarchy and CTA placement.
+- [x] TASK-BILLING-02: Refactor src/styles/billing.css and src/styles/checkout.css to use semantic color variables for status states.
 Effort: Medium (30–90 min)
 Priority: P2 High
 
