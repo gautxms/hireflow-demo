@@ -2,7 +2,8 @@
 
 @font-face {
   font-family: 'Syne Local';
-  src: local('Syne SemiBold'), local('Syne-SemiBold'), local('Syne');
+  src: url('/fonts/syne-latin-ext-600-normal.woff2') format('woff2'),
+       url('/fonts/syne-latin-600-normal.woff2') format('woff2');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -10,7 +11,8 @@
 
 @font-face {
   font-family: 'Syne Local';
-  src: local('Syne Bold'), local('Syne-Bold'), local('Syne');
+  src: url('/fonts/syne-latin-ext-700-normal.woff2') format('woff2'),
+       url('/fonts/syne-latin-700-normal.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -18,7 +20,8 @@
 
 @font-face {
   font-family: 'Syne Local';
-  src: local('Syne ExtraBold'), local('Syne-ExtraBold'), local('Syne');
+  src: url('/fonts/syne-latin-ext-800-normal.woff2') format('woff2'),
+       url('/fonts/syne-latin-800-normal.woff2') format('woff2');
   font-weight: 800;
   font-style: normal;
   font-display: swap;
