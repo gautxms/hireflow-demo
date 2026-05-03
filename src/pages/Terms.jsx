@@ -1,5 +1,5 @@
 import termsContent from '../../TERMS_AND_CONDITIONS_CONTENT.md?raw'
-import BackButton from '../components/BackButton'
+import ContentDocument from '../components/ContentDocument'
 
 function renderTermsMarkdown(content) {
   return content
@@ -7,25 +7,29 @@ function renderTermsMarkdown(content) {
     .map((block) => block.trim())
     .filter(Boolean)
     .map((block, index) => {
-      if (block.startsWith('# ')) {
-        return (
-          <h1 key={`h1-${index}`} className="terms-page__title">
-            {block.slice(2)}
-          </h1>
-        )
-      }
-
       if (block.startsWith('## ')) {
         return (
-          <h2 key={`h2-${index}`} className="terms-page__section-title">
+          <h2 key={`h2-${index}`} className="content-document__heading">
             {block.slice(3)}
           </h2>
         )
       }
 
+      if (block.startsWith('- ')) {
+        return (
+          <ul key={`ul-${index}`} className="content-document__list">
+            {block
+              .split('\n')
+              .map((item) => item.trim())
+              .filter((item) => item.startsWith('- '))
+              .map((item) => <li key={item}>{item.slice(2)}</li>)}
+          </ul>
+        )
+      }
+
       return (
-        <p key={`p-${index}`} className="terms-page__paragraph">
-          {block}
+        <p key={`p-${index}`} className="content-document__paragraph">
+          {block.replace(/^#\s+/, '')}
         </p>
       )
     })
@@ -33,15 +37,8 @@ function renderTermsMarkdown(content) {
 
 export default function Terms() {
   return (
-    <div className="terms-page">
-      <main className="terms-page__main">
-        <div className="terms-page__back-button-wrap">
-          <BackButton />
-        </div>
-        <article aria-label="Terms and Conditions" className="terms-page__article">
-          {renderTermsMarkdown(termsContent)}
-        </article>
-      </main>
-    </div>
+    <ContentDocument title="Terms and Conditions" eyebrow="Legal">
+      {renderTermsMarkdown(termsContent)}
+    </ContentDocument>
   )
 }

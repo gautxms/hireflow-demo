@@ -1,33 +1,24 @@
-import BackButton from '../components/BackButton'
-import PublicPageLayout from '../components/public/PublicPageLayout'
+import ContentDocument from '../components/ContentDocument'
 
 export default function RefundPolicy() {
   return (
-    <PublicPageLayout>
-      <section className="public-section policy-page__main">
-        <div className="policy-page__back-button-wrap">
-          <BackButton />
-        </div>
-        <article aria-label="Refund Policy">
-          <h1 className="policy-page__title">Refund Policy</h1>
-          <p>
-            Hireflow offers a 7-day free trial on all subscription plans.
-          </p>
-          <p>
-            Once a subscription converts to a paid plan, payments are non-refundable.
-          </p>
-          <p>
-            You may cancel your subscription at any time to prevent future charges.
-          </p>
-          <p>
-            If you believe you were charged in error, please contact us at{' '}
-            <a href="mailto:hello@gfactai.com" className="policy-page__link">hello@gfactai.com</a>.
-          </p>
-          <p>
-            This policy complies with Paddle’s merchant and billing requirements.
-          </p>
-        </article>
-      </section>
-    </PublicPageLayout>
+    <ContentDocument title="Refund Policy" eyebrow="Legal">
+      <p className="content-document__paragraph">
+        Hireflow offers a 7-day free trial on all subscription plans.
+      </p>
+      <p className="content-document__paragraph">
+        Once a subscription converts to a paid plan, payments are non-refundable.
+      </p>
+      <p className="content-document__paragraph">
+        You may cancel your subscription at any time to prevent future charges.
+      </p>
+      <p className="content-document__paragraph">
+        If you believe you were charged in error, please contact us at{' '}
+        <a href="mailto:hello@gfactai.com" className="content-document__link">hello@gfactai.com</a>.
+      </p>
+      <p className="content-document__paragraph">
+        This policy complies with Paddle’s merchant and billing requirements.
+      </p>
+    </ContentDocument>
   )
 }

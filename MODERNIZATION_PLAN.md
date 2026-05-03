@@ -105,8 +105,8 @@ Spacing⚠️Paragraph/block spacing varies between pages.
 UX✅Content discoverable and understandable.
 Polish⚠️Looks functional but not systematized.
 Tasks:
-- TASK-STATIC-01: Introduce a shared “content document” layout wrapper for policy/info pages to unify spacing and typography.
-- TASK-STATIC-02: Apply consistent heading and list styling using constitution typography tokens.
+- [x] TASK-STATIC-01: Introduce a shared “content document” layout wrapper for policy/info pages to unify spacing and typography.
+- [x] TASK-STATIC-02: Apply consistent heading and list styling using constitution typography tokens.
 Effort: Small (< 30 min)
 Priority: P3 Medium
 
