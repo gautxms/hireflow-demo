@@ -1,5 +1,12 @@
 export const USER_SECTION_NAVIGATION = [
   {
+    key: 'dashboard',
+    label: 'Dashboard',
+    href: '/dashboard',
+    aliases: ['/', '/dashboard', '/account/dashboard'],
+    requiresAuth: true,
+  },
+  {
     key: 'results',
     label: 'Results',
     href: '/results',
