@@ -27,7 +27,8 @@
     "qa:contrast-a11y": "node scripts/audit-accessibility-contrast.mjs",
     "lint:primitives": "node scripts/check-primitive-composition.mjs",
     "lint:primitives:baseline": "node scripts/check-primitive-composition.mjs --write-baseline",
-    "qa:primitive-visual-baseline": "node scripts/verify-primitive-visual-baseline.mjs"
+    "qa:primitive-visual-baseline": "node scripts/verify-primitive-visual-baseline.mjs",
+    "qa:brand-logo-consistency": "node scripts/check-brand-logo-consistency.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
@@ -44,12 +45,12 @@
     "isemail": "^3.2.0",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.542.0",
     "multer": "^1.4.5-lts.2",
     "nodemailer": "^6.10.1",
     "pg": "^8.16.3",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "lucide-react": "^0.542.0"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
