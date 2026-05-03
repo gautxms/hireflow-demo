@@ -418,7 +418,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return (
         <LandingPage
           onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
+          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
         />
       )
     }
