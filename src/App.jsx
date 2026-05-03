@@ -412,6 +412,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       )
     }
 
+
+    if (resolvedPathname === '/' || resolvedPathname === '/ai-resume-screening') {
+      return (
+        <LandingPage
+          onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
+          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
+        />
+      )
+    }
+
     if (resolvedPathname === '/pricing') {
       if (isAuthenticated && isActiveSubscriber) {
         navigate('/billing')
@@ -918,102 +928,19 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       )
     }
 
-    return (
-      <>
-        {currentPage === 'landing' && (
-          <LandingPage
-            onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-            ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View Plans'}
-          />
-        )}
-
-
-        {currentPage === 'uploader' && (
-          <ResumeUploader
-            onFileUploaded={handleFileUploaded}
-            onBack={() => handleNavigate('landing')}
-            isAuthenticated={isAuthenticated}
-            onRequireAuth={onRequireAuth}
-            subscriptionStatus={subscriptionStatus}
-            userProfile={userProfile}
-          />
-        )}
-
-        {currentPage === 'results' && (
-          (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted
-            ? (
-              <main className="route-state route-state--results-empty">
-                <StatePattern
-                  kind="empty"
-                  title={RESULTS_EMPTY_STATE_COPY.title}
-                  description={RESULTS_EMPTY_STATE_COPY.description}
-                  action={(
-                    <button
-                      type="button"
-                      onClick={() => navigate('/analyses')}
-                      className="route-state-card__action"
-                    >
-                      {RESULTS_EMPTY_STATE_COPY.action}
-                    </button>
-                  )}
-                />
-              </main>
-              )
-            : (
-              <CandidateResults
-                candidates={uploadedFiles}
-                onBack={() => navigate('/analyses')}
-                userProfile={userProfile}
-              />
-              )
-          )
-        )}
-
-        {currentPage === 'dashboard' && (
-          dashboardReportsEnabled
-            ? <OperationsDashboard onNavigate={handleNavigate} />
-            : <LegacyOperationsDashboard onNavigate={handleNavigate} />
-        )}
-
-        {currentPage === 'settings' && (
-          <SettingsPage onBack={() => handleNavigate('dashboard')} />
-        )}
-
-        {currentPage === 'help' && (
-          <HelpPage onBack={() => handleNavigate('landing')} />
-        )}
-
-        {currentPage === 'about' && (
-          <AboutPage onBack={() => handleNavigate('landing')} />
-        )}
-
-        {currentPage === 'demo' && (
-          <DemoBookingPage onBack={() => handleNavigate('landing')} />
-        )}
-
-        {currentPage === 'contact' && (
-          <ContactPage onBack={() => handleNavigate('landing')} />
-        )}
-      </>
-    )
+    return null
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
-    if (pathname !== '/') {
-      navigate('/')
-    }
-    setCurrentPage('landing')
+    navigate('/')
     window.setTimeout(() => {
       document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
     }, 0)
   }
   const handleHelpClick = () => {
-    if (pathname !== '/') {
-      navigate('/')
-    }
-    setCurrentPage('help')
+    navigate('/help')
   }
   const handleAboutClick = () => {
     navigate('/about')
@@ -1097,7 +1024,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           href="/"
           onClick={(event) => {
             event.preventDefault()
-                    navigate('/')
+            navigate('/')
           }}
           className="site-header__logo"
         >
