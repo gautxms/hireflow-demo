@@ -37,7 +37,7 @@ const DEFAULT_NAV = [
   { label: 'Settings', path: '/settings', Icon: Settings2 },
 ]
 
-export default function UserAppShell({ children, pathname, onNavigate, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
+export default function UserAppShell({ children, pathname, onNavigate, pageTitleProp, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
   const getInitialPinned = () => {
     try {
       return localStorage.getItem('hf-sb-pinned') !== 'false'
