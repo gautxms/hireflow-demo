@@ -71,7 +71,20 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
-const PUBLIC_ROUTE_PATHS = new Set(['/', '/login', '/signup', '/pricing'])
+const PUBLIC_ROUTE_PATHS = new Set([
+  '/',
+  '/login',
+  '/signup',
+  '/pricing',
+  '/about',
+  '/help',
+  '/contact',
+  '/demo',
+  '/privacy',
+  '/terms',
+  '/refund-policy',
+  ...INTENT_PAGE_ORDER,
+])
 const USER_SHELL_ROUTE_PATHS = new Set([
   '/dashboard',
   '/dashboard/legacy',
