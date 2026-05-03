@@ -928,7 +928,84 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       )
     }
 
-    return null
+    return (
+      <>
+        {currentPage === 'landing' && (
+          <LandingPage
+            onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
+            ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
+          />
+        )}
+
+
+        {currentPage === 'uploader' && (
+          <ResumeUploader
+            onFileUploaded={handleFileUploaded}
+            onBack={() => handleNavigate('landing')}
+            isAuthenticated={isAuthenticated}
+            onRequireAuth={onRequireAuth}
+            subscriptionStatus={subscriptionStatus}
+            userProfile={userProfile}
+          />
+        )}
+
+        {currentPage === 'results' && (
+          (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted
+            ? (
+              <main className="route-state route-state--results-empty">
+                <StatePattern
+                  kind="empty"
+                  title={RESULTS_EMPTY_STATE_COPY.title}
+                  description={RESULTS_EMPTY_STATE_COPY.description}
+                  action={(
+                    <button
+                      type="button"
+                      onClick={() => navigate('/analyses')}
+                      className="route-state-card__action"
+                    >
+                      {RESULTS_EMPTY_STATE_COPY.action}
+                    </button>
+                  )}
+                />
+              </main>
+              )
+            : (
+              <CandidateResults
+                candidates={uploadedFiles}
+                onBack={() => navigate('/analyses')}
+                userProfile={userProfile}
+              />
+              )
+          )
+        )}
+
+        {currentPage === 'dashboard' && (
+          dashboardReportsEnabled
+            ? <OperationsDashboard onNavigate={handleNavigate} />
+            : <LegacyOperationsDashboard onNavigate={handleNavigate} />
+        )}
+
+        {currentPage === 'settings' && (
+          <SettingsPage onBack={() => handleNavigate('dashboard')} />
+        )}
+
+        {currentPage === 'help' && (
+          <HelpPage onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentPage === 'about' && (
+          <AboutPage onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentPage === 'demo' && (
+          <DemoBookingPage onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentPage === 'contact' && (
+          <ContactPage onBack={() => handleNavigate('landing')} />
+        )}
+      </>
+    )
   }
 
   const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
@@ -1044,13 +1121,23 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         <div className="site-header__auth-actions">
           {isAuthenticated ? (
             <>
-              <button
-                type="button"
-                className="btn-ghost btn-ghost--accent"
-                onClick={handleDashboardShortcutClick}
-              >
-                Dashboard
-              </button>
+              {isActiveSubscriber ? (
+                <button
+                  type="button"
+                  className="btn-ghost btn-ghost--accent"
+                  onClick={handleDashboardShortcutClick}
+                >
+                  Dashboard
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-ghost btn-ghost--accent"
+                  onClick={handlePricingClick}
+                >
+                  View pricing
+                </button>
+              )}
               <div className="site-profile-menu" ref={profileMenuRef}>
                 <button
                   onClick={() => setIsProfileMenuOpen((open) => !open)}
