@@ -863,7 +863,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <SignupPage onSignupSuccess={onSignupSuccess} onGoToLogin={() => navigate('/login')} />
     }
 
-    if (!isAuthenticated && pathname === '/login') {
+    if (pathname === '/login') {
       return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} onNavigateToVerifyEmail={(email) => {
         setPendingVerificationEmail(email)
         navigate('/verify-email-info')
@@ -1327,7 +1327,7 @@ export default function App() {
 
   useEffect(() => {
     // Authenticated users are intentionally redirected away from auth forms to the home route.
-    if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
+    if (isAuthenticated && (pathname === '/signup' || pathname === '/login')) {
       navigate('/')
     }
   }, [isAuthenticated, pathname])
