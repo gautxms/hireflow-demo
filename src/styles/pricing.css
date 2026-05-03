@@ -1,7 +1,7 @@
 .pricing-page {
   min-height: 100vh;
-  background: var(--hf-bg);
-  color: var(--hf-text);
+  background: var(--hf-bg-primary);
+  color: var(--hf-text-primary);
 }
 
 .pricing-page__content {
@@ -18,7 +18,7 @@
   text-align: center;
   font-size: clamp(32px, 4vw, 40px);
   font-weight: 700;
-  color: var(--hf-text);
+  color: var(--hf-text-primary);
   line-height: 1.15;
   margin-bottom: var(--spacing-sm);
   font-family: var(--hf-font-ui);
@@ -27,7 +27,7 @@
 .pricing-page__subtitle,
 .pricing-page__price-note {
   text-align: center;
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
 }
 
 .pricing-page__subtitle {
@@ -37,7 +37,7 @@
 .pricing-page__intro {
   max-width: 860px;
   margin: 0 auto var(--spacing-xl);
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
   text-align: center;
   line-height: 1.7;
 }
@@ -54,7 +54,7 @@
 
 .pricing-page__toggle {
   display: inline-flex;
-  border: 1px solid var(--hf-border);
+  border: 1px solid var(--hf-border-subtle);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -62,7 +62,7 @@
 .pricing-page__toggle-button {
   border: none;
   background: transparent;
-  color: var(--hf-text);
+  color: var(--hf-text-primary);
   padding: 0.6rem 1rem;
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
@@ -81,10 +81,10 @@
 }
 
 .pricing-card {
-  border: 1px solid var(--hf-border);
+  border: 1px solid var(--hf-border-subtle);
   border-radius: 12px;
   padding: 20px 24px;
-  background: var(--hf-surface);
+  background: var(--hf-surface-card);
   position: relative;
 }
 
@@ -120,7 +120,7 @@
 .pricing-card__billing,
 .pricing-card__trial,
 .pricing-card__features {
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
 }
 
 .pricing-card__period {
@@ -145,9 +145,9 @@
   width: 100%;
   border-radius: 8px;
   padding: 10px 22px;
-  border: 1px solid var(--hf-border-2);
+  border: 1px solid var(--hf-border-muted);
   background: transparent;
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
   font-family: var(--hf-font-ui);
   font-size: 14px;
   font-weight: 500;
@@ -184,13 +184,13 @@
 }
 
 .pricing-page__section-copy {
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
   line-height: 1.75;
   margin-bottom: var(--spacing-base);
 }
 
 .pricing-page__section-list {
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
   padding-left: 1.2rem;
   display: grid;
   gap: 0.55rem;
@@ -203,9 +203,9 @@
 }
 
 .pricing-page__faq-item {
-  border: 1px solid var(--hf-border);
+  border: 1px solid var(--hf-border-subtle);
   border-radius: 12px;
-  background: var(--hf-surface);
+  background: var(--hf-surface-card);
   padding: var(--spacing-lg);
 }
 
@@ -215,7 +215,7 @@
 }
 
 .pricing-page__faq-answer {
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
   line-height: 1.7;
 }
 
@@ -223,22 +223,22 @@
   text-align: center;
   margin: var(--spacing-2xl) auto var(--spacing-xl);
   max-width: 720px;
-  color: var(--hf-text-2);
+  color: var(--hf-text-secondary);
   font-weight: var(--font-weight-semibold);
 }
 
 
 .pricing-card:hover {
-  border-color: var(--hf-border-2);
+  border-color: var(--hf-border-muted);
 }
 
 .pricing-card__cta:hover {
-  border-color: var(--hf-text-5);
-  color: var(--hf-text);
+  border-color: var(--hf-border-muted);
+  color: var(--hf-text-primary);
 }
 
 .pricing-card__cta.is-selected:hover {
-  background: var(--hf-lime-hover);
+  background: var(--hf-accent-primary-hover);
   color: #000000;
   transform: scale(0.97);
 }
