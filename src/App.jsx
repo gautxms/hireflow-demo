@@ -167,7 +167,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated) {
     return false
   }
 
-  const resolvedPathname = resolveUserSectionPath(pathname)
+  const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
 
   if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
     return false
@@ -256,7 +256,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const params = new URLSearchParams(window.location.search)
-    const resolvedPathname = resolveUserSectionPath(pathname)
+    const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
   const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
     const isResultsRoute = isResultsRootPath(resolvedPathname)
     const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
@@ -380,7 +380,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
-  const resolvedPathname = resolveUserSectionPath(pathname)
+  const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
   const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
 
   const getPageContent = () => {
