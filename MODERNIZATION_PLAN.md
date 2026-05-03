@@ -123,7 +123,7 @@ Spacing✅Not applicable.
 UX✅State transitions are explicit and test-backed.
 Polish✅Tests improve confidence in flow robustness.
 Tasks:
-- TASK-STATE-01: Keep state-machine contract docs adjacent to modules to ensure UI pages implement states consistently.
+- [x] TASK-STATE-01: Keep state-machine contract docs adjacent to modules to ensure UI pages implement states consistently.
 Effort: Small (< 30 min)
 Priority: P4 Low
 
