@@ -56,7 +56,8 @@ async function loadAnalysisStatus(analysisId, userId) {
             pj.status AS parse_job_status,
             pj.progress,
             pj.error_message,
-            pj.updated_at AS parse_job_updated_at
+            pj.updated_at AS parse_job_updated_at,
+            pj.result AS parse_result
      FROM analysis_items ai
      LEFT JOIN resumes r ON r.id = ai.resume_id
      LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
@@ -112,7 +113,7 @@ async function loadAnalysisStatus(analysisId, userId) {
       createdAt: row.created_at,
       updatedAt: row.parse_job_updated_at || row.created_at,
       error: row.error_message || row.parse_error || null,
-      result: null,
+      result: row.parse_result ?? null,
     })
   }
 
