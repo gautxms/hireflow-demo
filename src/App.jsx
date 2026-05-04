@@ -1087,8 +1087,44 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     console.debug('[route-diagnostics]', { pathname, resolvedPathname, matchedBranch })
   }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled])
 
+  const routeRecoveryActions = useMemo(() => {
+    const isSubscribedUser = isAuthenticated && hasActiveSubscription(subscriptionStatus)
+    const isAuthenticatedAppRoute = isAuthenticated && (
+      resolvedPathname === '/uploader'
+      || resolvedPathname === '/analyses'
+      || resolvedPathname.startsWith('/analyses/')
+      || shouldRenderWithinUserShell(resolvedPathname, isAuthenticated)
+    )
+
+    if (isAuthenticatedAppRoute) {
+      if (isSubscribedUser) {
+        return {
+          primaryLabel: 'Go to analyses',
+          primaryAction: () => navigate('/analyses'),
+          secondaryLabel: 'Go to dashboard',
+          secondaryAction: () => navigate('/dashboard'),
+        }
+      }
+
+      return {
+        primaryLabel: 'Go to dashboard',
+        primaryAction: () => navigate('/dashboard'),
+      }
+    }
+
+    return {
+      primaryLabel: 'Go to pricing',
+      primaryAction: () => navigate('/pricing'),
+    }
+  }, [isAuthenticated, resolvedPathname, subscriptionStatus])
+
   const pageContent = (
-    <PublicRouteChunkErrorBoundary>
+    <PublicRouteChunkErrorBoundary
+      primaryAction={routeRecoveryActions.primaryAction}
+      primaryLabel={routeRecoveryActions.primaryLabel}
+      secondaryAction={routeRecoveryActions.secondaryAction}
+      secondaryLabel={routeRecoveryActions.secondaryLabel}
+    >
       <Suspense fallback={<div className="app-route-loading-fallback">Loading…</div>}>
         {getPageContent()}
       </Suspense>

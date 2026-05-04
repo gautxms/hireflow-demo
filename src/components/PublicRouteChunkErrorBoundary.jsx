@@ -30,7 +30,19 @@ export default class PublicRouteChunkErrorBoundary extends React.Component {
 
   handleReload = () => window.location.reload()
 
-  handleGoToPricing = () => window.location.assign('/pricing')
+  handlePrimaryAction = () => {
+    const { primaryAction } = this.props
+    if (typeof primaryAction === 'function') {
+      primaryAction()
+    }
+  }
+
+  handleSecondaryAction = () => {
+    const { secondaryAction } = this.props
+    if (typeof secondaryAction === 'function') {
+      secondaryAction()
+    }
+  }
 
   render() {
     if (this.state.hasChunkError) {
@@ -40,11 +52,16 @@ export default class PublicRouteChunkErrorBoundary extends React.Component {
             <p className="route-state-card__eyebrow">HireFlow recovery mode</p>
             <h1 className="route-state-card__title">We couldn’t load this page</h1>
             <p className="route-state-card__description">
-              Please reload to refresh app assets, or continue to pricing while we recover this route.
+              Please reload to refresh app assets, or use the fallback action while we recover this route.
             </p>
             <div className="route-state-card__actions route-state-card__actions--recovery">
               <button type="button" className="route-state-card__action" onClick={this.handleReload}>Reload page</button>
-              <button type="button" className="route-state-card__action" onClick={this.handleGoToPricing}>Go to pricing</button>
+              {typeof this.props.primaryAction === 'function' && (
+                <button type="button" className="route-state-card__action" onClick={this.handlePrimaryAction}>{this.props.primaryLabel || 'Go to dashboard'}</button>
+              )}
+              {typeof this.props.secondaryAction === 'function' && (
+                <button type="button" className="route-state-card__action" onClick={this.handleSecondaryAction}>{this.props.secondaryLabel || 'Go to pricing'}</button>
+              )}
             </div>
           </section>
         </main>
