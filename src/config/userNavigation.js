@@ -3,7 +3,7 @@ export const USER_SECTION_NAVIGATION = [
     key: 'dashboard',
     label: 'Dashboard',
     href: '/dashboard',
-    aliases: ['/', '/dashboard', '/account/dashboard'],
+    aliases: ['/dashboard', '/account/dashboard'],
     requiresAuth: true,
   },
   {

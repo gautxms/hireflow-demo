@@ -21,13 +21,13 @@ test('header features and logo clicks navigate to concrete public pathname', () 
 
 test('login-to-landing guard: landing is route-driven and login remains explicit', () => {
   assert.doesNotMatch(appSource, /currentPage === 'landing'/)
-  assert.match(appSource, /if \(resolvedPathname === '\/' \|\| resolvedPathname === '\/ai-resume-screening'\) {[\s\S]*<LandingPage/)
+  assert.match(appSource, /if \(isRootLandingPath \|\| resolvedPathname === '\/ai-resume-screening'\) \{[\s\S]*<LandingPage/)
   assert.match(appSource, /if \(resolvedPathname === '\/login'\) {[\s\S]*return <LoginPage/)
 })
 
 
 test('logged-out public routes always resolve to concrete non-null content', () => {
-  assert.match(appSource, /if \(resolvedPathname === '\/' \|\| resolvedPathname === '\/ai-resume-screening'\) {[\s\S]*<LandingPage/)
+  assert.match(appSource, /if \(isRootLandingPath \|\| resolvedPathname === '\/ai-resume-screening'\) \{[\s\S]*<LandingPage/)
   assert.match(appSource, /if \(!isAuthenticated\) {[\s\S]*<LandingPage[\s\S]*ctaLabel="View pricing"/)
 })
 
@@ -64,4 +64,15 @@ test('dashboard path remains a shell route and unauthenticated users hit auth gu
   assert.match(appSource, /const USER_SHELL_ROUTE_PATHS = new Set\(\[[\s\S]*'\/dashboard'[\s\S]*\]\)/)
   assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*guardAuthenticatedRoute\([\s\S]*promptMessage: 'Please login to view the dashboard\.'/)
   assert.match(appSource, /if \(useUserShellLayout\) \{[\s\S]*<UserAppShell/)
+})
+
+
+test('authenticated root path bypasses dashboard alias resolution and stays landing', () => {
+  assert.match(appSource, /const isRootLandingPath = pathname === '\/'/)
+  assert.match(appSource, /const resolvedPathname = isRootLandingPath \? pathname : \(isAuthenticated \? resolveUserSectionPath\(pathname\) : pathname\)/)
+  assert.match(appSource, /if \(isRootLandingPath \|\| resolvedPathname === '\/ai-resume-screening'\) \{[\s\S]*<LandingPage/)
+})
+
+test('dashboard rendering remains explicit to dashboard pathname', () => {
+  assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*<OperationsDashboard/)
 })

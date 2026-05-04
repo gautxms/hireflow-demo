@@ -53,3 +53,9 @@ test('smoke-route sections are authenticated and avoid not-found fallback mappin
   const jobsSection = sectionByHref.get(resolveUserSectionPath('/jobs'))
   assert.equal(jobsSection?.requiresActiveSubscription, true)
 })
+
+
+test('root path is no longer treated as a dashboard alias', () => {
+  assert.equal(resolveUserSectionPath('/'), '/')
+  assert.ok(!Object.hasOwn(USER_SECTION_ALIASES, '/'))
+})
