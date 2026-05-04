@@ -157,3 +157,24 @@
   gap: var(--spacing-sm);
   margin-top: var(--spacing-xs);
 }
+
+.analyses-create-modal {
+  padding: var(--spacing-lg);
+}
+
+.analyses-create-modal__dialog {
+  width: min(760px, calc(100vw - (var(--spacing-xl) * 2)));
+  max-height: calc(100vh - (var(--spacing-xl) * 2));
+  overflow-y: auto;
+}
+
+@media (max-width: 1024px) {
+  .analyses-create-modal {
+    padding: var(--spacing-md);
+  }
+
+  .analyses-create-modal__dialog {
+    width: min(680px, calc(100vw - (var(--spacing-md) * 2)));
+    max-height: calc(100vh - (var(--spacing-md) * 2));
+  }
+}
