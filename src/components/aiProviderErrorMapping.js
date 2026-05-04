@@ -19,6 +19,72 @@ function sanitizeRawMessage(rawMessage) {
   return String(rawMessage || '').trim()
 }
 
+function tryParseJson(value) {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[') && !trimmed.startsWith('"')) {
+    return null
+  }
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return null
+  }
+}
+
+export function formatProviderErrorDetails(rawDetails, fallbackText = 'Unable to parse error details.') {
+  const fallback = sanitizeRawMessage(fallbackText) || 'Unable to parse error details.'
+  const seen = new Set()
+
+  let current = rawDetails
+  let parsedObject = null
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (current && typeof current === 'object') {
+      parsedObject = current
+      break
+    }
+
+    const normalized = sanitizeRawMessage(current)
+    if (!normalized || seen.has(normalized)) {
+      break
+    }
+    seen.add(normalized)
+
+    const parsed = tryParseJson(normalized)
+    if (parsed === null) {
+      break
+    }
+    current = parsed
+  }
+
+  if (!parsedObject || typeof parsedObject !== 'object') {
+    const rawText = sanitizeRawMessage(rawDetails)
+    return {
+      title: rawText || fallback,
+      detail: rawText || fallback,
+      usedFallback: !rawText,
+    }
+  }
+
+  const title = sanitizeRawMessage(
+    parsedObject.reason || parsedObject.error || parsedObject.message || parsedObject.title || '',
+  )
+  const detail = sanitizeRawMessage(
+    parsedObject.technicalDetails || parsedObject.detail || parsedObject.details || JSON.stringify(parsedObject),
+  )
+
+  return {
+    title: title || fallback,
+    detail: detail || fallback,
+    usedFallback: !title && !detail,
+  }
+}
+
 export function isStorageInfrastructureError(rawMessage) {
   const lower = sanitizeRawMessage(rawMessage).toLowerCase()
   return lower.includes('aws_s3_bucket')
@@ -126,7 +192,8 @@ export function mapProviderError(rawMessage) {
     parsedContext = null
   }
 
-  const technicalDetails = parsedContext?.technicalDetails || details
+  const formattedDetails = formatProviderErrorDetails(parsedContext?.technicalDetails || details)
+  const technicalDetails = formattedDetails.detail
   const provider = parsedContext?.provider || null
   const model = parsedContext?.model || null
   const adminPath = parsedContext?.adminPath || DEFAULT_ADMIN_PATH
