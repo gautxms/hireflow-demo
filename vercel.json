@@ -35,6 +35,22 @@
       "destination": "/index.html"
     },
     {
+      "source": "/analyses",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/analyses/(.*)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/candidates",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/candidates/(.*)",
+      "destination": "/index.html"
+    },
+    {
       "source": "/admin",
       "destination": "/index.html"
     },
