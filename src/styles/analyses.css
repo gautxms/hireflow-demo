@@ -98,4 +98,25 @@
 
 .analyses-layout__status-row--error {
   color: var(--color-error);
+.analyses-page__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.analyses-page__header h1 {
+  margin: 0;
+}
+
+.analyses-page__header p {
+  margin: var(--spacing-xs) 0 0;
+}
+
+@media (max-width: 640px) {
+  .analyses-page__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

@@ -210,48 +210,25 @@ export default function AnalysesPage() {
   return (
     <main className="analyses-layout">
       <section className="analyses-layout__content">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
 
         <div className="analyses-layout__table-shell">
-          <table className="analyses-layout__table">
-            <thead><tr><th>Created</th><th>Live status</th><th>Summary</th><th>Job description</th><th>Open</th></tr></thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td className="analyses-layout__status-row" colSpan={5}>Loading analyses…</td>
-                </tr>
-              )}
-              {!loading && error && (
-                <tr>
-                  <td className="analyses-layout__status-row analyses-layout__status-row--error" colSpan={5} role="alert">{error}</td>
-                </tr>
-              )}
-              {!loading && !error && sortedItems.length === 0 && (
-                <tr>
-                  <td className="analyses-layout__status-row" colSpan={5}>No analyses yet. Upload resumes to create your first run.</td>
-                </tr>
-              )}
-              {!loading && !error && sortedItems.map((analysis) => {
-                const status = normalizeStatus(analysis.liveStatus || analysis.status)
-                const summary = analysis.summary || {}
-                return (
-                  <tr key={analysis.id} className="analyses-layout__row">
-                    <td className="analyses-layout__col-created">{formatDate(analysis.createdAt)}</td>
-                    <td className="analyses-layout__col-status">{status}</td>
-                    <td className="analyses-layout__col-summary">Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Pending {(summary.pending || 0) + (summary.processing || 0)}</td>
-                    <td className="analyses-layout__col-jd">
-                      <span className="analyses-layout__truncate" title={analysis.jobDescriptionTitle || 'No job description'}>
-                        {analysis.jobDescriptionTitle || 'No job description'}
-                      </span>
-                    </td>
-                    <td className="analyses-layout__col-open">
-                      <a className="analyses-layout__open-link" href={`/analyses/${analysis.id}`}>Open analysis</a>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          {loading && <p>Loading analyses…</p>}
+          {!loading && error && <p role="alert">{error}</p>}
+          {!loading && !error && sortedItems.length === 0 && <p>No analyses yet. Upload resumes to create your first run.</p>}
+
+          {!loading && !error && sortedItems.length > 0 && (
+            <table className="analyses-layout__table">
+              <thead><tr><th>Created</th><th>Live status</th><th>Summary</th><th>Job description</th><th>Open</th></tr></thead>
+              <tbody>
+                {sortedItems.map((analysis) => {
+                  const status = normalizeStatus(analysis.liveStatus || analysis.status)
+                  const summary = analysis.summary || {}
+                  return <tr key={analysis.id}><td>{formatDate(analysis.createdAt)}</td><td>{status}</td><td>Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Pending {(summary.pending || 0) + (summary.processing || 0)}</td><td>{analysis.jobDescriptionTitle || 'No job description'}</td><td><a href={`/analyses/${analysis.id}`}>View</a></td></tr>
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 
