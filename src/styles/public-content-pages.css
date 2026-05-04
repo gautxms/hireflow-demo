@@ -72,7 +72,7 @@
 }
 
 .public-section-title {
-  font-family: var(--font-family-base);
+  font-family: var(--font-family-display);
   font-size: var(--type-h2-size);
   line-height: var(--type-h2-line-height);
   font-weight: var(--type-h2-weight);
@@ -126,6 +126,7 @@ a.public-card .public-copy {
 }
 
 .public-card-title {
+  font-family: var(--font-family-display);
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line-height);
   font-weight: var(--type-h3-weight);
@@ -135,6 +136,7 @@ a.public-card .public-copy {
 
 .public-copy,
 .public-card-copy {
+  font-family: var(--font-family-ui);
   color: var(--color-text-secondary);
   line-height: var(--type-body-line-height);
   font-size: var(--type-body-size);
@@ -292,6 +294,7 @@ a.public-card .public-copy {
 
 .public-btn-primary,
 .public-btn-secondary {
+  font-family: var(--font-family-ui);
   border-radius: var(--radius-sm);
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);

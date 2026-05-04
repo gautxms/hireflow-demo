@@ -75,7 +75,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 4rem;
+  padding: 1rem 4rem;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   background: var(--color-bg-overlay-80);
@@ -98,9 +98,9 @@ body {
 .brand-logo,
 .site-header__logo,
 .public-footer__brand {
-  font-size: 1.25rem;
+  font-size: 1.22rem;
   font-family: var(--font-family-brand-display);
-  font-weight: var(--font-weight-bold);
+  font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--color-text-primary);
   text-decoration: none;
@@ -169,7 +169,7 @@ body {
   color: var(--color-text-primary);
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
-  font-family: var(--font-family-base);
+  font-family: var(--hf-font-ui);
   font-size: var(--type-button-size);
   font-weight: var(--type-button-weight);
   line-height: var(--type-button-line-height);
@@ -181,13 +181,23 @@ body {
   border-color: var(--color-white-alpha-20);
 }
 
+.btn-ghost--accent {
+  border-color: var(--color-accent-green);
+}
+
+.btn-ghost--accent:hover,
+.btn-ghost--accent:focus-visible {
+  border-color: var(--color-accent-green);
+  box-shadow: 0 0 0 1px var(--color-accent-green);
+}
+
 .btn-primary {
   background: var(--color-accent-green);
   color: var(--color-bg-primary);
   border: none;
   padding: 0.55rem 1.35rem;
   border-radius: 6px;
-  font-family: var(--font-family-base);
+  font-family: var(--hf-font-ui);
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
   line-height: var(--type-button-line-height);
@@ -200,12 +210,17 @@ body {
   transform: translateY(-1px);
 }
 
+.site-header__auth-actions .btn-ghost,
+.site-header__auth-actions .btn-primary {
+  font-family: var(--hf-font-ui);
+}
+
 /* ---- HERO ---- */
 .hero {
   min-height: 100vh;
   display: flex;
   align-items: center;
-  padding: 8rem 4rem 6rem;
+  padding: 5.4rem 4rem 6rem;
   position: relative;
   overflow: hidden;
 }
@@ -297,6 +312,11 @@ body {
   flex-wrap: wrap;
 }
 
+.hero-cta .btn-primary,
+.hero-cta .btn-ghost {
+  font-family: var(--hf-font-ui);
+}
+
 /* ---- FEATURES ---- */
 .features {
   padding: 6rem 4rem;
@@ -325,7 +345,7 @@ body {
 }
 
 .feature-card h3 {
-  font-family: var(--font-family-base);
+  font-family: var(--font-family-display);
   font-weight: var(--type-h3-weight);
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line-height);
@@ -335,7 +355,8 @@ body {
 
 .feature-card p {
   color: var(--color-text-secondary);
-  font-size: 0.95rem;
+  font-size: 1.08rem;
+  font-family: var(--font-family-ui);
 }
 
 /* ---- FOOTER ---- */
@@ -382,7 +403,7 @@ body {
   padding: 0.85rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--color-border);
-  font-size: 0.95rem;
+  font-size: 1.08rem;
 }
 
 .candidate-results-table th {
@@ -408,7 +429,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
-  font-family: var(--font-family-base);
+  font-family: var(--hf-font-ui);
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
