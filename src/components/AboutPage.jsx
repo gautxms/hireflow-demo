@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Briefcase, Brain, Palette, Cog } from 'lucide-react'
 import { Icon } from './Icon'
 import PublicPageLayout from './public/PublicPageLayout'
 
@@ -6,10 +7,10 @@ export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
 
   const teamMembers = [
-    { id: 1, name: 'Gautam', title: 'Founder & CEO', bio: 'Former Head of Recruiting at Stripe. Passionate about building tools that make hiring human-centric.', expertise: ['Recruiting', 'Product', 'Operations'], image: '👔' },
-    { id: 2, name: 'Sarah Chen', title: 'Head of AI/ML', bio: 'PhD in Computer Science from MIT. Built ML systems at OpenAI. Leading our AI scoring engine.', expertise: ['Machine Learning', 'NLP', 'AI Ethics'], image: '🧠' },
-    { id: 3, name: 'Marcus Rodriguez', title: 'VP Product', bio: 'Ex-Google, ex-Figma. Obsessed with user experience and building products people love.', expertise: ['Product Design', 'UX', 'Strategy'], image: '🎨' },
-    { id: 4, name: 'Priya Sharma', title: 'VP Engineering', bio: 'Led infrastructure at Databricks. Building HireFlow to scale to millions of candidates.', expertise: ['Backend', 'Infrastructure', 'Scalability'], image: '⚙️' }
+    { id: 1, name: 'Gautam', title: 'Founder & CEO', bio: 'Former Head of Recruiting at Stripe. Passionate about building tools that make hiring human-centric.', expertise: ['Recruiting', 'Product', 'Operations'], avatarIcon: Briefcase },
+    { id: 2, name: 'Sarah Chen', title: 'Head of AI/ML', bio: 'PhD in Computer Science from MIT. Built ML systems at OpenAI. Leading our AI scoring engine.', expertise: ['Machine Learning', 'NLP', 'AI Ethics'], avatarIcon: Brain },
+    { id: 3, name: 'Marcus Rodriguez', title: 'VP Product', bio: 'Ex-Google, ex-Figma. Obsessed with user experience and building products people love.', expertise: ['Product Design', 'UX', 'Strategy'], avatarIcon: Palette },
+    { id: 4, name: 'Priya Sharma', title: 'VP Engineering', bio: 'Led infrastructure at Databricks. Building HireFlow to scale to millions of candidates.', expertise: ['Backend', 'Infrastructure', 'Scalability'], avatarIcon: Cog }
   ]
 
   const stats = [{ number: '10K+', label: 'Resumes Analyzed' }, { number: '94%', label: 'Accuracy Rate' }, { number: '45%', label: 'Time Saved for Recruiters' }, { number: '500+', label: 'Companies Using HireFlow' }]
@@ -48,7 +49,9 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-section public-page-main"><h2 className="public-section-title center">Our Values</h2><div className="public-feature-grid">{values.map((value) => <article key={value.title} className="public-card"><Icon name={value.icon} size="xl" tone="accent" className="contact-icon" /><h3 className="public-card-title">{value.title}</h3><p className="public-card-copy">{value.description}</p></article>)}</div></section>
 
-      <section className="public-section public-section-alt"><div className="public-page-main"><h2 className="public-section-title center">Meet the Team</h2><div className="public-feature-grid">{teamMembers.map((member) => <article key={member.id} className={`public-card about-team-card ${selectedTeamMember?.id === member.id ? 'active' : ''}`} onClick={() => setSelectedTeamMember(member)}><div className="about-team-avatar">{member.image}</div><h3 className="public-card-title">{member.name}</h3><p className="public-card-copy contact-accent-title">{member.title}</p>{selectedTeamMember?.id === member.id && <div className="about-team-meta"><p className="public-card-copy">{member.bio}</p><div className="about-pill-list">{member.expertise.map((skill) => <span key={skill} className="public-pill">{skill}</span>)}</div></div>}</article>)}</div><p className="public-copy center">Click a team member to learn more</p></div></section>
+      <section className="public-section public-section-alt"><div className="public-page-main"><h2 className="public-section-title center">Meet the Team</h2><div className="public-feature-grid">{teamMembers.map((member) => { const AvatarIcon = member.avatarIcon
+        return <article key={member.id} className={`public-card about-team-card ${selectedTeamMember?.id === member.id ? 'active' : ''}`} onClick={() => setSelectedTeamMember(member)}><div className="about-team-avatar" aria-hidden="true"><AvatarIcon size={22} strokeWidth={1.5} /></div><h3 className="public-card-title">{member.name}</h3><p className="public-card-copy contact-accent-title">{member.title}</p>{selectedTeamMember?.id === member.id && <div className="about-team-meta"><p className="public-card-copy">{member.bio}</p><div className="about-pill-list">{member.expertise.map((skill) => <span key={skill} className="public-pill">{skill}</span>)}</div></div>}</article>
+      })}</div><p className="public-copy center">Click a team member to learn more</p></div></section>
 
       <section className="public-section public-page-main"><h2 className="public-section-title center">What Customers Say</h2><div className="public-feature-grid">{testimonials.map((testimonial) => <article key={testimonial.author} className="public-card"><p className="public-copy">"{testimonial.quote}"</p><div className="about-team-meta"><div className="public-card-title">{testimonial.author}</div><div className="public-card-copy contact-accent-title">{testimonial.role}</div><div className="public-card-copy">{testimonial.company}</div></div></article>)}</div></section>
 
