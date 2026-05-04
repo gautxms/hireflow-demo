@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -25,6 +26,35 @@ function normalizeStatus(status) {
     retrying: 'processing',
   }
   return STATUS_ALIAS_MAP[normalizedStatus] || normalizedStatus
+}
+
+function toCandidateResultsPayload(analysis) {
+  const items = Array.isArray(analysis?.items) ? analysis.items : []
+  const completedEntries = items.flatMap((item) => {
+    const result = item?.result || {}
+    const candidates = Array.isArray(result?.candidates) ? result.candidates : []
+    return candidates.map((candidate) => ({
+      resumeId: item?.resumeId || candidate?.resumeId || candidate?.resume_id || '',
+      filename: item?.filename || result?.filename || '',
+      ...candidate,
+    }))
+  })
+
+  return {
+    candidates: completedEntries,
+    parseMeta: {
+      hasJobDescription: Boolean(analysis?.jobDescriptionId),
+      methodUsed: 'ai-extraction',
+    },
+    jobStatuses: items.map((item) => ({
+      jobId: String(item?.parseJobId || '').trim(),
+      resumeId: String(item?.resumeId || '').trim(),
+      filename: String(item?.filename || '').trim(),
+      status: String(item?.status || 'processing').trim() || 'processing',
+      progress: Number(item?.progress || 0),
+      error: item?.error ? String(item.error) : '',
+    })),
+  }
 }
 
 export default function AnalysisDetailPage({ pathname = '' }) {
@@ -88,6 +118,8 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   const itemRows = Array.isArray(analysis?.items) ? analysis.items : []
   const summary = analysis?.summary || {}
   const liveStatus = normalizeStatus(analysis?.liveStatus || analysis?.status)
+  const isCompletedTerminalState = liveStatus === 'complete' || liveStatus === 'completed'
+  const candidateResultsPayload = useMemo(() => toCandidateResultsPayload(analysis), [analysis])
 
   if (loading || error || !analysis) {
     return (
@@ -97,6 +129,21 @@ export default function AnalysisDetailPage({ pathname = '' }) {
           <h1>Analysis {analysisId || '—'}</h1>
           {loading && <p>Loading analysis…</p>}
           {!loading && error && <p role="alert">{error}</p>}
+        </section>
+      </main>
+    )
+  }
+
+  if (isCompletedTerminalState) {
+    return (
+      <main className="analyses-layout">
+        <section className="analyses-layout__content">
+          <CandidateResults
+            candidates={candidateResultsPayload}
+            onBack={() => {
+              window.location.href = '/analyses'
+            }}
+          />
         </section>
       </main>
     )
@@ -118,7 +165,6 @@ export default function AnalysisDetailPage({ pathname = '' }) {
             <p className="analysis-detail-page__summary">
               Summary — Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Processing {summary.processing || 0} · Pending {summary.pending || 0}
             </p>
-            {(liveStatus === 'complete' || liveStatus === 'completed') && <p className="analysis-detail-page__status-note">This analysis is complete. You can review final item statuses below.</p>}
             {liveStatus === 'failed' && <p className="analysis-detail-page__status-note analysis-detail-page__status-note--failed">This analysis encountered failures. Review item-level errors for remediation details.</p>}
             {(liveStatus === 'pending' || liveStatus === 'processing') && <p className="analysis-detail-page__status-note">This analysis is still running. Statuses refresh automatically every few seconds.</p>}
 
