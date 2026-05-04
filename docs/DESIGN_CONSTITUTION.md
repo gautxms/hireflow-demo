@@ -32,6 +32,8 @@ https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+San
 
 ### Typography scale
 
+Section/card headings: Syne. Contextual/body copy: DM Sans. Button labels: DM Sans across all pages.
+
 | Element | Font | Size | Weight | Color | Line-height | Letter-spacing |
 |---------|------|------|--------|-------|-------------|----------------|
 | Hero H1 | Syne | clamp(58px,9.2vw,96px) | 800 | #ffffff | 0.94 | -0.03em |
@@ -105,7 +107,7 @@ Hero H1 structure — NEVER put words on the same line:
 }
 ```
 
-Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, Syne 800 (extra bold), 0.95rem in header.
+Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, Syne 800 (extra bold), 1.08rem in header.
 Hero colors: "Hire" + "Smarter." = `#ffffff`.
 "Faster." gradient: `linear-gradient(90deg, #c8ff00, #39ff9f)` clipped to text.
 
@@ -203,9 +205,10 @@ overflow: hidden;
 [Logo]          [Features] [Solutions] [Pricing] [About] [Help]          [Auth actions]
 ```
 - Logo: "Hire" white + "Flow" lime, Syne 800 (extra bold)
-- Header spacing: top bar vertical padding `1rem` for old-site alignment
+- Header spacing: top bar vertical padding `1rem`; hero starts higher with ~`6.75rem` top padding
 - Nav links/menu items: DM Sans 400, `#888888`, hover `#ffffff`
 - Auth (logged out): ghost "Login" + lime "Sign up"
+- Login button outline: lime border (`#c8ff00`) to match page accent
 - Auth (logged in): ghost "Dashboard" + avatar circle side by side, `flex-direction: row`
 
 ---
