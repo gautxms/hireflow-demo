@@ -1088,6 +1088,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled])
 
   const routeRecoveryActions = useMemo(() => {
+    const hardRedirect = (path) => {
+      window.location.assign(path)
+    }
+
     const isSubscribedUser = isAuthenticated && hasActiveSubscription(subscriptionStatus)
     const isAuthenticatedAppRoute = isAuthenticated && (
       resolvedPathname === '/uploader'
@@ -1100,21 +1104,21 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       if (isSubscribedUser) {
         return {
           primaryLabel: 'Go to analyses',
-          primaryAction: () => navigate('/analyses'),
+          primaryAction: () => hardRedirect('/analyses'),
           secondaryLabel: 'Go to dashboard',
-          secondaryAction: () => navigate('/dashboard'),
+          secondaryAction: () => hardRedirect('/dashboard'),
         }
       }
 
       return {
         primaryLabel: 'Go to dashboard',
-        primaryAction: () => navigate('/dashboard'),
+        primaryAction: () => hardRedirect('/dashboard'),
       }
     }
 
     return {
       primaryLabel: 'Go to pricing',
-      primaryAction: () => navigate('/pricing'),
+      primaryAction: () => hardRedirect('/pricing'),
     }
   }, [isAuthenticated, resolvedPathname, subscriptionStatus])
 
