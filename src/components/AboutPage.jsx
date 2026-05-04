@@ -35,8 +35,7 @@ export default function AboutPage({ onBack }) {
   ]
 
   return (
-    <PublicPageLayout header={<div className="public-page-header"><button type="button" onClick={onBack} className="public-page-back-button public-nav-text">← Back</button></div>}>
-      <div className="public-page-header"><button type="button" onClick={onBack} className="public-page-back-button public-nav-text">← Back</button></div>
+    <PublicPageLayout header={<div className="public-page-header"><button type="button" onClick={onBack} className="public-page-back-button public-nav-text" aria-label="Back to home">← Back to Home</button></div>}>
 
       <section className="public-page-hero">
         <h1 className="public-page-title">About HireFlow</h1>
