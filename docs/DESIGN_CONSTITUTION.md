@@ -22,8 +22,8 @@ Two fonts. No others. Ever.
 
 | Role | Font | Weights | Where |
 |------|------|---------|-------|
-| Display | **Syne** | 800 only | Hero H1 only (`Hire`, `Smarter.`, `Faster.`) |
-| UI | **DM Sans** | 300, 400, 500, 600, 700 | Everything else |
+| Display | **Syne** | 700, 800 | Hero H1 + brand logo + primary marketing text |
+| UI | **DM Sans** | 300, 400, 500, 600, 700 | Supporting UI copy, controls, and metadata |
 
 Google Fonts link (already in index.html — DO NOT remove or change):
 ```
@@ -35,9 +35,9 @@ https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+San
 | Element | Font | Size | Weight | Color | Line-height | Letter-spacing |
 |---------|------|------|--------|-------|-------------|----------------|
 | Hero H1 | Syne | clamp(72px,11vw,120px) | 800 | #ffffff | 0.92 | -0.03em |
-| H2 section | DM Sans | 40px | 700 | #ffffff | 1.15 | -0.02em |
-| H3 card | DM Sans | 20px | 600 | #ffffff | 1.3 | 0 |
-| Body | DM Sans | 15–16px | 400 | #aaaaaa | 1.65 | 0 |
+| H2 section | Syne | 40px | 700 | #ffffff | 1.15 | -0.02em |
+| H3 card | Syne | 20px | 700 | #ffffff | 1.3 | 0 |
+| Body | Syne | 15–16px | 700 | #aaaaaa | 1.65 | 0 |
 | Small/label | DM Sans | 12–13px | 400 | #666666 | 1.5 | 0 |
 | Nav link | DM Sans | 14px | 400 | #888888 | 1.4 | 0 |
 | Button | DM Sans | 14–15px | 600–700 | varies | 1.4 | 0 |
@@ -105,7 +105,8 @@ Hero H1 structure — NEVER put words on the same line:
 }
 ```
 
-Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, DM Sans 700.
+Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, Syne 800 (extra bold).
+Hero colors: "Hire" + "Smarter." = `#ffffff`.
 "Faster." gradient: `linear-gradient(90deg, #c8ff00, #39ff9f)` clipped to text.
 
 ---
@@ -201,8 +202,8 @@ overflow: hidden;
 ```
 [Logo]          [Features] [Solutions] [Pricing] [About] [Help]          [Auth actions]
 ```
-- Logo: "Hire" white + "Flow" lime, DM Sans 700
-- Nav links: DM Sans 400, `#888888`, hover `#ffffff`
+- Logo: "Hire" white + "Flow" lime, Syne 800 (extra bold)
+- Nav links/menu items: DM Sans 400, `#888888`, hover `#ffffff`
 - Auth (logged out): ghost "Login" + lime "Sign up"
 - Auth (logged in): ghost "Dashboard" + avatar circle side by side, `flex-direction: row`
 
@@ -218,10 +219,12 @@ border-radius: 12px;
 padding: 20px 24px;
 transition: border-color 0.15s;
 ```
+Feature card content typography: Syne (title 700, body 700).
 Hover: `border-color: #2a2a2a`
 Active/selected: `border-color: rgba(200,255,0,0.3)`
 
 ### Primary button (lime CTA)
+Primary/ghost buttons must use DM Sans.
 ```css
 background: #c8ff00;
 color: #000000;
