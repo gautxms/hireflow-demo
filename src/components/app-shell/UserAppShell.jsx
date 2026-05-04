@@ -1,4 +1,5 @@
 import AppHeader from '../AppHeader'
+import BrandLogo from '../BrandLogo'
 import { createElement, useMemo, useState } from 'react'
 import {
   LayoutDashboard,
@@ -11,7 +12,6 @@ import {
   Pin,
   ChevronLeft,
   ChevronRight,
-  Grid2x2,
   Home,
   FileText,
   Target,
@@ -118,10 +118,14 @@ export default function UserAppShell({ children, pathname, onNavigate, pageTitle
         onMouseEnter={() => { if (!pinned) setExpanded(true) }}
         onMouseLeave={() => { if (!pinned) setExpanded(false) }}
       >
-        <div className="app-sb-logo">
-          <Grid2x2 size={20} strokeWidth={1.8} className="app-sb-logo-icon" />
-          <span className="app-sb-logo-text"><span className="app-sb-logo-text-hire">Hire</span><span className="app-sb-logo-text-flow">Flow</span></span>
-        </div>
+        <button
+          type="button"
+          className="app-sb-logo"
+          onClick={() => onNavigate('/')}
+          aria-label="Go to home"
+        >
+          <BrandLogo as="span" className="app-sb-logo-text" />
+        </button>
 
         <nav className="app-sb-nav">
           {normalizedNavItems.map(({ label, path, Icon, badge, proOnly, isLocked }) => {
