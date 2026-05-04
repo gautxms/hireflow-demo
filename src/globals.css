@@ -75,7 +75,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 4rem;
+  padding: 1rem 4rem;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   background: var(--color-bg-overlay-80);
@@ -98,9 +98,9 @@ body {
 .brand-logo,
 .site-header__logo,
 .public-footer__brand {
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   font-family: var(--font-family-brand-display);
-  font-weight: var(--font-weight-bold);
+  font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--color-text-primary);
   text-decoration: none;
@@ -169,7 +169,7 @@ body {
   color: var(--color-text-primary);
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
-  font-family: var(--font-family-base);
+  font-family: var(--hf-font-ui);
   font-size: var(--type-button-size);
   font-weight: var(--type-button-weight);
   line-height: var(--type-button-line-height);
@@ -187,7 +187,7 @@ body {
   border: none;
   padding: 0.55rem 1.35rem;
   border-radius: 6px;
-  font-family: var(--font-family-base);
+  font-family: var(--hf-font-ui);
   font-weight: var(--type-button-weight);
   font-size: var(--type-button-size);
   line-height: var(--type-button-line-height);
@@ -198,6 +198,11 @@ body {
 .btn-primary:hover {
   opacity: 0.9;
   transform: translateY(-1px);
+}
+
+.site-header__auth-actions .btn-ghost,
+.site-header__auth-actions .btn-primary {
+  font-family: var(--hf-font-ui);
 }
 
 /* ---- HERO ---- */
@@ -408,7 +413,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
-  font-family: var(--font-family-base);
+  font-family: var(--hf-font-ui);
   font-size: var(--type-nav-size);
   font-weight: var(--type-nav-weight);
   line-height: var(--type-nav-line-height);
