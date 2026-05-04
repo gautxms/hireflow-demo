@@ -121,3 +121,39 @@
     align-items: stretch;
   }
 }
+
+.analyses-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.analyses-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.analyses-modal__field label span {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-regular);
+}
+
+.analyses-modal__help {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.analyses-modal__error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: 0.875rem;
+}
+
+.analyses-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
