@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import '../styles/analyses.css'
@@ -43,7 +44,7 @@ export default function AnalysesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [items, setItems] = useState([])
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [jobDescriptions, setJobDescriptions] = useState([])
   const [analysisName, setAnalysisName] = useState('')
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
@@ -82,7 +83,7 @@ export default function AnalysesPage() {
   }, [])
 
   useEffect(() => {
-    if (!isModalOpen) return
+    if (!isCreateModalOpen) return
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) return
     fetch(`${API_BASE}/job-descriptions`, { headers: { Authorization: `Bearer ${token}` } })
@@ -94,7 +95,7 @@ export default function AnalysesPage() {
         setJobDescriptions(eligible)
       })
       .catch(() => setJobDescriptions([]))
-  }, [isModalOpen])
+  }, [isCreateModalOpen])
 
   const sortedItems = useMemo(
     () => [...items].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
@@ -102,7 +103,7 @@ export default function AnalysesPage() {
   )
 
   const resetModal = () => {
-    setIsModalOpen(false)
+    setIsCreateModalOpen(false)
     setAnalysisName('')
     setSelectedJobDescriptionId('')
     setSelectedFiles([])
@@ -111,21 +112,11 @@ export default function AnalysesPage() {
     setIsSubmitting(false)
   }
 
-
   useEffect(() => {
-    if (!isModalOpen) return undefined
-    nameInputRef.current?.focus()
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape' && !isSubmitting) resetModal()
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      createButtonRef.current?.focus()
-    }
-  }, [isModalOpen, isSubmitting])
+    if (isCreateModalOpen) return undefined
+    createButtonRef.current?.focus()
+    return undefined
+  }, [isCreateModalOpen])
 
   const handleFileSelection = (event) => {
     const incomingFiles = Array.from(event.target.files || [])
@@ -234,7 +225,7 @@ export default function AnalysesPage() {
   return (
     <main className="analyses-layout">
       <section className="analyses-layout__content">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)} ref={createButtonRef}>Create analysis</button></div>
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} ref={createButtonRef}>Create analysis</button></div>
 
         <div className="analyses-layout__table-shell">
           {loading && <p>Loading analyses…</p>}
@@ -256,43 +247,71 @@ export default function AnalysesPage() {
         </div>
       </section>
 
-      {isModalOpen && (
-        <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Create analysis" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmitting) resetModal() }}>
-          <div className="ui-card ui-card--card-spacing ui-modal__dialog w-full max-w-lg">
-            <h2>Create analysis</h2>
-            <form onSubmit={handleSubmit} className="analyses-modal__form" noValidate>
-              <div className="analyses-modal__field">
-                <label htmlFor="analysis-name">Analysis name</label>
-                <input ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />
-                {validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}
-              </div>
-
-              <div className="analyses-modal__field">
-                <label htmlFor="analysis-jd">Job description <span>(optional)</span></label>
-                <select id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => setSelectedJobDescriptionId(event.target.value)}>
-                  <option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>
-                  {jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-                </select>
-              </div>
-
-              <div className="analyses-modal__field">
-                <label htmlFor="analysis-files">Resume files</label>
-                <input id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} />
-                <p id="analysis-files-help" className="analyses-modal__help">Upload up to 20 PDF or DOCX files (100MB max each).</p>
-                {selectedFiles.length > 0 && <p className="analyses-modal__help">{selectedFiles.length} file(s) selected.</p>}
-                {validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}
-              </div>
-
-              {submitError && <p role="alert" className="analyses-modal__error">{submitError}</p>}
-
-              <div className="analyses-modal__actions">
-                <button type="button" className="hf-btn hf-btn--secondary" onClick={resetModal} disabled={isSubmitting}>Cancel</button>
-                <button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateAnalysisModal
+        isOpen={isCreateModalOpen}
+        isSubmitting={isSubmitting}
+        analysisName={analysisName}
+        onAnalysisNameChange={setAnalysisName}
+        selectedJobDescriptionId={selectedJobDescriptionId}
+        onSelectedJobDescriptionIdChange={setSelectedJobDescriptionId}
+        jobDescriptions={jobDescriptions}
+        onFileSelection={handleFileSelection}
+        selectedFiles={selectedFiles}
+        validationErrors={validationErrors}
+        submitError={submitError}
+        onSubmit={handleSubmit}
+        onClose={resetModal}
+        nameInputRef={nameInputRef}
+      />
     </main>
+  )
+}
+
+function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNameChange, selectedJobDescriptionId, onSelectedJobDescriptionIdChange, jobDescriptions, onFileSelection, selectedFiles, validationErrors, submitError, onSubmit, onClose, nameInputRef }) {
+  const dialogRef = useRef(null)
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    nameInputRef.current?.focus()
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !isSubmitting) {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return
+      const focusable = dialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, isSubmitting, onClose, nameInputRef])
+
+  if (!isOpen) return null
+
+  return createPortal(
+    <div className="ui-modal analyses-create-modal" role="dialog" aria-modal="true" aria-label="Create analysis" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmitting) onClose() }}>
+      <div ref={dialogRef} className="ui-card ui-card--card-spacing ui-modal__dialog analyses-create-modal__dialog">
+        <h2>Create analysis</h2>
+        <form onSubmit={onSubmit} className="analyses-modal__form" noValidate>
+          <div className="analyses-modal__field"><label htmlFor="analysis-name">Analysis name</label><input ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => onAnalysisNameChange(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />{validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}</div>
+          <div className="analyses-modal__field"><label htmlFor="analysis-jd">Job description <span>(optional)</span></label><select id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => onSelectedJobDescriptionIdChange(event.target.value)}><option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>{jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
+          <div className="analyses-modal__field"><label htmlFor="analysis-files">Resume files</label><input id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} /><p id="analysis-files-help" className="analyses-modal__help">Upload up to 20 PDF or DOCX files (100MB max each).</p>{selectedFiles.length > 0 && <p className="analyses-modal__help">{selectedFiles.length} file(s) selected.</p>}{validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}</div>
+          {submitError && <p role="alert" className="analyses-modal__error">{submitError}</p>}
+          <div className="analyses-modal__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button></div>
+        </form>
+      </div>
+    </div>,
+    document.body,
   )
 }
