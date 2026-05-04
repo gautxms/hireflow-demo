@@ -22,7 +22,12 @@ function formatDate(value) {
 }
 
 function normalizeStatus(status) {
-  return String(status || 'pending').toLowerCase()
+  const normalizedStatus = String(status || 'pending').trim().toLowerCase()
+  const STATUS_ALIAS_MAP = {
+    queued: 'pending',
+    retrying: 'processing',
+  }
+  return STATUS_ALIAS_MAP[normalizedStatus] || normalizedStatus
 }
 
 function inferResumeMimeType(fileLike = {}) {
