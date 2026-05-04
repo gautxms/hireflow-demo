@@ -67,6 +67,7 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
+import { isUserShellRoutePath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
@@ -89,22 +90,6 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/refund-policy',
   ...INTENT_PAGE_ORDER,
 ])
-const USER_SHELL_ROUTE_PATHS = new Set([
-  '/dashboard',
-  '/dashboard/legacy',
-  '/results',
-  '/shortlists',
-  '/job-descriptions',
-  '/jobs',
-  '/analyses',
-  '/candidates',
-  '/reports',
-  '/account',
-  '/settings',
-  '/billing',
-  '/account/payment-method',
-])
-
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -179,15 +164,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated) {
     return false
   }
 
-  if (USER_SHELL_ROUTE_PATHS.has(resolvedPathname)) {
-    return true
-  }
-
-  return resolvedPathname.startsWith('/analyses/')
-    || resolvedPathname.startsWith('/candidates/')
-    || resolvedPathname === '/uploader'
-    || resolvedPathname === '/create-analysis'
-    || resolvedPathname === '/account/payment-method'
+  return isUserShellRoutePath(resolvedPathname)
 }
 
 function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
@@ -1139,7 +1116,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </Suspense>
     </PublicRouteChunkErrorBoundary>
   )
-  const useUserShellLayout = shouldRenderWithinUserShell(pathname, isAuthenticated)
+  const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated)
 
   useEffect(() => {
     document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
