@@ -2,9 +2,27 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildRoleSafeErrorView,
+  formatProviderErrorDetails,
   isStorageInfrastructureError,
   mapProviderError,
 } from './aiProviderErrorMapping.js'
+
+test('formatProviderErrorDetails parses nested JSON-stringified blobs', () => {
+  const blob = JSON.stringify(JSON.stringify({ reason: 'Model unavailable', technicalDetails: 'provider payload: retired model' }))
+  const formatted = formatProviderErrorDetails(blob)
+
+  assert.equal(formatted.title, 'Model unavailable')
+  assert.equal(formatted.detail, 'provider payload: retired model')
+  assert.equal(formatted.usedFallback, false)
+})
+
+test('formatProviderErrorDetails falls back safely when parsing fails', () => {
+  const formatted = formatProviderErrorDetails('')
+
+  assert.equal(formatted.title, 'Unable to parse error details.')
+  assert.equal(formatted.detail, 'Unable to parse error details.')
+  assert.equal(formatted.usedFallback, true)
+})
 
 test('mapProviderError maps invalid request errors to admin security guidance', () => {
   const result = mapProviderError('invalid_request_error: model is not allowed')
