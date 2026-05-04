@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import '../styles/analyses.css'
@@ -44,7 +44,10 @@ export default function AnalysesPage() {
   const [selectedJobDescriptionId, setSelectedJobDescriptionId] = useState('')
   const [selectedFiles, setSelectedFiles] = useState([])
   const [submitError, setSubmitError] = useState('')
+  const [validationErrors, setValidationErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const createButtonRef = useRef(null)
+  const nameInputRef = useRef(null)
 
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -99,8 +102,25 @@ export default function AnalysesPage() {
     setSelectedJobDescriptionId('')
     setSelectedFiles([])
     setSubmitError('')
+    setValidationErrors({})
     setIsSubmitting(false)
   }
+
+
+  useEffect(() => {
+    if (!isModalOpen) return undefined
+    nameInputRef.current?.focus()
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !isSubmitting) resetModal()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      createButtonRef.current?.focus()
+    }
+  }, [isModalOpen, isSubmitting])
 
   const handleFileSelection = (event) => {
     const incomingFiles = Array.from(event.target.files || [])
@@ -126,20 +146,19 @@ export default function AnalysesPage() {
     })
 
     setSelectedFiles(allowed)
-    setSubmitError(rejected.length > 0 ? rejected.join(' ') : '')
+    setValidationErrors((current) => ({ ...current, files: rejected.length > 0 ? rejected.join(' ') : '' }))
+    setSubmitError('')
   }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     const nameValue = analysisName.trim()
-    if (!nameValue) {
-      setSubmitError('Analysis name is required. Please enter a name before submitting.')
-      return
+    const nextValidationErrors = {
+      name: nameValue ? '' : 'Give this analysis a name so you can find it later.',
+      files: selectedFiles.length > 0 ? '' : 'Add at least one resume file to continue.',
     }
-    if (selectedFiles.length === 0) {
-      setSubmitError('Please select at least one resume file.')
-      return
-    }
+    setValidationErrors(nextValidationErrors)
+    if (nextValidationErrors.name || nextValidationErrors.files) return
 
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) {
@@ -210,7 +229,7 @@ export default function AnalysesPage() {
   return (
     <main className="analyses-layout">
       <section className="analyses-layout__content">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)} ref={createButtonRef}>Create analysis</button></div>
 
         <div className="analyses-layout__table-shell">
           {loading && <p>Loading analyses…</p>}
@@ -233,25 +252,35 @@ export default function AnalysesPage() {
       </section>
 
       {isModalOpen && (
-        <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Create analysis">
+        <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Create analysis" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmitting) resetModal() }}>
           <div className="ui-card ui-card--card-spacing ui-modal__dialog w-full max-w-lg">
             <h2>Create analysis</h2>
-            <form onSubmit={handleSubmit}>
-              <label htmlFor="analysis-name">Analysis name</label>
-              <input id="analysis-name" value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} />
+            <form onSubmit={handleSubmit} className="analyses-modal__form" noValidate>
+              <div className="analyses-modal__field">
+                <label htmlFor="analysis-name">Analysis name</label>
+                <input ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />
+                {validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}
+              </div>
 
-              <label htmlFor="analysis-jd">Job description</label>
-              <select id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => setSelectedJobDescriptionId(event.target.value)}>
-                <option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>
-                {jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-              </select>
+              <div className="analyses-modal__field">
+                <label htmlFor="analysis-jd">Job description <span>(optional)</span></label>
+                <select id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => setSelectedJobDescriptionId(event.target.value)}>
+                  <option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>
+                  {jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </select>
+              </div>
 
-              <label htmlFor="analysis-files">Resume files</label>
-              <input id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelection} />
-              {selectedFiles.length > 0 && <p>{selectedFiles.length} file(s) selected.</p>}
-              {submitError && <p role="alert">{submitError}</p>}
+              <div className="analyses-modal__field">
+                <label htmlFor="analysis-files">Resume files</label>
+                <input id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} />
+                <p id="analysis-files-help" className="analyses-modal__help">Upload up to 20 PDF or DOCX files (100MB max each).</p>
+                {selectedFiles.length > 0 && <p className="analyses-modal__help">{selectedFiles.length} file(s) selected.</p>}
+                {validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}
+              </div>
 
-              <div>
+              {submitError && <p role="alert" className="analyses-modal__error">{submitError}</p>}
+
+              <div className="analyses-modal__actions">
                 <button type="button" className="hf-btn hf-btn--secondary" onClick={resetModal} disabled={isSubmitting}>Cancel</button>
                 <button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button>
               </div>
