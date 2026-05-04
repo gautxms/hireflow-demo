@@ -568,6 +568,7 @@
     "baselineUpdateProcess": [
       "Capture before and after primitive snapshots for each impacted variant across desktop and mobile.",
       "Capture and validate both header systems (`site-header__*` marketing chrome and `app-header__*` authenticated chrome) whenever header-adjacent changes are introduced.",
+      "Capture sidebar header logo region for authenticated shell in both expanded and collapsed sidebar states whenever app-shell brand/header styling changes.",
       "Attach context-strip and state-strip evidence paths in this baseline for every impacted variant.",
       "Document intentional visual deltas in PR notes and request reviewer sign-off from Design Systems + QA.",
       "Update release/review metadata in this file and run npm run qa:primitive-visual-baseline before merge."
