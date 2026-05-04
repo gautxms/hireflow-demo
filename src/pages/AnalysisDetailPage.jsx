@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import '../styles/analyses.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
@@ -82,17 +83,26 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   const itemRows = Array.isArray(analysis?.items) ? analysis.items : []
   const summary = analysis?.summary || {}
 
+  if (loading || error || !analysis) {
+    return (
+      <main className="route-state">
+        <section className="route-state-card">
+          <a href="/analyses">← Back to analyses</a>
+          <h1>Analysis {analysisId || '—'}</h1>
+          {loading && <p>Loading analysis…</p>}
+          {!loading && error && <p role="alert">{error}</p>}
+        </section>
+      </main>
+    )
+  }
+
   return (
-    <main className="route-state">
-      <section className="route-state-card">
+    <main className="analyses-layout">
+      <section className="analyses-layout__content">
         <a href="/analyses">← Back to analyses</a>
         <h1>Analysis {analysisId || '—'}</h1>
 
-        {loading && <p>Loading analysis…</p>}
-        {!loading && error && <p role="alert">{error}</p>}
-
-        {!loading && !error && analysis && (
-          <>
+        <>
             <p>
               Live status: <strong>{normalizeStatus(analysis.liveStatus || analysis.status)}</strong>
             </p>
@@ -103,7 +113,8 @@ export default function AnalysisDetailPage({ pathname = '' }) {
               Summary — Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Processing {summary.processing || 0} · Pending {summary.pending || 0}
             </p>
 
-            <table>
+            <div className="analyses-layout__table-shell">
+              <table className="analyses-layout__table">
               <thead>
                 <tr>
                   <th>Resume</th>
@@ -124,9 +135,9 @@ export default function AnalysisDetailPage({ pathname = '' }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </>
-        )}
+              </table>
+            </div>
+        </>
       </section>
     </main>
   )

@@ -1,0 +1,35 @@
+.analyses-layout {
+  width: 100%;
+  padding: var(--spacing-xl);
+  display: flex;
+  justify-content: center;
+}
+
+.analyses-layout__content {
+  width: min(1200px, 100%);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-lg);
+  color: var(--color-text-primary);
+}
+
+.analyses-layout__table-shell {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.analyses-layout__table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+.analyses-layout__table th,
+.analyses-layout__table td {
+  text-align: left;
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
