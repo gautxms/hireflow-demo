@@ -100,6 +100,14 @@ function toUserFriendlyJobError(rawError) {
   return normalized?.userMessage || 'Could not analyze this resume. Please retry.'
 }
 
+function formatFailureTimestamp(value) {
+  const timestamp = Date.parse(String(value || ''))
+  if (Number.isNaN(timestamp)) {
+    return 'Captured just now'
+  }
+  return new Date(timestamp).toLocaleString()
+}
+
 async function parseJsonSafe(response) {
   return response.json().catch(() => ({}))
 }
@@ -145,6 +153,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const isDevelopment = import.meta.env.DEV
   const canViewAdminDiagnostics = isAdmin || isDevelopment
   const resumeAnalysisOwnerKey = getResumeAnalysisOwnerKey(userProfile)
+  const failedJobs = jobStatuses.filter((job) => job.status === 'failed')
+  const failedJobCount = failedJobs.length
+  const failedContextTimestamp = failedJobs[0]?.lastUpdatedAt || new Date().toISOString()
 
 
 
@@ -704,6 +715,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         status: String(payload?.status || 'processing').trim() || 'processing',
         progress: Number(payload?.progress || 0),
         error: payload?.error ? String(payload.error) : '',
+        lastUpdatedAt: payload?.updatedAt || payload?.completedAt || payload?.failedAt || new Date().toISOString(),
       }))
       setJobStatuses(nextJobStatuses)
       if (!firstStatusTransitionTracked && nextJobStatuses.some((job) => job.status && job.status !== 'processing' && job.status !== 'queued')) {
@@ -821,6 +833,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         status: String(item.status || 'processing').trim() || 'processing',
         progress: Number(item.progress || 0),
         error: item.error ? String(item.error) : '',
+        lastUpdatedAt: item.updatedAt || item.completedAt || item.failedAt || new Date().toISOString(),
       }))
 
       const effectiveJobStatuses = nextJobStatuses.length > 0
@@ -1165,12 +1178,23 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </>
         )}
 
-        {!isAnalyzing && jobStatuses.some((job) => job.status === 'failed') && (
+        {!isAnalyzing && failedJobCount > 0 && (
           <div className="resume-error-banner" role="status">
             <strong>Some resumes failed to analyze.</strong>
+            <p>
+              {failedJobCount} of {jobStatuses.length} item(s) were affected · Context timestamp: {formatFailureTimestamp(failedContextTimestamp)}
+            </p>
             <ul>
-              {jobStatuses.filter((job) => job.status === 'failed').map((job) => (
-                <li key={`failed-${job.jobId}`}>{job.filename || job.jobId}: {toUserFriendlyJobError(job.error)}</li>
+              {failedJobs.map((job) => (
+                <li key={`failed-${job.jobId}`}>
+                  <strong>{job.filename || job.jobId}</strong>: {toUserFriendlyJobError(job.error)}
+                  <details className="resume-error-details">
+                    <summary className="resume-error-details-summary">Technical details</summary>
+                    <pre className="resume-error-details-pre">
+                      {`Job ID: ${job.jobId || 'n/a'}\nResume ID: ${job.resumeId || 'n/a'}\nStatus: ${job.status || 'n/a'}\nLast update: ${formatFailureTimestamp(job.lastUpdatedAt)}\nRaw error: ${job.error || 'n/a'}`}
+                    </pre>
+                  </details>
+                </li>
               ))}
             </ul>
             <button type="button" className="touch-target resume-analyze-button" onClick={() => handleAnalyze()}>
