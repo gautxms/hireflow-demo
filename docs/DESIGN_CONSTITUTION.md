@@ -105,7 +105,7 @@ Hero H1 structure — NEVER put words on the same line:
 }
 ```
 
-Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, Syne 700.
+Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, Syne 800 (extra bold).
 Hero colors: "Hire" + "Smarter." = `#ffffff`.
 "Faster." gradient: `linear-gradient(90deg, #c8ff00, #39ff9f)` clipped to text.
 
@@ -202,8 +202,8 @@ overflow: hidden;
 ```
 [Logo]          [Features] [Solutions] [Pricing] [About] [Help]          [Auth actions]
 ```
-- Logo: "Hire" white + "Flow" lime, Syne 700
-- Nav links: DM Sans 400, `#888888`, hover `#ffffff`
+- Logo: "Hire" white + "Flow" lime, Syne 800 (extra bold)
+- Nav links/menu items: DM Sans 400, `#888888`, hover `#ffffff`
 - Auth (logged out): ghost "Login" + lime "Sign up"
 - Auth (logged in): ghost "Dashboard" + avatar circle side by side, `flex-direction: row`
 
@@ -219,10 +219,12 @@ border-radius: 12px;
 padding: 20px 24px;
 transition: border-color 0.15s;
 ```
+Feature card content typography: Syne (title 700, body 700).
 Hover: `border-color: #2a2a2a`
 Active/selected: `border-color: rgba(200,255,0,0.3)`
 
 ### Primary button (lime CTA)
+Primary/ghost buttons must use DM Sans.
 ```css
 background: #c8ff00;
 color: #000000;
