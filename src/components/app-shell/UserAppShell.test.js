@@ -23,3 +23,26 @@ test('UserAppShell renders subscribed dashboard view without explicit pageTitleP
     assert.match(markup, /Pro/)
   })
 })
+
+
+test('UserAppShell assigns distinct canonical icons for Shortlists and Reports', () => {
+  const readIconName = (navItem) => navItem?.props?.Icon?.displayName || navItem?.props?.Icon?.name
+
+  const tree = UserAppShell({
+    pathname: '/dashboard',
+    onNavigate: () => {},
+    subscriptionStatus: 'active',
+    children: createElement('div', null, 'content'),
+  })
+
+  const aside = tree.props.children[0]
+  const nav = aside.props.children[1]
+  const navItems = nav.props.children
+
+  const shortlistsItem = navItems.find((item) => item.key === '/shortlists')
+  const reportsItem = navItems.find((item) => item.key === '/reports')
+
+  assert.equal(readIconName(shortlistsItem), 'ClipboardCheck')
+  assert.equal(readIconName(reportsItem), 'BarChart2')
+  assert.notEqual(readIconName(shortlistsItem), readIconName(reportsItem))
+})
