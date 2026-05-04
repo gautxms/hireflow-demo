@@ -30,7 +30,8 @@ router.get('/', requireAuth, async (req, res) => {
       COUNT(ai.id)::int AS total,
       COUNT(*) FILTER (WHERE COALESCE(pj.status, r.parse_status) IN ('completed','complete'))::int AS complete,
       COUNT(*) FILTER (WHERE COALESCE(pj.status, r.parse_status) IN ('failed'))::int AS failed,
-      COUNT(*) FILTER (WHERE COALESCE(pj.status, r.parse_status) IN ('active','processing','in_progress','retrying'))::int AS processing,
+      COUNT(*) FILTER (WHERE COALESCE(pj.status, r.parse_status) IN ('active','processing','in_progress'))::int AS processing,
+      COUNT(*) FILTER (WHERE COALESCE(pj.status, r.parse_status) IN ('retrying'))::int AS retrying,
       COUNT(*) FILTER (WHERE COALESCE(pj.status, r.parse_status) IN ('pending','queued'))::int AS pending
      FROM analyses a
      LEFT JOIN analysis_items ai ON ai.analysis_id = a.id
@@ -41,7 +42,26 @@ router.get('/', requireAuth, async (req, res) => {
      GROUP BY a.id, jd.title
      ORDER BY a.created_at DESC`, [req.userId])
 
-  return res.json({ items: result.rows.map((row) => ({ id: String(row.id), name: row.name || null, status: row.status, liveStatus: row.status, createdAt: row.created_at, jobDescriptionTitle: row.job_description_title || null, summary: { total: row.total, complete: row.complete, failed: row.failed, processing: row.processing, pending: row.pending } })) })
+  return res.json({
+    items: result.rows.map((row) => {
+      const counts = {
+        complete: Number(row.complete) || 0,
+        failed: Number(row.failed) || 0,
+        processing: Number(row.processing) || 0,
+        retrying: Number(row.retrying) || 0,
+      }
+      const total = Number(row.total) || 0
+      return {
+        id: String(row.id),
+        name: row.name || null,
+        status: row.status,
+        liveStatus: deriveAggregateStatus(counts, total),
+        createdAt: row.created_at,
+        jobDescriptionTitle: row.job_description_title || null,
+        summary: { total, complete: counts.complete, failed: counts.failed, processing: counts.processing + counts.retrying, pending: Number(row.pending) || 0 },
+      }
+    }),
+  })
 })
 
 router.post('/', requireAuth, requireActiveSubscription, enforceUploadLimit, (req,res,next)=>upload.array('resumes')(req,res,next), trackUploadUsage, async (req, res) => {
@@ -52,6 +72,22 @@ router.post('/', requireAuth, requireActiveSubscription, enforceUploadLimit, (re
   const jobDescriptionId = req.body.jobDescriptionId || null
   let analysisId = null
   try {
+    if (jobDescriptionId) {
+      const jdResult = await pool.query(
+        `SELECT id
+         FROM job_descriptions
+         WHERE id = $1
+           AND user_id = $2
+           AND status <> 'archived'
+         LIMIT 1`,
+        [jobDescriptionId, req.userId],
+      )
+
+      if (!jdResult.rows[0]) {
+        return res.status(400).json({ error: 'Selected job description is invalid or archived' })
+      }
+    }
+
     const inserted = await pool.query('INSERT INTO analyses (user_id, job_description_id, name, status) VALUES ($1,$2,$3,$4) RETURNING id,created_at,status', [req.userId, jobDescriptionId, name, 'queued'])
     analysisId = inserted.rows[0].id
     for (const f of req.files) {
@@ -86,7 +122,7 @@ router.get('/:id/status', requireAuth, async (req, res) => {
     const computedCompletedAt = isComplete ? (analysis.completed_at || new Date().toISOString()) : null
     if (aggregateStatus !== analysis.status || String(analysis.completed_at || '') !== String(computedCompletedAt || '')) await pool.query(`UPDATE analyses SET status = $2, completed_at = $3, error_summary = $4 WHERE id = $1`, [analysis.id, aggregateStatus, computedCompletedAt, failures[0]?.error?.slice(0, 500) || null])
     return res.json({ analysisId: String(analysis.id), status: aggregateStatus, progress: { total: totalItems, completed: counts.complete, failed: counts.failed, queued: counts.queued, processing: counts.processing, retrying: counts.retrying, percent: percentComplete }, failures, completion: { isComplete, completedAt: computedCompletedAt, createdAt: analysis.created_at, hasFailures: failures.length > 0, errorSummary: failures[0]?.error || analysis.error_summary || null, terminal: isComplete && TERMINAL_STATUSES.has(aggregateStatus) }, items, maxItemProgress: maxProgress })
-  } catch (statusError) { return res.status(500).json({ error: 'Unable to fetch analysis status' }) }
+  } catch { return res.status(500).json({ error: 'Unable to fetch analysis status' }) }
 })
 
 export default router

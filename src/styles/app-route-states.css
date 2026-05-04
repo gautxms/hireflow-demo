@@ -80,6 +80,10 @@
   margin-top: var(--spacing-base);
 }
 
+.analyses-page__modal {
+  margin-top: var(--spacing-base);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .route-state-card,
   .route-state-card__action {
