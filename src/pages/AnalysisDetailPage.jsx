@@ -82,6 +82,7 @@ export default function AnalysisDetailPage({ pathname = '' }) {
 
   const itemRows = Array.isArray(analysis?.items) ? analysis.items : []
   const summary = analysis?.summary || {}
+  const liveStatus = normalizeStatus(analysis?.liveStatus || analysis?.status)
 
   if (loading || error || !analysis) {
     return (
@@ -109,9 +110,12 @@ export default function AnalysisDetailPage({ pathname = '' }) {
             <p>
               Created: {formatDate(analysis.createdAt)} · Completed: {formatDate(analysis.completedAt)}
             </p>
-            <p>
+            <p className="analysis-detail-page__summary">
               Summary — Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Processing {summary.processing || 0} · Pending {summary.pending || 0}
             </p>
+            {(liveStatus === 'complete' || liveStatus === 'completed') && <p className="analysis-detail-page__status-note">This analysis is complete. You can review final item statuses below.</p>}
+            {liveStatus === 'failed' && <p className="analysis-detail-page__status-note analysis-detail-page__status-note--failed">This analysis encountered failures. Review item-level errors for remediation details.</p>}
+            {(liveStatus === 'pending' || liveStatus === 'processing') && <p className="analysis-detail-page__status-note">This analysis is still running. Statuses refresh automatically every few seconds.</p>}
 
             <div className="analyses-layout__table-shell">
               <table className="analyses-layout__table">

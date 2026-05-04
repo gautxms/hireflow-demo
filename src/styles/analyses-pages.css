@@ -1,0 +1,65 @@
+.analyses-page,
+.analysis-detail-page {
+  width: 100%;
+  padding: var(--spacing-xl);
+}
+
+.analyses-page__card,
+.analysis-detail-page__card {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.analyses-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.analyses-page__cta {
+  margin-left: auto;
+}
+
+.analyses-page__table,
+.analysis-detail-page__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-md);
+}
+
+.analyses-page__table th,
+.analyses-page__table td,
+.analysis-detail-page__table th,
+.analysis-detail-page__table td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.analysis-detail-page__back-link {
+  display: inline-block;
+  margin-bottom: var(--spacing-sm);
+}
+
+.analysis-detail-page__summary {
+  font-weight: var(--font-weight-medium);
+}
+
+.analysis-detail-page__status-note {
+  border-left: 3px solid var(--color-accent-green);
+  padding-left: var(--spacing-sm);
+  color: var(--color-text-secondary);
+}
+
+.analysis-detail-page__status-note--failed {
+  border-left-color: var(--color-error);
+}
