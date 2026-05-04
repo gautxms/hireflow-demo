@@ -207,64 +207,28 @@ export default function AnalysesPage() {
     }
   }
 
-  if (loading || error || sortedItems.length === 0) {
-    return (
-      <main className="route-state">
-        <section className="route-state-card">
-          <h1>Analyses</h1>
-          {loading && <p>Loading analyses…</p>}
-          {!loading && error && <p role="alert">{error}</p>}
-          {!loading && !error && sortedItems.length === 0 && <p>No analyses yet. Upload resumes to create your first run.</p>}
-          <button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button>
-        </section>
-
-        {isModalOpen && (
-          <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Create analysis">
-            <div className="ui-card ui-card--card-spacing ui-modal__dialog w-full max-w-lg">
-              <h2>Create analysis</h2>
-              <form onSubmit={handleSubmit}>
-                <label htmlFor="analysis-name">Analysis name</label>
-                <input id="analysis-name" value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} />
-
-                <label htmlFor="analysis-jd">Job description</label>
-                <select id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => setSelectedJobDescriptionId(event.target.value)}>
-                  <option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>
-                  {jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-                </select>
-
-                <label htmlFor="analysis-files">Resume files</label>
-                <input id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelection} />
-                {selectedFiles.length > 0 && <p>{selectedFiles.length} file(s) selected.</p>}
-                {submitError && <p role="alert">{submitError}</p>}
-
-                <div>
-                  <button type="button" className="hf-btn hf-btn--secondary" onClick={resetModal} disabled={isSubmitting}>Cancel</button>
-                  <button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </main>
-    )
-  }
-
   return (
     <main className="analyses-layout">
       <section className="analyses-layout__content">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
 
         <div className="analyses-layout__table-shell">
-          <table className="analyses-layout__table">
-            <thead><tr><th>Created</th><th>Live status</th><th>Summary</th><th>Job description</th><th>Open</th></tr></thead>
-            <tbody>
-              {sortedItems.map((analysis) => {
-                const status = normalizeStatus(analysis.liveStatus || analysis.status)
-                const summary = analysis.summary || {}
-                return <tr key={analysis.id}><td>{formatDate(analysis.createdAt)}</td><td>{status}</td><td>Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Pending {(summary.pending || 0) + (summary.processing || 0)}</td><td>{analysis.jobDescriptionTitle || 'No job description'}</td><td><a href={`/analyses/${analysis.id}`}>View</a></td></tr>
-              })}
-            </tbody>
-          </table>
+          {loading && <p>Loading analyses…</p>}
+          {!loading && error && <p role="alert">{error}</p>}
+          {!loading && !error && sortedItems.length === 0 && <p>No analyses yet. Upload resumes to create your first run.</p>}
+
+          {!loading && !error && sortedItems.length > 0 && (
+            <table className="analyses-layout__table">
+              <thead><tr><th>Created</th><th>Live status</th><th>Summary</th><th>Job description</th><th>Open</th></tr></thead>
+              <tbody>
+                {sortedItems.map((analysis) => {
+                  const status = normalizeStatus(analysis.liveStatus || analysis.status)
+                  const summary = analysis.summary || {}
+                  return <tr key={analysis.id}><td>{formatDate(analysis.createdAt)}</td><td>{status}</td><td>Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Pending {(summary.pending || 0) + (summary.processing || 0)}</td><td>{analysis.jobDescriptionTitle || 'No job description'}</td><td><a href={`/analyses/${analysis.id}`}>View</a></td></tr>
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 
