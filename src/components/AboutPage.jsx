@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Briefcase, Brain, Palette, Cog } from 'lucide-react'
 import { Icon } from './Icon'
 import PublicPageLayout from './public/PublicPageLayout'
 
@@ -6,10 +7,10 @@ export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
 
   const teamMembers = [
-    { id: 1, name: 'Gautam', title: 'Founder & CEO', bio: 'Former Head of Recruiting at Stripe. Passionate about building tools that make hiring human-centric.', expertise: ['Recruiting', 'Product', 'Operations'], image: '👔' },
-    { id: 2, name: 'Sarah Chen', title: 'Head of AI/ML', bio: 'PhD in Computer Science from MIT. Built ML systems at OpenAI. Leading our AI scoring engine.', expertise: ['Machine Learning', 'NLP', 'AI Ethics'], image: '🧠' },
-    { id: 3, name: 'Marcus Rodriguez', title: 'VP Product', bio: 'Ex-Google, ex-Figma. Obsessed with user experience and building products people love.', expertise: ['Product Design', 'UX', 'Strategy'], image: '🎨' },
-    { id: 4, name: 'Priya Sharma', title: 'VP Engineering', bio: 'Led infrastructure at Databricks. Building HireFlow to scale to millions of candidates.', expertise: ['Backend', 'Infrastructure', 'Scalability'], image: '⚙️' }
+    { id: 1, name: 'Gautam', title: 'Founder & CEO', bio: 'Former Head of Recruiting at Stripe. Passionate about building tools that make hiring human-centric.', expertise: ['Recruiting', 'Product', 'Operations'], avatarIcon: Briefcase },
+    { id: 2, name: 'Sarah Chen', title: 'Head of AI/ML', bio: 'PhD in Computer Science from MIT. Built ML systems at OpenAI. Leading our AI scoring engine.', expertise: ['Machine Learning', 'NLP', 'AI Ethics'], avatarIcon: Brain },
+    { id: 3, name: 'Marcus Rodriguez', title: 'VP Product', bio: 'Ex-Google, ex-Figma. Obsessed with user experience and building products people love.', expertise: ['Product Design', 'UX', 'Strategy'], avatarIcon: Palette },
+    { id: 4, name: 'Priya Sharma', title: 'VP Engineering', bio: 'Led infrastructure at Databricks. Building HireFlow to scale to millions of candidates.', expertise: ['Backend', 'Infrastructure', 'Scalability'], avatarIcon: Cog }
   ]
 
   const stats = [{ number: '10K+', label: 'Resumes Analyzed' }, { number: '94%', label: 'Accuracy Rate' }, { number: '45%', label: 'Time Saved for Recruiters' }, { number: '500+', label: 'Companies Using HireFlow' }]
