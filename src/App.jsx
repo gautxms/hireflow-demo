@@ -1053,16 +1053,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
   const userShellNavItems = useMemo(() => {
     return [
-      { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'home' },
-      { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'file' },
-      { key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'target', isLocked: !analysesModuleEnabled },
-      { key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'users', isLocked: !candidateModuleEnabled },
-      { key: 'shortlists', label: 'Shortlists', path: '/shortlists', icon: 'chart' },
+      { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+      { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'jobs' },
+      { key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'analyses', isLocked: !analysesModuleEnabled },
+      { key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'candidates', isLocked: !candidateModuleEnabled },
+      { key: 'shortlists', label: 'Shortlists', path: '/shortlists', icon: 'shortlists' },
       {
         key: 'reports',
         label: 'Reports',
         path: '/reports',
-        icon: 'chart',
+        icon: 'reports',
         isLocked: !dashboardReportsEnabled,
         badge: !dashboardReportsEnabled ? 'Pro' : '',
       },
