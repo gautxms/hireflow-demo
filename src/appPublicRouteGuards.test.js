@@ -75,9 +75,16 @@ test('authenticated root path bypasses dashboard alias resolution and stays land
 
 
 
-test('landing CTA sends active subscribers to explicit dashboard path', () => {
+test('landing CTA uses dashboard label and route for active/trialing subscribers', () => {
   assert.match(appSource, /onStartDemo=\{\(\) => \(isActiveSubscriber \? navigate\('\/dashboard'\) : navigate\('\/pricing'\)\)\}/)
+  assert.match(appSource, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'View pricing'\}/)
 })
+
+test('landing CTA keeps non-subscribed behavior unchanged', () => {
+  assert.match(appSource, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'View pricing'\}/)
+  assert.doesNotMatch(appSource, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'Start demo'\}/)
+})
+
 test('dashboard rendering remains explicit to dashboard pathname', () => {
   assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*<OperationsDashboard/)
 })

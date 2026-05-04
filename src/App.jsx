@@ -429,7 +429,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return (
         <LandingPage
           onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-          ctaLabel={isActiveSubscriber ? 'Start demo' : 'View pricing'}
+          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
         />
       )
     }
@@ -1023,7 +1023,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     return (
       <LandingPage
         onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-        ctaLabel={isActiveSubscriber ? 'Start demo' : 'View pricing'}
+        ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
       />
     )
   }
