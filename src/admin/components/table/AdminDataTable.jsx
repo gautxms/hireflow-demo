@@ -6,6 +6,17 @@ function SortIndicator({ active, direction }) {
   return <span>{direction === 'asc' ? '↑' : '↓'}</span>
 }
 
+function TechnicalPayload({ payload }) {
+  if (!payload) return null
+
+  return (
+    <details className="admin-technical-details">
+      <summary>Technical payload</summary>
+      <pre className="admin-technical-payload">{JSON.stringify(payload, null, 2)}</pre>
+    </details>
+  )
+}
+
 function DetailsDrawer({ title, row, onClose, renderDetails }) {
   if (!row) return null
 
@@ -17,6 +28,7 @@ function DetailsDrawer({ title, row, onClose, renderDetails }) {
           <button type="button" className="ui-btn" onClick={onClose}>Close</button>
         </div>
         {renderDetails(row)}
+        <TechnicalPayload payload={row} />
       </div>
     </div>
   )
@@ -161,7 +173,7 @@ export default function AdminDataTable({
                 onClick={() => { onRowClick?.(row); if (renderDetails) setSelectedRow(row) }}
               >
                 {columns.map((column) => (
-                  <td key={`${rowKey(row)}-${column.key}`} className="px-4 py-3 align-top">
+                  <td key={`${rowKey(row)}-${column.key}`} className="admin-table-cell px-4 py-3 align-top">
                     {column.render ? column.render(row) : row[column.key]}
                   </td>
                 ))}
