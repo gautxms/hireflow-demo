@@ -171,7 +171,8 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated) {
     return false
   }
 
-  const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
+  const isRootLandingPath = pathname === '/'
+  const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
 
   if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
     return false
@@ -260,7 +261,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     const params = new URLSearchParams(window.location.search)
-    const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
+    const isRootLandingPath = pathname === '/'
+  const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
   const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
     const isResultsRoute = isResultsRootPath(resolvedPathname)
     const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
@@ -384,7 +386,8 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
-  const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
+  const isRootLandingPath = pathname === '/'
+  const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
   const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
 
   const getPageContent = () => {
@@ -422,10 +425,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
 
-    if (resolvedPathname === '/' || resolvedPathname === '/ai-resume-screening') {
+    if (isRootLandingPath || resolvedPathname === '/ai-resume-screening') {
       return (
         <LandingPage
-          onStartDemo={() => (isActiveSubscriber ? navigate('/') : navigate('/pricing'))}
+          onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
           ctaLabel={isActiveSubscriber ? 'Start demo' : 'View pricing'}
         />
       )
@@ -1019,7 +1022,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     return (
       <LandingPage
-        onStartDemo={() => (isActiveSubscriber ? navigate('/') : navigate('/pricing'))}
+        onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
         ctaLabel={isActiveSubscriber ? 'Start demo' : 'View pricing'}
       />
     )
