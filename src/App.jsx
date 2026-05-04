@@ -426,11 +426,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
 
     if (isRootLandingPath || resolvedPathname === '/ai-resume-screening') {
-      if (isRootLandingPath && isAuthenticated && isActiveSubscriber) {
-        navigate('/dashboard')
-        return null
-      }
-
       return (
         <LandingPage
           onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
