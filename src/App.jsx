@@ -72,7 +72,6 @@ import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
-const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 const PUBLIC_ROUTE_PATHS = new Set([
   '/',
@@ -133,31 +132,6 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function markCreateAnalysisIntent() {
-  const intent = {
-    id: crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    createdAt: Date.now(),
-  }
-  sessionStorage.setItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY, JSON.stringify(intent))
-}
-
-function consumeCreateAnalysisIntent() {
-  try {
-    const rawIntent = sessionStorage.getItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY)
-    if (!rawIntent) {
-      return false
-    }
-    const parsedIntent = JSON.parse(rawIntent)
-    const maxAgeMs = 10 * 60 * 1000
-    const isFreshIntent = parsedIntent?.createdAt && (Date.now() - parsedIntent.createdAt) <= maxAgeMs
-    sessionStorage.removeItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY)
-    return Boolean(isFreshIntent)
-  } catch {
-    sessionStorage.removeItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY)
-    return false
-  }
-}
-
 function shouldDisableUserShell(pathname) {
   return isSharedResultsPath(pathname)
 }
@@ -199,7 +173,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef(null)
   const lastResultsValidatedOwnerKeyRef = useRef(null)
-  const uploaderIntentAccessRef = useRef({ pathname: '', allowed: null })
   const { logout: logoutAdmin } = useAdminAuth()
   const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
 
@@ -241,8 +214,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }
 
   const handleCreateAnalysis = () => {
-    markCreateAnalysisIntent()
-    navigate('/uploader')
+    navigate('/analyses?create=1')
   }
 
 
@@ -545,18 +517,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/uploader') {
-      if (uploaderIntentAccessRef.current.pathname !== pathname) {
-        uploaderIntentAccessRef.current = {
-          pathname,
-          allowed: consumeCreateAnalysisIntent(),
-        }
-      }
-
-      if (!uploaderIntentAccessRef.current.allowed) {
-        navigate('/analyses')
-        return null
-      }
-
       const canAccessUploader = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
