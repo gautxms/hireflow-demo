@@ -73,6 +73,11 @@ test('authenticated root path bypasses dashboard alias resolution and stays land
   assert.match(appSource, /if \(isRootLandingPath \|\| resolvedPathname === '\/ai-resume-screening'\) \{[\s\S]*<LandingPage/)
 })
 
+
+
+test('landing CTA sends active subscribers to explicit dashboard path', () => {
+  assert.match(appSource, /onStartDemo=\{\(\) => \(isActiveSubscriber \? navigate\('\/dashboard'\) : navigate\('\/pricing'\)\)\}/)
+})
 test('dashboard rendering remains explicit to dashboard pathname', () => {
   assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*<OperationsDashboard/)
 })

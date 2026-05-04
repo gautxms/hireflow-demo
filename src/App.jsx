@@ -428,7 +428,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     if (isRootLandingPath || resolvedPathname === '/ai-resume-screening') {
       return (
         <LandingPage
-          onStartDemo={() => (isActiveSubscriber ? navigate('/') : navigate('/pricing'))}
+          onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
           ctaLabel={isActiveSubscriber ? 'Start demo' : 'View pricing'}
         />
       )
@@ -1022,7 +1022,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     return (
       <LandingPage
-        onStartDemo={() => (isActiveSubscriber ? navigate('/') : navigate('/pricing'))}
+        onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
         ctaLabel={isActiveSubscriber ? 'Start demo' : 'View pricing'}
       />
     )
