@@ -741,6 +741,40 @@
   background: var(--color-white-alpha-03);
 }
 
+.admin-table-cell {
+  max-width: min(24rem, 40vw);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.admin-technical-details {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--admin-border);
+  padding-top: 0.75rem;
+}
+
+.admin-technical-details > summary {
+  cursor: pointer;
+  color: var(--admin-text-muted);
+  font-size: var(--type-small-size);
+}
+
+.admin-technical-payload {
+  margin-top: 0.6rem;
+  max-height: 18rem;
+  overflow: auto;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-interactive);
+  background: var(--admin-surface-subtle);
+  padding: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: pre;
+}
+
+
 .admin-shell-v2 .text-slate-950,
 .admin-shell-v2 .text-slate-900,
 .admin-shell-v2 .text-slate-800,
