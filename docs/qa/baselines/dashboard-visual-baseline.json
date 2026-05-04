@@ -1,0 +1,25 @@
+{
+  "release": "dashboard-ui-refresh-2026-05-04",
+  "reviewedAt": "2026-05-04",
+  "reviewedBy": "codex-agent",
+  "viewports": [
+    { "name": "desktop-1366", "width": 1366, "height": 768 },
+    { "name": "desktop-1920", "width": 1920, "height": 1080 }
+  ],
+  "snapshotMatrix": [
+    {
+      "path": "/dashboard",
+      "viewport": "desktop-1366",
+      "state": "default",
+      "image": "docs/qa/artifacts/dashboard-2026-05-04-1366x768.png",
+      "notes": "Top hierarchy, filter alignment, and KPI/trend spacing validated."
+    },
+    {
+      "path": "/dashboard",
+      "viewport": "desktop-1920",
+      "state": "default",
+      "image": "docs/qa/artifacts/dashboard-2026-05-04-1920x1080.png",
+      "notes": "Desktop widescreen layout and card consistency validated."
+    }
+  ]
+}

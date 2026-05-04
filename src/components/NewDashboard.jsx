@@ -104,11 +104,6 @@ export default function NewDashboard({ onNavigate }) {
     }
   }
 
-  const openLegacyDashboard = () => {
-    window.history.pushState({}, '', '/dashboard/legacy')
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  }
-
   const reportPeriod = dashboardData?.range
     ? `${dashboardData.range.startDate} → ${dashboardData.range.endDate}`
     : `${toIsoDate(new Date(Date.now() - 29 * 86400000))} → ${toIsoDate(new Date())}`
@@ -127,39 +122,41 @@ export default function NewDashboard({ onNavigate }) {
   return (
     <div className="new-dashboard">
       <div className="new-dashboard__header">
-        <div>
+        <div className="new-dashboard__title-row">
           <h1 className="new-dashboard__title">Recruiting Dashboard</h1>
-          <p className="new-dashboard__subtitle">KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
         </div>
-        <div className="new-dashboard__header-actions">
-        </div>
+        <p className="new-dashboard__subtitle">KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
       </div>
 
       <section className="new-dashboard__panel">
         <div className="new-dashboard__filters">
-          <label>
-            Date range
+          <label className="new-dashboard__field">
+            <span className="new-dashboard__field-label">Date range</span>
             <select value={rangeDays} onChange={(event) => setRangeDays(event.target.value)} className="new-dashboard__select">
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>
           </label>
-          <label>
-            Job
-            <select value={jobDescriptionId} onChange={(event) => setJobDescriptionId(event.target.value)} className="new-dashboard__select new-dashboard__select--job">
+          <label className="new-dashboard__field new-dashboard__field--wide">
+            <span className="new-dashboard__field-label">Job</span>
+            <select value={jobDescriptionId} onChange={(event) => setJobDescriptionId(event.target.value)} className="new-dashboard__select">
               <option value="">All jobs</option>
               {(dashboardData?.jobOptions || []).map((job) => (
                 <option key={job.id} value={job.id}>{job.title}</option>
               ))}
             </select>
           </label>
-          <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button new-dashboard__button--primary">{loading ? 'Refreshing…' : 'Apply filters'}</button>
-          <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button new-dashboard__button--secondary">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
+          <div className="new-dashboard__actions">
+            <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button new-dashboard__button--primary">{loading ? 'Refreshing…' : 'Apply filters'}</button>
+            <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button new-dashboard__button--secondary">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
+          </div>
         </div>
-        <p className="new-dashboard__report-period">Report period: {reportPeriod}</p>
-        {error ? <p className="new-dashboard__error">{error}</p> : null}
-        {exportError ? <p className="new-dashboard__error">{exportError}</p> : null}
+        <div className="new-dashboard__meta-row">
+          <p className="new-dashboard__report-period">Report period: {reportPeriod}</p>
+          {error ? <p className="new-dashboard__status new-dashboard__status--error">{error}</p> : null}
+          {exportError ? <p className="new-dashboard__status">{exportError}</p> : null}
+        </div>
       </section>
 
       <section className="new-dashboard__kpis">
@@ -179,8 +176,8 @@ export default function NewDashboard({ onNavigate }) {
       <section className="new-dashboard__trends">
         <article className="new-dashboard__trend-card">
           <h3 className="new-dashboard__trend-title">Analyses trend</h3>
-          {loading ? <p>Loading trend data…</p> : null}
-          {!loading && series.length === 0 ? <p className="new-dashboard__muted">No chart data for selected filters.</p> : null}
+          {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
+          {!loading && series.length === 0 ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
             <div className="new-dashboard__chart" role="img" aria-label="Analyses trend chart">
               {analysesBars.map((bar) => (
@@ -198,8 +195,8 @@ export default function NewDashboard({ onNavigate }) {
 
         <article className="new-dashboard__trend-card">
           <h3 className="new-dashboard__trend-title">Average score trend</h3>
-          {loading ? <p>Loading trend data…</p> : null}
-          {!loading && series.length === 0 ? <p className="new-dashboard__muted">No chart data for selected filters.</p> : null}
+          {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
+          {!loading && series.length === 0 ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
             <div className="new-dashboard__chart" role="img" aria-label="Average score trend chart">
               {averageScoreBars.map((bar) => (
