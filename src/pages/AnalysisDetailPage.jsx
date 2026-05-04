@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import '../styles/analyses.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
@@ -83,19 +84,28 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   const summary = analysis?.summary || {}
   const liveStatus = normalizeStatus(analysis?.liveStatus || analysis?.status)
 
+  if (loading || error || !analysis) {
+    return (
+      <main className="route-state">
+        <section className="route-state-card">
+          <a href="/analyses">← Back to analyses</a>
+          <h1>Analysis {analysisId || '—'}</h1>
+          {loading && <p>Loading analysis…</p>}
+          {!loading && error && <p role="alert">{error}</p>}
+        </section>
+      </main>
+    )
+  }
+
   return (
-    <main className="analysis-detail-page">
-      <section className="analysis-detail-page__card">
-        <a className="analysis-detail-page__back-link" href="/analyses">← Back to analyses</a>
+    <main className="analyses-layout">
+      <section className="analyses-layout__content">
+        <a href="/analyses">← Back to analyses</a>
         <h1>Analysis {analysisId || '—'}</h1>
 
-        {loading && <p>Loading analysis…</p>}
-        {!loading && error && <p role="alert">{error}</p>}
-
-        {!loading && !error && analysis && (
-          <>
-            <p className="analysis-detail-page__status-row">
-              Live status: <strong>{liveStatus}</strong>
+        <>
+            <p>
+              Live status: <strong>{normalizeStatus(analysis.liveStatus || analysis.status)}</strong>
             </p>
             <p>
               Created: {formatDate(analysis.createdAt)} · Completed: {formatDate(analysis.completedAt)}
@@ -107,7 +117,8 @@ export default function AnalysisDetailPage({ pathname = '' }) {
             {liveStatus === 'failed' && <p className="analysis-detail-page__status-note analysis-detail-page__status-note--failed">This analysis encountered failures. Review item-level errors for remediation details.</p>}
             {(liveStatus === 'pending' || liveStatus === 'processing') && <p className="analysis-detail-page__status-note">This analysis is still running. Statuses refresh automatically every few seconds.</p>}
 
-            <table className="analysis-detail-page__table">
+            <div className="analyses-layout__table-shell">
+              <table className="analyses-layout__table">
               <thead>
                 <tr>
                   <th>Resume</th>
@@ -128,9 +139,9 @@ export default function AnalysisDetailPage({ pathname = '' }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </>
-        )}
+              </table>
+            </div>
+        </>
       </section>
     </main>
   )

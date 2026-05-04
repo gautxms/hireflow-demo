@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
+import '../styles/analyses.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const MAX_FILE_SIZE = 100 * 1024 * 1024
@@ -206,16 +207,55 @@ export default function AnalysesPage() {
     }
   }
 
-  return (
-    <main className="analyses-page">
-      <section className="analyses-page__card">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary analyses-page__cta" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
+  if (loading || error || sortedItems.length === 0) {
+    return (
+      <main className="route-state">
+        <section className="route-state-card">
+          <h1>Analyses</h1>
+          {loading && <p>Loading analyses…</p>}
+          {!loading && error && <p role="alert">{error}</p>}
+          {!loading && !error && sortedItems.length === 0 && <p>No analyses yet. Upload resumes to create your first run.</p>}
+          <button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button>
+        </section>
 
-        {loading && <p>Loading analyses…</p>}
-        {!loading && error && <p role="alert">{error}</p>}
-        {!loading && !error && sortedItems.length === 0 && <p>No analyses yet. Upload resumes to create your first run.</p>}
-        {!loading && !error && sortedItems.length > 0 && (
-          <table className="analyses-page__table">
+        {isModalOpen && (
+          <div className="ui-modal" role="dialog" aria-modal="true" aria-label="Create analysis">
+            <div className="ui-card ui-card--card-spacing ui-modal__dialog w-full max-w-lg">
+              <h2>Create analysis</h2>
+              <form onSubmit={handleSubmit}>
+                <label htmlFor="analysis-name">Analysis name</label>
+                <input id="analysis-name" value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} />
+
+                <label htmlFor="analysis-jd">Job description</label>
+                <select id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => setSelectedJobDescriptionId(event.target.value)}>
+                  <option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>
+                  {jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </select>
+
+                <label htmlFor="analysis-files">Resume files</label>
+                <input id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelection} />
+                {selectedFiles.length > 0 && <p>{selectedFiles.length} file(s) selected.</p>}
+                {submitError && <p role="alert">{submitError}</p>}
+
+                <div>
+                  <button type="button" className="hf-btn hf-btn--secondary" onClick={resetModal} disabled={isSubmitting}>Cancel</button>
+                  <button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </main>
+    )
+  }
+
+  return (
+    <main className="analyses-layout">
+      <section className="analyses-layout__content">
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
+
+        <div className="analyses-layout__table-shell">
+          <table className="analyses-layout__table">
             <thead><tr><th>Created</th><th>Live status</th><th>Summary</th><th>Job description</th><th>Open</th></tr></thead>
             <tbody>
               {sortedItems.map((analysis) => {
@@ -225,7 +265,7 @@ export default function AnalysesPage() {
               })}
             </tbody>
           </table>
-        )}
+        </div>
       </section>
 
       {isModalOpen && (
