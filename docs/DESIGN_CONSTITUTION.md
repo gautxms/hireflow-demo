@@ -34,7 +34,7 @@ https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+San
 
 | Element | Font | Size | Weight | Color | Line-height | Letter-spacing |
 |---------|------|------|--------|-------|-------------|----------------|
-| Hero H1 | Syne | clamp(72px,11vw,120px) | 800 | #ffffff | 0.92 | -0.03em |
+| Hero H1 | Syne | clamp(58px,9.2vw,96px) | 800 | #ffffff | 0.94 | -0.03em |
 | H2 section | Syne | 40px | 700 | #ffffff | 1.15 | -0.02em |
 | H3 card | Syne | 20px | 700 | #ffffff | 1.3 | 0 |
 | Body | Syne | 15–16px | 700 | #aaaaaa | 1.65 | 0 |
@@ -105,7 +105,7 @@ Hero H1 structure — NEVER put words on the same line:
 }
 ```
 
-Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, Syne 800 (extra bold).
+Logo: "Hire" = `#ffffff`, "Flow" = `#c8ff00`, Syne 800 (extra bold), 0.95rem in header.
 Hero colors: "Hire" + "Smarter." = `#ffffff`.
 "Faster." gradient: `linear-gradient(90deg, #c8ff00, #39ff9f)` clipped to text.
 
@@ -203,6 +203,7 @@ overflow: hidden;
 [Logo]          [Features] [Solutions] [Pricing] [About] [Help]          [Auth actions]
 ```
 - Logo: "Hire" white + "Flow" lime, Syne 800 (extra bold)
+- Header spacing: top bar vertical padding `1rem` for old-site alignment
 - Nav links/menu items: DM Sans 400, `#888888`, hover `#ffffff`
 - Auth (logged out): ghost "Login" + lime "Sign up"
 - Auth (logged in): ghost "Dashboard" + avatar circle side by side, `flex-direction: row`

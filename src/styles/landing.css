@@ -47,8 +47,8 @@
 .hero-content { position: relative; z-index: 10; max-width: 800px; }
 .hero-headline {
   font-family: var(--hf-font-display);
-  font-size: clamp(72px, 11vw, 120px);
-  line-height: 0.92;
+  font-size: clamp(58px, 9.2vw, 96px);
+  line-height: 0.94;
   letter-spacing: -0.03em;
   font-weight: 800;
   color: var(--hf-text-primary);

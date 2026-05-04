@@ -75,7 +75,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 4rem;
+  padding: 1rem 4rem;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   background: var(--color-bg-overlay-80);
@@ -98,9 +98,9 @@ body {
 .brand-logo,
 .site-header__logo,
 .public-footer__brand {
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   font-family: var(--font-family-brand-display);
-  font-weight: var(--font-weight-bold);
+  font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--color-text-primary);
   text-decoration: none;
@@ -198,6 +198,11 @@ body {
 .btn-primary:hover {
   opacity: 0.9;
   transform: translateY(-1px);
+}
+
+.site-header__auth-actions .btn-ghost,
+.site-header__auth-actions .btn-primary {
+  font-family: var(--hf-font-ui);
 }
 
 /* ---- HERO ---- */
