@@ -207,15 +207,15 @@ export default function AnalysesPage() {
   }
 
   return (
-    <main className="route-state">
-      <section className="route-state-card">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
+    <main className="analyses-page">
+      <section className="analyses-page__card">
+        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Historical upload analyses and their latest live statuses.</p></div><button type="button" className="btn-primary analyses-page__cta" onClick={() => setIsModalOpen(true)}>Create analysis</button></div>
 
         {loading && <p>Loading analyses…</p>}
         {!loading && error && <p role="alert">{error}</p>}
         {!loading && !error && sortedItems.length === 0 && <p>No analyses yet. Upload resumes to create your first run.</p>}
         {!loading && !error && sortedItems.length > 0 && (
-          <table>
+          <table className="analyses-page__table">
             <thead><tr><th>Created</th><th>Live status</th><th>Summary</th><th>Job description</th><th>Open</th></tr></thead>
             <tbody>
               {sortedItems.map((analysis) => {

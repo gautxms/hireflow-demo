@@ -81,11 +81,12 @@ export default function AnalysisDetailPage({ pathname = '' }) {
 
   const itemRows = Array.isArray(analysis?.items) ? analysis.items : []
   const summary = analysis?.summary || {}
+  const liveStatus = normalizeStatus(analysis?.liveStatus || analysis?.status)
 
   return (
-    <main className="route-state">
-      <section className="route-state-card">
-        <a href="/analyses">← Back to analyses</a>
+    <main className="analysis-detail-page">
+      <section className="analysis-detail-page__card">
+        <a className="analysis-detail-page__back-link" href="/analyses">← Back to analyses</a>
         <h1>Analysis {analysisId || '—'}</h1>
 
         {loading && <p>Loading analysis…</p>}
@@ -93,17 +94,20 @@ export default function AnalysisDetailPage({ pathname = '' }) {
 
         {!loading && !error && analysis && (
           <>
-            <p>
-              Live status: <strong>{normalizeStatus(analysis.liveStatus || analysis.status)}</strong>
+            <p className="analysis-detail-page__status-row">
+              Live status: <strong>{liveStatus}</strong>
             </p>
             <p>
               Created: {formatDate(analysis.createdAt)} · Completed: {formatDate(analysis.completedAt)}
             </p>
-            <p>
+            <p className="analysis-detail-page__summary">
               Summary — Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Processing {summary.processing || 0} · Pending {summary.pending || 0}
             </p>
+            {(liveStatus === 'complete' || liveStatus === 'completed') && <p className="analysis-detail-page__status-note">This analysis is complete. You can review final item statuses below.</p>}
+            {liveStatus === 'failed' && <p className="analysis-detail-page__status-note analysis-detail-page__status-note--failed">This analysis encountered failures. Review item-level errors for remediation details.</p>}
+            {(liveStatus === 'pending' || liveStatus === 'processing') && <p className="analysis-detail-page__status-note">This analysis is still running. Statuses refresh automatically every few seconds.</p>}
 
-            <table>
+            <table className="analysis-detail-page__table">
               <thead>
                 <tr>
                   <th>Resume</th>
