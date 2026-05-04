@@ -23,7 +23,7 @@ Two fonts. No others. Ever.
 | Role | Font | Weights | Where |
 |------|------|---------|-------|
 | Display | **Syne** | 700, 800 | Hero H1 + brand logo + primary marketing text |
-| UI | **DM Sans** | 300, 400, 500, 600, 700 | Supporting UI copy, controls, and metadata |
+| UI | **DM Sans** | 300, 400, 500, 600, 700 | All buttons, menu items, links, supporting copy, controls, and metadata |
 
 Google Fonts link (already in index.html — DO NOT remove or change):
 ```
@@ -32,7 +32,7 @@ https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+San
 
 ### Typography scale
 
-Section/card headings: Syne. Contextual/body copy: DM Sans. Button labels: DM Sans across all pages. Hero CTA button labels must explicitly use DM Sans.
+Section/card headings and all H1–H6 headings: Syne. Contextual/body copy: DM Sans. Button labels and menu/link text: DM Sans across all pages. Hero CTA button labels must explicitly use DM Sans.
 
 | Element | Font | Size | Weight | Color | Line-height | Letter-spacing |
 |---------|------|------|--------|-------|-------------|----------------|
