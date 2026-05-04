@@ -416,7 +416,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
       return (
         <CandidateResults
-          candidates={sharedResults?.candidates || []}
+          candidates={{
+            candidates: sharedResults?.candidates || [],
+            parseMeta: sharedResults?.parseMeta || null,
+          }}
           onBack={() => navigate('/')}
           isSharedLoading={sharedResultsLoading}
           userProfile={userProfile}
@@ -636,7 +639,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
       return (
         <CandidateResults
-          candidates={uploadedFiles}
+          candidates={{
+            candidates: uploadedFiles?.candidates || [],
+            parseMeta: uploadedFiles?.parseMeta || null,
+          }}
           onBack={() => navigate('/')}
           userProfile={userProfile}
         />
@@ -946,51 +952,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           onStartDemo={() => navigate('/pricing')}
           ctaLabel="View pricing"
         />
-      )
-    }
-
-    if (currentPage === 'uploader') {
-      return (
-          <ResumeUploader
-            onFileUploaded={handleFileUploaded}
-            onBack={() => handleNavigate('landing')}
-            isAuthenticated={isAuthenticated}
-            onRequireAuth={onRequireAuth}
-            subscriptionStatus={subscriptionStatus}
-            userProfile={userProfile}
-          />
-      )
-    }
-
-    if (currentPage === 'results') {
-      return (
-          (!hasCandidateResults(uploadedFiles) && resultsRecoveryAttempted
-            ? (
-              <main className="route-state route-state--results-empty">
-                <StatePattern
-                  kind="empty"
-                  title={RESULTS_EMPTY_STATE_COPY.title}
-                  description={RESULTS_EMPTY_STATE_COPY.description}
-                  action={(
-                    <button
-                      type="button"
-                      onClick={() => navigate('/analyses')}
-                      className="route-state-card__action"
-                    >
-                      {RESULTS_EMPTY_STATE_COPY.action}
-                    </button>
-                  )}
-                />
-              </main>
-              )
-            : (
-              <CandidateResults
-                candidates={uploadedFiles}
-                onBack={() => navigate('/analyses')}
-                userProfile={userProfile}
-              />
-              )
-          )
       )
     }
 
