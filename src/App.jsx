@@ -167,6 +167,10 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated) {
     return false
   }
 
+  if (PUBLIC_ROUTE_PATHS.has(pathname)) {
+    return false
+  }
+
   const resolvedPathname = isAuthenticated ? resolveUserSectionPath(pathname) : pathname
 
   if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
