@@ -41,3 +41,27 @@ test('route matching in getPageContent consistently uses resolvedPathname', () =
   assert.doesNotMatch(appSource, /if \(pathname\.startsWith\('\/analyses\/'\)\)/)
   assert.doesNotMatch(appSource, /if \(pathname\.startsWith\('\/candidates\/'\)\)/)
 })
+
+test('user shell route paths include app destinations and exclude public pages', () => {
+  const shellRoutesMatch = appSource.match(/const USER_SHELL_ROUTE_PATHS = new Set\(\[([\s\S]*?)\]\)/)
+  assert.ok(shellRoutesMatch)
+  const shellRoutesBlock = shellRoutesMatch[1]
+
+  assert.match(shellRoutesBlock, /'\/dashboard'/)
+  assert.match(shellRoutesBlock, /'\/settings'/)
+  assert.doesNotMatch(shellRoutesBlock, /'\/'/)
+  assert.doesNotMatch(shellRoutesBlock, /'\/pricing'/)
+})
+
+test('authenticated subscribed users keep public header and footer on landing route', () => {
+  assert.match(appSource, /if \(PUBLIC_ROUTE_PATHS\.has\(pathname\)\) \{[\s\S]*return false/)
+  assert.match(appSource, /<header className="site-header">/)
+  assert.match(appSource, /<PublicFooter \/>/)
+  assert.match(appSource, /isActiveSubscriber \? \([\s\S]*Dashboard[\s\S]*\) : \(/)
+})
+
+test('dashboard path remains a shell route and unauthenticated users hit auth guard flow', () => {
+  assert.match(appSource, /const USER_SHELL_ROUTE_PATHS = new Set\(\[[\s\S]*'\/dashboard'[\s\S]*\]\)/)
+  assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*guardAuthenticatedRoute\([\s\S]*promptMessage: 'Please login to view the dashboard\.'/)
+  assert.match(appSource, /if \(useUserShellLayout\) \{[\s\S]*<UserAppShell/)
+})
