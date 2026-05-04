@@ -32,6 +32,10 @@ test('UserAppShell assigns distinct canonical icons for Shortlists and Reports',
     pathname: '/dashboard',
     onNavigate: () => {},
     subscriptionStatus: 'active',
+    navItems: [
+      { label: 'Shortlists', path: '/shortlists', icon: 'shortlists' },
+      { label: 'Reports', path: '/reports', icon: 'reports' },
+    ],
     children: createElement('div', null, 'content'),
   })
 
@@ -44,5 +48,5 @@ test('UserAppShell assigns distinct canonical icons for Shortlists and Reports',
 
   assert.equal(readIconName(shortlistsItem), 'ClipboardCheck')
   assert.equal(readIconName(reportsItem), 'BarChart2')
-  assert.notEqual(readIconName(shortlistsItem), readIconName(reportsItem))
+  assert.notEqual(shortlistsItem.props.Icon, reportsItem.props.Icon)
 })

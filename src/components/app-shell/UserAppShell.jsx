@@ -19,12 +19,18 @@ import {
 import { hasActiveSubscription } from '../../utils/routeGuards'
 
 const ICONS_BY_KEY = {
+  dashboard: LayoutDashboard,
+  jobs: Briefcase,
+  analyses: ScanSearch,
+  candidates: Users,
+  shortlists: ClipboardCheck,
+  reports: BarChart2,
+  settings: Settings2,
   home: Home,
   file: FileText,
   target: Target,
   users: Users,
   chart: BarChart2,
-  settings: Settings2,
 }
 
 const DEFAULT_NAV = [
