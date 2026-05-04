@@ -88,6 +88,10 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   const itemRows = Array.isArray(analysis?.items) ? analysis.items : []
   const summary = analysis?.summary || {}
   const liveStatus = normalizeStatus(analysis?.liveStatus || analysis?.status)
+  const failedCount = Number(summary.failed || 0)
+  const completeCount = Number(summary.complete || 0)
+  const hasFailures = liveStatus === 'failed' || failedCount > 0
+  const isComplete = (liveStatus === 'complete' || liveStatus === 'completed') && !hasFailures
 
   if (loading || error || !analysis) {
     return (
@@ -109,43 +113,58 @@ export default function AnalysisDetailPage({ pathname = '' }) {
         <h1>Analysis {analysisId || '—'}</h1>
 
         <>
-            <p>
-              Live status: <strong>{normalizeStatus(analysis.liveStatus || analysis.status)}</strong>
-            </p>
-            <p>
-              Created: {formatDate(analysis.createdAt)} · Completed: {formatDate(analysis.completedAt)}
-            </p>
-            <p className="analysis-detail-page__summary">
-              Summary — Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Processing {summary.processing || 0} · Pending {summary.pending || 0}
-            </p>
-            {(liveStatus === 'complete' || liveStatus === 'completed') && <p className="analysis-detail-page__status-note">This analysis is complete. You can review final item statuses below.</p>}
-            {liveStatus === 'failed' && <p className="analysis-detail-page__status-note analysis-detail-page__status-note--failed">This analysis encountered failures. Review item-level errors for remediation details.</p>}
-            {(liveStatus === 'pending' || liveStatus === 'processing') && <p className="analysis-detail-page__status-note">This analysis is still running. Statuses refresh automatically every few seconds.</p>}
+          <p>
+            Live status: <strong>{normalizeStatus(analysis.liveStatus || analysis.status)}</strong>
+          </p>
+          <p>
+            Created: {formatDate(analysis.createdAt)} · Completed: {formatDate(analysis.completedAt)}
+          </p>
+          <p className="analysis-detail-page__summary">
+            Summary — Total {summary.total || 0} · Complete {completeCount} · Failed {failedCount} · Processing {summary.processing || 0} · Pending {summary.pending || 0}
+          </p>
 
-            <div className="analyses-layout__table-shell">
-              <table className="analyses-layout__table">
-              <thead>
-                <tr>
-                  <th>Resume</th>
-                  <th>Status</th>
-                  <th>Progress</th>
-                  <th>Updated</th>
-                  <th>Error</th>
+          {hasFailures && (
+            <section className="analysis-detail-page__status-note analysis-detail-page__status-note--failed" role="region" aria-label="Failure overview">
+              <h2>Failure Overview</h2>
+              <p>This analysis has terminal failures (or a mixed completion with failures). Review item-level errors for remediation details.</p>
+              <p>Failed items: <strong>{failedCount}</strong></p>
+            </section>
+          )}
+
+          {isComplete && (
+            <section className="analysis-detail-page__status-note">
+              <h2>Results Ready</h2>
+              <p>This analysis completed without failures. Continue in the full results experience.</p>
+              <p><a href="/results">Open perfect results experience →</a></p>
+            </section>
+          )}
+
+          {(liveStatus === 'pending' || liveStatus === 'processing') && <p className="analysis-detail-page__status-note">This analysis is still running. Statuses refresh automatically every few seconds.</p>}
+
+          <div className="analyses-layout__table-shell">
+            <table className="analyses-layout__table">
+            <thead>
+              <tr>
+                <th>Resume</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Updated</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itemRows.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.filename || item.resumeId || item.parseJobId}</td>
+                  <td>{normalizeStatus(item.status)}</td>
+                  <td>{Number(item.progress || 0)}%</td>
+                  <td>{formatDate(item.updatedAt || item.createdAt)}</td>
+                  <td>{item.error || '—'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {itemRows.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.filename || item.resumeId || item.parseJobId}</td>
-                    <td>{normalizeStatus(item.status)}</td>
-                    <td>{Number(item.progress || 0)}%</td>
-                    <td>{formatDate(item.updatedAt || item.createdAt)}</td>
-                    <td>{item.error || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-              </table>
-            </div>
+              ))}
+            </tbody>
+            </table>
+          </div>
         </>
       </section>
     </main>
