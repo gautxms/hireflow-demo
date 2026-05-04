@@ -98,7 +98,7 @@ body {
 .brand-logo,
 .site-header__logo,
 .public-footer__brand {
-  font-size: 1.08rem;
+  font-size: 1.22rem;
   font-family: var(--font-family-brand-display);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -181,6 +181,16 @@ body {
   border-color: var(--color-white-alpha-20);
 }
 
+.btn-ghost--accent {
+  border-color: var(--color-accent-green);
+}
+
+.btn-ghost--accent:hover,
+.btn-ghost--accent:focus-visible {
+  border-color: var(--color-accent-green);
+  box-shadow: 0 0 0 1px var(--color-accent-green);
+}
+
 .btn-primary {
   background: var(--color-accent-green);
   color: var(--color-bg-primary);
@@ -210,7 +220,7 @@ body {
   min-height: 100vh;
   display: flex;
   align-items: center;
-  padding: 6.75rem 4rem 6rem;
+  padding: 5.4rem 4rem 6rem;
   position: relative;
   overflow: hidden;
 }
@@ -300,6 +310,11 @@ body {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.hero-cta .btn-primary,
+.hero-cta .btn-ghost {
+  font-family: var(--hf-font-ui);
 }
 
 /* ---- FEATURES ---- */
