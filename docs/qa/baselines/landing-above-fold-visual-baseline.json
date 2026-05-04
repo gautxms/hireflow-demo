@@ -1,0 +1,75 @@
+{
+  "release": "landing-hero-spacing-v1",
+  "reviewedAt": "2026-05-04",
+  "reviewedBy": "frontend-qa",
+  "route": "/",
+  "captureRegion": "above-the-fold",
+  "snapshotMatrix": [
+    {
+      "id": "landing-auth-1366x768",
+      "viewport": "1366x768",
+      "authState": "authenticated",
+      "headerState": "site-header-auth-actions-visible",
+      "artifact": "docs/qa/artifacts/landing-above-fold/auth-1366x768.png"
+    },
+    {
+      "id": "landing-guest-1366x768",
+      "viewport": "1366x768",
+      "authState": "unauthenticated",
+      "headerState": "site-header-auth-actions-visible",
+      "artifact": "docs/qa/artifacts/landing-above-fold/guest-1366x768.png"
+    },
+    {
+      "id": "landing-auth-1920x1080",
+      "viewport": "1920x1080",
+      "authState": "authenticated",
+      "headerState": "site-header-auth-actions-visible",
+      "artifact": "docs/qa/artifacts/landing-above-fold/auth-1920x1080.png"
+    },
+    {
+      "id": "landing-guest-1920x1080",
+      "viewport": "1920x1080",
+      "authState": "unauthenticated",
+      "headerState": "site-header-auth-actions-visible",
+      "artifact": "docs/qa/artifacts/landing-above-fold/guest-1920x1080.png"
+    }
+  ],
+  "uiRegressionChecks": [
+    {
+      "viewport": "1366x768",
+      "authState": "authenticated",
+      "assertions": [
+        "Primary hero CTA button is fully visible without scrolling.",
+        "Hero headline starts below fixed header with no overlap.",
+        "Hero content vertical center bias remains in upper half of viewport."
+      ]
+    },
+    {
+      "viewport": "1366x768",
+      "authState": "unauthenticated",
+      "assertions": [
+        "Primary hero CTA button is fully visible without scrolling.",
+        "Hero headline starts below fixed header with no overlap.",
+        "Sign in / Get started header actions do not collide with hero content."
+      ]
+    },
+    {
+      "viewport": "1920x1080",
+      "authState": "authenticated",
+      "assertions": [
+        "Primary hero CTA button is fully visible without scrolling.",
+        "Hero headline starts below fixed header with no overlap.",
+        "Hero copy and CTA remain grouped above fold with balanced top spacing."
+      ]
+    },
+    {
+      "viewport": "1920x1080",
+      "authState": "unauthenticated",
+      "assertions": [
+        "Primary hero CTA button is fully visible without scrolling.",
+        "Hero headline starts below fixed header with no overlap.",
+        "Hero copy and CTA remain grouped above fold with balanced top spacing."
+      ]
+    }
+  ]
+}

@@ -28,7 +28,8 @@
     "lint:primitives": "node scripts/check-primitive-composition.mjs",
     "lint:primitives:baseline": "node scripts/check-primitive-composition.mjs --write-baseline",
     "qa:primitive-visual-baseline": "node scripts/verify-primitive-visual-baseline.mjs",
-    "qa:brand-logo-consistency": "node scripts/check-brand-logo-consistency.mjs"
+    "qa:brand-logo-consistency": "node scripts/check-brand-logo-consistency.mjs",
+    "qa:landing-visual-baseline": "node scripts/verify-landing-visual-baseline.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
