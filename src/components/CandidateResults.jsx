@@ -24,6 +24,7 @@ import {
   toggleSelection,
 } from './candidateSelectionState'
 import '../styles/candidate-results.css'
+import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -142,7 +143,8 @@ function filterAndSortCandidates(candidates, filters) {
   })
 }
 
-export default function CandidateResults({ candidates, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null }) {
+
+export default function CandidateResults({ candidates: candidatePayload, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null }) {
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
@@ -165,14 +167,9 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
   const [candidateTags, setCandidateTags] = useState({})
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
-  const rawCandidates = useMemo(() => (
-    Array.isArray(candidates)
-      ? candidates
-      : Array.isArray(candidates?.candidates)
-        ? candidates.candidates
-        : []
-  ), [candidates])
-  const [hasJobDescription, setHasJobDescription] = useState(Boolean(candidates?.parseMeta?.hasJobDescription))
+  const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
+  const { candidates: rawCandidates, parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
+  const [hasJobDescription, setHasJobDescription] = useState(Boolean(parseMeta?.hasJobDescription))
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
 
@@ -180,8 +177,14 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
     setLiveCandidates(rawCandidates)
   }, [rawCandidates])
   useEffect(() => {
-    setHasJobDescription(Boolean(candidates?.parseMeta?.hasJobDescription))
-  }, [candidates])
+    setHasJobDescription(Boolean(parseMeta?.hasJobDescription))
+  }, [parseMeta])
+
+  useEffect(() => {
+    if (hasInvalidPayload) {
+      console.error('[CandidateResults] Invalid payload shape. Expected { candidates: Candidate[], parseMeta?: object }.', candidatePayload)
+    }
+  }, [candidatePayload, hasInvalidPayload])
 
   const displayCandidates = liveCandidates.length > 0 ? liveCandidates : null
 
@@ -718,7 +721,11 @@ export default function CandidateResults({ candidates, onBack, isLoading = false
           <h1 className="candidate-results-page__state-title candidate-results-page__state-title--compact">
             Candidate Ranking
           </h1>
-          <p className="candidate-results-page__state-copy">Please upload resumes before viewing analysis.</p>
+          <p className="candidate-results-page__state-copy">
+            {hasInvalidPayload
+              ? 'We could not read the results payload. Please retry from Analyses or upload resumes again.'
+              : 'Please upload resumes before viewing analysis.'}
+          </p>
         </div>
       </div>
     )
