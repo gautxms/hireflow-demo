@@ -27,6 +27,7 @@ import '../styles/resume-uploader.css'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
 const MAX_FILE_SIZE = 100 * 1024 * 1024
+const MAX_FILE_COUNT = 20
 const CHUNK_SIZE = 5 * 1024 * 1024
 const MAX_CHUNK_RETRIES = 3
 const MAX_QUEUE_RETRIES = 3
@@ -138,10 +139,26 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [showRecoveryPrompt, setShowRecoveryPrompt] = useState(false)
   const [failedAnalysisState, setFailedAnalysisState] = useState(null)
   const [jobStatuses, setJobStatuses] = useState([])
+  const [analysisName, setAnalysisName] = useState('')
   const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
+  const isJobDescriptionRequired = import.meta.env.VITE_REQUIRE_JOB_DESCRIPTION_FOR_ANALYSIS === 'true'
   const isDevelopment = import.meta.env.DEV
   const canViewAdminDiagnostics = isAdmin || isDevelopment
   const resumeAnalysisOwnerKey = getResumeAnalysisOwnerKey(userProfile)
+
+
+
+  const emitTelemetry = useCallback((eventType, metadata = {}) => {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('hireflow:telemetry', {
+      detail: {
+        eventType,
+        route: '/uploader',
+        timestamp: new Date().toISOString(),
+        metadata,
+      },
+    }))
+  }, [])
 
   const handleAuthRedirect = useCallback(() => {
     onRequireAuth('Please sign up or log in to upload resumes.')
@@ -156,11 +173,12 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
   useEffect(() => {
     mountedRef.current = true
+    emitTelemetry('analysis_create_modal_opened')
     return () => {
       mountedRef.current = false
       activePollAbortControllerRef.current?.abort()
     }
-  }, [])
+  }, [emitTelemetry])
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -226,8 +244,15 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     const normalizedFiles = Array.isArray(incomingFiles) ? incomingFiles : Array.from(incomingFiles.target.files || [])
     const allowed = []
     const rejected = []
+    const existingCount = uploadedFiles.length
 
-    normalizedFiles.forEach((file) => {
+    normalizedFiles.forEach((file, index) => {
+      if ((existingCount + allowed.length + 1) > MAX_FILE_COUNT) {
+        if (index === normalizedFiles.length - 1 || rejected.length === 0) {
+          rejected.push(`Maximum ${MAX_FILE_COUNT} files per analysis.`)
+        }
+        return
+      }
       const isAllowedType = ACCEPTED_TYPES.has(inferResumeMimeType(file))
       const isAllowedSize = file.size <= MAX_FILE_SIZE
 
@@ -340,7 +365,16 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   }
 
   const handleAnalyze = async ({ isAutomaticRetry = false } = {}) => {
+    const normalizedAnalysisName = analysisName.trim()
+    if (!normalizedAnalysisName) {
+      setError('Analysis name is required. Please enter a name before submitting.')
+      return
+    }
     if (uploadedFiles.length === 0) return
+    if (isJobDescriptionRequired && !toOptionalJobDescriptionId(selectedJobDescriptionId)) {
+      setError('Job description is required for this analysis. Please select one to continue.')
+      return
+    }
     if (uploadedFiles.some((item) => !item.file)) {
       setError('Please re-select files before retrying analysis.')
       return
@@ -506,8 +540,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       })
 
       if (ANALYSIS_LEVEL_POLLING_ENABLED && analysisId) {
+        emitTelemetry('analysis_enqueue_success', { analysisId, fileCount: validQueuedJobs.length })
         await trackAnalysisStatus({ token, analysisId, jobs: validQueuedJobs })
       } else {
+        emitTelemetry('analysis_enqueue_success', { analysisId, fileCount: validQueuedJobs.length })
         await trackParseStatus({ token, jobs: validQueuedJobs, analysisId })
       }
     } catch (err) {
@@ -515,6 +551,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         return
       }
       console.error('Upload error:', err)
+      emitTelemetry('analysis_enqueue_failure', { reason: String(err?.message || 'unknown') })
       setIsAnalyzing(false)
       setParseStatus('')
       setParseProgress(0)
@@ -606,6 +643,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     activePollAbortControllerRef.current = abortController
 
     let resultsByResumeId = {}
+    let firstStatusTransitionTracked = false
     let hasJobDescription = false
 
     for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
@@ -668,6 +706,10 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         error: payload?.error ? String(payload.error) : '',
       }))
       setJobStatuses(nextJobStatuses)
+      if (!firstStatusTransitionTracked && nextJobStatuses.some((job) => job.status && job.status !== 'processing' && job.status !== 'queued')) {
+        firstStatusTransitionTracked = true
+        emitTelemetry('analysis_first_status_transition', { status: nextJobStatuses.find((job) => job.status !== 'processing' && job.status !== 'queued')?.status || 'unknown' })
+      }
 
       const totalProgress = nextJobStatuses.reduce((sum, job) => sum + Number(job.progress || 0), 0)
       const nextProgress = Math.round(totalProgress / Math.max(1, nextJobStatuses.length))
@@ -976,6 +1018,17 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         </div>
 
         <div className="resume-jd-selector">
+          <label className="resume-jd-selector-label">
+            Analysis name
+          </label>
+          <input
+            type="text"
+            value={analysisName}
+            onChange={(event) => setAnalysisName(event.target.value)}
+            placeholder="e.g. Senior Backend Engineer - May batch"
+            maxLength={120}
+            className="resume-jd-selector-select"
+          />
           <label className="resume-jd-selector-label">
             Select job description for this upload
           </label>

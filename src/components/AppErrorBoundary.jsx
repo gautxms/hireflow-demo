@@ -55,14 +55,17 @@ export default class AppErrorBoundary extends React.Component {
   }
 
   handleReload = () => {
+    window.dispatchEvent(new CustomEvent('hireflow:telemetry', { detail: { eventType: 'error_boundary_recovery_action', route: window.location.pathname, metadata: { action: 'reload_app' }, timestamp: new Date().toISOString() } }))
     window.location.reload()
   }
 
   handleReturnHome = () => {
+    window.dispatchEvent(new CustomEvent('hireflow:telemetry', { detail: { eventType: 'error_boundary_recovery_action', route: window.location.pathname, metadata: { action: 'return_home' }, timestamp: new Date().toISOString() } }))
     window.location.assign('/')
   }
 
   handleResume = () => {
+    window.dispatchEvent(new CustomEvent('hireflow:telemetry', { detail: { eventType: 'error_boundary_recovery_action', route: window.location.pathname, metadata: { action: 'resume_last_analysis' }, timestamp: new Date().toISOString() } }))
     window.location.assign('/?resumeAnalysis=1')
   }
 
