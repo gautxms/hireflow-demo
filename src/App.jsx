@@ -202,6 +202,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const uploaderIntentAccessRef = useRef({ pathname: '', allowed: null })
   const { logout: logoutAdmin } = useAdminAuth()
   const resumeAnalysisOwnerKey = useMemo(() => getResumeAnalysisOwnerKey(userProfile), [userProfile])
+  const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
 
   const hasCandidateResults = (value) => {
     if (Array.isArray(value)) {
@@ -263,7 +264,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     const params = new URLSearchParams(window.location.search)
     const isRootLandingPath = pathname === '/'
   const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
-  const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
     const isResultsRoute = isResultsRootPath(resolvedPathname)
     const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
 
@@ -388,7 +388,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const isAdminPath = pathname.startsWith('/admin')
   const isRootLandingPath = pathname === '/'
   const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
-  const routeDiagnosticsEnabled = import.meta.env.DEV || window.localStorage.getItem('debug_routes') === '1'
 
   const getPageContent = () => {
     // Contract: `/results/:token` always resolves through the shared-results loading path.
