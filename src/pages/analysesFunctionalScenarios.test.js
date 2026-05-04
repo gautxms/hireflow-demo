@@ -36,3 +36,16 @@ test('analysis detail page renders processing state note while run is in progres
   assert.match(analysisDetailSource, /\(liveStatus === 'pending' \|\| liveStatus === 'processing'\)/)
   assert.match(analysisDetailSource, /This analysis is still running\. Statuses refresh automatically every few seconds\./)
 })
+
+test('status alias mapping stays consistent across analyses list and detail views', () => {
+  assert.match(analysesPageSource, /queued:\s*'pending'/)
+  assert.match(analysesPageSource, /retrying:\s*'processing'/)
+  assert.match(analysisDetailSource, /queued:\s*'pending'/)
+  assert.match(analysisDetailSource, /retrying:\s*'processing'/)
+})
+
+test('summary bucket labels and counts are aligned across analyses list and detail views', () => {
+  assert.match(analysesPageSource, /Summary<\/th>/)
+  assert.match(analysesPageSource, /Total \{summary\.total \|\| 0\} · Complete \{summary\.complete \|\| 0\} · Failed \{summary\.failed \|\| 0\} · Processing \{summary\.processing \|\| 0\} · Pending \{summary\.pending \|\| 0\}/)
+  assert.match(analysisDetailSource, /Summary — Total \{summary\.total \|\| 0\} · Complete \{completeCount\} · Failed \{failedCount\} · Processing \{summary\.processing \|\| 0\} · Pending \{summary\.pending \|\| 0\}/)
+})
