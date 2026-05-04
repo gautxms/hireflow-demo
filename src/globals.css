@@ -772,6 +772,23 @@ h6 {
   background: color-mix(in srgb, var(--color-accent, var(--hf-lime)) 18%, transparent);
 }
 
+.app-sb--closed .app-sb-item {
+  justify-content: center;
+  padding-inline: 0.45rem;
+}
+
+.app-sb--closed .app-sb-item:hover,
+.app-sb--closed .app-sb-item:focus-visible {
+  background: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+}
+
+.app-sb--closed .app-sb-item--active {
+  border-radius: 8px;
+  border-color: color-mix(in srgb, var(--color-accent, var(--hf-lime)) 18%, transparent);
+  background: color-mix(in srgb, var(--color-accent, var(--hf-lime)) 12%, transparent);
+  padding-inline: 0.35rem;
+}
+
 .app-sb-label {
   display: inline-flex;
   align-items: center;
