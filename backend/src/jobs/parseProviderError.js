@@ -24,6 +24,65 @@ function toMessage(value) {
   return String(value || '').trim()
 }
 
+function normalizeAttemptProvider(providerLabel = '') {
+  const normalized = String(providerLabel || '').trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized.includes('-')) {
+    return normalized.split('-')[0] || null
+  }
+  return normalized
+}
+
+function normalizeAttemptStatusCode(attempt = {}) {
+  const candidates = [attempt?.statusCode, attempt?.httpStatus, attempt?.status]
+  for (const candidate of candidates) {
+    if (candidate === null || typeof candidate === 'undefined') continue
+    const asNumber = Number(candidate)
+    if (Number.isFinite(asNumber) && asNumber > 0) return asNumber
+    const asString = String(candidate).trim()
+    if (/^\d{3}$/.test(asString)) return Number(asString)
+  }
+  return null
+}
+
+function buildProviderAttemptSummary(attempt = {}) {
+  const provider = normalizeAttemptProvider(attempt?.provider)
+  const model = String(attempt?.model || '').trim() || null
+  const outcome = attempt?.success ? 'succeeded' : 'failed'
+  const reason = String(attempt?.failureReason || '').trim() || null
+  const errorType = String(attempt?.failureCategory || '').trim() || null
+  const statusCode = normalizeAttemptStatusCode(attempt)
+
+  return {
+    provider,
+    model,
+    outcome,
+    reason,
+    errorType,
+    statusCode,
+  }
+}
+
+function buildProviderChain(errorLike) {
+  const attempts = Array.isArray(errorLike?.attempts) ? errorLike.attempts : []
+  if (attempts.length === 0) return null
+
+  const summaries = attempts.map((attempt) => buildProviderAttemptSummary(attempt))
+  const failed = summaries.filter((attempt) => attempt.outcome === 'failed')
+  const succeeded = [...summaries].reverse().find((attempt) => attempt.outcome === 'succeeded') || null
+
+  return {
+    attempts: summaries,
+    primaryAttempt: summaries[0] || null,
+    fallbackAttempt: summaries.length > 1 ? summaries[1] : null,
+    finalAttempt: summaries[summaries.length - 1] || null,
+    finalOutcome: succeeded ? 'succeeded' : 'failed',
+    lastSuccessfulProvider: succeeded ? { provider: succeeded.provider, model: succeeded.model } : null,
+    failedAttempts: failed,
+    fallbackTriggered: summaries.length > 1,
+  }
+}
+
 function extractAttemptContext(errorLike) {
   const attempts = Array.isArray(errorLike?.attempts) ? errorLike.attempts : []
   const lastAttempt = [...attempts].reverse().find((attempt) => attempt && !attempt.success)
@@ -228,10 +287,12 @@ export function normalizeProviderError(errorLike) {
   const provider = providerFromDetails || detectedProvider
   const model = modelFromDetails || detectedModel
   const hints = buildHints(category, { provider, model })
+  const providerChain = buildProviderChain(errorLike)
   const serializedDetails = JSON.stringify({
     technicalDetails: scopedTechnicalDetails,
     provider,
     model,
+    providerChain,
     ...hints,
   })
 
@@ -241,6 +302,7 @@ export function normalizeProviderError(errorLike) {
     technicalDetails: scopedTechnicalDetails,
     provider,
     model,
+    providerChain,
     ...hints,
     normalizedMessage: `${category}::${serializedDetails}`,
   }
