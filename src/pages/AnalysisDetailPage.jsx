@@ -67,7 +67,7 @@ function toCandidateResultsPayload(analysis) {
       }
     }
 
-    return [value]
+    return []
   }
 
   const items = Array.isArray(analysis?.items) ? analysis.items : []
