@@ -6,6 +6,12 @@ import { logResultsRenderError } from './resultsErrorBoundaryTelemetry'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
+const isNonProductionBuild = (() => {
+  if (typeof process !== 'undefined' && process?.env?.NODE_ENV) {
+    return process.env.NODE_ENV !== 'production'
+  }
+  return typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location?.hostname)
+})()
 
 function normalizeStatus(status) {
   const normalizedStatus = String(status || 'pending').trim().toLowerCase()
@@ -109,7 +115,6 @@ function toCandidateResultsPayload(analysis) {
     return typeof value === 'object' ? value : null
   }
 
-
   const collectCandidates = (value) => {
     if (Array.isArray(value)) return value
     if (!value || typeof value !== 'object') return []
@@ -141,20 +146,22 @@ function toCandidateResultsPayload(analysis) {
     const result = safeParseResult(item?.result)
     const candidates = collectCandidates(result)
 
-    return candidates.map((candidate, index) => {
-      try {
-        const normalized = normalizeCandidateForResults(candidate, index)
-        if (!normalized) return null
-        return {
-          ...normalized,
-          id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
-          resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
-          filename: normalizeString(item?.filename || result?.filename || normalized?.filename, ''),
+    return candidates
+      .map((candidate, index) => {
+        try {
+          const normalized = normalizeCandidateForResults(candidate, index)
+          if (!normalized) return null
+          return {
+            ...normalized,
+            id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
+            resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
+            filename: normalizeString(item?.filename || result?.filename || normalized?.filename, ''),
+          }
+        } catch {
+          return null
         }
-      } catch {
-        return null
-      }
-    }).filter(Boolean)
+      })
+      .filter(Boolean)
   })
 
   const rawCandidates = directCandidates.length > 0 ? directCandidates : itemCandidates
@@ -179,8 +186,7 @@ function toCandidateResultsPayload(analysis) {
   const hasInvalidPayload = inputCount > 0 && outputCount === 0
   const hasPartiallyInvalidPayload = droppedCount > 0 && outputCount > 0
 
-  const isProductionEnv = typeof window !== 'undefined' && window.location?.hostname && !['localhost', '127.0.0.1'].includes(window.location.hostname)
-  if (droppedCount > 0 && !isProductionEnv) {
+  if (droppedCount > 0 && isNonProductionBuild) {
     console.warn('[AnalysisDetailPage] Candidate normalization dropped invalid records.', {
       droppedCount,
       inputCount,
@@ -323,6 +329,30 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   if ((displayStatus === 'complete' || displayStatus === 'completed' || displayStatus === 'partial' || displayStatus === 'failed') && candidateResultsPayload.candidates.length > 0) {
     return (
       <main className="analyses-layout">
+        <section className="analyses-layout__content">
+          <ResultsErrorBoundary
+            analysisId={analysisId}
+            candidateCount={candidateCount}
+            normalizationStats={{
+              inputCount: itemCount,
+              droppedCount: Math.max(itemCount - candidateCount, 0),
+            }}
+          >
+            {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
+              <section className="route-state-card" role="status" aria-live="polite">
+                <p>
+                  Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
+                  Inspect logs for analysisId {analysisId || '—'}.
+                </p>
+              </section>
+            )}
+            <CandidateResults
+              candidates={candidateResultsPayload}
+              onBack={() => {
+                window.location.href = '/analyses'
+              }}
+            />
+          </ResultsErrorBoundary>
   <section className="analyses-layout__content">
     <ResultsErrorBoundary>
       {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
