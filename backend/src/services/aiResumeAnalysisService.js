@@ -16,6 +16,8 @@ const OPENAI_MODEL_CAPABILITIES = {
   },
 }
 const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
+const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
+const OPENAI_COMPACT_MODEL_PATTERN = /gpt-5-nano/i
 
 let claudeTokensUsed = {
   input: 0,
@@ -38,6 +40,32 @@ function sanitizeSnippet(value, maxLength = 180) {
     .replace(/[^\x20-\x7E]/g, '')
     .trim()
     .slice(0, maxLength)
+}
+
+function dedupeLinesPreserveOrder(input = '') {
+  const seen = new Set()
+  const lines = []
+  for (const line of String(input || '').split('\n')) {
+    const normalized = line.trim().toLowerCase()
+    if (!normalized) continue
+    if (seen.has(normalized)) continue
+    seen.add(normalized)
+    lines.push(line.trim())
+  }
+  return lines
+}
+
+function clampString(value, maxLength) {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim()
+  return normalized.slice(0, maxLength)
+}
+
+function clampStringArray(values, { maxItems, maxItemLength }) {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((item) => clampString(item, maxItemLength))
+    .filter(Boolean)
+    .slice(0, maxItems)
 }
 
 function createProviderResponseFormatError({
@@ -360,6 +388,9 @@ function normalizeProviderError(error, attemptHistory = []) {
 
   const format = (category) => `${category}::${JSON.stringify({ technicalDetails: message, provider, model })}`
 
+  if (lower.includes('response_truncated_error') || lower.includes('output was truncated') || lower.includes('max_tokens') || lower.includes('max_output_tokens')) {
+    return format('response_truncated_error')
+  }
   if (lower.includes('response_format_error')) {
     return format('response_format_error')
   }
@@ -521,6 +552,45 @@ function buildAnalysisModeDirectives(jobDescriptionContext = null) {
   ].join('\n')
 }
 
+function buildCompactOutputInstructions({ compactMode = false } = {}) {
+  const modeLabel = compactMode ? 'COMPACT_MINIMAL' : 'COMPACT_STANDARD'
+  return [
+    `Output Mode: ${modeLabel}`,
+    'Return compact JSON only. No markdown. No text before or after JSON.',
+    'Never repeat resume text or job description text verbatim.',
+    'Keep every string concise. If uncertain, return fewer items rather than longer text.',
+    'Prefer empty arrays over verbose explanations.',
+    'Response must complete valid JSON within the token budget.',
+    compactMode
+      ? 'Compact-minimal required fields: name, email, phone, matchScore.score, matchScore.fit, matchScore.reason, summary, strengths, considerations, fit_assessment.matched_requirements, fit_assessment.missing_requirements, parseMeta.'
+      : 'Use compact field lengths and item caps strictly.',
+  ].join('\n')
+}
+
+function cleanExtractedTextForPrompt(text, { maxChars = DEFAULT_TEXT_PROMPT_CHAR_LIMIT } = {}) {
+  const original = String(text || '')
+  const lines = dedupeLinesPreserveOrder(
+    original
+      .replace(/\u0000/g, ' ')
+      .replace(/[^\S\r\n]+/g, ' ')
+      .replace(/\r/g, '\n'),
+  )
+  const cleaned = lines
+    .filter((line) => !/^page\s+\d+(\s+of\s+\d+)?$/i.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  return {
+    cleanedText: cleaned.slice(0, maxChars),
+    metrics: {
+      originalCharCount: original.length,
+      cleanedCharCount: cleaned.length,
+      finalPromptCharCount: Math.min(cleaned.length, maxChars),
+    },
+  }
+}
+
 export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContext = null) {
   const basePrompt = normalizePrompt(systemPrompt)
   const jdContext = jobDescriptionContext && typeof jobDescriptionContext === 'object'
@@ -543,7 +613,7 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
 
   const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
 
-  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  return `${basePrompt}\n\n${analysisModeDirectives}\n\n${buildCompactOutputInstructions({ compactMode: false })}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
 
 export async function analyzeWithAnthropic(
@@ -558,6 +628,8 @@ export async function analyzeWithAnthropic(
     systemPromptConfig = null,
     jobDescriptionContext = null,
     anthropicClientFactory = null,
+    compactMode = false,
+    promptTextOverride = null,
   } = {},
 ) {
   if (!apiKey) {
@@ -569,7 +641,7 @@ export async function analyzeWithAnthropic(
     ? anthropicClientFactory({ apiKey })
     : new Anthropic({ apiKey })
 
-  const prompt = buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const prompt = `${promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)}\n\n${buildCompactOutputInstructions({ compactMode })}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
   console.log(
@@ -579,7 +651,7 @@ export async function analyzeWithAnthropic(
 
   const response = await client.messages.create({
     model,
-    max_tokens: 2800,
+    max_tokens: compactMode ? 1400 : 2200,
     temperature: 0,
     messages: [
       {
@@ -699,6 +771,8 @@ export async function analyzeWithOpenAI(
     jobDescriptionContext = null,
     modelCapabilities = null,
     fetchImpl = fetch,
+    compactMode = false,
+    promptTextOverride = null,
   } = {},
 ) {
   if (!apiKey) {
@@ -706,7 +780,7 @@ export async function analyzeWithOpenAI(
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
-  const prompt = buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const prompt = `${promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)}\n\n${buildCompactOutputInstructions({ compactMode })}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
   console.log(
@@ -773,7 +847,8 @@ export async function analyzeWithOpenAI(
   let payload = null
   let responseStatus = ''
   let incompleteReason = ''
-  for (const maxOutputTokens of OPENAI_OUTPUT_TOKEN_LADDER) {
+  const tokenLadder = compactMode ? [1200, 2000, 3000] : OPENAI_OUTPUT_TOKEN_LADDER
+  for (const maxOutputTokens of tokenLadder) {
     payload = await callOpenAi(maxOutputTokens)
     responseStatus = String(payload?.status || '').toLowerCase()
     incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
@@ -792,7 +867,7 @@ export async function analyzeWithOpenAI(
         category: 'response_truncated_error',
         provider: 'openai',
         model,
-        technicalDetails: `Provider output was truncated before valid JSON completion after retries (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${OPENAI_OUTPUT_TOKEN_LADDER.join('->')}).`,
+        technicalDetails: `Provider output was truncated before valid JSON completion after retries (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${tokenLadder.join('->')}).`,
       })
     }
 
@@ -847,6 +922,10 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 
   let lastError = null
   const attemptHistory = []
+  const compactByDefaultForModel = (modelName) => OPENAI_COMPACT_MODEL_PATTERN.test(String(modelName || ''))
+  const isTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
+  const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8')) : null
+  const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
 
   for (const entry of attemptPlan) {
     if (!providerSupportsMimeType(entry.provider, mimeType)) {
@@ -854,16 +933,26 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       continue
     }
 
+    let compactMode = compactByDefaultForModel(entry.model)
     try {
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
-      const response = await adapter(fileBufferBase64, mimeType, filename, {
+      const response = await adapter(cleanedBase64, mimeType, filename, {
         apiKey: entry.apiKey,
         model: entry.model,
         keyLabel: entry.keyLabel,
         providerSource: entry.source,
         systemPromptConfig,
         jobDescriptionContext: options.jobDescriptionContext || null,
+        compactMode,
+        promptTextOverride: null,
       })
+      if (cleanedPayload?.metrics) {
+        console.log('[AI Parse] Prompt payload metrics:', {
+          provider: entry.provider,
+          model: entry.model,
+          ...cleanedPayload.metrics,
+        })
+      }
 
       return {
         ...response,
@@ -882,6 +971,31 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         ],
       }
     } catch (error) {
+      const firstFailureCategory = getFailureCategory(normalizeProviderError(error, attemptHistory))
+      if (firstFailureCategory === 'response_truncated_error' && compactMode === false) {
+        try {
+          const adapter = adapters[entry.provider] || analyzeWithAnthropic
+          const response = await adapter(cleanedBase64, mimeType, filename, {
+            apiKey: entry.apiKey,
+            model: entry.model,
+            keyLabel: entry.keyLabel,
+            providerSource: entry.source,
+            systemPromptConfig,
+            jobDescriptionContext: options.jobDescriptionContext || null,
+            compactMode: true,
+          })
+          return {
+            ...response,
+            attempts: [
+              ...attemptHistory,
+              createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:first_pass' }, failureCategory: 'response_truncated_error', failureReason: 'first attempt truncated; compact retry succeeded' }),
+              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage }),
+            ],
+          }
+        } catch (compactRetryError) {
+          error = compactRetryError
+        }
+      }
       lastError = error
       const normalizedMessage = normalizeProviderError(error, attemptHistory)
       const failureCategory = getFailureCategory(normalizedMessage)
