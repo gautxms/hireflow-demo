@@ -316,3 +316,98 @@
   padding: 0.125rem 0.375rem;
   vertical-align: middle;
 }
+
+.analyses-layout__status-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.analyses-status-summary__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1px solid color-mix(in srgb, var(--color-border), transparent 25%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-bg-secondary), #000 16%);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.analyses-status-summary__trigger:hover {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary), transparent 40%);
+}
+
+.analyses-status-summary__trigger:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.analyses-status-summary__popover {
+  position: absolute;
+  z-index: 1200;
+  width: min(320px, calc(100vw - 2rem));
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-secondary), #000 20%);
+  border: 1px solid color-mix(in srgb, var(--color-border), var(--color-primary) 16%);
+  box-shadow: var(--shadow-md);
+}
+
+.analyses-status-summary__list {
+  margin: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.analyses-status-summary__list div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.analyses-status-summary__list dt {
+  color: var(--color-text-secondary);
+}
+
+.analyses-status-summary__list dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.analyses-status-summary__failures {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.analyses-status-summary__failures p {
+  margin: 0 0 0.4rem;
+  color: var(--color-text-secondary);
+}
+
+.analyses-status-summary__failures ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.analyses-status-summary__failures li span:first-child {
+  color: var(--color-text-primary);
+}
+
+.analyses-status-summary__failures li span:last-child {
+  color: var(--color-text-secondary);
+  display: inline;
+  margin-left: 0.25rem;
+}
+
+.analyses-status-summary__empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
