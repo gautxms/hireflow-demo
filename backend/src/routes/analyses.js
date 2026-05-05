@@ -172,6 +172,36 @@ router.get('/', requireAuth, async (req, res) => {
       [req.userId],
     )
 
+    const failedItemsResult = await pool.query(
+      `SELECT ai.analysis_id,
+              r.filename,
+              COALESCE(pj.status, r.parse_status, 'failed') AS status,
+              COALESCE(NULLIF(pj.error_message, ''), NULLIF(r.parse_error, '')) AS error,
+              ai.created_at
+       FROM analysis_items ai
+       INNER JOIN analyses a ON a.id = ai.analysis_id
+       LEFT JOIN resumes r ON r.id = ai.resume_id
+       LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
+       WHERE a.user_id = $1
+         AND COALESCE(pj.status, r.parse_status) = 'failed'
+       ORDER BY ai.analysis_id ASC, ai.created_at ASC`,
+      [req.userId],
+    )
+
+    const failedItemsByAnalysis = new Map()
+    for (const row of failedItemsResult.rows) {
+      const analysisId = String(row.analysis_id || '')
+      if (!analysisId) continue
+      const existingItems = failedItemsByAnalysis.get(analysisId) || []
+      if (existingItems.length >= 5) continue
+      existingItems.push({
+        filename: row.filename || null,
+        status: row.status || 'failed',
+        error: row.error || null,
+      })
+      failedItemsByAnalysis.set(analysisId, existingItems)
+    }
+
     const items = result.rows.map((row) => {
       const summary = {
         total: Number(row.total_count || 0),
@@ -192,6 +222,7 @@ router.get('/', requireAuth, async (req, res) => {
           failed: Number(row.failed_count || 0),
         }, Number(row.total_count || 0)),
         summary: { ...summary, pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing) },
+        failedItems: failedItemsByAnalysis.get(String(row.id)) || [],
         jobDescriptionTitle: row.job_description_title || null,
       }
     })

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Upload, X } from 'lucide-react'
+import { Info, Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import '../styles/analyses.css'
@@ -78,6 +78,7 @@ export default function AnalysesPage() {
   const [isDraggingOverDropzone, setIsDraggingOverDropzone] = useState(false)
   const createButtonRef = useRef(null)
   const nameInputRef = useRef(null)
+  const [openSummaryPopoverId, setOpenSummaryPopoverId] = useState(null)
 
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -144,6 +145,27 @@ export default function AnalysesPage() {
     () => [...items].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
     [items],
   )
+
+  useEffect(() => {
+    if (!openSummaryPopoverId) return undefined
+    const handleKeydown = (event) => {
+      if (event.key === 'Escape') setOpenSummaryPopoverId(null)
+    }
+    const handlePointerDown = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('[data-summary-popover-root="true"]')) return
+      setOpenSummaryPopoverId(null)
+    }
+    document.addEventListener('keydown', handleKeydown)
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeydown)
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+    }
+  }, [openSummaryPopoverId])
 
   const resetModal = () => {
     setIsCreateModalOpen(false)
@@ -312,7 +334,18 @@ export default function AnalysesPage() {
                         )}
                       </td>
                       <td>{formatDate(analysis.createdAt)}</td>
-                      <td>{status}</td>
+                      <td>
+                        <div className="analyses-layout__status-display">
+                          <span>{status}</span>
+                          <StatusSummaryPopover
+                            analysis={analysis}
+                            isOpen={openSummaryPopoverId === analysis.id}
+                            onOpen={() => setOpenSummaryPopoverId(analysis.id)}
+                            onClose={() => setOpenSummaryPopoverId(null)}
+                            popoverId={`analysis-summary-popover-${analysis.id}`}
+                          />
+                        </div>
+                      </td>
                       <td>{analysis.jobDescriptionTitle || 'No job description'}</td>
                     </tr>
                   )
@@ -405,5 +438,93 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
       </div>
     </div>,
     document.body,
+  )
+}
+
+function StatusSummaryPopover({ analysis, isOpen, onOpen, onClose, popoverId }) {
+  const anchorRef = useRef(null)
+  const popoverRef = useRef(null)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const summary = analysis?.summary
+  const failedItems = Array.isArray(analysis?.failedItems) ? analysis.failedItems : []
+  const hasFailed = Number(summary?.failed || 0) > 0
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const maxLeft = Math.max(16, window.innerWidth - 16 - 320)
+      setPosition({
+        top: Math.round(rect.bottom + window.scrollY + 8),
+        left: Math.round(Math.min(Math.max(16, rect.left + window.scrollX - 140), maxLeft)),
+      })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !popoverRef.current) return
+    popoverRef.current.style.top = `${position.top}px`
+    popoverRef.current.style.left = `${position.left}px`
+  }, [isOpen, position])
+
+  return (
+    <span className="analyses-status-summary" data-summary-popover-root="true">
+      <button
+        ref={anchorRef}
+        type="button"
+        className="analyses-status-summary__trigger"
+        aria-label="View analysis status details"
+        aria-expanded={isOpen}
+        aria-controls={popoverId}
+        onMouseEnter={onOpen}
+        onFocus={onOpen}
+        onClick={() => (isOpen ? onClose() : onOpen())}
+      >
+        <Info size={14} aria-hidden="true" />
+      </button>
+      {isOpen && createPortal(
+        <div id={popoverId} ref={popoverRef} role="dialog" className="analyses-status-summary__popover" data-summary-popover-root="true">
+          {!summary ? (
+            <p className="analyses-status-summary__empty">No file summary available yet.</p>
+          ) : (
+            <>
+              <dl className="analyses-status-summary__list">
+                <div><dt>Total</dt><dd>{Number(summary.total || 0)}</dd></div>
+                <div><dt>Completed</dt><dd>{Number(summary.complete || 0)}</dd></div>
+                <div><dt>Failed</dt><dd>{Number(summary.failed || 0)}</dd></div>
+                <div><dt>Processing</dt><dd>{Number(summary.processing || 0)}</dd></div>
+                <div><dt>Pending</dt><dd>{Number(summary.pending || 0)}</dd></div>
+              </dl>
+              {hasFailed && (
+                <div className="analyses-status-summary__failures">
+                  <p>Failed files:</p>
+                  {failedItems.length === 0 ? (
+                    <p className="analyses-status-summary__empty">Failure details are not available yet.</p>
+                  ) : (
+                    <ul>
+                      {failedItems.map((item, index) => (
+                        <li key={`${item.filename || 'unknown'}-${index}`}>
+                          <span>{item.filename || 'Unknown file'}</span>
+                          <span>{item.error || 'Unknown parse failure'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>,
+        document.body,
+      )}
+    </span>
   )
 }
