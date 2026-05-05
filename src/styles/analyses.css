@@ -22,7 +22,7 @@
 
 .analyses-layout__table {
   width: 100%;
-  min-width: 900px;
+  min-width: 760px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -36,28 +36,23 @@
 }
 
 .analyses-layout__table th:nth-child(1),
+.analyses-layout__col-name {
+  width: 30%;
+}
+
+.analyses-layout__table th:nth-child(2),
 .analyses-layout__col-created {
   width: 20%;
 }
 
-.analyses-layout__table th:nth-child(2),
-.analyses-layout__col-status {
-  width: 12%;
-}
-
 .analyses-layout__table th:nth-child(3),
-.analyses-layout__col-summary {
-  width: 33%;
+.analyses-layout__col-status {
+  width: 18%;
 }
 
 .analyses-layout__table th:nth-child(4),
 .analyses-layout__col-jd {
-  width: 25%;
-}
-
-.analyses-layout__table th:nth-child(5),
-.analyses-layout__col-open {
-  width: 10%;
+  width: 32%;
 }
 
 .analyses-layout__row {
@@ -238,9 +233,27 @@
 
 .analyses-modal__selected-files ul {
   margin: 0;
-  padding-left: 1rem;
+  padding: 0;
+  list-style: none;
   display: grid;
   gap: 0.25rem;
+}
+
+.analyses-modal__selected-files li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.analyses-modal__file-remove {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.analyses-modal__file-remove:hover {
+  color: var(--color-error);
 }
 
 .analyses-modal__field label span {
