@@ -66,7 +66,7 @@ test('normalizeProviderError preserves provider/model context for response forma
   assert.equal(result.category, 'response_format_error')
   assert.equal(result.provider, 'openai')
   assert.equal(result.model, 'gpt-4o-mini')
-  assert.equal(result.action, 'retry_or_adjust_provider_model')
+  assert.equal(result.action, 'retry_compact_or_adjust_output_schema')
   assert.match(result.normalizedMessage, /^response_format_error::\{/)
 })
 
@@ -75,7 +75,7 @@ test('normalizeProviderError maps truncated provider outputs', () => {
   const result = normalizeProviderError('response_truncated_error::{"technicalDetails":"stop_reason=max_tokens"}')
 
   assert.equal(result.category, 'response_truncated_error')
-  assert.equal(result.action, 'retry_or_adjust_provider_model')
+  assert.equal(result.action, 'retry_compact_or_adjust_output_schema')
 })
 
 

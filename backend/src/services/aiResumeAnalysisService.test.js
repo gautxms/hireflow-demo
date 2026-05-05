@@ -561,3 +561,42 @@ test('analyzeResumeWithConfiguredFallback skips anthropic for docx mime types an
   assert.equal(response.attempts[0].success, true)
   assert.equal(response.attempts[0].provider, 'openai-primary')
 })
+
+
+test('analyzeWithOpenAI preserves considerations when compact-normalizing', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({
+      output_text: JSON.stringify({
+        candidates: [{
+          id: 'cand-1',
+          considerations: ['Needs stronger system design depth'],
+        }],
+      }),
+    }),
+  })
+
+  const response = await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    apiKey: 'oa-key',
+    model: 'gpt-4.1-mini',
+    fetchImpl,
+  })
+
+  assert.deepEqual(response.result.candidates[0].considerations, ['Needs stronger system design depth'])
+})
+
+test('analyzeWithOpenAI throws when parsed candidates is not an array', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({ output_text: JSON.stringify({ candidates: { id: 'not-array' } }) }),
+  })
+
+  await assert.rejects(
+    () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      apiKey: 'oa-key',
+      model: 'gpt-4.1-mini',
+      fetchImpl,
+    }),
+    /missing candidates array/,
+  )
+})
