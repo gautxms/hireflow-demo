@@ -37,6 +37,14 @@ test('analysis detail page renders processing state note while run is in progres
   assert.match(analysisDetailSource, /This analysis is still running\. Statuses refresh automatically every few seconds\./)
 })
 
+test('analysis detail page renders normalization drop warning only for non-production and dropped candidates', () => {
+  assert.match(analysisDetailSource, /const isNonProductionBuild = \(\(\) =>/)
+  assert.match(analysisDetailSource, /process\.env\.NODE_ENV !== 'production'/)
+  assert.match(analysisDetailSource, /isNonProductionBuild && candidateResultsPayload\.droppedCount > 0/)
+  assert.match(analysisDetailSource, /Dev warning: dropped \{candidateResultsPayload\.droppedCount\} of \{candidateResultsPayload\.inputCount\} incoming candidates during normalization\./)
+  assert.match(analysisDetailSource, /Inspect logs for analysisId \{analysisId \|\| '—'\}\./)
+})
+
 test('status alias mapping stays consistent across analyses list and detail views', () => {
   assert.match(analysesPageSource, /queued:\s*'pending'/)
   assert.match(analysesPageSource, /retrying:\s*'processing'/)

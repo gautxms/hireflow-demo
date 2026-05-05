@@ -5,6 +5,12 @@ import '../styles/analyses.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
+const isNonProductionBuild = (() => {
+  if (typeof process !== 'undefined' && process?.env?.NODE_ENV) {
+    return process.env.NODE_ENV !== 'production'
+  }
+  return typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location?.hostname)
+})()
 
 function normalizeStatus(status) {
   const normalizedStatus = String(status || 'pending').trim().toLowerCase()
@@ -178,8 +184,7 @@ function toCandidateResultsPayload(analysis) {
   const hasInvalidPayload = inputCount > 0 && outputCount === 0
   const hasPartiallyInvalidPayload = droppedCount > 0 && outputCount > 0
 
-  const isProductionEnv = typeof window !== 'undefined' && window.location?.hostname && !['localhost', '127.0.0.1'].includes(window.location.hostname)
-  if (droppedCount > 0 && !isProductionEnv) {
+  if (droppedCount > 0 && isNonProductionBuild) {
     console.warn('[AnalysisDetailPage] Candidate normalization dropped invalid records.', {
       droppedCount,
       inputCount,
@@ -308,6 +313,14 @@ export default function AnalysisDetailPage({ pathname = '' }) {
       <main className="analyses-layout">
         <section className="analyses-layout__content">
           <ResultsErrorBoundary>
+            {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
+              <section className="route-state-card" role="status" aria-live="polite">
+                <p>
+                  Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
+                  Inspect logs for analysisId {analysisId || '—'}.
+                </p>
+              </section>
+            )}
             <CandidateResults
               candidates={candidateResultsPayload}
               onBack={() => {
