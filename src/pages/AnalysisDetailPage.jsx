@@ -115,7 +115,6 @@ function toCandidateResultsPayload(analysis) {
     return typeof value === 'object' ? value : null
   }
 
-
   const collectCandidates = (value) => {
     if (Array.isArray(value)) return value
     if (!value || typeof value !== 'object') return []
@@ -147,20 +146,22 @@ function toCandidateResultsPayload(analysis) {
     const result = safeParseResult(item?.result)
     const candidates = collectCandidates(result)
 
-    return candidates.map((candidate, index) => {
-      try {
-        const normalized = normalizeCandidateForResults(candidate, index)
-        if (!normalized) return null
-        return {
-          ...normalized,
-          id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
-          resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
-          filename: normalizeString(item?.filename || result?.filename || normalized?.filename, ''),
+    return candidates
+      .map((candidate, index) => {
+        try {
+          const normalized = normalizeCandidateForResults(candidate, index)
+          if (!normalized) return null
+          return {
+            ...normalized,
+            id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
+            resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
+            filename: normalizeString(item?.filename || result?.filename || normalized?.filename, ''),
+          }
+        } catch {
+          return null
         }
-      } catch {
-        return null
-      }
-    }).filter(Boolean)
+      })
+      .filter(Boolean)
   })
 
   const rawCandidates = directCandidates.length > 0 ? directCandidates : itemCandidates
@@ -329,15 +330,6 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     return (
       <main className="analyses-layout">
         <section className="analyses-layout__content">
-          <ResultsErrorBoundary>
-            {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
-              <section className="route-state-card" role="status" aria-live="polite">
-                <p>
-                  Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
-                  Inspect logs for analysisId {analysisId || '—'}.
-                </p>
-              </section>
-            )}
           <ResultsErrorBoundary
             analysisId={analysisId}
             candidateCount={candidateCount}
@@ -346,6 +338,14 @@ export default function AnalysisDetailPage({ pathname = '' }) {
               droppedCount: Math.max(itemCount - candidateCount, 0),
             }}
           >
+            {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
+              <section className="route-state-card" role="status" aria-live="polite">
+                <p>
+                  Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
+                  Inspect logs for analysisId {analysisId || '—'}.
+                </p>
+              </section>
+            )}
             <CandidateResults
               candidates={candidateResultsPayload}
               onBack={() => {
