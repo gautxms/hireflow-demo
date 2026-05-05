@@ -6,19 +6,6 @@ import '../styles/analyses.css'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
 
-function formatDate(value) {
-  if (!value) {
-    return '—'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '—'
-  }
-
-  return date.toLocaleString()
-}
-
 function normalizeStatus(status) {
   const normalizedStatus = String(status || 'pending').trim().toLowerCase()
   const STATUS_ALIAS_MAP = {
@@ -28,32 +15,47 @@ function normalizeStatus(status) {
   return STATUS_ALIAS_MAP[normalizedStatus] || normalizedStatus
 }
 
+function deriveDisplayStatus(analysis) {
+  const summary = analysis?.summary || {}
+  const total = Number(summary.total || 0)
+  const complete = Number(summary.complete || 0)
+  const failed = Number(summary.failed || 0)
+  const processing = Number(summary.processing || 0)
+  const pending = Number(summary.pending || 0)
+
+  if (total > 0 && complete === total && failed === 0) return 'complete'
+  if (total > 0 && failed === total) return 'failed'
+  if (processing > 0) return 'processing'
+  if (pending > 0) return 'pending'
+
+  return normalizeStatus(analysis?.liveStatus || analysis?.status)
+}
+
 function toCandidateResultsPayload(analysis) {
   const items = Array.isArray(analysis?.items) ? analysis.items : []
-  const completedEntries = items.flatMap((item) => {
-    const result = item?.result || {}
-    const candidates = Array.isArray(result?.candidates) ? result.candidates : []
+  const directCandidates = Array.isArray(analysis?.candidates) ? analysis.candidates : []
+
+  const itemCandidates = items.flatMap((item) => {
+    const result = item?.result && typeof item.result === 'object' ? item.result : {}
+    const candidates = Array.isArray(result.candidates) ? result.candidates : []
+
     return candidates.map((candidate) => ({
-      resumeId: item?.resumeId || candidate?.resumeId || candidate?.resume_id || '',
-      filename: item?.filename || result?.filename || '',
       ...candidate,
+      resumeId: item?.resumeId || candidate?.resumeId || candidate?.resume_id || '',
+      filename: item?.filename || result?.filename || candidate?.filename || '',
+      score: Number(candidate?.score ?? 0),
     }))
   })
 
+  const candidates = (directCandidates.length > 0 ? directCandidates : itemCandidates).filter((candidate) => candidate && typeof candidate === 'object')
+
   return {
-    candidates: completedEntries,
+    candidates,
     parseMeta: {
-      hasJobDescription: Boolean(analysis?.jobDescriptionId),
-      methodUsed: 'ai-extraction',
+      ...(analysis?.parseMeta && typeof analysis.parseMeta === 'object' ? analysis.parseMeta : {}),
+      hasJobDescription: Boolean(analysis?.jobDescriptionId || analysis?.jobDescriptionTitle),
+      methodUsed: analysis?.parseMeta?.methodUsed || 'ai-extraction',
     },
-    jobStatuses: items.map((item) => ({
-      jobId: String(item?.parseJobId || '').trim(),
-      resumeId: String(item?.resumeId || '').trim(),
-      filename: String(item?.filename || '').trim(),
-      status: String(item?.status || 'processing').trim() || 'processing',
-      progress: Number(item?.progress || 0),
-      error: item?.error ? String(item.error) : '',
-    })),
   }
 }
 
@@ -115,15 +117,10 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     }
   }, [analysisId])
 
-  const itemRows = Array.isArray(analysis?.items) ? analysis.items : []
   const summary = analysis?.summary || {}
-  const liveStatus = normalizeStatus(analysis?.liveStatus || analysis?.status)
-  const isCompletedTerminalState = liveStatus === 'complete' || liveStatus === 'completed'
+  const displayStatus = deriveDisplayStatus(analysis)
   const candidateResultsPayload = useMemo(() => toCandidateResultsPayload(analysis), [analysis])
   const failedCount = Number(summary.failed || 0)
-  const completeCount = Number(summary.complete || 0)
-  const hasFailures = liveStatus === 'failed' || failedCount > 0
-  const isComplete = (liveStatus === 'complete' || liveStatus === 'completed') && !hasFailures
 
   if (loading || error || !analysis) {
     return (
@@ -138,7 +135,7 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     )
   }
 
-  if (isCompletedTerminalState) {
+  if (displayStatus === 'complete' || displayStatus === 'completed') {
     return (
       <main className="analyses-layout">
         <section className="analyses-layout__content">
@@ -154,65 +151,17 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   }
 
   return (
-    <main className="analyses-layout">
-      <section className="analyses-layout__content">
+    <main className="route-state">
+      <section className="route-state-card">
         <a href="/analyses">← Back to analyses</a>
         <h1>Analysis {analysisId || '—'}</h1>
-
-        <>
-          <p>
-            Live status: <strong>{normalizeStatus(analysis.liveStatus || analysis.status)}</strong>
-          </p>
-          <p>
-            Created: {formatDate(analysis.createdAt)} · Completed: {formatDate(analysis.completedAt)}
-          </p>
-          <p className="analysis-detail-page__summary">
-            Summary — Total {summary.total || 0} · Complete {completeCount} · Failed {failedCount} · Processing {summary.processing || 0} · Pending {summary.pending || 0}
-          </p>
-
-          {hasFailures && (
-            <section className="analysis-detail-page__status-note analysis-detail-page__status-note--failed" role="region" aria-label="Failure overview">
-              <h2>Failure Overview</h2>
-              <p>This analysis has terminal failures (or a mixed completion with failures). Review item-level errors for remediation details.</p>
-              <p>Failed items: <strong>{failedCount}</strong></p>
-            </section>
-          )}
-
-          {isComplete && (
-            <section className="analysis-detail-page__status-note">
-              <h2>Results Ready</h2>
-              <p>This analysis completed without failures. Continue in the full results experience.</p>
-              <p><a href="/results">Open perfect results experience →</a></p>
-            </section>
-          )}
-
-          {(liveStatus === 'pending' || liveStatus === 'processing') && <p className="analysis-detail-page__status-note">This analysis is still running. Statuses refresh automatically every few seconds.</p>}
-
-          <div className="analyses-layout__table-shell">
-            <table className="analyses-layout__table">
-            <thead>
-              <tr>
-                <th>Resume</th>
-                <th>Status</th>
-                <th>Progress</th>
-                <th>Updated</th>
-                <th>Error</th>
-              </tr>
-            </thead>
-            <tbody>
-              {itemRows.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.filename || item.resumeId || item.parseJobId}</td>
-                  <td>{normalizeStatus(item.status)}</td>
-                  <td>{Number(item.progress || 0)}%</td>
-                  <td>{formatDate(item.updatedAt || item.createdAt)}</td>
-                  <td>{item.error || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-            </table>
-          </div>
-        </>
+        <p>Current status: <strong>{displayStatus}</strong></p>
+        {displayStatus === 'failed' ? (
+          <p role="alert">This analysis failed before results were finalized. Please re-run the analysis or check the source files.</p>
+        ) : (
+          <p>This analysis is still processing. Results will be available when processing completes.</p>
+        )}
+        <p>Summary — Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {failedCount} · Processing {summary.processing || 0} · Pending {summary.pending || 0}</p>
       </section>
     </main>
   )
