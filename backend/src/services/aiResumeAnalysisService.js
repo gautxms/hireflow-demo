@@ -18,6 +18,7 @@ const OPENAI_MODEL_CAPABILITIES = {
 const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
 const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
 const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
+const CANDIDATE_COMPACT_SCHEMA_VERSION = 'compact-v2'
 const OPENAI_COMPACT_MODEL_PATTERN = /gpt-5-nano/i
 
 let claudeTokensUsed = {
@@ -87,16 +88,16 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
       ? Math.max(0, Math.min(100, Number(candidate.score)))
       : Math.max(0, Math.min(100, Number(candidate?.matchScore?.score || 0))),
     verdict: clampString(candidate?.verdict || candidate?.matchScore?.fit || 'review', 30),
-    summary: clampString(candidate?.summary || candidate?.profile_summary || '', minimalMode ? 200 : 380),
-    strengths: clampStringArray(candidate?.strengths || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
-    concerns: clampStringArray(candidate?.concerns || candidate?.considerations || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
-    considerations: clampStringArray(candidate?.considerations || candidate?.concerns || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
+    summary: clampString(candidate?.summary || candidate?.profile_summary || '', 250),
+    strengths: clampStringArray(candidate?.strengths || [], { maxItems: 3, maxItemLength: 120 }),
+    concerns: clampStringArray(candidate?.concerns || candidate?.considerations || [], { maxItems: 3, maxItemLength: 120 }),
+    considerations: clampStringArray(candidate?.considerations || candidate?.concerns || [], { maxItems: 3, maxItemLength: 120 }),
     matchedSkills,
     missingSkills,
     skills: clampStringArray(candidate?.skills || [...matchedSkills, ...missingSkills], { maxItems: 25, maxItemLength: 80 }),
-    experienceHighlights: clampStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
-    evidenceSnippets: clampStringArray(candidate?.evidenceSnippets || [], { maxItems: minimalMode ? 1 : 2, maxItemLength: 150 }),
-    recommendation: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', minimalMode ? 160 : 250),
+    experienceHighlights: minimalMode ? [] : clampStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
+    evidenceSnippets: [],
+    recommendation: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', 160),
     filename: clampString(candidate?.filename || '', 180),
     resumeId: clampString(candidate?.resumeId || candidate?.resume_id || '', 100),
   }
@@ -478,6 +479,12 @@ function createAttemptRecord({
   promptVersion,
   promptIsDefaultFallback,
   tokenUsage,
+  mode = null,
+  schemaVersion = CANDIDATE_COMPACT_SCHEMA_VERSION,
+  maxOutputTokens = null,
+  promptCharCount = null,
+  resumeCharCount = null,
+  jdCharCount = null,
   failureCategory = null,
   failureReason = null,
 }) {
@@ -490,6 +497,12 @@ function createAttemptRecord({
     promptVersion,
     promptIsDefaultFallback,
     tokenUsage,
+    mode,
+    schemaVersion,
+    maxOutputTokens,
+    promptCharCount,
+    resumeCharCount,
+    jdCharCount,
     failureCategory,
     failureReason,
   }
@@ -606,9 +619,10 @@ function buildCompactOutputInstructions({ compactMode = false } = {}) {
     'Prefer empty arrays over verbose explanations.',
     'Response must complete valid JSON within the token budget.',
     compactMode
-      ? 'Minimal schema per candidate: {name, score, summary<=200, strengths<=3, concerns<=3, matchedSkills<=10, missingSkills<=5, recommendation<=160}.'
-      : 'Compact schema per candidate: {name,email,phone,score,verdict,summary<=380,strengths<=5,concerns<=5,matchedSkills<=15,missingSkills<=10,skills<=25,experienceHighlights<=3,evidenceSnippets<=2,recommendation<=250,filename,resumeId}.',
-    'If output risks truncation, omit optional fields first (experienceHighlights, evidenceSnippets, email, phone).',
+      ? 'Minimal schema per candidate: {name,score,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,recommendation<=160}.'
+      : 'Compact schema per candidate: {name,email,phone,score,verdict,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,skills<=25,recommendation<=160,filename,resumeId}.',
+    'Do not include evidence snippets, full work history, full resume text, or full job description text.',
+    'If output risks truncation, omit optional fields first (email, phone, filename, resumeId, skills).',
   ].join('\n')
 }
 
@@ -804,6 +818,12 @@ export async function analyzeWithAnthropic(
     providerSource,
     promptVersion,
     promptIsDefaultFallback,
+    mode: compactMode ? 'minimal' : 'compact',
+    schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
+    maxOutputTokens: compactMode ? 1400 : 2200,
+    promptCharCount: prompt.length,
+    resumeCharCount: null,
+    jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
   }
 }
 
@@ -897,7 +917,9 @@ export async function analyzeWithOpenAI(
   let responseStatus = ''
   let incompleteReason = ''
   const tokenLadder = compactMode ? [1200, 2000, 3000] : OPENAI_OUTPUT_TOKEN_LADDER
+  let attemptedMaxOutputTokens = tokenLadder[0]
   for (const maxOutputTokens of tokenLadder) {
+    attemptedMaxOutputTokens = maxOutputTokens
     payload = await callOpenAi(maxOutputTokens)
     responseStatus = String(payload?.status || '').toLowerCase()
     incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
@@ -947,6 +969,12 @@ export async function analyzeWithOpenAI(
     providerSource,
     promptVersion,
     promptIsDefaultFallback,
+    mode: compactMode ? 'minimal' : 'compact',
+    schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
+    maxOutputTokens: attemptedMaxOutputTokens,
+    promptCharCount: prompt.length,
+    resumeCharCount: null,
+    jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
   }
 }
 
@@ -1021,7 +1049,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       }
     } catch (error) {
       const firstFailureCategory = getFailureCategory(normalizeProviderError(error, attemptHistory))
-      if (firstFailureCategory === 'response_truncated_error' && compactMode === false) {
+      if (entry.provider === 'anthropic' && firstFailureCategory === 'response_truncated_error' && compactMode === false) {
         try {
           const adapter = adapters[entry.provider] || analyzeWithAnthropic
           const response = await adapter(cleanedBase64, mimeType, filename, {
@@ -1061,6 +1089,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
           usageAvailable: false,
           unavailableReason: `provider_request_failed:${failureCategory}:${failureReason}`,
         },
+        mode: compactMode ? 'minimal' : 'compact',
         failureCategory,
         failureReason,
       }))
