@@ -77,3 +77,34 @@ test('normalizeProviderError maps truncated provider outputs', () => {
   assert.equal(result.category, 'response_truncated_error')
   assert.equal(result.action, 'retry_or_adjust_provider_model')
 })
+
+
+test('normalizeProviderError includes provider chain details for primary failure followed by fallback failure', () => {
+  const providerFailure = new Error('response_truncated_error::{"technicalDetails":"Provider output was truncated"}')
+  providerFailure.attempts = [
+    {
+      success: false,
+      provider: 'anthropic-primary',
+      model: 'claude-haiku-4-5-20251001',
+      failureCategory: 'response_truncated_error',
+      failureReason: 'Provider output was truncated before valid JSON completion.',
+      statusCode: 529,
+    },
+    {
+      success: false,
+      provider: 'openai-primary',
+      model: 'gpt-5-nano-2025-08-07',
+      failureCategory: 'response_truncated_error',
+      failureReason: 'Provider output was truncated before valid JSON completion after retries.',
+    },
+  ]
+
+  const result = normalizeProviderError(providerFailure)
+
+  assert.equal(result.providerChain?.fallbackTriggered, true)
+  assert.equal(result.providerChain?.primaryAttempt?.provider, 'anthropic')
+  assert.equal(result.providerChain?.primaryAttempt?.statusCode, 529)
+  assert.equal(result.providerChain?.fallbackAttempt?.provider, 'openai')
+  assert.equal(result.providerChain?.finalOutcome, 'failed')
+  assert.match(result.normalizedMessage, /"providerChain":\{/) 
+})
