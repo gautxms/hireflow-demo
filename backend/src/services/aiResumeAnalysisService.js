@@ -90,6 +90,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     summary: clampString(candidate?.summary || candidate?.profile_summary || '', minimalMode ? 200 : 380),
     strengths: clampStringArray(candidate?.strengths || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
     concerns: clampStringArray(candidate?.concerns || candidate?.considerations || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
+    considerations: clampStringArray(candidate?.considerations || candidate?.concerns || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
     matchedSkills,
     missingSkills,
     skills: clampStringArray(candidate?.skills || [...matchedSkills, ...missingSkills], { maxItems: 25, maxItemLength: 80 }),
@@ -102,9 +103,12 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
 }
 
 function normalizeCompactAnalysis(result = {}, { minimalMode = false } = {}) {
-  const sourceCandidates = Array.isArray(result?.candidates) ? result.candidates : []
+  const sourceCandidates = result?.candidates
   return {
-    candidates: sourceCandidates.slice(0, 20).map((candidate) => normalizeCompactCandidate(candidate, { minimalMode })),
+    ...result,
+    candidates: Array.isArray(sourceCandidates)
+      ? sourceCandidates.slice(0, 20).map((candidate) => normalizeCompactCandidate(candidate, { minimalMode }))
+      : sourceCandidates,
   }
 }
 
