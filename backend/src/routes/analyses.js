@@ -8,6 +8,18 @@ const router = Router()
 
 const TERMINAL_STATUSES = new Set(['complete', 'failed'])
 
+function safeParseResult(result) {
+  if (result == null) return null
+  if (typeof result === 'string') {
+    try {
+      return JSON.parse(result)
+    } catch {
+      return null
+    }
+  }
+  return typeof result === 'object' ? result : null
+}
+
 function deriveAggregateStatus(counts, totalItems) {
   if (totalItems === 0) return 'queued'
 
@@ -102,6 +114,8 @@ async function loadAnalysisStatus(analysisId, userId) {
       })
     }
 
+    const parsedResult = safeParseResult(row.parse_result)
+
     items.push({
       id: String(row.id),
       itemId: String(row.id),
@@ -113,7 +127,7 @@ async function loadAnalysisStatus(analysisId, userId) {
       createdAt: row.created_at,
       updatedAt: row.parse_job_updated_at || row.created_at,
       error: row.error_message || row.parse_error || null,
-      result: row.parse_result ?? null,
+      result: parsedResult,
     })
   }
 

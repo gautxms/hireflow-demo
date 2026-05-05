@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
@@ -33,22 +33,49 @@ function deriveDisplayStatus(analysis) {
 }
 
 function toCandidateResultsPayload(analysis) {
+  const safeParseResult = (value) => {
+    if (!value) return null
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value)
+      } catch {
+        return null
+      }
+    }
+    return typeof value === 'object' ? value : null
+  }
+
   const items = Array.isArray(analysis?.items) ? analysis.items : []
   const directCandidates = Array.isArray(analysis?.candidates) ? analysis.candidates : []
 
   const itemCandidates = items.flatMap((item) => {
-    const result = item?.result && typeof item.result === 'object' ? item.result : {}
-    const candidates = Array.isArray(result.candidates) ? result.candidates : []
+    const result = safeParseResult(item?.result) || {}
+    const candidates = Array.isArray(result.candidates)
+      ? result.candidates
+      : (result && typeof result === 'object' ? [result] : [])
 
-    return candidates.map((candidate) => ({
+    return candidates.filter((candidate) => candidate && typeof candidate === 'object').map((candidate, index) => ({
       ...candidate,
+      id: candidate?.id || candidate?.resumeId || candidate?.resume_id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
+      name: String(candidate?.name || candidate?.full_name || candidate?.candidate_name || 'Unknown candidate'),
       resumeId: item?.resumeId || candidate?.resumeId || candidate?.resume_id || '',
       filename: item?.filename || result?.filename || candidate?.filename || '',
       score: Number(candidate?.score ?? 0),
+      skills: Array.isArray(candidate?.skills) || typeof candidate?.skills === 'string' ? candidate.skills : '',
     }))
   })
 
-  const candidates = (directCandidates.length > 0 ? directCandidates : itemCandidates).filter((candidate) => candidate && typeof candidate === 'object')
+  const candidates = (directCandidates.length > 0 ? directCandidates : itemCandidates)
+    .filter((candidate) => candidate && typeof candidate === 'object')
+    .map((candidate, index) => ({
+      ...candidate,
+      id: candidate?.id || candidate?.resumeId || candidate?.resume_id || `candidate-${index}`,
+      name: String(candidate?.name || candidate?.full_name || candidate?.candidate_name || 'Unknown candidate'),
+      score: Number(candidate?.score ?? 0),
+      skills: Array.isArray(candidate?.skills) || typeof candidate?.skills === 'string' ? candidate.skills : '',
+      resumeId: candidate?.resumeId || candidate?.resume_id || '',
+      filename: candidate?.filename || '',
+    }))
 
   return {
     candidates,
@@ -57,6 +84,30 @@ function toCandidateResultsPayload(analysis) {
       hasJobDescription: Boolean(analysis?.jobDescriptionId || analysis?.jobDescriptionTitle),
       methodUsed: analysis?.parseMeta?.methodUsed || 'ai-extraction',
     },
+  }
+}
+
+class ResultsErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="route-state-card" role="alert">
+          <p>We could not render these results. Please return to Analyses or retry.</p>
+          <a href="/analyses">← Back to analyses</a>
+        </section>
+      )
+    }
+
+    return this.props.children
   }
 }
 
@@ -140,12 +191,14 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     return (
       <main className="analyses-layout">
         <section className="analyses-layout__content">
-          <CandidateResults
-            candidates={candidateResultsPayload}
-            onBack={() => {
-              window.location.href = '/analyses'
-            }}
-          />
+          <ResultsErrorBoundary>
+            <CandidateResults
+              candidates={candidateResultsPayload}
+              onBack={() => {
+                window.location.href = '/analyses'
+              }}
+            />
+          </ResultsErrorBoundary>
         </section>
       </main>
     )
