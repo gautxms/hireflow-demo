@@ -43,6 +43,17 @@ function normalizeStringArray(value) {
   return value.map((entry) => normalizeString(entry)).filter(Boolean)
 }
 
+function clampString(value, maxLength = 300) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+}
+
+function clampStringArray(value, maxItems = 5, maxItemLength = 160) {
+  return normalizeStringArray(value)
+    .map((entry) => clampString(entry, maxItemLength))
+    .filter(Boolean)
+    .slice(0, maxItems)
+}
+
 function normalizeStructuredSkills(skills) {
   if (Array.isArray(skills) || typeof skills === 'string') {
     return {
@@ -441,16 +452,17 @@ async function runParse(job) {
           candidateId: identity.candidateId,
           resumeId: identity.resumeId || String(resumeId || ''),
           ...candidate,
+          summary: clampString(candidate?.summary, 400),
           years_experience: normalizeNullableNumber(candidate?.years_experience),
           profile_score: normalizeNullableNumber(candidate?.profile_score),
-          strengths: normalizeStringArray(candidate?.strengths),
-          considerations: normalizeStringArray(candidate?.considerations),
+          strengths: clampStringArray(candidate?.strengths, 5, 160),
+          considerations: clampStringArray(candidate?.considerations, 5, 160),
           seniority_level: normalizeString(candidate?.seniority_level),
           tags: normalizeStringArray(candidate?.tags),
-          top_skills: normalizeStringArray(candidate?.top_skills).slice(0, 5),
+          top_skills: normalizeStringArray(candidate?.top_skills).slice(0, 15),
           skills_structured: skillsStructured,
           skills: skillsStructured,
-          skills_flat: resolvedSkillsFlat,
+          skills_flat: normalizeStringArray(resolvedSkillsFlat).slice(0, 25),
           confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
         }
       })
