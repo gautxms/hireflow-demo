@@ -23,6 +23,7 @@ function deriveDisplayStatus(analysis) {
   const processing = Number(summary.processing || 0)
   const pending = Number(summary.pending || 0)
 
+  if (complete > 0 && failed > 0) return 'partial'
   if (total > 0 && complete === total && failed === 0) return 'complete'
   if (total > 0 && failed === total) return 'failed'
   if (processing > 0) return 'processing'
