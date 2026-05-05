@@ -296,7 +296,26 @@ export default function AnalysesPage() {
               <tbody>
                 {sortedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
-                  return <tr key={analysis.id}><td><a href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a></td><td>{formatDate(analysis.createdAt)}</td><td>{status}</td><td>{analysis.jobDescriptionTitle || 'No job description'}</td></tr>
+                  const isComplete = status === 'complete' || status === 'completed'
+                  const helperLabel = status === 'failed' ? 'Failed' : status === 'processing' ? 'Processing' : 'Results not ready'
+
+                  return (
+                    <tr key={analysis.id}>
+                      <td>
+                        {isComplete ? (
+                          <a href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a>
+                        ) : (
+                          <span>
+                            {analysis.name || 'Untitled analysis'}
+                            <span className="analyses-layout__name-helper">{helperLabel}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td>{formatDate(analysis.createdAt)}</td>
+                      <td>{status}</td>
+                      <td>{analysis.jobDescriptionTitle || 'No job description'}</td>
+                    </tr>
+                  )
                 })}
               </tbody>
             </table>
