@@ -1031,12 +1031,14 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
 
-  for (const [attemptIndex, entry] of attemptPlan.entries()) {
-    if (attemptIndex >= getMaxProviderAttemptsPerFile()) break
+  let executedProviderAttempts = 0
+  for (const entry of attemptPlan) {
     if (!providerSupportsMimeType(entry.provider, mimeType)) {
       console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${mimeType}.`)
       continue
     }
+    if (executedProviderAttempts >= getMaxProviderAttemptsPerFile()) break
+    executedProviderAttempts += 1
 
     let compactMode = compactByDefaultForModel(entry.model)
     try {
