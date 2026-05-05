@@ -45,16 +45,37 @@ function toCandidateResultsPayload(analysis) {
     return typeof value === 'object' ? value : null
   }
 
+
+  const collectCandidates = (value) => {
+    if (Array.isArray(value)) return value
+    if (!value || typeof value !== 'object') return []
+
+    const candidateBuckets = [
+      value.candidates,
+      value.results,
+      value.output,
+      value.data?.candidates,
+      value.data?.results,
+      value.payload?.candidates,
+      value.payload?.results,
+      value.response?.candidates,
+    ]
+
+    for (const bucket of candidateBuckets) {
+      if (Array.isArray(bucket)) {
+        return bucket
+      }
+    }
+
+    return [value]
+  }
+
   const items = Array.isArray(analysis?.items) ? analysis.items : []
   const directCandidates = Array.isArray(analysis?.candidates) ? analysis.candidates : []
 
   const itemCandidates = items.flatMap((item) => {
     const result = safeParseResult(item?.result)
-    const candidates = Array.isArray(result)
-      ? result
-      : Array.isArray(result?.candidates)
-        ? result.candidates
-        : (result && typeof result === 'object' ? [result] : [])
+    const candidates = collectCandidates(result)
 
     return candidates.filter((candidate) => candidate && typeof candidate === 'object').map((candidate, index) => ({
       ...candidate,
@@ -189,7 +210,7 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     )
   }
 
-  if (displayStatus === 'complete' || displayStatus === 'completed') {
+  if ((displayStatus === 'complete' || displayStatus === 'completed' || displayStatus === 'partial' || displayStatus === 'failed') && candidateResultsPayload.candidates.length > 0) {
     return (
       <main className="analyses-layout">
         <section className="analyses-layout__content">
