@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import '../styles/analyses.css'
@@ -52,6 +53,7 @@ export default function AnalysesPage() {
   const [submitError, setSubmitError] = useState('')
   const [validationErrors, setValidationErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDraggingOverDropzone, setIsDraggingOverDropzone] = useState(false)
   const createButtonRef = useRef(null)
   const nameInputRef = useRef(null)
 
@@ -118,8 +120,7 @@ export default function AnalysesPage() {
     return undefined
   }, [isCreateModalOpen])
 
-  const handleFileSelection = (event) => {
-    const incomingFiles = Array.from(event.target.files || [])
+  const handleFilesSelected = (incomingFiles) => {
     const allowed = []
     const rejected = []
 
@@ -144,6 +145,10 @@ export default function AnalysesPage() {
     setSelectedFiles(allowed)
     setValidationErrors((current) => ({ ...current, files: rejected.length > 0 ? rejected.join(' ') : '' }))
     setSubmitError('')
+  }
+
+  const handleFileSelection = (event) => {
+    handleFilesSelected(Array.from(event.target.files || []))
   }
 
   const handleSubmit = async (event) => {
@@ -256,19 +261,34 @@ export default function AnalysesPage() {
         onSelectedJobDescriptionIdChange={setSelectedJobDescriptionId}
         jobDescriptions={jobDescriptions}
         onFileSelection={handleFileSelection}
+        onFilesSelected={handleFilesSelected}
         selectedFiles={selectedFiles}
         validationErrors={validationErrors}
         submitError={submitError}
         onSubmit={handleSubmit}
         onClose={resetModal}
         nameInputRef={nameInputRef}
+        isDraggingOverDropzone={isDraggingOverDropzone}
+        onDraggingOverDropzoneChange={setIsDraggingOverDropzone}
       />
     </main>
   )
 }
 
-function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNameChange, selectedJobDescriptionId, onSelectedJobDescriptionIdChange, jobDescriptions, onFileSelection, selectedFiles, validationErrors, submitError, onSubmit, onClose, nameInputRef }) {
+function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNameChange, selectedJobDescriptionId, onSelectedJobDescriptionIdChange, jobDescriptions, onFileSelection, onFilesSelected, selectedFiles, validationErrors, submitError, onSubmit, onClose, nameInputRef, isDraggingOverDropzone, onDraggingOverDropzoneChange }) {
   const dialogRef = useRef(null)
+  const fileInputRef = useRef(null)
+
+  const setDropzoneDragging = (isDragging) => onDraggingOverDropzoneChange(Boolean(isDragging))
+
+  const handleDrop = (event) => {
+    event.preventDefault()
+    setDropzoneDragging(false)
+    if (isSubmitting) return
+    const droppedFiles = Array.from(event.dataTransfer?.files || [])
+    onFilesSelected(droppedFiles)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -300,13 +320,13 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
   if (!isOpen) return null
 
   return createPortal(
-    <div className="ui-modal analyses-create-modal" role="dialog" aria-modal="true" aria-label="Create analysis" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmitting) onClose() }}>
+    <div className="ui-modal analyses-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-analysis-title" aria-describedby="create-analysis-description" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmitting) onClose() }}>
       <div ref={dialogRef} className="ui-card ui-card--card-spacing ui-modal__dialog analyses-create-modal__dialog">
-        <h2>Create analysis</h2>
+        <div className="analyses-modal__header"><div><h2 id="create-analysis-title">Create analysis</h2><p id="create-analysis-description" className="analyses-modal__description">Upload resumes and choose an optional job description to start ranking candidates.</p></div><button type="button" className="analyses-modal__close" aria-label="Close create analysis modal" onClick={onClose} disabled={isSubmitting}><X size={18} strokeWidth={1.5} aria-hidden="true" /></button></div>
         <form onSubmit={onSubmit} className="analyses-modal__form" noValidate>
-          <div className="analyses-modal__field"><label htmlFor="analysis-name">Analysis name</label><input ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => onAnalysisNameChange(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />{validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}</div>
-          <div className="analyses-modal__field"><label htmlFor="analysis-jd">Job description <span>(optional)</span></label><select id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => onSelectedJobDescriptionIdChange(event.target.value)}><option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>{jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
-          <div className="analyses-modal__field"><label htmlFor="analysis-files">Resume files</label><input id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} /><p id="analysis-files-help" className="analyses-modal__help">Upload up to 20 PDF or DOCX files (100MB max each).</p>{selectedFiles.length > 0 && <p className="analyses-modal__help">{selectedFiles.length} file(s) selected.</p>}{validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}</div>
+          <div className="analyses-modal__field"><label htmlFor="analysis-name">Analysis name</label><input className="analyses-modal__control" ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => onAnalysisNameChange(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />{validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}</div>
+          <div className="analyses-modal__field"><label htmlFor="analysis-jd">Job description <span>(optional)</span></label><select className="analyses-modal__control" id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => onSelectedJobDescriptionIdChange(event.target.value)}><option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>{jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
+          <div className="analyses-modal__field"><label htmlFor="analysis-files">Resume files</label><input ref={fileInputRef} className="analyses-modal__input-hidden" id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} /><div className={`analyses-modal__dropzone${isDraggingOverDropzone ? ' is-dragging' : ''}${validationErrors.files ? ' is-invalid' : ''}`} onDragEnter={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragOver={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget.contains(event.relatedTarget)) return; setDropzoneDragging(false) }} onDrop={handleDrop}><Upload size={18} strokeWidth={1.5} aria-hidden="true" /><p className="analyses-modal__dropzone-title">Drag and drop resumes here</p><p id="analysis-files-help" className="analyses-modal__help">PDF or DOCX · Up to 20 files · 100MB each</p><button type="button" className="hf-btn hf-btn--secondary analyses-modal__browse-btn" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>Browse files</button></div>{selectedFiles.length > 0 && <div className="analyses-modal__selected-files"><p className="analyses-modal__selected-count">{selectedFiles.length} file(s) selected</p><ul>{selectedFiles.map((file) => <li key={`${file.name}-${file.size}`}>{file.name}</li>)}</ul></div>}{validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}</div>
           {submitError && <p role="alert" className="analyses-modal__error">{submitError}</p>}
           <div className="analyses-modal__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button></div>
         </form>
