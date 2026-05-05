@@ -33,6 +33,69 @@ function deriveDisplayStatus(analysis) {
 }
 
 function toCandidateResultsPayload(analysis) {
+  const normalizeString = (value, fallback = '') => {
+    if (typeof value === 'string') return value
+    if (value === null || value === undefined) return fallback
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    return fallback
+  }
+
+  const normalizeStringArray = (value) => {
+    if (!Array.isArray(value)) return []
+    return value
+      .map((item) => normalizeString(item, '').trim())
+      .filter(Boolean)
+  }
+
+  const normalizeObjectArray = (value) => {
+    if (!Array.isArray(value)) return []
+    return value.filter((item) => item && typeof item === 'object')
+  }
+
+  const normalizeBoundedScore = (value) => {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return 0
+    return Math.max(0, Math.min(100, numeric))
+  }
+
+  const normalizeCandidateForResults = (raw, index) => {
+    if (!raw || typeof raw !== 'object') return null
+
+    const id = normalizeString(raw?.id || raw?.resumeId || raw?.resume_id || `candidate-${index}`, `candidate-${index}`)
+    const name = normalizeString(raw?.name || raw?.full_name || raw?.candidate_name || 'Candidate', 'Candidate')
+
+    return {
+      ...raw,
+      id,
+      name,
+      title: normalizeString(raw?.title, ''),
+      location: normalizeString(raw?.location, ''),
+      summary: normalizeString(raw?.summary, ''),
+      matchScore: normalizeBoundedScore(raw?.matchScore ?? raw?.score ?? 0),
+      score: normalizeBoundedScore(raw?.score ?? raw?.matchScore ?? 0),
+      resumeId: normalizeString(raw?.resumeId || raw?.resume_id, ''),
+      filename: normalizeString(raw?.filename, ''),
+      skills: Array.isArray(raw?.skills) || typeof raw?.skills === 'string' ? raw.skills : [],
+      experience: normalizeObjectArray(raw?.experience),
+      strengths: normalizeStringArray(raw?.strengths),
+      considerations: normalizeStringArray(raw?.considerations),
+      mustHaveSkills: normalizeStringArray(raw?.mustHaveSkills),
+      niceToHaveSkills: normalizeStringArray(raw?.niceToHaveSkills),
+      missingSkills: normalizeStringArray(raw?.missingSkills),
+      assessment: {
+        summary: '',
+        highlights: [],
+        risks: [],
+        ...(raw?.assessment && typeof raw.assessment === 'object' ? raw.assessment : {}),
+      },
+      scoreBreakdown: {
+        overall: normalizeBoundedScore(raw?.scoreBreakdown?.overall ?? raw?.score ?? raw?.matchScore ?? 0),
+        categories: {},
+        ...(raw?.scoreBreakdown && typeof raw.scoreBreakdown === 'object' ? raw.scoreBreakdown : {}),
+      },
+    }
+  }
+
   const safeParseResult = (value) => {
     if (!value) return null
     if (typeof value === 'string') {
@@ -77,31 +140,61 @@ function toCandidateResultsPayload(analysis) {
     const result = safeParseResult(item?.result)
     const candidates = collectCandidates(result)
 
-    return candidates.filter((candidate) => candidate && typeof candidate === 'object').map((candidate, index) => ({
-      ...candidate,
-      id: candidate?.id || candidate?.resumeId || candidate?.resume_id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
-      name: String(candidate?.name || candidate?.full_name || candidate?.candidate_name || 'Unknown candidate'),
-      resumeId: item?.resumeId || candidate?.resumeId || candidate?.resume_id || '',
-      filename: item?.filename || result?.filename || candidate?.filename || '',
-      score: Number(candidate?.score ?? 0),
-      skills: Array.isArray(candidate?.skills) || typeof candidate?.skills === 'string' ? candidate.skills : '',
-    }))
+    return candidates.map((candidate, index) => {
+      try {
+        const normalized = normalizeCandidateForResults(candidate, index)
+        if (!normalized) return null
+        return {
+          ...normalized,
+          id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
+          resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
+          filename: normalizeString(item?.filename || result?.filename || normalized?.filename, ''),
+        }
+      } catch {
+        return null
+      }
+    }).filter(Boolean)
   })
 
-  const candidates = (directCandidates.length > 0 ? directCandidates : itemCandidates)
-    .filter((candidate) => candidate && typeof candidate === 'object')
-    .map((candidate, index) => ({
+  const rawCandidates = directCandidates.length > 0 ? directCandidates : itemCandidates
+  const inputCount = rawCandidates.length
+  const candidates = rawCandidates
+    .map((candidate, index) => {
+      try {
+        return normalizeCandidateForResults(candidate, index)
+      } catch {
+        return null
+      }
+    })
+    .filter(Boolean)
+    .map((candidate) => ({
       ...candidate,
-      id: candidate?.id || candidate?.resumeId || candidate?.resume_id || `candidate-${index}`,
-      name: String(candidate?.name || candidate?.full_name || candidate?.candidate_name || 'Unknown candidate'),
-      score: Number(candidate?.score ?? 0),
-      skills: Array.isArray(candidate?.skills) || typeof candidate?.skills === 'string' ? candidate.skills : '',
-      resumeId: candidate?.resumeId || candidate?.resume_id || '',
-      filename: candidate?.filename || '',
+      resumeId: normalizeString(candidate?.resumeId || candidate?.resume_id, ''),
+      filename: normalizeString(candidate?.filename, ''),
     }))
+
+  const outputCount = candidates.length
+  const droppedCount = Math.max(0, inputCount - outputCount)
+  const hasInvalidPayload = inputCount > 0 && outputCount === 0
+  const hasPartiallyInvalidPayload = droppedCount > 0 && outputCount > 0
+
+  const isProductionEnv = typeof window !== 'undefined' && window.location?.hostname && !['localhost', '127.0.0.1'].includes(window.location.hostname)
+  if (droppedCount > 0 && !isProductionEnv) {
+    console.warn('[AnalysisDetailPage] Candidate normalization dropped invalid records.', {
+      droppedCount,
+      inputCount,
+      outputCount,
+      analysisId: analysis?.id || '',
+    })
+  }
 
   return {
     candidates,
+    droppedCount,
+    inputCount,
+    outputCount,
+    hasInvalidPayload,
+    hasPartiallyInvalidPayload,
     parseMeta: {
       ...(analysis?.parseMeta && typeof analysis.parseMeta === 'object' ? analysis.parseMeta : {}),
       hasJobDescription: Boolean(analysis?.jobDescriptionId || analysis?.jobDescriptionTitle),
