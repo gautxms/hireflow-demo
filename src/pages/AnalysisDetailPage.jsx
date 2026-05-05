@@ -353,8 +353,25 @@ export default function AnalysisDetailPage({ pathname = '' }) {
               }}
             />
           </ResultsErrorBoundary>
+  <section className="analyses-layout__content">
+    <ResultsErrorBoundary>
+      {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
+        <section className="route-state-card" role="status" aria-live="polite">
+          <p>
+            Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
+            Inspect logs for analysisId {analysisId || '—'}.
+          </p>
         </section>
-      </main>
+      )}
+      <CandidateResults
+        candidates={candidateResultsPayload}
+        onBack={() => {
+          window.location.href = '/analyses'
+        }}
+      />
+    </ResultsErrorBoundary>
+  </section>
+</main>
     )
   }
 
