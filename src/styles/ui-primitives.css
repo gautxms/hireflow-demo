@@ -1,0 +1,61 @@
+.ui-card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-primary);
+}
+
+.ui-card--card-spacing {
+  padding: var(--spacing-lg);
+}
+
+.hf-btn {
+  border-radius: var(--radius-md);
+  padding: 10px 22px;
+  font: 700 14px 'DM Sans', sans-serif;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.hf-btn--primary {
+  background: var(--color-accent-green);
+  color: #000;
+}
+
+.hf-btn--primary:hover {
+  background: color-mix(in srgb, var(--color-accent-green), #000 10%);
+}
+
+.hf-btn--primary:active {
+  transform: scale(0.98);
+}
+
+.hf-btn--secondary {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  font-weight: var(--font-weight-medium);
+}
+
+.hf-btn--secondary:hover {
+  border-color: color-mix(in srgb, var(--color-border), #fff 15%);
+  color: var(--color-text-primary);
+}
+
+.ui-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-lg);
+  background: rgba(0, 0, 0, 0.76);
+}
+
+.ui-modal__dialog {
+  width: min(760px, calc(100vw - (var(--spacing-xl) * 2)));
+  max-height: calc(100vh - (var(--spacing-xl) * 2));
+  overflow-y: auto;
+}
