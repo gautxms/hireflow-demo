@@ -49,10 +49,12 @@ function toCandidateResultsPayload(analysis) {
   const directCandidates = Array.isArray(analysis?.candidates) ? analysis.candidates : []
 
   const itemCandidates = items.flatMap((item) => {
-    const result = safeParseResult(item?.result) || {}
-    const candidates = Array.isArray(result.candidates)
-      ? result.candidates
-      : (result && typeof result === 'object' ? [result] : [])
+    const result = safeParseResult(item?.result)
+    const candidates = Array.isArray(result)
+      ? result
+      : Array.isArray(result?.candidates)
+        ? result.candidates
+        : (result && typeof result === 'object' ? [result] : [])
 
     return candidates.filter((candidate) => candidate && typeof candidate === 'object').map((candidate, index) => ({
       ...candidate,
