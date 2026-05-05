@@ -28,11 +28,20 @@ import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
+function safeSerialize(value) {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return '[object]'
+  }
+}
+
+
 function parseSkills(skills) {
   if (Array.isArray(skills)) {
     return skills
       .map((skill) => (typeof skill === 'object' && skill !== null
-        ? skill.name || skill.label || JSON.stringify(skill)
+        ? skill.name || skill.label || safeSerialize(skill)
         : skill))
       .map((skill) => String(skill || '').trim())
       .filter(Boolean)
@@ -53,7 +62,7 @@ function normalizeSkillKey(skill) {
 
 function formatSkillLabel(skill) {
   if (typeof skill === 'object' && skill !== null) {
-    return skill.name || skill.label || JSON.stringify(skill)
+    return skill.name || skill.label || safeSerialize(skill)
   }
 
   return skill
