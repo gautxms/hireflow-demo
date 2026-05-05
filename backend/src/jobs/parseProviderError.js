@@ -3,7 +3,7 @@ const ADMIN_SECURITY_PATH = '/admin/security'
 
 const CATEGORY_MESSAGES = {
   response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
-  response_truncated_error: 'AI response was truncated before completion; retry or switch provider/model.',
+  response_truncated_error: 'AI output exceeded response size; retry with compact analysis or reduce schema detail.',
   invalid_request_error: 'AI model configuration issue in Admin Security.',
   not_found_error: 'AI model configuration issue in Admin Security.',
   auth_error: 'AI key invalid or expired.',
@@ -171,12 +171,13 @@ function buildHints(category, { provider, model } = {}) {
 
   if (category === 'response_format_error' || category === 'response_truncated_error') {
     return {
-      action: 'retry_or_adjust_provider_model',
+      action: 'retry_compact_or_adjust_output_schema',
       adminPath: ADMIN_SECURITY_PATH,
       remediationSteps: [
-        'Retry once; transient provider formatting issues can self-resolve.',
+        'AI output exceeded response size. Retry with compact analysis mode.',
+        'Reduce output detail/schema size (shorter strings, fewer list items, omit optional fields).',
+        'Use larger output budget or a stronger model only if compact mode still fails.',
         modelStep,
-        'If persistent, switch to a different supported model or fallback provider.',
       ],
     }
   }

@@ -17,6 +17,7 @@ const OPENAI_MODEL_CAPABILITIES = {
 }
 const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
 const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
+const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
 const OPENAI_COMPACT_MODEL_PATTERN = /gpt-5-nano/i
 
 let claudeTokensUsed = {
@@ -66,6 +67,45 @@ function clampStringArray(values, { maxItems, maxItemLength }) {
     .map((item) => clampString(item, maxItemLength))
     .filter(Boolean)
     .slice(0, maxItems)
+}
+
+function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {}) {
+  const matchedSkills = clampStringArray(
+    candidate?.matchedSkills || candidate?.fit_assessment?.matched_requirements || [],
+    { maxItems: minimalMode ? 10 : 15, maxItemLength: 80 },
+  )
+  const missingSkills = clampStringArray(
+    candidate?.missingSkills || candidate?.fit_assessment?.missing_requirements || [],
+    { maxItems: minimalMode ? 5 : 10, maxItemLength: 80 },
+  )
+  return {
+    id: clampString(candidate?.id || '', 120),
+    name: clampString(candidate?.name || candidate?.full_name || 'Unknown Candidate', 80),
+    email: clampString(candidate?.email || '', 120),
+    phone: clampString(candidate?.phone || candidate?.phone_number || '', 40),
+    score: Number.isFinite(Number(candidate?.score))
+      ? Math.max(0, Math.min(100, Number(candidate.score)))
+      : Math.max(0, Math.min(100, Number(candidate?.matchScore?.score || 0))),
+    verdict: clampString(candidate?.verdict || candidate?.matchScore?.fit || 'review', 30),
+    summary: clampString(candidate?.summary || candidate?.profile_summary || '', minimalMode ? 200 : 380),
+    strengths: clampStringArray(candidate?.strengths || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
+    concerns: clampStringArray(candidate?.concerns || candidate?.considerations || [], { maxItems: minimalMode ? 3 : 5, maxItemLength: 120 }),
+    matchedSkills,
+    missingSkills,
+    skills: clampStringArray(candidate?.skills || [...matchedSkills, ...missingSkills], { maxItems: 25, maxItemLength: 80 }),
+    experienceHighlights: clampStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
+    evidenceSnippets: clampStringArray(candidate?.evidenceSnippets || [], { maxItems: minimalMode ? 1 : 2, maxItemLength: 150 }),
+    recommendation: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', minimalMode ? 160 : 250),
+    filename: clampString(candidate?.filename || '', 180),
+    resumeId: clampString(candidate?.resumeId || candidate?.resume_id || '', 100),
+  }
+}
+
+function normalizeCompactAnalysis(result = {}, { minimalMode = false } = {}) {
+  const sourceCandidates = Array.isArray(result?.candidates) ? result.candidates : []
+  return {
+    candidates: sourceCandidates.slice(0, 20).map((candidate) => normalizeCompactCandidate(candidate, { minimalMode })),
+  }
 }
 
 function createProviderResponseFormatError({
@@ -562,8 +602,9 @@ function buildCompactOutputInstructions({ compactMode = false } = {}) {
     'Prefer empty arrays over verbose explanations.',
     'Response must complete valid JSON within the token budget.',
     compactMode
-      ? 'Compact-minimal required fields: name, email, phone, matchScore.score, matchScore.fit, matchScore.reason, summary, strengths, considerations, fit_assessment.matched_requirements, fit_assessment.missing_requirements, parseMeta.'
-      : 'Use compact field lengths and item caps strictly.',
+      ? 'Minimal schema per candidate: {name, score, summary<=200, strengths<=3, concerns<=3, matchedSkills<=10, missingSkills<=5, recommendation<=160}.'
+      : 'Compact schema per candidate: {name,email,phone,score,verdict,summary<=380,strengths<=5,concerns<=5,matchedSkills<=15,missingSkills<=10,skills<=25,experienceHighlights<=3,evidenceSnippets<=2,recommendation<=250,filename,resumeId}.',
+    'If output risks truncation, omit optional fields first (experienceHighlights, evidenceSnippets, email, phone).',
   ].join('\n')
 }
 
@@ -572,11 +613,14 @@ function cleanExtractedTextForPrompt(text, { maxChars = DEFAULT_TEXT_PROMPT_CHAR
   const lines = dedupeLinesPreserveOrder(
     original
       .replace(/\u0000/g, ' ')
+      .replace(/\uFFFD/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
       .replace(/[^\S\r\n]+/g, ' ')
       .replace(/\r/g, '\n'),
   )
   const cleaned = lines
     .filter((line) => !/^page\s+\d+(\s+of\s+\d+)?$/i.test(line))
+    .filter((line) => !/^(confidential|curriculum vitae|resume)\s*$/i.test(line))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -742,6 +786,7 @@ export async function analyzeWithAnthropic(
     }
   }
 
+  result = normalizeCompactAnalysis(result, { minimalMode: compactMode })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('Anthropic response is missing candidates array')
   }
@@ -884,7 +929,7 @@ export async function analyzeWithOpenAI(
   }
 
   console.log('[AI][OpenAI] Raw response before parsing:', outputText)
-  const result = extractJsonWithContext(outputText, { provider: 'openai', model })
+  const result = normalizeCompactAnalysis(extractJsonWithContext(outputText, { provider: 'openai', model }), { minimalMode: compactMode })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('OpenAI response is missing candidates array')
   }
@@ -924,7 +969,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const attemptHistory = []
   const compactByDefaultForModel = (modelName) => OPENAI_COMPACT_MODEL_PATTERN.test(String(modelName || ''))
   const isTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
-  const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8')) : null
+  const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
 
   for (const entry of attemptPlan) {
