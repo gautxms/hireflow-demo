@@ -616,8 +616,8 @@ function buildAnalysisModeDirectives(jobDescriptionContext = null) {
   ].join('\n')
 }
 
-function buildCompactOutputInstructions({ compactMode = false } = {}) {
-  const modeLabel = compactMode ? 'COMPACT_MINIMAL' : 'COMPACT_STANDARD'
+function buildCompactOutputInstructions({ compactMode = false, truncationSafeMode = false } = {}) {
+  const modeLabel = truncationSafeMode ? 'COMPACT_TRUNCATION_SAFE' : (compactMode ? 'COMPACT_MINIMAL' : 'COMPACT_STANDARD')
   return [
     `Output Mode: ${modeLabel}`,
     'Return compact JSON only. No markdown. No text before or after JSON.',
@@ -625,9 +625,11 @@ function buildCompactOutputInstructions({ compactMode = false } = {}) {
     'Keep every string concise. If uncertain, return fewer items rather than longer text.',
     'Prefer empty arrays over verbose explanations.',
     'Response must complete valid JSON within the token budget.',
-    compactMode
-      ? 'Minimal schema per candidate: {name,score,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,recommendation<=160}.'
-      : 'Compact schema per candidate: {name,email,phone,score,verdict,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,skills<=25,recommendation<=160,filename,resumeId}.',
+    truncationSafeMode
+      ? 'Return at most 3 candidates. Use minimal schema only: {name,score,summary<=140,strengths<=2,concerns<=2,matchedSkills<=6,missingSkills<=3,recommendation<=120}. Omit all optional fields.'
+      : (compactMode
+        ? 'Return at most 5 candidates. Minimal schema per candidate: {name,score,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,recommendation<=160}.'
+        : 'Return at most 10 candidates. Compact schema per candidate: {name,email,phone,score,verdict,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,skills<=25,recommendation<=160,filename,resumeId}.'),
     'Do not include evidence snippets, full work history, full resume text, or full job description text.',
     'If output risks truncation, omit optional fields first (email, phone, filename, resumeId, skills).',
   ].join('\n')
@@ -722,12 +724,12 @@ export async function analyzeWithAnthropic(
     ? anthropicClientFactory({ apiKey })
     : new Anthropic({ apiKey })
 
-  const outputInstructions = buildCompactOutputInstructions({ compactMode })
+  const baseOutputInstructions = buildCompactOutputInstructions({ compactMode })
   const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
-  const prompt = `${systemPromptText}\n\n${outputInstructions}`
+  const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
-  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: outputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: 'document_file' })
   console.log('[AI Parse] Prompt metrics:', { provider: 'anthropic', model, ...promptMetrics })
   console.log(
     '[HireFlow] JD in AI user message:',
@@ -872,12 +874,12 @@ export async function analyzeWithOpenAI(
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
-  const outputInstructions = buildCompactOutputInstructions({ compactMode })
+  const baseOutputInstructions = buildCompactOutputInstructions({ compactMode })
   const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
-  const prompt = `${systemPromptText}\n\n${outputInstructions}`
+  const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
-  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: outputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: 'document_file' })
   console.log('[AI Parse] Prompt metrics:', { provider: 'openai', model, ...promptMetrics })
   console.log(
     '[HireFlow] JD in AI user message:',
@@ -888,7 +890,7 @@ export async function analyzeWithOpenAI(
     ? modelCapabilities
     : OPENAI_MODEL_CAPABILITIES.default
 
-  const buildRequestBody = (maxOutputTokens) => {
+  const buildRequestBody = (maxOutputTokens, promptText) => {
     const requestBody = {
       model,
       max_output_tokens: maxOutputTokens,
@@ -903,7 +905,7 @@ export async function analyzeWithOpenAI(
             },
             {
               type: 'input_text',
-              text: prompt,
+              text: promptText,
             },
           ],
         },
@@ -916,14 +918,14 @@ export async function analyzeWithOpenAI(
     return requestBody
   }
 
-  const callOpenAi = async (maxOutputTokens) => {
+  const callOpenAi = async (maxOutputTokens, promptText) => {
     const response = await fetchImpl('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(buildRequestBody(maxOutputTokens)),
+      body: JSON.stringify(buildRequestBody(maxOutputTokens, promptText)),
     })
 
     if (!response.ok) {
@@ -945,9 +947,16 @@ export async function analyzeWithOpenAI(
   let incompleteReason = ''
   const tokenLadder = compactMode ? [1200, 2000, 3000] : OPENAI_OUTPUT_TOKEN_LADDER
   let attemptedMaxOutputTokens = tokenLadder[0]
-  for (const maxOutputTokens of tokenLadder) {
+  for (let index = 0; index < tokenLadder.length; index += 1) {
+    const maxOutputTokens = tokenLadder[index]
+    const retryingAfterTokenCeiling = index > 0
+    const retryOutputInstructions = retryingAfterTokenCeiling
+      ? buildCompactOutputInstructions({ compactMode: true, truncationSafeMode: true })
+      : baseOutputInstructions
+    const requestPrompt = `${systemPromptText}\n\n${retryOutputInstructions}`
+
     attemptedMaxOutputTokens = maxOutputTokens
-    payload = await callOpenAi(maxOutputTokens)
+    payload = await callOpenAi(maxOutputTokens, requestPrompt)
     responseStatus = String(payload?.status || '').toLowerCase()
     incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
 
