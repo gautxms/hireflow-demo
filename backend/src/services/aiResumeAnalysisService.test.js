@@ -600,3 +600,80 @@ test('analyzeWithOpenAI throws when parsed candidates is not an array', async ()
     /missing candidates array/,
   )
 })
+
+
+test('buildPromptWithJobDescription does not duplicate output contract directives', () => {
+  const prompt = buildPromptWithJobDescription('Base prompt', { hasContext: true, jobDescriptionId: 'jd-100' })
+  assert.equal(prompt.includes('Return compact JSON only.'), false)
+})
+
+test('analyzeResumeWithConfiguredFallback can disable fallback on truncation', async () => {
+  process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION = 'true'
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+      openai: {
+        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  let openAiCalled = false
+  await assert.rejects(() => analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+    analyzeWithAnthropic: async () => { throw new Error('response_truncated_error::{}') },
+    analyzeWithOpenAI: async () => { openAiCalled = true; return { result: { candidates: [{ id: 'x' }] } } },
+  }), /response_truncated_error::/)
+
+  assert.equal(openAiCalled, false)
+  delete process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION
+})
+
+test('analyzeResumeWithConfiguredFallback counts only executed attempts against cap', async () => {
+  process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = '1'
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+      openai: {
+        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  let anthropicCalled = false
+  let openAiCalled = false
+  const response = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'resume.docx', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+    analyzeWithAnthropic: async () => { anthropicCalled = true; throw new Error('anthropic should be skipped for DOCX') },
+    analyzeWithOpenAI: async () => {
+      openAiCalled = true
+      return {
+        result: { candidates: [{ id: 'cand-1' }] },
+        tokenUsage: { usageAvailable: false },
+        provider: 'openai-primary',
+        model: 'gpt-4.1-mini',
+        credentialLabel: 'primary',
+        providerSource: 'admin',
+        promptVersion: 2,
+        promptIsDefaultFallback: false,
+      }
+    },
+  })
+
+  assert.equal(anthropicCalled, false)
+  assert.equal(openAiCalled, true)
+  assert.equal(response.attempts.length, 1)
+  assert.equal(response.attempts[0].success, true)
+  assert.equal(response.attempts[0].provider, 'openai-primary')
+  delete process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+})
