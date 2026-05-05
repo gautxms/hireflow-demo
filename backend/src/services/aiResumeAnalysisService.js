@@ -16,6 +16,13 @@ const OPENAI_MODEL_CAPABILITIES = {
   },
 }
 const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
+function isFallbackDisabledOnTruncation() {
+  return String(process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION || '').toLowerCase() === 'true'
+}
+
+function getMaxProviderAttemptsPerFile() {
+  return Math.max(1, Number.parseInt(process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE || '8', 10) || 8)
+}
 const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
 const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
 const CANDIDATE_COMPACT_SCHEMA_VERSION = 'compact-v2'
@@ -675,7 +682,19 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
 
   const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
 
-  return `${basePrompt}\n\n${analysisModeDirectives}\n\n${buildCompactOutputInstructions({ compactMode: false })}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+}
+
+
+function buildPromptMetrics({ prompt, systemPrompt, outputInstruction, jobDescriptionContext, resumeCharCount = null, inputMode = 'document_file' }) {
+  return {
+    promptCharCount: String(prompt || '').length,
+    systemPromptCharCount: String(systemPrompt || '').length,
+    outputInstructionCharCount: String(outputInstruction || '').length,
+    jdContextCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+    resumeTextCharCount: Number.isFinite(resumeCharCount) ? resumeCharCount : null,
+    inputMode,
+  }
 }
 
 export async function analyzeWithAnthropic(
@@ -703,9 +722,13 @@ export async function analyzeWithAnthropic(
     ? anthropicClientFactory({ apiKey })
     : new Anthropic({ apiKey })
 
-  const prompt = `${promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)}\n\n${buildCompactOutputInstructions({ compactMode })}`
+  const outputInstructions = buildCompactOutputInstructions({ compactMode })
+  const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const prompt = `${systemPromptText}\n\n${outputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
+  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: outputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  console.log('[AI Parse] Prompt metrics:', { provider: 'anthropic', model, ...promptMetrics })
   console.log(
     '[HireFlow] JD in AI user message:',
     prompt.includes('Job Description Context:\nAVAILABLE') ? 'YES' : 'NO — JD missing from prompt',
@@ -821,7 +844,7 @@ export async function analyzeWithAnthropic(
     mode: compactMode ? 'minimal' : 'compact',
     schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
     maxOutputTokens: compactMode ? 1400 : 2200,
-    promptCharCount: prompt.length,
+    promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
     jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
   }
@@ -849,9 +872,13 @@ export async function analyzeWithOpenAI(
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
-  const prompt = `${promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)}\n\n${buildCompactOutputInstructions({ compactMode })}`
+  const outputInstructions = buildCompactOutputInstructions({ compactMode })
+  const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const prompt = `${systemPromptText}\n\n${outputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
+  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: outputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  console.log('[AI Parse] Prompt metrics:', { provider: 'openai', model, ...promptMetrics })
   console.log(
     '[HireFlow] JD in AI user message:',
     prompt.includes('Job Description Context:\nAVAILABLE') ? 'YES' : 'NO — JD missing from prompt',
@@ -972,7 +999,7 @@ export async function analyzeWithOpenAI(
     mode: compactMode ? 'minimal' : 'compact',
     schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
     maxOutputTokens: attemptedMaxOutputTokens,
-    promptCharCount: prompt.length,
+    promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
     jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
   }
@@ -1004,7 +1031,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
 
-  for (const entry of attemptPlan) {
+  for (const [attemptIndex, entry] of attemptPlan.entries()) {
+    if (attemptIndex >= getMaxProviderAttemptsPerFile()) break
     if (!providerSupportsMimeType(entry.provider, mimeType)) {
       console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${mimeType}.`)
       continue
@@ -1093,6 +1121,9 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         failureCategory,
         failureReason,
       }))
+      if (failureCategory === 'response_truncated_error' && isFallbackDisabledOnTruncation()) {
+        throw createTerminalProviderError(error, attemptHistory)
+      }
       if (failureCategory === 'billing_quota_error') {
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} quota/billing failed; immediate failover.`, error.message)
       } else if (failureCategory === 'response_format_error') {

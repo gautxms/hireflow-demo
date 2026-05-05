@@ -600,3 +600,36 @@ test('analyzeWithOpenAI throws when parsed candidates is not an array', async ()
     /missing candidates array/,
   )
 })
+
+
+test('buildPromptWithJobDescription does not duplicate output contract directives', () => {
+  const prompt = buildPromptWithJobDescription('Base prompt', { hasContext: true, jobDescriptionId: 'jd-100' })
+  assert.equal(prompt.includes('Return compact JSON only.'), false)
+})
+
+test('analyzeResumeWithConfiguredFallback can disable fallback on truncation', async () => {
+  process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION = 'true'
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+      openai: {
+        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  let openAiCalled = false
+  await assert.rejects(() => analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+    analyzeWithAnthropic: async () => { throw new Error('response_truncated_error::{}') },
+    analyzeWithOpenAI: async () => { openAiCalled = true; return { result: { candidates: [{ id: 'x' }] } } },
+  }), /response_truncated_error::/)
+
+  assert.equal(openAiCalled, false)
+  delete process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION
+})
