@@ -326,54 +326,44 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     )
   }
 
-  if ((displayStatus === 'complete' || displayStatus === 'completed' || displayStatus === 'partial' || displayStatus === 'failed') && candidateResultsPayload.candidates.length > 0) {
-    return (
-      <main className="analyses-layout">
-        <section className="analyses-layout__content">
-          <ResultsErrorBoundary
-            analysisId={analysisId}
-            candidateCount={candidateCount}
-            normalizationStats={{
-              inputCount: itemCount,
-              droppedCount: Math.max(itemCount - candidateCount, 0),
+  if (
+  (displayStatus === 'complete' ||
+    displayStatus === 'completed' ||
+    displayStatus === 'partial' ||
+    displayStatus === 'failed') &&
+  candidateResultsPayload.candidates.length > 0
+) {
+  return (
+    <main className="analyses-layout">
+      <section className="analyses-layout__content">
+        <ResultsErrorBoundary
+          analysisId={analysisId}
+          candidateCount={candidateCount}
+          normalizationStats={{
+            inputCount: itemCount,
+            droppedCount: Math.max(itemCount - candidateCount, 0),
+          }}
+        >
+          {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
+            <section className="route-state-card" role="status" aria-live="polite">
+              <p>
+                Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
+                Inspect logs for analysisId {analysisId || '—'}.
+              </p>
+            </section>
+          )}
+
+          <CandidateResults
+            candidates={candidateResultsPayload}
+            onBack={() => {
+              window.location.href = '/analyses'
             }}
-          >
-            {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
-              <section className="route-state-card" role="status" aria-live="polite">
-                <p>
-                  Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
-                  Inspect logs for analysisId {analysisId || '—'}.
-                </p>
-              </section>
-            )}
-            <CandidateResults
-              candidates={candidateResultsPayload}
-              onBack={() => {
-                window.location.href = '/analyses'
-              }}
-            />
-          </ResultsErrorBoundary>
-  <section className="analyses-layout__content">
-    <ResultsErrorBoundary>
-      {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
-        <section className="route-state-card" role="status" aria-live="polite">
-          <p>
-            Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
-            Inspect logs for analysisId {analysisId || '—'}.
-          </p>
-        </section>
-      )}
-      <CandidateResults
-        candidates={candidateResultsPayload}
-        onBack={() => {
-          window.location.href = '/analyses'
-        }}
-      />
-    </ResultsErrorBoundary>
-  </section>
-</main>
-    )
-  }
+          />
+        </ResultsErrorBoundary>
+      </section>
+    </main>
+  )
+}
 
   return (
     <main className="route-state">
