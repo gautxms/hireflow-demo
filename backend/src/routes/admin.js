@@ -25,6 +25,16 @@ import { isValidModelFormat } from '../config/aiModels.js'
 const router = Router()
 const RUNTIME_SUPPORTED_ACTIVE_PROVIDERS = [...SUPPORTED_PROVIDERS]
 const CONNECTION_TEST_TIMEOUT_MS = 15000
+const OPENAI_TEST_MIN_OUTPUT_TOKENS = 16
+const OPENAI_TEST_MAX_OUTPUT_TOKENS = 32
+const ANTHROPIC_TEST_MAX_TOKENS = 32
+const PROVIDER_TEST_PROMPT = 'Return OK'
+
+function clampOpenAiTestMaxOutputTokens(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return OPENAI_TEST_MAX_OUTPUT_TOKENS
+  return Math.max(OPENAI_TEST_MIN_OUTPUT_TOKENS, Math.floor(parsed))
+}
 
 function normalizeProviderError(error) {
   const status = Number(error?.status || error?.statusCode || 0)
@@ -100,13 +110,13 @@ async function runProviderConnectionTest({ provider, apiKey, model }) {
     const requestBody = provider === 'anthropic'
       ? {
           model,
-          max_tokens: 8,
-          messages: [{ role: 'user', content: 'Respond with: ok' }],
+          max_tokens: ANTHROPIC_TEST_MAX_TOKENS,
+          messages: [{ role: 'user', content: PROVIDER_TEST_PROMPT }],
         }
       : {
           model,
-          max_output_tokens: 8,
-          input: 'Respond with: ok',
+          max_output_tokens: clampOpenAiTestMaxOutputTokens(OPENAI_TEST_MAX_OUTPUT_TOKENS),
+          input: PROVIDER_TEST_PROMPT,
         }
 
     const response = await fetch(
