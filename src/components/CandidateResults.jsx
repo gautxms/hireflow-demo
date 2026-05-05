@@ -966,12 +966,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const score = resolveActiveCandidateScore(candidate)
         const tier = scoreTier(score)
         const displayScore = toTenScale(score)
+        const normalizeTextList = (list) => (Array.isArray(list) ? list.map((entry) => toDisplayText(entry, '')).filter(Boolean) : [])
         const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
-          ? candidate.strengths
+          ? normalizeTextList(candidate.strengths)
           : Array.isArray(candidate.achievements)
-            ? candidate.achievements.slice(0, 3)
+            ? normalizeTextList(candidate.achievements).slice(0, 3)
             : []
-        const candidateConsiderations = Array.isArray(candidate.considerations) ? candidate.considerations : []
+        const candidateConsiderations = normalizeTextList(candidate.considerations)
         const experienceEntries = Array.isArray(candidate.experience) ? candidate.experience.slice(0, 2) : []
         const topSkills = Array.isArray(candidate.top_skills) ? candidate.top_skills : parseSkills(candidate.skills).slice(0, 6)
         const initials = String(candidate?.name || '')
@@ -1043,9 +1044,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
                 {experienceEntries.map((job, idx) => (
                   <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
-                    <div className="dd-job-title">{job.title}</div>
+                    <div className="dd-job-title">{toDisplayText(job.title, 'Role not provided')}</div>
                     <div className="dd-job-meta">
-                      {job.company} · {job.durationText || [job.startDate, job.endDate].filter(Boolean).join(' – ')}
+                      {toDisplayText(job.company, 'N/A')} · {toDisplayText(job.durationText, [job.startDate, job.endDate].filter(Boolean).join(' – ') || 'N/A')}
                     </div>
                   </div>
                 ))}
