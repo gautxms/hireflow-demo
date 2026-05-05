@@ -32,6 +32,28 @@ function normalizeStatus(status) {
   return STATUS_ALIAS_MAP[normalizedStatus] || normalizedStatus
 }
 
+
+function getFileKey(file) {
+  return `${file.name}-${file.size}-${file.lastModified}`
+}
+
+function deriveDisplayStatus(analysis) {
+  const summary = analysis?.summary || {}
+  const total = Number(summary.total || 0)
+  const complete = Number(summary.complete || 0)
+  const failed = Number(summary.failed || 0)
+  const processing = Number(summary.processing || 0)
+  const pending = Number(summary.pending || 0)
+
+  if (processing > 0) return 'processing'
+  if (pending > 0 && complete < total) return 'pending'
+  if (total > 0 && complete === total && failed === 0) return 'complete'
+  if (total > 0 && failed === total) return 'failed'
+  if (total > 0 && complete > 0 && failed > 0 && pending === 0 && processing === 0) return 'partial'
+
+  return normalizeStatus(analysis?.liveStatus || analysis?.status)
+}
+
 function inferResumeMimeType(fileLike = {}) {
   const explicitType = String(fileLike?.type || '').trim().toLowerCase()
   if (ACCEPTED_TYPES.has(explicitType)) return explicitType
@@ -85,6 +107,25 @@ export default function AnalysesPage() {
   }, [])
 
   useEffect(() => {
+    const hasActiveAnalyses = items.some((analysis) => {
+      const status = deriveDisplayStatus(analysis)
+      return status === 'pending' || status === 'processing'
+    })
+    if (!hasActiveAnalyses) return undefined
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const nextItems = await loadAnalyses()
+        setItems(nextItems)
+      } catch {
+        // keep existing data if polling request fails
+      }
+    }, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [items])
+
+  useEffect(() => {
     if (!isCreateModalOpen) return
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) return
@@ -121,14 +162,11 @@ export default function AnalysesPage() {
   }, [isCreateModalOpen])
 
   const handleFilesSelected = (incomingFiles) => {
-    const allowed = []
+    const incomingArray = Array.from(incomingFiles || [])
     const rejected = []
+    const validIncoming = []
 
-    incomingFiles.forEach((file, index) => {
-      if ((allowed.length + 1) > MAX_FILE_COUNT) {
-        if (index === incomingFiles.length - 1 || rejected.length === 0) rejected.push(`Maximum ${MAX_FILE_COUNT} files per analysis.`)
-        return
-      }
+    incomingArray.forEach((file) => {
       const isAllowedType = ACCEPTED_TYPES.has(inferResumeMimeType(file))
       const isAllowedSize = file.size <= MAX_FILE_SIZE
       if (!isAllowedType) {
@@ -139,16 +177,30 @@ export default function AnalysesPage() {
         rejected.push(`${file.name}: exceeds 100MB limit.`)
         return
       }
-      allowed.push(file)
+      validIncoming.push(file)
     })
 
-    setSelectedFiles(allowed)
+    setSelectedFiles((currentFiles) => {
+      const nextByKey = new Map(currentFiles.map((file) => [getFileKey(file), file]))
+      validIncoming.forEach((file) => nextByKey.set(getFileKey(file), file))
+      const merged = Array.from(nextByKey.values())
+      if (merged.length > MAX_FILE_COUNT) {
+        rejected.push(`Maximum ${MAX_FILE_COUNT} files per analysis.`)
+      }
+      return merged.slice(0, MAX_FILE_COUNT)
+    })
+
     setValidationErrors((current) => ({ ...current, files: rejected.length > 0 ? rejected.join(' ') : '' }))
     setSubmitError('')
   }
 
   const handleFileSelection = (event) => {
-    handleFilesSelected(Array.from(event.target.files || []))
+    handleFilesSelected(event.target.files || [])
+    event.target.value = ''
+  }
+
+  const handleRemoveSelectedFile = (fileKey) => {
+    setSelectedFiles((currentFiles) => currentFiles.filter((file) => getFileKey(file) !== fileKey))
   }
 
   const handleSubmit = async (event) => {
@@ -183,6 +235,7 @@ export default function AnalysesPage() {
             mimeType: inferResumeMimeType(file),
             ...(toOptionalJobDescriptionId(selectedJobDescriptionId) ? { jobDescriptionId: selectedJobDescriptionId } : {}),
             ...(analysisId ? { analysisId } : {}),
+            ...(analysisName.trim() ? { analysisName: analysisName.trim() } : {}),
           }),
         })
         const initPayload = await initResponse.json().catch(() => ({}))
@@ -239,12 +292,11 @@ export default function AnalysesPage() {
 
           {!loading && !error && sortedItems.length > 0 && (
             <table className="analyses-layout__table">
-              <thead><tr><th>Created</th><th>Live status</th><th>Summary</th><th>Job description</th><th>Open</th></tr></thead>
+              <thead><tr><th>Analysis name</th><th>Created</th><th>Live status</th><th>Job description</th></tr></thead>
               <tbody>
                 {sortedItems.map((analysis) => {
-                  const status = normalizeStatus(analysis.liveStatus || analysis.status)
-                  const summary = analysis.summary || {}
-                  return <tr key={analysis.id}><td>{formatDate(analysis.createdAt)}</td><td>{status}</td><td>Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {summary.failed || 0} · Processing {summary.processing || 0} · Pending {summary.pending || 0}</td><td>{analysis.jobDescriptionTitle || 'No job description'}</td><td><a href={`/analyses/${analysis.id}`}>View</a></td></tr>
+                  const status = deriveDisplayStatus(analysis)
+                  return <tr key={analysis.id}><td><a href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a></td><td>{formatDate(analysis.createdAt)}</td><td>{status}</td><td>{analysis.jobDescriptionTitle || 'No job description'}</td></tr>
                 })}
               </tbody>
             </table>
@@ -270,12 +322,13 @@ export default function AnalysesPage() {
         nameInputRef={nameInputRef}
         isDraggingOverDropzone={isDraggingOverDropzone}
         onDraggingOverDropzoneChange={setIsDraggingOverDropzone}
+        onRemoveSelectedFile={handleRemoveSelectedFile}
       />
     </main>
   )
 }
 
-function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNameChange, selectedJobDescriptionId, onSelectedJobDescriptionIdChange, jobDescriptions, onFileSelection, onFilesSelected, selectedFiles, validationErrors, submitError, onSubmit, onClose, nameInputRef, isDraggingOverDropzone, onDraggingOverDropzoneChange }) {
+function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNameChange, selectedJobDescriptionId, onSelectedJobDescriptionIdChange, jobDescriptions, onFileSelection, onFilesSelected, selectedFiles, validationErrors, submitError, onSubmit, onClose, nameInputRef, isDraggingOverDropzone, onDraggingOverDropzoneChange, onRemoveSelectedFile }) {
   const dialogRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -326,7 +379,7 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
         <form onSubmit={onSubmit} className="analyses-modal__form" noValidate>
           <div className="analyses-modal__field"><label htmlFor="analysis-name">Analysis name</label><input className="analyses-modal__control" ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => onAnalysisNameChange(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />{validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}</div>
           <div className="analyses-modal__field"><label htmlFor="analysis-jd">Job description <span>(optional)</span></label><select className="analyses-modal__control" id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => onSelectedJobDescriptionIdChange(event.target.value)}><option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>{jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
-          <div className="analyses-modal__field"><label htmlFor="analysis-files">Resume files</label><input ref={fileInputRef} className="analyses-modal__input-hidden" id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} /><div className={`analyses-modal__dropzone${isDraggingOverDropzone ? ' is-dragging' : ''}${validationErrors.files ? ' is-invalid' : ''}`} onDragEnter={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragOver={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget.contains(event.relatedTarget)) return; setDropzoneDragging(false) }} onDrop={handleDrop}><Upload size={18} strokeWidth={1.5} aria-hidden="true" /><p className="analyses-modal__dropzone-title">Drag and drop resumes here</p><p id="analysis-files-help" className="analyses-modal__help">PDF or DOCX · Up to 20 files · 100MB each</p><button type="button" className="hf-btn hf-btn--secondary analyses-modal__browse-btn" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>Browse files</button></div>{selectedFiles.length > 0 && <div className="analyses-modal__selected-files"><p className="analyses-modal__selected-count">{selectedFiles.length} file(s) selected</p><ul>{selectedFiles.map((file) => <li key={`${file.name}-${file.size}`}>{file.name}</li>)}</ul></div>}{validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}</div>
+          <div className="analyses-modal__field"><label htmlFor="analysis-files">Resume files</label><input ref={fileInputRef} className="analyses-modal__input-hidden" id="analysis-files" type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} /><div className={`analyses-modal__dropzone${isDraggingOverDropzone ? ' is-dragging' : ''}${validationErrors.files ? ' is-invalid' : ''}`} onDragEnter={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragOver={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget.contains(event.relatedTarget)) return; setDropzoneDragging(false) }} onDrop={handleDrop}><Upload size={18} strokeWidth={1.5} aria-hidden="true" /><p className="analyses-modal__dropzone-title">Drag and drop resumes here</p><p id="analysis-files-help" className="analyses-modal__help">PDF or DOCX · Up to 20 files · 100MB each</p><button type="button" className="hf-btn hf-btn--secondary analyses-modal__browse-btn" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>Browse files</button></div>{selectedFiles.length > 0 && <div className="analyses-modal__selected-files"><p className="analyses-modal__selected-count">{selectedFiles.length} file(s) selected</p><ul>{selectedFiles.map((file) => <li key={getFileKey(file)}><span>{file.name}</span><button type="button" className="analyses-modal__file-remove" onClick={() => onRemoveSelectedFile(getFileKey(file))} aria-label={`Remove ${file.name}`}>×</button></li>)}</ul></div>}{validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}</div>
           {submitError && <p role="alert" className="analyses-modal__error">{submitError}</p>}
           <div className="analyses-modal__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button></div>
         </form>

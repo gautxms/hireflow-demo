@@ -154,6 +154,7 @@ router.get('/', requireAuth, async (req, res) => {
       `SELECT a.id,
               a.created_at,
               a.status,
+              a.name,
               a.job_description_id,
               jd.title AS job_description_title,
               COUNT(ai.id) AS total_count,
@@ -181,8 +182,15 @@ router.get('/', requireAuth, async (req, res) => {
       return {
         id: String(row.id),
         createdAt: row.created_at,
+        name: row.name || null,
         status: row.status || 'queued',
-        liveStatus: row.status || 'queued',
+        liveStatus: deriveAggregateStatus({
+          queued: Math.max(0, Number(row.total_count || 0) - Number(row.complete_count || 0) - Number(row.failed_count || 0) - Number(row.processing_count || 0)),
+          processing: Number(row.processing_count || 0),
+          retrying: 0,
+          complete: Number(row.complete_count || 0),
+          failed: Number(row.failed_count || 0),
+        }, Number(row.total_count || 0)),
         summary: { ...summary, pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing) },
         jobDescriptionTitle: row.job_description_title || null,
       }

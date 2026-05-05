@@ -178,7 +178,7 @@ export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
   return true
 }
 
-export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null }) {
+export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null }) {
   ensureS3Configured()
   await ensureUploadChunkTables()
   await ensureAnalysisTables()
@@ -228,10 +228,10 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     }
   } else {
     const createdAnalysis = await pool.query(
-      `INSERT INTO analyses (user_id, job_description_id, status)
-       VALUES ($1, $2, 'pending')
+      `INSERT INTO analyses (user_id, job_description_id, status, name)
+       VALUES ($1, $2, 'pending', NULLIF($3, ''))
        RETURNING id`,
-      [userId, jobDescriptionId],
+      [userId, jobDescriptionId, String(analysisName || "").trim()],
     )
     resolvedAnalysisId = createdAnalysis.rows[0]?.id || ''
   }
