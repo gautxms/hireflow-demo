@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
+import { logResultsRenderError } from './resultsErrorBoundaryTelemetry'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
@@ -203,14 +204,25 @@ function toCandidateResultsPayload(analysis) {
   }
 }
 
-class ResultsErrorBoundary extends React.Component {
+export class ResultsErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, diagnosticCode: '', diagnosticTimestamp: '' }
   }
 
   static getDerivedStateFromError() {
     return { hasError: true }
+  }
+
+  componentDidCatch(error, errorInfo) {
+    const telemetryEvent = logResultsRenderError({
+      analysisId: this.props.analysisId,
+      candidateCount: this.props.candidateCount,
+      normalizationStats: this.props.normalizationStats,
+      error,
+      errorInfo,
+    })
+    this.setState({ diagnosticCode: telemetryEvent.diagnosticCode, diagnosticTimestamp: telemetryEvent.timestamp })
   }
 
   render() {
@@ -219,6 +231,9 @@ class ResultsErrorBoundary extends React.Component {
         <section className="route-state-card" role="alert">
           <p>We could not render these results. Please return to Analyses or retry.</p>
           <a href="/analyses">← Back to analyses</a>
+          {import.meta.env?.DEV && this.state.diagnosticCode && this.state.diagnosticTimestamp && (
+            <p data-testid="results-error-diagnostic">{this.state.diagnosticCode} · {this.state.diagnosticTimestamp}</p>
+          )}
         </section>
       )
     }
@@ -288,6 +303,8 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   const summary = analysis?.summary || {}
   const displayStatus = deriveDisplayStatus(analysis)
   const candidateResultsPayload = useMemo(() => toCandidateResultsPayload(analysis), [analysis])
+  const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
+  const candidateCount = candidateResultsPayload.candidates.length
   const failedCount = Number(summary.failed || 0)
 
   if (loading || error || !analysis) {
@@ -307,7 +324,14 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     return (
       <main className="analyses-layout">
         <section className="analyses-layout__content">
-          <ResultsErrorBoundary>
+          <ResultsErrorBoundary
+            analysisId={analysisId}
+            candidateCount={candidateCount}
+            normalizationStats={{
+              inputCount: itemCount,
+              droppedCount: Math.max(itemCount - candidateCount, 0),
+            }}
+          >
             <CandidateResults
               candidates={candidateResultsPayload}
               onBack={() => {
