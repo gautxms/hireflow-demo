@@ -256,6 +256,10 @@ export function resolveActiveCandidateScore(candidate = {}) {
   ]
 
   for (const rawScore of possibleScores) {
+    if (rawScore == null) {
+      continue
+    }
+
     const numeric = Number(rawScore)
     if (Number.isFinite(numeric)) {
       return numeric
