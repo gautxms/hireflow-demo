@@ -63,6 +63,8 @@ test('GET /analyses/:id returns owner-only detail payload', async (t) => {
 
   assert.equal(response.status, 200)
   assert.equal(payload.id, '22')
+  assert.equal(Object.keys(payload).filter((key) => key === 'diagnostics').length, 1)
+  assert.equal(payload.error, undefined)
   assert.equal(payload.jobDescriptionTitle, 'Product Manager')
   assert.equal(payload.items[0].id, '101')
   assert.deepEqual(payload.items[0].result, { candidates: [{ name: 'Alice' }] })
@@ -112,6 +114,39 @@ test('GET /analyses/:id normalizes historical parse result envelopes and malform
   })
 })
 
+
+
+test('GET /analyses/:id regression: does not reference undefined diagnostics variables', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(parseQueue, 'getJob', async () => null)
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: 44, user_id: 9, status: 'queued', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: null, job_description_title: null }] }
+    }
+    if (sql.includes('FROM analysis_items ai')) {
+      return { rows: [{ id: 301, resume_id: 'r-301', parse_job_id: 'p-301', created_at: '2026-05-01T00:00:10.000Z', filename: 'r.pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: JSON.stringify({ output: { candidates: [{ name: 'Regress' }] } }) }] }
+    }
+    if (sql.includes('UPDATE analyses')) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/44`, { headers: authHeader(9) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(payload.diagnostics, {
+    resultExtraction: {
+      totalItems: 1,
+      parseableObjectCount: 1,
+      candidateBearingItemCount: 1,
+      malformedItemCount: 0,
+    },
+  })
+})
 test('GET /analyses/:id returns 404 for cross-user access', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
   t.mock.method(pool, 'query', async (sql) => {

@@ -233,7 +233,6 @@ async function loadAnalysisStatus(analysisId, userId) {
     items,
     failures,
     counts,
-    resultDiagnostics,
     aggregateStatus,
     isComplete,
     percentComplete,
@@ -351,9 +350,6 @@ router.get('/:id', requireAuth, async (req, res) => {
       failed: counts.failed,
       processing: counts.processing + counts.retrying,
       pending: counts.queued,
-    },
-    diagnostics: {
-      results: resultDiagnostics,
     },
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,
