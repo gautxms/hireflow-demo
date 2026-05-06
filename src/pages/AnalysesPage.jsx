@@ -373,17 +373,19 @@ export default function AnalysesPage() {
           )}
 
           {shouldRenderPaginationControls && (
-            <nav aria-label="Analyses pagination">
+            <nav className="analyses-layout__pagination" aria-label="Analyses pagination">
               <button
                 type="button"
+                className="analyses-layout__pagination-button"
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={currentPage <= 1}
               >
                 Previous
               </button>
-              <span aria-live="polite">Page {currentPage} of {totalPages}</span>
+              <span className="analyses-layout__pagination-info" aria-live="polite">Page {currentPage} of {totalPages}</span>
               <button
                 type="button"
+                className="analyses-layout__pagination-button"
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                 disabled={currentPage >= totalPages}
               >
