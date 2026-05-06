@@ -134,6 +134,12 @@ const scoreTier = (score) => {
   return 'low'
 }
 
+function deriveCompactRationale(candidate) {
+  const reason = String(candidate?.matchScore?.reason || '').trim()
+  if (reason) return reason
+  return 'General profile score based on experience depth, skill breadth, and career progression.'
+}
+
 function activeScore(candidate) {
   const resolved = resolveActiveCandidateScore(candidate)
   const fallbackScore = (
@@ -921,6 +927,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             .slice(0, 2)
             .toUpperCase()
           const topSkills = deriveTopSkills(candidate)
+          const compactRationale = deriveCompactRationale(candidate)
           const selected = selectedIds.includes(candidate._bulkKey)
 
           return (
@@ -960,27 +967,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
               </div>
 
-              {score != null && (
-                <progress
-                  className={`rc-bar-progress rc-bar--${tier}`}
-                  value={score}
-                  max={100}
-                  aria-label={`Match score ${score} out of 100`}
-                />
-              )}
-
-              {(candidate.matchScore?.reason || candidate.profile_score != null) && (
-                <div className="rc-reasoning">
-                  <div className="rc-reasoning-label">
-                    <span className="rc-reasoning-dot" />
-                    AI reasoning
-                  </div>
-                  <div className="rc-reasoning-text">
-                    {candidate.matchScore?.reason
-                      ?? 'General profile score based on experience depth, skill breadth, and career progression.'}
-                  </div>
-                </div>
-              )}
+              <div className="rc-rationale" title={compactRationale}>
+                {compactRationale}
+              </div>
 
               <div className="rc-skills">
                 {topSkills.slice(0, 3).map((skill) => (
