@@ -71,6 +71,17 @@ test('normalizeCandidate returns canonical adapter fields for candidate and resu
   assert.equal(normalized.resumeId, resumeId)
 })
 
+
+test('normalizeCandidate falls back to top-level score when matchScore.score is absent', () => {
+  const normalized = normalizeCandidate({
+    score: 73,
+    matchScore: { reason: 'Missing nested score' },
+  })
+
+  assert.equal(normalized.score, 73)
+  assert.equal(normalized.matchScore.score, 73)
+})
+
 test('fixture: candidate normalization keeps legacy and modern payload score contracts in sync (no-diff gate)', () => {
   const normalizedLegacy = normalizeCandidate(RESULTS_CONTRACT_FIXTURES.legacyCandidate)
   const normalizedModern = normalizeCandidate(RESULTS_CONTRACT_FIXTURES.modernCandidate)

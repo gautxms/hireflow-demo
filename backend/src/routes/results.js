@@ -150,7 +150,10 @@ export function normalizeCandidate(candidate = {}) {
           soft_skills: [],
         })
 
-  const canonicalScore = Number(candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.score ?? 0)
+  const canonicalScoreSource = candidate?.matchScore && typeof candidate.matchScore === 'object'
+    ? candidate?.matchScore?.score
+    : candidate?.matchScore
+  const canonicalScore = Number(canonicalScoreSource ?? candidate?.score ?? 0)
   const safeScore = Number.isFinite(canonicalScore) ? Math.max(0, Math.min(100, canonicalScore)) : 0
   const reasoningFallback = sentenceSafeClamp(
     candidate?.fit_assessment?.reason
