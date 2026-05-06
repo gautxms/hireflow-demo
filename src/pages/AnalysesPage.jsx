@@ -507,13 +507,12 @@ function StatusSummaryPopover({ analysis, isOpen, onOpen, onClose, popoverId }) 
                 <div className="analyses-status-summary__failures">
                   <p>Failed files:</p>
                   {failedItems.length === 0 ? (
-                    <p className="analyses-status-summary__empty">Failure details are not available yet.</p>
+                    <p className="analyses-status-summary__empty">Failed files unavailable yet.</p>
                   ) : (
                     <ul>
                       {failedItems.map((item, index) => (
                         <li key={`${item.filename || 'unknown'}-${index}`}>
                           <span>{item.filename || 'Unknown file'}</span>
-                          <span>{item.error || 'Unknown parse failure'}</span>
                         </li>
                       ))}
                     </ul>
