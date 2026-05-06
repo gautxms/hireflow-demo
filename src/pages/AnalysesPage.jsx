@@ -329,6 +329,7 @@ export default function AnalysesPage() {
                             <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
                             <span className="analyses-layout__meta">View analysis details</span>
                           </a>
+                          <a className="analyses-layout__open-link" href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a>
                         ) : (
                           <div className="analyses-layout__title-block">
                             <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
