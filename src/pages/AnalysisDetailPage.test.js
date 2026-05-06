@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
+
+const analysisDetailSource = readFileSync(new URL('./AnalysisDetailPage.jsx', import.meta.url), 'utf8')
 
 function withWarnSpy(fn) {
   const originalWarn = console.warn
@@ -92,4 +95,46 @@ test('toCandidateResultsPayload can normalize nested item result candidates from
   assert.equal(payload.candidates[0].filename, 'resume-1.pdf')
   assert.equal(payload.hasPartiallyInvalidPayload, false)
   assert.equal(payload.hasInvalidPayload, false)
+})
+
+test('e2e: analysis detail terminal response with one malformed candidate still renders results and non-prod debug banner', () => {
+  const analysisResponse = {
+    id: 'analysis-e2e-partial',
+    status: 'complete',
+    summary: { total: 2, complete: 2, failed: 0, processing: 0, pending: 0 },
+    candidates: [
+      { id: 'valid-1', name: 'Valid One', matchScore: 80, scoreBreakdown: { overall: 80 } },
+      null,
+      { id: 'valid-2', name: 'Valid Two', matchScore: 90, scoreBreakdown: { overall: 90 } },
+    ],
+  }
+
+  const normalized = toCandidateResultsPayload(analysisResponse)
+  assert.equal(normalized.hasInvalidPayload, false)
+  assert.equal(normalized.hasPartiallyInvalidPayload, true)
+  assert.equal(normalized.candidates.length, 2)
+  assert.equal(normalized.candidates[0].name, 'Valid One')
+  assert.equal(normalized.candidates[1].name, 'Valid Two')
+
+  assert.match(analysisDetailSource, /CandidateResults/)
+  assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
+  assert.doesNotMatch(analysisDetailSource, /<ResultsErrorBoundary[^]*We could not render these results/s)
+  assert.match(analysisDetailSource, /isNonProductionBuild && candidateResultsPayload\.droppedCount > 0/)
+})
+
+test('e2e: analysis detail terminal response with fully malformed candidates resolves to graceful invalid/empty state', () => {
+  const analysisResponse = {
+    id: 'analysis-e2e-invalid',
+    status: 'complete',
+    summary: { total: 3, complete: 3, failed: 0, processing: 0, pending: 0 },
+    candidates: [null, undefined, false],
+  }
+
+  const normalized = toCandidateResultsPayload(analysisResponse)
+  assert.equal(normalized.hasInvalidPayload, true)
+  assert.equal(normalized.hasPartiallyInvalidPayload, false)
+  assert.equal(normalized.candidates.length, 0)
+
+  assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
+  assert.match(analysisDetailSource, /This analysis is still processing\. Results will be available when processing completes\./)
 })
