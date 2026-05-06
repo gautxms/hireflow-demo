@@ -1,6 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { logResultsRenderError } from './resultsErrorBoundaryTelemetry.js'
+import { logResultsRenderError, normalizeErrorFingerprint } from './resultsErrorBoundaryTelemetry.js'
+
+test('normalizeErrorFingerprint normalizes whitespace and casing', () => {
+  const fingerprint = normalizeErrorFingerprint({
+    error: { name: 'TypeError', message: ' Cannot read   value ' },
+    errorInfo: { componentStack: '\n at Foo\n   at Bar ' },
+  })
+
+  assert.equal(fingerprint, 'typeerror|cannot read value|at foo at bar')
+})
 
 test('logResultsRenderError emits structured telemetry when child throws', () => {
   const telemetryEvents = []
@@ -43,6 +52,10 @@ test('logResultsRenderError emits structured telemetry when child throws', () =>
   assert.deepEqual(telemetryEvents[0].normalizationStats, { inputCount: 5, droppedCount: 1 })
   assert.equal(telemetryEvents[0].errorMessage, 'Child render explosion')
   assert.equal(telemetryEvents[0].componentStack, '\n at ThrowingChild')
+  assert.equal(
+    telemetryEvents[0].normalizedErrorFingerprint,
+    'error|child render explosion|at throwingchild',
+  )
   assert.ok(loggedContext)
 
   mockWindow.dispatchEvent = originalDispatch

@@ -225,6 +225,49 @@ router.get('/webhooks', async (req, res) => {
   }
 })
 
+router.get('/analysis-render-crashes', async (req, res) => {
+  const analysisId = String(req.query.analysisId || '').trim()
+  const limit = toInt(req.query.limit, 20, { min: 1, max: 200 })
+
+  if (!analysisId) {
+    return res.status(400).json({ error: 'analysisId is required' })
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT
+         id,
+         source,
+         payload,
+         created_at
+       FROM telemetry_logs
+       WHERE payload ->> 'eventType' = 'analysis_detail_results_render_error'
+         AND payload ->> 'analysisId' = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [analysisId, limit],
+    )
+
+    return res.json({
+      analysisId,
+      count: result.rows.length,
+      items: result.rows.map((row) => ({
+        id: row.id,
+        source: row.source,
+        createdAt: row.created_at,
+        eventType: row.payload?.eventType || null,
+        candidateCount: Number(row.payload?.candidateCount || 0),
+        normalizedErrorFingerprint: row.payload?.normalizedErrorFingerprint || '',
+        componentStack: redactValue(row.payload?.componentStack || ''),
+        payload: redactValue(row.payload || {}),
+      })),
+    })
+  } catch (error) {
+    console.error('[Admin logs] failed to fetch analysis render crashes', error)
+    return res.status(500).json({ error: 'Failed to fetch analysis render crashes' })
+  }
+})
+
 router.get('/audit-trail', async (req, res) => {
   const page = toInt(req.query.page, 1)
   const pageSize = toInt(req.query.pageSize, 25, { min: 5, max: 100 })

@@ -8,6 +8,7 @@ import './globals.css'
 import './index.css'
 import App from './App.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
+import API_BASE from './config/api'
 
 const RECENT_CRASH_CONTEXT_KEY = 'hireflow_recent_crash_context_v1'
 
@@ -43,6 +44,26 @@ window.addEventListener('unhandledrejection', (event) => {
   }
   storeCrashContext(detail)
   console.error('[HireFlow] unhandled rejection', detail)
+})
+
+window.addEventListener('hireflow:telemetry', (event) => {
+  const payload = event?.detail
+  if (!payload || typeof payload !== 'object') return
+
+  const endpoint = `${API_BASE}/telemetry/client`
+
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  }).catch((error) => {
+    console.warn('[HireFlow] Failed to persist telemetry event', {
+      endpoint,
+      eventType: payload?.eventType || 'unknown',
+      message: error?.message || String(error),
+    })
+  })
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(

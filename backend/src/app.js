@@ -33,6 +33,7 @@ import adminHealthRoutes from './routes/admin/health.js'
 import adminLogsRoutes from './routes/admin/logs.js'
 import adminUxRoutes from './routes/admin/ux.js'
 import webhooksRoutes from './routes/webhooks.js'
+import telemetryRoutes from './routes/telemetry.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
@@ -120,6 +121,7 @@ app.use('/api/shortlists', generalApiLimiterAuth, shortlistsRoutes)
 app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
 app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, requireActiveSubscription, jobDescriptionsRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
+app.use('/api/telemetry', telemetryRoutes)
 app.use('/api/notifications', requireAuth, generalApiLimiterAuth, notificationsRoutes)
 app.use('/api/analyses', requireAuth, generalApiLimiterAuth, analysesRoutes)
 app.use('/api/reports', requireAuth, generalApiLimiterAuth, reportsRoutes)
