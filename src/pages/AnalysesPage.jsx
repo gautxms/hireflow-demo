@@ -368,19 +368,29 @@ export default function AnalysesPage() {
                     </tr>
                   )
                 })}
-                </tbody>
-              </table>
-              {shouldRenderPaginationControls && (
-                <nav aria-label="Analyses pagination">
-                  <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label="Previous analyses page">
-                    Previous
-                  </button>
-                  <span aria-live="polite">Page {currentPage} of {totalPages}</span>
-                  <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} aria-label="Next analyses page">
-                    Next
-                  </button>
-                </nav>
-              )}
+              </tbody>
+            </table>
+          )}
+
+          {shouldRenderPaginationControls && (
+            <nav aria-label="Analyses pagination">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage <= 1}
+              >
+                Previous
+              </button>
+              <span aria-live="polite">Page {currentPage} of {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Next
+              </button>
+            </nav>
+          )}
             </>
           )}
         </div>
