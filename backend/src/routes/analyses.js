@@ -20,6 +20,27 @@ function safeParseResult(result) {
   return typeof result === 'object' ? result : null
 }
 
+function normalizeItemResult(result, diagnostics) {
+  const parsed = safeParseResult(result)
+  if (!parsed || typeof parsed !== 'object') {
+    diagnostics.invalid += 1
+    return null
+  }
+
+  if (Array.isArray(parsed.candidates)) {
+    diagnostics.valid += 1
+    return { candidates: parsed.candidates }
+  }
+
+  if (parsed.output && typeof parsed.output === 'object' && Array.isArray(parsed.output.candidates)) {
+    diagnostics.valid += 1
+    return { candidates: parsed.output.candidates }
+  }
+
+  diagnostics.invalid += 1
+  return null
+}
+
 function extractCandidatesFromResult(result) {
   const diagnostics = {
     parseableObject: false,
@@ -212,6 +233,7 @@ async function loadAnalysisStatus(analysisId, userId) {
     items,
     failures,
     counts,
+    resultDiagnostics,
     aggregateStatus,
     isComplete,
     percentComplete,
@@ -329,6 +351,9 @@ router.get('/:id', requireAuth, async (req, res) => {
       failed: counts.failed,
       processing: counts.processing + counts.retrying,
       pending: counts.queued,
+    },
+    diagnostics: {
+      results: resultDiagnostics,
     },
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,
