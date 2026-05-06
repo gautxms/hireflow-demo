@@ -391,8 +391,6 @@ export default function AnalysesPage() {
               </button>
             </nav>
           )}
-            </>
-          )}
         </div>
       </section>
 
