@@ -19,6 +19,28 @@ body {
   overflow-x: hidden;
 }
 
+
+
+a:link {
+  color: var(--color-accent-green);
+}
+
+a:visited {
+  color: var(--color-accent-green);
+}
+
+a:hover {
+  color: var(--color-accent-green-hover);
+}
+
+a:active {
+  color: var(--color-accent-green-active);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 h1,
 h2,
 h3,

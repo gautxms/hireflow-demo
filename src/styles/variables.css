@@ -64,7 +64,7 @@
   --hf-font-display: 'Syne Local', 'Syne', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   --font-family-ui: var(--hf-font-ui);
   --font-family-brand-display: var(--hf-font-display);
-  --font-family-base: var(--hf-font-display);
+  --font-family-base: var(--hf-font-ui);
   --font-family-display: var(--hf-font-display);
   --font-body: var(--hf-font-ui);
   --font-display: var(--hf-font-display);
