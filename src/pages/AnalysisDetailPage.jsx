@@ -4,6 +4,7 @@ import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
 import { logResultsRenderError } from './resultsErrorBoundaryTelemetry'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
+import { validateAnalysisResultsPayload } from '../schemas/analysisResultsSchema.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
@@ -139,7 +140,11 @@ export default function AnalysisDetailPage({ pathname = '' }) {
 
   const summary = analysis?.summary || {}
   const displayStatus = deriveDisplayStatus(analysis)
-  const candidateResultsPayload = useMemo(() => toCandidateResultsPayload(analysis), [analysis])
+  const candidateResultsPayload = useMemo(() => {
+    const rawPayload = toCandidateResultsPayload(analysis)
+    const { payload } = validateAnalysisResultsPayload(rawPayload)
+    return payload
+  }, [analysis])
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
   const candidateCount = candidateResultsPayload.candidates.length
   const failedCount = Number(summary.failed || 0)
