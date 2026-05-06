@@ -327,30 +327,23 @@ export default function AnalysesPage() {
           {!loading && !error && sortedItems.length === 0 && <p className="analyses-layout__state analyses-layout__state--empty">No analyses yet. Upload resumes to create your first run.</p>}
 
           {!loading && !error && sortedItems.length > 0 && (
-            <>
-              <table className="analyses-layout__table">
-                <thead><tr><th>Analysis name</th><th>Created</th><th>Live status</th><th>Job description</th></tr></thead>
+            <table className="analyses-layout__table">
+              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Job description</th></tr></thead>
               <tbody>
                 {pagedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
                   const isNavigable = status === 'complete' || status === 'completed' || status === 'partial'
-                  const helperLabel = status === 'failed' ? 'Failed' : status === 'processing' ? 'Processing' : 'Results not ready'
 
                   return (
                     <tr key={analysis.id} className="analyses-layout__row">
                       <td className="analyses-layout__cell analyses-layout__cell--name" data-label="Analysis">
                         {isNavigable ? (
                           <a className="analyses-layout__title-link analyses-layout__open-link" href={`/analyses/${analysis.id}`}>
-                          <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
-                          <span className="analyses-layout__meta">View analysis details</span>
+                            <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
                           </a>
                         ) : (
                           <div className="analyses-layout__title-block">
                             <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
-                            <span className="analyses-layout__meta">
-                              Results pending
-                              <span className="analyses-layout__name-helper">{helperLabel}</span>
-                            </span>
                           </div>
                         )}
                       </td>
@@ -375,20 +368,28 @@ export default function AnalysesPage() {
                     </tr>
                   )
                 })}
-                </tbody>
-              </table>
-              {shouldRenderPaginationControls && (
-                <nav aria-label="Analyses pagination">
-                  <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label="Previous analyses page">
-                    Previous
-                  </button>
-                  <span aria-live="polite">Page {currentPage} of {totalPages}</span>
-                  <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} aria-label="Next analyses page">
-                    Next
-                  </button>
-                </nav>
-              )}
-            </>
+              </tbody>
+            </table>
+          )}
+
+          {shouldRenderPaginationControls && (
+            <nav aria-label="Analyses pagination">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage <= 1}
+              >
+                Previous
+              </button>
+              <span aria-live="polite">Page {currentPage} of {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Next
+              </button>
+            </nav>
           )}
         </div>
       </section>
