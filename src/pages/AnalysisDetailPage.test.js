@@ -297,3 +297,19 @@ test('toCandidateResultsPayload preserves top skill and experience fallback sour
   assert.equal(payload.candidates[0].skills, 'TypeScript,SQL')
   assert.equal(payload.candidates[0].experience, '7 years across product engineering')
 })
+
+
+test('analysis detail page defines page title fallback priority matrix and shell callback propagation', () => {
+  assert.match(analysisDetailSource, /function deriveAnalysisPageTitle\(analysis, analysisId\)/)
+  assert.match(analysisDetailSource, /analysis\?\.name/)
+  assert.match(analysisDetailSource, /analysis\?\.jobDescriptionTitle/)
+  assert.match(analysisDetailSource, /analysis\?\.jobDescription\?\.title/)
+  assert.match(analysisDetailSource, /analysis\?\.batchName/)
+  assert.match(analysisDetailSource, /shortenAnalysisId\(analysis\?\.id \|\| analysisId\)/)
+  assert.match(analysisDetailSource, /onPageTitleChange\(pageTitle\)/)
+})
+
+test('analysis detail page back affordance consistently routes to analyses index with explicit label', () => {
+  assert.match(analysisDetailSource, /← Back to Analyses/)
+  assert.match(analysisDetailSource, /window\.location\.assign\('\/analyses'\)/)
+})
