@@ -314,28 +314,22 @@ export default function AnalysesPage() {
 
           {!loading && !error && sortedItems.length > 0 && (
             <table className="analyses-layout__table">
-              <thead><tr><th>Analysis name</th><th>Created</th><th>Live status</th><th>Job description</th></tr></thead>
+              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Job description</th></tr></thead>
               <tbody>
                 {sortedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
                   const isNavigable = status === 'complete' || status === 'completed' || status === 'partial'
-                  const helperLabel = status === 'failed' ? 'Failed' : status === 'processing' ? 'Processing' : 'Results not ready'
 
                   return (
                     <tr key={analysis.id} className="analyses-layout__row">
                       <td className="analyses-layout__cell analyses-layout__cell--name" data-label="Analysis">
                         {isNavigable ? (
                           <a className="analyses-layout__title-link analyses-layout__open-link" href={`/analyses/${analysis.id}`}>
-                          <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
-                          <span className="analyses-layout__meta">View analysis details</span>
+                            <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
                           </a>
                         ) : (
                           <div className="analyses-layout__title-block">
                             <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
-                            <span className="analyses-layout__meta">
-                              Results pending
-                              <span className="analyses-layout__name-helper">{helperLabel}</span>
-                            </span>
                           </div>
                         )}
                       </td>
