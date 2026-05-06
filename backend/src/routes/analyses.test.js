@@ -37,7 +37,7 @@ test('GET /analyses returns authenticated user scoped items with frontend fields
   assert.equal(payload.items[0].id, '11')
   assert.equal(payload.items[0].jobDescriptionTitle, 'Backend Engineer')
   assert.equal(payload.items[0].summary.pending, 0)
-  assert.equal(queryMock.mock.callCount(), 1)
+  assert.equal(queryMock.mock.callCount(), 2)
 })
 
 test('GET /analyses/:id returns owner-only detail payload', async (t) => {
@@ -66,6 +66,50 @@ test('GET /analyses/:id returns owner-only detail payload', async (t) => {
   assert.equal(payload.jobDescriptionTitle, 'Product Manager')
   assert.equal(payload.items[0].id, '101')
   assert.deepEqual(payload.items[0].result, { candidates: [{ name: 'Alice' }] })
+  assert.deepEqual(payload.items[0].normalizedCandidates, [{ name: 'Alice' }])
+  assert.deepEqual(payload.diagnostics.resultExtraction, {
+    totalItems: 1,
+    parseableObjectCount: 1,
+    candidateBearingItemCount: 1,
+    malformedItemCount: 0,
+  })
+})
+
+test('GET /analyses/:id normalizes historical parse result envelopes and malformed payloads', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(parseQueue, 'getJob', async () => null)
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: 30, user_id: 9, status: 'queued', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: null, job_description_title: null }] }
+    }
+    if (sql.includes('FROM analysis_items ai')) {
+      return {
+        rows: [
+          { id: 201, resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'a.pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: JSON.stringify({ output: JSON.stringify({ candidates: [{ name: 'Nested' }] }) }) },
+          { id: 202, resume_id: 'r-2', parse_job_id: 'p-2', created_at: '2026-05-01T00:00:11.000Z', filename: 'b.pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:01.000Z', parse_result: '{bad-json' },
+        ],
+      }
+    }
+    if (sql.includes('UPDATE analyses')) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/30`, { headers: authHeader(9) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(payload.items[0].normalizedCandidates, [{ name: 'Nested' }])
+  assert.deepEqual(payload.items[1].normalizedCandidates, [])
+  assert.deepEqual(payload.diagnostics.resultExtraction, {
+    totalItems: 2,
+    parseableObjectCount: 1,
+    candidateBearingItemCount: 1,
+    malformedItemCount: 1,
+  })
 })
 
 test('GET /analyses/:id returns 404 for cross-user access', async (t) => {
