@@ -70,7 +70,23 @@
   min-height: 2rem;
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
+  font-family: var(--font-family-ui);
   font-weight: var(--font-weight-medium);
+}
+
+
+.analyses-layout__open-link:link,
+.analyses-layout__open-link:visited {
+  color: var(--color-accent-green);
+  text-decoration: none;
+}
+
+.analyses-layout__open-link:hover {
+  color: var(--color-accent-green-hover);
+}
+
+.analyses-layout__open-link:active {
+  color: var(--color-accent-green-active);
 }
 
 .analyses-layout__open-link:focus-visible {
@@ -211,6 +227,7 @@
 .analyses-modal__dropzone-title {
   margin: 0;
   color: var(--color-text-primary);
+  font-family: var(--font-family-ui);
   font-weight: var(--font-weight-medium);
 }
 
@@ -376,6 +393,7 @@
 .analyses-status-summary__list dd {
   margin: 0;
   color: var(--color-text-primary);
+  font-family: var(--font-family-ui);
   font-weight: var(--font-weight-medium);
 }
 

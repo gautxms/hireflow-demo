@@ -325,7 +325,7 @@ export default function AnalysesPage() {
                     <tr key={analysis.id}>
                       <td>
                         {isNavigable ? (
-                          <a href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a>
+                          <a className="analyses-layout__open-link" href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a>
                         ) : (
                           <span>
                             {analysis.name || 'Untitled analysis'}

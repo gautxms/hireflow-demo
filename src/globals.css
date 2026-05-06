@@ -19,6 +19,28 @@ body {
   overflow-x: hidden;
 }
 
+
+
+:where(a:link) {
+  color: var(--color-accent-green);
+}
+
+:where(a:visited) {
+  color: var(--color-accent-green);
+}
+
+:where(a:hover) {
+  color: var(--color-accent-green-hover);
+}
+
+:where(a:active) {
+  color: var(--color-accent-green-active);
+}
+
+:where(a:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 h1,
 h2,
 h3,
