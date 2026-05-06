@@ -1022,6 +1022,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             ? normalizeTextList(candidate.achievements).slice(0, 3)
             : []
         const candidateConsiderations = normalizeTextList(candidate.considerations)
+        const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
         const experienceEntries = deriveExperienceEntries(candidate)
         const topSkills = deriveTopSkills(candidate).slice(0, 6)
         const initials = String(candidate?.name || '')
@@ -1067,6 +1068,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="dd-col">
                 <div className="dd-col-label">Summary</div>
                 <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
+                <div className="dd-col-label dd-col-label--mt-16">AI reasoning</div>
+                <p className="dd-summary">{reasoningText}</p>
 
                 <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
                 <div className="dd-facts">

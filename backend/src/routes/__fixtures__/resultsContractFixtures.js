@@ -14,6 +14,10 @@ export const RESULTS_CONTRACT_FIXTURES = Object.freeze({
       skill_match_score: 86,
       experience_match_score: 90,
     },
+    matchScore: {
+      score: 88,
+      reason: 'Strong fit for role requirements',
+    },
   },
   modernCandidate: {
     candidateId: 'cand-modern-1',

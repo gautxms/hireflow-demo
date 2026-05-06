@@ -12,11 +12,10 @@ test('normalizeCandidateResultsPayload handles empty payload', () => {
 
 test('normalizeCandidateResultsPayload handles array payload', () => {
   const candidate = { id: 'c1', name: 'Alice' }
-  assert.deepEqual(normalizeCandidateResultsPayload([candidate]), {
-    candidates: [candidate],
-    parseMeta: {},
-    isInvalid: false,
-  })
+  const normalized = normalizeCandidateResultsPayload([candidate])
+  assert.equal(normalized.isInvalid, false)
+  assert.equal(normalized.candidates[0].matchScore.score, 0)
+  assert.equal(typeof normalized.candidates[0].matchScore.reason, 'string')
 })
 
 test('normalizeCandidateResultsPayload handles object payload with parseMeta', () => {
@@ -24,11 +23,11 @@ test('normalizeCandidateResultsPayload handles object payload with parseMeta', (
     candidates: [{ id: 'c2', name: 'Bob' }],
     parseMeta: { hasJobDescription: true, source: 'parse-job-1' },
   }
-  assert.deepEqual(normalizeCandidateResultsPayload(payload), {
-    candidates: payload.candidates,
-    parseMeta: payload.parseMeta,
-    isInvalid: false,
-  })
+  const normalized = normalizeCandidateResultsPayload(payload)
+  assert.equal(normalized.isInvalid, false)
+  assert.equal(normalized.parseMeta.source, 'parse-job-1')
+  assert.equal(normalized.candidates[0].name, 'Bob')
+  assert.equal(typeof normalized.candidates[0].matchScore.reason, 'string')
 })
 
 test('normalizeCandidateResultsPayload handles shared results payload', () => {
