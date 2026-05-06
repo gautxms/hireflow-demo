@@ -95,6 +95,21 @@ const scoreTier = (score) => {
   return 'low'
 }
 
+function activeScore(candidate) {
+  const resolved = resolveActiveCandidateScore(candidate)
+  const fallbackScore = (
+    candidate?.matchScore?.score
+    ?? candidate?.matchScore
+    ?? candidate?.score
+    ?? candidate?.profile_score
+    ?? candidate?.scoreBreakdown?.overall
+    ?? 0
+  )
+
+  const numeric = Number(resolved ?? fallbackScore)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
 function filterAndSortCandidates(candidates, filters) {
   const {
     searchText = '',
@@ -855,7 +870,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
       <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
-          const score = resolveActiveCandidateScore(candidate)
+          const score = activeScore(candidate)
           const tier = scoreTier(score)
           const displayScore = toTenScale(score)
           const isExpanded = expandedId === candidate.id
@@ -972,7 +987,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
       {expandedCandidate && (() => {
         const candidate = expandedCandidate
-        const score = resolveActiveCandidateScore(candidate)
+        const score = activeScore(candidate)
         const tier = scoreTier(score)
         const displayScore = toTenScale(score)
         const normalizeTextList = (list) => (Array.isArray(list) ? list.map((entry) => toDisplayText(entry, '')).filter(Boolean) : [])

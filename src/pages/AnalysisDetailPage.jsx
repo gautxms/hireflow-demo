@@ -53,6 +53,18 @@ export class ResultsErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    console.error('[ResultsErrorBoundary] render crash while rendering analysis results.', {
+      analysisId: this.props.analysisId,
+      candidateCount: this.props.candidateCount,
+      normalizationStats: this.props.normalizationStats,
+      candidatePayloadShape: this.props.candidatePayloadShape,
+      renderException: {
+        name: error?.name || 'Error',
+        message: error?.message || String(error),
+        stack: error?.stack || '',
+      },
+      componentStack: errorInfo?.componentStack || '',
+    })
     const telemetryEvent = logResultsRenderError({
       analysisId: this.props.analysisId,
       candidateCount: this.props.candidateCount,
@@ -148,6 +160,22 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
   const candidateCount = candidateResultsPayload.candidates.length
   const failedCount = Number(summary.failed || 0)
+  const candidatePayloadShape = useMemo(() => ({
+    status: analysis?.status || '',
+    liveStatus: analysis?.liveStatus || '',
+    summary: analysis?.summary || {},
+    candidateCount,
+    itemCount,
+    candidateSampleKeys: candidateResultsPayload?.candidates?.[0] && typeof candidateResultsPayload.candidates[0] === 'object'
+      ? Object.keys(candidateResultsPayload.candidates[0]).slice(0, 20)
+      : [],
+  }), [analysis, candidateCount, candidateResultsPayload, itemCount])
+
+  useEffect(() => {
+    if (isNonProductionBuild && (displayStatus === 'complete' || displayStatus === 'partial' || displayStatus === 'failed')) {
+      console.info('[AnalysisDetailPage] Candidate results payload shape.', candidatePayloadShape)
+    }
+  }, [candidatePayloadShape, displayStatus])
 
   if (loading || error || !analysis) {
     return (
@@ -179,6 +207,7 @@ export default function AnalysisDetailPage({ pathname = '' }) {
             inputCount: itemCount,
             droppedCount: Math.max(itemCount - candidateCount, 0),
           }}
+          candidatePayloadShape={candidatePayloadShape}
         >
           {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
             <section className="route-state-card" role="status" aria-live="polite">

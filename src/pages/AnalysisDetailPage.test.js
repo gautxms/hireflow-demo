@@ -246,3 +246,32 @@ test('toCandidateResultsPayload prefers backend normalizedCandidates when parse 
   assert.equal(payload.candidates[0].resumeId, 'resume-1')
   assert.equal(payload.candidates[0].filename, 'resume-1.pdf')
 })
+
+test('toCandidateResultsPayload normalizes completed /api/analyses/:id payload with two complete items', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'cb12a09b-55c8-4ab1-9ba1-95db1adeda75',
+    status: 'complete',
+    liveStatus: 'complete',
+    summary: { total: 2, complete: 2, failed: 0, processing: 0, pending: 0 },
+    items: [
+      {
+        id: 'item-1',
+        resumeId: 'resume-a',
+        filename: 'candidate-a.pdf',
+        result: JSON.stringify({ candidates: [{ id: 'c-a', name: 'Candidate A', matchScore: { score: 82 } }] }),
+      },
+      {
+        id: 'item-2',
+        resumeId: 'resume-b',
+        filename: 'candidate-b.pdf',
+        result: JSON.stringify({ candidates: [{ id: 'c-b', name: 'Candidate B', scoreBreakdown: { overall: 76 } }] }),
+      },
+    ],
+  })
+
+  assert.equal(payload.candidates.length, 2)
+  assert.equal(payload.hasInvalidPayload, false)
+  assert.equal(payload.hasPartiallyInvalidPayload, false)
+  assert.equal(payload.candidates[0].name, 'Candidate A')
+  assert.equal(payload.candidates[1].name, 'Candidate B')
+})

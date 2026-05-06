@@ -247,8 +247,22 @@ function parseSkillList(skills) {
 }
 
 export function resolveActiveCandidateScore(candidate = {}) {
-  const score = candidate?.matchScore?.score ?? candidate?.profile_score ?? null
-  return Number.isFinite(Number(score)) ? Number(score) : null
+  const possibleScores = [
+    candidate?.matchScore?.score,
+    candidate?.matchScore,
+    candidate?.score,
+    candidate?.profile_score,
+    candidate?.scoreBreakdown?.overall,
+  ]
+
+  for (const rawScore of possibleScores) {
+    const numeric = Number(rawScore)
+    if (Number.isFinite(numeric)) {
+      return numeric
+    }
+  }
+
+  return null
 }
 
 export function buildCandidateRenderContract(candidate = {}) {
