@@ -4,6 +4,8 @@ const isNonProductionBuild = (() => {
 })()
 
 function toCandidateResultsPayload(analysis) {
+  const diagnostics = { fixedFieldCount: 0, fixedSkillsStructuredFieldCount: 0 }
+
   const normalizeString = (value, fallback = '') => {
     if (typeof value === 'string') return value
     if (value === null || value === undefined) return fallback
@@ -18,6 +20,17 @@ function toCandidateResultsPayload(analysis) {
       .filter(Boolean)
   }
 
+  const normalizeDelimitedStringArray = (value) => {
+    if (Array.isArray(value)) return normalizeStringArray(value)
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    }
+    return []
+  }
+
   const normalizeObjectArray = (value) => {
     if (!Array.isArray(value)) return []
     return value.filter((item) => item && typeof item === 'object')
@@ -27,6 +40,24 @@ function toCandidateResultsPayload(analysis) {
     const numeric = Number(value)
     if (!Number.isFinite(numeric)) return 0
     return Math.max(0, Math.min(100, numeric))
+  }
+
+  const normalizeSkillsStructured = (input) => {
+    const source = input && typeof input === 'object' ? input : {}
+    const fields = ['tools_and_platforms', 'methodologies', 'domain_expertise', 'soft_skills']
+    const normalized = {}
+
+    for (const field of fields) {
+      const rawValue = source[field]
+      const normalizedValue = normalizeDelimitedStringArray(rawValue)
+      if (rawValue !== undefined && JSON.stringify(normalizedValue) !== JSON.stringify(rawValue)) {
+        diagnostics.fixedFieldCount += 1
+        diagnostics.fixedSkillsStructuredFieldCount += 1
+      }
+      normalized[field] = normalizedValue
+    }
+
+    return normalized
   }
 
   const normalizeCandidateForResults = (raw, index) => {
@@ -53,6 +84,7 @@ function toCandidateResultsPayload(analysis) {
       mustHaveSkills: normalizeStringArray(raw?.mustHaveSkills),
       niceToHaveSkills: normalizeStringArray(raw?.niceToHaveSkills),
       missingSkills: normalizeStringArray(raw?.missingSkills),
+      skills_structured: normalizeSkillsStructured(raw?.skills_structured),
       assessment: {
         summary: '',
         highlights: [],
@@ -150,8 +182,9 @@ function toCandidateResultsPayload(analysis) {
   const hasInvalidPayload = inputCount > 0 && outputCount === 0
   const hasPartiallyInvalidPayload = droppedCount > 0 && outputCount > 0
 
-  if (droppedCount > 0 && isNonProductionBuild) {
-    console.warn('[AnalysisDetailPage] Candidate normalization dropped invalid records.', {
+  if ((droppedCount > 0 || diagnostics.fixedFieldCount > 0) && isNonProductionBuild) {
+    console.warn('[AnalysisDetailPage] Candidate normalization adjusted records.', {
+      ...diagnostics,
       droppedCount,
       inputCount,
       outputCount,
@@ -166,6 +199,7 @@ function toCandidateResultsPayload(analysis) {
     outputCount,
     hasInvalidPayload,
     hasPartiallyInvalidPayload,
+    normalizationDiagnostics: diagnostics,
     parseMeta: {
       ...(analysis?.parseMeta && typeof analysis.parseMeta === 'object' ? analysis.parseMeta : {}),
       hasJobDescription: Boolean(analysis?.jobDescriptionId || analysis?.jobDescriptionTitle),
