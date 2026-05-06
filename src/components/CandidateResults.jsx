@@ -1105,21 +1105,32 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                       Tools: candidate.skills_structured.tools_and_platforms,
                       Methods: candidate.skills_structured.methodologies,
                       Domain: candidate.skills_structured.domain_expertise,
-                    }).map(([category, skills]) => skills?.length > 0 && (
-                      <div key={`${candidate._bulkKey}-${category}`} className="dd-skill-group">
-                        <div className="dd-skill-cat">{category}</div>
-                        <div className="dd-skill-row">
-                          {skills.slice(0, 6).map((skill) => (
-                            <span className="dd-skill-pill" key={`${candidate._bulkKey}-${category}-${String(formatSkillLabel(skill))}`}>
-                              {formatSkillLabel(skill)}
-                            </span>
-                          ))}
-                          {skills.length > 6 && (
-                            <span className="dd-skill-more">+{skills.length - 6}</span>
-                          )}
+                    }).map(([category, skills]) => {
+                      const safeSkills = Array.isArray(skills) ? skills : []
+                      const hasMalformedCategory = skills != null && !Array.isArray(skills)
+                      if (safeSkills.length === 0 && !hasMalformedCategory) {
+                        return null
+                      }
+
+                      return (
+                        <div key={`${candidate._bulkKey}-${category}`} className="dd-skill-group">
+                          <div className="dd-skill-cat">{category}</div>
+                          <div className="dd-skill-row">
+                            {safeSkills.slice(0, 6).map((skill) => (
+                              <span className="dd-skill-pill" key={`${candidate._bulkKey}-${category}-${String(formatSkillLabel(skill))}`}>
+                                {formatSkillLabel(skill)}
+                              </span>
+                            ))}
+                            {safeSkills.length > 6 && (
+                              <span className="dd-skill-more">+{safeSkills.length - 6}</span>
+                            )}
+                            {hasMalformedCategory && safeSkills.length === 0 && (
+                              <span className="dd-skill-more">Unavailable (invalid format)</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </>
                 )}
               </div>
