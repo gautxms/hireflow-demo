@@ -16,6 +16,7 @@ function normalizeTelemetryPayload(payload = {}) {
 
 router.post('/client', async (req, res) => {
   const payload = normalizeTelemetryPayload(req.body || {})
+  payload.userId = req.userId || null
 
   try {
     await logTelemetryToDatabase('frontend', payload)
