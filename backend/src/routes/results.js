@@ -79,6 +79,25 @@ function parseSkills(skills) {
     .filter(Boolean)
 }
 
+function normalizeText(value, fallback = '') {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim()
+  return normalized || fallback
+}
+
+function sentenceSafeClamp(value, maxLength = 240) {
+  const normalized = normalizeText(value)
+  if (!normalized || normalized.length <= maxLength) {
+    return normalized
+  }
+  const sliced = normalized.slice(0, maxLength)
+  const sentenceBreak = Math.max(sliced.lastIndexOf('. '), sliced.lastIndexOf('! '), sliced.lastIndexOf('? '))
+  if (sentenceBreak >= 40) {
+    return sliced.slice(0, sentenceBreak + 1).trim()
+  }
+  const wordBreak = sliced.lastIndexOf(' ')
+  return `${(wordBreak >= 40 ? sliced.slice(0, wordBreak) : sliced).trim()}…`
+}
+
 function parseSkillsFilter(rawSkills) {
   if (Array.isArray(rawSkills)) {
     return rawSkills
@@ -131,6 +150,24 @@ export function normalizeCandidate(candidate = {}) {
           soft_skills: [],
         })
 
+  const canonicalScoreSource = candidate?.matchScore && typeof candidate.matchScore === 'object'
+    ? candidate?.matchScore?.score
+    : candidate?.matchScore
+  const canonicalScore = Number(canonicalScoreSource ?? candidate?.score ?? 0)
+  const safeScore = Number.isFinite(canonicalScore) ? Math.max(0, Math.min(100, canonicalScore)) : 0
+  const reasoningFallback = sentenceSafeClamp(
+    candidate?.fit_assessment?.reason
+    || candidate?.recommendation
+    || candidate?.summary
+    || 'Candidate scored using role fit, skills alignment, and experience depth.',
+  )
+  const fitAssessment = candidate?.fit_assessment && typeof candidate.fit_assessment === 'object'
+    ? candidate.fit_assessment
+    : {}
+  const structuredExperience = Array.isArray(candidate?.experience)
+    ? candidate.experience
+    : (normalizeText(candidate?.experience) ? [{ title: normalizeText(candidate.experience) }] : [])
+
   return {
     id,
     candidateId,
@@ -138,27 +175,38 @@ export function normalizeCandidate(candidate = {}) {
     name: candidate.name || 'Unknown Candidate',
     email: candidate.email || '',
     phone: candidate.phone || '',
-    score: Number(candidate.score || 0),
-    summary: candidate.summary || '',
+    score: safeScore,
+    matchScore: {
+      score: safeScore,
+      reason: sentenceSafeClamp(candidate?.matchScore?.reason || reasoningFallback),
+    },
+    summary: sentenceSafeClamp(candidate.summary || 'Summary not provided in this analysis.', 320),
     skills: normalizedSkillsObject,
     skills_flat: Array.isArray(candidate.skills_flat) ? candidate.skills_flat : parseSkills(candidate.skills),
     skills_structured: normalizedSkillsObject,
-    top_skills: Array.isArray(candidate.top_skills) ? candidate.top_skills : [],
-    strengths: Array.isArray(candidate.pros) ? candidate.pros : Array.isArray(candidate.strengths) ? candidate.strengths : [],
-    considerations: Array.isArray(candidate.considerations) ? candidate.considerations : [],
+    top_skills: Array.isArray(candidate.top_skills) && candidate.top_skills.length > 0 ? candidate.top_skills : parseSkills(candidate.skills).slice(0, 5),
+    strengths: Array.isArray(candidate.pros) ? candidate.pros : Array.isArray(candidate.strengths) ? candidate.strengths : [reasoningFallback],
+    considerations: Array.isArray(candidate.considerations) && candidate.considerations.length > 0 ? candidate.considerations : [fitAssessment.risk || 'Validate role-specific depth during interview.'],
     cons: Array.isArray(candidate.cons) ? candidate.cons : [],
     profile_score: Number.isFinite(Number(candidate.profile_score)) ? Number(candidate.profile_score) : null,
     years_experience: Number.isFinite(Number(candidate.years_experience)) ? Number(candidate.years_experience) : null,
     seniority_level: candidate.seniority_level || null,
     tags: Array.isArray(candidate.tags) ? candidate.tags : [],
     location: candidate.location || 'Unknown',
-    experience: experienceValue || '0 years',
+    experience: structuredExperience.length > 0 ? structuredExperience : (experienceValue || '0 years'),
     experience_years: Number.isFinite(Number(candidate.experience_years))
       ? Number(candidate.experience_years)
       : parseExperienceToYears(experienceValue || candidate.experience),
     position: candidate.position || '',
     education: educationValue || '',
     fit: candidate.fit || '',
+    fit_assessment: {
+      matched: Array.isArray(fitAssessment.matched) ? fitAssessment.matched : Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : [],
+      missing: Array.isArray(fitAssessment.missing) ? fitAssessment.missing : Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : [],
+      risk: normalizeText(fitAssessment.risk || fitAssessment.risks || ''),
+      uncertainty: normalizeText(fitAssessment.uncertainty || ''),
+      reason: sentenceSafeClamp(fitAssessment.reason || candidate?.matchScore?.reason || reasoningFallback),
+    },
     tier: candidate.tier || 'consider',
     certifications: Array.isArray(candidate.certifications) ? candidate.certifications : [],
     languages: Array.isArray(candidate.languages) ? candidate.languages : [],

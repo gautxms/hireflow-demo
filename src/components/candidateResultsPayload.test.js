@@ -25,4 +25,6 @@ test('normalizes payload candidates and parseMeta object', () => {
   assert.equal(payload.isInvalid, false)
   assert.equal(payload.candidates.length, 1)
   assert.equal(payload.parseMeta.hasJobDescription, true)
+  assert.equal(payload.candidates[0].matchScore.score, 0)
+  assert.equal(typeof payload.candidates[0].matchScore.reason, 'string')
 })

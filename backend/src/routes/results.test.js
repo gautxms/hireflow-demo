@@ -7,10 +7,14 @@ import { RESULTS_CONTRACT_FIXTURES } from './__fixtures__/resultsContractFixture
 function pickScoreContractFields(candidate) {
   return {
     score: candidate.score,
+    matchScore: candidate.matchScore,
     profile_score: candidate.profile_score,
     years_experience: candidate.years_experience,
     seniority_level: candidate.seniority_level,
     top_skills: candidate.top_skills,
+    summary: candidate.summary,
+    strengths: candidate.strengths,
+    considerations: candidate.considerations,
   }
 }
 
@@ -67,6 +71,17 @@ test('normalizeCandidate returns canonical adapter fields for candidate and resu
   assert.equal(normalized.resumeId, resumeId)
 })
 
+
+test('normalizeCandidate falls back to top-level score when matchScore.score is absent', () => {
+  const normalized = normalizeCandidate({
+    score: 73,
+    matchScore: { reason: 'Missing nested score' },
+  })
+
+  assert.equal(normalized.score, 73)
+  assert.equal(normalized.matchScore.score, 73)
+})
+
 test('fixture: candidate normalization keeps legacy and modern payload score contracts in sync (no-diff gate)', () => {
   const normalizedLegacy = normalizeCandidate(RESULTS_CONTRACT_FIXTURES.legacyCandidate)
   const normalizedModern = normalizeCandidate(RESULTS_CONTRACT_FIXTURES.modernCandidate)
@@ -118,10 +133,17 @@ test('fixture: results response contract retains filters/sort/pagination envelop
     pickScoreContractFields(response.candidates[0]),
     {
       score: 88,
+      matchScore: {
+        score: 88,
+        reason: 'Strong fit for role requirements',
+      },
       profile_score: 88,
       years_experience: 6,
       seniority_level: 'senior',
       top_skills: ['React', 'Node.js', 'TypeScript'],
+      summary: 'Summary not provided in this analysis.',
+      strengths: ['Candidate scored using role fit, skills alignment, and experience depth.'],
+      considerations: ['Validate role-specific depth during interview.'],
     },
   )
 })
