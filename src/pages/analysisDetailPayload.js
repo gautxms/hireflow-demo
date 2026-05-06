@@ -139,6 +139,26 @@ function toCandidateResultsPayload(analysis) {
   const directCandidates = Array.isArray(analysis?.candidates) ? analysis.candidates : []
 
   const itemCandidates = items.flatMap((item) => {
+    const normalizedCandidates = Array.isArray(item?.normalizedCandidates) ? item.normalizedCandidates : []
+    if (normalizedCandidates.length > 0) {
+      return normalizedCandidates
+        .map((candidate, index) => {
+          try {
+            const normalized = normalizeCandidateForResults(candidate, index)
+            if (!normalized) return null
+            return {
+              ...normalized,
+              id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
+              resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
+              filename: normalizeString(item?.filename || normalized?.filename, ''),
+            }
+          } catch {
+            return null
+          }
+        })
+        .filter(Boolean)
+    }
+
     const result = safeParseResult(item?.result)
     const candidates = collectCandidates(result)
 
