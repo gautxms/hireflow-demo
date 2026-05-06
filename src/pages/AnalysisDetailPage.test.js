@@ -275,3 +275,25 @@ test('toCandidateResultsPayload normalizes completed /api/analyses/:id payload w
   assert.equal(payload.candidates[0].name, 'Candidate A')
   assert.equal(payload.candidates[1].name, 'Candidate B')
 })
+
+test('toCandidateResultsPayload preserves top skill and experience fallback source fields', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-fallback-sources',
+    candidates: [
+      {
+        id: 'fallback-1',
+        name: 'Fallback Candidate',
+        top_skills: ['GraphQL'],
+        skills_structured: { tools_and_platforms: 'React,Node.js' },
+        skills: 'TypeScript,SQL',
+        experience: '7 years across product engineering',
+      },
+    ],
+  })
+
+  assert.equal(payload.candidates.length, 1)
+  assert.deepEqual(payload.candidates[0].top_skills, ['GraphQL'])
+  assert.deepEqual(payload.candidates[0].skills_structured.tools_and_platforms, ['React', 'Node.js'])
+  assert.equal(payload.candidates[0].skills, 'TypeScript,SQL')
+  assert.equal(payload.candidates[0].experience, '7 years across product engineering')
+})

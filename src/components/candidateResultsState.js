@@ -104,9 +104,28 @@ export function normalizeCandidateForResults(candidate, index = 0) {
   return {
     ...source,
     skills: normalizedSkills,
+    candidateKey: resolveCandidateKey(source, index),
     _bulkKey: String(source?.id ?? `${source?.name || 'candidate'}-${index}`),
     _isRenderable: isRenderable,
   }
+}
+
+export function resolveCandidateKey(candidate = {}, index = 0) {
+  const fields = [
+    candidate?.candidateKey,
+    candidate?.resumeId,
+    candidate?.resume_id,
+    candidate?.id,
+    candidate?.email,
+    candidate?.name ? `${candidate.name}-${index}` : null,
+  ]
+
+  for (const value of fields) {
+    const normalized = String(value || '').trim()
+    if (normalized) return normalized
+  }
+
+  return `candidate-${index}`
 }
 
 export function hasRenderableCandidates(candidates) {
