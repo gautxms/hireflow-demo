@@ -57,3 +57,10 @@ test('summary bucket labels and counts are aligned across analyses list and deta
   assert.match(analysesPageSource, /Total \{summary\.total \|\| 0\} · Complete \{summary\.complete \|\| 0\} · Failed \{summary\.failed \|\| 0\} · Processing \{summary\.processing \|\| 0\} · Pending \{summary\.pending \|\| 0\}/)
   assert.match(analysisDetailSource, /Summary — Total \{summary\.total \|\| 0\} · Complete \{completeCount\} · Failed \{failedCount\} · Processing \{summary\.processing \|\| 0\} · Pending \{summary\.pending \|\| 0\}/)
 })
+
+test('analyses list links complete and partial rows while leaving pending and processing non-clickable', () => {
+  assert.match(analysesPageSource, /const isNavigable = status === 'complete' \|\| status === 'completed' \|\| status === 'partial'/)
+  assert.match(analysesPageSource, /\{isNavigable \? \(/)
+  assert.match(analysesPageSource, /<a href=\{`\/analyses\/\$\{analysis\.id\}`\}>\{analysis\.name \|\| 'Untitled analysis'\}<\/a>/)
+  assert.match(analysesPageSource, /const helperLabel = status === 'failed' \? 'Failed' : status === 'processing' \? 'Processing' : 'Results not ready'/)
+})

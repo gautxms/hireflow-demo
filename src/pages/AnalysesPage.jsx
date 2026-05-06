@@ -318,13 +318,13 @@ export default function AnalysesPage() {
               <tbody>
                 {sortedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
-                  const isComplete = status === 'complete' || status === 'completed'
+                  const isNavigable = status === 'complete' || status === 'completed' || status === 'partial'
                   const helperLabel = status === 'failed' ? 'Failed' : status === 'processing' ? 'Processing' : 'Results not ready'
 
                   return (
                     <tr key={analysis.id}>
                       <td>
-                        {isComplete ? (
+                        {isNavigable ? (
                           <a href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a>
                         ) : (
                           <span>
