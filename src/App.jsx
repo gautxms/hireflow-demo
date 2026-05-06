@@ -660,7 +660,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      return <AnalysisDetailPage pathname={resolvedPathname} />
+      return <AnalysisDetailPage pathname={resolvedPathname} onPageTitleChange={setShellPageTitle} />
     }
 
     if (resolvedPathname === '/candidates') {
@@ -1060,6 +1060,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
   }, [isAuthenticated, resolvedPathname, subscriptionStatus])
 
+  const [shellPageTitle, setShellPageTitle] = useState('')
+
+  useEffect(() => {
+    setShellPageTitle('')
+  }, [resolvedPathname])
+
   const pageContent = (
     <PublicRouteChunkErrorBoundary
       primaryAction={routeRecoveryActions.primaryAction}
@@ -1102,6 +1108,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           userProfile={userProfile}
           navItems={userShellNavItems}
           subscriptionStatus={subscriptionStatus}
+          pageTitleProp={shellPageTitle}
           showUpgradeCta={canViewUpgradePricing}
         >
           {pageContent}

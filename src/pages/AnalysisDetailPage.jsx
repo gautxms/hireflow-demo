@@ -42,6 +42,27 @@ function deriveDisplayStatus(analysis) {
 }
 
 
+function shortenAnalysisId(value) {
+  const normalized = String(value || '').trim()
+  if (!normalized) return '—'
+  if (normalized.length <= 12) return normalized
+  return `${normalized.slice(0, 8)}…${normalized.slice(-4)}`
+}
+
+function deriveAnalysisPageTitle(analysis, analysisId) {
+  const preferred = [
+    analysis?.name,
+    analysis?.jobDescriptionTitle,
+    analysis?.jobDescription?.title,
+    analysis?.batchName,
+    analysis?.batch?.name,
+    shortenAnalysisId(analysis?.id || analysisId),
+  ]
+
+  return preferred.map((value) => String(value || '').trim()).find(Boolean) || 'Analysis'
+}
+
+
 export class ResultsErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
@@ -80,7 +101,7 @@ export class ResultsErrorBoundary extends React.Component {
       return (
         <section className="route-state-card" role="alert">
           <p>We could not render these results. Please return to Analyses or retry.</p>
-          <a href="/analyses">← Back to analyses</a>
+          <a href="/analyses">← Back to Analyses</a>
           {import.meta.env?.DEV && this.state.diagnosticCode && this.state.diagnosticTimestamp && (
             <p data-testid="results-error-diagnostic">{this.state.diagnosticCode} · {this.state.diagnosticTimestamp}</p>
           )}
@@ -92,7 +113,7 @@ export class ResultsErrorBoundary extends React.Component {
   }
 }
 
-export default function AnalysisDetailPage({ pathname = '' }) {
+export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = null }) {
   const analysisId = useMemo(() => {
     const parts = String(pathname || '').split('/').filter(Boolean)
     return parts.length >= 2 ? parts[1] : ''
@@ -160,6 +181,14 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
   const candidateCount = candidateResultsPayload.candidates.length
   const failedCount = Number(summary.failed || 0)
+  const pageTitle = useMemo(() => deriveAnalysisPageTitle(analysis, analysisId), [analysis, analysisId])
+
+  useEffect(() => {
+    if (typeof onPageTitleChange === 'function') {
+      onPageTitleChange(pageTitle)
+    }
+  }, [onPageTitleChange, pageTitle])
+
   const candidatePayloadShape = useMemo(() => ({
     status: analysis?.status || '',
     liveStatus: analysis?.liveStatus || '',
@@ -181,7 +210,7 @@ export default function AnalysisDetailPage({ pathname = '' }) {
     return (
       <main className="route-state">
         <section className="route-state-card">
-          <a href="/analyses">← Back to analyses</a>
+          <a href="/analyses">← Back to Analyses</a>
           <h1>Analysis {analysisId || '—'}</h1>
           {loading && <p>Loading analysis…</p>}
           {!loading && error && <p role="alert">{error}</p>}
@@ -221,7 +250,7 @@ export default function AnalysisDetailPage({ pathname = '' }) {
           <CandidateResults
             candidates={candidateResultsPayload}
             onBack={() => {
-              window.location.href = '/analyses'
+              window.location.assign('/analyses')
             }}
           />
         </ResultsErrorBoundary>
@@ -233,7 +262,7 @@ export default function AnalysisDetailPage({ pathname = '' }) {
   return (
     <main className="route-state">
       <section className="route-state-card">
-        <a href="/analyses">← Back to analyses</a>
+        <a href="/analyses">← Back to Analyses</a>
         <h1>Analysis {analysisId || '—'}</h1>
         <p>Current status: <strong>{displayStatus}</strong></p>
         {displayStatus === 'failed' ? (

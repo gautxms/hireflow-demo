@@ -2,7 +2,7 @@
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   min-height: 100vh;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-lg) var(--spacing-xl);
 }
 
 .candidate-results-page--state,
@@ -13,7 +13,7 @@
 
 .candidate-results-page__header {
   max-width: 1200px;
-  margin: 0 auto var(--spacing-xl);
+  margin: 0 auto var(--spacing-base);
 }
 
 .candidate-results-page__back-button {
@@ -23,7 +23,7 @@
   padding: 0.5rem 1rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  margin-bottom: var(--spacing-base);
+  margin-bottom: 0.5rem;
   font-size: var(--type-small-size);
 }
 
@@ -97,21 +97,19 @@
 .jd-panel,
 .ranking-stats,
 .cand-list {
-  max-width: 1200px;
-  margin-left: auto;
-  margin-right: auto;
+  max-width: 100%;
 }
 
 .bulk-toolbar {
   background: #111111;
   border: 1px solid #1e1e1e;
   border-radius: 10px;
-  padding: 14px 20px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .bulk-actions {
@@ -162,8 +160,8 @@
 .jd-panel {
   background: #111111;
   border: 1px solid #1e1e1e;
-  border-radius: 12px;
-  margin-bottom: 24px;
+  border-radius: 10px;
+  margin-bottom: 14px;
   overflow: hidden;
 }
 
@@ -297,7 +295,7 @@
 .cand-list {
   background: #111111;
   border: 1px solid #1e1e1e;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -506,13 +504,11 @@
 .candidate-results-page__empty-note,
 .pagination,
 .candidate-results-list--cards {
-  max-width: 1200px;
-  margin-left: auto;
-  margin-right: auto;
+  max-width: 100%;
 }
 
 .candidate-results-page__empty-note {
-  margin-bottom: var(--spacing-base);
+  margin-bottom: 0.5rem;
 }
 
 .pagination {
@@ -572,7 +568,7 @@
 }
 
 .candidate-results__selection {
-  margin-bottom: var(--spacing-base);
+  margin-bottom: 0.5rem;
 }
 
 .candidate-results__selection-label {
@@ -802,7 +798,7 @@
 .profile-score-card {
   background: #111111;
   border: 1px solid #1e1e1e;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 18px;
 }
 
@@ -969,7 +965,7 @@
 .profile-analysis-box {
   background: #111111;
   border: 1px solid #1e1e1e;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 20px;
 }
 
@@ -1346,7 +1342,7 @@
   border: 1px solid rgba(200, 255, 0, 0.2);
   border-radius: 16px;
   padding: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 14px;
   scroll-margin-top: 80px;
   animation: drawerIn 0.2s ease;
 }
@@ -1360,7 +1356,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   padding-bottom: 18px;
   border-bottom: 1px solid #1a1a1a;
   flex-wrap: wrap;
