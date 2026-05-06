@@ -45,8 +45,10 @@ test('toCandidateResultsPayload keeps valid candidates and drops malformed entri
     assert.equal(payload.candidates[3].score, 0)
 
     assert.equal(warnCalls.length, 1)
-    assert.equal(warnCalls[0][0], '[AnalysisDetailPage] Candidate normalization dropped invalid records.')
+    assert.equal(warnCalls[0][0], '[AnalysisDetailPage] Candidate normalization adjusted records.')
     assert.deepEqual(warnCalls[0][1], {
+      fixedFieldCount: 0,
+      fixedSkillsStructuredFieldCount: 0,
       droppedCount: 3,
       inputCount: 7,
       outputCount: 4,
@@ -137,4 +139,32 @@ test('e2e: analysis detail terminal response with fully malformed candidates res
 
   assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
   assert.match(analysisDetailSource, /This analysis is still processing\. Results will be available when processing completes\./)
+})
+
+
+test('toCandidateResultsPayload normalizes nested skills_structured fields to safe arrays', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-4',
+    candidates: [{
+      id: 'skills-1',
+      name: 'Skills Candidate',
+      skills_structured: {
+        tools_and_platforms: 'React, Node.js,  PostgreSQL ',
+        methodologies: ['Agile', 'Scrum'],
+        domain_expertise: 'FinTech, B2B SaaS',
+        soft_skills: null,
+      },
+    }],
+  })
+
+  assert.deepEqual(payload.candidates[0].skills_structured, {
+    tools_and_platforms: ['React', 'Node.js', 'PostgreSQL'],
+    methodologies: ['Agile', 'Scrum'],
+    domain_expertise: ['FinTech', 'B2B SaaS'],
+    soft_skills: [],
+  })
+  assert.deepEqual(payload.normalizationDiagnostics, {
+    fixedFieldCount: 3,
+    fixedSkillsStructuredFieldCount: 3,
+  })
 })
