@@ -326,10 +326,9 @@ export default function AnalysesPage() {
                       <td className="analyses-layout__cell analyses-layout__cell--name" data-label="Analysis">
                         {isNavigable ? (
                           <a className="analyses-layout__title-link analyses-layout__open-link" href={`/analyses/${analysis.id}`}>
-                            <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
-                            <span className="analyses-layout__meta">View analysis details</span>
+                          <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
+                          <span className="analyses-layout__meta">View analysis details</span>
                           </a>
-                          <a className="analyses-layout__open-link" href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a>
                         ) : (
                           <div className="analyses-layout__title-block">
                             <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
