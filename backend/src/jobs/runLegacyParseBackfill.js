@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { pool } from '../db/client.js'
 import { backfillAnalysesFromLegacyParse } from './backfillAnalysesFromLegacyParse.js'
 import { backfillCandidateProfilesFromLegacyParse } from './backfillCandidateProfilesFromLegacyParse.js'
+import { backfillParseJobSkillsStructured } from './backfillParseJobSkillsStructured.js'
 
 function parseCliArgs(argv = process.argv.slice(2)) {
   const options = {
@@ -46,11 +47,13 @@ async function run() {
   try {
     const analyses = await backfillAnalysesFromLegacyParse(options)
     const candidateProfiles = await backfillCandidateProfilesFromLegacyParse(options)
+    const parseJobSkillsStructured = await backfillParseJobSkillsStructured(options)
 
     const reconciliation = {
       dryRun: options.dryRun,
       analyses,
       candidateProfiles,
+      parseJobSkillsStructured,
     }
 
     console.log('[Backfill] Combined reconciliation summary')
