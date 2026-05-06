@@ -308,9 +308,9 @@ export default function AnalysesPage() {
         <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} ref={createButtonRef}>Create analysis</button></div>
 
         <div className="analyses-layout__table-shell">
-          {loading && <p>Loading analyses…</p>}
-          {!loading && error && <p role="alert">{error}</p>}
-          {!loading && !error && sortedItems.length === 0 && <p>No analyses yet. Upload resumes to create your first run.</p>}
+          {loading && <p className="analyses-layout__state analyses-layout__state--loading">Loading analyses…</p>}
+          {!loading && error && <p role="alert" className="analyses-layout__state analyses-layout__state--error">{error}</p>}
+          {!loading && !error && sortedItems.length === 0 && <p className="analyses-layout__state analyses-layout__state--empty">No analyses yet. Upload resumes to create your first run.</p>}
 
           {!loading && !error && sortedItems.length > 0 && (
             <table className="analyses-layout__table">
@@ -322,21 +322,29 @@ export default function AnalysesPage() {
                   const helperLabel = status === 'failed' ? 'Failed' : status === 'processing' ? 'Processing' : 'Results not ready'
 
                   return (
-                    <tr key={analysis.id}>
-                      <td>
+                    <tr key={analysis.id} className="analyses-layout__row">
+                      <td className="analyses-layout__cell analyses-layout__cell--name" data-label="Analysis">
                         {isNavigable ? (
-                          <a className="analyses-layout__open-link" href={`/analyses/${analysis.id}`}>{analysis.name || 'Untitled analysis'}</a>
+                          <a className="analyses-layout__title-link analyses-layout__open-link" href={`/analyses/${analysis.id}`}>
+                          <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
+                          <span className="analyses-layout__meta">View analysis details</span>
+                          </a>
                         ) : (
-                          <span>
-                            {analysis.name || 'Untitled analysis'}
-                            <span className="analyses-layout__name-helper">{helperLabel}</span>
-                          </span>
+                          <div className="analyses-layout__title-block">
+                            <span className="analyses-layout__title">{analysis.name || 'Untitled analysis'}</span>
+                            <span className="analyses-layout__meta">
+                              Results pending
+                              <span className="analyses-layout__name-helper">{helperLabel}</span>
+                            </span>
+                          </div>
                         )}
                       </td>
-                      <td>{formatDate(analysis.createdAt)}</td>
-                      <td>
+                      <td className="analyses-layout__cell analyses-layout__cell--created" data-label="Created">
+                        <span className="analyses-layout__meta">{formatDate(analysis.createdAt)}</span>
+                      </td>
+                      <td className="analyses-layout__cell analyses-layout__cell--status" data-label="Status">
                         <div className="analyses-layout__status-display">
-                          <span>{status}</span>
+                          <span className={`analyses-layout__status-badge analyses-layout__status-badge--${status}`}>{status}</span>
                           <StatusSummaryPopover
                             analysis={analysis}
                             isOpen={openSummaryPopoverId === analysis.id}
@@ -346,7 +354,9 @@ export default function AnalysesPage() {
                           />
                         </div>
                       </td>
-                      <td>{analysis.jobDescriptionTitle || 'No job description'}</td>
+                      <td className="analyses-layout__cell analyses-layout__cell--jd" data-label="Job description">
+                        <span className="analyses-layout__meta">{analysis.jobDescriptionTitle || 'No job description'}</span>
+                      </td>
                     </tr>
                   )
                 })}

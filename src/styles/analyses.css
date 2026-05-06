@@ -20,6 +20,29 @@
   overflow-x: auto;
 }
 
+.analyses-layout__state {
+  margin: 0;
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-secondary), #000 18%);
+  color: var(--color-text-secondary);
+}
+
+.analyses-layout__state--loading {
+  border-color: color-mix(in srgb, var(--color-border), var(--color-primary) 24%);
+}
+
+.analyses-layout__state--empty {
+  border-style: dashed;
+}
+
+.analyses-layout__state--error {
+  border-color: color-mix(in srgb, var(--color-error), var(--color-border) 35%);
+  background: color-mix(in srgb, var(--color-bg-secondary), var(--color-error) 10%);
+  color: var(--color-error);
+}
+
 .analyses-layout__table {
   width: 100%;
   min-width: 760px;
@@ -30,7 +53,7 @@
 .analyses-layout__table th,
 .analyses-layout__table td {
   text-align: left;
-  padding: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-sm);
   border-bottom: 1px solid var(--color-border);
   vertical-align: top;
 }
@@ -61,6 +84,39 @@
 
 .analyses-layout__row:hover {
   background: color-mix(in srgb, var(--color-bg-secondary), var(--color-primary) 6%);
+}
+
+.analyses-layout__cell {
+  line-height: 1.35;
+}
+
+.analyses-layout__title-block,
+.analyses-layout__title-link {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.analyses-layout__title-link {
+  text-decoration: none;
+}
+
+.analyses-layout__title {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.analyses-layout__title-link .analyses-layout__title {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.analyses-layout__title-link:hover .analyses-layout__title {
+  color: var(--color-primary);
+}
+
+.analyses-layout__meta {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
 }
 
 .analyses-layout__open-link {
@@ -340,6 +396,49 @@
   gap: 0.35rem;
 }
 
+.analyses-layout__status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: var(--font-weight-medium);
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+}
+
+.analyses-layout__status-badge--complete,
+.analyses-layout__status-badge--completed {
+  color: #72f0be;
+  border-color: color-mix(in srgb, #72f0be, transparent 60%);
+  background: color-mix(in srgb, #72f0be, transparent 90%);
+}
+
+.analyses-layout__status-badge--processing {
+  color: #7fc3ff;
+  border-color: color-mix(in srgb, #7fc3ff, transparent 58%);
+  background: color-mix(in srgb, #7fc3ff, transparent 90%);
+}
+
+.analyses-layout__status-badge--pending {
+  color: #ffd27a;
+  border-color: color-mix(in srgb, #ffd27a, transparent 55%);
+  background: color-mix(in srgb, #ffd27a, transparent 90%);
+}
+
+.analyses-layout__status-badge--failed {
+  color: #ff9e9e;
+  border-color: color-mix(in srgb, #ff9e9e, transparent 52%);
+  background: color-mix(in srgb, #ff9e9e, transparent 90%);
+}
+
+.analyses-layout__status-badge--partial {
+  color: #c8a7ff;
+  border-color: color-mix(in srgb, #c8a7ff, transparent 52%);
+  background: color-mix(in srgb, #c8a7ff, transparent 90%);
+}
+
 .analyses-status-summary__trigger {
   display: inline-flex;
   align-items: center;
@@ -428,4 +527,45 @@
 .analyses-status-summary__empty {
   margin: 0;
   color: var(--color-text-secondary);
+}
+
+@media (max-width: 860px) {
+  .analyses-layout__table {
+    min-width: 100%;
+  }
+
+  .analyses-layout__table thead {
+    display: none;
+  }
+
+  .analyses-layout__table,
+  .analyses-layout__table tbody,
+  .analyses-layout__table tr,
+  .analyses-layout__table td {
+    display: block;
+    width: 100%;
+  }
+
+  .analyses-layout__row {
+    padding: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-bg-secondary), #000 14%);
+  }
+
+  .analyses-layout__table td {
+    border-bottom: 0;
+    padding: 0.35rem 0;
+  }
+
+  .analyses-layout__table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.1rem;
+    color: var(--color-text-secondary);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
 }
