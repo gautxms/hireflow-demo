@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Info, Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
+import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analysesPaginationState'
 import '../styles/analyses.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -79,6 +80,7 @@ export default function AnalysesPage() {
   const createButtonRef = useRef(null)
   const nameInputRef = useRef(null)
   const [openSummaryPopoverId, setOpenSummaryPopoverId] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -145,6 +147,18 @@ export default function AnalysesPage() {
     () => [...items].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
     [items],
   )
+  const { rows: pagedItems, pagination } = useMemo(
+    () => paginateAnalyses(sortedItems, currentPage, ANALYSES_PAGE_SIZE),
+    [currentPage, sortedItems],
+  )
+  const totalPages = pagination.totalPages
+  const shouldRenderPaginationControls = pagination.shouldRenderControls
+
+  useEffect(() => {
+    const nextPage = clampAnalysesPage(currentPage, sortedItems.length, ANALYSES_PAGE_SIZE)
+    if (nextPage === currentPage) return
+    setCurrentPage(nextPage)
+  }, [currentPage, sortedItems.length])
 
   useEffect(() => {
     if (!openSummaryPopoverId) return undefined
@@ -316,7 +330,7 @@ export default function AnalysesPage() {
             <table className="analyses-layout__table">
               <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Job description</th></tr></thead>
               <tbody>
-                {sortedItems.map((analysis) => {
+                {pagedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
                   const isNavigable = status === 'complete' || status === 'completed' || status === 'partial'
 
@@ -354,8 +368,20 @@ export default function AnalysesPage() {
                     </tr>
                   )
                 })}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+              {shouldRenderPaginationControls && (
+                <nav aria-label="Analyses pagination">
+                  <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label="Previous analyses page">
+                    Previous
+                  </button>
+                  <span aria-live="polite">Page {currentPage} of {totalPages}</span>
+                  <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} aria-label="Next analyses page">
+                    Next
+                  </button>
+                </nav>
+              )}
+            </>
           )}
         </div>
       </section>
