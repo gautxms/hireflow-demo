@@ -10,6 +10,7 @@ import {
   normalizeSortBy,
   paginateCandidates,
   resolveActiveCandidateScore,
+  resolveCandidateKey,
   resolveCandidateResumeUuid,
   toDisplayText,
 } from './candidateResultsState'
@@ -75,6 +76,44 @@ function parseYears(experience) {
 
   const match = String(experience || '').match(/(\d+(?:\.\d+)?)/)
   return match ? Number(match[1]) : 0
+}
+
+function deriveExperienceEntries(candidate) {
+  if (Array.isArray(candidate?.experience) && candidate.experience.length > 0) {
+    return candidate.experience.slice(0, 2)
+  }
+
+  const structuredHighlights = Array.isArray(candidate?.highlights?.experience) ? candidate.highlights.experience : []
+  if (structuredHighlights.length > 0) {
+    return structuredHighlights.slice(0, 2).map((entry) => (typeof entry === 'string' ? { title: entry } : entry))
+  }
+
+  if (typeof candidate?.experience === 'string' && candidate.experience.trim()) {
+    return [{ title: candidate.experience.trim() }]
+  }
+
+  return []
+}
+
+function deriveTopSkills(candidate) {
+  if (Array.isArray(candidate?.top_skills) && candidate.top_skills.length > 0) {
+    return parseSkills(candidate.top_skills)
+  }
+
+  if (candidate?.skills_structured) {
+    const structured = candidate.skills_structured
+    const aggregated = [
+      ...(Array.isArray(structured.tools_and_platforms) ? structured.tools_and_platforms : []),
+      ...(Array.isArray(structured.methodologies) ? structured.methodologies : []),
+      ...(Array.isArray(structured.domain_expertise) ? structured.domain_expertise : []),
+      ...(Array.isArray(structured.soft_skills) ? structured.soft_skills : []),
+    ]
+    if (aggregated.length > 0) {
+      return parseSkills(aggregated)
+    }
+  }
+
+  return parseSkills(candidate?.skills)
 }
 
 function parseUploadDate(candidate) {
@@ -689,10 +728,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }
 
   const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
-  const expandedCandidate = useMemo(
-    () => sortedCandidates.find((candidate) => candidate.id === expandedId),
-    [expandedId, sortedCandidates],
-  )
+  const expandedCandidate = useMemo(() => {
+    if (!expandedId) return null
+    return sortedCandidates.find((candidate, index) => resolveCandidateKey(candidate, index) === expandedId) || null
+  }, [expandedId, sortedCandidates])
 
   useEffect(() => {
     if (expandedId && !expandedCandidate) {
@@ -873,25 +912,22 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           const score = activeScore(candidate)
           const tier = scoreTier(score)
           const displayScore = toTenScale(score)
-          const isExpanded = expandedId === candidate.id
+          const candidateKey = resolveCandidateKey(candidate, index)
+          const isExpanded = expandedId === candidateKey
           const initials = String(candidate?.name || '')
             .split(' ')
             .map((part) => part[0] || '')
             .join('')
             .slice(0, 2)
             .toUpperCase()
-          const topSkills = parseSkills(
-            Array.isArray(candidate.top_skills)
-              ? candidate.top_skills
-              : (candidate.top_skills || candidate.skills),
-          )
+          const topSkills = deriveTopSkills(candidate)
           const selected = selectedIds.includes(candidate._bulkKey)
 
           return (
             <div
               key={candidate._bulkKey}
               className={`result-card result-card--${tier}${isExpanded ? ' result-card--open' : ''}`}
-              onClick={() => handleCardClick(candidate.id)}
+              onClick={() => handleCardClick(candidateKey)}
             >
               <div className="rc-rank">#{index + 1}</div>
 
@@ -997,8 +1033,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             ? normalizeTextList(candidate.achievements).slice(0, 3)
             : []
         const candidateConsiderations = normalizeTextList(candidate.considerations)
-        const experienceEntries = Array.isArray(candidate.experience) ? candidate.experience.slice(0, 2) : []
-        const topSkills = Array.isArray(candidate.top_skills) ? candidate.top_skills : parseSkills(candidate.skills).slice(0, 6)
+        const experienceEntries = deriveExperienceEntries(candidate)
+        const topSkills = deriveTopSkills(candidate).slice(0, 6)
         const initials = String(candidate?.name || '')
           .split(' ')
           .map((part) => part[0] || '')

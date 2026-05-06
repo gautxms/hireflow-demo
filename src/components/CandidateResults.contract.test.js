@@ -5,7 +5,7 @@ import { normalizeCandidateResultsPayload } from './candidateResultsPayload.js'
 test('normalizeCandidateResultsPayload handles empty payload', () => {
   assert.deepEqual(normalizeCandidateResultsPayload(null), {
     candidates: [],
-    parseMeta: null,
+    parseMeta: {},
     isInvalid: false,
   })
 })
@@ -14,7 +14,7 @@ test('normalizeCandidateResultsPayload handles array payload', () => {
   const candidate = { id: 'c1', name: 'Alice' }
   assert.deepEqual(normalizeCandidateResultsPayload([candidate]), {
     candidates: [candidate],
-    parseMeta: null,
+    parseMeta: {},
     isInvalid: false,
   })
 })

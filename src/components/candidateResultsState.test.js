@@ -10,6 +10,7 @@ import {
   paginateCandidates,
   buildCandidateRenderContract,
   resolveCandidateResumeUuid,
+  resolveCandidateKey,
   resolveActiveCandidateScore,
   toDisplayText,
   toSafeScore,
@@ -55,6 +56,14 @@ test('resolveCandidateResumeUuid only returns valid UUID values', () => {
   assert.equal(resolveCandidateResumeUuid({ resumeId: resumeUuid }), resumeUuid)
   assert.equal(resolveCandidateResumeUuid({ id: 'parsed-1' }), null)
   assert.equal(resolveCandidateResumeUuid({ resume_id: '123' }), null)
+})
+
+test('resolveCandidateKey prefers stable candidate identity fields', () => {
+  assert.equal(resolveCandidateKey({ candidateKey: 'key-1', id: 'id-1' }, 0), 'key-1')
+  assert.equal(resolveCandidateKey({ resumeId: 'resume-2', id: 'id-2' }, 0), 'resume-2')
+  assert.equal(resolveCandidateKey({ id: 'id-3' }, 0), 'id-3')
+  assert.equal(resolveCandidateKey({ email: 'a@b.com' }, 0), 'a@b.com')
+  assert.equal(resolveCandidateKey({ name: 'Alex' }, 4), 'Alex-4')
 })
 
 test('toDisplayText normalizes object/array candidate fields into safe renderable text', () => {

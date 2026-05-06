@@ -78,7 +78,9 @@ function toCandidateResultsPayload(analysis) {
       resumeId: normalizeString(raw?.resumeId || raw?.resume_id, ''),
       filename: normalizeString(raw?.filename, ''),
       skills: Array.isArray(raw?.skills) || typeof raw?.skills === 'string' ? raw.skills : [],
-      experience: normalizeObjectArray(raw?.experience),
+      experience: Array.isArray(raw?.experience)
+        ? normalizeObjectArray(raw?.experience)
+        : normalizeString(raw?.experience, ''),
       strengths: normalizeStringArray(raw?.strengths),
       considerations: normalizeStringArray(raw?.considerations),
       mustHaveSkills: normalizeStringArray(raw?.mustHaveSkills),
