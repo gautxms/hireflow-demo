@@ -222,3 +222,27 @@ test('e2e: malformed nested skills_structured variants do not trigger boundary f
   assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
   assert.doesNotMatch(analysisDetailSource, /<ResultsErrorBoundary[^]*We could not render these results/s)
 })
+
+test('toCandidateResultsPayload prefers backend normalizedCandidates when parse result payload is malformed', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-5',
+    liveStatus: 'complete',
+    items: [
+      {
+        id: 'item-1',
+        resumeId: 'resume-1',
+        filename: 'resume-1.pdf',
+        result: '{"broken":',
+        normalizedCandidates: [
+          { id: 'n-1', name: 'Recovered Candidate', matchScore: 86 },
+        ],
+      },
+    ],
+  })
+
+  assert.equal(payload.candidates.length, 1)
+  assert.equal(payload.candidates[0].id, 'n-1')
+  assert.equal(payload.candidates[0].name, 'Recovered Candidate')
+  assert.equal(payload.candidates[0].resumeId, 'resume-1')
+  assert.equal(payload.candidates[0].filename, 'resume-1.pdf')
+})
