@@ -40,6 +40,31 @@ test('GET /analyses returns authenticated user scoped items with frontend fields
   assert.equal(queryMock.mock.callCount(), 2)
 })
 
+
+
+test('GET /analyses failedItems omits raw error text', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: 12, created_at: '2026-05-01T00:00:00.000Z', status: 'failed', job_description_title: 'Backend Engineer', total_count: '1', complete_count: '0', failed_count: '1', processing_count: '0' }] }
+    }
+    if (sql.includes('COALESCE(NULLIF(pj.error_message')) {
+      return { rows: [{ analysis_id: 12, filename: 'broken.pdf', status: 'failed', error: 'provider timeout: token abc123' }] }
+    }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses`, { headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(payload.items[0].failedItems, [{ filename: 'broken.pdf', status: 'failed' }])
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.items[0].failedItems[0], 'error'), false)
+})
 test('GET /analyses/:id returns owner-only detail payload', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
   t.mock.method(parseQueue, 'getJob', async () => null)

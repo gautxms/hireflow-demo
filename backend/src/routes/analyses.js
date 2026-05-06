@@ -291,7 +291,6 @@ router.get('/', requireAuth, async (req, res) => {
       existingItems.push({
         filename: row.filename || null,
         status: row.status || 'failed',
-        error: row.error || null,
       })
       failedItemsByAnalysis.set(analysisId, existingItems)
     }
