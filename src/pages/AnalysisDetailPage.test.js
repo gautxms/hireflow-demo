@@ -168,3 +168,57 @@ test('toCandidateResultsPayload normalizes nested skills_structured fields to sa
     fixedSkillsStructuredFieldCount: 3,
   })
 })
+
+test('e2e: malformed nested skills_structured variants do not trigger boundary fallback and still render candidates', () => {
+  const analysisResponse = {
+    id: 'analysis-e2e-skills-structured-malformed',
+    status: 'complete',
+    candidates: [
+      {
+        id: 'skills-valid',
+        name: 'Valid Skills',
+        skills_structured: {
+          tools_and_platforms: ['React', 'TypeScript'],
+          methodologies: ['Agile'],
+          domain_expertise: ['SaaS'],
+          soft_skills: ['Communication'],
+        },
+      },
+      {
+        id: 'skills-string',
+        name: 'String Tools',
+        skills_structured: {
+          tools_and_platforms: 'React,Node.js',
+        },
+      },
+      {
+        id: 'skills-null',
+        name: 'Null Tools',
+        skills_structured: {
+          tools_and_platforms: null,
+        },
+      },
+      {
+        id: 'skills-object',
+        name: 'Object Tools',
+        skills_structured: {
+          tools_and_platforms: { primary: 'React' },
+        },
+      },
+    ],
+  }
+
+  const normalized = toCandidateResultsPayload(analysisResponse)
+  assert.equal(normalized.candidates.length, 4)
+  assert.equal(normalized.hasInvalidPayload, false)
+  assert.equal(normalized.hasPartiallyInvalidPayload, false)
+
+  assert.deepEqual(normalized.candidates[0].skills_structured.tools_and_platforms, ['React', 'TypeScript'])
+  assert.deepEqual(normalized.candidates[1].skills_structured.tools_and_platforms, ['React', 'Node.js'])
+  assert.deepEqual(normalized.candidates[2].skills_structured.tools_and_platforms, [])
+  assert.deepEqual(normalized.candidates[3].skills_structured.tools_and_platforms, [])
+  assert.equal(normalized.normalizationDiagnostics.fixedSkillsStructuredFieldCount, 3)
+
+  assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
+  assert.doesNotMatch(analysisDetailSource, /<ResultsErrorBoundary[^]*We could not render these results/s)
+})
