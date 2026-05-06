@@ -1,5 +1,14 @@
 import { Search, SlidersHorizontal } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
 
 function parseSkills(rawSkills) {
   if (Array.isArray(rawSkills)) {
@@ -41,6 +50,9 @@ export default function CandidateFilters({
   const [skillSearch, setSkillSearch] = useState('')
   const [showAllSkills, setShowAllSkills] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
+  const toolbarRef = useRef(null)
+  const filterPanelRef = useRef(null)
+  const filterToggleRef = useRef(null)
 
   const allSkills = useMemo(() => {
     const skills = new Set()
@@ -51,6 +63,53 @@ export default function CandidateFilters({
 
     return [...skills]
   }, [candidates])
+
+  useEffect(() => {
+    if (!filterOpen) return undefined
+
+    const handlePointerDown = (event) => {
+      const target = event.target
+      if (filterPanelRef.current?.contains(target) || filterToggleRef.current?.contains(target)) return
+      setFilterOpen(false)
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setFilterOpen(false)
+      }
+    }
+
+    const handleTabTrap = (event) => {
+      if (event.key !== 'Tab') return
+      const focusable = [...(filterPanelRef.current?.querySelectorAll(FOCUSABLE_SELECTOR) || [])]
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && active === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+    document.addEventListener('keydown', handleTabTrap)
+
+    const firstFocusable = filterPanelRef.current?.querySelector(FOCUSABLE_SELECTOR)
+    firstFocusable?.focus()
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+      document.removeEventListener('keydown', handleTabTrap)
+      filterToggleRef.current?.focus()
+    }
+  }, [filterOpen])
 
   const dedupedSkills = useMemo(() => {
     const uniqueByKey = new Map()
@@ -92,14 +151,15 @@ export default function CandidateFilters({
   }
 
   return (
-    <>
-      <div className="filter-bar">
+    <div className="candidate-filter-toolbar-wrap" ref={toolbarRef}>
+      <div className="filter-bar" role="toolbar" aria-label="Candidate search and filtering">
         <div className="filter-bar-search">
           <Search className="filter-search-icon" size={18} strokeWidth={1.5} aria-hidden="true" />
           <input
             type="text"
             className="touch-target filter-search-input"
             placeholder="Search candidates..."
+            aria-label="Search candidates"
             value={searchText}
             onChange={(event) => onSearch?.(event.target.value)}
           />
@@ -107,6 +167,7 @@ export default function CandidateFilters({
 
         <select
           className="touch-target filter-sort-select"
+          aria-label="Sort candidates"
           value={sortBy}
           onChange={(event) => onSort?.(event.target.value)}
         >
@@ -116,7 +177,15 @@ export default function CandidateFilters({
           <option value="upload_date">Recently added</option>
         </select>
 
-        <button type="button" className="touch-target filter-filters-btn" onClick={() => setFilterOpen((open) => !open)}>
+        <button
+          ref={filterToggleRef}
+          type="button"
+          className="touch-target filter-filters-btn"
+          aria-haspopup="dialog"
+          aria-expanded={filterOpen}
+          aria-controls="candidate-filter-popover"
+          onClick={() => setFilterOpen((open) => !open)}
+        >
           <SlidersHorizontal size={14} strokeWidth={1.5} aria-hidden="true" />
           Filters
           {activeFilterCount > 0 && (
@@ -132,7 +201,14 @@ export default function CandidateFilters({
       </div>
 
       {filterOpen && (
-        <div className="filter-popover">
+        <div
+          id="candidate-filter-popover"
+          className="filter-popover"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Candidate filters"
+          ref={filterPanelRef}
+        >
           <div className="fp-section">
             <div className="fp-label">Experience (years)</div>
             <div className="fp-range-display">
@@ -142,58 +218,28 @@ export default function CandidateFilters({
               {' '}
               {experienceMax}
             </div>
-            <input
-              className="touch-target"
-              type="range"
-              min="0"
-              max="50"
-              step="1"
-              value={experienceMin}
-              onChange={(event) => {
-                const nextMin = Number(event.target.value)
-                onExperienceFilter?.({ min: String(nextMin), max: String(Math.max(nextMin, experienceMax)) })
-              }}
-            />
-            <input
-              className="touch-target"
-              type="range"
-              min="0"
-              max="50"
-              step="1"
-              value={experienceMax}
-              onChange={(event) => {
-                const nextMax = Number(event.target.value)
-                onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
-              }}
-            />
+            <input className="touch-target" type="range" min="0" max="50" step="1" value={experienceMin} onChange={(event) => {
+              const nextMin = Number(event.target.value)
+              onExperienceFilter?.({ min: String(nextMin), max: String(Math.max(nextMin, experienceMax)) })
+            }} />
+            <input className="touch-target" type="range" min="0" max="50" step="1" value={experienceMax} onChange={(event) => {
+              const nextMax = Number(event.target.value)
+              onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
+            }} />
           </div>
 
           <div className="fp-section">
             <div className="fp-label">Skills</div>
-            <input
-              type="text"
-              className="touch-target fp-skill-search"
-              placeholder="Search skills..."
-              value={skillSearch}
-              onChange={(event) => {
-                setSkillSearch(event.target.value)
-                setShowAllSkills(false)
-              }}
-            />
+            <input type="text" className="touch-target fp-skill-search" placeholder="Search skills..." value={skillSearch} onChange={(event) => {
+              setSkillSearch(event.target.value)
+              setShowAllSkills(false)
+            }} />
             <div className="fp-skill-grid">
-              {dedupedSkills
-                .filter((skill) => skill.label.toLowerCase().includes(skillSearch.toLowerCase()))
-                .slice(0, showAllSkills ? undefined : 20)
-                .map((skill) => (
-                  <button
-                    type="button"
-                    key={skill.key}
-                    className={`touch-target fp-skill-pill${selectedSkills.includes(skill.key) ? ' active' : ''}`}
-                    onClick={() => toggleSkill(skill.key)}
-                  >
-                    {skill.label}
-                  </button>
-                ))}
+              {dedupedSkills.filter((skill) => skill.label.toLowerCase().includes(skillSearch.toLowerCase())).slice(0, showAllSkills ? undefined : 20).map((skill) => (
+                <button type="button" key={skill.key} className={`touch-target fp-skill-pill${selectedSkills.includes(skill.key) ? ' active' : ''}`} onClick={() => toggleSkill(skill.key)}>
+                  {skill.label}
+                </button>
+              ))}
               {dedupedSkills.length === 0 && <span className="candidate-filter-empty-skills">No skills available</span>}
             </div>
             {dedupedSkills.length > 20 && !showAllSkills && (
@@ -211,6 +257,6 @@ export default function CandidateFilters({
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }
