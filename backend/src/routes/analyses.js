@@ -20,6 +20,56 @@ function safeParseResult(result) {
   return typeof result === 'object' ? result : null
 }
 
+function extractCandidatesFromResult(result) {
+  const diagnostics = {
+    parseableObject: false,
+    malformed: false,
+  }
+
+  const parseStringSafely = (value) => {
+    try {
+      return JSON.parse(value)
+    } catch {
+      diagnostics.malformed = true
+      return null
+    }
+  }
+
+  const resolveObject = (value, depth = 0) => {
+    if (depth > 4 || value == null) return null
+    if (typeof value === 'string') {
+      const parsed = parseStringSafely(value)
+      return resolveObject(parsed, depth + 1)
+    }
+    if (typeof value !== 'object') return null
+    return value
+  }
+
+  const parsed = resolveObject(result)
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      candidates: [],
+      diagnostics,
+      normalizedResult: safeParseResult(result),
+    }
+  }
+
+  diagnostics.parseableObject = true
+
+  const candidateFields = [parsed.candidates, parsed.results, parsed.output]
+  for (const field of candidateFields) {
+    if (Array.isArray(field)) {
+      return { candidates: field, diagnostics, normalizedResult: parsed }
+    }
+    const nested = resolveObject(field)
+    if (nested && Array.isArray(nested.candidates)) {
+      return { candidates: nested.candidates, diagnostics, normalizedResult: parsed }
+    }
+  }
+
+  return { candidates: [], diagnostics, normalizedResult: parsed }
+}
+
 function deriveAggregateStatus(counts, totalItems) {
   if (totalItems === 0) return 'queued'
 
@@ -81,6 +131,7 @@ async function loadAnalysisStatus(analysisId, userId) {
   const items = []
   const failures = []
   const counts = { queued: 0, processing: 0, retrying: 0, complete: 0, failed: 0 }
+  const extractionDiagnostics = { totalItems: 0, parseableObjectCount: 0, candidateBearingItemCount: 0, malformedItemCount: 0 }
   let maxProgress = 0
 
   for (const row of itemsResult.rows) {
@@ -114,7 +165,13 @@ async function loadAnalysisStatus(analysisId, userId) {
       })
     }
 
-    const parsedResult = safeParseResult(row.parse_result)
+    const extracted = extractCandidatesFromResult(row.parse_result)
+    extractionDiagnostics.totalItems += 1
+    if (extracted.diagnostics.parseableObject) extractionDiagnostics.parseableObjectCount += 1
+    if (extracted.diagnostics.malformed) extractionDiagnostics.malformedItemCount += 1
+    if (extracted.candidates.length > 0) extractionDiagnostics.candidateBearingItemCount += 1
+
+    const parsedResult = extracted.normalizedResult
 
     items.push({
       id: String(row.id),
@@ -128,6 +185,7 @@ async function loadAnalysisStatus(analysisId, userId) {
       updatedAt: row.parse_job_updated_at || row.created_at,
       error: row.error_message || row.parse_error || null,
       result: parsedResult,
+      normalizedCandidates: extracted.candidates,
     })
   }
 
@@ -159,6 +217,7 @@ async function loadAnalysisStatus(analysisId, userId) {
     percentComplete,
     computedCompletedAt,
     maxProgress,
+    extractionDiagnostics,
   }
 }
 
@@ -256,7 +315,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   if (analysisData === '__error__') return res.status(500).json({ error: 'Unable to fetch analysis status' })
   if (!analysisData) return res.status(404).json({ error: 'Analysis not found' })
 
-  const { analysis, aggregateStatus, counts, items, computedCompletedAt } = analysisData
+  const { analysis, aggregateStatus, counts, items, computedCompletedAt, extractionDiagnostics } = analysisData
   return res.json({
     id: String(analysis.id),
     analysisId: String(analysis.id),
@@ -274,6 +333,9 @@ router.get('/:id', requireAuth, async (req, res) => {
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,
     items,
+    diagnostics: {
+      resultExtraction: extractionDiagnostics,
+    },
   })
 })
 
