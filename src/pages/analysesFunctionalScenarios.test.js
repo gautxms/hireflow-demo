@@ -22,6 +22,14 @@ test('analyses list page includes loading, empty, and populated rendering branch
   assert.match(analysesPageSource, /<table className="analyses-layout__table">/)
 })
 
+test('analyses list page provides conditional and keyboard-accessible pagination controls', () => {
+  assert.match(analysesPageSource, /shouldRenderPaginationControls && \(/)
+  assert.match(analysesPageSource, /<nav aria-label="Analyses pagination">/)
+  assert.match(analysesPageSource, /aria-label="Previous analyses page"/)
+  assert.match(analysesPageSource, /aria-label="Next analyses page"/)
+  assert.match(analysesPageSource, /<span aria-live="polite">Page \{currentPage\} of \{totalPages\}<\/span>/)
+})
+
 test('analysis detail page renders complete terminal flow to CandidateResults', () => {
   assert.match(analysisDetailSource, /if \(isCompletedTerminalState\) \{[\s\S]*<CandidateResults/)
 })
