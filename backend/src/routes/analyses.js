@@ -20,6 +20,27 @@ function safeParseResult(result) {
   return typeof result === 'object' ? result : null
 }
 
+function normalizeItemResult(result, diagnostics) {
+  const parsed = safeParseResult(result)
+  if (!parsed || typeof parsed !== 'object') {
+    diagnostics.invalid += 1
+    return null
+  }
+
+  if (Array.isArray(parsed.candidates)) {
+    diagnostics.valid += 1
+    return { candidates: parsed.candidates }
+  }
+
+  if (parsed.output && typeof parsed.output === 'object' && Array.isArray(parsed.output.candidates)) {
+    diagnostics.valid += 1
+    return { candidates: parsed.output.candidates }
+  }
+
+  diagnostics.invalid += 1
+  return null
+}
+
 function deriveAggregateStatus(counts, totalItems) {
   if (totalItems === 0) return 'queued'
 
@@ -81,6 +102,7 @@ async function loadAnalysisStatus(analysisId, userId) {
   const items = []
   const failures = []
   const counts = { queued: 0, processing: 0, retrying: 0, complete: 0, failed: 0 }
+  const resultDiagnostics = { valid: 0, invalid: 0, skipped: 0 }
   let maxProgress = 0
 
   for (const row of itemsResult.rows) {
@@ -114,7 +136,8 @@ async function loadAnalysisStatus(analysisId, userId) {
       })
     }
 
-    const parsedResult = safeParseResult(row.parse_result)
+    const parsedResult = normalizeItemResult(row.parse_result, resultDiagnostics)
+    if (!parsedResult) resultDiagnostics.skipped += 1
 
     items.push({
       id: String(row.id),
@@ -154,6 +177,7 @@ async function loadAnalysisStatus(analysisId, userId) {
     items,
     failures,
     counts,
+    resultDiagnostics,
     aggregateStatus,
     isComplete,
     percentComplete,
@@ -256,7 +280,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   if (analysisData === '__error__') return res.status(500).json({ error: 'Unable to fetch analysis status' })
   if (!analysisData) return res.status(404).json({ error: 'Analysis not found' })
 
-  const { analysis, aggregateStatus, counts, items, computedCompletedAt } = analysisData
+  const { analysis, aggregateStatus, counts, items, computedCompletedAt, resultDiagnostics } = analysisData
   return res.json({
     id: String(analysis.id),
     analysisId: String(analysis.id),
@@ -270,6 +294,9 @@ router.get('/:id', requireAuth, async (req, res) => {
       failed: counts.failed,
       processing: counts.processing + counts.retrying,
       pending: counts.queued,
+    },
+    diagnostics: {
+      results: resultDiagnostics,
     },
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,
