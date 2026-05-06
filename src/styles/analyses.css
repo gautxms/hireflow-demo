@@ -163,6 +163,49 @@
 .analyses-layout__status-row--error {
   color: var(--color-error);
 }
+
+.analyses-layout__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: var(--spacing-md);
+}
+
+.analyses-layout__pagination-button {
+  min-height: 2rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-secondary), #000 18%);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-ui);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.analyses-layout__pagination-button:hover:not(:disabled) {
+  border-color: var(--color-text-muted);
+  color: var(--color-text-primary);
+}
+
+.analyses-layout__pagination-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.analyses-layout__pagination-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.analyses-layout__pagination-info {
+  font-family: var(--font-family-ui);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
 .analyses-page__header {
   display: flex;
   justify-content: space-between;
