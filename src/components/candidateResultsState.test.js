@@ -10,6 +10,7 @@ import {
   paginateCandidates,
   buildCandidateRenderContract,
   resolveCandidateResumeUuid,
+  resolveActiveCandidateScore,
   toDisplayText,
   toSafeScore,
 } from './candidateResultsState.js'
@@ -105,6 +106,15 @@ test('buildCandidateRenderContract returns stable display fields for legacy payl
     scoreTier: 'strong',
     topSkills: ['React', 'Node.js', 'TypeScript'],
   })
+})
+
+test('resolveActiveCandidateScore supports multiple backend score field variants', () => {
+  assert.equal(resolveActiveCandidateScore({ matchScore: { score: 92 } }), 92)
+  assert.equal(resolveActiveCandidateScore({ matchScore: 87 }), 87)
+  assert.equal(resolveActiveCandidateScore({ score: 78 }), 78)
+  assert.equal(resolveActiveCandidateScore({ profile_score: 71 }), 71)
+  assert.equal(resolveActiveCandidateScore({ scoreBreakdown: { overall: 66 } }), 66)
+  assert.equal(resolveActiveCandidateScore({ score: 'not-a-number' }), null)
 })
 
 test('no-diff gate: buildCandidateRenderContract score-related fields are identical for legacy and modern payload variants', () => {
