@@ -7,6 +7,7 @@ import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
 const router = Router()
 
 const TERMINAL_STATUSES = new Set(['complete', 'failed'])
+const FILES_PREVIEW_LIMIT = 5
 
 function safeParseResult(result) {
   if (result == null) return null
@@ -295,6 +296,33 @@ router.get('/', requireAuth, async (req, res) => {
       failedItemsByAnalysis.set(analysisId, existingItems)
     }
 
+    const filesByAnalysisResult = await pool.query(
+      `SELECT ai.analysis_id,
+              r.filename,
+              COALESCE(pj.status, r.parse_status, 'queued') AS status,
+              ai.created_at
+       FROM analysis_items ai
+       INNER JOIN analyses a ON a.id = ai.analysis_id
+       LEFT JOIN resumes r ON r.id = ai.resume_id
+       LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
+       WHERE a.user_id = $1
+       ORDER BY ai.analysis_id ASC, ai.created_at ASC`,
+      [req.userId],
+    )
+
+    const filesByAnalysis = new Map()
+    for (const row of filesByAnalysisResult.rows) {
+      const analysisId = String(row.analysis_id || '')
+      if (!analysisId) continue
+      const existingItems = filesByAnalysis.get(analysisId) || []
+      if (existingItems.length >= FILES_PREVIEW_LIMIT) continue
+      existingItems.push({
+        name: row.filename || 'Unknown file',
+        status: row.status || 'queued',
+      })
+      filesByAnalysis.set(analysisId, existingItems)
+    }
+
     const items = result.rows.map((row) => {
       const summary = {
         total: Number(row.total_count || 0),
@@ -316,6 +344,8 @@ router.get('/', requireAuth, async (req, res) => {
         }, Number(row.total_count || 0)),
         summary: { ...summary, pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing) },
         failedItems: failedItemsByAnalysis.get(String(row.id)) || [],
+        fileCount: summary.total,
+        filesPreview: filesByAnalysis.get(String(row.id)) || [],
         jobDescriptionTitle: row.job_description_title || null,
       }
     })

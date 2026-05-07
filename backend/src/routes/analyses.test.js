@@ -37,7 +37,9 @@ test('GET /analyses returns authenticated user scoped items with frontend fields
   assert.equal(payload.items[0].id, '11')
   assert.equal(payload.items[0].jobDescriptionTitle, 'Backend Engineer')
   assert.equal(payload.items[0].summary.pending, 0)
-  assert.equal(queryMock.mock.callCount(), 2)
+  assert.equal(payload.items[0].fileCount, 3)
+  assert.deepEqual(payload.items[0].filesPreview, [])
+  assert.equal(queryMock.mock.callCount(), 3)
 })
 
 
@@ -51,6 +53,9 @@ test('GET /analyses failedItems omits raw error text', async (t) => {
     if (sql.includes('COALESCE(NULLIF(pj.error_message')) {
       return { rows: [{ analysis_id: 12, filename: 'broken.pdf', status: 'failed', error: 'provider timeout: token abc123' }] }
     }
+    if (sql.includes('COALESCE(pj.status, r.parse_status, \'queued\')')) {
+      return { rows: [{ analysis_id: 12, filename: null, status: null }] }
+    }
     return { rows: [] }
   })
 
@@ -63,6 +68,7 @@ test('GET /analyses failedItems omits raw error text', async (t) => {
 
   assert.equal(response.status, 200)
   assert.deepEqual(payload.items[0].failedItems, [{ filename: 'broken.pdf', status: 'failed' }])
+  assert.deepEqual(payload.items[0].filesPreview, [{ name: 'Unknown file', status: 'queued' }])
   assert.equal(Object.prototype.hasOwnProperty.call(payload.items[0].failedItems[0], 'error'), false)
 })
 test('GET /analyses/:id returns owner-only detail payload', async (t) => {
