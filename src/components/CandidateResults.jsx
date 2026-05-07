@@ -1020,22 +1020,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     candidate.seniority_level,
                   ].filter(Boolean).join(' · ')}
                 </span>
-                <span className="rc-expand-hint">
-                  {isExpanded ? '↑ collapse' : '↓ expand'}
+                <span className="rc-expand-hint" role="button" aria-label={isExpanded ? 'Collapse candidate details' : 'Expand candidate details'}>
+                  {isExpanded ? 'Collapse details' : 'Expand details'}
                 </span>
               </div>
 
-              <input
-                type="checkbox"
-                className="rc-checkbox"
-                checked={selected}
-                onChange={(event) => {
-                  event.stopPropagation()
-                  toggleCandidateSelection(candidate._bulkKey)
-                }}
-                onClick={(event) => event.stopPropagation()}
-                aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
-              />
+              <label className="rc-checkbox-wrap" onClick={(event) => event.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  className="rc-checkbox"
+                  checked={selected}
+                  onChange={(event) => {
+                    event.stopPropagation()
+                    toggleCandidateSelection(candidate._bulkKey)
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                  aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
+                />
+                <span className="rc-checkbox-label">Select</span>
+              </label>
             </div>
           )
         })}
