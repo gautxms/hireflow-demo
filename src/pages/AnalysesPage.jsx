@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Info, Upload, X } from 'lucide-react'
+import { Info, Trash2, Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analysesPaginationState'
@@ -369,8 +369,7 @@ export default function AnalysesPage() {
 
           {!loading && !error && sortedItems.length > 0 && (
             <table className="analyses-layout__table">
-              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Files</th><th>Job description</th></tr></thead>
-              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Job description</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Files</th><th>Job description</th><th>Actions</th></tr></thead>
               <tbody>
                 {pagedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
@@ -422,8 +421,9 @@ export default function AnalysesPage() {
                           className="hf-btn hf-btn--secondary"
                           onClick={() => handleDeleteAnalysis(String(analysis.id), analysis.name)}
                           disabled={deletingAnalysisId === String(analysis.id)}
+                          aria-label={`Delete analysis ${analysis.name || 'Untitled analysis'}`}
                         >
-                          {deletingAnalysisId === String(analysis.id) ? 'Deleting…' : 'Delete'}
+                          {deletingAnalysisId === String(analysis.id) ? 'Deleting…' : <Trash2 size={16} aria-hidden="true" />}
                         </button>
                       </td>
                     </tr>
@@ -485,9 +485,10 @@ function FilesPreviewPopover({ analysis, isOpen, onOpen, onClose, popoverId }) {
   const anchorRef = useRef(null)
   const popoverRef = useRef(null)
   const [position, setPosition] = useState({ top: 0, left: 0 })
+  const files = Array.isArray(analysis?.files) ? analysis.files : []
   const filesPreview = Array.isArray(analysis?.filesPreview) ? analysis.filesPreview : []
-  const fileCount = Number(analysis?.fileCount ?? analysis?.summary?.total ?? filesPreview.length ?? 0)
-  const hasAdditionalFiles = fileCount > filesPreview.length
+  const fileItems = files.length > 0 ? files : filesPreview
+  const fileCount = Number(analysis?.fileCount ?? analysis?.summary?.total ?? fileItems.length ?? 0)
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -522,11 +523,11 @@ function FilesPreviewPopover({ analysis, isOpen, onOpen, onClose, popoverId }) {
       </button>
       {isOpen && createPortal(
         <div id={popoverId} ref={popoverRef} role="dialog" className="analyses-files-preview__popover" data-files-popover-root="true">
-          {filesPreview.length === 0 ? (
+          {fileItems.length === 0 ? (
             <p className="analyses-status-summary__empty">File names unavailable for this analysis.</p>
           ) : (
             <ul className="analyses-files-preview__list">
-              {filesPreview.map((file, index) => (
+              {fileItems.map((file, index) => (
                 <li key={`${file.name || 'unknown'}-${index}`}>
                   <span>{file.name || 'Unknown file'}</span>
                   <span>{file.status || 'queued'}</span>
@@ -534,7 +535,6 @@ function FilesPreviewPopover({ analysis, isOpen, onOpen, onClose, popoverId }) {
               ))}
             </ul>
           )}
-          {hasAdditionalFiles && <p className="analyses-files-preview__hint">Showing {filesPreview.length} of {fileCount} files.</p>}
         </div>,
         document.body,
       )}
@@ -608,8 +608,6 @@ function StatusSummaryPopover({ analysis, isOpen, onOpen, onClose, popoverId }) 
   const popoverRef = useRef(null)
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const summary = analysis?.summary
-  const failedItems = Array.isArray(analysis?.failedItems) ? analysis.failedItems : []
-  const hasFailed = Number(summary?.failed || 0) > 0
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -665,22 +663,6 @@ function StatusSummaryPopover({ analysis, isOpen, onOpen, onClose, popoverId }) 
                 <div><dt>Processing</dt><dd>{Number(summary.processing || 0)}</dd></div>
                 <div><dt>Pending</dt><dd>{Number(summary.pending || 0)}</dd></div>
               </dl>
-              {hasFailed && (
-                <div className="analyses-status-summary__failures">
-                  <p>Failed files:</p>
-                  {failedItems.length === 0 ? (
-                    <p className="analyses-status-summary__empty">Failed files unavailable yet.</p>
-                  ) : (
-                    <ul>
-                      {failedItems.map((item, index) => (
-                        <li key={`${item.filename || 'unknown'}-${index}`}>
-                          <span>{item.filename || 'Unknown file'}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
             </>
           )}
         </div>,
