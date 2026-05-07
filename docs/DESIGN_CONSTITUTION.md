@@ -401,3 +401,202 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 ```
+
+---
+
+## 9. IMPLEMENTED APP PATTERNS (ANALYSES + RESULTS)
+
+Source files inspected for this section:
+- `src/pages/AnalysesPage.jsx`
+- `src/styles/analyses.css`
+- `src/pages/analysesPaginationState.js`
+- `src/components/CandidateResults.jsx`
+- `src/styles/candidate-results.css`
+
+### 9.1 Data tables (shared dark table baseline)
+
+Use this pattern for dense, comparable records with 4+ columns and repeated row actions.
+
+- Container: bordered dark card (`var(--color-bg-secondary)`, `var(--color-border)`, `var(--radius-lg)`, `var(--shadow-md)`).
+- Table:
+  - `width: 100%`, `border-collapse: collapse`, `table-layout: fixed`.
+  - Cell rhythm: `padding: var(--spacing-md) var(--spacing-sm)` and row separators using `border-bottom: 1px solid var(--color-border)`.
+  - Row hover: subtle primary tint (`color-mix(... var(--color-primary) 6%)`).
+- Typography:
+  - Table body, metadata, and controls use `var(--font-family-ui)` (DM Sans).
+  - Dense metadata is `0.875rem` and `var(--color-text-secondary)`.
+
+**Use table vs card/list**
+- Use **table** for sort-like comparison (analysis status, created date, file counts, actions).
+- Use **cards** when each item needs multi-line rationale/details (Candidate Results cards).
+- Use **simple list** for short, non-comparative nav/filter choices.
+
+### 9.2 Analysis table pattern (`/analyses`)
+
+Reusable implementation:
+- Page: `src/pages/AnalysesPage.jsx`
+- Style contract: `src/styles/analyses.css`
+
+Structure:
+- Columns: Analysis name, Created, Status, Files, Job description, Actions.
+- Name cell:
+  - Navigable rows render `<a class="analyses-layout__title-link analyses-layout__open-link">`.
+  - Non-navigable rows render static title block.
+- Status cell:
+  - Pill badge + optional summary popover trigger.
+  - Status badge modifiers: `--complete/--completed/--processing/--pending/--failed/--partial`.
+- File count cell:
+  - Count button opens file popover dialog rendered to `document.body`.
+
+States:
+- Loading: `.analyses-layout__state--loading`.
+- Error: `role="alert"` + `.analyses-layout__state--error`.
+- Empty: `.analyses-layout__state--empty` with dashed treatment.
+- Row action loading: delete button label changes to `Deleting…` and disables.
+
+Interaction + links:
+- Open-analysis links keep dark theme tokens and get focus ring via `:focus-visible` with `outline: 2px solid var(--color-primary)`.
+- Row hover is non-layout-shifting color tint only.
+
+Responsive:
+- At `max-width: 860px`, header row is hidden and each `<td>` becomes a block with `data-label` pseudo-label.
+- Each row becomes card-like (`border`, `radius`, padded block).
+
+### 9.3 Pagination (Analyses table)
+
+Reusable implementation:
+- Logic: `src/pages/analysesPaginationState.js`
+- UI: `src/pages/AnalysesPage.jsx`, `.analyses-layout__pagination*` styles in `src/styles/analyses.css`
+
+Rules:
+- Default page size: `ANALYSES_PAGE_SIZE = 15`.
+- Pagination controls only render when `items.length > pageSize` (`shouldRenderControls`).
+- Page clamps to valid range using `clampAnalysesPage()`.
+
+Buttons and states:
+- `Previous` disables on first page.
+- `Next` disables on last page.
+- Buttons use compact secondary token style (`border`, dark mixed bg, UI font).
+- Focus style: `:focus-visible` outline with primary color.
+- Live page status text uses `aria-live="polite"`.
+
+Accessibility/keyboard:
+- Must be real `<button>` elements.
+- Tab-focusable when enabled; disabled when unavailable.
+- Pagination wrapper keeps `aria-label="Analyses pagination"`.
+
+### 9.4 Modals: Create Analysis modal baseline
+
+Reusable implementation:
+- Component: `CreateAnalysisModal` in `src/pages/AnalysesPage.jsx`
+- Styles: `.analyses-modal__*` and `.analyses-create-modal*` in `src/styles/analyses.css`
+
+Layout + overlay:
+- Modal uses shared overlay shell (`.ui-modal`) and dialog card (`.ui-card ui-modal__dialog`).
+- Dialog width: `min(760px, calc(100vw - spacing gutters))`, constrained max-height with internal vertical scroll.
+- Overlay click closes only when click target is backdrop and submission is not active.
+
+Form + controls:
+- Vertical field stack with `gap: var(--spacing-md)`.
+- Inputs/selects use `.analyses-modal__control` (dark mixed bg, border, `min-height: 2.75rem`).
+- File picker uses hidden native input + custom dropzone and browse button.
+- Validation:
+  - `aria-invalid` on invalid controls.
+  - Error copy uses `role="alert"` and `aria-describedby` wiring.
+  - Invalid dropzone adds `.is-invalid` (error border).
+
+Close/focus behavior:
+- ESC closes if not submitting.
+- Focus trap implemented for Tab/Shift+Tab inside dialog.
+- Initial focus goes to analysis name input.
+- Close button disabled during submit.
+
+Loading/submission:
+- Submit button text switches to `Analyzing…` during submit.
+- Cancel/close and browse actions disabled while submitting.
+
+Responsive:
+- At `max-width: 1024px`, modal gutters tighten and dialog max width reduces.
+- Action row can wrap.
+
+### 9.5 Buttons and actions (Analyses + Results)
+
+Use existing variants only; compose with context classes:
+- Primary CTA: `.hf-btn--primary` (e.g., “Analyze resumes”).
+- Secondary: `.hf-btn--secondary` (Cancel/Delete container actions).
+- Contextual ghost/utility buttons on results page:
+  - `.bulk-btn`, `.jd-btn-clear`, `.candidate-card__action--ghost` (ghost style).
+- Destructive affordances:
+  - Delete actions use secondary button shell + destructive text/icon states (`.bulk-btn.danger:hover`, error-color hover treatments).
+- Icon-only action buttons are allowed when `aria-label` is present (e.g., Trash, Close).
+
+Do:
+- Keep touch target minimum around 2rem+ for dense controls.
+- Keep hover/focus/disabled states explicit.
+
+Don’t:
+- Introduce new button geometry or color rules when existing `.hf-btn`/context variants fit.
+
+### 9.6 Icons
+
+- Library: Lucide React only.
+- Current app pattern uses `size={18}` and `strokeWidth={1.5}` in modal/table controls.
+- Smaller informational icon buttons may use `size={14}` for inline status popovers.
+- Icon-only controls must include `aria-label`.
+- Keep icons decorative with `aria-hidden="true"` when label text is already present.
+
+### 9.7 Cards (Analysis Results page)
+
+Reusable implementation:
+- Component composition: `src/components/CandidateResults.jsx`
+- Style contract: `src/styles/candidate-results.css`
+
+Card families in use:
+- Header summary card (`candidate-results-page__header`) with gradient + subtle border.
+- Stats cards (`ranking-stat`) for totals/strong matches/etc.
+- Candidate list cards (`candidate-card*` classes in same stylesheet) with expandable detail regions.
+- Supporting cards/panels: bulk toolbar, job-description panel, shortlist side panel/dialog.
+
+Shared card language:
+- Dark layered backgrounds (`#111111`, `#0d0d0d`, alpha gradients).
+- Border-first separation (`1px` subtle alpha/border token).
+- Radius generally `10–12px` via existing radius tokens/classes.
+- Accent usage is selective: lime for positive/high-score emphasis; semantic warning/error colors for risk/negative states.
+
+Expanded/collapsed patterns:
+- Job description panel uses toggle header + collapsible body.
+- Candidate details are conditionally expanded in-page with stable selection/pagination context.
+
+### 9.8 Analysis Results page pattern guidance
+
+When reusing on new data-heavy decision pages:
+- Compose in this order:
+  1) Summary/header card.
+  2) Filters/actions row.
+  3) Stats cards.
+  4) Paginated candidate/item cards.
+- Keep dense controls in DM Sans and preserve dark-token contrast.
+- Reuse existing pagination behavior from candidate state helpers (`paginateCandidates`) or Analyses pagination helper for table pages.
+- Prefer progressive disclosure (collapsed details) over long default-expanded cards.
+
+### 9.9 Typography usage: Syne vs DM Sans (enforced)
+
+**Use Syne for**
+- Brand/logo lockups.
+- Major headings/display titles (page-level titles, high-emphasis numeric/value callouts where already implemented).
+
+**Use DM Sans for**
+- Body text.
+- Dense UI and controls.
+- Table rows/cells, metadata, forms, helper text, filters, and most button labels.
+
+Examples from implemented UI:
+- Results state title uses heading family (`var(--font-heading, 'Syne', sans-serif)`).
+- Table metadata and pagination use UI family (`var(--font-family-ui)`).
+- Modal form controls/help/errors stay in UI font for readability.
+
+Anti-patterns to avoid:
+- Don’t use Syne for long-form paragraph copy, table cell blocks, or compact form metadata.
+- Don’t mix one-off font families in app surfaces.
+- Don’t restyle dense controls into display typography.
+
