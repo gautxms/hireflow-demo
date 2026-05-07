@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload.js'
+
+const candidateResultsSource = readFileSync(new URL('./CandidateResults.jsx', import.meta.url), 'utf8')
 
 test('normalizeCandidateResultsPayload handles empty payload', () => {
   assert.deepEqual(normalizeCandidateResultsPayload(null), {
@@ -39,4 +42,12 @@ test('normalizeCandidateResultsPayload handles shared results payload', () => {
   assert.equal(normalized.candidates[0].id, 'shared-1')
   assert.equal(normalized.parseMeta?.shared, true)
   assert.equal(normalized.isInvalid, false)
+})
+
+test('CandidateResults title contract: analysis title does not fall back to job description fields', () => {
+  assert.match(candidateResultsSource, /return resolved \|\| 'Analysis Results'/)
+  assert.match(
+    candidateResultsSource,
+    /const candidateFields = \[\s*firstCandidate\?\.analysisName,\s*firstCandidate\?\.analysisTitle,\s*firstCandidate\?\.analysis_name,\s*\]/s,
+  )
 })

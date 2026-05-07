@@ -298,6 +298,31 @@ test('toCandidateResultsPayload preserves top skill and experience fallback sour
   assert.equal(payload.candidates[0].experience, '7 years across product engineering')
 })
 
+test('toCandidateResultsPayload maps analysis name into title fields and keeps job description as subtitle metadata only', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-name-priority',
+    name: 'Business Analyst (4–6 Years Experience)',
+    jobDescriptionTitle: 'JD: Business Analyst role',
+    candidates: [{ id: 'c-1', name: 'Candidate 1', matchScore: 77 }],
+  })
+
+  assert.equal(payload.parseMeta.analysisName, 'Business Analyst (4–6 Years Experience)')
+  assert.equal(payload.parseMeta.analysisTitle, 'Business Analyst (4–6 Years Experience)')
+  assert.equal(payload.parseMeta.jobDescriptionTitle, 'JD: Business Analyst role')
+})
+
+test('toCandidateResultsPayload does not promote job description title to analysis title fallback', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-no-name',
+    jobDescriptionTitle: 'JD: Data Analyst',
+    candidates: [{ id: 'c-1', name: 'Candidate 1', matchScore: 77 }],
+  })
+
+  assert.equal(payload.parseMeta.analysisName, '')
+  assert.equal(payload.parseMeta.analysisTitle, '')
+  assert.equal(payload.parseMeta.jobDescriptionTitle, 'JD: Data Analyst')
+})
+
 
 test('analysis detail page defines page title fallback priority matrix and shell callback propagation', () => {
   assert.match(analysisDetailSource, /function deriveAnalysisPageTitle\(analysis, analysisId\)/)

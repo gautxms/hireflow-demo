@@ -225,8 +225,9 @@ function toCandidateResultsPayload(analysis) {
     parseMeta: {
       ...(analysis?.parseMeta && typeof analysis.parseMeta === 'object' ? analysis.parseMeta : {}),
       analysisName: normalizeString(analysis?.name || analysis?.analysisName || analysis?.batchName, ''),
-      analysisTitle: normalizeString(analysis?.name || analysis?.analysisTitle || analysis?.jobDescriptionTitle, ''),
+      analysisTitle: normalizeString(analysis?.name || analysis?.analysisTitle || analysis?.analysisName || analysis?.batchName, ''),
       jobTitle: normalizeString(analysis?.jobDescriptionTitle || analysis?.jobDescription?.title, ''),
+      jobDescriptionTitle: normalizeString(analysis?.jobDescriptionTitle || analysis?.jobDescription?.title, ''),
       hasJobDescription: Boolean(analysis?.jobDescriptionId || analysis?.jobDescriptionTitle),
       methodUsed: analysis?.parseMeta?.methodUsed || 'ai-extraction',
     },

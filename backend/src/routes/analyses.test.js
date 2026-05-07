@@ -76,7 +76,7 @@ test('GET /analyses/:id returns owner-only detail payload', async (t) => {
   t.mock.method(parseQueue, 'getJob', async () => null)
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('FROM analyses a')) {
-      return { rows: [{ id: 22, user_id: 9, status: 'queued', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: 4, job_description_title: 'Product Manager' }] }
+      return { rows: [{ id: 22, user_id: 9, status: 'queued', name: 'Business Analyst (4–6 Years Experience)', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: 4, job_description_title: 'Product Manager' }] }
     }
     if (sql.includes('FROM analysis_items ai')) {
       return { rows: [{ id: 101, resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'a.pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: { candidates: [{ name: 'Alice' }] } }] }
@@ -94,6 +94,7 @@ test('GET /analyses/:id returns owner-only detail payload', async (t) => {
 
   assert.equal(response.status, 200)
   assert.equal(payload.id, '22')
+  assert.equal(payload.name, 'Business Analyst (4–6 Years Experience)')
   assert.equal(Object.keys(payload).filter((key) => key === 'diagnostics').length, 1)
   assert.equal(payload.error, undefined)
   assert.equal(payload.jobDescriptionTitle, 'Product Manager')

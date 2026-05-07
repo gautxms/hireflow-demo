@@ -108,9 +108,10 @@ function deriveAggregateStatus(counts, totalItems) {
 
 async function loadAnalysisStatus(analysisId, userId) {
   const analysisResult = await pool.query(
-    `SELECT a.id,
+     `SELECT a.id,
             a.user_id,
             a.status,
+            a.name,
             a.created_at,
             a.completed_at,
             a.error_summary,
@@ -367,6 +368,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   return res.json({
     id: String(analysis.id),
     analysisId: String(analysis.id),
+    name: analysis.name || null,
     createdAt: analysis.created_at,
     completedAt: computedCompletedAt,
     status: aggregateStatus,

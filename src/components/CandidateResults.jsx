@@ -168,7 +168,6 @@ function resolveAnalysisTitle(parseMeta, candidates) {
     firstCandidate?.analysisName,
     firstCandidate?.analysisTitle,
     firstCandidate?.analysis_name,
-    firstCandidate?.job_title,
   ]
 
   const resolved = [...parseMetaCandidates, ...candidateFields]
