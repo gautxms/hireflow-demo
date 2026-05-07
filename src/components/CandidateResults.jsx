@@ -161,8 +161,6 @@ function resolveAnalysisTitle(parseMeta, candidates) {
     parseMeta?.analysisName,
     parseMeta?.analysisTitle,
     parseMeta?.analysisLabel,
-    parseMeta?.jobTitle,
-    parseMeta?.jobDescriptionTitle,
   ]
 
   const firstCandidate = Array.isArray(candidates) && candidates.length > 0 ? candidates[0] : null
@@ -178,6 +176,24 @@ function resolveAnalysisTitle(parseMeta, candidates) {
     .find(Boolean)
 
   return resolved || 'Analysis Results'
+}
+
+function resolveJobDescriptionSubtitle(parseMeta, candidates) {
+  const parseMetaCandidates = [
+    parseMeta?.jobDescriptionTitle,
+    parseMeta?.jobTitle,
+    parseMeta?.jobDescriptionName,
+  ]
+
+  const firstCandidate = Array.isArray(candidates) && candidates.length > 0 ? candidates[0] : null
+  const candidateFields = [
+    firstCandidate?.jobDescriptionTitle,
+    firstCandidate?.job_title,
+  ]
+
+  return [...parseMetaCandidates, ...candidateFields]
+    .map((value) => String(value || '').trim())
+    .find(Boolean)
 }
 
 function filterAndSortCandidates(candidates, filters) {
@@ -282,6 +298,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const displayCandidates = liveCandidates.length > 0 ? liveCandidates : null
   const analysisTitle = useMemo(() => resolveAnalysisTitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
+  const jobDescriptionSubtitle = useMemo(() => resolveJobDescriptionSubtitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -843,9 +860,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             {analysisTitle}
           </h1>
           <p className="candidate-results-page__state-copy">
-            {hasJobDescription
-              ? `${pagination.total} ranked candidates`
-              : `${pagination.total} analyzed candidates`}
+            {jobDescriptionSubtitle || (hasJobDescription ? 'Job description' : 'No job description')}
+          </p>
+          <p className="candidate-results-page__state-copy">
+            {hasJobDescription ? `${pagination.total} ranked candidates` : `${pagination.total} analyzed candidates`}
           </p>
         </div>
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
