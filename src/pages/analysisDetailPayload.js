@@ -224,6 +224,9 @@ function toCandidateResultsPayload(analysis) {
     normalizationDiagnostics: diagnostics,
     parseMeta: {
       ...(analysis?.parseMeta && typeof analysis.parseMeta === 'object' ? analysis.parseMeta : {}),
+      analysisName: normalizeString(analysis?.name || analysis?.analysisName || analysis?.batchName, ''),
+      analysisTitle: normalizeString(analysis?.name || analysis?.analysisTitle || analysis?.jobDescriptionTitle, ''),
+      jobTitle: normalizeString(analysis?.jobDescriptionTitle || analysis?.jobDescription?.title, ''),
       hasJobDescription: Boolean(analysis?.jobDescriptionId || analysis?.jobDescriptionTitle),
       methodUsed: analysis?.parseMeta?.methodUsed || 'ai-extraction',
     },
