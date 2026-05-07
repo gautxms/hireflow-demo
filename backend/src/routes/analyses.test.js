@@ -197,3 +197,77 @@ test('GET /analyses/:id returns 404 for cross-user access', async (t) => {
   assert.equal(response.status, 404)
   assert.equal(payload.error, 'Analysis not found')
 })
+
+
+test('DELETE /analyses/:id deletes owner analysis transactionally', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const client = {
+    released: false,
+    query: t.mock.fn(async (sql) => {
+      if (sql.includes('SELECT id FROM analyses WHERE id = $1 AND user_id = $2')) return { rowCount: 1, rows: [{ id: 'a-1' }] }
+      return { rowCount: 1, rows: [] }
+    }),
+    release() { this.released = true },
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/a-1`, { method: 'DELETE', headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.ok, true)
+  assert.equal(payload.resumePolicy, 'retained')
+  assert.equal(client.query.mock.calls[0].arguments[0], 'BEGIN')
+  assert.equal(client.query.mock.calls.at(-1).arguments[0], 'COMMIT')
+  assert.equal(client.released, true)
+})
+
+test('DELETE /analyses/:id returns 403 for non-owner', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const client = {
+    query: t.mock.fn(async (sql) => {
+      if (sql.includes('SELECT id FROM analyses WHERE id = $1 AND user_id = $2')) return { rowCount: 0, rows: [] }
+      if (sql.includes('SELECT id FROM analyses WHERE id = $1 LIMIT 1')) return { rowCount: 1, rows: [{ id: 'a-1' }] }
+      return { rowCount: 0, rows: [] }
+    }),
+    release: t.mock.fn(() => {}),
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/a-1`, { method: 'DELETE', headers: authHeader(8) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 403)
+  assert.equal(payload.error, 'Forbidden')
+})
+
+test('DELETE /analyses/:id returns 404 when analysis is missing', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const client = {
+    query: t.mock.fn(async (sql) => {
+      if (sql.includes('SELECT id FROM analyses WHERE id = $1 AND user_id = $2')) return { rowCount: 0, rows: [] }
+      if (sql.includes('SELECT id FROM analyses WHERE id = $1 LIMIT 1')) return { rowCount: 0, rows: [] }
+      return { rowCount: 0, rows: [] }
+    }),
+    release: t.mock.fn(() => {}),
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/missing`, { method: 'DELETE', headers: authHeader(8) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 404)
+  assert.equal(payload.error, 'Analysis not found')
+})

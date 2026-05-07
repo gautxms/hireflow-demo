@@ -82,6 +82,8 @@ export default function AnalysesPage() {
   const [openSummaryPopoverId, setOpenSummaryPopoverId] = useState(null)
   const [openFilesPopoverId, setOpenFilesPopoverId] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [deletingAnalysisId, setDeletingAnalysisId] = useState('')
+  const [deleteFeedback, setDeleteFeedback] = useState({ type: '', message: '' })
 
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -318,10 +320,47 @@ export default function AnalysesPage() {
     }
   }
 
+  const handleDeleteAnalysis = async (analysisId, analysisName) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setDeleteFeedback({ type: 'error', message: 'Authentication required.' })
+      return
+    }
+
+    const confirmed = window.confirm(`Delete analysis "${analysisName || 'Untitled analysis'}"? This removes analysis history only and cannot be undone.`)
+    if (!confirmed) return
+
+    const previousItems = items
+    setDeletingAnalysisId(analysisId)
+    setDeleteFeedback({ type: '', message: '' })
+    setItems((current) => current.filter((entry) => String(entry.id) !== String(analysisId)))
+
+    try {
+      const response = await fetch(`${API_BASE}/analyses/${analysisId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Unable to delete analysis')
+
+      setDeleteFeedback({ type: 'success', message: 'Analysis deleted successfully.' })
+      const refreshedItems = await loadAnalyses()
+      setItems(refreshedItems)
+    } catch (deleteError) {
+      setItems(previousItems)
+      setDeleteFeedback({ type: 'error', message: deleteError.message || 'Unable to delete analysis' })
+    } finally {
+      setDeletingAnalysisId('')
+    }
+  }
+
+
   return (
     <main className="analyses-layout">
       <section className="analyses-layout__content">
         <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} ref={createButtonRef}>Create analysis</button></div>
+
+        {deleteFeedback.message && <p role="status" className={`analyses-layout__state ${deleteFeedback.type === 'error' ? 'analyses-layout__state--error' : 'analyses-layout__state--success'}`}>{deleteFeedback.message}</p>}
 
         <div className="analyses-layout__table-shell">
           {loading && <p className="analyses-layout__state analyses-layout__state--loading">Loading analyses…</p>}
@@ -331,6 +370,7 @@ export default function AnalysesPage() {
           {!loading && !error && sortedItems.length > 0 && (
             <table className="analyses-layout__table">
               <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Files</th><th>Job description</th></tr></thead>
+              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Job description</th><th>Actions</th></tr></thead>
               <tbody>
                 {pagedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
@@ -375,6 +415,16 @@ export default function AnalysesPage() {
                       </td>
                       <td className="analyses-layout__cell analyses-layout__cell--jd" data-label="Job description">
                         <span className="analyses-layout__meta">{analysis.jobDescriptionTitle || 'No job description'}</span>
+                      </td>
+                      <td className="analyses-layout__cell" data-label="Actions">
+                        <button
+                          type="button"
+                          className="hf-btn hf-btn--secondary"
+                          onClick={() => handleDeleteAnalysis(String(analysis.id), analysis.name)}
+                          disabled={deletingAnalysisId === String(analysis.id)}
+                        >
+                          {deletingAnalysisId === String(analysis.id) ? 'Deleting…' : 'Delete'}
+                        </button>
                       </td>
                     </tr>
                   )

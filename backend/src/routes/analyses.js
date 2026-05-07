@@ -427,4 +427,36 @@ router.get('/:id/status', requireAuth, async (req, res) => {
   }
 })
 
+
+router.delete('/:id', requireAuth, async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const ownershipResult = await client.query(
+      'SELECT id FROM analyses WHERE id = $1 AND user_id = $2 LIMIT 1',
+      [req.params.id, req.userId],
+    )
+
+    if (ownershipResult.rowCount === 0) {
+      const existenceResult = await client.query('SELECT id FROM analyses WHERE id = $1 LIMIT 1', [req.params.id])
+      await client.query('ROLLBACK')
+      if (existenceResult.rowCount === 0) return res.status(404).json({ error: 'Analysis not found' })
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+
+    await client.query('DELETE FROM analysis_items WHERE analysis_id = $1', [req.params.id])
+    await client.query('DELETE FROM analyses WHERE id = $1 AND user_id = $2', [req.params.id, req.userId])
+
+    await client.query('COMMIT')
+    return res.status(200).json({ ok: true, deletedAnalysisId: String(req.params.id), resumePolicy: 'retained' })
+  } catch (error) {
+    await client.query('ROLLBACK')
+    console.error('[Analyses] Failed to delete analysis:', error)
+    return res.status(500).json({ error: 'Unable to delete analysis' })
+  } finally {
+    client.release()
+  }
+})
+
 export default router
