@@ -80,6 +80,7 @@ export default function AnalysesPage() {
   const createButtonRef = useRef(null)
   const nameInputRef = useRef(null)
   const [openSummaryPopoverId, setOpenSummaryPopoverId] = useState(null)
+  const [openFilesPopoverId, setOpenFilesPopoverId] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
 
   const loadAnalyses = async ({ signal } = {}) => {
@@ -161,15 +162,16 @@ export default function AnalysesPage() {
   }, [currentPage, sortedItems.length])
 
   useEffect(() => {
-    if (!openSummaryPopoverId) return undefined
+    if (!openSummaryPopoverId && !openFilesPopoverId) return undefined
     const handleKeydown = (event) => {
       if (event.key === 'Escape') setOpenSummaryPopoverId(null)
     }
     const handlePointerDown = (event) => {
       const target = event.target
       if (!(target instanceof Element)) return
-      if (target.closest('[data-summary-popover-root="true"]')) return
+      if (target.closest('[data-summary-popover-root="true"]') || target.closest('[data-files-popover-root="true"]')) return
       setOpenSummaryPopoverId(null)
+      setOpenFilesPopoverId(null)
     }
     document.addEventListener('keydown', handleKeydown)
     document.addEventListener('mousedown', handlePointerDown)
@@ -179,7 +181,7 @@ export default function AnalysesPage() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('touchstart', handlePointerDown)
     }
-  }, [openSummaryPopoverId])
+  }, [openSummaryPopoverId, openFilesPopoverId])
 
   const resetModal = () => {
     setIsCreateModalOpen(false)
@@ -328,7 +330,7 @@ export default function AnalysesPage() {
 
           {!loading && !error && sortedItems.length > 0 && (
             <table className="analyses-layout__table">
-              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Job description</th></tr></thead>
+              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Files</th><th>Job description</th></tr></thead>
               <tbody>
                 {pagedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
@@ -361,6 +363,15 @@ export default function AnalysesPage() {
                             popoverId={`analysis-summary-popover-${analysis.id}`}
                           />
                         </div>
+                      </td>
+                      <td className="analyses-layout__cell analyses-layout__cell--files" data-label="Files">
+                        <FilesPreviewPopover
+                          analysis={analysis}
+                          isOpen={openFilesPopoverId === analysis.id}
+                          onOpen={() => setOpenFilesPopoverId(analysis.id)}
+                          onClose={() => setOpenFilesPopoverId(null)}
+                          popoverId={`analysis-files-popover-${analysis.id}`}
+                        />
                       </td>
                       <td className="analyses-layout__cell analyses-layout__cell--jd" data-label="Job description">
                         <span className="analyses-layout__meta">{analysis.jobDescriptionTitle || 'No job description'}</span>
@@ -417,6 +428,67 @@ export default function AnalysesPage() {
         onRemoveSelectedFile={handleRemoveSelectedFile}
       />
     </main>
+  )
+}
+
+function FilesPreviewPopover({ analysis, isOpen, onOpen, onClose, popoverId }) {
+  const anchorRef = useRef(null)
+  const popoverRef = useRef(null)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const filesPreview = Array.isArray(analysis?.filesPreview) ? analysis.filesPreview : []
+  const fileCount = Number(analysis?.fileCount ?? analysis?.summary?.total ?? filesPreview.length ?? 0)
+  const hasAdditionalFiles = fileCount > filesPreview.length
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const maxLeft = Math.max(16, window.innerWidth - 16 - 320)
+      setPosition({
+        top: Math.round(rect.bottom + window.scrollY + 8),
+        left: Math.round(Math.min(Math.max(16, rect.left + window.scrollX - 120), maxLeft)),
+      })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !popoverRef.current) return
+    popoverRef.current.style.top = `${position.top}px`
+    popoverRef.current.style.left = `${position.left}px`
+  }, [isOpen, position])
+
+  return (
+    <span className="analyses-files-preview" data-files-popover-root="true">
+      <button type="button" ref={anchorRef} className="analyses-files-preview__trigger" onClick={() => (isOpen ? onClose() : onOpen())} aria-expanded={isOpen} aria-controls={popoverId}>
+        {fileCount}
+      </button>
+      {isOpen && createPortal(
+        <div id={popoverId} ref={popoverRef} role="dialog" className="analyses-files-preview__popover" data-files-popover-root="true">
+          {filesPreview.length === 0 ? (
+            <p className="analyses-status-summary__empty">File names unavailable for this analysis.</p>
+          ) : (
+            <ul className="analyses-files-preview__list">
+              {filesPreview.map((file, index) => (
+                <li key={`${file.name || 'unknown'}-${index}`}>
+                  <span>{file.name || 'Unknown file'}</span>
+                  <span>{file.status || 'queued'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {hasAdditionalFiles && <p className="analyses-files-preview__hint">Showing {filesPreview.length} of {fileCount} files.</p>}
+        </div>,
+        document.body,
+      )}
+    </span>
   )
 }
 
