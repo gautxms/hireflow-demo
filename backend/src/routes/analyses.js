@@ -7,7 +7,6 @@ import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
 const router = Router()
 
 const TERMINAL_STATUSES = new Set(['complete', 'failed'])
-const FILES_PREVIEW_LIMIT = 5
 
 function safeParseResult(result) {
   if (result == null) return null
@@ -315,7 +314,6 @@ router.get('/', requireAuth, async (req, res) => {
       const analysisId = String(row.analysis_id || '')
       if (!analysisId) continue
       const existingItems = filesByAnalysis.get(analysisId) || []
-      if (existingItems.length >= FILES_PREVIEW_LIMIT) continue
       existingItems.push({
         name: row.filename || 'Unknown file',
         status: row.status || 'queued',
@@ -345,7 +343,7 @@ router.get('/', requireAuth, async (req, res) => {
         summary: { ...summary, pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing) },
         failedItems: failedItemsByAnalysis.get(String(row.id)) || [],
         fileCount: summary.total,
-        filesPreview: filesByAnalysis.get(String(row.id)) || [],
+        files: filesByAnalysis.get(String(row.id)) || [],
         jobDescriptionTitle: row.job_description_title || null,
       }
     })
