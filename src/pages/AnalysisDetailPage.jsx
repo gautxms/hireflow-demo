@@ -52,8 +52,6 @@ function shortenAnalysisId(value) {
 function deriveAnalysisPageTitle(analysis, analysisId) {
   const preferred = [
     analysis?.name,
-    analysis?.jobDescriptionTitle,
-    analysis?.jobDescription?.title,
     analysis?.batchName,
     analysis?.batch?.name,
     shortenAnalysisId(analysis?.id || analysisId),
