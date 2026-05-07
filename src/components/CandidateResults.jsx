@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -155,6 +156,30 @@ function activeScore(candidate) {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
+function resolveAnalysisTitle(parseMeta, candidates) {
+  const parseMetaCandidates = [
+    parseMeta?.analysisName,
+    parseMeta?.analysisTitle,
+    parseMeta?.analysisLabel,
+    parseMeta?.jobTitle,
+    parseMeta?.jobDescriptionTitle,
+  ]
+
+  const firstCandidate = Array.isArray(candidates) && candidates.length > 0 ? candidates[0] : null
+  const candidateFields = [
+    firstCandidate?.analysisName,
+    firstCandidate?.analysisTitle,
+    firstCandidate?.analysis_name,
+    firstCandidate?.job_title,
+  ]
+
+  const resolved = [...parseMetaCandidates, ...candidateFields]
+    .map((value) => String(value || '').trim())
+    .find(Boolean)
+
+  return resolved || 'Analysis Results'
+}
+
 function filterAndSortCandidates(candidates, filters) {
   const {
     searchText = '',
@@ -256,6 +281,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }, [candidatePayload, hasInvalidPayload])
 
   const displayCandidates = liveCandidates.length > 0 ? liveCandidates : null
+  const analysisTitle = useMemo(() => resolveAnalysisTitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -753,7 +779,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             className="touch-target candidate-results-page__back-button"
             onClick={onBack}
           >
-            ← Upload New Resumes
+            <ChevronLeft size={14} aria-hidden="true" />
+            Back
           </button>
           <h1 className="candidate-results-page__state-title">
             ⏳ Parsing resume...
@@ -785,10 +812,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             className="touch-target candidate-results-page__back-button"
             onClick={onBack}
           >
-            ← Upload New Resumes
+            <ChevronLeft size={14} aria-hidden="true" />
+            Back
           </button>
           <h1 className="candidate-results-page__state-title candidate-results-page__state-title--compact">
-            Candidate Ranking
+            {analysisTitle}
           </h1>
           <p className="candidate-results-page__state-copy">
             {hasInvalidPayload
@@ -807,16 +835,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           className="touch-target candidate-results-page__back-button"
           onClick={onBack}
         >
-          ← Upload New Resumes
+          <ChevronLeft size={14} aria-hidden="true" />
+          Back
         </button>
-        <h1 className="candidate-results-page__state-title candidate-results-page__state-title--compact">
-          Candidate Ranking
-        </h1>
-        <p className="candidate-results-page__state-copy">
-          {hasJobDescription
-            ? `${pagination.total} candidates analyzed and ranked by fit`
-            : `${pagination.total} candidates analyzed`}
-        </p>
+        <div className="candidate-results-page__header-main">
+          <h1 className="candidate-results-page__state-title candidate-results-page__state-title--compact">
+            {analysisTitle}
+          </h1>
+          <p className="candidate-results-page__state-copy">
+            {hasJobDescription
+              ? `${pagination.total} ranked candidates`
+              : `${pagination.total} analyzed candidates`}
+          </p>
+        </div>
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
 
