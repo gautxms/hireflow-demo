@@ -302,8 +302,8 @@ test('toCandidateResultsPayload preserves top skill and experience fallback sour
 test('analysis detail page defines page title fallback priority matrix and shell callback propagation', () => {
   assert.match(analysisDetailSource, /function deriveAnalysisPageTitle\(analysis, analysisId\)/)
   assert.match(analysisDetailSource, /analysis\?\.name/)
-  assert.match(analysisDetailSource, /analysis\?\.jobDescriptionTitle/)
-  assert.match(analysisDetailSource, /analysis\?\.jobDescription\?\.title/)
+  assert.doesNotMatch(analysisDetailSource, /analysis\?\.jobDescriptionTitle/)
+  assert.doesNotMatch(analysisDetailSource, /analysis\?\.jobDescription\?\.title/)
   assert.match(analysisDetailSource, /analysis\?\.batchName/)
   assert.match(analysisDetailSource, /shortenAnalysisId\(analysis\?\.id \|\| analysisId\)/)
   assert.match(analysisDetailSource, /onPageTitleChange\(pageTitle\)/)
