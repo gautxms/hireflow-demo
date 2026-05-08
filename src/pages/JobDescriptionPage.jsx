@@ -427,7 +427,6 @@ export default function JobDescriptionPage({ onRequireAuth }) {
               )}
             </aside>
           </div>
-        </>
       )}
     </section>
   )
