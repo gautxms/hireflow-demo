@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { Upload, X } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { SUPPORTED_SALARY_CURRENCIES, serializeJobDescriptionForm, validateJobDescriptionForm } from './jobDescriptionFormState'
 
 const blankState = {
@@ -6,7 +7,8 @@ const blankState = {
   description: '',
   requirements: '',
   skills: '',
-  experienceYears: '',
+  experienceMin: '',
+  experienceMax: '',
   location: '',
   salaryMin: '',
   salaryMax: '',
@@ -14,30 +16,33 @@ const blankState = {
   status: 'draft',
 }
 
-export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting, renderAsModal = false }) {
+function mapInitialValue(initialValue) {
+  if (!initialValue) return blankState
+  const fallbackExperience = initialValue.experienceYears ?? ''
+  return {
+    title: initialValue.title || '',
+    description: initialValue.description || '',
+    requirements: initialValue.requirements || '',
+    skills: Array.isArray(initialValue.skills) ? initialValue.skills.join(', ') : '',
+    experienceMin: initialValue.experienceMin ?? fallbackExperience,
+    experienceMax: initialValue.experienceMax ?? fallbackExperience,
+    location: initialValue.location || '',
+    salaryMin: initialValue.salaryMin ?? '',
+    salaryMax: initialValue.salaryMax ?? '',
+    salaryCurrency: initialValue.salaryCurrency || 'USD',
+    status: initialValue.status || 'draft',
+  }
+}
+
+export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting }) {
   const [formState, setFormState] = useState(blankState)
   const [jdFile, setJdFile] = useState(null)
   const [errors, setErrors] = useState({})
+  const fileInputId = useId()
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
-    if (initialValue) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFormState({
-        title: initialValue.title || '',
-        description: initialValue.description || '',
-        requirements: initialValue.requirements || '',
-        skills: Array.isArray(initialValue.skills) ? initialValue.skills.join(', ') : '',
-        experienceYears: initialValue.experienceYears ?? '',
-        location: initialValue.location || '',
-        salaryMin: initialValue.salaryMin ?? '',
-        salaryMax: initialValue.salaryMax ?? '',
-        salaryCurrency: initialValue.salaryCurrency || 'USD',
-        status: initialValue.status || 'draft',
-      })
-    } else {
-      setFormState(blankState)
-    }
-
+    setFormState(mapInitialValue(initialValue))
     setErrors({})
     setJdFile(null)
   }, [initialValue, resetToken])
@@ -45,10 +50,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
   const handleChange = (field) => (event) => {
     setFormState((prev) => ({ ...prev, [field]: event.target.value }))
     setErrors((prev) => {
-      if (!prev[field]) {
-        return prev
-      }
-
+      if (!prev[field]) return prev
       const next = { ...prev }
       delete next[field]
       return next
@@ -57,7 +59,6 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-
     const nextErrors = validateJobDescriptionForm(formState)
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
@@ -72,108 +73,62 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
   }
 
   return (
-    <form onSubmit={handleSubmit} style={renderAsModal ? modalFormStyle : pageFormStyle}>
-      {!renderAsModal && <h2 style={{ marginTop: 0 }}>{initialValue ? 'Edit Job Description' : 'New Job Description'}</h2>}
+    <form onSubmit={handleSubmit} className="job-form" noValidate>
+      <div className="job-form__scrollable">
+        <section className="job-form__section">
+          <h3>Basic details</h3>
+          <div className="job-form__grid job-form__grid--two">
+            <label className="job-form__field" htmlFor="job-title"><span>Job title <em>*</em></span><input id="job-title" required className="job-form__control" placeholder="Senior Backend Engineer" value={formState.title} onChange={handleChange('title')} aria-invalid={Boolean(errors.title)} /></label>
+            <label className="job-form__field" htmlFor="job-status"><span>Status <em>*</em></span><select id="job-status" className="job-form__control" value={formState.status} onChange={handleChange('status')}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></label>
+          </div>
+          {errors.title && <p className="job-form__error" role="alert">{errors.title}</p>}
+        </section>
 
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
-        <input required placeholder="Job title" value={formState.title} onChange={handleChange('title')} style={inputStyle} />
-        <textarea placeholder="Paste full job description text" value={formState.description} onChange={handleChange('description')} rows={5} style={inputStyle} />
-        <textarea placeholder="Requirements" value={formState.requirements} onChange={handleChange('requirements')} rows={3} style={inputStyle} />
-        <input placeholder="Skills (comma separated)" value={formState.skills} onChange={handleChange('skills')} style={inputStyle} />
+        <section className="job-form__section">
+          <h3>Role content</h3>
+          <label className="job-form__field" htmlFor="job-description"><span>Full job description</span><textarea id="job-description" className="job-form__control job-form__control--textarea" placeholder="Describe responsibilities, goals, and outcomes for this role." rows={6} value={formState.description} onChange={handleChange('description')} /></label>
+          <label className="job-form__field" htmlFor="job-requirements"><span>Requirements</span><textarea id="job-requirements" className="job-form__control job-form__control--textarea" placeholder="Required qualifications and domain experience." rows={4} value={formState.requirements} onChange={handleChange('requirements')} /></label>
+          <label className="job-form__field" htmlFor="job-skills"><span>Skills</span><input id="job-skills" className="job-form__control" placeholder="Node.js, PostgreSQL, AWS" value={formState.skills} onChange={handleChange('skills')} /></label>
+        </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}>
-          <input type="number" min="0" placeholder="Experience years" value={formState.experienceYears} onChange={handleChange('experienceYears')} style={inputStyle} />
-          <input placeholder="Location" value={formState.location} onChange={handleChange('location')} style={inputStyle} />
-          <select aria-label="Salary currency" value={formState.salaryCurrency} onChange={handleChange('salaryCurrency')} style={inputStyle}>
-            {SUPPORTED_SALARY_CURRENCIES.map((currency) => (
-              <option key={currency} value={currency}>{currency}</option>
-            ))}
-          </select>
-          <input type="number" min="0" placeholder="Salary min" value={formState.salaryMin} onChange={handleChange('salaryMin')} style={inputStyle} />
-          <input type="number" min="0" placeholder="Salary max" value={formState.salaryMax} onChange={handleChange('salaryMax')} style={inputStyle} />
-        </div>
+        <section className="job-form__section">
+          <h3>Role metadata</h3>
+          <div className="job-form__grid job-form__grid--two">
+            <label className="job-form__field" htmlFor="job-experience-min"><span>Minimum experience (years)</span><input id="job-experience-min" type="number" min="0" className="job-form__control" placeholder="4" value={formState.experienceMin} onChange={handleChange('experienceMin')} aria-invalid={Boolean(errors.experienceMin)} /></label>
+            <label className="job-form__field" htmlFor="job-experience-max"><span>Maximum experience (years)</span><input id="job-experience-max" type="number" min="0" className="job-form__control" placeholder="6" value={formState.experienceMax} onChange={handleChange('experienceMax')} aria-invalid={Boolean(errors.experienceMax)} /></label>
+          </div>
+          {(errors.experienceMin || errors.experienceMax) && <p className="job-form__error" role="alert">{errors.experienceMin || errors.experienceMax}</p>}
+          <label className="job-form__field" htmlFor="job-location"><span>Location</span><input id="job-location" className="job-form__control" placeholder="San Francisco, CA" value={formState.location} onChange={handleChange('location')} /></label>
+        </section>
 
-        {errors.salaryCurrency && <p style={errorStyle}>{errors.salaryCurrency}</p>}
-        {errors.salaryMin && <p style={errorStyle}>{errors.salaryMin}</p>}
+        <section className="job-form__section">
+          <h3>Compensation</h3>
+          <div className="job-form__grid job-form__grid--three">
+            <label className="job-form__field" htmlFor="job-salary-currency"><span>Currency</span><select id="job-salary-currency" className="job-form__control" value={formState.salaryCurrency} onChange={handleChange('salaryCurrency')}>
+              {SUPPORTED_SALARY_CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+            </select></label>
+            <label className="job-form__field" htmlFor="job-salary-min"><span>Salary min</span><input id="job-salary-min" type="number" min="0" className="job-form__control" placeholder="120000" value={formState.salaryMin} onChange={handleChange('salaryMin')} /></label>
+            <label className="job-form__field" htmlFor="job-salary-max"><span>Salary max</span><input id="job-salary-max" type="number" min="0" className="job-form__control" placeholder="160000" value={formState.salaryMax} onChange={handleChange('salaryMax')} /></label>
+          </div>
+          {(errors.salaryCurrency || errors.salaryMin) && <p className="job-form__error" role="alert">{errors.salaryCurrency || errors.salaryMin}</p>}
+        </section>
 
-        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-          Upload JD file (PDF/DOCX)
-          <input
-            type="file"
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(event) => setJdFile(event.target.files?.[0] || null)}
-            style={{ display: 'block', marginTop: '0.4rem' }}
-          />
-        </label>
-
-        <label style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-          Status
-          <select value={formState.status} onChange={handleChange('status')} style={{ ...inputStyle, marginTop: '0.4rem' }}>
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-        </label>
+        <section className="job-form__section">
+          <h3>JD file upload</h3>
+          <input ref={fileInputRef} id={fileInputId} className="job-form__file-input" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setJdFile(event.target.files?.[0] || null)} />
+          <div className="job-form__file-row">
+            <button type="button" className="hf-btn hf-btn--secondary" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}><Upload size={16} strokeWidth={1.5} aria-hidden="true" /> Upload PDF/DOCX</button>
+            <span className="job-form__file-name">{jdFile ? jdFile.name : 'No file selected'}</span>
+            {jdFile ? <button type="button" className="job-form__file-clear" aria-label="Clear selected JD file" onClick={() => setJdFile(null)}><X size={14} strokeWidth={1.5} aria-hidden="true" /></button> : null}
+          </div>
+          <p className="job-form__help">Accepted formats: PDF or DOCX.</p>
+        </section>
       </div>
 
-      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem' }}>
-        <button type="submit" disabled={isSubmitting} style={primaryButtonStyle}>
-          {isSubmitting ? 'Saving…' : (initialValue ? 'Save changes' : 'Create job description')}
-        </button>
-        {onCancel && (
-          <button type="button" onClick={onCancel} style={secondaryButtonStyle}>Cancel</button>
-        )}
+      <div className="job-form__footer">
+        <button type="button" className="hf-btn hf-btn--secondary" onClick={onCancel} disabled={isSubmitting}>Cancel</button>
+        <button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Saving…' : (initialValue ? 'Save changes' : 'Create Job')}</button>
       </div>
     </form>
   )
-}
-
-const inputStyle = {
-  width: '100%',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  background: 'var(--hf-surface-input)',
-  color: 'var(--hf-text-primary)',
-  padding: '0.65rem 0.8rem',
-}
-
-const primaryButtonStyle = {
-  background: 'var(--color-accent-green)',
-  border: 'none',
-  color: 'var(--hf-text-inverse)',
-  fontWeight: 700,
-  borderRadius: 8,
-  padding: '0.7rem 1rem',
-  cursor: 'pointer',
-}
-
-const secondaryButtonStyle = {
-  background: 'transparent',
-  border: '1px solid var(--border)',
-  color: 'var(--hf-text-primary)',
-  borderRadius: 8,
-  padding: '0.7rem 1rem',
-  cursor: 'pointer',
-}
-
-const errorStyle = {
-  color: 'var(--hf-status-error)',
-  margin: 0,
-  fontSize: '0.9rem',
-}
-
-
-const pageFormStyle = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: '1.25rem',
-  marginBottom: '1.5rem',
-}
-
-const modalFormStyle = {
-  background: 'transparent',
-  border: 'none',
-  padding: 0,
-  marginBottom: 0,
 }

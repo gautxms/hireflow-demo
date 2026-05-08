@@ -13,6 +13,23 @@ export function validateJobDescriptionForm(formValues) {
     errors.salaryCurrency = 'Please choose a supported salary currency'
   }
 
+
+  if (!String(formValues.title || '').trim()) {
+    errors.title = 'Job title is required'
+  }
+
+  const experienceMin = formValues.experienceMin === '' ? null : Number(formValues.experienceMin)
+  const experienceMax = formValues.experienceMax === '' ? null : Number(formValues.experienceMax)
+
+  if (experienceMin !== null && (!Number.isFinite(experienceMin) || experienceMin < 0)) {
+    errors.experienceMin = 'Minimum experience must be a non-negative number'
+  }
+  if (experienceMax !== null && (!Number.isFinite(experienceMax) || experienceMax < 0)) {
+    errors.experienceMax = 'Maximum experience must be a non-negative number'
+  }
+  if (experienceMin !== null && Number.isFinite(experienceMin) && experienceMax !== null && Number.isFinite(experienceMax) && experienceMin > experienceMax) {
+    errors.experienceMin = 'Minimum experience cannot be greater than maximum experience'
+  }
   const min = formValues.salaryMin === '' ? null : Number(formValues.salaryMin)
   const max = formValues.salaryMax === '' ? null : Number(formValues.salaryMax)
 
@@ -51,5 +68,8 @@ export function serializeJobDescriptionForm(formValues) {
     archivedReason: toOptionalTrimmed(formValues.archivedReason),
     sourceType: toOptionalTrimmed(formValues.sourceType),
     version: toOptionalInt(formValues.version),
+    experienceMin: toOptionalInt(formValues.experienceMin),
+    experienceMax: toOptionalInt(formValues.experienceMax),
+    experienceYears: toOptionalInt(formValues.experienceMin) ?? toOptionalInt(formValues.experienceMax),
   }
 }

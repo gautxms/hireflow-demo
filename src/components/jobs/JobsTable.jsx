@@ -20,6 +20,24 @@ function normalizeSkills(skills) {
   return skills.map((entry) => String(entry || '').trim()).filter(Boolean)
 }
 
+function parseExperienceValue(value) {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function formatExperience(item = {}) {
+  const min = parseExperienceValue(item.experienceMin)
+  const max = parseExperienceValue(item.experienceMax)
+  const legacy = parseExperienceValue(item.experienceYears)
+
+  if (min !== null && max !== null) return `${min}–${max} years`
+  if (min !== null) return `${min}+ years`
+  if (max !== null) return `Up to ${max} years`
+  if (legacy !== null) return `${legacy} years`
+  return '—'
+}
+
 function SkillsPreviewPopover({ item, isOpen, onOpen, onClose, popoverId }) {
   const anchorRef = useRef(null)
   const popoverRef = useRef(null)
@@ -28,18 +46,22 @@ function SkillsPreviewPopover({ item, isOpen, onOpen, onClose, popoverId }) {
 
   useEffect(() => {
     if (!isOpen) return undefined
+
     const updatePosition = () => {
       const rect = anchorRef.current?.getBoundingClientRect()
       if (!rect) return
+
       const maxLeft = Math.max(16, window.innerWidth - 16 - 320)
       setPosition({
         top: Math.round(rect.bottom + window.scrollY + 8),
         left: Math.round(Math.min(Math.max(16, rect.left + window.scrollX - 120), maxLeft)),
       })
     }
+
     updatePosition()
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
+
     return () => {
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
@@ -68,7 +90,14 @@ function SkillsPreviewPopover({ item, isOpen, onOpen, onClose, popoverId }) {
         {formatSkillsCount(skills)}
       </button>
       {isOpen && createPortal(
-        <div id={popoverId} ref={popoverRef} role="dialog" className="analyses-files-preview__popover" data-skills-popover-root="true" aria-label="Skills list">
+        <div
+          id={popoverId}
+          ref={popoverRef}
+          role="dialog"
+          className="analyses-files-preview__popover"
+          data-skills-popover-root="true"
+          aria-label="Skills list"
+        >
           <p className="jobs-table__skills-list">{skills.join(', ')}</p>
         </div>,
         document.body,
@@ -82,18 +111,22 @@ export default function JobsTable({ items = [], onEdit, onDelete, deletingId = '
 
   useEffect(() => {
     if (!openSkillsPopoverId) return undefined
+
     const handleKeydown = (event) => {
       if (event.key === 'Escape') setOpenSkillsPopoverId(null)
     }
+
     const handlePointerDown = (event) => {
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest('[data-skills-popover-root="true"]')) return
       setOpenSkillsPopoverId(null)
     }
+
     document.addEventListener('keydown', handleKeydown)
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('touchstart', handlePointerDown)
+
     return () => {
       document.removeEventListener('keydown', handleKeydown)
       document.removeEventListener('mousedown', handlePointerDown)
@@ -117,42 +150,64 @@ export default function JobsTable({ items = [], onEdit, onDelete, deletingId = '
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <tr key={item.id || item.title} className="analyses-layout__row">
-              <td className="analyses-layout__cell" data-label="Title">
-                <button type="button" className="analyses-layout__title-link analyses-layout__open-link jobs-table__title-link-reset" onClick={(event) => onEdit?.(item, event.currentTarget)}>
-                  <span className="analyses-layout__title">{item.title || 'Untitled role'}</span>
-                </button>
-              </td>
-              <td className="analyses-layout__cell" data-label="Status">{item.status || 'draft'}</td>
-              <td className="analyses-layout__cell" data-label="Experience">
-                <span className="analyses-layout__meta">{item.experience || '—'}</span>
-              </td>
-              <td className="analyses-layout__cell" data-label="Location">{item.location || '—'}</td>
-              <td className="analyses-layout__cell" data-label="Skills">
-                <SkillsPreviewPopover
-                  item={item}
-                  isOpen={openSkillsPopoverId === item.id}
-                  onOpen={() => setOpenSkillsPopoverId(item.id)}
-                  onClose={() => setOpenSkillsPopoverId(null)}
-                  popoverId={`job-skills-popover-${item.id}`}
-                />
-              </td>
-              <td className="analyses-layout__cell" data-label="Created"><span className="analyses-layout__meta">{formatDateTime(item.createdAt)}</span></td>
-              <td className="analyses-layout__cell" data-label="Updated"><span className="analyses-layout__meta">{formatDateTime(item.updatedAt || item.createdAt)}</span></td>
-              <td className="analyses-layout__cell" data-label="Actions">
-                <button
-                  type="button"
-                  className="hf-btn hf-btn--secondary"
-                  onClick={() => onDelete?.(item)}
-                  disabled={deletingId === String(item.id)}
-                  aria-label={`Delete job ${item.title || 'Untitled role'}`}
-                >
-                  {deletingId === String(item.id) ? 'Deleting…' : <Trash2 size={16} aria-hidden="true" />}
-                </button>
-              </td>
-            </tr>
-          ))}
+          {items.map((item) => {
+            const itemId = String(item.id)
+            return (
+              <tr key={item.id || item.title} className="analyses-layout__row">
+                <td className="analyses-layout__cell" data-label="Title">
+                  <button
+                    type="button"
+                    className="analyses-layout__title-link analyses-layout__open-link jobs-table__title-link-reset"
+                    onClick={(event) => onEdit?.(item, event.currentTarget)}
+                  >
+                    <span className="analyses-layout__title">{item.title || 'Untitled role'}</span>
+                  </button>
+                </td>
+
+                <td className="analyses-layout__cell" data-label="Status">
+                  {item.status || 'draft'}
+                </td>
+
+                <td className="analyses-layout__cell" data-label="Experience">
+                  <span className="analyses-layout__meta">{formatExperience(item)}</span>
+                </td>
+
+                <td className="analyses-layout__cell" data-label="Location">
+                  {item.location || '—'}
+                </td>
+
+                <td className="analyses-layout__cell" data-label="Skills">
+                  <SkillsPreviewPopover
+                    item={item}
+                    isOpen={openSkillsPopoverId === itemId}
+                    onOpen={() => setOpenSkillsPopoverId(itemId)}
+                    onClose={() => setOpenSkillsPopoverId(null)}
+                    popoverId={`job-skills-popover-${itemId}`}
+                  />
+                </td>
+
+                <td className="analyses-layout__cell" data-label="Created">
+                  <span className="analyses-layout__meta">{formatDateTime(item.createdAt)}</span>
+                </td>
+
+                <td className="analyses-layout__cell" data-label="Updated">
+                  <span className="analyses-layout__meta">{formatDateTime(item.updatedAt || item.createdAt)}</span>
+                </td>
+
+                <td className="analyses-layout__cell" data-label="Actions">
+                  <button
+                    type="button"
+                    className="hf-btn hf-btn--secondary"
+                    onClick={() => onDelete?.(item)}
+                    disabled={deletingId === itemId}
+                    aria-label={`Delete job ${item.title || 'Untitled role'}`}
+                  >
+                    {deletingId === itemId ? 'Deleting…' : <Trash2 size={16} aria-hidden="true" />}
+                  </button>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

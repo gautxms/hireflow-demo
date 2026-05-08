@@ -16,6 +16,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   const [activeItem, setActiveItem] = useState(null)
   const [resetToken, setResetToken] = useState(0)
   const [error, setError] = useState('')
+  const [modalError, setModalError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const modalTriggerRef = useRef(null)
   const token = useMemo(() => localStorage.getItem(TOKEN_STORAGE_KEY) || '', [])
@@ -55,6 +56,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     setModalMode('create')
     setActiveItem(null)
     setResetToken((current) => current + 1)
+    setModalError('')
     setIsModalOpen(true)
   }, [])
 
@@ -63,6 +65,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     setModalMode('edit')
     setActiveItem(item)
     setResetToken((current) => current + 1)
+    setModalError('')
     setIsModalOpen(true)
   }, [])
 
@@ -74,6 +77,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
     setIsSubmitting(true)
     setError('')
+    setModalError('')
     setSuccessMessage('')
 
     try {
@@ -97,7 +101,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
       setIsModalOpen(false)
       setSuccessMessage(isEdit ? 'Job updated successfully.' : 'Job created successfully.')
     } catch (requestError) {
-      setError(requestError.message || 'Unable to save job description')
+      setModalError(requestError.message || 'Unable to save job description')
     } finally {
       setIsSubmitting(false)
     }
@@ -178,6 +182,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
           onSubmit={handleModalSubmit}
           onClose={() => setIsModalOpen(false)}
           triggerRef={modalTriggerRef}
+          errorMessage={modalError}
         />
       </div>
     </section>
