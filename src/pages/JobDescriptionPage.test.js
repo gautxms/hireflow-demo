@@ -15,7 +15,7 @@ test('jobs page renders loading, error with retry, empty, and populated table br
   assert.match(source, /analyses-layout__state--error/)
   assert.match(source, /onClick=\{fetchItems\}>Retry<\/button>/)
   assert.match(source, /No jobs yet\. Create your first job to get started\./)
-  assert.match(source, /<JobsTable items=\{items\} onEdit=\{handleOpenEdit\} onArchive=\{handleArchive\} onDelete=\{handleDelete\} \/>/)
+  assert.match(source, /<JobsTable items=\{items\} onEdit=\{handleOpenEdit\} onDelete=\{handleDelete\} deletingId=\{deletingJobId\} \/>/)
 })
 
 test('jobs page uses modal create and edit submit paths with success feedback', () => {
