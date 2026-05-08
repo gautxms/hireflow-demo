@@ -169,3 +169,8 @@
     position: static;
   }
 }
+
+
+.job-modal__title {
+  margin-top: 0;
+}
