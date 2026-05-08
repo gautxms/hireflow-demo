@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import JobDescriptionForm from '../components/JobDescriptionForm'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import JobDescriptionList from '../components/JobDescriptionList'
+import JobModal from '../components/jobs/JobModal'
 import { serializeJobDescriptionForm } from '../components/jobDescriptionFormState'
 import { shouldResetAfterSave } from './jobDescriptionSubmissionState'
 import API_BASE from '../config/api'
@@ -13,6 +13,8 @@ const getAuthToken = () => localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 export default function JobDescriptionPage({ onRequireAuth }) {
   const [items, setItems] = useState([])
   const [activeItem, setActiveItem] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [modalMode, setModalMode] = useState('create')
   const [formResetToken, setFormResetToken] = useState(0)
   const [loadState, setLoadState] = useState('idle')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -21,6 +23,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   const [searchText, setSearchText] = useState('')
   const [selectedItemId, setSelectedItemId] = useState('')
   const isLoading = loadState === 'idle' || loadState === 'loading'
+  const modalTriggerRef = useRef(null)
 
   const mapAuthError = (response, payload) => {
     if (response.status === 401) {
@@ -182,6 +185,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
       }
 
       await fetchItems()
+      setIsModalOpen(false)
       setActiveItem(null)
       if (shouldResetAfterSave({ isEditing, payload })) {
         setFormResetToken((prev) => prev + 1)
@@ -220,6 +224,26 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     await fetchItems()
   }
 
+
+  const openCreateModal = (event) => {
+    modalTriggerRef.current = event?.currentTarget || null
+    setModalMode('create')
+    setActiveItem(null)
+    setIsModalOpen(true)
+  }
+
+  const openEditModal = (item, triggerElement) => {
+    modalTriggerRef.current = triggerElement || null
+    setModalMode('edit')
+    setActiveItem(item)
+    setIsModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (isSubmitting) return
+    setIsModalOpen(false)
+    setActiveItem(null)
+  }
   return (
     <section className="job-description-page">
       <header className="job-description-page__header">
@@ -235,12 +259,16 @@ export default function JobDescriptionPage({ onRequireAuth }) {
         </div>
       )}
 
-      <JobDescriptionForm
-        initialValue={activeItem}
+      <button type="button" className="hf-btn hf-btn--primary" onClick={openCreateModal}>Create Job</button>
+      <JobModal
+        isOpen={isModalOpen}
+        mode={modalMode}
+        item={activeItem}
         resetToken={formResetToken}
-        onSubmit={submitForm}
-        onCancel={() => setActiveItem(null)}
         isSubmitting={isSubmitting}
+        onSubmit={submitForm}
+        onClose={closeModal}
+        triggerRef={modalTriggerRef}
       />
 
       {isLoading ? (
@@ -286,7 +314,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
           <div className="job-description-page__content">
             <JobDescriptionList
               items={visibleItems}
-              onEdit={setActiveItem}
+              onEdit={(item, triggerElement) => openEditModal(item, triggerElement)}
               onDuplicate={duplicateItem}
               onArchive={archiveItem}
               onDelete={hardDeleteItem}
