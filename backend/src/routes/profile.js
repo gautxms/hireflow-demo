@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware/auth.js'
 const router = Router()
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
 const GRACE_PERIOD_DAYS = 30
-const KPI_SCHEMA_VERSION = '2026-04-26.v1'
+const KPI_SCHEMA_VERSION = '2026-05-08.v2'
 const MAX_DASHBOARD_RANGE_DAYS = 180
 const DEFAULT_DASHBOARD_RANGE_DAYS = 30
 const DASHBOARD_ERROR_CODE = {
@@ -352,6 +352,25 @@ router.get('/dashboard/kpis', async (req, res) => {
       }
     })
 
+    const analysesTrend = timeSeries.map((row) => ({
+      periodStart: row.periodStart,
+      value: row.analysesRunCount,
+    }))
+    const averageScoreTrend = timeSeries.map((row) => ({
+      periodStart: row.periodStart,
+      value: row.avgScore,
+    }))
+    const completionRateTrend = timeSeries.map((row) => ({
+      periodStart: row.periodStart,
+      value: row.completionRate,
+    }))
+    const shortlistedRateTrend = timeSeries.map((row) => ({
+      periodStart: row.periodStart,
+      value: row.shortlistedRate,
+    }))
+
+    const hasScoreData = timeSeries.some((row) => Number(row.avgScore || 0) > 0)
+
     const payload = {
       schemaVersion: KPI_SCHEMA_VERSION,
       range: {
@@ -363,9 +382,15 @@ router.get('/dashboard/kpis', async (req, res) => {
       filters: {
         jobDescriptionId,
       },
+      flags: {
+        hasScoreData,
+      },
       kpis,
       charts: {
-        overview: timeSeries,
+        analysesTrend,
+        averageScoreTrend,
+        completionRateTrend,
+        shortlistedRateTrend,
       },
       topJobActivity,
       jobOptions: jobOptionsResult.rows.map((row) => ({
@@ -375,16 +400,37 @@ router.get('/dashboard/kpis', async (req, res) => {
     }
 
     if (exportFormat === 'csv') {
-      const header = ['period_start', 'analyses_run_count', 'completion_rate', 'avg_score', 'shortlisted_rate', 'resumes_uploaded']
-      const rows = payload.charts.overview.map((row) => [
-        row.periodStart,
-        row.analysesRunCount,
-        row.completionRate,
-        row.avgScore,
-        row.shortlistedRate,
-        row.resumesUploaded,
-      ])
-      const csv = [header, ...rows].map((line) => line.map(csvEscape).join(',')).join('\n')
+      const filterRows = [
+        ['schema_version', payload.schemaVersion],
+        ['start_date', payload.range.startDate],
+        ['end_date', payload.range.endDate],
+        ['range_days', payload.range.days],
+        ['granularity', payload.range.granularity],
+        ['job_description_id', payload.filters.jobDescriptionId || ''],
+        ['has_score_data', payload.flags.hasScoreData],
+      ]
+      const summaryRows = [
+        ['analyses_run_count', payload.kpis.analysesRunCount],
+        ['completion_rate', payload.kpis.completionRate],
+        ['avg_score', payload.kpis.avgScore],
+        ['shortlisted_rate', payload.kpis.shortlistedRate],
+      ]
+      const trendHeader = ['trend_name', 'period_start', 'value']
+      const trendRows = [
+        ...payload.charts.analysesTrend.map((row) => ['analyses', row.periodStart, row.value]),
+        ...payload.charts.averageScoreTrend.map((row) => ['average_score', row.periodStart, row.value]),
+        ...payload.charts.completionRateTrend.map((row) => ['completion_rate', row.periodStart, row.value]),
+        ...payload.charts.shortlistedRateTrend.map((row) => ['shortlisted_rate', row.periodStart, row.value]),
+      ]
+      const csvSections = [
+        ['section', 'key', 'value'],
+        ...filterRows.map((row) => ['filters', row[0], row[1]]),
+        ...summaryRows.map((row) => ['kpi_summary', row[0], row[1]]),
+        [],
+        trendHeader,
+        ...trendRows,
+      ]
+      const csv = csvSections.map((line) => line.map(csvEscape).join(',')).join('\n')
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')
       res.setHeader('Content-Disposition', `attachment; filename="dashboard-kpis-${payload.range.startDate}-to-${payload.range.endDate}.csv"`)
       return res.status(200).send(csv)
