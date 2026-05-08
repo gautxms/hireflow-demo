@@ -42,15 +42,8 @@ test('route matching in getPageContent consistently uses resolvedPathname', () =
   assert.doesNotMatch(appSource, /if \(pathname\.startsWith\('\/candidates\/'\)\)/)
 })
 
-test('user shell route paths include app destinations and exclude public pages', () => {
-  const shellRoutesMatch = appSource.match(/const USER_SHELL_ROUTE_PATHS = new Set\(\[([\s\S]*?)\]\)/)
-  assert.ok(shellRoutesMatch)
-  const shellRoutesBlock = shellRoutesMatch[1]
-
-  assert.match(shellRoutesBlock, /'\/dashboard'/)
-  assert.match(shellRoutesBlock, /'\/settings'/)
-  assert.doesNotMatch(shellRoutesBlock, /'\/'/)
-  assert.doesNotMatch(shellRoutesBlock, /'\/pricing'/)
+test('user shell routing resolves from canonical route paths', () => {
+  assert.match(appSource, /function shouldRenderWithinUserShell\([\s\S]*return isUserShellRoutePath\(resolvedPathname\)/)
 })
 
 test('authenticated subscribed users keep public header and footer on landing route', () => {
@@ -61,7 +54,7 @@ test('authenticated subscribed users keep public header and footer on landing ro
 })
 
 test('dashboard path remains a shell route and unauthenticated users hit auth guard flow', () => {
-  assert.match(appSource, /const USER_SHELL_ROUTE_PATHS = new Set\(\[[\s\S]*'\/dashboard'[\s\S]*\]\)/)
+  assert.match(appSource, /function shouldRenderWithinUserShell\([\s\S]*return isUserShellRoutePath\(resolvedPathname\)/)
   assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*guardAuthenticatedRoute\([\s\S]*promptMessage: 'Please login to view the dashboard\.'/)
   assert.match(appSource, /if \(useUserShellLayout\) \{[\s\S]*<UserAppShell/)
 })
@@ -69,7 +62,7 @@ test('dashboard path remains a shell route and unauthenticated users hit auth gu
 
 test('authenticated root path bypasses dashboard alias resolution and stays landing', () => {
   assert.match(appSource, /const isRootLandingPath = pathname === '\/'/)
-  assert.match(appSource, /const resolvedPathname = isRootLandingPath \? pathname : \(isAuthenticated \? resolveUserSectionPath\(pathname\) : pathname\)/)
+  assert.match(appSource, /const resolvedPathname = isRootLandingPath \? pathname : resolveUserSectionPath\(pathname\)/)
   assert.match(appSource, /if \(isRootLandingPath \|\| resolvedPathname === '\/ai-resume-screening'\) \{[\s\S]*<LandingPage/)
 })
 

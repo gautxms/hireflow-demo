@@ -158,7 +158,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated) {
   }
 
   const isRootLandingPath = pathname === '/'
-  const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
+  const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
 
   if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
     return false
@@ -241,7 +241,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     const params = new URLSearchParams(window.location.search)
     const isRootLandingPath = pathname === '/'
-  const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
+  const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
     const isResultsRoute = isResultsRootPath(resolvedPathname)
     const hasResumeAnalysisFlag = params.get('resumeAnalysis') === '1'
 
@@ -365,7 +365,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
   const isRootLandingPath = pathname === '/'
-  const resolvedPathname = isRootLandingPath ? pathname : (isAuthenticated ? resolveUserSectionPath(pathname) : pathname)
+  const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
 
   const getPageContent = () => {
     // Contract: `/results/:token` always resolves through the shared-results loading path.

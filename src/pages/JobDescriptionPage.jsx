@@ -8,26 +8,52 @@ import '../styles/job-description.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const ROUTE_STATES = ['active', 'draft', 'archived']
+const getAuthToken = () => localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 
 export default function JobDescriptionPage({ onRequireAuth }) {
   const [items, setItems] = useState([])
   const [activeItem, setActiveItem] = useState(null)
   const [formResetToken, setFormResetToken] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loadState, setLoadState] = useState('idle')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [routeState, setRouteState] = useState('active')
   const [searchText, setSearchText] = useState('')
   const [selectedItemId, setSelectedItemId] = useState('')
-  const token = useMemo(() => localStorage.getItem(TOKEN_STORAGE_KEY) || '', [])
+  const isLoading = loadState === 'idle' || loadState === 'loading'
+
+  const mapAuthError = (response, payload) => {
+    if (response.status === 401) {
+      return {
+        state: 'auth-required',
+        message: payload.error || 'Your session expired. Please sign in again.',
+      }
+    }
+    if (response.status === 402) {
+      return {
+        state: 'subscription-required',
+        message: payload.error || 'An active subscription is required to manage job descriptions.',
+      }
+    }
+    if (response.status === 403) {
+      return {
+        state: 'subscription-required',
+        message: payload.error || 'You do not have access to manage job descriptions on this account.',
+      }
+    }
+    return null
+  }
 
   const fetchItems = useCallback(async () => {
+    const token = getAuthToken()
     if (!token) {
+      setLoadState('auth-required')
+      setError('Please login to manage job descriptions.')
       onRequireAuth?.('Please login to manage job descriptions.')
       return
     }
 
-    setIsLoading(true)
+    setLoadState('loading')
     setError('')
 
     try {
@@ -40,16 +66,25 @@ export default function JobDescriptionPage({ onRequireAuth }) {
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
+        const authError = mapAuthError(response, payload)
+        if (authError) {
+          setLoadState(authError.state)
+          setError(authError.message)
+          if (authError.state === 'auth-required') {
+            onRequireAuth?.(authError.message)
+          }
+          return
+        }
         throw new Error(payload.error || 'Unable to load job descriptions')
       }
 
       setItems(Array.isArray(payload.items) ? payload.items : [])
+      setLoadState('success')
     } catch (requestError) {
+      setLoadState('error')
       setError(requestError.message || 'Unable to load job descriptions')
-    } finally {
-      setIsLoading(false)
     }
-  }, [onRequireAuth, token])
+  }, [onRequireAuth])
 
   useEffect(() => {
     fetchItems()
@@ -105,6 +140,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }, {}), [items])
 
   const submitForm = async (formValues) => {
+    const token = getAuthToken()
     if (!token) {
       onRequireAuth?.('Please login to manage job descriptions.')
       return
@@ -158,6 +194,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }
 
   const archiveItem = async (item) => {
+    const token = getAuthToken()
     await fetch(`${API_BASE}/job-descriptions/${item.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -166,6 +203,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }
 
   const hardDeleteItem = async (item) => {
+    const token = getAuthToken()
     await fetch(`${API_BASE}/job-descriptions/${item.id}?hardDelete=true`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -174,6 +212,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }
 
   const duplicateItem = async (item) => {
+    const token = getAuthToken()
     await fetch(`${API_BASE}/job-descriptions/${item.id}/duplicate`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -206,6 +245,21 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
       {isLoading ? (
         <p className="job-description-page__loading">Loading job descriptions...</p>
+      ) : loadState === 'auth-required' ? (
+        <div className="job-description-page__error">
+          <p>{error || 'Please login to manage job descriptions.'}</p>
+          <button type="button" onClick={() => fetchItems()}>Retry</button>
+        </div>
+      ) : loadState === 'subscription-required' ? (
+        <div className="job-description-page__error">
+          <p>{error || 'An active subscription is required to manage job descriptions.'}</p>
+          <button type="button" onClick={() => fetchItems()}>Retry</button>
+        </div>
+      ) : loadState === 'error' ? (
+        <div className="job-description-page__error">
+          <p>{error || 'Unable to load job descriptions'}</p>
+          <button type="button" onClick={() => fetchItems()}>Retry</button>
+        </div>
       ) : (
         <>
           <div className="job-description-page__route-controls">
