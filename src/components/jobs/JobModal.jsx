@@ -4,6 +4,7 @@ import JobDescriptionForm from '../JobDescriptionForm'
 
 export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting, onSubmit, onClose, triggerRef }) {
   const dialogRef = useRef(null)
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -32,9 +33,22 @@ export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting,
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, isSubmitting, onClose])
+
+  useEffect(() => {
+    if (wasOpenRef.current && !isOpen) {
       triggerRef?.current?.focus?.({ preventScroll: true })
     }
-  }, [isOpen, isSubmitting, onClose, triggerRef])
+
+    wasOpenRef.current = isOpen
+
+    return () => {
+      if (wasOpenRef.current) {
+        triggerRef?.current?.focus?.({ preventScroll: true })
+      }
+    }
+  }, [isOpen, triggerRef])
 
   if (!isOpen) return null
 
