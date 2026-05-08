@@ -7,12 +7,12 @@ const dashboardStyles = readFileSync(new URL('./NewDashboard.css', import.meta.u
 
 test('dashboard trend sections expose keyboard focus and aria labeling contracts', () => {
   assert.match(dashboardSource, /role="region" aria-labelledby="dashboard-analyses-trend-title"/)
-  assert.match(dashboardSource, /id="dashboard-analyses-trend-title" className="new-dashboard__trend-title">Analyses trend/) 
+  assert.match(dashboardSource, /id="dashboard-analyses-trend-title" className="new-dashboard__trend-title">[\s\S]*Analyses trend/) 
   assert.match(dashboardSource, /role="img" tabIndex=\{0\} aria-label="Analyses trend chart"/)
   assert.match(dashboardSource, /aria-label=\{`\$\{bar\.label\}: \$\{bar\.value\}`\}/)
 
   assert.match(dashboardSource, /role="region" aria-labelledby="dashboard-average-score-trend-title"/)
-  assert.match(dashboardSource, /id="dashboard-average-score-trend-title" className="new-dashboard__trend-title">Average score trend/)
+  assert.match(dashboardSource, /id="dashboard-average-score-trend-title" className="new-dashboard__trend-title">[\s\S]*Average score trend/)
   assert.match(dashboardSource, /role="img" tabIndex=\{0\} aria-label="Average score trend chart"/)
   assert.match(dashboardSource, /aria-label=\{`\$\{bar\.label\}: \$\{bar\.value\.toFixed\(2\)\}`\}/)
 })

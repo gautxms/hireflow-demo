@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import { Icon } from './Icon'
 import './NewDashboard.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -187,7 +188,7 @@ export default function NewDashboard() {
 
       <section className="new-dashboard__trends">
         <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-analyses-trend-title">
-          <h3 id="dashboard-analyses-trend-title" className="new-dashboard__trend-title">Analyses trend</h3>
+          <h3 id="dashboard-analyses-trend-title" className="new-dashboard__trend-title"><Icon name="chart" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Analyses trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
           {isAnalysesEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
@@ -207,7 +208,7 @@ export default function NewDashboard() {
         </article>
 
         <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-average-score-trend-title">
-          <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title">Average score trend</h3>
+          <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average score trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
           {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No score data available for selected filters.</p> : null}
