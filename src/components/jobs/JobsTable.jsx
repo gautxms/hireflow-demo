@@ -5,10 +5,16 @@ function formatDate(value) {
   return date.toLocaleDateString()
 }
 
+function parseExperienceValue(value) {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function formatExperience(item = {}) {
-  const min = Number.isFinite(Number(item.experienceMin)) ? Number(item.experienceMin) : null
-  const max = Number.isFinite(Number(item.experienceMax)) ? Number(item.experienceMax) : null
-  const legacy = Number.isFinite(Number(item.experienceYears)) ? Number(item.experienceYears) : null
+  const min = parseExperienceValue(item.experienceMin)
+  const max = parseExperienceValue(item.experienceMax)
+  const legacy = parseExperienceValue(item.experienceYears)
   if (min !== null && max !== null) return `${min}–${max} years`
   if (min !== null) return `${min}+ years`
   if (max !== null) return `Up to ${max} years`
