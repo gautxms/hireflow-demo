@@ -443,7 +443,35 @@ router.delete('/:id', async (req, res) => {
     await ensureSchema()
     const hardDelete = String(req.query.hardDelete || 'false') === 'true'
 
+    const usageResult = await pool.query(
+      `SELECT COUNT(DISTINCT r.id)::int AS resume_count,
+              COUNT(pj.id)::int AS parse_job_count
+       FROM job_descriptions jd
+       LEFT JOIN resumes r
+         ON r.job_description_id = jd.id
+        AND r.user_id = jd.user_id
+       LEFT JOIN parse_jobs pj
+         ON pj.resume_id = r.id
+       WHERE jd.id = $1 AND jd.user_id = $2
+       GROUP BY jd.id`,
+      [req.params.id, req.userId],
+    )
+
+    const usageRow = usageResult.rows[0]
+    if (!usageRow) {
+      return res.status(404).json({ error: 'Job description not found' })
+    }
+
+    const usageSummary = mapUsageSummary(usageRow)
+
     if (hardDelete) {
+      if ((usageSummary?.resumeCount || 0) > 0 || (usageSummary?.parseJobCount || 0) > 0) {
+        return res.status(409).json({
+          error: 'Hard delete blocked because this job has linked resumes or analyses. Archive instead.',
+          usageSummary,
+        })
+      }
+
       const deleted = await pool.query(
         `DELETE FROM job_descriptions WHERE id = $1 AND user_id = $2 RETURNING id`,
         [req.params.id, req.userId],
@@ -453,7 +481,7 @@ router.delete('/:id', async (req, res) => {
         return res.status(404).json({ error: 'Job description not found' })
       }
 
-      return res.json({ ok: true, deleted: true })
+      return res.json({ ok: true, deleted: true, usageSummary })
     }
 
     const archived = await pool.query(
@@ -468,7 +496,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Job description not found' })
     }
 
-    return res.json({ ok: true, archived: true })
+    return res.json({ ok: true, archived: true, usageSummary })
   } catch (error) {
     console.error('[JobDescriptions] delete failed:', error)
     return res.status(500).json({ error: 'Unable to delete job description' })

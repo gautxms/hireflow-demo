@@ -84,6 +84,68 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     }
   }, [fetchItems, onRequireAuth, token])
 
+  const runJobMutation = useCallback(async ({ item, hardDelete = false }) => {
+    const response = await fetch(`${API_BASE}/job-descriptions/${item.id}${hardDelete ? '?hardDelete=true' : ''}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to update job description')
+    }
+
+    if (hardDelete) {
+      setItems((current) => current.filter((candidate) => candidate.id !== item.id))
+      return
+    }
+
+    setItems((current) => current.map((candidate) => (
+      candidate.id === item.id
+        ? { ...candidate, status: 'archived', updatedAt: new Date().toISOString() }
+        : candidate
+    )))
+  }, [token])
+
+  const handleArchive = useCallback(async (item) => {
+    const confirmed = window.confirm(`Archive "${item.title || 'Untitled role'}"? This keeps historical analyses intact.`)
+    if (!confirmed) return
+
+    setError('')
+    try {
+      await runJobMutation({ item })
+      await fetchItems()
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to archive job description')
+    }
+  }, [fetchItems, runJobMutation])
+
+  const handleDelete = useCallback(async (item) => {
+    const archiveInstead = window.confirm(
+      `Archive is recommended for "${item.title || 'Untitled role'}". Press OK to archive, Cancel for permanent delete options.`,
+    )
+
+    if (archiveInstead) {
+      await handleArchive(item)
+      return
+    }
+
+    const confirmedHardDelete = window.confirm(
+      `Permanently delete "${item.title || 'Untitled role'}"? Linked resumes/analyses may be affected if dependencies exist.`,
+    )
+    if (!confirmedHardDelete) return
+
+    setError('')
+    try {
+      await runJobMutation({ item, hardDelete: true })
+      await fetchItems()
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to delete job description')
+    }
+  }, [fetchItems, handleArchive, runJobMutation])
+
   return (
     <section className="analyses-layout job-description-page">
       <div className="analyses-layout__content">
@@ -112,7 +174,14 @@ export default function JobDescriptionPage({ onRequireAuth }) {
             No jobs yet. Create your first job to get started.
           </p>
         ) : null}
-        {!isCreating && !isLoading && !error && items.length > 0 ? <JobsTable items={items} /> : null}
+        {!isCreating && !isLoading && !error && items.length > 0 ? (
+          <JobsTable
+            items={items}
+            onEdit={() => {}}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+          />
+        ) : null}
       </div>
     </section>
   )
