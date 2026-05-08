@@ -224,7 +224,6 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     await fetchItems()
   }
 
-
   const openCreateModal = (event) => {
     modalTriggerRef.current = event?.currentTarget || null
     setModalMode('create')
@@ -244,6 +243,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     setIsModalOpen(false)
     setActiveItem(null)
   }
+
   return (
     <section className="job-description-page">
       <header className="job-description-page__header">

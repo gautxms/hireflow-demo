@@ -34,10 +34,12 @@ export default function NewDashboard({ onNavigate }) {
   const [rangeDays, setRangeDays] = useState('30')
   const [jobDescriptionId, setJobDescriptionId] = useState('')
   const [dashboardData, setDashboardData] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [fetchState, setFetchState] = useState('idle')
   const [error, setError] = useState('')
   const [exportLoading, setExportLoading] = useState(false)
   const [exportError, setExportError] = useState('')
+  const loading = fetchState === 'loading'
+  const hasFetchError = fetchState === 'error'
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -48,7 +50,7 @@ export default function NewDashboard({ onNavigate }) {
 
   const loadDashboard = useCallback(async () => {
     try {
-      setLoading(true)
+      setFetchState('loading')
       setError('')
       const params = new URLSearchParams({ rangeDays })
       if (jobDescriptionId) params.set('jobDescriptionId', jobDescriptionId)
@@ -58,14 +60,16 @@ export default function NewDashboard({ onNavigate }) {
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(payload.error || 'Unable to load dashboard')
+        throw new Error(payload.message || payload.error || 'Unable to load dashboard')
       }
       setDashboardData(payload)
+      setFetchState('success')
     } catch (fetchError) {
       setDashboardData(null)
       setError(fetchError.message || 'Unable to load dashboard')
+      setFetchState('error')
     } finally {
-      setLoading(false)
+      // no-op; fetchState tracks loading lifecycle
     }
   }, [authHeaders, jobDescriptionId, rangeDays])
 
@@ -116,6 +120,7 @@ export default function NewDashboard({ onNavigate }) {
   }
 
   const series = useMemo(() => dashboardData?.charts?.overview || [], [dashboardData])
+  const isEmpty = fetchState === 'success' && series.length === 0
   const analysesBars = useMemo(() => buildChartBars(series, 'analysesRunCount'), [series])
   const averageScoreBars = useMemo(() => buildChartBars(series, 'avgScore'), [series])
 
@@ -154,7 +159,7 @@ export default function NewDashboard({ onNavigate }) {
         </div>
         <div className="new-dashboard__meta-row">
           <p className="new-dashboard__report-period">Report period: {reportPeriod}</p>
-          {error ? <p className="new-dashboard__status new-dashboard__status--error">{error}</p> : null}
+          {hasFetchError ? <p className="new-dashboard__status new-dashboard__status--error">{error}</p> : null}
           {exportError ? <p className="new-dashboard__status">{exportError}</p> : null}
         </div>
       </section>
@@ -177,7 +182,8 @@ export default function NewDashboard({ onNavigate }) {
         <article className="new-dashboard__trend-card">
           <h3 className="new-dashboard__trend-title">Analyses trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
-          {!loading && series.length === 0 ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
+          {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
+          {isEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
             <div className="new-dashboard__chart" role="img" aria-label="Analyses trend chart">
               {analysesBars.map((bar) => (
@@ -196,7 +202,8 @@ export default function NewDashboard({ onNavigate }) {
         <article className="new-dashboard__trend-card">
           <h3 className="new-dashboard__trend-title">Average score trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
-          {!loading && series.length === 0 ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
+          {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
+          {isEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {series.length > 0 && (
             <div className="new-dashboard__chart" role="img" aria-label="Average score trend chart">
               {averageScoreBars.map((bar) => (
