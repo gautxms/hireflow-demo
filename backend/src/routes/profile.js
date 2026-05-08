@@ -70,9 +70,20 @@ function resolveBucketTrunc(granularity, effectiveRangeDays) {
   return effectiveRangeDays > 90 ? 'week' : 'day'
 }
 
-function formatRate(numerator, denominator) {
-  if (!denominator) return 0
-  return Number(((numerator / denominator) * 100).toFixed(2))
+/**
+ * KPI denominator contract:
+ * - Non-finite denominators (null/undefined/NaN) are treated as 0.
+ * - Denominators <= 0 resolve to 0%.
+ * - Non-finite numerators are coerced to 0.
+ * - Numerators are capped at denominator (rate metrics never exceed 100%).
+ */
+export function formatRate(numerator, denominator) {
+  const safeDenominator = Number(denominator)
+  if (!Number.isFinite(safeDenominator) || safeDenominator <= 0) return 0
+  const safeNumerator = Number(numerator)
+  if (!Number.isFinite(safeNumerator) || safeNumerator <= 0) return 0
+  const boundedNumerator = Math.min(safeNumerator, safeDenominator)
+  return Number(((boundedNumerator / safeDenominator) * 100).toFixed(2))
 }
 
 function csvEscape(value) {
@@ -165,6 +176,7 @@ router.get('/dashboard/kpis', async (req, res) => {
          SELECT
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window) AS analyses_run_count,
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status = 'complete') AS analyses_completed_count,
+           (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status IN ('failed', 'partial')) AS analyses_failed_count,
            (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM resume_window WHERE profile_score IS NOT NULL) AS avg_score,
            (SELECT COUNT(*)::int FROM resume_window) AS resumes_count,
            (SELECT COUNT(*)::int FROM shortlist_window) AS shortlisted_count`,
@@ -195,7 +207,8 @@ router.get('/dashboard/kpis', async (req, res) => {
          analyses_by_day AS (
            SELECT date_trunc('day', created_at)::date AS day,
                   COUNT(*)::int AS analyses_run,
-                  COUNT(*) FILTER (WHERE status = 'complete')::int AS analyses_completed
+                  COUNT(*) FILTER (WHERE status = 'complete')::int AS analyses_completed,
+                  COUNT(*) FILTER (WHERE status IN ('failed', 'partial'))::int AS analyses_failed
            FROM (
              SELECT DISTINCT analysis_id, status, created_at
              FROM filtered_analysis_items
@@ -238,6 +251,7 @@ router.get('/dashboard/kpis', async (req, res) => {
            SELECT d.day,
                   COALESCE(a.analyses_run, 0) AS analyses_run,
                   COALESCE(a.analyses_completed, 0) AS analyses_completed,
+                  COALESCE(a.analyses_failed, 0) AS analyses_failed,
                   sb.avg_score,
                   COALESCE(sl.shortlisted_resumes, 0) AS shortlisted_resumes,
                   COALESCE(rb.resumes_uploaded, 0) AS resumes_uploaded
@@ -251,6 +265,7 @@ router.get('/dashboard/kpis', async (req, res) => {
            date_trunc($4, day)::date AS bucket,
            SUM(analyses_run)::int AS analyses_run,
            SUM(analyses_completed)::int AS analyses_completed,
+           SUM(analyses_failed)::int AS analyses_failed,
            ROUND(AVG(avg_score)::numeric, 2) AS avg_score,
            SUM(shortlisted_resumes)::int AS shortlisted_resumes,
            SUM(resumes_uploaded)::int AS resumes_uploaded
@@ -266,6 +281,7 @@ router.get('/dashboard/kpis', async (req, res) => {
            jd.title,
            COUNT(a.id)::int AS analyses_run,
            COUNT(*) FILTER (WHERE a.status = 'complete')::int AS analyses_completed,
+           COUNT(*) FILTER (WHERE a.status IN ('failed', 'partial'))::int AS analyses_failed,
            MAX(a.created_at) AS latest_activity_at
          FROM analyses a
          INNER JOIN job_descriptions jd ON jd.id = a.job_description_id
@@ -291,12 +307,14 @@ router.get('/dashboard/kpis', async (req, res) => {
     const summary = summaryResult.rows[0] || {}
     const analysesRunCount = Number(summary.analyses_run_count || 0)
     const analysesCompletedCount = Number(summary.analyses_completed_count || 0)
+    const analysesFailedCount = Number(summary.analyses_failed_count || 0)
     const resumesCount = Number(summary.resumes_count || 0)
     const shortlistedCount = Number(summary.shortlisted_count || 0)
 
     const kpis = {
       analysesRunCount,
       completionRate: formatRate(analysesCompletedCount, analysesRunCount),
+      analysesFailedCount,
       avgScore: Number(summary.avg_score || 0),
       shortlistedRate: formatRate(shortlistedCount, resumesCount),
     }
@@ -304,6 +322,7 @@ router.get('/dashboard/kpis', async (req, res) => {
     const timeSeries = timeSeriesResult.rows.map((row) => {
       const analysesRun = Number(row.analyses_run || 0)
       const analysesCompleted = Number(row.analyses_completed || 0)
+      const analysesFailed = Number(row.analyses_failed || 0)
       const resumesUploaded = Number(row.resumes_uploaded || 0)
       const shortlistedResumes = Number(row.shortlisted_resumes || 0)
 
@@ -311,6 +330,7 @@ router.get('/dashboard/kpis', async (req, res) => {
         periodStart: row.bucket,
         analysesRunCount: analysesRun,
         completionRate: formatRate(analysesCompleted, analysesRun),
+        analysesFailedCount: analysesFailed,
         avgScore: Number(row.avg_score || 0),
         shortlistedRate: formatRate(shortlistedResumes, resumesUploaded),
         resumesUploaded,
@@ -320,12 +340,14 @@ router.get('/dashboard/kpis', async (req, res) => {
     const topJobActivity = topJobsResult.rows.map((row) => {
       const analysesRun = Number(row.analyses_run || 0)
       const analysesCompleted = Number(row.analyses_completed || 0)
+      const analysesFailed = Number(row.analyses_failed || 0)
 
       return {
         jobDescriptionId: row.id,
         title: row.title,
         analysesRunCount: analysesRun,
         completionRate: formatRate(analysesCompleted, analysesRun),
+        analysesFailedCount: analysesFailed,
         latestActivityAt: row.latest_activity_at,
       }
     })
