@@ -23,9 +23,9 @@ export default function JobsTable({ items = [], onEdit, onArchive, onDelete }) {
           {items.map((item) => (
             <tr key={item.id || item.title} className="analyses-layout__row">
               <td className="analyses-layout__cell">
-                <a href="/job-descriptions" className="jobs-table__title-link">
+                <button type="button" className="jobs-table__title-link" onClick={(event) => onEdit?.(item, event.currentTarget)}>
                   {item.title || 'Untitled role'}
-                </a>
+                </button>
               </td>
               <td className="analyses-layout__cell">{item.status || 'draft'}</td>
               <td className="analyses-layout__cell">{item.department || '—'}</td>
