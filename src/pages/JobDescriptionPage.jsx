@@ -85,12 +85,15 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }, [fetchItems, onRequireAuth, token])
 
   const runJobMutation = useCallback(async ({ item, hardDelete = false }) => {
-    const response = await fetch(`${API_BASE}/job-descriptions/${item.id}${hardDelete ? '?hardDelete=true' : ''}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const response = await fetch(
+      `${API_BASE}/job-descriptions/${item.id}${hardDelete ? '?hardDelete=true' : ''}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    })
+    )
 
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
@@ -110,7 +113,9 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }, [token])
 
   const handleArchive = useCallback(async (item) => {
-    const confirmed = window.confirm(`Archive "${item.title || 'Untitled role'}"? This keeps historical analyses intact.`)
+    const confirmed = window.confirm(
+      `Archive "${item.title || 'Untitled role'}"? This keeps historical analyses intact.`,
+    )
     if (!confirmed) return
 
     setError('')
@@ -154,7 +159,11 @@ export default function JobDescriptionPage({ onRequireAuth }) {
             <h1>Jobs</h1>
             <p>Manage your job descriptions used for resume screening workflows.</p>
           </div>
-          <button type="button" className="job-description-page__create-button" onClick={() => setIsCreating(true)}>
+          <button
+            type="button"
+            className="job-description-page__create-button"
+            onClick={() => setIsCreating(true)}
+          >
             Create Job
           </button>
         </header>
@@ -169,11 +178,13 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
         {isLoading ? <p className="analyses-layout__state analyses-layout__state--loading">Loading jobs…</p> : null}
         {!isLoading && error ? <p className="analyses-layout__state analyses-layout__state--error">{error}</p> : null}
+
         {!isCreating && !isLoading && !error && items.length === 0 ? (
           <p className="analyses-layout__state analyses-layout__state--empty">
             No jobs yet. Create your first job to get started.
           </p>
         ) : null}
+
         {!isCreating && !isLoading && !error && items.length > 0 ? (
           <JobsTable
             items={items}
