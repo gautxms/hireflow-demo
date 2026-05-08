@@ -17,7 +17,9 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
   const fetchItems = useCallback(async () => {
     if (!token) {
+      setError('Please login to manage job descriptions.')
       onRequireAuth?.('Please login to manage job descriptions.')
+      setIsLoading(false)
       return
     }
 
@@ -95,12 +97,20 @@ export default function JobDescriptionPage({ onRequireAuth }) {
           </button>
         </header>
 
-        {isCreating ? <JobDescriptionForm onSubmit={handleCreateJob} onCancel={() => setIsCreating(false)} isSubmitting={isSubmitting} /> : null}
+        {isCreating ? (
+          <JobDescriptionForm
+            onSubmit={handleCreateJob}
+            onCancel={() => setIsCreating(false)}
+            isSubmitting={isSubmitting}
+          />
+        ) : null}
 
         {isLoading ? <p className="analyses-layout__state analyses-layout__state--loading">Loading jobs…</p> : null}
         {!isLoading && error ? <p className="analyses-layout__state analyses-layout__state--error">{error}</p> : null}
         {!isCreating && !isLoading && !error && items.length === 0 ? (
-          <p className="analyses-layout__state analyses-layout__state--empty">No jobs yet. Create your first job to get started.</p>
+          <p className="analyses-layout__state analyses-layout__state--empty">
+            No jobs yet. Create your first job to get started.
+          </p>
         ) : null}
         {!isCreating && !isLoading && !error && items.length > 0 ? <JobsTable items={items} /> : null}
       </div>
