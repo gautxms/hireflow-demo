@@ -389,7 +389,6 @@ export default function JobDescriptionPage({ onRequireAuth }) {
             onDelete={handleDelete}
           />
         ) : null}
-      </div>
     </section>
   )
 }
