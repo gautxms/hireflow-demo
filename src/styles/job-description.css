@@ -32,3 +32,8 @@
 .jobs-table__title-link:hover {
   color: var(--color-primary);
 }
+
+
+.job-modal__title {
+  margin-top: 0;
+}

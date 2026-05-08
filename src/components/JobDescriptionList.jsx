@@ -35,7 +35,7 @@ export default function JobDescriptionList({
         >
           <div className="job-description-list__content">
             <div>
-              <h3 className="job-description-list__title">{item.title}</h3>
+              <h3 className="job-description-list__title"><button type="button" className="job-description-list__action" onClick={(event) => { event.stopPropagation(); onEdit(item, event.currentTarget) }}>{item.title}</button></h3>
               <p className="job-description-list__description">{item.description || 'No description yet.'}</p>
               <div className="job-description-list__meta">
                 Status: <strong className="job-description-list__status">{item.status}</strong>
@@ -47,7 +47,7 @@ export default function JobDescriptionList({
               </div>
             </div>
             <div className="job-description-list__actions">
-              <button onClick={(event) => { event.stopPropagation(); onEdit(item) }} className="job-description-list__action">Edit</button>
+              <button onClick={(event) => { event.stopPropagation(); onEdit(item, event.currentTarget) }} className="job-description-list__action">Edit</button>
               <button onClick={(event) => { event.stopPropagation(); onDuplicate(item) }} className="job-description-list__action">Duplicate</button>
               {item.status !== 'archived' && (
                 <button onClick={(event) => { event.stopPropagation(); onArchive(item) }} className="job-description-list__action">Archive</button>
