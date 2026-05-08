@@ -2,6 +2,7 @@ import 'dotenv/config'
 import app from './server.js'
 import { runMigrations } from './db/migrate.js'
 import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTables } from './db/client.js'
+import { pool } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
 import { startAnalyticsCron } from './services/analytics.js'
 import { logEmailConfigStatus } from './services/emailService.js'
@@ -56,6 +57,20 @@ async function start() {
         `[Startup] Admin AI schema compatibility check failed for users.id (${adminAiSchemaHealth.usersIdType}): ${adminAiSchemaHealth.issues.join('; ')}`,
       )
     }
+    const dashboardSchemaResult = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'resumes'
+           AND column_name = 'profile_score'
+       ) AS has_profile_score`,
+    )
+    const hasProfileScoreColumn = Boolean(dashboardSchemaResult.rows[0]?.has_profile_score)
+    if (!hasProfileScoreColumn) {
+      throw new Error('[Startup] Missing migration prerequisite: resumes.profile_score column is required for dashboard KPIs')
+    }
+    console.log('[Startup] Migration prerequisite confirmed: resumes.profile_score')
     await initializeJobQueue()
 
     logEmailConfigStatus()

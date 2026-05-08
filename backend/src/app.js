@@ -39,6 +39,7 @@ import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
+import { pool } from './db/client.js'
 
 const app = express()
 
@@ -83,8 +84,9 @@ app.use('/api/paddle/webhook', paddleWebhookRoutes)
 app.use(express.json())
 app.use(cookieParser())
 
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
   const aiModelWarnings = []
+  const schemaWarnings = []
   const defaultModel = String(AI_MODEL_CONFIG.defaultModel || '').trim()
 
   if (!defaultModel || !isValidModelFormat(defaultModel)) {
@@ -96,7 +98,33 @@ app.get('/health', (_req, res) => {
     })
   }
 
-  res.json({ status: 'ok', warnings: aiModelWarnings })
+  try {
+    const profileScoreResult = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'resumes'
+           AND column_name = 'profile_score'
+       ) AS has_profile_score`,
+    )
+
+    if (!profileScoreResult.rows[0]?.has_profile_score) {
+      schemaWarnings.push({
+        type: 'missing_dashboard_migration_prerequisite',
+        table: 'resumes',
+        column: 'profile_score',
+        message: 'Dashboard KPI queries require resumes.profile_score. Run migrations before serving traffic.',
+      })
+    }
+  } catch (error) {
+    schemaWarnings.push({
+      type: 'schema_check_failed',
+      message: error.message,
+    })
+  }
+
+  res.json({ status: 'ok', warnings: [...aiModelWarnings, ...schemaWarnings] })
 })
 
 app.use('/api', generalApiLimiterUnauth)
