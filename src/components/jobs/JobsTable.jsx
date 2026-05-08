@@ -22,7 +22,7 @@ export default function JobsTable({ items = [] }) {
           {items.map((item) => (
             <tr key={item.id || item.title} className="analyses-layout__row">
               <td className="analyses-layout__cell">
-                <a href={`/jobs/${item.id || ''}`} className="jobs-table__title-link">
+                <a href="/job-descriptions" className="jobs-table__title-link">
                   {item.title || 'Untitled role'}
                 </a>
               </td>

@@ -7,6 +7,7 @@ const source = readFileSync(new URL('./JobDescriptionPage.jsx', import.meta.url)
 test('jobs page includes analyses-style header and create button', () => {
   assert.match(source, /className="analyses-page__header"/)
   assert.match(source, />\s*Create Job\s*</)
+  assert.match(source, /onClick=\{\(\) => setIsCreating\(true\)\}/)
 })
 
 test('jobs page renders loading, error, empty, and populated table branches', () => {
@@ -16,7 +17,8 @@ test('jobs page renders loading, error, empty, and populated table branches', ()
   assert.match(source, /<JobsTable items=\{items\} \/>/)
 })
 
-test('jobs page no longer renders inline new job description form', () => {
-  assert.doesNotMatch(source, /<JobDescriptionForm/)
-  assert.doesNotMatch(source, /New Job Description/)
+test('jobs page renders the create job form flow when requested', () => {
+  assert.match(source, /<JobDescriptionForm onSubmit=\{handleCreateJob\} onCancel=\{\(\) => setIsCreating\(false\)\} isSubmitting=\{isSubmitting\} \/>/)
+  assert.match(source, /fetch\(`\$\{API_BASE\}\/job-descriptions`, \{/)
+  assert.match(source, /method: 'POST'/)
 })
