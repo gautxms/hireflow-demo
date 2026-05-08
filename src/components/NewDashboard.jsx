@@ -191,16 +191,16 @@ export default function NewDashboard() {
       </section>
 
       <section className="new-dashboard__trends">
-        <article className="new-dashboard__trend-card">
-          <h3 className="new-dashboard__trend-title"><Icon name="chart" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Analyses trend</h3>
+        <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-analyses-trend-title">
+          <h3 id="dashboard-analyses-trend-title" className="new-dashboard__trend-title"><Icon name="chart" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Analyses trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
           {isAnalysesEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {analysesTrend.length > 0 && (
-            <div className="new-dashboard__chart" role="img" aria-label="Analyses trend chart">
+            <div className="new-dashboard__chart" role="img" tabIndex={0} aria-label="Analyses trend chart">
               {analysesBars.map((bar) => (
                 <div key={bar.id} className="new-dashboard__bar-column">
-                  <div className="new-dashboard__bar new-dashboard__bar--primary" style={{ height: `${bar.height}%` }} title={`${bar.label}: ${bar.value}`} />
+                  <div className="new-dashboard__bar new-dashboard__bar--primary" style={{ height: `${bar.height}%` }} aria-label={`${bar.label}: ${bar.value}`} title={`${bar.label}: ${bar.value}`} />
                 </div>
               ))}
             </div>
@@ -211,17 +211,17 @@ export default function NewDashboard() {
           </div>
         </article>
 
-        <article className="new-dashboard__trend-card">
-          <h3 className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average score trend</h3>
+        <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-average-score-trend-title">
+          <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average score trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
           {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No score data available for selected filters.</p> : null}
           {isScoreEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {averageScoreTrend.length > 0 && hasScoreData && (
-            <div className="new-dashboard__chart" role="img" aria-label="Average score trend chart">
+            <div className="new-dashboard__chart" role="img" tabIndex={0} aria-label="Average score trend chart">
               {averageScoreBars.map((bar) => (
                 <div key={bar.id} className="new-dashboard__bar-column">
-                  <div className="new-dashboard__bar new-dashboard__bar--secondary" style={{ height: `${bar.height}%` }} title={`${bar.label}: ${bar.value.toFixed(2)}`} />
+                  <div className="new-dashboard__bar new-dashboard__bar--secondary" style={{ height: `${bar.height}%` }} aria-label={`${bar.label}: ${bar.value.toFixed(2)}`} title={`${bar.label}: ${bar.value.toFixed(2)}`} />
                 </div>
               ))}
             </div>
