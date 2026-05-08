@@ -197,23 +197,55 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     }
   }
 
-  const archiveItem = async (item) => {
+  const runJobMutation = useCallback(async ({ item, hardDelete = false }) => {
     const token = getAuthToken()
-    await fetch(`${API_BASE}/job-descriptions/${item.id}`, {
+    const response = await fetch(`${API_BASE}/job-descriptions/${item.id}${hardDelete ? '?hardDelete=true' : ''}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
-    await fetchItems()
-  }
 
-  const hardDeleteItem = async (item) => {
-    const token = getAuthToken()
-    await fetch(`${API_BASE}/job-descriptions/${item.id}?hardDelete=true`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload.error || 'Unable to update job description')
+    }
+
     await fetchItems()
-  }
+  }, [fetchItems])
+
+  const handleArchive = useCallback(async (item) => {
+    const confirmed = window.confirm(`Archive "${item.title || 'Untitled role'}"? This keeps historical analyses intact.`)
+    if (!confirmed) return
+
+    setError('')
+    try {
+      await runJobMutation({ item })
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to archive job description')
+    }
+  }, [runJobMutation])
+
+  const handleDelete = useCallback(async (item) => {
+    const archiveInstead = window.confirm(
+      `Archive is recommended for "${item.title || 'Untitled role'}". Press OK to archive, Cancel for permanent delete options.`,
+    )
+
+    if (archiveInstead) {
+      await handleArchive(item)
+      return
+    }
+
+    const confirmedHardDelete = window.confirm(
+      `Permanently delete "${item.title || 'Untitled role'}"? Linked resumes/analyses may be affected if dependencies exist.`,
+    )
+    if (!confirmedHardDelete) return
+
+    setError('')
+    try {
+      await runJobMutation({ item, hardDelete: true })
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to delete job description')
+    }
+  }, [handleArchive, runJobMutation])
 
   const duplicateItem = async (item) => {
     const token = getAuthToken()
@@ -321,8 +353,8 @@ export default function JobDescriptionPage({ onRequireAuth }) {
               items={visibleItems}
               onEdit={(item, triggerElement) => openEditModal(item, triggerElement)}
               onDuplicate={duplicateItem}
-              onArchive={archiveItem}
-              onDelete={hardDeleteItem}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
               onSelect={(item) => setSelectedItemId(item.id)}
               selectedItemId={selectedItem?.id || ''}
             />
