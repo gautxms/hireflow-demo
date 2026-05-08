@@ -14,7 +14,7 @@ const blankState = {
   status: 'draft',
 }
 
-export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting }) {
+export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting, renderAsModal = false }) {
   const [formState, setFormState] = useState(blankState)
   const [jdFile, setJdFile] = useState(null)
   const [errors, setErrors] = useState({})
@@ -72,8 +72,8 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.25rem', marginBottom: '1.5rem' }}>
-      <h2 style={{ marginTop: 0 }}>{initialValue ? 'Edit Job Description' : 'New Job Description'}</h2>
+    <form onSubmit={handleSubmit} style={renderAsModal ? modalFormStyle : pageFormStyle}>
+      {!renderAsModal && <h2 style={{ marginTop: 0 }}>{initialValue ? 'Edit Job Description' : 'New Job Description'}</h2>}
 
       <div style={{ display: 'grid', gap: '0.75rem' }}>
         <input required placeholder="Job title" value={formState.title} onChange={handleChange('title')} style={inputStyle} />
@@ -160,4 +160,20 @@ const errorStyle = {
   color: 'var(--hf-status-error)',
   margin: 0,
   fontSize: '0.9rem',
+}
+
+
+const pageFormStyle = {
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  padding: '1.25rem',
+  marginBottom: '1.5rem',
+}
+
+const modalFormStyle = {
+  background: 'transparent',
+  border: 'none',
+  padding: 0,
+  marginBottom: 0,
 }
