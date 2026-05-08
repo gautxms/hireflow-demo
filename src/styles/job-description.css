@@ -2,37 +2,34 @@
   width: min(1200px, 100%);
 }
 
-.job-description-page__create-button {
-  min-height: 2.5rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-accent-green);
-  background: var(--color-accent-green);
-  color: #02110a;
-  font-weight: var(--font-weight-semibold);
-  font-family: var(--font-family-ui);
-  padding: 0.5rem 1rem;
+.jobs-table__col-title {
+  width: 30%;
+}
+
+.jobs-table__title-link-reset {
+  border: 0;
+  background: none;
+  padding: 0;
   cursor: pointer;
 }
 
-.job-description-page__create-button:hover {
-  background: var(--color-accent-green-hover);
+.jobs-table__title-link-reset .analyses-layout__title {
+  text-align: left;
 }
 
-.jobs-table__col-title {
-  width: 36%;
+.jobs-table__title-link-reset:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
-.jobs-table__title-link:link,
-.jobs-table__title-link:visited {
+.jobs-table__skills-list {
+  margin: 0;
   color: var(--color-text-primary);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  font-family: var(--font-family-ui);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  word-break: break-word;
 }
-
-.jobs-table__title-link:hover {
-  color: var(--color-primary);
-}
-
 
 .job-modal__title {
   margin-top: 0;
@@ -59,18 +56,6 @@
   display: inline-block;
   margin-top: 1rem;
   margin-bottom: 0.375rem;
-}
-
-.jobs-table__title-link:any-link,
-.jobs-table__title-link:visited {
-  color: var(--color-text-primary);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.jobs-table__title-link:hover,
-.jobs-table__title-link:focus-visible {
-  color: var(--color-primary);
 }
 
 .job-description-list__title-button {
