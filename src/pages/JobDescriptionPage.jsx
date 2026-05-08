@@ -104,17 +104,24 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }, [activeItem, fetchItems, modalMode, onRequireAuth, token])
 
   const runJobMutation = useCallback(async ({ item, hardDelete = false }) => {
-    const response = await fetch(`${API_BASE}/job-descriptions/${item.id}${hardDelete ? '?hardDelete=true' : ''}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const response = await fetch(
+      `${API_BASE}/job-descriptions/${item.id}${hardDelete ? '?hardDelete=true' : ''}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    )
 
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(payload.error || 'Unable to update job description')
   }, [token])
 
   const handleArchive = useCallback(async (item) => {
-    const confirmed = window.confirm(`Archive "${item.title || 'Untitled role'}"? This keeps historical analyses intact.`)
+    const confirmed = window.confirm(
+      `Archive "${item.title || 'Untitled role'}"? This keeps historical analyses intact.`,
+    )
     if (!confirmed) return
 
     setError('')
