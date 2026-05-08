@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import { Icon } from './Icon'
 import './NewDashboard.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -30,7 +31,7 @@ function buildChartBars(series, key) {
   }))
 }
 
-export default function NewDashboard({ onNavigate }) {
+export default function NewDashboard() {
   const [rangeDays, setRangeDays] = useState('30')
   const [jobDescriptionId, setJobDescriptionId] = useState('')
   const [dashboardData, setDashboardData] = useState(null)
@@ -38,6 +39,7 @@ export default function NewDashboard({ onNavigate }) {
   const [error, setError] = useState('')
   const [exportLoading, setExportLoading] = useState(false)
   const [exportError, setExportError] = useState('')
+  const [exportSuccess, setExportSuccess] = useState('')
   const loading = fetchState === 'loading'
   const hasFetchError = fetchState === 'error'
 
@@ -81,6 +83,7 @@ export default function NewDashboard({ onNavigate }) {
     try {
       setExportLoading(true)
       setExportError('')
+      setExportSuccess('')
       const params = new URLSearchParams({ rangeDays, export: 'csv' })
       if (jobDescriptionId) params.set('jobDescriptionId', jobDescriptionId)
 
@@ -101,6 +104,7 @@ export default function NewDashboard({ onNavigate }) {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
+      setExportSuccess('CSV exported successfully for the active filters.')
     } catch (csvError) {
       setExportError(csvError.message || 'Unable to export CSV')
     } finally {
@@ -119,16 +123,20 @@ export default function NewDashboard({ onNavigate }) {
     shortlistedRate: 0,
   }
 
-  const series = useMemo(() => dashboardData?.charts?.overview || [], [dashboardData])
-  const isEmpty = fetchState === 'success' && series.length === 0
-  const analysesBars = useMemo(() => buildChartBars(series, 'analysesRunCount'), [series])
-  const averageScoreBars = useMemo(() => buildChartBars(series, 'avgScore'), [series])
+  const analysesTrend = useMemo(() => dashboardData?.charts?.analysesTrend || [], [dashboardData])
+  const averageScoreTrend = useMemo(() => dashboardData?.charts?.averageScoreTrend || [], [dashboardData])
+  const hasScoreData = Boolean(dashboardData?.flags?.hasScoreData)
+  const isAnalysesEmpty = fetchState === 'success' && analysesTrend.length === 0
+  const isScoreEmpty = fetchState === 'success' && averageScoreTrend.length === 0
+  const analysesBars = useMemo(() => buildChartBars(analysesTrend, 'value'), [analysesTrend])
+  const averageScoreBars = useMemo(() => buildChartBars(averageScoreTrend, 'value'), [averageScoreTrend])
 
   return (
     <div className="new-dashboard">
       <div className="new-dashboard__header">
         <div className="new-dashboard__title-row">
           <h1 className="new-dashboard__title">Recruiting Dashboard</h1>
+          <span className="new-dashboard__title-icon" aria-hidden="true"><Icon name="chart" size="lg" tone="accent" /></span>
         </div>
         <p className="new-dashboard__subtitle">KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
       </div>
@@ -161,18 +169,22 @@ export default function NewDashboard({ onNavigate }) {
           <p className="new-dashboard__report-period">Report period: {reportPeriod}</p>
           {hasFetchError ? <p className="new-dashboard__status new-dashboard__status--error">{error}</p> : null}
           {exportError ? <p className="new-dashboard__status">{exportError}</p> : null}
+          {exportSuccess ? <p className="new-dashboard__status">{exportSuccess}</p> : null}
         </div>
       </section>
 
       <section className="new-dashboard__kpis">
         {[
-          ['Analyses Run', kpis.analysesRunCount],
-          ['Completion Rate', formatPercent(kpis.completionRate)],
-          ['Average Score', Number(kpis.avgScore || 0).toFixed(2)],
-          ['Shortlisted Rate', formatPercent(kpis.shortlistedRate)],
-        ].map(([label, value]) => (
+          ['Analyses Run', kpis.analysesRunCount, 'file'],
+          ['Completion Rate', formatPercent(kpis.completionRate), 'target'],
+          ['Average Score', Number(kpis.avgScore || 0).toFixed(2), 'chart'],
+          ['Shortlisted Rate', formatPercent(kpis.shortlistedRate), 'users'],
+        ].map(([label, value, iconName]) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
-            <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
+            <div className="new-dashboard__kpi-top-row">
+              <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
+              <span className="new-dashboard__kpi-icon" aria-hidden="true"><Icon name={iconName} size="sm" tone="muted" /></span>
+            </div>
             <p className="new-dashboard__kpi-value kpi-card-value">{value}</p>
           </article>
         ))}
@@ -180,11 +192,11 @@ export default function NewDashboard({ onNavigate }) {
 
       <section className="new-dashboard__trends">
         <article className="new-dashboard__trend-card">
-          <h3 className="new-dashboard__trend-title">Analyses trend</h3>
+          <h3 className="new-dashboard__trend-title"><Icon name="chart" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Analyses trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
-          {isEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
-          {series.length > 0 && (
+          {isAnalysesEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
+          {analysesTrend.length > 0 && (
             <div className="new-dashboard__chart" role="img" aria-label="Analyses trend chart">
               {analysesBars.map((bar) => (
                 <div key={bar.id} className="new-dashboard__bar-column">
@@ -194,17 +206,18 @@ export default function NewDashboard({ onNavigate }) {
             </div>
           )}
           <div className="new-dashboard__trend-range">
-            <span>{series[0] ? formatDateLabel(series[0].periodStart) : '-'}</span>
-            <span>{series.at(-1) ? formatDateLabel(series.at(-1).periodStart) : '-'}</span>
+            <span>{analysesTrend[0] ? formatDateLabel(analysesTrend[0].periodStart) : '-'}</span>
+            <span>{analysesTrend.at(-1) ? formatDateLabel(analysesTrend.at(-1).periodStart) : '-'}</span>
           </div>
         </article>
 
         <article className="new-dashboard__trend-card">
-          <h3 className="new-dashboard__trend-title">Average score trend</h3>
+          <h3 className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average score trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
-          {isEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
-          {series.length > 0 && (
+          {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No score data available for selected filters.</p> : null}
+          {isScoreEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
+          {averageScoreTrend.length > 0 && hasScoreData && (
             <div className="new-dashboard__chart" role="img" aria-label="Average score trend chart">
               {averageScoreBars.map((bar) => (
                 <div key={bar.id} className="new-dashboard__bar-column">
@@ -214,8 +227,8 @@ export default function NewDashboard({ onNavigate }) {
             </div>
           )}
           <div className="new-dashboard__trend-range">
-            <span>{series[0] ? formatDateLabel(series[0].periodStart) : '-'}</span>
-            <span>{series.at(-1) ? formatDateLabel(series.at(-1).periodStart) : '-'}</span>
+            <span>{averageScoreTrend[0] ? formatDateLabel(averageScoreTrend[0].periodStart) : '-'}</span>
+            <span>{averageScoreTrend.at(-1) ? formatDateLabel(averageScoreTrend.at(-1).periodStart) : '-'}</span>
           </div>
         </article>
       </section>
