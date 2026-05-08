@@ -246,7 +246,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
   return (
     <section className="job-description-page">
-      <header className="job-description-page__header">
+      <header className="job-description-page__header analyses-page__header">
         <h1 className="job-description-page__title">Job Descriptions</h1>
         <p className="job-description-page__subtitle">
           Upload/paste job descriptions, keep drafts, and choose an active JD for resume screening.
@@ -290,11 +290,14 @@ export default function JobDescriptionPage({ onRequireAuth }) {
         </div>
       ) : (
         <>
-          <div className="job-description-page__route-controls">
+          <div className="job-description-page__route-controls" role="tablist" aria-label="Job status">
             {ROUTE_STATES.map((state) => (
               <button
                 key={state}
                 type="button"
+                role="tab"
+                aria-selected={routeState === state}
+                aria-controls="job-description-list-panel"
                 onClick={() => setRouteState(state)}
                 className={`job-description-page__route-button ${routeState === state ? 'job-description-page__route-button--active' : ''}`}
               >
@@ -303,7 +306,9 @@ export default function JobDescriptionPage({ onRequireAuth }) {
             ))}
           </div>
 
+          <label className="job-description-page__search-label" htmlFor="job-description-search">Search job descriptions</label>
           <input
+            id="job-description-search"
             type="search"
             placeholder="Search title, description, skills, location..."
             value={searchText}
@@ -311,7 +316,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
             className="job-description-page__search"
           />
 
-          <div className="job-description-page__content">
+          <div className="job-description-page__content" id="job-description-list-panel">
             <JobDescriptionList
               items={visibleItems}
               onEdit={(item, triggerElement) => openEditModal(item, triggerElement)}
