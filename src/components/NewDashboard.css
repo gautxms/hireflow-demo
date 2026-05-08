@@ -110,3 +110,21 @@
   .new-dashboard { padding: 20px 16px; }
   .new-dashboard__kpis { grid-template-columns: 1fr; }
 }
+
+.new-dashboard__select:focus-visible,
+.new-dashboard__chart:focus-visible,
+.new-dashboard__trend-card:focus-within {
+  outline: 2px solid var(--color-accent-green);
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .new-dashboard__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .new-dashboard__button {
+    width: 100%;
+  }
+}
