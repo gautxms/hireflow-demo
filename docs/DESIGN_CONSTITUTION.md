@@ -600,3 +600,46 @@ Anti-patterns to avoid:
 - Don’t mix one-off font families in app surfaces.
 - Don’t restyle dense controls into display typography.
 
+
+---
+
+## 16. CREATE/EDIT LONG-FORM MODAL PATTERN (IMPLEMENTED)
+
+Reference implementation:
+- `src/components/jobs/JobModal.jsx`
+- `src/components/JobDescriptionForm.jsx`
+- `src/styles/job-description.css`
+
+When to use:
+- Create/Edit forms that exceed one viewport and require persistent actions.
+
+Rules:
+- Modal panel must be an **opaque surface** (`#111111` style token family). Do not use translucent/blurred modal surfaces.
+- Backdrop/overlay may be semi-transparent to dim context.
+- Use sticky header with title, helper text, and keyboard-accessible close button (`aria-label` required).
+- Use sticky footer with right-aligned secondary + primary actions. Preferred wording: `Cancel` + context-specific primary (`Create Job`, `Save changes`).
+- Keep long content in a dedicated internal scroll area; style that scrollbar for dark theme locally to the scroll container.
+- Group fields into labeled sections with subtle borders/dividers (Basic details, Role content, Role metadata, Compensation, Upload).
+- Every field must have a visible label; placeholders are hints only.
+- Show validation and API errors inline near relevant fields (and modal-level save error when applicable).
+- Experience inputs use range fields (`experienceMin`, `experienceMax`) with non-negative numeric validation and min<=max; legacy single value can be mapped for prefill/display.
+
+Typography:
+- Modal title/section headers: Syne.
+- Dense controls, labels, helper text, metadata, and buttons: DM Sans.
+
+Accessibility:
+- Escape closes modal (unless submitting).
+- Focus trap retained while modal is open.
+- Close/action buttons keyboard reachable with visible focus styles.
+- Labels associated with inputs.
+
+Responsive:
+- Desktop supports multi-column grids for range/compensation rows.
+- Mobile collapses those rows into one column.
+
+Do/Don't:
+- Do keep actions always visible via sticky footer.
+- Do keep modal body readable with solid contrast.
+- Don’t rely on browser-default file inputs; use styled trigger + selected filename.
+- Don’t place critical actions only at scroll end.
