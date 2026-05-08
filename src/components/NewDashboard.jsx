@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import { Icon } from './Icon'
 import './NewDashboard.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -135,6 +136,7 @@ export default function NewDashboard() {
       <div className="new-dashboard__header">
         <div className="new-dashboard__title-row">
           <h1 className="new-dashboard__title">Recruiting Dashboard</h1>
+          <span className="new-dashboard__title-icon" aria-hidden="true"><Icon name="chart" size="lg" tone="accent" /></span>
         </div>
         <p className="new-dashboard__subtitle">KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
       </div>
@@ -173,13 +175,16 @@ export default function NewDashboard() {
 
       <section className="new-dashboard__kpis">
         {[
-          ['Analyses Run', kpis.analysesRunCount],
-          ['Completion Rate', formatPercent(kpis.completionRate)],
-          ['Average Score', Number(kpis.avgScore || 0).toFixed(2)],
-          ['Shortlisted Rate', formatPercent(kpis.shortlistedRate)],
-        ].map(([label, value]) => (
+          ['Analyses Run', kpis.analysesRunCount, 'file'],
+          ['Completion Rate', formatPercent(kpis.completionRate), 'target'],
+          ['Average Score', Number(kpis.avgScore || 0).toFixed(2), 'chart'],
+          ['Shortlisted Rate', formatPercent(kpis.shortlistedRate), 'users'],
+        ].map(([label, value, iconName]) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
-            <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
+            <div className="new-dashboard__kpi-top-row">
+              <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
+              <span className="new-dashboard__kpi-icon" aria-hidden="true"><Icon name={iconName} size="sm" tone="muted" /></span>
+            </div>
             <p className="new-dashboard__kpi-value kpi-card-value">{value}</p>
           </article>
         ))}
@@ -187,7 +192,7 @@ export default function NewDashboard() {
 
       <section className="new-dashboard__trends">
         <article className="new-dashboard__trend-card">
-          <h3 className="new-dashboard__trend-title">Analyses trend</h3>
+          <h3 className="new-dashboard__trend-title"><Icon name="chart" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Analyses trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
           {isAnalysesEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
@@ -207,7 +212,7 @@ export default function NewDashboard() {
         </article>
 
         <article className="new-dashboard__trend-card">
-          <h3 className="new-dashboard__trend-title">Average score trend</h3>
+          <h3 className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average score trend</h3>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
           {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No score data available for selected filters.</p> : null}
