@@ -8,6 +8,11 @@ const GRACE_PERIOD_DAYS = 30
 const KPI_SCHEMA_VERSION = '2026-04-26.v1'
 const MAX_DASHBOARD_RANGE_DAYS = 180
 const DEFAULT_DASHBOARD_RANGE_DAYS = 30
+const DASHBOARD_ERROR_CODE = {
+  INVALID_RANGE: 'DASHBOARD_INVALID_RANGE',
+  DB_QUERY_FAILED: 'DASHBOARD_QUERY_FAILED',
+  INTERNAL: 'DASHBOARD_INTERNAL_ERROR',
+}
 
 function sanitizeText(value, maxLength = 100) {
   if (typeof value !== 'string') return ''
@@ -94,8 +99,39 @@ router.get('/dashboard/kpis', async (req, res) => {
       jobDescriptionId,
     }
 
+    const runSegmentQuery = async (segment, query, params) => {
+      const startedAt = Date.now()
+      console.info('[profile.dashboard.kpis] Running SQL segment', {
+        userId: req.user?.id,
+        segment,
+      })
+      try {
+        const result = await pool.query(query, params)
+        console.info('[profile.dashboard.kpis] SQL segment completed', {
+          userId: req.user?.id,
+          segment,
+          rowCount: result.rowCount,
+          durationMs: Date.now() - startedAt,
+        })
+        return result
+      } catch (error) {
+        console.error('[profile.dashboard.kpis] SQL segment failed', {
+          userId: req.user?.id,
+          segment,
+          durationMs: Date.now() - startedAt,
+          dbCode: error.code || null,
+          dbRoutine: error.routine || null,
+          dbConstraint: error.constraint || null,
+          message: error.message,
+        })
+        error.dashboardCode = DASHBOARD_ERROR_CODE.DB_QUERY_FAILED
+        throw error
+      }
+    }
+
     const [summaryResult, timeSeriesResult, topJobsResult, jobOptionsResult] = await Promise.all([
-      pool.query(
+      runSegmentQuery(
+        'summary',
         `WITH analysis_window AS (
            SELECT a.id, a.status, ai.resume_id
            FROM analyses a
@@ -134,7 +170,8 @@ router.get('/dashboard/kpis', async (req, res) => {
            (SELECT COUNT(*)::int FROM shortlist_window) AS shortlisted_count`,
         [filters.userId, filters.startDate, filters.endDateExclusive, filters.bucketTrunc, filters.jobDescriptionId],
       ),
-      pool.query(
+      runSegmentQuery(
+        'timeseries',
         `WITH days AS (
            SELECT generate_series($2::date, ($3::date - interval '1 day')::date, interval '1 day') AS day
          ),
@@ -222,7 +259,8 @@ router.get('/dashboard/kpis', async (req, res) => {
          ORDER BY 1 ASC`,
         [filters.userId, filters.startDate, filters.endDateExclusive, filters.bucketTrunc, filters.jobDescriptionId],
       ),
-      pool.query(
+      runSegmentQuery(
+        'topJobs',
         `SELECT
            jd.id,
            jd.title,
@@ -240,7 +278,8 @@ router.get('/dashboard/kpis', async (req, res) => {
          LIMIT 5`,
         [filters.userId, filters.startDate, filters.endDateExclusive, filters.jobDescriptionId],
       ),
-      pool.query(
+      runSegmentQuery(
+        'jobOptions',
         `SELECT id, title
          FROM job_descriptions
          WHERE user_id = $1
@@ -340,14 +379,23 @@ router.get('/dashboard/kpis', async (req, res) => {
     return res.json(payload)
   } catch (error) {
     if (error.message?.includes('Invalid') || error.message?.includes('Date range') || error.message?.includes('startDate')) {
-      return res.status(400).json({ error: error.message })
+      return res.status(400).json({
+        error: error.message,
+        code: DASHBOARD_ERROR_CODE.INVALID_RANGE,
+        message: error.message,
+      })
     }
 
     console.error('[profile.dashboard.kpis] Failed to load dashboard KPIs', {
       userId: req.user?.id,
       error: error.message,
+      dbCode: error.code || null,
     })
-    return res.status(500).json({ error: 'Unable to load dashboard KPIs' })
+    return res.status(500).json({
+      error: 'Unable to load dashboard KPIs',
+      code: error.dashboardCode || DASHBOARD_ERROR_CODE.INTERNAL,
+      message: 'Unable to load dashboard KPIs',
+    })
   }
 })
 
