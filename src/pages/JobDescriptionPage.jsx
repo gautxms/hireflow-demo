@@ -122,32 +122,9 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     if (!response.ok) throw new Error(payload.error || 'Unable to update job description')
   }, [token])
 
-  const handleArchive = useCallback(async (item) => {
-    const confirmed = window.confirm(
-      `Archive "${item.title || 'Untitled role'}"? This keeps historical analyses intact.`,
-    )
-    if (!confirmed) return
-
-    setError('')
-    setSuccessMessage('')
-    try {
-      await runJobMutation({ item })
-      await fetchItems()
-      setSuccessMessage('Job archived successfully.')
-    } catch (requestError) {
-      setError(requestError.message || 'Unable to archive job description')
-    }
-  }, [fetchItems, runJobMutation])
+  const [deletingJobId, setDeletingJobId] = useState('')
 
   const handleDelete = useCallback(async (item) => {
-    const archiveInstead = window.confirm(
-      `Archive is recommended for "${item.title || 'Untitled role'}". Press OK to archive, Cancel for permanent delete options.`,
-    )
-    if (archiveInstead) {
-      await handleArchive(item)
-      return
-    }
-
     const confirmedHardDelete = window.confirm(
       `Permanently delete "${item.title || 'Untitled role'}"? Linked resumes/analyses may be affected if dependencies exist.`,
     )
@@ -156,13 +133,16 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     setError('')
     setSuccessMessage('')
     try {
+      setDeletingJobId(String(item.id))
       await runJobMutation({ item, hardDelete: true })
       await fetchItems()
       setSuccessMessage('Job deleted successfully.')
     } catch (requestError) {
       setError(requestError.message || 'Unable to delete job description')
+    } finally {
+      setDeletingJobId('')
     }
-  }, [fetchItems, handleArchive, runJobMutation])
+  }, [fetchItems, runJobMutation])
 
   return (
     <section className="analyses-layout job-description-page">
@@ -172,7 +152,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
             <h1>Jobs</h1>
             <p>Manage your job descriptions used for resume screening workflows.</p>
           </div>
-          <button type="button" className="job-description-page__create-button" onClick={(event) => handleOpenCreate(event.currentTarget)}>
+          <button type="button" className="btn-primary" onClick={(event) => handleOpenCreate(event.currentTarget)}>
             Create Job
           </button>
         </header>
@@ -181,7 +161,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
         {isLoading ? <p className="analyses-layout__state analyses-layout__state--loading">Loading jobs…</p> : null}
         {!isLoading && error ? (
           <p className="analyses-layout__state analyses-layout__state--error">
-            {error} <button type="button" className="jobs-table__action" onClick={fetchItems}>Retry</button>
+            {error} <button type="button" className="hf-btn hf-btn--secondary" onClick={fetchItems}>Retry</button>
           </p>
         ) : null}
         {!isLoading && !error && items.length === 0 ? (
@@ -190,7 +170,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
           </p>
         ) : null}
         {!isLoading && !error && items.length > 0 ? (
-          <JobsTable items={items} onEdit={handleOpenEdit} onArchive={handleArchive} onDelete={handleDelete} />
+          <JobsTable items={items} onEdit={handleOpenEdit} onDelete={handleDelete} deletingId={deletingJobId} />
         ) : null}
 
         <JobModal
