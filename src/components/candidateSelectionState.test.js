@@ -24,6 +24,13 @@ test('bulk selection acts on visible rows only', () => {
   assert.deepEqual(toggleSelectAllVisible(['a', 'b'], [{ _bulkKey: 'a' }, { _bulkKey: 'b' }]), [])
 })
 
+test('select all on page never selects off-page candidates in filtered/paginated views', () => {
+  const selectedFromPageOne = toggleSelectAllVisible([], [{ _bulkKey: 'a' }, { _bulkKey: 'b' }])
+  assert.deepEqual(selectedFromPageOne, ['a', 'b'])
+  const selectedFromPageTwo = toggleSelectAllVisible(selectedFromPageOne, [{ _bulkKey: 'c' }])
+  assert.deepEqual(selectedFromPageTwo, ['a', 'b', 'c'])
+})
+
 test('selected candidates include rows from all filtered pages', () => {
   const selected = getSelectedCandidates(rows, ['a', 'c'])
   assert.deepEqual(selected.map((row) => row._bulkKey), ['a', 'c'])
