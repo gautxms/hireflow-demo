@@ -121,6 +121,33 @@ function ensureTextList(values, fallback) {
   return normalized.length > 0 ? normalized : [fallback]
 }
 
+function normalizeEvidenceList(values) {
+  if (!Array.isArray(values)) {
+    return []
+  }
+
+  return values
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const text = toDisplayText(entry, '').trim()
+        return text ? { quote: text, section: '', span: '' } : null
+      }
+
+      if (!entry || typeof entry !== 'object') {
+        return null
+      }
+
+      const quote = toDisplayText(entry.quote || entry.snippet || entry.text, '').trim()
+      const section = toDisplayText(entry.section || entry.resumeSection, '').trim()
+      const span = toDisplayText(entry.span || entry.resumeSpan, '').trim()
+      if (!quote && !section && !span) {
+        return null
+      }
+      return { quote, section, span }
+    })
+    .filter(Boolean)
+}
+
 function parseUploadDate(candidate) {
   const value = candidate?.uploadDate || candidate?.uploadedAt || candidate?.created_at || candidate?.createdAt
   const timestamp = Date.parse(String(value || ''))
@@ -1024,13 +1051,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const topSkills = deriveTopSkills(candidate).slice(0, 6)
         const matchedSkills = ensureTextList(candidate?.matchedSkills || candidate?.matched_skills, 'No confirmed matched skills were detected.')
         const missingSkills = ensureTextList(candidate?.missingSkills || candidate?.missing_skills, 'No explicit skill gaps were detected.')
-        const evidenceItems = ensureTextList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements, 'No supporting evidence snippets are available.')
+        const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
+        const evidenceItems = evidenceObjects.length > 0
+          ? evidenceObjects
+          : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = candidateConsiderations.length > 0
           ? candidateConsiderations
           : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
         const nextActions = ensureTextList(candidate?.next_action || candidate?.next_actions || candidate?.recommendation, 'Schedule a recruiter screen to validate fit and open questions.')
         const resumeFilename = toDisplayText(candidate?.filename || candidate?.resume_filename, 'Filename unavailable')
-        const resumeUnavailable = 'Preview unavailable'
+        const resumeUnavailable = 'Preview unavailable — secure file open/download is not yet supported for this candidate view.'
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
         const persistedTags = Array.isArray(candidate?.tags) ? candidate.tags : []
         const optimisticTags = candidateTags[candidate._bulkKey] || []
@@ -1083,6 +1113,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box">
                   <div className="dd-analysis-item">{resumeFilename}</div>
                   <div className="dd-analysis-item">{resumeUnavailable}</div>
+                  <button
+                    type="button"
+                    className="dd-btn-ghost"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      window.location.href = `/candidates/${candidate.id}`
+                    }}
+                  >
+                    Open full profile
+                  </button>
                 </div>
                 <div className="dd-col-label dd-col-label--mt-16">Tags</div>
                 <div className="dd-top-skills">
@@ -1142,7 +1182,15 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-col-label dd-col-label--mt-14">Evidence</div>
                 <div className="dd-analysis-box">
                   {evidenceItems.map((item, idx) => (
-                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item}</div>
+                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>
+                      <strong>Requirement:</strong> {matchedSkills[idx] || matchedSkills[0] || 'General role fit'}<br />
+                      <strong>Resume evidence:</strong> {item.quote || 'Snippet unavailable'}
+                      {(item.section || item.span) && (
+                        <>
+                          {' '}<em>({[item.section, item.span].filter(Boolean).join(' · ')})</em>
+                        </>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
