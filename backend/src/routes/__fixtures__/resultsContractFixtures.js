@@ -46,4 +46,20 @@ export const RESULTS_CONTRACT_FIXTURES = Object.freeze({
       reason: 'Strong fit for role requirements',
     },
   },
+  candidateV3OptIn: {
+    candidateId: 'cand-v3-1',
+    resumeId: '550e8400-e29b-41d4-a716-446655440001',
+    name: 'Jordan Lee',
+    score: 81,
+    matchedRequirements: ['Node.js API development', 'PostgreSQL query optimization'],
+    missingRequirements: ['SOC2 operations ownership'],
+    evidence: [
+      { quote: 'Built Node.js microservices for customer APIs', section: 'Experience', span: 'Acme Corp, 2022-2025' },
+    ],
+    uncertaintyNotes: ['Limited evidence for compliance ownership'],
+    suggestedRecruiterAction: 'Probe compliance depth in technical screen.',
+    resumeFilename: 'jordan-lee-resume.pdf',
+    resumeAssetRef: 'asset://resume/jordan-lee-1',
+    parseMeta: { contractVersion: 'candidate-v3', contractMode: 'opt_in' },
+  },
 })

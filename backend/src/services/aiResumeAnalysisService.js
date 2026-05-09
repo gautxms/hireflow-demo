@@ -26,6 +26,7 @@ function getMaxProviderAttemptsPerFile() {
 const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
 const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
 const CANDIDATE_COMPACT_SCHEMA_VERSION = 'compact-v2'
+const CANDIDATE_CONTRACT_V3_FLAG = String(process.env.AI_PARSE_CONTRACT_V3 || '').toLowerCase() === 'true'
 const OPENAI_COMPACT_MODEL_PATTERN = /gpt-5-nano/i
 
 let claudeTokensUsed = {
@@ -86,7 +87,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     candidate?.missingSkills || candidate?.fit_assessment?.missing_requirements || [],
     { maxItems: minimalMode ? 5 : 10, maxItemLength: 80 },
   )
-  return {
+  const normalizedCandidate = {
     id: clampString(candidate?.id || '', 120),
     name: clampString(candidate?.name || candidate?.full_name || 'Unknown Candidate', 80),
     email: clampString(candidate?.email || '', 120),
@@ -108,6 +109,16 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     filename: clampString(candidate?.filename || '', 180),
     resumeId: clampString(candidate?.resumeId || candidate?.resume_id || '', 100),
   }
+
+  if (CANDIDATE_CONTRACT_V3_FLAG) {
+    normalizedCandidate.parseMeta = {
+      ...(candidate?.parseMeta && typeof candidate.parseMeta === 'object' ? candidate.parseMeta : {}),
+      contractVersion: 'candidate-v3',
+      contractMode: 'opt_in',
+    }
+  }
+
+  return normalizedCandidate
 }
 
 function normalizeCompactAnalysis(result = {}, { minimalMode = false } = {}) {
@@ -630,7 +641,9 @@ function buildCompactOutputInstructions({ compactMode = false, truncationSafeMod
       : (compactMode
         ? 'Return at most 5 candidates. Minimal schema per candidate: {name,score,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,recommendation<=160}.'
         : 'Return at most 10 candidates. Compact schema per candidate: {name,email,phone,score,verdict,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,skills<=25,recommendation<=160,filename,resumeId}.'),
-    'Do not include evidence snippets, full work history, full resume text, or full job description text.',
+    CANDIDATE_CONTRACT_V3_FLAG
+      ? 'When returning evidence, each evidence item must cite resume section or span when available. If unavailable, set uncertaintyNotes and keep evidence conservative.'
+      : 'Do not include evidence snippets, full work history, full resume text, or full job description text.',
     'If output risks truncation, omit optional fields first (email, phone, filename, resumeId, skills).',
   ].join('\n')
 }

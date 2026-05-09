@@ -147,3 +147,23 @@ test('fixture: results response contract retains filters/sort/pagination envelop
     },
   )
 })
+
+test('normalizeCandidate remains backward compatible for legacy shape and exposes additive v3 fields', () => {
+  const normalized = normalizeCandidate(RESULTS_CONTRACT_FIXTURES.legacyCandidate)
+  assert.deepEqual(normalized.matchedRequirements, [])
+  assert.deepEqual(normalized.missingRequirements, [])
+  assert.deepEqual(normalized.evidence, [])
+  assert.equal(typeof normalized.suggestedRecruiterAction, 'string')
+  assert.equal(normalized.resumeFilename, '')
+  assert.equal(normalized.resumeAssetRef, '')
+})
+
+test('normalizeCandidate keeps strict v3 contract fields when provided', () => {
+  const normalized = normalizeCandidate(RESULTS_CONTRACT_FIXTURES.candidateV3OptIn)
+  assert.deepEqual(normalized.matchedRequirements, ['Node.js API development', 'PostgreSQL query optimization'])
+  assert.deepEqual(normalized.missingRequirements, ['SOC2 operations ownership'])
+  assert.equal(normalized.evidence[0].section, 'Experience')
+  assert.equal(normalized.evidence[0].span, 'Acme Corp, 2022-2025')
+  assert.equal(normalized.parseMeta.contractVersion, 'candidate-v3')
+  assert.equal(normalized.parseMeta.contractMode, 'opt_in')
+})
