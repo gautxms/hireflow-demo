@@ -1062,6 +1062,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const resumeFilename = toDisplayText(candidate?.filename || candidate?.resume_filename, 'Filename unavailable')
         const resumeUnavailable = 'Preview unavailable — secure file open/download is not yet supported for this candidate view.'
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
+        const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
         const persistedTags = Array.isArray(candidate?.tags) ? candidate.tags : []
         const optimisticTags = candidateTags[candidate._bulkKey] || []
         const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
@@ -1092,9 +1093,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <button
                   className="dd-btn-ghost"
                   type="button"
+                  disabled={!fullProfilePath}
                   onClick={(event) => {
                     event.stopPropagation()
-                    window.location.href = `/candidates/${candidate.id}`
+                    if (!fullProfilePath) return
+                    window.location.href = fullProfilePath
                   }}
                 >
                   View full profile →
@@ -1116,9 +1119,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   <button
                     type="button"
                     className="dd-btn-ghost"
+                    disabled={!fullProfilePath}
                     onClick={(event) => {
                       event.stopPropagation()
-                      window.location.href = `/candidates/${candidate.id}`
+                      if (!fullProfilePath) return
+                      window.location.href = fullProfilePath
                     }}
                   >
                     Open full profile
