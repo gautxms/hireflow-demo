@@ -1281,6 +1281,9 @@
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 /* Skills */
@@ -1492,6 +1495,8 @@
   font-size: 13px;
   color: var(--color-text-secondary);
   line-height: 1.7;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .dd-facts { display: flex; flex-direction: column; gap: 7px; }
