@@ -116,6 +116,17 @@ function deriveTopSkills(candidate) {
   return parseSkills(candidate?.skills)
 }
 
+function ensureTextList(values, fallback) {
+  const normalized = Array.isArray(values) ? values.map((entry) => toDisplayText(entry, '')).filter(Boolean) : []
+  return normalized.length > 0 ? normalized : [fallback]
+}
+
+function parseUploadDate(candidate) {
+  const value = candidate?.uploadDate || candidate?.uploadedAt || candidate?.created_at || candidate?.createdAt
+  const timestamp = Date.parse(String(value || ''))
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
 const toTenScale = (score) => {
   if (score == null) return null
   return (score / 10).toFixed(1)
@@ -1011,6 +1022,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
         const experienceEntries = deriveExperienceEntries(candidate)
         const topSkills = deriveTopSkills(candidate).slice(0, 6)
+        const matchedSkills = ensureTextList(candidate?.matchedSkills || candidate?.matched_skills, 'No confirmed matched skills were detected.')
+        const missingSkills = ensureTextList(candidate?.missingSkills || candidate?.missing_skills, 'No explicit skill gaps were detected.')
+        const evidenceItems = ensureTextList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements, 'No supporting evidence snippets are available.')
+        const uncertaintyItems = candidateConsiderations.length > 0
+          ? candidateConsiderations
+          : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
+        const nextActions = ensureTextList(candidate?.next_action || candidate?.next_actions || candidate?.recommendation, 'Schedule a recruiter screen to validate fit and open questions.')
+        const resumeFilename = toDisplayText(candidate?.filename || candidate?.resume_filename, 'Filename unavailable')
+        const resumeUnavailable = 'Preview unavailable'
+        const candidateResumeId = resolveCandidateResumeUuid(candidate)
+        const persistedTags = Array.isArray(candidate?.tags) ? candidate.tags : []
+        const optimisticTags = candidateTags[candidate._bulkKey] || []
+        const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
         const initials = String(candidate?.name || '')
           .split(' ')
           .map((part) => part[0] || '')
@@ -1034,7 +1058,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
               )}
               <div className="dd-header-actions">
-                <button className="dd-btn-primary" type="button">Schedule Interview</button>
                 <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
                 <button
                   className="dd-btn-ghost"
@@ -1052,10 +1075,23 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
             <div className="dd-body">
               <div className="dd-col">
-                <div className="dd-col-label">Summary</div>
+                <div className="dd-col-label">Why ranked?</div>
                 <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
-                <div className="dd-col-label dd-col-label--mt-16">AI reasoning</div>
+                <div className="dd-col-label dd-col-label--mt-16">Evidence</div>
                 <p className="dd-summary">{reasoningText}</p>
+                <div className="dd-col-label dd-col-label--mt-16">Resume</div>
+                <div className="dd-analysis-box">
+                  <div className="dd-analysis-item">{resumeFilename}</div>
+                  <div className="dd-analysis-item">{resumeUnavailable}</div>
+                </div>
+                <div className="dd-col-label dd-col-label--mt-16">Tags</div>
+                <div className="dd-top-skills">
+                  {visibleTags.length > 0
+                    ? visibleTags.map((tag) => (
+                      <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>
+                    ))
+                    : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}
+                </div>
 
                 <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
                 <div className="dd-facts">
@@ -1091,34 +1127,49 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
 
               <div className="dd-col">
-                <div className="dd-col-label">Strengths</div>
+                <div className="dd-col-label">Matched</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
+                  {matchedSkills.map((item, idx) => (
+                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>
+                  ))}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">Missing</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
+                  {missingSkills.map((item, idx) => (
+                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>
+                  ))}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">Evidence</div>
+                <div className="dd-analysis-box">
+                  {evidenceItems.map((item, idx) => (
+                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="dd-col">
+                <div className="dd-col-label">Uncertainty</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
+                  {uncertaintyItems.map((item, idx) => (
+                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>
+                  ))}
+                </div>
+
+                <div className="dd-col-label dd-col-label--mt-14">Next action</div>
+                <div className="dd-analysis-box dd-analysis-box--green">
+                  {nextActions.map((item, idx) => (
+                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>
+                  ))}
+                </div>
+
+                <div className="dd-col-label dd-col-label--mt-14">Strengths snapshot</div>
+                <div className="dd-analysis-box">
                   {candidateStrengths.length > 0
                     ? candidateStrengths.map((strength, idx) => (
                       <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>
                     ))
                     : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
                 </div>
-
-                <div className="dd-col-label dd-col-label--mt-14">Considerations</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {candidateConsiderations.length > 0
-                    ? candidateConsiderations.map((consideration, idx) => (
-                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-consideration-${idx}`}>{consideration}</div>
-                    ))
-                    : (
-                      <div className="dd-analysis-item">
-                        {candidate.years_experience == null
-                          ? 'Experience duration could not be determined — verify dates in resume'
-                          : candidate.years_experience < 3
-                            ? 'Early-career candidate — assess growth trajectory in interview'
-                            : 'Run re-analysis to generate detailed AI considerations'}
-                      </div>
-                    )}
-                </div>
-              </div>
-
-              <div className="dd-col">
                 <div className="dd-col-label">Top skills</div>
                 <div className="dd-top-skills">
                   {topSkills.map((skill) => (
