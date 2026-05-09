@@ -38,7 +38,7 @@ export default function CandidateFilters({
   searchText = '',
   selectedSkills = [],
   expRange = { min: '0', max: '50' },
-  sortBy = 'score',
+  sortBy = 'best_match',
   onSearch,
   onSkillsFilter,
   onExperienceFilter,
@@ -129,10 +129,21 @@ export default function CandidateFilters({
 
   const experienceMin = Number(expRange?.min || 0)
   const experienceMax = Number(expRange?.max || 50)
-  const activeFilterCount = [
-    selectedSkills.length > 0,
-    experienceMin > 0 || experienceMax < 50,
-  ].filter(Boolean).length
+  const candidateCount = Array.isArray(candidates) ? candidates.length : 0
+  const experienceCoverage = candidateCount > 0
+    ? candidates.filter((candidate) => Number.isFinite(Number(candidate?.experience_years ?? candidate?.experience))).length / candidateCount
+    : 0
+  const skillsCoverage = candidateCount > 0
+    ? candidates.filter((candidate) => parseSkills(candidate?.skills).length > 0).length / candidateCount
+    : 0
+  const showExperienceFilter = experienceCoverage >= 0.5
+  const showSkillsFilter = skillsCoverage >= 0.5
+
+  const activeFilterCount = [selectedSkills.length > 0, (experienceMin > 0 || experienceMax < 50) && showExperienceFilter].filter(Boolean).length
+  const activeChips = [
+    ...(selectedSkills.length ? [`Skills (${selectedSkills.length})`] : []),
+    ...((experienceMin > 0 || experienceMax < 50) && showExperienceFilter ? [`Experience ${experienceMin}-${experienceMax} yrs`] : []),
+  ]
 
   const toggleSkill = (skillKey) => {
     const alreadySelected = selectedSkills.includes(skillKey)
@@ -171,10 +182,10 @@ export default function CandidateFilters({
           value={sortBy}
           onChange={(event) => onSort?.(event.target.value)}
         >
-          <option value="score">Best match</option>
-          <option value="name">Name A–Z</option>
-          <option value="experience">Most experienced</option>
-          <option value="upload_date">Recently added</option>
+          <option value="best_match">Best match</option>
+          <option value="score_desc">Score (high to low)</option>
+          <option value="name_asc">Name A–Z</option>
+          <option value="experience_desc">Most experienced</option>
         </select>
 
         <button
@@ -199,6 +210,11 @@ export default function CandidateFilters({
           </button>
         )}
       </div>
+      {activeChips.length > 0 && (
+        <div className="filter-chip-row" aria-label="Active filters">
+          {activeChips.map((chip) => <span key={chip} className="filter-chip">{chip}</span>)}
+        </div>
+      )}
 
       {filterOpen && (
         <div
@@ -206,10 +222,10 @@ export default function CandidateFilters({
           className="filter-popover"
           role="dialog"
           aria-modal="true"
-          aria-label="Candidate filters"
+          aria-label="Filter candidates"
           ref={filterPanelRef}
         >
-          <div className="fp-section">
+          {showExperienceFilter && <div className="fp-section">
             <div className="fp-label">Experience (years)</div>
             <div className="fp-range-display">
               {experienceMin}
@@ -226,9 +242,9 @@ export default function CandidateFilters({
               const nextMax = Number(event.target.value)
               onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
             }} />
-          </div>
+          </div>}
 
-          <div className="fp-section">
+          {showSkillsFilter && <div className="fp-section">
             <div className="fp-label">Skills</div>
             <input type="text" className="touch-target fp-skill-search" placeholder="Search skills..." value={skillSearch} onChange={(event) => {
               setSkillSearch(event.target.value)
@@ -247,7 +263,7 @@ export default function CandidateFilters({
                 +{dedupedSkills.length - 20} more skills
               </button>
             )}
-          </div>
+          </div>}
 
           <div className="fp-footer">
             <button type="button" className="touch-target fp-clear" onClick={clearAllFilters}>Clear all</button>

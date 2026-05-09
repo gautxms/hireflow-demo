@@ -17,8 +17,9 @@ import {
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
-  assert.equal(normalizeSortBy('name'), 'name')
-  assert.equal(normalizeSortBy('bad-value'), 'match_score')
+  assert.equal(normalizeSortBy('name'), 'name_asc')
+  assert.equal(normalizeSortBy('experience'), 'experience_desc')
+  assert.equal(normalizeSortBy('bad-value'), 'best_match')
 })
 
 test('buildResultsQueryParams serializes query state for share/export', () => {
@@ -27,7 +28,7 @@ test('buildResultsQueryParams serializes query state for share/export', () => {
     selectedSkills: ['React', 'Node'],
     expRange: { min: '3', max: '8' },
     matchRange: { min: '70', max: '99' },
-    sortBy: 'experience',
+    sortBy: 'experience_desc',
     page: 2,
     pageSize: 10,
   })
@@ -36,7 +37,15 @@ test('buildResultsQueryParams serializes query state for share/export', () => {
   assert.equal(params.get('skills'), 'React,Node')
   assert.equal(params.get('experienceMin'), '3')
   assert.equal(params.get('matchMax'), '99')
+  assert.equal(params.get('sortBy'), 'experience_desc')
   assert.equal(params.get('page'), '2')
+})
+
+test('normalizeCandidateForResults builds deterministic bulk key when IDs are missing', () => {
+  const candidate = { name: 'Alex Rivera', email: 'alex@example.com', phone: '555-0000', createdAt: '2025-01-02' }
+  const first = normalizeCandidateForResults(candidate, 0)
+  const second = normalizeCandidateForResults(candidate, 99)
+  assert.equal(first._bulkKey, second._bulkKey)
 })
 
 test('pagination clamps page and returns page metadata', () => {
