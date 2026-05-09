@@ -113,7 +113,7 @@ export function normalizeCandidateForResults(candidate, index = 0) {
       ? skillsValue
       : ''
 
-  const stableIdentity = [
+  const identityParts = [
     source?.resumeId,
     source?.resume_id,
     source?.email,
@@ -121,13 +121,16 @@ export function normalizeCandidateForResults(candidate, index = 0) {
     source?.phone,
     source?.created_at,
     source?.createdAt,
-  ].map((value) => String(value || '').trim().toLowerCase()).join('|')
+  ].map((value) => String(value || '').trim().toLowerCase())
+
+  const stableIdentity = identityParts.join('|')
+  const hasStableIdentity = identityParts.some(Boolean)
 
   return {
     ...source,
     skills: normalizedSkills,
     candidateKey: resolveCandidateKey(source, index),
-    _bulkKey: String(source?.id || resolveCandidateResumeUuid(source) || `candidate-${stableHash(stableIdentity || `index:${index}`)}`),
+    _bulkKey: String(source?.id || resolveCandidateResumeUuid(source) || `candidate-${stableHash(hasStableIdentity ? stableIdentity : `index:${index}`)}`),
     _isRenderable: isRenderable,
   }
 }

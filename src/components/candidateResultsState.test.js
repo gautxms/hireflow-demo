@@ -48,6 +48,13 @@ test('normalizeCandidateForResults builds deterministic bulk key when IDs are mi
   assert.equal(first._bulkKey, second._bulkKey)
 })
 
+
+test('normalizeCandidateForResults uses index fallback when stable identity fields are absent', () => {
+  const first = normalizeCandidateForResults({}, 0)
+  const second = normalizeCandidateForResults({}, 1)
+  assert.notEqual(first._bulkKey, second._bulkKey)
+})
+
 test('pagination clamps page and returns page metadata', () => {
   const { rows, pagination } = paginateCandidates([{ id: 1 }, { id: 2 }, { id: 3 }], 5, 2)
   assert.equal(rows.length, 1)
