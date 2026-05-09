@@ -98,6 +98,39 @@ function sentenceSafeClamp(value, maxLength = 240) {
   return `${(wordBreak >= 40 ? sliced.slice(0, wordBreak) : sliced).trim()}…`
 }
 
+function normalizeEvidenceItems(candidate = {}) {
+  const rawEvidence = Array.isArray(candidate.evidence)
+    ? candidate.evidence
+    : Array.isArray(candidate.evidenceSnippets)
+      ? candidate.evidenceSnippets
+      : []
+
+  return rawEvidence
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        return {
+          quote: sentenceSafeClamp(entry, 240),
+          section: '',
+          span: '',
+          source: 'resume_text',
+        }
+      }
+
+      if (!entry || typeof entry !== 'object') return null
+
+      const quote = sentenceSafeClamp(entry.quote || entry.snippet || entry.text || '', 240)
+      const section = normalizeText(entry.section || entry.resumeSection || '')
+      const span = normalizeText(entry.span || entry.resumeSpan || '')
+      return {
+        quote,
+        section,
+        span,
+        source: normalizeText(entry.source || 'resume_text'),
+      }
+    })
+    .filter((entry) => entry && entry.quote)
+}
+
 function parseSkillsFilter(rawSkills) {
   if (Array.isArray(rawSkills)) {
     return rawSkills
@@ -164,6 +197,24 @@ export function normalizeCandidate(candidate = {}) {
   const fitAssessment = candidate?.fit_assessment && typeof candidate.fit_assessment === 'object'
     ? candidate.fit_assessment
     : {}
+  const matchedRequirements = Array.isArray(candidate?.matchedRequirements)
+    ? candidate.matchedRequirements
+    : Array.isArray(fitAssessment?.matched)
+      ? fitAssessment.matched
+      : Array.isArray(fitAssessment?.matched_requirements)
+        ? fitAssessment.matched_requirements
+        : []
+  const missingRequirements = Array.isArray(candidate?.missingRequirements)
+    ? candidate.missingRequirements
+    : Array.isArray(fitAssessment?.missing)
+      ? fitAssessment.missing
+      : Array.isArray(fitAssessment?.missing_requirements)
+        ? fitAssessment.missing_requirements
+        : []
+  const evidence = normalizeEvidenceItems(candidate)
+  const uncertaintyNotes = Array.isArray(candidate?.uncertaintyNotes)
+    ? candidate.uncertaintyNotes
+    : [fitAssessment?.uncertainty || candidate?.uncertainty || ''].filter(Boolean)
   const structuredExperience = Array.isArray(candidate?.experience)
     ? candidate.experience
     : (normalizeText(candidate?.experience) ? [{ title: normalizeText(candidate.experience) }] : [])
@@ -201,12 +252,22 @@ export function normalizeCandidate(candidate = {}) {
     education: educationValue || '',
     fit: candidate.fit || '',
     fit_assessment: {
-      matched: Array.isArray(fitAssessment.matched) ? fitAssessment.matched : Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : [],
-      missing: Array.isArray(fitAssessment.missing) ? fitAssessment.missing : Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : [],
+      matched: matchedRequirements,
+      missing: missingRequirements,
       risk: normalizeText(fitAssessment.risk || fitAssessment.risks || ''),
       uncertainty: normalizeText(fitAssessment.uncertainty || ''),
       reason: sentenceSafeClamp(fitAssessment.reason || candidate?.matchScore?.reason || reasoningFallback),
     },
+    matchedRequirements,
+    missingRequirements,
+    evidence,
+    uncertaintyNotes,
+    suggestedRecruiterAction: sentenceSafeClamp(candidate?.suggestedRecruiterAction || fitAssessment?.risk || 'Schedule targeted interview follow-up for validation.'),
+    resumeFilename: normalizeText(candidate?.resumeFilename || candidate?.filename || ''),
+    resumeAssetRef: normalizeText(candidate?.resumeAssetRef || candidate?.resumeId || candidate?.resume_id || ''),
+    parseMeta: candidate?.parseMeta && typeof candidate.parseMeta === 'object'
+      ? { ...candidate.parseMeta }
+      : {},
     tier: candidate.tier || 'consider',
     certifications: Array.isArray(candidate.certifications) ? candidate.certifications : [],
     languages: Array.isArray(candidate.languages) ? candidate.languages : [],
