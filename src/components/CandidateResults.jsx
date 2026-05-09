@@ -4,7 +4,6 @@ import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
 import {
-  buildResultsQueryParams,
   hasRenderableCandidates,
   normalizeCandidateForResults,
   normalizeNumericRange,
@@ -205,7 +204,7 @@ function filterAndSortCandidates(candidates, filters) {
     searchText = '',
     selectedSkills = [],
     expRange = { min: '', max: '' },
-    sortBy = 'score',
+    sortBy = 'best_match',
   } = filters || {}
 
   const query = searchText.trim().toLowerCase()
@@ -241,19 +240,15 @@ function filterAndSortCandidates(candidates, filters) {
   })
 
   return [...filtered].sort((a, b) => {
-    if (sortBy === 'name') {
+    if (sortBy === 'name_asc') {
       return String(a?.name || '').localeCompare(String(b?.name || ''))
     }
 
-    if (sortBy === 'experience') {
+    if (sortBy === 'experience_desc') {
       return parseYears(b?.experience_years ?? b?.experience) - parseYears(a?.experience_years ?? a?.experience)
     }
 
-    if (sortBy === 'upload_date') {
-      return parseUploadDate(b) - parseUploadDate(a)
-    }
-
-    return Number(b?.score || 0) - Number(a?.score || 0)
+    return Number(activeScore(b) || 0) - Number(activeScore(a) || 0)
   })
 }
 
@@ -262,7 +257,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
-  const [sortBy, setSortBy] = useState('score')
+  const [sortBy, setSortBy] = useState('best_match')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [resultsError, setResultsError] = useState('')
@@ -558,11 +553,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
     : 0
   const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
-  const sortedCandidates = useMemo(() => (
-    [...visibleCandidates].sort((a, b) => {
-      return (activeScore(b) ?? -1) - (activeScore(a) ?? -1)
-    })
-  ), [visibleCandidates])
 
   const toggleCandidateSelection = (candidateKey) => {
     setSelectedIds((currentSelected) => toggleSelection(currentSelected, candidateKey))
@@ -595,7 +585,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         body: JSON.stringify({
           candidates: effectiveRows,
           sortBy: normalizeSortBy(sortBy),
-          sortOrder: normalizeSortBy(sortBy) === 'name' ? 'asc' : 'desc',
+          sortOrder: normalizeSortBy(sortBy) === 'name_asc' ? 'asc' : 'desc',
           filters: {
             search: searchText,
             skills: selectedSkills,
@@ -624,14 +614,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }
 
-  const emailForm = (selected) => {
-    const recipients = selected.map((candidate) => candidate.email).filter(Boolean)
-    if (recipients.length === 0) {
-      alert('No candidate emails found. Please add emails before exporting to email.')
-      return
-    }
-    window.location.href = `mailto:${recipients.join(',')}?subject=HireFlow%20Feedback%20Form`
-  }
 
   const addToShortlist = async (selected) => {
     if (selected.length === 0) {
@@ -694,16 +676,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }
 
-  const sendFeedbackForm = (selected) => {
-    alert(`Feedback form sent to ${selected.length} candidate(s).`)
-    emailForm(selected)
-  }
-
-  const deleteSelected = (selected) => {
-    const deleteKeys = selected.map((candidate) => candidate._bulkKey)
-    setDeletedIds((current) => [...new Set([...current, ...deleteKeys])])
-    setSelectedIds((current) => current.filter((id) => !deleteKeys.includes(id)))
-  }
 
   const mutateSelectedTags = async (operation) => {
     const tags = tagDraft.split(',').map((tag) => tag.trim()).filter(Boolean)
@@ -754,37 +726,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }
 
-  const createShareLink = async () => {
-    try {
-      setResultsError('')
-      const response = await fetch(`${API_BASE}/results/share`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({
-          candidates: filtered,
-          query: Object.fromEntries(buildResultsQueryParams({ searchText, selectedSkills, expRange, sortBy, page, pageSize })),
-        }),
-      })
-
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(payload.error || 'Unable to create share link')
-      }
-
-      const origin = window.location.origin
-      const shareUrl = `${origin}${payload.sharePath}`
-      await navigator.clipboard.writeText(shareUrl)
-      alert('Share link copied to clipboard.')
-    } catch (error) {
-      setResultsError(error.message || 'Unable to create share link')
-    }
-  }
-
   const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
   const expandedCandidate = useMemo(() => {
     if (!expandedId) return null
-    return sortedCandidates.find((candidate, index) => resolveCandidateKey(candidate, index) === expandedId) || null
-  }, [expandedId, sortedCandidates])
+    return visibleCandidates.find((candidate, index) => resolveCandidateKey(candidate, index) === expandedId) || null
+  }, [expandedId, visibleCandidates])
 
   useEffect(() => {
     if (expandedId && !expandedCandidate) {
@@ -923,11 +869,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       {selectedCandidates.length > 0 && (
         <BulkActions selectedCount={selectedCandidates.length}>
           <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
-          <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
           <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
-          <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
-          <button className="touch-target bulk-btn" onClick={createShareLink} type="button">🔗 Share View</button>
-          <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
           <input
             className="touch-target candidate-results-page__tag-input"
             value={tagDraft}
@@ -967,7 +909,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       </div>
 
       <div className="results-grid">
-        {sortedCandidates.map((candidate, index) => {
+        {visibleCandidates.map((candidate, index) => {
           const score = activeScore(candidate)
           const tier = scoreTier(score)
           const displayScore = toTenScale(score)
@@ -1059,7 +1001,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   onClick={(event) => event.stopPropagation()}
                   aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
                 />
-                <span className="rc-checkbox-label">Select</span>
               </label>
             </div>
           )

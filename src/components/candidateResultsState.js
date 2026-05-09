@@ -1,7 +1,19 @@
-export const RESULTS_SORT_OPTIONS = new Set(['match_score', 'name', 'experience', 'upload_date'])
+export const RESULTS_SORT_OPTIONS = new Set(['best_match', 'score_desc', 'name_asc', 'experience_desc'])
+
+const LEGACY_SORT_KEY_MAP = {
+  score: 'best_match',
+  match_score: 'best_match',
+  name: 'name_asc',
+  experience: 'experience_desc',
+  upload_date: 'best_match',
+}
 
 export function normalizeSortBy(sortBy) {
-  return RESULTS_SORT_OPTIONS.has(sortBy) ? sortBy : 'match_score'
+  const normalized = String(sortBy || '').trim().toLowerCase()
+  if (RESULTS_SORT_OPTIONS.has(normalized)) {
+    return normalized
+  }
+  return LEGACY_SORT_KEY_MAP[normalized] || 'best_match'
 }
 
 export function normalizeNumericRange(range = {}, bounds = { min: 0, max: Number.POSITIVE_INFINITY }) {
@@ -33,7 +45,7 @@ export function buildResultsQueryParams({
   selectedSkills = [],
   expRange = { min: '', max: '' },
   matchRange = { min: '', max: '' },
-  sortBy = 'match_score',
+  sortBy = 'best_match',
   page = 1,
   pageSize = 25,
 } = {}) {
@@ -65,7 +77,7 @@ export function buildResultsQueryParams({
   }
 
   params.set('sortBy', normalizeSortBy(sortBy))
-  params.set('sortOrder', normalizeSortBy(sortBy) === 'name' ? 'asc' : 'desc')
+  params.set('sortOrder', normalizeSortBy(sortBy) === 'name_asc' ? 'asc' : 'desc')
   params.set('page', String(Math.max(1, Number(page) || 1)))
   params.set('pageSize', String(Math.max(1, Math.min(100, Number(pageSize) || 25))))
 
@@ -101,13 +113,34 @@ export function normalizeCandidateForResults(candidate, index = 0) {
       ? skillsValue
       : ''
 
+  const identityParts = [
+    source?.resumeId,
+    source?.resume_id,
+    source?.email,
+    source?.name,
+    source?.phone,
+    source?.created_at,
+    source?.createdAt,
+  ].map((value) => String(value || '').trim().toLowerCase())
+
+  const stableIdentity = identityParts.join('|')
+  const hasStableIdentity = identityParts.some(Boolean)
+
   return {
     ...source,
     skills: normalizedSkills,
     candidateKey: resolveCandidateKey(source, index),
-    _bulkKey: String(source?.id ?? `${source?.name || 'candidate'}-${index}`),
+    _bulkKey: String(source?.id || resolveCandidateResumeUuid(source) || `candidate-${stableHash(hasStableIdentity ? stableIdentity : `index:${index}`)}`),
     _isRenderable: isRenderable,
   }
+}
+
+function stableHash(value) {
+  let hash = 5381
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) + hash) + value.charCodeAt(i)
+  }
+  return Math.abs(hash).toString(36)
 }
 
 export function resolveCandidateKey(candidate = {}, index = 0) {
