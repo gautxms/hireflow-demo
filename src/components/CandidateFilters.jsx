@@ -127,6 +127,7 @@ export default function CandidateFilters({
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [allSkills])
 
+  const experienceBucket = String(expRange?.bucket || 'all')
   const experienceMin = Number(expRange?.min || 0)
   const experienceMax = Number(expRange?.max || 50)
   const candidateCount = Array.isArray(candidates) ? candidates.length : 0
@@ -139,10 +140,10 @@ export default function CandidateFilters({
   const showExperienceFilter = experienceCoverage >= 0.5
   const showSkillsFilter = skillsCoverage >= 0.5
 
-  const activeFilterCount = [selectedSkills.length > 0, (experienceMin > 0 || experienceMax < 50) && showExperienceFilter].filter(Boolean).length
+  const activeFilterCount = [selectedSkills.length > 0, experienceBucket !== 'all' && showExperienceFilter].filter(Boolean).length
   const activeChips = [
     ...(selectedSkills.length ? [`Skills (${selectedSkills.length})`] : []),
-    ...((experienceMin > 0 || experienceMax < 50) && showExperienceFilter ? [`Experience ${experienceMin}-${experienceMax} yrs`] : []),
+    ...(experienceBucket !== 'all' && showExperienceFilter ? [`Experience ${experienceBucket}`] : []),
   ]
 
   const toggleSkill = (skillKey) => {
@@ -156,7 +157,7 @@ export default function CandidateFilters({
 
   const clearAllFilters = () => {
     onSkillsFilter?.([])
-    onExperienceFilter?.({ min: '0', max: '50' })
+    onExperienceFilter?.({ min: '0', max: '50', bucket: 'all' })
     setSkillSearch('')
     setShowAllSkills(false)
   }
@@ -226,22 +227,31 @@ export default function CandidateFilters({
           ref={filterPanelRef}
         >
           {showExperienceFilter && <div className="fp-section">
-            <div className="fp-label">Experience (years)</div>
-            <div className="fp-range-display">
-              {experienceMin}
-              {' '}
-              –
-              {' '}
-              {experienceMax}
-            </div>
-            <input className="touch-target" type="range" min="0" max="50" step="1" value={experienceMin} onChange={(event) => {
-              const nextMin = Number(event.target.value)
-              onExperienceFilter?.({ min: String(nextMin), max: String(Math.max(nextMin, experienceMax)) })
-            }} />
-            <input className="touch-target" type="range" min="0" max="50" step="1" value={experienceMax} onChange={(event) => {
-              const nextMax = Number(event.target.value)
-              onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
-            }} />
+            <div className="fp-label">Experience</div>
+            <select
+              className="touch-target filter-sort-select"
+              aria-label="Filter by experience"
+              value={experienceBucket}
+              onChange={(event) => {
+                const bucket = event.target.value
+                const map = {
+                  all: { min: '0', max: '50', bucket: 'all' },
+                  '0-2 years': { min: '0', max: '2', bucket: '0-2 years' },
+                  '3-5 years': { min: '3', max: '5', bucket: '3-5 years' },
+                  '6-8 years': { min: '6', max: '8', bucket: '6-8 years' },
+                  '9+ years': { min: '9', max: '50', bucket: '9+ years' },
+                  Unknown: { min: '', max: '', bucket: 'Unknown', unknownOnly: 'true' },
+                }
+                onExperienceFilter?.(map[bucket] || map.all)
+              }}
+            >
+              <option value="all">All candidates</option>
+              <option value="0-2 years">0–2 years</option>
+              <option value="3-5 years">3–5 years</option>
+              <option value="6-8 years">6–8 years</option>
+              <option value="9+ years">9+ years</option>
+              <option value="Unknown">Unknown</option>
+            </select>
           </div>}
 
           {showSkillsFilter && <div className="fp-section">

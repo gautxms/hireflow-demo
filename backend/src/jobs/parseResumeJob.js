@@ -54,6 +54,16 @@ function clampStringArray(value, maxItems = 5, maxItemLength = 160) {
     .slice(0, maxItems)
 }
 
+function normalizeExperienceConfidence(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return ['high', 'medium', 'low', 'unknown'].includes(normalized) ? normalized : 'unknown'
+}
+
+function normalizeExperienceSource(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return ['resume', 'ai_inferred', 'unknown'].includes(normalized) ? normalized : 'unknown'
+}
+
 function normalizeStructuredSkills(skills) {
   if (Array.isArray(skills) || typeof skills === 'string') {
     return {
@@ -454,6 +464,12 @@ async function runParse(job) {
           ...candidate,
           summary: clampString(candidate?.summary, 400),
           years_experience: normalizeNullableNumber(candidate?.years_experience),
+          totalExperienceYears: normalizeNullableNumber(candidate?.totalExperienceYears ?? candidate?.years_experience),
+          relevantExperienceYears: normalizeNullableNumber(candidate?.relevantExperienceYears),
+          experienceLabel: normalizeString(candidate?.experienceLabel),
+          experienceConfidence: normalizeExperienceConfidence(candidate?.experienceConfidence),
+          experienceEvidence: clampStringArray(candidate?.experienceEvidence, 3, 180),
+          experienceSource: normalizeExperienceSource(candidate?.experienceSource),
           profile_score: normalizeNullableNumber(candidate?.profile_score),
           strengths: clampStringArray(candidate?.strengths, 5, 160),
           considerations: clampStringArray(candidate?.considerations, 5, 160),

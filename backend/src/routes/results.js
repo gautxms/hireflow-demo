@@ -40,9 +40,23 @@ function parseExperienceToYears(experience) {
 
   if (Array.isArray(experience)) {
     return experience.reduce((total, entry) => {
-      const duration = entry?.duration || ''
-      const match = String(duration).match(/(\d+(?:\.\d+)?)/)
-      return total + (match ? Number(match[1]) : 0)
+      const durationRaw = entry?.duration
+      if (durationRaw !== undefined && durationRaw !== null && durationRaw !== '') {
+        const durationMatch = String(durationRaw).match(/(\d+(?:\.\d+)?)/)
+        return total + (durationMatch ? Number(durationMatch[1]) : 0)
+      }
+
+      const startDateRaw = entry?.startDate ?? entry?.start_date
+      const endDateRaw = entry?.endDate ?? entry?.end_date
+      const startTimestamp = Date.parse(String(startDateRaw || ''))
+      const endTimestamp = Date.parse(String(endDateRaw || 'present'))
+
+      if (!Number.isNaN(startTimestamp) && !Number.isNaN(endTimestamp) && endTimestamp >= startTimestamp) {
+        const years = (endTimestamp - startTimestamp) / (1000 * 60 * 60 * 24 * 365.25)
+        return total + Math.max(0, years)
+      }
+
+      return total
     }, 0)
   }
 
@@ -50,6 +64,33 @@ function parseExperienceToYears(experience) {
   return match ? Number(match[1]) : 0
 }
 
+
+function resolveExperienceYears(candidate = {}) {
+  if (candidate?.totalExperienceYears !== null && candidate?.totalExperienceYears !== undefined && candidate?.totalExperienceYears !== '') {
+    const explicit = Number(candidate.totalExperienceYears)
+    if (Number.isFinite(explicit)) return explicit
+  }
+  const legacyRaw = candidate?.years_experience ?? candidate?.experience_years
+  if (legacyRaw !== null && legacyRaw !== undefined && legacyRaw !== '') {
+    const legacy = Number(legacyRaw)
+    if (Number.isFinite(legacy)) return legacy
+  }
+  return parseExperienceToYears(candidate?.experience)
+}
+
+function normalizeExperienceContract(candidate = {}) {
+  const totalExperienceYears = Number.isFinite(Number(candidate?.totalExperienceYears))
+    ? Number(candidate.totalExperienceYears)
+    : (Number.isFinite(Number(candidate?.years_experience)) ? Number(candidate.years_experience) : null)
+  const relevantExperienceYears = Number.isFinite(Number(candidate?.relevantExperienceYears)) ? Number(candidate.relevantExperienceYears) : null
+  const experienceConfidence = ['high', 'medium', 'low', 'unknown'].includes(String(candidate?.experienceConfidence || '').toLowerCase())
+    ? String(candidate.experienceConfidence).toLowerCase() : 'unknown'
+  const experienceSource = ['resume', 'ai_inferred', 'unknown'].includes(String(candidate?.experienceSource || '').toLowerCase())
+    ? String(candidate.experienceSource).toLowerCase() : 'unknown'
+  const experienceEvidence = Array.isArray(candidate?.experienceEvidence) ? candidate.experienceEvidence.filter(Boolean).slice(0, 3) : []
+  const experienceLabel = normalizeText(candidate?.experienceLabel || (totalExperienceYears != null ? `${totalExperienceYears}+ years` : 'Unknown'), 'Unknown')
+  return { totalExperienceYears, relevantExperienceYears, experienceLabel, experienceConfidence, experienceEvidence, experienceSource }
+}
 function parseUploadedAt(candidate = {}) {
   const timestamp = Date.parse(String(candidate.uploadDate || candidate.uploadedAt || candidate.created_at || candidate.createdAt || ''))
   return Number.isNaN(timestamp) ? 0 : timestamp
@@ -108,7 +149,9 @@ function normalizeEvidenceItems(candidate = {}) {
   return rawEvidence
     .map((entry) => {
       if (typeof entry === 'string') {
-        return {
+        const normalizedExperience = normalizeExperienceContract(candidate)
+
+  return {
           quote: sentenceSafeClamp(entry, 240),
           section: '',
           span: '',
@@ -146,7 +189,7 @@ function parseSkillsFilter(rawSkills) {
 }
 
 export function getSeniorityRank(candidate) {
-  const years = parseExperienceToYears(candidate.experience_years ?? candidate.experience)
+  const years = resolveExperienceYears(candidate)
 
   if (years >= 8) return 4
   if (years >= 5) return 3
@@ -155,7 +198,7 @@ export function getSeniorityRank(candidate) {
 }
 
 export function getExperienceLevel(candidate) {
-  const years = parseExperienceToYears(candidate.experience_years ?? candidate.experience)
+  const years = resolveExperienceYears(candidate)
 
   if (years >= 8) return 'lead'
   if (years >= 5) return 'senior'
@@ -218,6 +261,7 @@ export function normalizeCandidate(candidate = {}) {
   const structuredExperience = Array.isArray(candidate?.experience)
     ? candidate.experience
     : (normalizeText(candidate?.experience) ? [{ title: normalizeText(candidate.experience) }] : [])
+  const normalizedExperience = normalizeExperienceContract(candidate)
 
   return {
     id,
@@ -241,13 +285,14 @@ export function normalizeCandidate(candidate = {}) {
     cons: Array.isArray(candidate.cons) ? candidate.cons : [],
     profile_score: Number.isFinite(Number(candidate.profile_score)) ? Number(candidate.profile_score) : null,
     years_experience: Number.isFinite(Number(candidate.years_experience)) ? Number(candidate.years_experience) : null,
+    ...normalizedExperience,
     seniority_level: candidate.seniority_level || null,
     tags: Array.isArray(candidate.tags) ? candidate.tags : [],
     location: candidate.location || 'Unknown',
     experience: structuredExperience.length > 0 ? structuredExperience : (experienceValue || '0 years'),
     experience_years: Number.isFinite(Number(candidate.experience_years))
       ? Number(candidate.experience_years)
-      : parseExperienceToYears(experienceValue || candidate.experience),
+      : resolveExperienceYears({ ...candidate, experience: experienceValue || candidate.experience }),
     position: candidate.position || '',
     education: educationValue || '',
     fit: candidate.fit || '',
@@ -329,7 +374,7 @@ export function applyCandidateFilters(candidates, {
       }
     }
 
-    const years = parseExperienceToYears(candidate.experience_years ?? candidate.experience)
+    const years = resolveExperienceYears(candidate)
 
     if (experienceMin !== undefined && experienceMin !== null && experienceMin !== '' && years < Number(experienceMin)) {
       return false

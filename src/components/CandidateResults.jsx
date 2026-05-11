@@ -78,6 +78,15 @@ function parseYears(experience) {
   return match ? Number(match[1]) : 0
 }
 
+
+function resolveCandidateExperience(candidate = {}) {
+  const total = Number(candidate?.totalExperienceYears)
+  if (Number.isFinite(total)) return total
+  const legacy = Number(candidate?.years_experience ?? candidate?.experience_years)
+  if (Number.isFinite(legacy)) return legacy
+  return parseYears(candidate?.experience)
+}
+
 function deriveExperienceEntries(candidate) {
   if (Array.isArray(candidate?.experience) && candidate.experience.length > 0) {
     return candidate.experience.slice(0, 2)
@@ -301,7 +310,11 @@ function filterAndSortCandidates(candidates, filters) {
       }
     }
 
-    const years = parseYears(candidate?.experience_years ?? candidate?.experience)
+    const years = resolveCandidateExperience(candidate)
+    if (String(expRange?.unknownOnly) === 'true') {
+      if (candidate?.totalExperienceYears != null || candidate?.years_experience != null || candidate?.experience_years != null) return false
+    }
+
     if (expMin !== null && years < expMin) {
       return false
     }
@@ -319,7 +332,7 @@ function filterAndSortCandidates(candidates, filters) {
     }
 
     if (sortBy === 'experience_desc') {
-      return parseYears(b?.experience_years ?? b?.experience) - parseYears(a?.experience_years ?? a?.experience)
+      return resolveCandidateExperience(b) - resolveCandidateExperience(a)
     }
 
     return Number(activeScore(b) || 0) - Number(activeScore(a) || 0)
@@ -330,7 +343,7 @@ function filterAndSortCandidates(candidates, filters) {
 export default function CandidateResults({ candidates: candidatePayload, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null }) {
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
-  const [expRange, setExpRange] = useState({ min: '0', max: '50' })
+  const [expRange, setExpRange] = useState({ min: '0', max: '50', bucket: 'all', unknownOnly: 'false' })
   const [sortBy, setSortBy] = useState('best_match')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
@@ -1066,7 +1079,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="rc-footer">
                 <span className="rc-footer-meta">
                   {[
-                    candidate.years_experience != null ? `${candidate.years_experience} yrs exp` : null,
+                    (candidate.experienceLabel || (resolveCandidateExperience(candidate) ? `${resolveCandidateExperience(candidate)} yrs exp` : null)),
                     candidate.seniority_level,
                   ].filter(Boolean).join(' · ')}
                 </span>
