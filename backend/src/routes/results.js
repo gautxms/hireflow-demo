@@ -40,9 +40,23 @@ function parseExperienceToYears(experience) {
 
   if (Array.isArray(experience)) {
     return experience.reduce((total, entry) => {
-      const raw = entry?.duration || entry?.title || entry?.description || ''
-      const match = String(raw).match(/(\d+(?:\.\d+)?)/)
-      return total + (match ? Number(match[1]) : 0)
+      const durationRaw = entry?.duration
+      if (durationRaw !== undefined && durationRaw !== null && durationRaw !== '') {
+        const durationMatch = String(durationRaw).match(/(\d+(?:\.\d+)?)/)
+        return total + (durationMatch ? Number(durationMatch[1]) : 0)
+      }
+
+      const startDateRaw = entry?.startDate ?? entry?.start_date
+      const endDateRaw = entry?.endDate ?? entry?.end_date
+      const startTimestamp = Date.parse(String(startDateRaw || ''))
+      const endTimestamp = Date.parse(String(endDateRaw || 'present'))
+
+      if (!Number.isNaN(startTimestamp) && !Number.isNaN(endTimestamp) && endTimestamp >= startTimestamp) {
+        const years = (endTimestamp - startTimestamp) / (1000 * 60 * 60 * 24 * 365.25)
+        return total + Math.max(0, years)
+      }
+
+      return total
     }, 0)
   }
 
