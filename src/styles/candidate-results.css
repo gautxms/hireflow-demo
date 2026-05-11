@@ -1733,3 +1733,41 @@
   }
   .rc-checkbox-wrap { padding-right: 6px; }
 }
+
+.dd-details summary {
+  cursor: pointer;
+  color: #c8ff00;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.resume-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 70;
+  padding: 20px;
+}
+.resume-modal-panel {
+  width: min(760px, 100%);
+  background: #111111;
+  border: 1px solid rgba(200, 255, 0, 0.2);
+  border-radius: 14px;
+  padding: 20px;
+}
+.resume-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #1f1f1f;
+  padding-bottom: 14px;
+}
+.resume-modal-body { padding-top: 14px; }
+.resume-modal-link {
+  text-decoration: none;
+  display: inline-flex;
+  margin-top: 10px;
+}
