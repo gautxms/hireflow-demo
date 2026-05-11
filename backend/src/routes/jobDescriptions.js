@@ -310,7 +310,7 @@ router.post('/', (req, res, next) => {
          file_url,
          status,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
        RETURNING *`,
       [
         req.userId,
@@ -337,7 +337,8 @@ router.post('/', (req, res, next) => {
     return res.status(201).json({ item: mapRecord(result.rows[0]) })
   } catch (error) {
     console.error('[JobDescriptions] create failed:', error)
-    return res.status(500).json({ error: 'Unable to create job description' })
+    const detail = typeof error?.detail === 'string' && error.detail.trim() ? error.detail.trim() : ''
+    return res.status(500).json({ error: detail ? `Unable to create job description: ${detail}` : 'Unable to create job description' })
   }
 })
 

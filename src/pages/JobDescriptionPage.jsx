@@ -82,17 +82,47 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
     try {
       const isEdit = modalMode === 'edit' && activeItem?.id
-      const response = await fetch(
-        isEdit ? `${API_BASE}/job-descriptions/${activeItem.id}` : `${API_BASE}/job-descriptions`,
-        {
+      const endpoint = isEdit ? `${API_BASE}/job-descriptions/${activeItem.id}` : `${API_BASE}/job-descriptions`
+      const shouldUseMultipart = nextValues?.jdFile instanceof File
+
+      const normalizedPayload = {
+        ...nextValues,
+        title: String(nextValues?.title || '').trim(),
+        description: nextValues?.description === '' ? null : nextValues?.description,
+        requirements: nextValues?.requirements === '' ? null : nextValues?.requirements,
+        location: nextValues?.location === '' ? null : nextValues?.location,
+        experienceYears: nextValues?.experienceYears === '' ? null : nextValues?.experienceYears,
+        salaryMin: nextValues?.salaryMin === '' ? null : nextValues?.salaryMin,
+        salaryMax: nextValues?.salaryMax === '' ? null : nextValues?.salaryMax,
+        skills: String(nextValues?.skills || ''),
+      }
+
+      delete normalizedPayload.jdFile
+
+      const requestOptions = shouldUseMultipart
+        ? (() => {
+          const formData = new FormData()
+          Object.entries(normalizedPayload).forEach(([key, value]) => {
+            if (value === undefined || value === null || value === '') return
+            formData.append(key, String(value))
+          })
+          formData.append('jdFile', nextValues.jdFile)
+          return {
+            method: isEdit ? 'PUT' : 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          }
+        })()
+        : {
           method: isEdit ? 'PUT' : 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(nextValues),
-        },
-      )
+          body: JSON.stringify(normalizedPayload),
+        }
+
+      const response = await fetch(endpoint, requestOptions)
 
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || `Unable to ${isEdit ? 'update' : 'create'} job description`)
