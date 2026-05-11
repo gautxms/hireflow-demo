@@ -45,6 +45,12 @@ JSON schema to return:
     "certifications": ["string"],
     "languages": ["string"],
     "years_experience": "number|null",
+    "totalExperienceYears": "number|null",
+    "relevantExperienceYears": "number|null",
+    "experienceLabel": "string|null",
+    "experienceConfidence": "high|medium|low|unknown",
+    "experienceEvidence": ["string"],
+    "experienceSource": "resume|ai_inferred|unknown",
     "profile_score": "number|null",
     "strengths": ["string"],
     "considerations": ["string"],
@@ -105,7 +111,15 @@ IMPORTANT RULES:
 5) Do not hallucinate: never invent employers, dates, degrees, certifications, projects, skills, metrics, links, or contact details.
 6) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
 7) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
-8) For years_experience: first scan the summary/profile section for an explicit statement like "X years of experience" or "X+ years". If found, use that number (strip the +). If not found, calculate by summing all experience entry durations: subtract startDate from endDate for each role. For roles where endDate is null or "Present", use today's date. Sum all durations, round down to nearest integer. If neither method works, return null. Never return N/A as a string.
+8) Experience extraction contract:
+   - totalExperienceYears: overall professional years from resume evidence only.
+   - relevantExperienceYears: years relevant to the provided job description when possible; else null.
+   - experienceLabel: concise display value like "3+ years", "8 years", or "Unknown".
+   - experienceConfidence: one of high|medium|low|unknown.
+   - experienceEvidence: 0-3 short snippets from resume text supporting experience claims.
+   - experienceSource: resume when explicit in resume, ai_inferred when computed from role dates, unknown when unavailable.
+   Also set years_experience equal to totalExperienceYears for backward compatibility.
+   If experience cannot be determined, set totalExperienceYears/relevantExperienceYears to null, experienceConfidence=unknown, experienceSource=unknown, and experienceEvidence=[]. Never return N/A as a string.
 9) profile_score is a general quality score 0-100 based on the resume alone, independent of any JD. Score using these weights: Depth of experience (35%) years of experience, seniority of roles, career progression shown; Skill breadth (25%) variety and relevance of skills listed; Education (15%) degree level and institution quality; Achievements & certifications (15%) measurable outcomes, awards, certifications listed; Resume clarity (10%) how clearly structured and specific the resume content is. Always populate this field. It is not affected by JD availability. When a JD is available, matchScore.score is the primary ranking signal. When no JD is available, profile_score is the fallback ranking signal.
 10) strengths: Generate 3 to 5 specific, concrete strengths based on what is actually written in the resume. Reference real companies, projects, technologies, or measurable outcomes. Do not write generic statements like "strong communicator" or "team player" unless backed by specific evidence from the resume.
 11) considerations: Generate 2 to 3 honest, constructive observations a recruiter should probe in an interview. These are not negatives — they are gaps, unknowns, or risk factors.
