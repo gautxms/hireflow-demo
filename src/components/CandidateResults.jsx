@@ -181,6 +181,53 @@ function deriveCompactRationale(candidate) {
   return 'General profile score based on experience depth, skill breadth, and career progression.'
 }
 
+
+
+function normalizeComparableText(value) {
+  return toDisplayText(value, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[•\-–—]/g, ' ')
+    .trim()
+}
+
+function dedupeTextItems(items, blocked = []) {
+  const blockedSet = new Set(blocked.map(normalizeComparableText).filter(Boolean))
+  const seen = new Set()
+  return (Array.isArray(items) ? items : [])
+    .map((item) => toDisplayText(item, '').trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = normalizeComparableText(item)
+      if (!key || seen.has(key) || blockedSet.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
+}
+
+function resolveResumeDisplayFilename(candidate) {
+  const preferred = [
+    candidate?.sourceFilename,
+    candidate?.originalFilename,
+    candidate?.original_filename,
+    candidate?.resume_filename,
+    candidate?.filename,
+  ]
+    .map((value) => toDisplayText(value, '').trim())
+    .find(Boolean)
+
+  return preferred || 'Resume file'
+}
+
+function resolveResumeFileType(candidate) {
+  const rawType = toDisplayText(candidate?.file_type || candidate?.fileType || candidate?.mime_type || candidate?.mimeType, '').trim()
+  if (!rawType) return 'Unknown file type'
+  if (rawType === 'application/pdf') return 'PDF'
+  if (rawType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
+  return rawType
+}
 function activeScore(candidate) {
   const resolved = resolveActiveCandidateScore(candidate)
   const fallbackScore = (
@@ -305,6 +352,18 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [deletedIds, setDeletedIds] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [shortlistOpen, setShortlistOpen] = useState(false)
+  const [resumeViewerCandidate, setResumeViewerCandidate] = useState(null)
+
+  useEffect(() => {
+    if (!resumeViewerCandidate) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setResumeViewerCandidate(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [resumeViewerCandidate])
 
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
@@ -1053,237 +1112,59 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const tier = scoreTier(score)
         const displayScore = toTenScale(score)
         const normalizeTextList = (list) => (Array.isArray(list) ? list.map((entry) => toDisplayText(entry, '')).filter(Boolean) : [])
-        const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
+        const candidateStrengths = dedupeTextItems(Array.isArray(candidate.strengths) && candidate.strengths.length > 0
           ? normalizeTextList(candidate.strengths)
           : Array.isArray(candidate.achievements)
             ? normalizeTextList(candidate.achievements).slice(0, 3)
-            : []
-        const candidateConsiderations = normalizeTextList(candidate.considerations)
+            : [])
+        const candidateConsiderations = dedupeTextItems(normalizeTextList(candidate.considerations))
         const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
-        const experienceEntries = deriveExperienceEntries(candidate)
-        const topSkills = deriveTopSkills(candidate).slice(0, 6)
-        const matchedSkills = ensureTextList(candidate?.matchedSkills || candidate?.matched_skills, 'No confirmed matched skills were detected.')
-        const missingSkills = ensureTextList(candidate?.missingSkills || candidate?.missing_skills, 'No explicit skill gaps were detected.')
+        const matchedSkills = dedupeTextItems(ensureTextList(candidate?.matchedSkills || candidate?.matched_skills, 'No confirmed matched skills were detected.'))
+        const missingSkills = dedupeTextItems(ensureTextList(candidate?.missingSkills || candidate?.missing_skills, 'No explicit skill gaps were detected.'), matchedSkills)
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
-        const evidenceItems = evidenceObjects.length > 0
-          ? evidenceObjects
-          : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
-        const uncertaintyItems = candidateConsiderations.length > 0
-          ? candidateConsiderations
-          : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
-        const nextActions = ensureTextList(candidate?.next_action || candidate?.next_actions || candidate?.recommendation, 'Schedule a recruiter screen to validate fit and open questions.')
-        const resumeFilename = toDisplayText(candidate?.filename || candidate?.resume_filename, 'Filename unavailable')
-        const resumeUnavailable = 'Preview unavailable — secure file open/download is not yet supported for this candidate view.'
+        const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
+        const uncertaintyItems = candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
+        const nextActions = dedupeTextItems(ensureTextList(candidate?.next_action || candidate?.next_actions || candidate?.recommendation, 'Schedule a recruiter screen to validate fit and open questions.'))
+        const resumeFilename = resolveResumeDisplayFilename(candidate)
+        const resumeFileType = resolveResumeFileType(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
         const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
         const persistedTags = Array.isArray(candidate?.tags) ? candidate.tags : []
         const optimisticTags = candidateTags[candidate._bulkKey] || []
         const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
-        const initials = String(candidate?.name || '')
-          .split(' ')
-          .map((part) => part[0] || '')
-          .join('')
-          .slice(0, 2)
-          .toUpperCase()
+        const initials = String(candidate?.name || '').split(' ').map((part) => part[0] || '').join('').slice(0, 2).toUpperCase()
 
         return (
           <div id="detail-drawer" className="detail-drawer">
             <div className="dd-header">
               <div className="dd-avatar">{initials || 'NA'}</div>
-              <div className="dd-header-info">
-                <div className="dd-name">{toDisplayText(candidate.name)}</div>
-                <div className="dd-subtitle">
-                  {[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}
-                </div>
-              </div>
-              {displayScore != null && (
-                <div className={`dd-score dd-score--${tier}`}>
-                  {displayScore}<span>/10</span>
-                </div>
-              )}
+              <div className="dd-header-info"><div className="dd-name">{toDisplayText(candidate.name)}</div><div className="dd-subtitle">{[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}</div></div>
+              {displayScore != null && <div className={`dd-score dd-score--${tier}`}>{displayScore}<span>/10</span></div>}
               <div className="dd-header-actions">
-                <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
-                <button
-                  className="dd-btn-ghost"
-                  type="button"
-                  disabled={!fullProfilePath}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (!fullProfilePath) return
-                    window.location.href = fullProfilePath
-                  }}
-                >
-                  View full profile →
-                </button>
+                <button className="dd-btn-primary" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
+                <button className="dd-btn-ghost" type="button" onClick={() => setResumeViewerCandidate({ ...candidate, resumeFilename, resumeFileType, fullProfilePath })}>Open Resume</button>
               </div>
               <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
             </div>
-
             <div className="dd-body">
-              <div className="dd-col">
-                <div className="dd-col-label">Why ranked?</div>
-                <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
-                <div className="dd-col-label dd-col-label--mt-16">Evidence</div>
-                <p className="dd-summary">{reasoningText}</p>
-                <div className="dd-col-label dd-col-label--mt-16">Resume</div>
-                <div className="dd-analysis-box">
-                  <div className="dd-analysis-item">{resumeFilename}</div>
-                  <div className="dd-analysis-item">{resumeUnavailable}</div>
-                  <button
-                    type="button"
-                    className="dd-btn-ghost"
-                    disabled={!fullProfilePath}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      if (!fullProfilePath) return
-                      window.location.href = fullProfilePath
-                    }}
-                  >
-                    Open full profile
-                  </button>
-                </div>
-                <div className="dd-col-label dd-col-label--mt-16">Tags</div>
-                <div className="dd-top-skills">
-                  {visibleTags.length > 0
-                    ? visibleTags.map((tag) => (
-                      <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>
-                    ))
-                    : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}
-                </div>
-
-                <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
-                <div className="dd-facts">
-                  <div className="dd-fact">
-                      <span className="dd-fact-k">Experience</span>
-                      <span className="dd-fact-v">{candidate.experienceLabel || (resolveCandidateExperience(candidate) ? `${resolveCandidateExperience(candidate)} years` : 'Unknown')}</span>
-                    </div>
-                  {candidate.seniority_level && (
-                    <div className="dd-fact">
-                      <span className="dd-fact-k">Seniority</span>
-                      <span className="dd-fact-v">{candidate.seniority_level}</span>
-                    </div>
-                  )}
-                  {candidate.email && (
-                    <div className="dd-fact">
-                      <span className="dd-fact-k">Email</span>
-                      <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
-                    </div>
-                  )}
-                </div>
-
-                <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
-                {experienceEntries.map((job, idx) => (
-                  <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
-                    <div className="dd-job-title">{toDisplayText(job.title, 'Role not provided')}</div>
-                    <div className="dd-job-meta">
-                      {toDisplayText(job.company, 'N/A')} · {toDisplayText(job.durationText, [job.startDate, job.endDate].filter(Boolean).join(' – ') || 'N/A')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="dd-col">
-                <div className="dd-col-label">Matched</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {matchedSkills.map((item, idx) => (
-                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>
-                  ))}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-14">Missing</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {missingSkills.map((item, idx) => (
-                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>
-                  ))}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-14">Evidence</div>
-                <div className="dd-analysis-box">
-                  {evidenceItems.map((item, idx) => (
-                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>
-                      <strong>Requirement:</strong> {matchedSkills[idx] || matchedSkills[0] || 'General role fit'}<br />
-                      <strong>Resume evidence:</strong> {item.quote || 'Snippet unavailable'}
-                      {(item.section || item.span) && (
-                        <>
-                          {' '}<em>({[item.section, item.span].filter(Boolean).join(' · ')})</em>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="dd-col">
-                <div className="dd-col-label">Uncertainty</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {uncertaintyItems.map((item, idx) => (
-                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>
-                  ))}
-                </div>
-
-                <div className="dd-col-label dd-col-label--mt-14">Next action</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {nextActions.map((item, idx) => (
-                    <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>
-                  ))}
-                </div>
-
-                <div className="dd-col-label dd-col-label--mt-14">Strengths snapshot</div>
-                <div className="dd-analysis-box">
-                  {candidateStrengths.length > 0
-                    ? candidateStrengths.map((strength, idx) => (
-                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>
-                    ))
-                    : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-                </div>
-                <div className="dd-col-label">Top skills</div>
-                <div className="dd-top-skills">
-                  {topSkills.map((skill) => (
-                    <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
-                      {formatSkillLabel(skill)}
-                    </span>
-                  ))}
-                </div>
-
-                {candidate.skills_structured && (
-                  <>
-                    {Object.entries({
-                      Tools: candidate.skills_structured.tools_and_platforms,
-                      Methods: candidate.skills_structured.methodologies,
-                      Domain: candidate.skills_structured.domain_expertise,
-                    }).map(([category, skills]) => {
-                      const safeSkills = Array.isArray(skills) ? skills : []
-                      const hasMalformedCategory = skills != null && !Array.isArray(skills)
-                      if (safeSkills.length === 0 && !hasMalformedCategory) {
-                        return null
-                      }
-
-                      return (
-                        <div key={`${candidate._bulkKey}-${category}`} className="dd-skill-group">
-                          <div className="dd-skill-cat">{category}</div>
-                          <div className="dd-skill-row">
-                            {safeSkills.slice(0, 6).map((skill) => (
-                              <span className="dd-skill-pill" key={`${candidate._bulkKey}-${category}-${String(formatSkillLabel(skill))}`}>
-                                {formatSkillLabel(skill)}
-                              </span>
-                            ))}
-                            {safeSkills.length > 6 && (
-                              <span className="dd-skill-more">+{safeSkills.length - 6}</span>
-                            )}
-                            {hasMalformedCategory && safeSkills.length === 0 && (
-                              <span className="dd-skill-more">Unavailable (invalid format)</span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </>
-                )}
-              </div>
+              <div className="dd-col"><div className="dd-col-label">Decision summary</div><p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p><div className="dd-col-label dd-col-label--mt-16">Recommended action</div><div className="dd-analysis-box dd-analysis-box--green">{nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-16">Tags</div><div className="dd-top-skills">{visibleTags.length > 0 ? visibleTags.map((tag) => <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>) : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}</div></div>
+              <div className="dd-col"><div className="dd-col-label">Fit breakdown</div><div className="dd-analysis-box dd-analysis-box--green">{matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Missing requirements</div><div className="dd-analysis-box dd-analysis-box--amber">{missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Resume file</div><div className="dd-analysis-box"><div className="dd-analysis-item"><strong>{resumeFilename}</strong></div><div className="dd-analysis-item">{resumeFileType}</div></div></div>
+              <div className="dd-col"><details className="dd-details"><summary>Expandable AI details</summary><div className="dd-col-label dd-col-label--mt-14">Reasoning</div><p className="dd-summary">{reasoningText}</p><div className="dd-col-label dd-col-label--mt-14">Evidence</div><div className="dd-analysis-box">{evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Strengths</div><div className="dd-analysis-box">{candidateStrengths.length > 0 ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>) : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}</div><div className="dd-col-label dd-col-label--mt-14">Uncertainty</div><div className="dd-analysis-box dd-analysis-box--amber">{uncertaintyItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>)}</div></details></div>
             </div>
           </div>
         )
       })()}
 
-      {visibleCandidates.length === 0 && (
+      {resumeViewerCandidate && (
+        <div className="resume-modal-backdrop" role="dialog" aria-modal="true" aria-label="Resume viewer" onClick={() => setResumeViewerCandidate(null)}>
+          <div className="resume-modal-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="resume-modal-header"><div><div className="dd-name">{toDisplayText(resumeViewerCandidate.name, 'Candidate')}</div><div className="dd-subtitle">{resumeViewerCandidate.resumeFilename} · {resumeViewerCandidate.resumeFileType}</div></div><button className="dd-close" type="button" onClick={() => setResumeViewerCandidate(null)}>✕</button></div>
+            <div className="resume-modal-body"><p className="dd-summary">Preview unavailable in this view. Use the secure candidate profile page to review the full document.</p>{resumeViewerCandidate.fullProfilePath ? <a className="dd-btn-primary resume-modal-link" href={resumeViewerCandidate.fullProfilePath}>Open secure profile</a> : <div className="dd-analysis-empty">Resume ID not available for secure open.</div>}</div>
+          </div>
+        </div>
+      )}
+
+            {visibleCandidates.length === 0 && (
         <div className="candidate-results-page__empty-note">
           No candidates match the current filters.
         </div>
