@@ -242,14 +242,29 @@
 .analyses-modal__form {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.analyses-modal__body {
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  display: grid;
   gap: var(--spacing-md);
+  scrollbar-color: #3a3a3a #151515;
 }
 
 .analyses-modal__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   justify-content: space-between;
   gap: var(--spacing-md);
   align-items: flex-start;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #1e1e1e;
+  background: #111111;
 }
 
 .analyses-modal__header h2 {
@@ -269,7 +284,7 @@
   justify-content: center;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-bg-secondary), transparent 25%);
+  background: #151515;
   color: var(--color-text-secondary);
 }
 
@@ -355,6 +370,8 @@
 }
 
 .analyses-modal__selected-files ul {
+  max-height: 10rem;
+  overflow-y: auto;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -365,14 +382,24 @@
 .analyses-modal__selected-files li {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: var(--spacing-sm);
 }
 
+.analyses-modal__selected-files li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .analyses-modal__file-remove {
-  border: 0;
-  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.5rem;
+  background: #151515;
   color: var(--color-text-secondary);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .analyses-modal__file-remove:hover {
@@ -397,12 +424,15 @@
 }
 
 .analyses-modal__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
-  margin-top: var(--spacing-xs);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border);
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid #1e1e1e;
+  background: #111111;
 }
 
 .analyses-create-modal {
@@ -410,9 +440,15 @@
 }
 
 .analyses-create-modal__dialog {
-  width: min(760px, calc(100vw - (var(--spacing-xl) * 2)));
-  max-height: calc(100vh - (var(--spacing-xl) * 2));
-  overflow-y: auto;
+  width: min(900px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  background: #111111;
+  border: 1px solid #1e1e1e;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 1024px) {
@@ -595,4 +631,11 @@
     text-transform: uppercase;
     letter-spacing: 0.02em;
   }
+}
+
+
+.analyses-page__header .btn-primary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  box-shadow: none;
 }
