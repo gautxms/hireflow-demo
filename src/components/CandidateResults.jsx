@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BookmarkPlus, Briefcase, CalendarDays, Check, ChevronLeft, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
+import { AlertTriangle, AlertCircle, BookmarkPlus, Briefcase, CalendarDays, Check, ChevronLeft, CircleHelp, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -204,6 +204,42 @@ function resolveResumeFileType(candidate) {
   if (rawType === 'application/pdf') return 'PDF'
   if (rawType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
   return rawType
+}
+
+function deriveDecisionVerdict(candidate, score) {
+  const title = toDisplayText(candidate?.current_title, 'this candidate')
+  const matchedSkills = dedupeTextItems(candidate?.matchedSkills || candidate?.matched_skills || [])
+  const missingSkills = dedupeTextItems(candidate?.missingSkills || candidate?.missing_skills || [])
+
+  if (score >= 80) {
+    return `${title} shows strong fit signals. Proceed if priorities align with the role scope.`
+  }
+  if (score >= 60) {
+    if (missingSkills.length > 0) {
+      return `${title} is a potential fit with a few open skill gaps that need interview validation.`
+    }
+    return `${title} is a possible fit; validate depth and recency of relevant experience in screening.`
+  }
+  if (matchedSkills.length > 0) {
+    return `${title} has limited fit against core requirements despite some relevant overlap.`
+  }
+  return `${title} has low demonstrated alignment with the core requirements in the current profile data.`
+}
+
+function deriveRecommendedAction(candidate, score) {
+  const missingSkills = dedupeTextItems(candidate?.missingSkills || candidate?.missing_skills || [])
+  const considerations = dedupeTextItems(candidate?.considerations || [])
+
+  if (score >= 80 && missingSkills.length === 0 && considerations.length === 0) {
+    return 'Move to panel interview and focus on role-specific impact examples.'
+  }
+  if (score >= 80) {
+    return `Advance to recruiter screen and verify: ${[...missingSkills, ...considerations][0] || 'remaining uncertainties'}.`
+  }
+  if (score >= 60) {
+    return `Run a targeted recruiter screen before advancing; confirm ${missingSkills[0] || considerations[0] || 'critical requirement coverage'}.`
+  }
+  return `Hold progression until core fit is validated; prioritize screening around ${missingSkills[0] || 'required role capabilities'}.`
 }
 function activeScore(candidate) {
   const resolved = resolveActiveCandidateScore(candidate)
@@ -1096,7 +1132,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
-        const nextActions = dedupeTextItems(ensureTextList(candidate?.next_action || candidate?.next_actions || candidate?.recommendation, 'Schedule a recruiter screen to validate fit and open questions.'))
+        const decisionVerdict = deriveDecisionVerdict(candidate, score)
+        const recommendedAction = deriveRecommendedAction(candidate, score)
+        const probePool = dedupeTextItems([
+          ...candidateConsiderations,
+          ...missingSkills,
+          ...(Array.isArray(candidate?.questions) ? candidate.questions : []),
+        ])
+        const interviewProbes = probePool.slice(0, 3)
         const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
         const resumeFileType = resolveResumeFileType(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
@@ -1106,6 +1149,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const optimisticTags = candidateTags[candidate._bulkKey] || []
         const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
         const initials = String(candidate?.name || '').split(' ').map((part) => part[0] || '').join('').slice(0, 2).toUpperCase()
+        const keyFacts = [
+          { label: 'Match score', value: displayScore != null ? `${displayScore}/10` : 'N/A' },
+          { label: 'Experience', value: `${resolveCandidateExperience(candidate)} yrs` },
+          { label: 'Current role', value: toDisplayText(candidate.current_title, 'Unavailable') },
+          { label: 'Location', value: toDisplayText(candidate.location, 'Unavailable') },
+        ]
 
         return (
           <div id="detail-drawer" className="detail-drawer">
