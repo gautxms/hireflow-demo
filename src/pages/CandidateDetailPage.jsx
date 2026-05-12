@@ -75,6 +75,7 @@ export default function CandidateDetailPage({ pathname }) {
   return (
     <main className="candidates-directory">
       <a href="/candidates">← Back to candidates</a>
+      <p><a href={`${API_BASE}/resumes/${resumeId}/view`} target="_blank" rel="noopener noreferrer">Open resume</a> · <span>PDFs open in browser. Word files may download.</span></p>
       <h1>{candidate.fields?.name || 'Candidate profile'}</h1>
       <p>{candidate.fields?.summary || 'No summary provided.'}</p>
       <ul>
