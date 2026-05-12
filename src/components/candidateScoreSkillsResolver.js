@@ -41,8 +41,8 @@ export function resolveScoreBreakdown(candidate = {}) {
   ]
 
   const items = allowedFields
-    .filter(([, value]) => Number.isFinite(Number(value)))
-    .map(([label, value]) => ({ label, value: Number(value) }))
+    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+    .map(([label, value]) => ({ label, value }))
 
   return { isValid: items.length > 0, items }
 }
