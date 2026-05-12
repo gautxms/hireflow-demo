@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookmarkPlus, Briefcase, CalendarDays, ChevronLeft, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
+import { AlertTriangle, BookmarkPlus, Briefcase, CalendarDays, Check, ChevronLeft, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -28,6 +28,7 @@ import {
 } from './candidateSelectionState'
 import '../styles/candidate-results.css'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
+import { resolveScoreBreakdown, resolveSkillSignals } from './candidateScoreSkillsResolver'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -1083,8 +1084,15 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             : [])
         const candidateConsiderations = dedupeTextItems(normalizeTextList(candidate.considerations))
         const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
-        const matchedSkills = dedupeTextItems(ensureTextList(candidate?.matchedSkills || candidate?.matched_skills, 'No confirmed matched skills were detected.'))
-        const missingSkills = dedupeTextItems(ensureTextList(candidate?.missingSkills || candidate?.missing_skills, 'No explicit skill gaps were detected.'), matchedSkills)
+        const scoreBreakdown = resolveScoreBreakdown(candidate)
+        const skillSignals = resolveSkillSignals(candidate)
+        const primarySkills = skillSignals.primarySkills.length > 0
+          ? dedupeTextItems(skillSignals.primarySkills)
+          : [skillSignals.hasExplicitMatched ? 'No confirmed matched skills were detected.' : 'Relevant skills unavailable for this analysis.']
+        const missingSkills = skillSignals.skillGaps.length > 0
+          ? dedupeTextItems(skillSignals.skillGaps, primarySkills)
+          : ['No explicit skill gaps were detected.']
+        const allSkills = skillSignals.allSkills.length > 0 ? dedupeTextItems(skillSignals.allSkills) : ['No skills were extracted for this profile.']
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
@@ -1139,13 +1147,23 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
 
               <div className="dd-col dd-col--center">
-                <div className="dd-col-label">Fit breakdown</div>
+                <div className="dd-col-label">Score breakdown</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
-                  {matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}
+                  {scoreBreakdown.isValid
+                    ? scoreBreakdown.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-score-breakdown-${idx}`}>{item.label}: {item.value}</div>)
+                    : <div className="dd-analysis-empty">Score breakdown unavailable for this analysis.</div>}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
+                <div className="dd-analysis-box dd-analysis-box--green">
+                  {primarySkills.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-primary-skill-${idx}`}><Check size={14} aria-hidden="true" />{item}</div>)}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
-                  {missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}
+                  {missingSkills.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-missing-${idx}`}><AlertTriangle size={14} aria-hidden="true" />{item}</div>)}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">All skills (reference)</div>
+                <div className="dd-analysis-box">
+                  {allSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-all-skills-${idx}`}>{item}</div>)}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
                 <div className="dd-analysis-box">
