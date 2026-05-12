@@ -352,18 +352,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [deletedIds, setDeletedIds] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [shortlistOpen, setShortlistOpen] = useState(false)
-  const [resumeViewerCandidate, setResumeViewerCandidate] = useState(null)
-
-  useEffect(() => {
-    if (!resumeViewerCandidate) return undefined
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setResumeViewerCandidate(null)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [resumeViewerCandidate])
 
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
@@ -1129,6 +1117,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const resumeFileType = resolveResumeFileType(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
         const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
+        const openResumePath = candidateResumeId ? `${API_BASE}/resumes/${candidateResumeId}/view` : null
         const persistedTags = Array.isArray(candidate?.tags) ? candidate.tags : []
         const optimisticTags = candidateTags[candidate._bulkKey] || []
         const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
@@ -1142,7 +1131,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               {displayScore != null && <div className={`dd-score dd-score--${tier}`}>{displayScore}<span>/10</span></div>}
               <div className="dd-header-actions">
                 <button className="dd-btn-primary" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
-                <button className="dd-btn-ghost" type="button" onClick={() => setResumeViewerCandidate({ ...candidate, resumeFilename, resumeFileType, fullProfilePath })}>Open Resume</button>
+                {openResumePath ? <a className="dd-btn-ghost" href={openResumePath} target="_blank" rel="noopener noreferrer" title="PDFs open in browser. Word files may download.">Open resume</a> : <button className="dd-btn-ghost" type="button" disabled>Open resume</button>}
+                {fullProfilePath ? <a className="dd-btn-ghost" href={fullProfilePath}>Full profile</a> : null}
               </div>
               <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
             </div>
@@ -1155,14 +1145,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         )
       })()}
 
-      {resumeViewerCandidate && (
-        <div className="resume-modal-backdrop" role="dialog" aria-modal="true" aria-label="Resume viewer" onClick={() => setResumeViewerCandidate(null)}>
-          <div className="resume-modal-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="resume-modal-header"><div><div className="dd-name">{toDisplayText(resumeViewerCandidate.name, 'Candidate')}</div><div className="dd-subtitle">{resumeViewerCandidate.resumeFilename} · {resumeViewerCandidate.resumeFileType}</div></div><button className="dd-close" type="button" onClick={() => setResumeViewerCandidate(null)}>✕</button></div>
-            <div className="resume-modal-body"><p className="dd-summary">Preview unavailable in this view. Use the secure candidate profile page to review the full document.</p>{resumeViewerCandidate.fullProfilePath ? <a className="dd-btn-primary resume-modal-link" href={resumeViewerCandidate.fullProfilePath}>Open secure profile</a> : <div className="dd-analysis-empty">Resume ID not available for secure open.</div>}</div>
-          </div>
-        </div>
-      )}
 
             {visibleCandidates.length === 0 && (
         <div className="candidate-results-page__empty-note">

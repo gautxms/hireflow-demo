@@ -12,6 +12,7 @@ import uploadsRoutes from './routes/uploads.js'
 import uploadChunksRoutes from './routes/uploadChunks.js'
 import parseStatusRoutes from './routes/parseStatus.js'
 import resultsRoutes from './routes/results.js'
+import resumesRoutes from './routes/resumes.js'
 import resultsExportRoutes from './routes/resultsExport.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import feedbackRoutes from './routes/feedback.js'
@@ -141,7 +142,7 @@ app.use('/api/uploads/chunks', uploadChunksRoutes)
 app.use('/api/uploads', uploadsRoutes)
 app.use('/api/feedback', requireAuth, generalApiLimiterAuth, feedbackRoutes)
 app.use('/api/results', resultsRoutes)
-app.use('/api/resumes', resultsRoutes)
+app.use('/api/resumes', resumesRoutes)
 app.use('/api/results/export', resultsExportRoutes)
 app.use('/api/profile', generalApiLimiterAuth, profileRoutes)
 app.use('/api/subscriptions', generalApiLimiterAuth, subscriptionsRoutes)
