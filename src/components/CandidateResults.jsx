@@ -199,11 +199,33 @@ function dedupeTextItems(items, blocked = []) {
 
 
 function resolveResumeFileType(candidate) {
-  const rawType = toDisplayText(candidate?.file_type || candidate?.fileType || candidate?.mime_type || candidate?.mimeType, '').trim()
-  if (!rawType) return 'Unknown file type'
+  const rawType = toDisplayText(candidate?.file_type || candidate?.fileType || candidate?.mime_type || candidate?.mimeType, '').trim().toLowerCase()
   if (rawType === 'application/pdf') return 'PDF'
   if (rawType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
-  return rawType
+  if (rawType === 'application/msword') return 'DOC'
+  if (rawType === 'text/plain') return 'TXT'
+  if (rawType === 'text/rtf' || rawType === 'application/rtf') return 'RTF'
+  if (rawType) return rawType.toUpperCase()
+
+  const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
+  const extension = String(resumeFilename || '').trim().split('.').pop()?.toLowerCase()
+  if (extension === 'pdf') return 'PDF'
+  if (extension === 'docx') return 'DOCX'
+  if (extension === 'doc') return 'DOC'
+  if (extension === 'txt') return 'TXT'
+  if (extension === 'rtf') return 'RTF'
+  if (extension) return extension.toUpperCase()
+
+  return 'File'
+}
+
+function formatResumeSize(candidate) {
+  const rawSize = candidate?.file_size ?? candidate?.fileSize ?? candidate?.resume_size ?? candidate?.resumeSize
+  const size = Number(rawSize)
+  if (!Number.isFinite(size) || size <= 0) return null
+  if (size < 1024) return `${size} B`
+  if (size < 1024 ** 2) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 ** 2)).toFixed(1)} MB`
 }
 
 function deriveDecisionVerdict(candidate, score) {
@@ -1117,7 +1139,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           ? normalizeTextList(candidate.strengths)
           : Array.isArray(candidate.achievements)
             ? normalizeTextList(candidate.achievements).slice(0, 3)
-            : [])
+            : []).slice(0, 3)
         const candidateConsiderations = dedupeTextItems(normalizeTextList(candidate.considerations))
         const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
         const scoreBreakdown = resolveScoreBreakdown(candidate)
@@ -1131,7 +1153,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const allSkills = skillSignals.allSkills.length > 0 ? dedupeTextItems(skillSignals.allSkills) : ['No skills were extracted for this profile.']
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
-        const uncertaintyItems = candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
+        const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']).slice(0, 3)
         const decisionVerdict = deriveDecisionVerdict(candidate, score)
         const recommendedAction = deriveRecommendedAction(candidate, score)
         const probePool = dedupeTextItems([
@@ -1142,6 +1164,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const interviewProbes = probePool.slice(0, 3)
         const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
         const resumeFileType = resolveResumeFileType(candidate)
+        const resumeFileSize = formatResumeSize(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
         const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
         const openResumePath = candidateResumeId ? `${API_BASE}/resumes/${candidateResumeId}/view` : null
