@@ -63,14 +63,23 @@ export default function CandidatesPage() {
   const [bulkStatus, setBulkStatus] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [bulkFeedback, setBulkFeedback] = useState({ type: 'info', message: '', detail: '' })
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [totalCount, setTotalCount] = useState(0)
+  const [sortBy, setSortBy] = useState('recent')
+  const [sortDirection, setSortDirection] = useState('desc')
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
     Object.entries(filters).forEach(([key, value]) => {
       if (String(value || '').trim()) params.set(key, String(value).trim())
     })
+    params.set('page', String(page))
+    params.set('pageSize', String(pageSize))
+    params.set('sortBy', sortBy)
+    params.set('sortDirection', sortDirection)
     return params.toString()
-  }, [filters])
+  }, [filters, page, pageSize, sortBy, sortDirection])
 
   const hasActiveFilters = useMemo(() => (
     Object.entries(filters).some(([key, value]) => {
@@ -102,6 +111,9 @@ export default function CandidatesPage() {
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(payload.error || 'Unable to load candidates')
         setCandidates(Array.isArray(payload.candidates) ? payload.candidates : [])
+        setTotalCount(Number(payload.totalCount ?? payload.meta?.totalCount ?? 0))
+        setPage(Number(payload.page ?? payload.meta?.page ?? page))
+        setPageSize(Number(payload.pageSize ?? payload.meta?.pageSize ?? pageSize))
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
           setError(loadError.message || 'Unable to load candidates')
@@ -193,7 +205,7 @@ export default function CandidatesPage() {
             max={config.max}
             step={config.step}
             value={filters[key]}
-            onChange={(event) => setFilters((prev) => ({ ...prev, [key]: event.target.value }))}
+            onChange={(event) => { setFilters((prev) => ({ ...prev, [key]: event.target.value })); setPage(1) }}
             placeholder={config.placeholder || `Filter by ${key}`}
           />
         )}
@@ -208,7 +220,7 @@ export default function CandidatesPage() {
         <p>Review talent, apply technical filters, and shortlist quickly.</p>
       </div>
       <div className="candidates-directory__chips" aria-label="Directory summary">
-        <span className="chip">{candidateRows.length} total</span>
+        <span className="chip">{totalCount} total</span>
         <span className="chip">{selectedCount} selected</span>
         <span className="chip">{shortlists.length} shortlists</span>
       </div>
@@ -240,6 +252,35 @@ export default function CandidatesPage() {
     {isLoading && <p className="candidates-directory__status">Loading candidates…</p>}
     {!isLoading && !error && candidates.length === 0 && !hasActiveFilters && <p className="candidates-directory__status">No candidates yet. Candidate records will appear here once resumes are analyzed.</p>}
     {!isLoading && !error && candidates.length === 0 && hasActiveFilters && <p className="candidates-directory__status">No results for these filters. Try broadening your search criteria.</p>}
+
+
+      <div className="candidates-directory__pagination">
+        <label>
+          Sort
+          <select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setPage(1) }}>
+            <option value="recent">Latest analyzed</option>
+            <option value="score">Top score</option>
+            <option value="experience">Most experience</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </label>
+        <label>
+          Direction
+          <select value={sortDirection} onChange={(event) => { setSortDirection(event.target.value); setPage(1) }}>
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
+        </label>
+        <label>
+          Page size
+          <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>
+            <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+          </select>
+        </label>
+        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button>
+        <span>Page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))}</span>
+        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => (current < Math.ceil(totalCount / pageSize) ? current + 1 : current))} disabled={page >= Math.ceil(totalCount / pageSize)}>Next</button>
+      </div>
 
     <section className="candidates-directory__table-wrap" aria-live="polite">
       <table className="candidates-directory__table">

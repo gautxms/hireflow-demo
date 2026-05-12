@@ -11,6 +11,22 @@ import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '.
 
 const router = Router()
 
+
+const DEFAULT_DIRECTORY_PAGE = 1
+const DEFAULT_DIRECTORY_PAGE_SIZE = 25
+const MAX_DIRECTORY_PAGE_SIZE = 100
+const DIRECTORY_SORT_FIELDS = Object.freeze({
+  recent: 'cp.source_updated_at',
+  score: "COALESCE((cp.profile->>'profile_score')::numeric, r.profile_score)",
+  experience: "COALESCE((cp.profile->>'years_experience')::numeric, r.years_experience)",
+  name: "LOWER(COALESCE(NULLIF(cp.profile->>'name', ''), NULLIF(cp.profile->>'full_name', ''), r.filename, 'candidate'))",
+})
+
+function normalizePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
 function normalizeString(value) {
   const normalized = String(value || '').trim()
   return normalized || null
@@ -360,6 +376,107 @@ router.get('/directory', requireAuth, async (req, res) => {
       job: normalizeString(req.query.job).toLowerCase(),
     }
 
+    const page = normalizePositiveInteger(req.query.page, DEFAULT_DIRECTORY_PAGE)
+    const requestedPageSize = normalizePositiveInteger(req.query.pageSize, DEFAULT_DIRECTORY_PAGE_SIZE)
+    const pageSize = Math.min(requestedPageSize, MAX_DIRECTORY_PAGE_SIZE)
+
+    const sortByKey = normalizeString(req.query.sortBy)?.toLowerCase() || 'recent'
+    const sortDirectionInput = normalizeString(req.query.sortDirection)?.toLowerCase()
+    const sortBy = DIRECTORY_SORT_FIELDS[sortByKey] ? sortByKey : 'recent'
+    const sortDirection = sortDirectionInput === 'asc' ? 'ASC' : 'DESC'
+
+    const whereClauses = ['cp.user_id = $1']
+    const queryParams = [req.userId]
+    const addParam = (value) => {
+      queryParams.push(value)
+      return `$${queryParams.length}`
+    }
+
+    if (filters.sourceJobId) {
+      whereClauses.push(`CAST(r.job_description_id AS text) = ${addParam(filters.sourceJobId)}`)
+    }
+
+    if (filters.sourceAnalysisId) {
+      whereClauses.push(`cp.source_parse_job_id = ${addParam(filters.sourceAnalysisId)}`)
+    }
+
+    if (filters.experienceMin !== null) {
+      whereClauses.push(`COALESCE((cp.profile->>'years_experience')::numeric, r.years_experience) >= ${addParam(filters.experienceMin)}`)
+    }
+
+    if (filters.experienceMax !== null) {
+      whereClauses.push(`COALESCE((cp.profile->>'years_experience')::numeric, r.years_experience) <= ${addParam(filters.experienceMax)}`)
+    }
+
+    if (filters.scoreMin !== null) {
+      whereClauses.push(`COALESCE((cp.profile->>'profile_score')::numeric, r.profile_score) >= ${addParam(filters.scoreMin)}`)
+    }
+
+    if (filters.scoreMax !== null) {
+      whereClauses.push(`COALESCE((cp.profile->>'profile_score')::numeric, r.profile_score) <= ${addParam(filters.scoreMax)}`)
+    }
+
+    if (filters.job) {
+      const token = `%${filters.job}%`
+      const param = addParam(token)
+      whereClauses.push(`(LOWER(COALESCE(jd.title, '')) LIKE ${param})`)
+    }
+
+    if (filters.search) {
+      const token = `%${filters.search}%`
+      const param = addParam(token)
+      whereClauses.push(`(
+        LOWER(COALESCE(cp.profile->>'name', '')) LIKE ${param}
+        OR LOWER(COALESCE(cp.profile->>'full_name', '')) LIKE ${param}
+        OR LOWER(COALESCE(cp.profile->>'headline', '')) LIKE ${param}
+        OR LOWER(COALESCE(cp.profile->>'current_title', '')) LIKE ${param}
+        OR LOWER(COALESCE(cp.profile->>'current_company', '')) LIKE ${param}
+        OR LOWER(COALESCE(cp.profile->>'email', '')) LIKE ${param}
+        OR LOWER(COALESCE(r.filename, '')) LIKE ${param}
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements_text(
+            COALESCE(cp.profile->'skills_flat', '[]'::jsonb)
+            || COALESCE(cp.profile->'top_skills', '[]'::jsonb)
+            || COALESCE(cp.profile->'skills', '[]'::jsonb)
+          ) skill_value(value)
+          WHERE LOWER(value) LIKE ${param}
+        )
+      )`)
+    }
+
+    if (filters.skills.length > 0) {
+      const param = addParam(filters.skills)
+      whereClauses.push(`EXISTS (
+        SELECT 1
+        FROM unnest(ARRAY(
+          SELECT lower(value)
+          FROM jsonb_array_elements_text(
+            COALESCE(cp.profile->'skills_flat', '[]'::jsonb)
+            || COALESCE(cp.profile->'top_skills', '[]'::jsonb)
+            || COALESCE(cp.profile->'skills', '[]'::jsonb)
+          ) value
+        )) skill_value
+        WHERE skill_value = ANY(${param}::text[])
+      )`)
+    }
+
+    if (filters.tags.length > 0) {
+      const param = addParam(filters.tags)
+      whereClauses.push(`EXISTS (
+        SELECT 1
+        FROM candidate_tags ct
+        WHERE ct.user_id = cp.user_id
+          AND ct.resume_id = cp.resume_id
+          AND LOWER(ct.tag) = ANY(${param}::text[])
+      )`)
+    }
+
+    const whereSql = whereClauses.join('\n       AND ')
+    const sortExpression = DIRECTORY_SORT_FIELDS[sortBy]
+    const offset = (page - 1) * pageSize
+    queryParams.push(pageSize, offset)
+
     const result = await pool.query(
       `SELECT cp.resume_id,
               cp.profile,
@@ -377,7 +494,8 @@ router.get('/directory', requireAuth, async (req, res) => {
               latest_analysis.created_at AS latest_analysis_created_at,
               latest_analysis.completed_at AS latest_analysis_completed_at,
               latest_analysis.status AS latest_analysis_status,
-              COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
+              COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags,
+              COUNT(*) OVER()::integer AS total_count
        FROM candidate_profiles cp
        INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
        LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
@@ -400,13 +518,14 @@ router.get('/directory', requireAuth, async (req, res) => {
          WHERE ct.user_id = cp.user_id
            AND ct.resume_id = cp.resume_id
        ) tag_agg ON TRUE
-       WHERE cp.user_id = $1
-       ORDER BY cp.source_updated_at DESC, cp.updated_at DESC`,
-      [req.userId],
+       WHERE ${whereSql}
+       ORDER BY ${sortExpression} ${sortDirection}, cp.updated_at DESC
+       LIMIT $${queryParams.length - 1}
+       OFFSET $${queryParams.length}`,
+      queryParams,
     )
 
-    const profiles = result.rows
-      .map((row) => {
+    const profiles = result.rows.map((row) => {
         const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
         const normalizedCandidate = normalizeCandidateScoreExperienceAndSkills(profile, row)
         const skills = normalizedCandidate.skills
@@ -421,144 +540,20 @@ router.get('/directory', requireAuth, async (req, res) => {
         const latestAnalysisName = normalizeString(row.latest_analysis_name)
         const latestAnalysisDate = row.latest_analysis_completed_at || row.latest_analysis_created_at || null
 
-        return {
-          resumeId: String(row.resume_id),
-          candidateId: String(row.resume_id),
-          profile,
-          name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
-          skills,
-          profileScore,
-          yearsExperience,
-          email: normalizeString(profile.email),
-          resumeFilename: normalizeString(row.filename),
-          latestJobTitle: normalizeString(row.job_title),
-          topSkills,
-          tags,
-          parseStatus: normalizeString(row.parse_status),
-          analysisStatus: normalizeString(row.latest_analysis_status),
-          sourceParseJobId: row.source_parse_job_id || null,
-          sourceUpdatedAt: row.source_updated_at,
-          latestAnalysis: latestAnalysisId
-            ? {
-                id: latestAnalysisId,
-                name: latestAnalysisName,
-                date: latestAnalysisDate,
-              }
-            : null,
-          recruiter: {
-            headline: normalizeString(profile.headline),
-            currentTitle: normalizeString(profile.current_title) || normalizeString(profile.title),
-            currentCompany: normalizeString(profile.current_company) || normalizeString(profile.company),
-            location: normalizeString(profile.location),
-            phone: normalizeString(profile.phone),
-            linkedinUrl: normalizeString(profile.linkedin_url) || normalizeString(profile.linkedin),
-            portfolioUrl: normalizeString(profile.portfolio_url) || normalizeString(profile.portfolio),
-            workAuthorization: normalizeString(profile.work_authorization),
-            visaStatus: normalizeString(profile.visa_status),
-          },
-          dataCompleteness: {
-            profile: Object.keys(profile).length > 0,
-            email: Boolean(normalizeString(profile.email)),
-            latestAnalysis: Boolean(latestAnalysisId),
-            parseStatus: Boolean(normalizeString(row.parse_status)),
-            analysisStatus: Boolean(normalizeString(row.latest_analysis_status)),
-            fallbackSource: Object.keys(profile).length > 0 ? 'candidate_profiles.profile' : 'resumes',
-          },
-          associatedJob: row.job_description_id
-            ? {
-                id: String(row.job_description_id),
-                title: normalizeString(row.job_title) || 'Untitled job',
-              }
-            : null,
-        }
-      })
-      .filter((entry) => {
-        if (filters.search) {
-          const searchHaystack = [
-            entry.name,
-            entry.resumeFilename,
-            entry.email,
-            entry.recruiter?.headline,
-            entry.recruiter?.currentTitle,
-            entry.recruiter?.currentCompany,
-            ...entry.skills,
-            ...entry.topSkills,
-          ]
-            .map((value) => normalizeString(value).toLowerCase())
-            .filter(Boolean)
-
-          if (!searchHaystack.some((value) => value.includes(filters.search))) {
-            return false
-          }
-        }
-
-        if (filters.job) {
-          const jobHaystack = [entry.associatedJob?.title, entry.latestJobTitle]
-            .map((value) => normalizeString(value).toLowerCase())
-            .filter(Boolean)
-
-          if (!jobHaystack.some((value) => value.includes(filters.job))) {
-            return false
-          }
-        }
-
-        if (filters.skills.length > 0) {
-          const candidateSkills = entry.skills.map((skill) => skill.toLowerCase())
-          if (!filters.skills.some((skill) => candidateSkills.includes(skill))) {
-            return false
-          }
-        }
-
-        if (filters.tags.length > 0) {
-          const candidateTags = entry.tags.map((tag) => tag.toLowerCase())
-          if (!filters.tags.some((tag) => candidateTags.includes(tag))) {
-            return false
-          }
-        }
-
-        if (filters.experienceMin !== null && (entry.yearsExperience ?? -Infinity) < filters.experienceMin) {
-          return false
-        }
-
-        if (filters.experienceMax !== null && (entry.yearsExperience ?? Infinity) > filters.experienceMax) {
-          return false
-        }
-
-        if (filters.scoreMin !== null && (entry.profileScore ?? -Infinity) < filters.scoreMin) {
-          return false
-        }
-
-        if (filters.scoreMax !== null && (entry.profileScore ?? Infinity) > filters.scoreMax) {
-          return false
-        }
-
-        if (filters.sourceJobId && entry.associatedJob?.id !== filters.sourceJobId) {
-          return false
-        }
-
-        if (filters.sourceAnalysisId && entry.sourceParseJobId !== filters.sourceAnalysisId) {
-          return false
-        }
-
-        return true
+        return { resumeId: String(row.resume_id), candidateId: String(row.resume_id), profile, name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate', skills, profileScore, yearsExperience, email: normalizeString(profile.email), resumeFilename: normalizeString(row.filename), latestJobTitle: normalizeString(row.job_title), topSkills, tags, parseStatus: normalizeString(row.parse_status), analysisStatus: normalizeString(row.latest_analysis_status), sourceParseJobId: row.source_parse_job_id || null, sourceUpdatedAt: row.source_updated_at, latestAnalysis: latestAnalysisId ? { id: latestAnalysisId, name: latestAnalysisName, date: latestAnalysisDate } : null, recruiter: { headline: normalizeString(profile.headline), currentTitle: normalizeString(profile.current_title) || normalizeString(profile.title), currentCompany: normalizeString(profile.current_company) || normalizeString(profile.company), location: normalizeString(profile.location), phone: normalizeString(profile.phone), linkedinUrl: normalizeString(profile.linkedin_url) || normalizeString(profile.linkedin), portfolioUrl: normalizeString(profile.portfolio_url) || normalizeString(profile.portfolio), workAuthorization: normalizeString(profile.work_authorization), visaStatus: normalizeString(profile.visa_status) }, dataCompleteness: { profile: Object.keys(profile).length > 0, email: Boolean(normalizeString(profile.email)), latestAnalysis: Boolean(latestAnalysisId), parseStatus: Boolean(normalizeString(row.parse_status)), analysisStatus: Boolean(normalizeString(row.latest_analysis_status)), fallbackSource: Object.keys(profile).length > 0 ? 'candidate_profiles.profile' : 'resumes' }, associatedJob: row.job_description_id ? { id: String(row.job_description_id), title: normalizeString(row.job_title) || 'Untitled job' } : null }
       })
 
-    const page = normalizeNumberFilter(req.query.page)
-    const pageSize = normalizeNumberFilter(req.query.pageSize)
+    const totalCount = Number(result.rows[0]?.total_count || 0)
 
     return res.json({
       candidates: profiles,
-      total: profiles.length,
-      meta: {
-        totalCount: profiles.length,
-        page,
-        pageSize,
-      },
-      filtersApplied: {
-        ...filters,
-        sourceJobId: filters.sourceJobId || null,
-        sourceAnalysisId: filters.sourceAnalysisId || null,
-      },
+      totalCount,
+      page,
+      pageSize,
+      total: totalCount,
+      meta: { totalCount, page, pageSize },
+      filtersApplied: { ...filters, sourceJobId: filters.sourceJobId || null, sourceAnalysisId: filters.sourceAnalysisId || null },
+      sort: { sortBy, sortDirection: sortDirection.toLowerCase() },
     })
   } catch (error) {
     console.error('[Candidates] Failed to fetch candidates directory:', error)
