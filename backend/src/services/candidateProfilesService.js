@@ -13,8 +13,48 @@ function pickPrimaryCandidate(payload) {
   }
 
   if (Array.isArray(payload.candidates) && payload.candidates.length > 0) {
-    const first = payload.candidates[0]
-    return first && typeof first === 'object' ? first : null
+    const candidates = payload.candidates.filter((candidate) => candidate && typeof candidate === 'object')
+    if (candidates.length === 0) {
+      return null
+    }
+
+    const first = candidates[0]
+    const scoreCandidateCompleteness = (candidate) => {
+      const hasName = Boolean(String(candidate.full_name || candidate.name || '').trim())
+      const hasScore = Number.isFinite(Number(candidate.score))
+
+      const experienceRaw = candidate.experience ?? candidate.experienceYears ?? candidate.years_experience
+      const hasExperience = Number.isFinite(Number(experienceRaw)) || Boolean(String(experienceRaw || '').trim())
+
+      const skills = candidate.skills
+      const hasSkills = Array.isArray(skills)
+        ? skills.some((skill) => Boolean(String(skill || '').trim()))
+        : Boolean(String(skills || '').trim())
+
+      return Number(hasName) + Number(hasScore || hasExperience || hasSkills)
+    }
+
+    let bestCandidate = first
+    let bestScore = scoreCandidateCompleteness(first)
+    let hasTie = false
+
+    for (let i = 1; i < candidates.length; i += 1) {
+      const candidate = candidates[i]
+      const candidateScore = scoreCandidateCompleteness(candidate)
+      if (candidateScore > bestScore) {
+        bestCandidate = candidate
+        bestScore = candidateScore
+        hasTie = false
+      } else if (candidateScore === bestScore) {
+        hasTie = true
+      }
+    }
+
+    if (!hasTie && bestScore > scoreCandidateCompleteness(first)) {
+      return bestCandidate
+    }
+
+    return first
   }
 
   return null
