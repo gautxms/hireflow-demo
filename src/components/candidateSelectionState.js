@@ -1,5 +1,5 @@
 function candidateSelectionKey(candidate) {
-  return candidate?.resumeId
+  return candidate?.resumeId ?? candidate?._bulkKey
 }
 
 export function getSelectedCandidates(candidates, selectedIds) {
