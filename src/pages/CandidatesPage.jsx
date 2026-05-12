@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import { dedupeCandidatesByResumeId } from '../components/candidateSelectionState'
 import '../styles/candidates-directory.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -69,6 +70,13 @@ export default function CandidatesPage() {
   }, [filters])
 
   const selectedCount = selectedResumeIds.length
+  const candidateRows = useMemo(() => {
+    const { candidates: dedupedCandidates, duplicateResumeIds } = dedupeCandidatesByResumeId(candidates)
+    if (duplicateResumeIds.length) {
+      console.warn('[CandidatesPage] Duplicate resumeId entries were omitted from the client view model.', duplicateResumeIds)
+    }
+    return dedupedCandidates
+  }, [candidates])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -173,7 +181,7 @@ export default function CandidatesPage() {
         <p>Review talent, apply technical filters, and shortlist quickly.</p>
       </div>
       <div className="candidates-directory__chips" aria-label="Directory summary">
-        <span className="chip">{candidates.length} total</span>
+        <span className="chip">{candidateRows.length} total</span>
         <span className="chip">{selectedCount} selected</span>
         <span className="chip">{shortlists.length} shortlists</span>
       </div>
@@ -186,7 +194,8 @@ export default function CandidatesPage() {
       <section className="candidates-directory__filters" aria-label="Advanced candidate filters">{advancedFilterKeys.map(renderFilterField)}</section>
     </details>
 
-    <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
+    {selectedCount > 0 && <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
+      <span className="chip" aria-live="polite">{selectedCount} selected</span>
       <label className="candidates-directory__filter-field">
         <span>Shortlist</span>
         <select value={selectedShortlistId} onChange={(event) => setSelectedShortlistId(event.target.value)}>
@@ -196,7 +205,7 @@ export default function CandidatesPage() {
       </label>
       <button type="button" onClick={() => runBulkShortlistAction('add')}>Add selected</button>
       <button type="button" onClick={() => runBulkShortlistAction('remove')}>Remove selected</button>
-    </section>
+    </section>}
 
     {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
     {error && <p className="candidates-directory__error">{error}</p>}
@@ -206,12 +215,12 @@ export default function CandidatesPage() {
     <section className="candidates-directory__table-wrap" aria-live="polite">
       <table className="candidates-directory__table">
         <thead>
-          <tr><th>Candidate</th><th>Job</th><th>Score</th><th>Experience</th><th>Skills</th><th>Shortlist / Status</th><th>Last analyzed</th><th>Actions</th></tr>
+          <tr><th aria-label="Select candidate" /><th>Candidate</th><th>Job</th><th>Score</th><th>Experience</th><th>Skills</th><th>Shortlist / Status</th><th>Last analyzed</th><th>Actions</th></tr>
         </thead>
         <tbody>
-          {candidates.map((candidate) => <tr key={candidate.resumeId}>
-            <td><label className="candidate-select"><input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} />
-              <span>{candidate.name || 'Candidate'}</span></label></td>
+          {candidateRows.map((candidate) => <tr key={candidate.resumeId}>
+            <td><label className="candidate-select"><input type="checkbox" aria-label={`Select ${candidate.name || 'candidate'}`} checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></label></td>
+            <td>{candidate.name || 'Candidate'}</td>
             <td>{candidate.associatedJob?.title || 'No linked job'}</td>
             <td>{candidate.profileScore ?? 'N/A'}</td>
             <td>{candidate.yearsExperience ?? 'N/A'} yrs</td>
@@ -224,8 +233,9 @@ export default function CandidatesPage() {
       </table>
 
       <div className="candidates-directory__cards">
-        {candidates.map((candidate) => <article key={`card-${candidate.resumeId}`} className="candidate-directory-card">
-          <label className="candidate-select"><input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /><span>{candidate.name || 'Candidate'}</span></label>
+        {candidateRows.map((candidate) => <article key={`card-${candidate.resumeId}`} className="candidate-directory-card">
+          <label className="candidate-select"><input type="checkbox" aria-label={`Select ${candidate.name || 'candidate'}`} checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></label>
+          <p><strong>Candidate:</strong> {candidate.name || 'Candidate'}</p>
           <p><strong>Job:</strong> {candidate.associatedJob?.title || 'No linked job'}</p>
           <p><strong>Score:</strong> {candidate.profileScore ?? 'N/A'}</p><p><strong>Experience:</strong> {candidate.yearsExperience ?? 'N/A'} yrs</p>
           <p><strong>Skills:</strong> {(candidate.skills || []).slice(0, 5).join(', ') || 'None listed'}</p>
