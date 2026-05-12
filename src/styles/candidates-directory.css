@@ -121,6 +121,7 @@
 .candidates-directory__error {
   color: var(--color-error, #d14343);
   font-family: var(--font-family-ui);
+}
 .candidates-directory { padding: 1.5rem; color: var(--color-text-primary); }
 .candidates-directory__header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }
 .candidates-directory__header p { color: var(--color-text-secondary); }
