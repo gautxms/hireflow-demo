@@ -221,10 +221,9 @@ export default function CandidatesPage() {
           {shortlists.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.candidate_count || 0})</option>)}
         </select>
       </label>
-      <button type="button" className="hf-btn hf-btn--primary" onClick={() => runBulkShortlistAction('add')} disabled={bulkActionsDisabled}>Add selected</button>
-      <button type="button" className="hf-btn hf-btn--secondary" onClick={() => runBulkShortlistAction('remove')} disabled={bulkActionsDisabled}>Remove selected</button>
+        <button type="button" className="hf-btn hf-btn--primary" onClick={() => runBulkShortlistAction('add')} disabled={bulkActionsDisabled}>Add selected</button>
+        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => runBulkShortlistAction('remove')} disabled={bulkActionsDisabled}>Remove selected</button>
     </section>
-
     {bulkFeedback.message && <p className={`candidates-directory__status candidates-directory__status--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</p>}
     {bulkFeedback.detail && <p className="candidates-directory__status candidates-directory__status--error" role="alert">{bulkFeedback.detail}</p>}
     {bulkFeedback.message && <div className={`candidates-directory__toast candidates-directory__toast--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</div>}
