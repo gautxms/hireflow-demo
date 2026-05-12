@@ -47,7 +47,7 @@ const candidateFilterFieldConfig = {
 
 function formatDate(value) {
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Unknown'
+  if (Number.isNaN(date.getTime())) return 'Not extracted'
   return date.toLocaleString()
 }
 
@@ -60,6 +60,7 @@ export default function CandidatesPage() {
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [selectedResumeIds, setSelectedResumeIds] = useState([])
   const [bulkStatus, setBulkStatus] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
@@ -68,6 +69,13 @@ export default function CandidatesPage() {
     })
     return params.toString()
   }, [filters])
+
+  const hasActiveFilters = useMemo(() => (
+    Object.entries(filters).some(([key, value]) => {
+      if (key === 'sortBySkillMatch') return value !== emptyFilters.sortBySkillMatch
+      return String(value || '').trim().length > 0
+    })
+  ), [filters])
 
   const selectedCount = selectedResumeIds.length
   const candidateRows = useMemo(() => {
@@ -101,7 +109,7 @@ export default function CandidatesPage() {
     }
     loadCandidates()
     return () => controller.abort()
-  }, [queryString])
+  }, [queryString, reloadKey])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -208,9 +216,10 @@ export default function CandidatesPage() {
     </section>}
 
     {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
-    {error && <p className="candidates-directory__error">{error}</p>}
+    {error && <p className="candidates-directory__error">{error} <button type="button" onClick={() => setReloadKey((prev) => prev + 1)}>Retry</button></p>}
     {isLoading && <p className="candidates-directory__status">Loading candidates…</p>}
-    {!isLoading && !error && candidates.length === 0 && <p className="candidates-directory__status">No candidates matched the current filters.</p>}
+    {!isLoading && !error && candidates.length === 0 && !hasActiveFilters && <p className="candidates-directory__status">No candidates yet. Candidate records will appear here once resumes are analyzed.</p>}
+    {!isLoading && !error && candidates.length === 0 && hasActiveFilters && <p className="candidates-directory__status">No results for these filters. Try broadening your search criteria.</p>}
 
     <section className="candidates-directory__table-wrap" aria-live="polite">
       <table className="candidates-directory__table">
@@ -218,12 +227,16 @@ export default function CandidatesPage() {
           <tr><th aria-label="Select candidate" /><th>Candidate</th><th>Job</th><th>Score</th><th>Experience</th><th>Skills</th><th>Shortlist / Status</th><th>Last analyzed</th><th>Actions</th></tr>
         </thead>
         <tbody>
+          {isLoading && Array.from({ length: 5 }).map((_, idx) => <tr key={`skeleton-row-${idx}`} aria-hidden="true">
+            <td><div className="chip">Loading…</div></td>
+            <td colSpan={8}><div className="chip">Fetching candidate record</div></td>
+          </tr>)}
           {candidateRows.map((candidate) => <tr key={candidate.resumeId}>
             <td><label className="candidate-select"><input type="checkbox" aria-label={`Select ${candidate.name || 'candidate'}`} checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></label></td>
             <td>{candidate.name || 'Candidate'}</td>
             <td>{candidate.associatedJob?.title || 'No linked job'}</td>
-            <td>{candidate.profileScore ?? 'N/A'}</td>
-            <td>{candidate.yearsExperience ?? 'N/A'} yrs</td>
+            <td>{candidate.profileScore ?? 'Score pending'}</td>
+            <td>{candidate.yearsExperience != null ? `${candidate.yearsExperience} yrs` : 'Experience unavailable'}</td>
             <td>{(candidate.skills || []).slice(0, 5).join(', ') || 'None listed'}</td>
             <td>{(candidate.tags || []).join(', ') || 'Unassigned'}</td>
             <td>{formatDate(candidate.sourceUpdatedAt)}</td>
@@ -237,7 +250,7 @@ export default function CandidatesPage() {
           <label className="candidate-select"><input type="checkbox" aria-label={`Select ${candidate.name || 'candidate'}`} checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></label>
           <p><strong>Candidate:</strong> {candidate.name || 'Candidate'}</p>
           <p><strong>Job:</strong> {candidate.associatedJob?.title || 'No linked job'}</p>
-          <p><strong>Score:</strong> {candidate.profileScore ?? 'N/A'}</p><p><strong>Experience:</strong> {candidate.yearsExperience ?? 'N/A'} yrs</p>
+          <p><strong>Score:</strong> {candidate.profileScore ?? 'Score pending'}</p><p><strong>Experience:</strong> {candidate.yearsExperience != null ? `${candidate.yearsExperience} yrs` : 'Experience unavailable'}</p>
           <p><strong>Skills:</strong> {(candidate.skills || []).slice(0, 5).join(', ') || 'None listed'}</p>
           <p><strong>Status:</strong> {(candidate.tags || []).join(', ') || 'Unassigned'}</p>
           <p><strong>Last analyzed:</strong> {formatDate(candidate.sourceUpdatedAt)}</p>
