@@ -433,6 +433,15 @@ router.get('/directory', requireAuth, async (req, res) => {
         OR LOWER(COALESCE(cp.profile->>'current_company', '')) LIKE ${param}
         OR LOWER(COALESCE(cp.profile->>'email', '')) LIKE ${param}
         OR LOWER(COALESCE(r.filename, '')) LIKE ${param}
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements_text(
+            COALESCE(cp.profile->'skills_flat', '[]'::jsonb)
+            || COALESCE(cp.profile->'top_skills', '[]'::jsonb)
+            || COALESCE(cp.profile->'skills', '[]'::jsonb)
+          ) skill_value(value)
+          WHERE LOWER(value) LIKE ${param}
+        )
       )`)
     }
 
