@@ -66,6 +66,45 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
+function normalizeCandidateScoreExperienceAndSkills(profile, resumeRow = {}) {
+  const candidateProfile = profile && typeof profile === 'object' ? profile : {}
+
+  const profileScore = normalizeNullableNumber(
+    candidateProfile.profile_score
+      ?? candidateProfile.profileScore
+      ?? candidateProfile.score
+      ?? candidateProfile.matchScore?.score
+      ?? candidateProfile.fit_assessment?.overall_fit_score
+      ?? candidateProfile.fitAssessment?.overallFitScore
+      ?? resumeRow.profile_score,
+  )
+
+  const yearsExperience = normalizeNullableNumber(
+    candidateProfile.years_experience
+      ?? candidateProfile.yearsExperience
+      ?? candidateProfile.totalExperienceYears
+      ?? candidateProfile.experience_years
+      ?? resumeRow.years_experience,
+  )
+
+  const structuredSkillsSource = candidateProfile.skills_structured
+    ?? candidateProfile.skillsStructured
+    ?? candidateProfile.skills
+    ?? candidateProfile.top_skills
+    ?? candidateProfile.topSkills
+    ?? []
+  const skillsStructured = normalizeStructuredSkills(structuredSkillsSource)
+  const fallbackSkillsFlat = normalizeStringArray(candidateProfile.skills_flat ?? candidateProfile.skillsFlat)
+  const skills = fallbackSkillsFlat.length > 0 ? [...new Set(fallbackSkillsFlat)] : flattenStructuredSkills(skillsStructured)
+
+  return {
+    profileScore,
+    yearsExperience,
+    skillsStructured,
+    skills,
+  }
+}
+
 function parseStringList(value) {
   if (Array.isArray(value)) {
     return value.flatMap((entry) => String(entry || '').split(',')).map((entry) => entry.trim()).filter(Boolean)
@@ -337,18 +376,16 @@ router.get('/directory', requireAuth, async (req, res) => {
     const profiles = result.rows
       .map((row) => {
         const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
-        const skills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
-        const profileScore = normalizeNullableNumber(profile.profile_score) ?? normalizeNullableNumber(row.profile_score)
-        const yearsExperience = normalizeNullableNumber(profile.years_experience) ?? normalizeNullableNumber(row.years_experience)
+        const normalizedCandidate = normalizeCandidateScoreExperienceAndSkills(profile, row)
         const tags = normalizeStringArray(row.tags)
 
         return {
           resumeId: String(row.resume_id),
           profile,
           name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
-          skills,
-          profileScore,
-          yearsExperience,
+          skills: normalizedCandidate.skills,
+          profileScore: normalizedCandidate.profileScore,
+          yearsExperience: normalizedCandidate.yearsExperience,
           tags,
           sourceParseJobId: row.source_parse_job_id || null,
           sourceUpdatedAt: row.source_updated_at,
@@ -568,16 +605,14 @@ router.get('/:resumeId', requireAuth, async (req, res) => {
       resumeId: String(row.resume_id),
       profile,
       fields: {
+        ...normalizeCandidateScoreExperienceAndSkills(profile, row),
         name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
         email: normalizeString(profile.email),
         phone: normalizeString(profile.phone),
         summary: normalizeString(profile.summary),
         location: normalizeString(profile.location),
-        skills: flattenStructuredSkills(normalizeStructuredSkills(profile.skills)),
         strengths: normalizeStringArray(profile.strengths),
         considerations: normalizeStringArray(profile.considerations),
-        yearsExperience: normalizeNullableNumber(profile.years_experience) ?? normalizeNullableNumber(row.years_experience),
-        profileScore: normalizeNullableNumber(profile.profile_score) ?? normalizeNullableNumber(row.profile_score),
         tags: normalizeStringArray(row.tags),
       },
       provenance: {
