@@ -319,7 +319,6 @@ router.get('/directory', requireAuth, async (req, res) => {
               r.years_experience,
               r.job_description_id,
               r.parse_status,
-              r.analysis_id AS resume_analysis_id,
               jd.title AS job_title,
               latest_analysis.id AS latest_analysis_id,
               latest_analysis.name AS latest_analysis_name,
@@ -365,7 +364,7 @@ router.get('/directory', requireAuth, async (req, res) => {
           ? normalizeStringArray(profile.top_skills).slice(0, 5)
           : skills.slice(0, 5)
 
-        const latestAnalysisId = normalizeString(row.latest_analysis_id) || normalizeString(row.resume_analysis_id)
+        const latestAnalysisId = normalizeString(row.latest_analysis_id)
         const latestAnalysisName = normalizeString(row.latest_analysis_name)
         const latestAnalysisDate = row.latest_analysis_completed_at || row.latest_analysis_created_at || null
 
