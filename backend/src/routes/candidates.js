@@ -407,6 +407,9 @@ router.get('/directory', requireAuth, async (req, res) => {
       .map((row) => {
         const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
         const normalizedCandidate = normalizeCandidateScoreExperienceAndSkills(profile, row)
+        const skills = normalizedCandidate.skills
+        const profileScore = normalizedCandidate.profileScore
+        const yearsExperience = normalizedCandidate.yearsExperience
         const tags = normalizeStringArray(row.tags)
         const topSkills = normalizeStringArray(profile.top_skills).length > 0
           ? normalizeStringArray(profile.top_skills).slice(0, 5)
@@ -421,15 +424,12 @@ router.get('/directory', requireAuth, async (req, res) => {
           candidateId: String(row.resume_id),
           profile,
           name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
-          skills: normalizedCandidate.skills,
-          profileScore: normalizedCandidate.profileScore,
-          yearsExperience: normalizedCandidate.yearsExperience,
-          email: normalizeString(profile.email),
-          resumeFilename: normalizeString(row.filename),
-          latestJobTitle: normalizeString(row.job_title),
           skills,
           profileScore,
           yearsExperience,
+          email: normalizeString(profile.email),
+          resumeFilename: normalizeString(row.filename),
+          latestJobTitle: normalizeString(row.job_title),
           topSkills,
           tags,
           parseStatus: normalizeString(row.parse_status),
@@ -443,6 +443,17 @@ router.get('/directory', requireAuth, async (req, res) => {
                 date: latestAnalysisDate,
               }
             : null,
+          recruiter: {
+            headline: normalizeString(profile.headline),
+            currentTitle: normalizeString(profile.current_title) || normalizeString(profile.title),
+            currentCompany: normalizeString(profile.current_company) || normalizeString(profile.company),
+            location: normalizeString(profile.location),
+            phone: normalizeString(profile.phone),
+            linkedinUrl: normalizeString(profile.linkedin_url) || normalizeString(profile.linkedin),
+            portfolioUrl: normalizeString(profile.portfolio_url) || normalizeString(profile.portfolio),
+            workAuthorization: normalizeString(profile.work_authorization),
+            visaStatus: normalizeString(profile.visa_status),
+          },
           dataCompleteness: {
             profile: Object.keys(profile).length > 0,
             email: Boolean(normalizeString(profile.email)),
@@ -501,9 +512,17 @@ router.get('/directory', requireAuth, async (req, res) => {
         return true
       })
 
+    const page = normalizeNumberFilter(req.query.page)
+    const pageSize = normalizeNumberFilter(req.query.pageSize)
+
     return res.json({
       candidates: profiles,
       total: profiles.length,
+      meta: {
+        totalCount: profiles.length,
+        page,
+        pageSize,
+      },
       filtersApplied: {
         ...filters,
         sourceJobId: filters.sourceJobId || null,
