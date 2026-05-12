@@ -198,11 +198,33 @@ function dedupeTextItems(items, blocked = []) {
 
 
 function resolveResumeFileType(candidate) {
-  const rawType = toDisplayText(candidate?.file_type || candidate?.fileType || candidate?.mime_type || candidate?.mimeType, '').trim()
-  if (!rawType) return 'Unknown file type'
+  const rawType = toDisplayText(candidate?.file_type || candidate?.fileType || candidate?.mime_type || candidate?.mimeType, '').trim().toLowerCase()
   if (rawType === 'application/pdf') return 'PDF'
   if (rawType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
-  return rawType
+  if (rawType === 'application/msword') return 'DOC'
+  if (rawType === 'text/plain') return 'TXT'
+  if (rawType === 'text/rtf' || rawType === 'application/rtf') return 'RTF'
+  if (rawType) return rawType.toUpperCase()
+
+  const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
+  const extension = String(resumeFilename || '').trim().split('.').pop()?.toLowerCase()
+  if (extension === 'pdf') return 'PDF'
+  if (extension === 'docx') return 'DOCX'
+  if (extension === 'doc') return 'DOC'
+  if (extension === 'txt') return 'TXT'
+  if (extension === 'rtf') return 'RTF'
+  if (extension) return extension.toUpperCase()
+
+  return 'File'
+}
+
+function formatResumeSize(candidate) {
+  const rawSize = candidate?.file_size ?? candidate?.fileSize ?? candidate?.resume_size ?? candidate?.resumeSize
+  const size = Number(rawSize)
+  if (!Number.isFinite(size) || size <= 0) return null
+  if (size < 1024) return `${size} B`
+  if (size < 1024 ** 2) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 ** 2)).toFixed(1)} MB`
 }
 
 function deriveDecisionVerdict(candidate, score) {
@@ -1116,14 +1138,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           ? normalizeTextList(candidate.strengths)
           : Array.isArray(candidate.achievements)
             ? normalizeTextList(candidate.achievements).slice(0, 3)
-            : [])
+            : []).slice(0, 3)
         const candidateConsiderations = dedupeTextItems(normalizeTextList(candidate.considerations))
         const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
         const matchedSkills = dedupeTextItems(ensureTextList(candidate?.matchedSkills || candidate?.matched_skills, 'No confirmed matched skills were detected.'))
         const missingSkills = dedupeTextItems(ensureTextList(candidate?.missingSkills || candidate?.missing_skills, 'No explicit skill gaps were detected.'), matchedSkills)
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
-        const uncertaintyItems = candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
+        const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']).slice(0, 3)
         const decisionVerdict = deriveDecisionVerdict(candidate, score)
         const recommendedAction = deriveRecommendedAction(candidate, score)
         const probePool = dedupeTextItems([
@@ -1134,6 +1156,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const interviewProbes = probePool.slice(0, 3)
         const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
         const resumeFileType = resolveResumeFileType(candidate)
+        const resumeFileSize = formatResumeSize(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
         const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
         const openResumePath = candidateResumeId ? `${API_BASE}/resumes/${candidateResumeId}/view` : null
@@ -1173,8 +1196,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             </div>
             <div className="dd-body">
               <div className="dd-col"><div className="dd-col-label">AI verdict</div><p className="dd-summary">{decisionVerdict}</p><div className="dd-col-label dd-col-label--mt-16">Recommended action</div><div className="dd-analysis-box dd-analysis-box--green"><div className="dd-analysis-item">{recommendedAction}</div></div><div className="dd-col-label dd-col-label--mt-16">Interview probes</div><div className="dd-analysis-box dd-analysis-box--amber">{interviewProbes.length > 0 ? interviewProbes.map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} aria-hidden="true" />{item}</div>) : <div className="dd-analysis-item dd-probe-item"><AlertCircle size={14} aria-hidden="true" />No verified probe prompts available from current profile data.</div>}</div><div className="dd-col-label dd-col-label--mt-16">Key facts</div><div className="dd-key-facts-grid">{keyFacts.map((fact, idx) => <div className="dd-key-fact-card" key={`${candidate._bulkKey}-fact-${idx}`}><div className="dd-key-fact-label">{fact.label}</div><div className="dd-key-fact-value">{fact.value}</div></div>)}</div><div className="dd-col-label dd-col-label--mt-16">Tags</div><div className="dd-top-skills">{visibleTags.length > 0 ? visibleTags.map((tag) => <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>) : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}</div></div>
-              <div className="dd-col"><div className="dd-col-label">Fit breakdown</div><div className="dd-analysis-box dd-analysis-box--green">{matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Missing requirements</div><div className="dd-analysis-box dd-analysis-box--amber">{missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Resume file</div><div className="dd-analysis-box"><div className="dd-analysis-item"><strong>{resumeFilename}</strong></div><div className="dd-analysis-item">{resumeFileType}</div></div></div>
-              <div className="dd-col"><details className="dd-details"><summary>Expandable AI details</summary><div className="dd-col-label dd-col-label--mt-14">Reasoning</div><p className="dd-summary">{reasoningText}</p><div className="dd-col-label dd-col-label--mt-14">Evidence</div><div className="dd-analysis-box">{evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Strengths</div><div className="dd-analysis-box">{candidateStrengths.length > 0 ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>) : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}</div><div className="dd-col-label dd-col-label--mt-14">Uncertainty</div><div className="dd-analysis-box dd-analysis-box--amber">{uncertaintyItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>)}</div></details></div>
+              <div className="dd-col"><div className="dd-col-label">Fit breakdown</div><div className="dd-analysis-box dd-analysis-box--green">{matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Missing requirements</div><div className="dd-analysis-box dd-analysis-box--amber">{missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Resume file</div><div className="dd-analysis-box"><div className="dd-analysis-item"><FileText size={14} aria-hidden="true" /><strong>{resumeFilename}</strong></div><div className="dd-analysis-item">{resumeFileType}{resumeFileSize ? ` · ${resumeFileSize}` : ''}</div>{openResumePath ? <div className="dd-analysis-item"><a href={openResumePath} target="_blank" rel="noopener noreferrer">Open resume</a></div> : <div className="dd-analysis-item">Open unavailable (missing resume ID)</div>}</div></div>
+              <div className="dd-col"><details className="dd-details"><summary>Expandable AI details</summary><div className="dd-col-label dd-col-label--mt-14">Reasoning</div><p className="dd-summary">{reasoningText}</p><div className="dd-col-label dd-col-label--mt-14">Evidence</div><div className="dd-analysis-box">{evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Strengths</div><div className="dd-analysis-box">{candidateStrengths.length > 0 ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}><UserRoundCheck size={14} aria-hidden="true" />{strength}</div>) : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}</div><div className="dd-col-label dd-col-label--mt-14">Uncertainty</div><div className="dd-analysis-box dd-analysis-box--amber">{uncertaintyItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}><CircleHelp size={14} aria-hidden="true" />{item}</div>)}</div></details></div>
             </div>
           </div>
         )
