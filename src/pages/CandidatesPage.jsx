@@ -292,7 +292,8 @@ export default function CandidatesPage() {
             <p><strong>Tags:</strong> {(candidate.tags || []).join(', ') || 'No tags'}</p>
             <p><strong>Analysis:</strong> {formatDate(candidate.sourceUpdatedAt)}</p>
             <p><strong>Job:</strong> {candidate.associatedJob?.title || 'No linked job description'}</p>
-            <a href={`/candidates/${candidate.resumeId}`}>View profile</a>
+            <a href={`${API_BASE}/resumes/${candidate.resumeId}/view`} target="_blank" rel="noopener noreferrer">Open resume</a>
+            <a href={`/candidates/${candidate.resumeId}`}>Full profile</a>
           </article>
         ))}
       </section>
