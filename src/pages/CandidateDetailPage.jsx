@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import '../styles/candidates-directory.css'
 
@@ -17,6 +17,7 @@ export default function CandidateDetailPage({ pathname }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [candidate, setCandidate] = useState(null)
+  const [isOpeningResume, setIsOpeningResume] = useState(false)
 
   const resumeId = useMemo(() => pathname.replace('/candidates/', '').trim(), [pathname])
 
@@ -60,6 +61,42 @@ export default function CandidateDetailPage({ pathname }) {
     return () => controller.abort()
   }, [resumeId])
 
+
+  const handleOpenResume = useCallback(async () => {
+    if (!resumeId || isOpeningResume) {
+      return
+    }
+
+    try {
+      setIsOpeningResume(true)
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+      const response = await fetch(`${API_BASE}/resumes/${resumeId}/view`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'Unable to open resume')
+      }
+
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const openedWindow = window.open(objectUrl, '_blank', 'noopener,noreferrer')
+
+      if (!openedWindow) {
+        throw new Error('Popup was blocked. Please allow popups and try again.')
+      }
+
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (openError) {
+      setError(openError.message || 'Unable to open resume')
+    } finally {
+      setIsOpeningResume(false)
+    }
+  }, [isOpeningResume, resumeId])
+
   if (isLoading) {
     return <main className="candidates-directory"><p className="candidates-directory__status">Loading profile…</p></main>
   }
@@ -75,7 +112,7 @@ export default function CandidateDetailPage({ pathname }) {
   return (
     <main className="candidates-directory">
       <a href="/candidates">← Back to candidates</a>
-      <p><a href={`${API_BASE}/resumes/${resumeId}/view`} target="_blank" rel="noopener noreferrer">Open resume</a> · <span>PDFs open in browser. Word files may download.</span></p>
+      <p><button type="button" onClick={handleOpenResume} disabled={isOpeningResume}>{isOpeningResume ? 'Opening resume…' : 'Open resume'}</button> · <span>PDFs open in browser. Word files may download.</span></p>
       <h1>{candidate.fields?.name || 'Candidate profile'}</h1>
       <p>{candidate.fields?.summary || 'No summary provided.'}</p>
       <ul>
