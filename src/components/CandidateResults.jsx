@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { BookmarkPlus, Briefcase, CalendarDays, ChevronLeft, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -1126,15 +1126,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         return (
           <div id="detail-drawer" className="detail-drawer">
             <div className="dd-header">
-              <div className="dd-avatar">{initials || 'NA'}</div>
-              <div className="dd-header-info"><div className="dd-name">{toDisplayText(candidate.name)}</div><div className="dd-subtitle">{[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}</div></div>
+              <div className="dd-header-identity">
+                <div className="dd-avatar">{initials || 'NA'}</div>
+                <div className="dd-header-info">
+                  <div className="dd-name">{toDisplayText(candidate.name)}</div>
+                  <div className="dd-meta-row">
+                    <span className="dd-meta-pill"><Briefcase size={14} aria-hidden="true" />{toDisplayText(candidate.current_title, 'Role unavailable')}</span>
+                    <span className="dd-meta-pill"><Clock3 size={14} aria-hidden="true" />{resolveCandidateExperience(candidate)} yrs</span>
+                    <span className="dd-meta-pill"><MapPin size={14} aria-hidden="true" />{toDisplayText(candidate.location, 'Location unavailable')}</span>
+                    <span className="dd-meta-pill"><UserRoundCheck size={14} aria-hidden="true" />{toDisplayText(candidate.seniority || candidate.level, 'Seniority not specified')}</span>
+                  </div>
+                </div>
+              </div>
               {displayScore != null && <div className={`dd-score dd-score--${tier}`}>{displayScore}<span>/10</span></div>}
               <div className="dd-header-actions">
-                {fullProfilePath ? <a className="dd-btn-primary" href={fullProfilePath}>View profile</a> : <button className="dd-btn-primary" type="button" disabled>View profile</button>}
-                {openResumePath ? <a className="dd-btn-ghost" href={openResumePath} target="_blank" rel="noopener noreferrer" title="PDFs open in browser. Word files may download.">Open resume</a> : null}
-                <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
+                {fullProfilePath ? <a className="dd-btn-primary" href={fullProfilePath}><CalendarDays size={15} aria-hidden="true" />Schedule interview</a> : <button className="dd-btn-primary" type="button" disabled><CalendarDays size={15} aria-hidden="true" />Schedule interview</button>}
+                {openResumePath ? <a className="dd-icon-btn" href={openResumePath} target="_blank" rel="noopener noreferrer" aria-label="Open resume" title="Open resume"><FileText size={16} aria-hidden="true" /></a> : null}
+                <button className="dd-icon-btn" type="button" onClick={() => addCandidateToShortlist(candidate)} aria-label="Add to shortlist" title="Add to shortlist"><BookmarkPlus size={16} aria-hidden="true" /></button>
               </div>
-              <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
+              <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details" title="Close"><X size={16} aria-hidden="true" /></button>
             </div>
             <div className="dd-body">
               <div className="dd-col"><div className="dd-col-label">Decision summary</div><p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p><div className="dd-col-label dd-col-label--mt-16">Recommended action</div><div className="dd-analysis-box dd-analysis-box--green">{nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-16">Tags</div><div className="dd-top-skills">{visibleTags.length > 0 ? visibleTags.map((tag) => <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>) : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}</div></div>
