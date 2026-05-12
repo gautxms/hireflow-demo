@@ -1130,9 +1130,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="dd-header-info"><div className="dd-name">{toDisplayText(candidate.name)}</div><div className="dd-subtitle">{[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}</div></div>
               {displayScore != null && <div className={`dd-score dd-score--${tier}`}>{displayScore}<span>/10</span></div>}
               <div className="dd-header-actions">
-                <button className="dd-btn-primary" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
-                {openResumePath ? <a className="dd-btn-ghost" href={openResumePath} target="_blank" rel="noopener noreferrer" title="PDFs open in browser. Word files may download.">Open resume</a> : <button className="dd-btn-ghost" type="button" disabled>Open resume</button>}
-                {fullProfilePath ? <a className="dd-btn-ghost" href={fullProfilePath}>Full profile</a> : null}
+                {fullProfilePath ? <a className="dd-btn-primary" href={fullProfilePath}>View profile</a> : <button className="dd-btn-primary" type="button" disabled>View profile</button>}
+                {openResumePath ? <a className="dd-btn-ghost" href={openResumePath} target="_blank" rel="noopener noreferrer" title="PDFs open in browser. Word files may download.">Open resume</a> : null}
+                <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
               </div>
               <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
             </div>
