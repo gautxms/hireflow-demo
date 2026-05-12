@@ -389,3 +389,97 @@ export function toSafeScore(value, fallback = 0) {
 
   return Math.max(0, Math.min(100, parsed))
 }
+
+function firstDefined(values = []) {
+  for (const value of values) {
+    if (value !== null && value !== undefined) {
+      return value
+    }
+  }
+  return undefined
+}
+
+export function resolveCandidateBasics(candidate = {}) {
+  const title = toDisplayText(firstDefined([candidate?.title, candidate?.role, candidate?.headline]), 'N/A')
+  const location = toDisplayText(firstDefined([candidate?.location, candidate?.city, candidate?.region]), 'N/A')
+  const seniority = toDisplayText(firstDefined([candidate?.seniority, candidate?.level]), 'N/A')
+  const education = toDisplayText(firstDefined([candidate?.education, candidate?.highestEducation]), 'N/A')
+
+  const totalExperienceYears = Number(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
+  const experienceYears = Number.isFinite(totalExperienceYears)
+    ? totalExperienceYears
+    : (() => {
+      const parsed = String(firstDefined([candidate?.experience, '']) || '').match(/(\d+(?:\.\d+)?)/)
+      return parsed ? Number(parsed[1]) : null
+    })()
+
+  return {
+    title,
+    location,
+    seniority,
+    education,
+    experienceYears,
+  }
+}
+
+export function resolveCandidateScoring(candidate = {}) {
+  const score = resolveActiveCandidateScore(candidate)
+  const breakdown = candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object' ? candidate.scoreBreakdown : null
+  const hasBreakdown = Boolean(breakdown && Object.values(breakdown).some((value) => Number.isFinite(Number(value))))
+
+  return {
+    score,
+    scoreAvailable: score != null,
+    scoreBreakdown: hasBreakdown ? breakdown : null,
+    scoreBreakdownAvailable: hasBreakdown,
+    scoreBreakdownProvenance: hasBreakdown ? 'analysis_payload' : 'unavailable',
+  }
+}
+
+export function resolveCandidateFit(candidate = {}) {
+  const fit = candidate?.fitAssessment && typeof candidate.fitAssessment === 'object' ? candidate.fitAssessment : null
+  const verdict = toDisplayText(firstDefined([candidate?.verdict, fit?.verdict, candidate?.action]), 'N/A')
+  const probes = Array.isArray(candidate?.probes) ? candidate.probes.map((entry) => toDisplayText(entry, '')).filter(Boolean) : []
+
+  return {
+    verdict,
+    action: toDisplayText(firstDefined([candidate?.action, fit?.action]), 'N/A'),
+    probes,
+    fitAssessment: fit,
+    fitAssessmentAvailable: Boolean(fit),
+    fitAssessmentProvenance: fit ? 'analysis_payload' : 'unavailable',
+  }
+}
+
+export function resolveCandidateSkills(candidate = {}) {
+  const matchedSkills = Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []
+  const relevantSkills = parseSkillList(firstDefined([candidate?.top_skills, candidate?.skills_structured, candidate?.skills]))
+  const skillGaps = Array.isArray(candidate?.skillGaps) ? candidate.skillGaps : []
+
+  return {
+    matchedSkills,
+    relevantSkills,
+    skillGaps,
+    matchedSkillsAvailable: matchedSkills.length > 0,
+    relevantSkillsAvailable: relevantSkills.length > 0,
+    skillGapAvailable: skillGaps.length > 0,
+    matchedSkillsProvenance: matchedSkills.length > 0 ? 'analysis_payload' : 'unavailable',
+  }
+}
+
+export function resolveCandidateResumeMetadata(candidate = {}) {
+  const resumeUrl = toDisplayText(firstDefined([candidate?.resumeUrl, candidate?.resume_url, candidate?.url]), '')
+  const filename = toDisplayText(firstDefined([
+    candidate?.sourceFilename,
+    candidate?.originalFilename,
+    candidate?.original_filename,
+    candidate?.resume_filename,
+    candidate?.filename,
+  ]), 'Resume file')
+
+  return {
+    resumeUrl: resumeUrl || '',
+    resumeUrlAvailable: Boolean(resumeUrl),
+    resumeFilename: filename,
+  }
+}

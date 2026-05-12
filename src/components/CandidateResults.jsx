@@ -10,7 +10,9 @@ import {
   normalizeSortBy,
   paginateCandidates,
   resolveActiveCandidateScore,
+  resolveCandidateBasics,
   resolveCandidateKey,
+  resolveCandidateResumeMetadata,
   resolveCandidateResumeUuid,
   toDisplayText,
 } from './candidateResultsState'
@@ -69,22 +71,9 @@ function formatSkillLabel(skill) {
   return skill
 }
 
-function parseYears(experience) {
-  if (typeof experience === 'number' && Number.isFinite(experience)) {
-    return experience
-  }
-
-  const match = String(experience || '').match(/(\d+(?:\.\d+)?)/)
-  return match ? Number(match[1]) : 0
-}
-
-
 function resolveCandidateExperience(candidate = {}) {
-  const total = Number(candidate?.totalExperienceYears)
-  if (Number.isFinite(total)) return total
-  const legacy = Number(candidate?.years_experience ?? candidate?.experience_years)
-  if (Number.isFinite(legacy)) return legacy
-  return parseYears(candidate?.experience)
+  const basics = resolveCandidateBasics(candidate)
+  return Number.isFinite(basics.experienceYears) ? basics.experienceYears : 0
 }
 
 function deriveExperienceEntries(candidate) {
@@ -207,19 +196,6 @@ function dedupeTextItems(items, blocked = []) {
     })
 }
 
-function resolveResumeDisplayFilename(candidate) {
-  const preferred = [
-    candidate?.sourceFilename,
-    candidate?.originalFilename,
-    candidate?.original_filename,
-    candidate?.resume_filename,
-    candidate?.filename,
-  ]
-    .map((value) => toDisplayText(value, '').trim())
-    .find(Boolean)
-
-  return preferred || 'Resume file'
-}
 
 function resolveResumeFileType(candidate) {
   const rawType = toDisplayText(candidate?.file_type || candidate?.fileType || candidate?.mime_type || candidate?.mimeType, '').trim()
@@ -1113,7 +1089,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
         const nextActions = dedupeTextItems(ensureTextList(candidate?.next_action || candidate?.next_actions || candidate?.recommendation, 'Schedule a recruiter screen to validate fit and open questions.'))
-        const resumeFilename = resolveResumeDisplayFilename(candidate)
+        const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
         const resumeFileType = resolveResumeFileType(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
         const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
