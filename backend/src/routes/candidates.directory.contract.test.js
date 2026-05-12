@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken'
 import candidatesRouter from './candidates.js'
 import { pool } from '../db/client.js'
 import * as candidateProfilesService from '../services/candidateProfilesService.js'
+import { once } from 'node:events'
 
 function buildApp() {
   const app = express()
@@ -133,6 +134,10 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
 
   const app = buildApp()
   const server = app.listen(0)
+  t.after(async () => {
+    server.close()
+    await once(server, 'close')
+  })
   const port = server.address().port
 
   const allResponse = await fetch(`http://127.0.0.1:${port}/candidates/directory`, {
@@ -178,7 +183,6 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
     headers: authHeader(42),
   })
   const filteredPayload = await filteredResponse.json()
-  server.close()
 
   assert.equal(filteredResponse.status, 200)
   assert.equal(filteredPayload.total, 0)
