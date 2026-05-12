@@ -356,6 +356,8 @@ router.get('/directory', requireAuth, async (req, res) => {
       scoreMax: normalizeNumberFilter(req.query.scoreMax),
       sourceJobId: normalizeString(req.query.sourceJobId),
       sourceAnalysisId: normalizeString(req.query.sourceAnalysisId),
+      search: normalizeString(req.query.search).toLowerCase(),
+      job: normalizeString(req.query.job).toLowerCase(),
     }
 
     const result = await pool.query(
@@ -471,6 +473,35 @@ router.get('/directory', requireAuth, async (req, res) => {
         }
       })
       .filter((entry) => {
+        if (filters.search) {
+          const searchHaystack = [
+            entry.name,
+            entry.resumeFilename,
+            entry.email,
+            entry.recruiter?.headline,
+            entry.recruiter?.currentTitle,
+            entry.recruiter?.currentCompany,
+            ...entry.skills,
+            ...entry.topSkills,
+          ]
+            .map((value) => normalizeString(value).toLowerCase())
+            .filter(Boolean)
+
+          if (!searchHaystack.some((value) => value.includes(filters.search))) {
+            return false
+          }
+        }
+
+        if (filters.job) {
+          const jobHaystack = [entry.associatedJob?.title, entry.latestJobTitle]
+            .map((value) => normalizeString(value).toLowerCase())
+            .filter(Boolean)
+
+          if (!jobHaystack.some((value) => value.includes(filters.job))) {
+            return false
+          }
+        }
+
         if (filters.skills.length > 0) {
           const candidateSkills = entry.skills.map((skill) => skill.toLowerCase())
           if (!filters.skills.some((skill) => candidateSkills.includes(skill))) {
