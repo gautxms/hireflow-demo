@@ -318,11 +318,31 @@ router.get('/directory', requireAuth, async (req, res) => {
               r.profile_score,
               r.years_experience,
               r.job_description_id,
+              r.parse_status,
+              r.analysis_id AS resume_analysis_id,
               jd.title AS job_title,
+              latest_analysis.id AS latest_analysis_id,
+              latest_analysis.name AS latest_analysis_name,
+              latest_analysis.created_at AS latest_analysis_created_at,
+              latest_analysis.completed_at AS latest_analysis_completed_at,
+              latest_analysis.status AS latest_analysis_status,
               COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
        FROM candidate_profiles cp
        INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
        LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
+       LEFT JOIN LATERAL (
+         SELECT a.id,
+                a.name,
+                a.created_at,
+                a.completed_at,
+                a.status
+         FROM analysis_items ai
+         INNER JOIN analyses a ON a.id = ai.analysis_id
+         WHERE ai.resume_id = cp.resume_id
+           AND a.user_id = cp.user_id
+         ORDER BY COALESCE(a.completed_at, a.created_at) DESC, a.created_at DESC
+         LIMIT 1
+       ) latest_analysis ON TRUE
        LEFT JOIN LATERAL (
          SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
          FROM candidate_tags ct
@@ -341,17 +361,46 @@ router.get('/directory', requireAuth, async (req, res) => {
         const profileScore = normalizeNullableNumber(profile.profile_score) ?? normalizeNullableNumber(row.profile_score)
         const yearsExperience = normalizeNullableNumber(profile.years_experience) ?? normalizeNullableNumber(row.years_experience)
         const tags = normalizeStringArray(row.tags)
+        const topSkills = normalizeStringArray(profile.top_skills).length > 0
+          ? normalizeStringArray(profile.top_skills).slice(0, 5)
+          : skills.slice(0, 5)
+
+        const latestAnalysisId = normalizeString(row.latest_analysis_id) || normalizeString(row.resume_analysis_id)
+        const latestAnalysisName = normalizeString(row.latest_analysis_name)
+        const latestAnalysisDate = row.latest_analysis_completed_at || row.latest_analysis_created_at || null
 
         return {
           resumeId: String(row.resume_id),
+          candidateId: String(row.resume_id),
           profile,
           name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
+          email: normalizeString(profile.email),
+          resumeFilename: normalizeString(row.filename),
+          latestJobTitle: normalizeString(row.job_title),
           skills,
           profileScore,
           yearsExperience,
+          topSkills,
           tags,
+          parseStatus: normalizeString(row.parse_status),
+          analysisStatus: normalizeString(row.latest_analysis_status),
           sourceParseJobId: row.source_parse_job_id || null,
           sourceUpdatedAt: row.source_updated_at,
+          latestAnalysis: latestAnalysisId
+            ? {
+                id: latestAnalysisId,
+                name: latestAnalysisName,
+                date: latestAnalysisDate,
+              }
+            : null,
+          dataCompleteness: {
+            profile: Object.keys(profile).length > 0,
+            email: Boolean(normalizeString(profile.email)),
+            latestAnalysis: Boolean(latestAnalysisId),
+            parseStatus: Boolean(normalizeString(row.parse_status)),
+            analysisStatus: Boolean(normalizeString(row.latest_analysis_status)),
+            fallbackSource: Object.keys(profile).length > 0 ? 'candidate_profiles.profile' : 'resumes',
+          },
           associatedJob: row.job_description_id
             ? {
                 id: String(row.job_description_id),
