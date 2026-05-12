@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { normalizeCandidateExperience } from '../utils/experienceNormalization.js'
 
 const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -33,63 +34,15 @@ function sanitizeQueryValue(value) {
   return String(value)
 }
 
-function parseExperienceToYears(experience) {
-  if (!experience) {
-    return 0
-  }
-
-  if (Array.isArray(experience)) {
-    return experience.reduce((total, entry) => {
-      const durationRaw = entry?.duration
-      if (durationRaw !== undefined && durationRaw !== null && durationRaw !== '') {
-        const durationMatch = String(durationRaw).match(/(\d+(?:\.\d+)?)/)
-        return total + (durationMatch ? Number(durationMatch[1]) : 0)
-      }
-
-      const startDateRaw = entry?.startDate ?? entry?.start_date
-      const endDateRaw = entry?.endDate ?? entry?.end_date
-      const startTimestamp = Date.parse(String(startDateRaw || ''))
-      const endTimestamp = Date.parse(String(endDateRaw || 'present'))
-
-      if (!Number.isNaN(startTimestamp) && !Number.isNaN(endTimestamp) && endTimestamp >= startTimestamp) {
-        const years = (endTimestamp - startTimestamp) / (1000 * 60 * 60 * 24 * 365.25)
-        return total + Math.max(0, years)
-      }
-
-      return total
-    }, 0)
-  }
-
-  const match = String(experience).match(/(\d+(?:\.\d+)?)/)
-  return match ? Number(match[1]) : 0
-}
-
-
 function resolveExperienceYears(candidate = {}) {
-  if (candidate?.totalExperienceYears !== null && candidate?.totalExperienceYears !== undefined && candidate?.totalExperienceYears !== '') {
-    const explicit = Number(candidate.totalExperienceYears)
-    if (Number.isFinite(explicit)) return explicit
-  }
-  const legacyRaw = candidate?.years_experience ?? candidate?.experience_years
-  if (legacyRaw !== null && legacyRaw !== undefined && legacyRaw !== '') {
-    const legacy = Number(legacyRaw)
-    if (Number.isFinite(legacy)) return legacy
-  }
-  return parseExperienceToYears(candidate?.experience)
+  const normalized = normalizeCandidateExperience(candidate)
+  if (normalized.totalExperienceYears !== null) return normalized.totalExperienceYears
+  if (normalized.relevantExperienceYears !== null) return normalized.relevantExperienceYears
+  return null
 }
 
 function normalizeExperienceContract(candidate = {}) {
-  const totalExperienceYears = Number.isFinite(Number(candidate?.totalExperienceYears))
-    ? Number(candidate.totalExperienceYears)
-    : (Number.isFinite(Number(candidate?.years_experience)) ? Number(candidate.years_experience) : null)
-  const relevantExperienceYears = Number.isFinite(Number(candidate?.relevantExperienceYears)) ? Number(candidate.relevantExperienceYears) : null
-  const experienceConfidence = ['high', 'medium', 'low', 'unknown'].includes(String(candidate?.experienceConfidence || '').toLowerCase())
-    ? String(candidate.experienceConfidence).toLowerCase() : 'unknown'
-  const experienceSource = ['resume', 'ai_inferred', 'unknown'].includes(String(candidate?.experienceSource || '').toLowerCase())
-    ? String(candidate.experienceSource).toLowerCase() : 'unknown'
-  const experienceEvidence = Array.isArray(candidate?.experienceEvidence) ? candidate.experienceEvidence.filter(Boolean).slice(0, 3) : []
-  const experienceLabel = normalizeText(candidate?.experienceLabel || (totalExperienceYears != null ? `${totalExperienceYears}+ years` : 'Unknown'), 'Unknown')
-  return { totalExperienceYears, relevantExperienceYears, experienceLabel, experienceConfidence, experienceEvidence, experienceSource }
+  return normalizeCandidateExperience(candidate)
 }
 function parseUploadedAt(candidate = {}) {
   const timestamp = Date.parse(String(candidate.uploadDate || candidate.uploadedAt || candidate.created_at || candidate.createdAt || ''))
@@ -374,7 +327,7 @@ export function applyCandidateFilters(candidates, {
       }
     }
 
-    const years = resolveExperienceYears(candidate)
+    const years = resolveExperienceYears(candidate) ?? 0
 
     if (experienceMin !== undefined && experienceMin !== null && experienceMin !== '' && years < Number(experienceMin)) {
       return false
@@ -402,8 +355,25 @@ export function sortCandidates(candidates, sortBy = 'score', sortOrder = 'desc')
       return a.location.localeCompare(b.location)
     }
 
-    if (normalizedSortBy === 'seniority' || normalizedSortBy === 'experience') {
+    if (normalizedSortBy === 'seniority') {
       return getSeniorityRank(a) - getSeniorityRank(b)
+    }
+
+    if (normalizedSortBy === 'experience') {
+      const aExp = normalizeCandidateExperience(a)
+      const bExp = normalizeCandidateExperience(b)
+      const aPrimary = aExp.totalExperienceYears
+      const bPrimary = bExp.totalExperienceYears
+      const aFallback = aExp.relevantExperienceYears
+      const bFallback = bExp.relevantExperienceYears
+      const aKnown = aPrimary !== null || aFallback !== null
+      const bKnown = bPrimary !== null || bFallback !== null
+      if (aKnown !== bKnown) return aKnown ? 1 : -1
+      const aValue = aPrimary ?? aFallback ?? -1
+      const bValue = bPrimary ?? bFallback ?? -1
+      if (aValue !== bValue) return aValue - bValue
+      if (a.score !== b.score) return a.score - b.score
+      return b.name.localeCompare(a.name)
     }
 
     if (normalizedSortBy === 'upload_date' || normalizedSortBy === 'uploadDate') {

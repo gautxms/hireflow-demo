@@ -48,6 +48,28 @@ test('sortCandidates supports upload date and name modes', () => {
   assert.deepEqual(uploadSorted.map((candidate) => candidate.name), ['Amy', 'Zoe'])
 })
 
+
+test('sortCandidates most experienced uses normalized years with stable tie-breakers and unknown last', () => {
+  const candidates = [
+    normalizeCandidate({ name: 'A', score: 80, summary: '3+ years of experience' }),
+    normalizeCandidate({ name: 'B', score: 70, summary: '8 years of experience' }),
+    normalizeCandidate({ name: 'C', score: 95, summary: '9 months of hands-on experience' }),
+    normalizeCandidate({ name: 'D', score: 60, summary: '5.2 years experience' }),
+    normalizeCandidate({ name: 'E', score: 99, summary: 'experienced business analyst' }),
+  ]
+  const sorted = sortCandidates(candidates, 'experience', 'desc')
+  assert.deepEqual(sorted.map((candidate) => candidate.name), ['B', 'D', 'A', 'C', 'E'])
+})
+
+test('sortCandidates experience tie-breakers use score then name', () => {
+  const candidates = [
+    normalizeCandidate({ name: 'Zed', score: 82, totalExperienceYears: 5 }),
+    normalizeCandidate({ name: 'Amy', score: 82, totalExperienceYears: 5 }),
+    normalizeCandidate({ name: 'Bob', score: 90, totalExperienceYears: 5 }),
+  ]
+  const sorted = sortCandidates(candidates, 'experience', 'desc')
+  assert.deepEqual(sorted.map((candidate) => candidate.name), ['Bob', 'Amy', 'Zed'])
+})
 test('sortCandidates treats match_score as score and keeps name ascending', () => {
   const candidates = [
     normalizeCandidate({ name: 'Mia', score: 81 }),
