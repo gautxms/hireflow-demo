@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookmarkPlus, Briefcase, CalendarDays, ChevronLeft, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
+import { AlertCircle, BookmarkPlus, Briefcase, CalendarDays, ChevronLeft, CircleHelp, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -203,6 +203,42 @@ function resolveResumeFileType(candidate) {
   if (rawType === 'application/pdf') return 'PDF'
   if (rawType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
   return rawType
+}
+
+function deriveDecisionVerdict(candidate, score) {
+  const title = toDisplayText(candidate?.current_title, 'this candidate')
+  const matchedSkills = dedupeTextItems(candidate?.matchedSkills || candidate?.matched_skills || [])
+  const missingSkills = dedupeTextItems(candidate?.missingSkills || candidate?.missing_skills || [])
+
+  if (score >= 80) {
+    return `${title} shows strong fit signals. Proceed if priorities align with the role scope.`
+  }
+  if (score >= 60) {
+    if (missingSkills.length > 0) {
+      return `${title} is a potential fit with a few open skill gaps that need interview validation.`
+    }
+    return `${title} is a possible fit; validate depth and recency of relevant experience in screening.`
+  }
+  if (matchedSkills.length > 0) {
+    return `${title} has limited fit against core requirements despite some relevant overlap.`
+  }
+  return `${title} has low demonstrated alignment with the core requirements in the current profile data.`
+}
+
+function deriveRecommendedAction(candidate, score) {
+  const missingSkills = dedupeTextItems(candidate?.missingSkills || candidate?.missing_skills || [])
+  const considerations = dedupeTextItems(candidate?.considerations || [])
+
+  if (score >= 80 && missingSkills.length === 0 && considerations.length === 0) {
+    return 'Move to panel interview and focus on role-specific impact examples.'
+  }
+  if (score >= 80) {
+    return `Advance to recruiter screen and verify: ${[...missingSkills, ...considerations][0] || 'remaining uncertainties'}.`
+  }
+  if (score >= 60) {
+    return `Run a targeted recruiter screen before advancing; confirm ${missingSkills[0] || considerations[0] || 'critical requirement coverage'}.`
+  }
+  return `Hold progression until core fit is validated; prioritize screening around ${missingSkills[0] || 'required role capabilities'}.`
 }
 function activeScore(candidate) {
   const resolved = resolveActiveCandidateScore(candidate)
@@ -1088,7 +1124,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']
-        const nextActions = dedupeTextItems(ensureTextList(candidate?.next_action || candidate?.next_actions || candidate?.recommendation, 'Schedule a recruiter screen to validate fit and open questions.'))
+        const decisionVerdict = deriveDecisionVerdict(candidate, score)
+        const recommendedAction = deriveRecommendedAction(candidate, score)
+        const probePool = dedupeTextItems([
+          ...candidateConsiderations,
+          ...missingSkills,
+          ...(Array.isArray(candidate?.questions) ? candidate.questions : []),
+        ])
+        const interviewProbes = probePool.slice(0, 3)
         const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
         const resumeFileType = resolveResumeFileType(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
@@ -1098,6 +1141,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const optimisticTags = candidateTags[candidate._bulkKey] || []
         const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
         const initials = String(candidate?.name || '').split(' ').map((part) => part[0] || '').join('').slice(0, 2).toUpperCase()
+        const keyFacts = [
+          { label: 'Match score', value: displayScore != null ? `${displayScore}/10` : 'N/A' },
+          { label: 'Experience', value: `${resolveCandidateExperience(candidate)} yrs` },
+          { label: 'Current role', value: toDisplayText(candidate.current_title, 'Unavailable') },
+          { label: 'Location', value: toDisplayText(candidate.location, 'Unavailable') },
+        ]
 
         return (
           <div id="detail-drawer" className="detail-drawer">
@@ -1123,58 +1172,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details" title="Close"><X size={16} aria-hidden="true" /></button>
             </div>
             <div className="dd-body">
-              <div className="dd-col dd-col--left">
-                <div className="dd-col-label">Decision summary</div>
-                <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
-                <div className="dd-col-label dd-col-label--mt-16">Recommended action</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-16">Tags</div>
-                <div className="dd-top-skills">
-                  {visibleTags.length > 0
-                    ? visibleTags.map((tag) => <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>)
-                    : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}
-                </div>
-              </div>
-
-              <div className="dd-col dd-col--center">
-                <div className="dd-col-label">Fit breakdown</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
-                <div className="dd-analysis-box">
-                  <div className="dd-analysis-item"><strong>{resumeFilename}</strong></div>
-                  <div className="dd-analysis-item">{resumeFileType}</div>
-                </div>
-              </div>
-
-              <div className="dd-col dd-col--right">
-                <details className="dd-details">
-                  <summary>Expandable AI details</summary>
-                  <div className="dd-col-label dd-col-label--mt-14">Reasoning</div>
-                  <p className="dd-summary">{reasoningText}</p>
-                  <div className="dd-col-label dd-col-label--mt-14">Evidence</div>
-                  <div className="dd-analysis-box">
-                    {evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
-                  </div>
-                  <div className="dd-col-label dd-col-label--mt-14">Strengths</div>
-                  <div className="dd-analysis-box">
-                    {candidateStrengths.length > 0
-                      ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>)
-                      : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-                  </div>
-                  <div className="dd-col-label dd-col-label--mt-14">Uncertainty</div>
-                  <div className="dd-analysis-box dd-analysis-box--amber">
-                    {uncertaintyItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>)}
-                  </div>
-                </details>
-              </div>
+              <div className="dd-col"><div className="dd-col-label">AI verdict</div><p className="dd-summary">{decisionVerdict}</p><div className="dd-col-label dd-col-label--mt-16">Recommended action</div><div className="dd-analysis-box dd-analysis-box--green"><div className="dd-analysis-item">{recommendedAction}</div></div><div className="dd-col-label dd-col-label--mt-16">Interview probes</div><div className="dd-analysis-box dd-analysis-box--amber">{interviewProbes.length > 0 ? interviewProbes.map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} aria-hidden="true" />{item}</div>) : <div className="dd-analysis-item dd-probe-item"><AlertCircle size={14} aria-hidden="true" />No verified probe prompts available from current profile data.</div>}</div><div className="dd-col-label dd-col-label--mt-16">Key facts</div><div className="dd-key-facts-grid">{keyFacts.map((fact, idx) => <div className="dd-key-fact-card" key={`${candidate._bulkKey}-fact-${idx}`}><div className="dd-key-fact-label">{fact.label}</div><div className="dd-key-fact-value">{fact.value}</div></div>)}</div><div className="dd-col-label dd-col-label--mt-16">Tags</div><div className="dd-top-skills">{visibleTags.length > 0 ? visibleTags.map((tag) => <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>) : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}</div></div>
+              <div className="dd-col"><div className="dd-col-label">Fit breakdown</div><div className="dd-analysis-box dd-analysis-box--green">{matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Missing requirements</div><div className="dd-analysis-box dd-analysis-box--amber">{missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Resume file</div><div className="dd-analysis-box"><div className="dd-analysis-item"><strong>{resumeFilename}</strong></div><div className="dd-analysis-item">{resumeFileType}</div></div></div>
+              <div className="dd-col"><details className="dd-details"><summary>Expandable AI details</summary><div className="dd-col-label dd-col-label--mt-14">Reasoning</div><p className="dd-summary">{reasoningText}</p><div className="dd-col-label dd-col-label--mt-14">Evidence</div><div className="dd-analysis-box">{evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Strengths</div><div className="dd-analysis-box">{candidateStrengths.length > 0 ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>) : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}</div><div className="dd-col-label dd-col-label--mt-14">Uncertainty</div><div className="dd-analysis-box dd-analysis-box--amber">{uncertaintyItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>)}</div></details></div>
             </div>
           </div>
         )
