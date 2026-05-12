@@ -66,25 +66,36 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
+function pickFirstValidNumber(...values) {
+  for (const value of values) {
+    const normalized = normalizeNullableNumber(value)
+    if (normalized !== null) {
+      return normalized
+    }
+  }
+
+  return null
+}
+
 function normalizeCandidateScoreExperienceAndSkills(profile, resumeRow = {}) {
   const candidateProfile = profile && typeof profile === 'object' ? profile : {}
 
-  const profileScore = normalizeNullableNumber(
-    candidateProfile.profile_score
-      ?? candidateProfile.profileScore
-      ?? candidateProfile.score
-      ?? candidateProfile.matchScore?.score
-      ?? candidateProfile.fit_assessment?.overall_fit_score
-      ?? candidateProfile.fitAssessment?.overallFitScore
-      ?? resumeRow.profile_score,
+  const profileScore = pickFirstValidNumber(
+    candidateProfile.profile_score,
+    candidateProfile.profileScore,
+    candidateProfile.score,
+    candidateProfile.matchScore?.score,
+    candidateProfile.fit_assessment?.overall_fit_score,
+    candidateProfile.fitAssessment?.overallFitScore,
+    resumeRow.profile_score,
   )
 
-  const yearsExperience = normalizeNullableNumber(
-    candidateProfile.years_experience
-      ?? candidateProfile.yearsExperience
-      ?? candidateProfile.totalExperienceYears
-      ?? candidateProfile.experience_years
-      ?? resumeRow.years_experience,
+  const yearsExperience = pickFirstValidNumber(
+    candidateProfile.years_experience,
+    candidateProfile.yearsExperience,
+    candidateProfile.totalExperienceYears,
+    candidateProfile.experience_years,
+    resumeRow.years_experience,
   )
 
   const structuredSkillsSource = candidateProfile.skills_structured
