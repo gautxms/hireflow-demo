@@ -1113,9 +1113,58 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
             </div>
             <div className="dd-body">
-              <div className="dd-col"><div className="dd-col-label">Decision summary</div><p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p><div className="dd-col-label dd-col-label--mt-16">Recommended action</div><div className="dd-analysis-box dd-analysis-box--green">{nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-16">Tags</div><div className="dd-top-skills">{visibleTags.length > 0 ? visibleTags.map((tag) => <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>) : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}</div></div>
-              <div className="dd-col"><div className="dd-col-label">Fit breakdown</div><div className="dd-analysis-box dd-analysis-box--green">{matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Missing requirements</div><div className="dd-analysis-box dd-analysis-box--amber">{missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Resume file</div><div className="dd-analysis-box"><div className="dd-analysis-item"><strong>{resumeFilename}</strong></div><div className="dd-analysis-item">{resumeFileType}</div></div></div>
-              <div className="dd-col"><details className="dd-details"><summary>Expandable AI details</summary><div className="dd-col-label dd-col-label--mt-14">Reasoning</div><p className="dd-summary">{reasoningText}</p><div className="dd-col-label dd-col-label--mt-14">Evidence</div><div className="dd-analysis-box">{evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}</div><div className="dd-col-label dd-col-label--mt-14">Strengths</div><div className="dd-analysis-box">{candidateStrengths.length > 0 ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>) : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}</div><div className="dd-col-label dd-col-label--mt-14">Uncertainty</div><div className="dd-analysis-box dd-analysis-box--amber">{uncertaintyItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>)}</div></details></div>
+              <div className="dd-col dd-col--left">
+                <div className="dd-col-label">Decision summary</div>
+                <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
+                <div className="dd-col-label dd-col-label--mt-16">Recommended action</div>
+                <div className="dd-analysis-box dd-analysis-box--green">
+                  {nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-16">Tags</div>
+                <div className="dd-top-skills">
+                  {visibleTags.length > 0
+                    ? visibleTags.map((tag) => <span className="dd-top-skill" key={`${candidate._bulkKey}-tag-${tag}`}>{tag}</span>)
+                    : <span className="dd-skill-more">{candidateResumeId ? 'No tags added yet.' : 'Tags unavailable (missing resume ID).'}</span>}
+                </div>
+              </div>
+
+              <div className="dd-col dd-col--center">
+                <div className="dd-col-label">Fit breakdown</div>
+                <div className="dd-analysis-box dd-analysis-box--green">
+                  {matchedSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-matched-${idx}`}>{item}</div>)}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
+                  {missingSkills.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</div>)}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
+                <div className="dd-analysis-box">
+                  <div className="dd-analysis-item"><strong>{resumeFilename}</strong></div>
+                  <div className="dd-analysis-item">{resumeFileType}</div>
+                </div>
+              </div>
+
+              <div className="dd-col dd-col--right">
+                <details className="dd-details">
+                  <summary>Expandable AI details</summary>
+                  <div className="dd-col-label dd-col-label--mt-14">Reasoning</div>
+                  <p className="dd-summary">{reasoningText}</p>
+                  <div className="dd-col-label dd-col-label--mt-14">Evidence</div>
+                  <div className="dd-analysis-box">
+                    {evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
+                  </div>
+                  <div className="dd-col-label dd-col-label--mt-14">Strengths</div>
+                  <div className="dd-analysis-box">
+                    {candidateStrengths.length > 0
+                      ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>)
+                      : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+                  </div>
+                  <div className="dd-col-label dd-col-label--mt-14">Uncertainty</div>
+                  <div className="dd-analysis-box dd-analysis-box--amber">
+                    {uncertaintyItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-uncertainty-${idx}`}>{item}</div>)}
+                  </div>
+                </details>
+              </div>
             </div>
           </div>
         )

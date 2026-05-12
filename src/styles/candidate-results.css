@@ -1470,15 +1470,27 @@
 }
 .dd-close:hover { color: #ffffff; }
 
-/* Drawer 3-column body */
+/* Drawer 3-column shell */
 .dd-body {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1.1fr);
+  grid-template-areas: "left center right";
   gap: 24px;
 }
-@media (max-width: 900px) { .dd-body { grid-template-columns: 1fr; } }
+@media (max-width: 1080px) {
+  .dd-body {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "left"
+      "center"
+      "right";
+  }
+}
 
 .dd-col { min-width: 0; }
+.dd-col--left { grid-area: left; }
+.dd-col--center { grid-area: center; }
+.dd-col--right { grid-area: right; }
 
 .dd-col-label {
   font-size: 10px;
