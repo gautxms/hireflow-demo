@@ -212,7 +212,7 @@ export default function CandidatesPage() {
       <section className="candidates-directory__filters" aria-label="Advanced candidate filters">{advancedFilterKeys.map(renderFilterField)}</section>
     </details>
 
-    {selectedCount > 0 && <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
+    {selectedCount > 0 && (<section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
       <span className="chip" aria-live="polite">{selectedCount} selected</span>
       <label className="candidates-directory__filter-field">
         <span>Shortlist</span>
@@ -223,7 +223,7 @@ export default function CandidatesPage() {
       </label>
         <button type="button" className="hf-btn hf-btn--primary" onClick={() => runBulkShortlistAction('add')} disabled={bulkActionsDisabled}>Add selected</button>
         <button type="button" className="hf-btn hf-btn--secondary" onClick={() => runBulkShortlistAction('remove')} disabled={bulkActionsDisabled}>Remove selected</button>
-    </section>
+    </section>)}
     {bulkFeedback.message && <p className={`candidates-directory__status candidates-directory__status--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</p>}
     {bulkFeedback.detail && <p className="candidates-directory__status candidates-directory__status--error" role="alert">{bulkFeedback.detail}</p>}
     {bulkFeedback.message && <div className={`candidates-directory__toast candidates-directory__toast--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</div>}
