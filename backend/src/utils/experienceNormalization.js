@@ -11,6 +11,30 @@ function roundYears(value) {
   return Math.round(value * 100) / 100
 }
 
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    const parsed = toFiniteNumber(value)
+    if (parsed !== null) return parsed
+  }
+  return null
+}
+
+function sumExperienceFromEntries(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return null
+  let sum = 0
+  let found = false
+
+  for (const entry of entries) {
+    const parsed = parseExperienceTextToYears(entry)
+    if (parsed !== null) {
+      sum += parsed
+      found = true
+    }
+  }
+
+  return found ? roundYears(sum) : null
+}
+
 export function parseExperienceTextToYears(input) {
   if (input === null || input === undefined) return null
   const text = String(input).trim().toLowerCase()
@@ -39,7 +63,7 @@ export function parseExperienceTextToYears(input) {
 }
 
 export function normalizeCandidateExperience(candidate = {}) {
-  const totalStructured = toFiniteNumber(candidate?.totalExperienceYears ?? candidate?.years_experience ?? candidate?.experience_years)
+  const totalStructured = firstFiniteNumber(candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years)
   const relevantStructured = toFiniteNumber(candidate?.relevantExperienceYears)
 
   let totalExperienceYears = totalStructured
@@ -49,8 +73,12 @@ export function normalizeCandidateExperience(candidate = {}) {
     : 'unknown'
 
   if (totalExperienceYears === null && relevantExperienceYears === null) {
-    const fallbackText = candidate?.experienceLabel || candidate?.experience || candidate?.summary || null
-    const parsed = parseExperienceTextToYears(fallbackText)
+    const parsedFromEntries = sumExperienceFromEntries(candidate?.experience)
+    const fallbackText = candidate?.experienceLabel
+      || (!Array.isArray(candidate?.experience) ? candidate?.experience : null)
+      || candidate?.summary
+      || null
+    const parsed = parsedFromEntries ?? parseExperienceTextToYears(fallbackText)
     if (parsed !== null) {
       totalExperienceYears = parsed
       experienceSource = 'legacy_text_fallback'

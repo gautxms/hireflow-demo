@@ -52,3 +52,21 @@ test('normalizeCandidateExperience uses structured fields first and legacy fallb
   assert.equal(fallback.experienceSource, 'legacy_text_fallback')
   assert.equal(fallback.experienceConfidence, 'low')
 })
+
+test('normalizeCandidateExperience falls back to legacy numeric fields when totalExperienceYears is invalid', () => {
+  const normalized = normalizeCandidateExperience({
+    totalExperienceYears: 'N/A',
+    years_experience: 7,
+  })
+
+  assert.equal(normalized.totalExperienceYears, 7)
+})
+
+test('normalizeCandidateExperience aggregates array-based legacy experience entries', () => {
+  const normalized = normalizeCandidateExperience({
+    experience: ['2 years', '3 years', '18 months'],
+  })
+
+  assert.equal(normalized.totalExperienceYears, 6.5)
+  assert.equal(normalized.experienceSource, 'legacy_text_fallback')
+})
