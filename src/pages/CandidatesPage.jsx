@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import '../styles/candidates-directory.css'
+import '../styles/ui-primitives.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -58,7 +59,7 @@ export default function CandidatesPage() {
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [selectedResumeIds, setSelectedResumeIds] = useState([])
-  const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkFeedback, setBulkFeedback] = useState({ type: 'info', message: '', detail: '' })
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
@@ -110,7 +111,9 @@ export default function CandidatesPage() {
         setShortlists(next)
         if (!selectedShortlistId && next[0]?.id) setSelectedShortlistId(next[0].id)
       } catch (loadError) {
-        if (loadError.name !== 'AbortError') setBulkStatus(loadError.message || 'Unable to load shortlists')
+        if (loadError.name !== 'AbortError') {
+          setBulkFeedback({ type: 'error', message: loadError.message || 'Unable to load shortlists', detail: '' })
+        }
       }
     }
     loadShortlists()
@@ -121,11 +124,17 @@ export default function CandidatesPage() {
     setSelectedResumeIds((current) => (current.includes(resumeId) ? current.filter((id) => id !== resumeId) : [...current, resumeId]))
   }
 
+  useEffect(() => {
+    if (!bulkFeedback.message) return undefined
+    const timeoutId = window.setTimeout(() => setBulkFeedback((current) => ({ ...current, message: '', detail: '' })), 4500)
+    return () => window.clearTimeout(timeoutId)
+  }, [bulkFeedback.message])
+
   const runBulkShortlistAction = async (mode) => {
-    if (!selectedShortlistId) return setBulkStatus('Select a shortlist first.')
-    if (!selectedCount) return setBulkStatus('Select at least one candidate to run a bulk action.')
+    if (!selectedShortlistId) return setBulkFeedback({ type: 'error', message: 'Select a shortlist first.', detail: '' })
+    if (!selectedCount) return setBulkFeedback({ type: 'error', message: 'Select at least one candidate to run a bulk action.', detail: '' })
     try {
-      setBulkStatus('')
+      setBulkFeedback({ type: 'info', message: '', detail: '' })
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
       const endpoint = mode === 'add' ? `${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch` : `${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`
       const response = await fetch(endpoint, {
@@ -136,10 +145,19 @@ export default function CandidatesPage() {
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Bulk shortlist action failed')
       const summary = payload?.summary || {}
-      setBulkStatus(mode === 'add' ? `Bulk add complete: ${summary.added || 0} added, ${summary.updated || 0} updated, ${summary.failed || 0} failed.` : `Bulk remove complete: ${summary.removed || 0} removed, ${summary.notPresent || 0} not present.`)
+      const isAdd = mode === 'add'
+      const message = isAdd
+        ? `Bulk add complete: ${summary.added || 0} added, ${summary.updated || 0} updated, ${summary.failed || 0} failed.`
+        : `Bulk remove complete: ${summary.removed || 0} removed, ${summary.notPresent || 0} not present.`
+      const summaryErrorDetail = Array.isArray(summary.errors) && summary.errors.length
+        ? `API summary errors: ${summary.errors.slice(0, 3).join('; ')}`
+        : ''
+      setBulkFeedback({ type: summary.failed > 0 ? 'error' : 'success', message, detail: summaryErrorDetail })
       setSelectedResumeIds([])
-    } catch (bulkError) { setBulkStatus(bulkError.message || 'Bulk shortlist action failed') }
+    } catch (bulkError) { setBulkFeedback({ type: 'error', message: bulkError.message || 'Bulk shortlist action failed', detail: '' }) }
   }
+
+  const bulkActionsDisabled = !selectedShortlistId || !selectedCount
 
   const renderFilterField = (key) => {
     const config = candidateFilterFieldConfig[key] || {}
@@ -189,16 +207,18 @@ export default function CandidatesPage() {
     <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
       <label className="candidates-directory__filter-field">
         <span>Shortlist</span>
-        <select value={selectedShortlistId} onChange={(event) => setSelectedShortlistId(event.target.value)}>
+        <select className="candidates-directory__shortlist-select" value={selectedShortlistId} onChange={(event) => setSelectedShortlistId(event.target.value)}>
           <option value="">Select shortlist</option>
           {shortlists.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.candidate_count || 0})</option>)}
         </select>
       </label>
-      <button type="button" onClick={() => runBulkShortlistAction('add')}>Add selected</button>
-      <button type="button" onClick={() => runBulkShortlistAction('remove')}>Remove selected</button>
+      <button type="button" className="hf-btn hf-btn--primary" onClick={() => runBulkShortlistAction('add')} disabled={bulkActionsDisabled}>Add selected</button>
+      <button type="button" className="hf-btn hf-btn--secondary" onClick={() => runBulkShortlistAction('remove')} disabled={bulkActionsDisabled}>Remove selected</button>
     </section>
 
-    {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
+    {bulkFeedback.message && <p className={`candidates-directory__status candidates-directory__status--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</p>}
+    {bulkFeedback.detail && <p className="candidates-directory__status candidates-directory__status--error" role="alert">{bulkFeedback.detail}</p>}
+    {bulkFeedback.message && <div className={`candidates-directory__toast candidates-directory__toast--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</div>}
     {error && <p className="candidates-directory__error">{error}</p>}
     {isLoading && <p className="candidates-directory__status">Loading candidates…</p>}
     {!isLoading && !error && candidates.length === 0 && <p className="candidates-directory__status">No candidates matched the current filters.</p>}
