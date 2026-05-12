@@ -14,6 +14,11 @@ import {
   resolveActiveCandidateScore,
   toDisplayText,
   toSafeScore,
+  resolveCandidateBasics,
+  resolveCandidateFit,
+  resolveCandidateResumeMetadata,
+  resolveCandidateScoring,
+  resolveCandidateSkills,
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
@@ -165,4 +170,21 @@ test('no-diff gate: buildCandidateRenderContract score-related fields are identi
       topSkills: modernContract.topSkills,
     },
   )
+})
+
+test('resolver bundle returns safe defaults and availability flags without throwing', () => {
+  const candidate = { skills: { tools_and_platforms: ['React'] }, scoreBreakdown: { overall: 82 } }
+  const basics = resolveCandidateBasics(candidate)
+  const scoring = resolveCandidateScoring(candidate)
+  const fit = resolveCandidateFit(candidate)
+  const skills = resolveCandidateSkills(candidate)
+  const resume = resolveCandidateResumeMetadata(candidate)
+
+  assert.equal(basics.title, 'N/A')
+  assert.equal(scoring.scoreBreakdownAvailable, true)
+  assert.equal(scoring.scoreBreakdownProvenance, 'analysis_payload')
+  assert.equal(fit.fitAssessmentAvailable, false)
+  assert.equal(skills.relevantSkillsAvailable, true)
+  assert.equal(skills.matchedSkillsAvailable, false)
+  assert.equal(resume.resumeUrlAvailable, false)
 })
