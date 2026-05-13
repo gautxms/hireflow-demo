@@ -1,4 +1,4 @@
-import { estimateExtractableText, isLikelyScannedPdf, runOcrWithCache } from '../services/ocrService.js'
+import { extractTextFromResume, isLikelyScannedPdf, runOcrWithCache } from '../services/ocrService.js'
 
 const SECTION_PATTERNS = {
   experience: /^(professional\s+)?experience|work\s+history|employment|internships?$/i,
@@ -312,7 +312,7 @@ export function shouldUseOcrFallback({ scannedPdf, extractionLength, aiConfidenc
 }
 
 export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer }) {
-  const extraction = estimateExtractableText(fileBuffer)
+  const extraction = await extractTextFromResume({ fileBuffer, mimeType })
   const aiConfidence = scoreTextConfidence(extraction.length, fileSize)
   const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
 

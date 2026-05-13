@@ -441,6 +441,8 @@ async function runParse(job) {
       filename,
       {
       jobDescriptionContext,
+      resumeId,
+      jobId: job.id,
       },
     )
     const aiResult = aiResponse?.result || {}
