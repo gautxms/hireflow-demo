@@ -149,6 +149,16 @@ function normalizeNumberFilter(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function summarizeSafeError(error) {
+  if (!error || typeof error !== 'object') {
+    return { message: 'Unknown sync error', code: null }
+  }
+
+  const code = typeof error.code === 'string' ? error.code : null
+  const message = normalizeString(error.message) || 'Unexpected sync error'
+  return { message, code }
+}
+
 function normalizeCandidateFromAnalysis(candidate, resumeId, fallbackName = 'resume') {
   const skillsStructured = normalizeStructuredSkills(candidate?.skills)
   const skillsFlat = flattenStructuredSkills(skillsStructured)
@@ -361,7 +371,18 @@ router.get('/profiles', requireAuth, async (req, res) => {
 
 router.get('/directory', requireAuth, async (req, res) => {
   try {
-    await syncCandidateProfilesForUser(req.userId)
+    // Endpoint contract note: profile sync is best-effort; on sync failures,
+    // continue serving directory results from existing persisted records when possible.
+    try {
+      await syncCandidateProfilesForUser(req.userId)
+    } catch (error) {
+      const safeError = summarizeSafeError(error)
+      console.error('[CandidatesDirectorySyncError]', {
+        userId: req.userId,
+        code: safeError.code,
+        message: safeError.message,
+      })
+    }
 
     const filters = {
       skills: parseStringList(req.query.skills).map((skill) => skill.toLowerCase()),
