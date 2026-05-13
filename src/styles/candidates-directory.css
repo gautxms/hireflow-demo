@@ -29,7 +29,7 @@
 }
 
 .candidates-directory a:hover {
-  color: var(--hf-lime-hover);
+  color: var(--color-accent-green-hover);
 }
 
 .candidates-directory a:focus-visible {
@@ -144,6 +144,26 @@
 .candidates-directory__table th { color: var(--color-text-secondary); font-size: var(--type-nav-size); }
 .candidate-select { display:flex; align-items:center; gap:.5rem; }
 .candidate-actions { display:flex; gap:.6rem; flex-wrap:wrap; }
+
+.candidate-actions a,
+.candidate-actions a:visited {
+  color: var(--color-accent-green);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+
+.candidate-actions a:hover {
+  color: var(--color-accent-green-hover);
+}
+
+.candidate-actions a:focus-visible {
+  color: var(--color-accent-green);
+  border-radius: var(--radius-interactive);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--color-focus-ring-inner);
+}
 .candidates-directory__cards { display:none; }
 .candidate-directory-card { border-top:1px solid var(--color-border); padding: .9rem; }
 .candidates-directory__status { color: var(--color-text-secondary); }
