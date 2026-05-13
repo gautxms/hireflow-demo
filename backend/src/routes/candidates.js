@@ -15,10 +15,26 @@ const router = Router()
 const DEFAULT_DIRECTORY_PAGE = 1
 const DEFAULT_DIRECTORY_PAGE_SIZE = 25
 const MAX_DIRECTORY_PAGE_SIZE = 100
+const PROFILE_SCORE_NUMERIC_SQL = `(
+  CASE
+    WHEN NULLIF(BTRIM(cp.profile->>'profile_score'), '') ~ '^[-+]?[0-9]*\.?[0-9]+$'
+      THEN NULLIF(BTRIM(cp.profile->>'profile_score'), '')::numeric
+    ELSE NULL
+  END
+)`
+
+const YEARS_EXPERIENCE_NUMERIC_SQL = `(
+  CASE
+    WHEN NULLIF(BTRIM(cp.profile->>'years_experience'), '') ~ '^[-+]?[0-9]*\.?[0-9]+$'
+      THEN NULLIF(BTRIM(cp.profile->>'years_experience'), '')::numeric
+    ELSE NULL
+  END
+)`
+
 const DIRECTORY_SORT_FIELDS = Object.freeze({
   recent: 'cp.source_updated_at',
-  score: "COALESCE((cp.profile->>'profile_score')::numeric, r.profile_score)",
-  experience: "COALESCE((cp.profile->>'years_experience')::numeric, r.years_experience)",
+  score: `COALESCE(${PROFILE_SCORE_NUMERIC_SQL}, r.profile_score)`,
+  experience: `COALESCE(${YEARS_EXPERIENCE_NUMERIC_SQL}, r.years_experience)`,
   name: "LOWER(COALESCE(NULLIF(cp.profile->>'name', ''), NULLIF(cp.profile->>'full_name', ''), r.filename, 'candidate'))",
 })
 
@@ -422,19 +438,19 @@ router.get('/directory', requireAuth, async (req, res) => {
     }
 
     if (filters.experienceMin !== null) {
-      whereClauses.push(`COALESCE((cp.profile->>'years_experience')::numeric, r.years_experience) >= ${addParam(filters.experienceMin)}`)
+      whereClauses.push(`COALESCE(${YEARS_EXPERIENCE_NUMERIC_SQL}, r.years_experience) >= ${addParam(filters.experienceMin)}`)
     }
 
     if (filters.experienceMax !== null) {
-      whereClauses.push(`COALESCE((cp.profile->>'years_experience')::numeric, r.years_experience) <= ${addParam(filters.experienceMax)}`)
+      whereClauses.push(`COALESCE(${YEARS_EXPERIENCE_NUMERIC_SQL}, r.years_experience) <= ${addParam(filters.experienceMax)}`)
     }
 
     if (filters.scoreMin !== null) {
-      whereClauses.push(`COALESCE((cp.profile->>'profile_score')::numeric, r.profile_score) >= ${addParam(filters.scoreMin)}`)
+      whereClauses.push(`COALESCE(${PROFILE_SCORE_NUMERIC_SQL}, r.profile_score) >= ${addParam(filters.scoreMin)}`)
     }
 
     if (filters.scoreMax !== null) {
-      whereClauses.push(`COALESCE((cp.profile->>'profile_score')::numeric, r.profile_score) <= ${addParam(filters.scoreMax)}`)
+      whereClauses.push(`COALESCE(${PROFILE_SCORE_NUMERIC_SQL}, r.profile_score) <= ${addParam(filters.scoreMax)}`)
     }
 
     if (filters.job) {
