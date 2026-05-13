@@ -66,3 +66,18 @@ test('normalizes skill contract fields with backward-compatible aliases', () => 
   assert.deepEqual(candidate.missingRequirements, ['Kubernetes'])
   assert.deepEqual(candidate.all_extracted_skills, ['React', 'Node.js', 'Kubernetes'])
 })
+
+
+test('preserves top-level missing requirements when fit_assessment is absent', () => {
+  const payload = normalizeCandidateResultsPayload({
+    candidates: [{
+      missing_requirements: ['GraphQL'],
+    }],
+  })
+
+  const [candidate] = payload.candidates
+  assert.deepEqual(candidate.missingRequirements, ['GraphQL'])
+  assert.deepEqual(candidate.missing_requirements, ['GraphQL'])
+  assert.deepEqual(candidate.fit_assessment.missing_requirements, ['GraphQL'])
+  assert.deepEqual(candidate.fit_assessment.missing, ['GraphQL'])
+})

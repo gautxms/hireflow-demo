@@ -4,7 +4,13 @@ function normalizeCandidate(candidate = {}) {
     : {}
 
   const matchedRequirements = Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : []
-  const missingRequirements = Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : []
+  const missingRequirements = Array.isArray(fitAssessment.missing_requirements)
+    ? fitAssessment.missing_requirements
+    : Array.isArray(candidate?.missingRequirements)
+      ? candidate.missingRequirements
+      : Array.isArray(candidate?.missing_requirements)
+        ? candidate.missing_requirements
+        : []
   const allExtractedSkills = Array.isArray(candidate?.allExtractedSkills)
     ? candidate.allExtractedSkills
     : Array.isArray(candidate?.all_extracted_skills)
