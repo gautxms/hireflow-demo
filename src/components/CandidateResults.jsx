@@ -1144,6 +1144,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']).slice(0, 3)
+        const integrityFlags = Array.isArray(candidate?.resumeIntegrityFlags) ? candidate.resumeIntegrityFlags : []
         const decisionVerdict = deriveDecisionVerdict(candidate, score)
         const recommendedAction = deriveRecommendedAction(candidate, score)
         const nextActions = ensureTextList(candidate?.next_steps || candidate?.recommended_actions, recommendedAction).slice(0, 3)
@@ -1273,6 +1274,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-col-label">Resume evidence</div>
                 <div className="dd-analysis-box">
                   {evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
+                  {integrityFlags.length > 0
+                    ? integrityFlags.map((flag, idx) => (
+                      <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-integrity-${idx}`}>
+                        <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />
+                        {toDisplayText(flag.label, 'Potential issue')}: {toDisplayText(flag.evidence, 'Needs recruiter review')}
+                      </div>
+                    ))
+                    : <div className="dd-analysis-empty">No resume integrity concerns detected. Continue with normal recruiter review.</div>}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
                 <div className="dd-analysis-box">

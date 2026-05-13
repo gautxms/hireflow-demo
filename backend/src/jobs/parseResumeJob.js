@@ -64,6 +64,28 @@ function normalizeExperienceSource(value) {
   return ['resume', 'ai_inferred', 'unknown'].includes(normalized) ? normalized : 'unknown'
 }
 
+function normalizeIntegritySeverity(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return ['low', 'medium', 'high'].includes(normalized) ? normalized : 'low'
+}
+
+function normalizeResumeIntegrityFlags(value) {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    if (!entry || typeof entry !== 'object') return null
+    const issueType = normalizeString(entry.issueType ?? entry.issue_type) || 'general_parsing_concern'
+    return {
+      issueType,
+      severity: normalizeIntegritySeverity(entry.severity),
+      label: clampString(entry.label || 'Potential issue', 120),
+      evidence: clampString(entry.evidence || 'Needs recruiter review', 240),
+      recruiterAction: clampString(entry.recruiterAction || entry.recruiter_action || 'Needs recruiter review', 180),
+      confidence: Math.max(0, Math.min(1, Number.isFinite(Number(entry.confidence)) ? Number(entry.confidence) : 0.5)),
+      source: clampString(entry.source || 'ai_assisted', 40),
+    }
+  }).filter(Boolean).slice(0, 8)
+}
+
 function normalizeEducationEntry(entry) {
   if (typeof entry === 'string') {
     const rawText = normalizeString(entry)
@@ -512,6 +534,7 @@ async function runParse(job) {
           `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
         )
         const normalizedEducation = normalizeEducation(candidate?.education, candidate)
+        const resumeIntegrityFlags = normalizeResumeIntegrityFlags(candidate?.resumeIntegrityFlags)
         return {
           id: identity.id,
           candidateId: identity.candidateId,
@@ -540,6 +563,7 @@ async function runParse(job) {
           highest_education: normalizedEducation.highestEducation,
           degree: normalizedEducation.degree,
           legacyEducation: normalizedEducation.legacyEducation,
+          ...(resumeIntegrityFlags.length > 0 ? { resumeIntegrityFlags } : {}),
         }
       })
     : []

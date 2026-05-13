@@ -122,6 +122,27 @@ function sentenceSafeClamp(value, maxLength = 240) {
   return `${(wordBreak >= 40 ? sliced.slice(0, wordBreak) : sliced).trim()}…`
 }
 
+function normalizeIntegritySeverity(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return ['low', 'medium', 'high'].includes(normalized) ? normalized : 'low'
+}
+
+function normalizeResumeIntegrityFlags(candidate = {}) {
+  const raw = Array.isArray(candidate?.resumeIntegrityFlags) ? candidate.resumeIntegrityFlags : []
+  return raw.map((entry) => {
+    if (!entry || typeof entry !== 'object') return null
+    return {
+      issueType: normalizeText(entry.issueType || entry.issue_type, 'general_parsing_concern'),
+      severity: normalizeIntegritySeverity(entry.severity),
+      label: sentenceSafeClamp(entry.label || 'Potential issue', 120),
+      evidence: sentenceSafeClamp(entry.evidence || 'Needs recruiter review', 240),
+      recruiterAction: sentenceSafeClamp(entry.recruiterAction || entry.recruiter_action || 'Needs recruiter review', 180),
+      confidence: Math.max(0, Math.min(1, Number.isFinite(Number(entry.confidence)) ? Number(entry.confidence) : 0.5)),
+      source: normalizeText(entry.source || 'ai_assisted', 'ai_assisted'),
+    }
+  }).filter(Boolean).slice(0, 8)
+}
+
 function normalizeEvidenceItems(candidate = {}) {
   const rawEvidence = Array.isArray(candidate.evidence)
     ? candidate.evidence
@@ -243,6 +264,7 @@ export function normalizeCandidate(candidate = {}) {
     ? candidate.experience
     : (normalizeText(candidate?.experience) ? [{ title: normalizeText(candidate.experience) }] : [])
   const normalizedExperience = normalizeExperienceContract(candidate)
+  const resumeIntegrityFlags = normalizeResumeIntegrityFlags(candidate)
 
   return {
     id,
@@ -306,6 +328,7 @@ export function normalizeCandidate(candidate = {}) {
     linkedinProfile: candidate.linkedinProfile || '',
     achievements: Array.isArray(candidate.achievements) ? candidate.achievements : [],
     confidenceScores: candidate.confidenceScores && typeof candidate.confidenceScores === 'object' ? candidate.confidenceScores : {},
+    ...(resumeIntegrityFlags.length > 0 ? { resumeIntegrityFlags } : {}),
   }
 }
 
