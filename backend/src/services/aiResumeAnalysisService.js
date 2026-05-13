@@ -1052,7 +1052,6 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const providerOrder = []
   for (const entry of rawPlan) {
     if (!providerSupportsMimeType(entry.provider, mimeType)) continue
-    if (providerOrder.some((candidate) => candidate.provider === entry.provider)) continue
     providerOrder.push(entry)
     if (providerOrder.length === 2) break
   }
