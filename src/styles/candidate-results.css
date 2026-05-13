@@ -1885,7 +1885,7 @@
   color: var(--color-text-secondary);
 }
 
-.candidate-results-page a:hover {
+.candidate-results-page a:not(.dd-btn-primary):not(.dd-btn-secondary):hover {
   color: #c8ff00;
 }
 
