@@ -196,3 +196,22 @@
 .candidates-directory__toast--error {
   border-color: color-mix(in srgb, var(--color-error, #d14343), #fff 25%);
 }
+
+.candidates-directory__table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+
+.candidates-directory__toolbar-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.candidates-directory__table-toolbar .candidates-directory__filter-field {
+  min-width: 10rem;
+}
