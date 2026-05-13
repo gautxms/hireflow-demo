@@ -41,17 +41,17 @@ function parseDateToMonthIndex(raw, { isEnd = false } = {}) {
     if (month >= 1 && month <= 12) return (year * 12) + (month - 1)
   }
 
+  const yearOnly = normalized.match(/^\d{4}$/)
+  if (yearOnly) {
+    const year = Number(yearOnly[0])
+    return (year * 12) + (isEnd ? 11 : 0)
+  }
+
   const parsed = new Date(normalized)
   if (!Number.isNaN(parsed.getTime())) {
     const year = parsed.getUTCFullYear()
     const month = parsed.getUTCMonth()
     return (year * 12) + month
-  }
-
-  const yearOnly = normalized.match(/^\d{4}$/)
-  if (yearOnly) {
-    const year = Number(yearOnly[0])
-    return (year * 12) + (isEnd ? 11 : 0)
   }
 
   return null

@@ -452,8 +452,16 @@ export function resolveCandidateBasics(candidate = {}) {
   const seniority = toDisplayText(firstDefined([candidate?.seniority, candidate?.level]), 'N/A')
   const education = toDisplayText(resolveEducationDisplay(firstDefined([candidate?.education, candidate?.highestEducation])), 'N/A')
 
-  const totalExperienceYears = Number(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
-  const estimatedExperienceYears = Number(candidate?.estimatedExperienceYears)
+  const parseFiniteNumber = (value) => {
+    if (value === null || value === undefined || value === '') {
+      return null
+    }
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const totalExperienceYears = parseFiniteNumber(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
+  const estimatedExperienceYears = parseFiniteNumber(candidate?.estimatedExperienceYears)
   const isEstimatedExperience = Boolean(candidate?.isEstimated)
   const experienceYears = Number.isFinite(totalExperienceYears)
     ? totalExperienceYears
