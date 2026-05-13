@@ -66,7 +66,8 @@ export default function CandidatesPage() {
   const [bulkFeedback, setBulkFeedback] = useState({ type: 'info', message: '', detail: '' })
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
-  const [totalCount, setTotalCount] = useState(0)
+  const [totalCount, setTotalCount] = useState(null)
+  const [isDirectoryDataAvailable, setIsDirectoryDataAvailable] = useState(false)
   const [sortBy, setSortBy] = useState('recent')
   const [sortDirection, setSortDirection] = useState('desc')
 
@@ -113,12 +114,15 @@ export default function CandidatesPage() {
         if (!response.ok) throw new Error(payload.error || 'Unable to load candidates')
         setCandidates(Array.isArray(payload.candidates) ? payload.candidates : [])
         setTotalCount(Number(payload.totalCount ?? payload.meta?.totalCount ?? 0))
+        setIsDirectoryDataAvailable(true)
         setPage(Number(payload.page ?? payload.meta?.page ?? page))
         setPageSize(Number(payload.pageSize ?? payload.meta?.pageSize ?? pageSize))
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
           setError(loadError.message || 'Unable to load candidates')
           setCandidates([])
+          setTotalCount(null)
+          setIsDirectoryDataAvailable(false)
         }
       } finally { setIsLoading(false) }
     }
@@ -188,6 +192,9 @@ export default function CandidatesPage() {
   }
 
   const bulkActionsDisabled = !selectedShortlistId || !selectedCount
+  const totalCountLabel = isDirectoryDataAvailable && typeof totalCount === 'number' ? totalCount : '—'
+  const totalCountValue = typeof totalCount === 'number' ? totalCount : 0
+  const totalPages = Math.max(1, Math.ceil(totalCountValue / pageSize))
 
   const hasCandidates = candidateRows.length > 0
   const showLoadingState = isLoading
@@ -228,7 +235,7 @@ export default function CandidatesPage() {
         <p>Review talent, apply technical filters, and shortlist quickly.</p>
       </div>
       <div className="candidates-directory__chips" aria-label="Directory summary">
-        <span className="chip">{totalCount} total</span>
+        <span className="chip">{totalCountLabel} total</span>
         <span className="chip">{selectedCount} selected</span>
         <span className="chip">{shortlists.length} shortlists</span>
       </div>
@@ -323,8 +330,8 @@ export default function CandidatesPage() {
           </select>
         </label>
         <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button>
-        <span>Page {page} of {Math.max(1, Math.ceil(totalCount / pageSize))}</span>
-        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => (current < Math.ceil(totalCount / pageSize) ? current + 1 : current))} disabled={page >= Math.ceil(totalCount / pageSize)}>Next</button>
+        <span>Page {page} of {totalPages}</span>
+        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => (current < totalPages ? current + 1 : current))} disabled={page >= totalPages}>Next</button>
       </div>
 
     <section className="candidates-directory__table-wrap" aria-live="polite">
