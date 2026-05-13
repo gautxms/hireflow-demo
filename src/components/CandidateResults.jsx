@@ -29,6 +29,7 @@ import {
 import '../styles/candidate-results.css'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
 import { resolveScoreBreakdown, resolveSkillSignals } from './candidateScoreSkillsResolver'
+import { resolveResumeFileTypeLabel } from './resumeFileTypeResolver'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -197,27 +198,6 @@ function dedupeTextItems(items, blocked = []) {
     })
 }
 
-
-function resolveResumeFileType(candidate) {
-  const rawType = toDisplayText(candidate?.file_type || candidate?.fileType || candidate?.mime_type || candidate?.mimeType, '').trim().toLowerCase()
-  if (rawType === 'application/pdf') return 'PDF'
-  if (rawType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
-  if (rawType === 'application/msword') return 'DOC'
-  if (rawType === 'text/plain') return 'TXT'
-  if (rawType === 'text/rtf' || rawType === 'application/rtf') return 'RTF'
-  if (rawType) return rawType.toUpperCase()
-
-  const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
-  const extension = String(resumeFilename || '').trim().split('.').pop()?.toLowerCase()
-  if (extension === 'pdf') return 'PDF'
-  if (extension === 'docx') return 'DOCX'
-  if (extension === 'doc') return 'DOC'
-  if (extension === 'txt') return 'TXT'
-  if (extension === 'rtf') return 'RTF'
-  if (extension) return extension.toUpperCase()
-
-  return 'File'
-}
 
 function formatResumeSize(candidate) {
   const rawSize = candidate?.file_size ?? candidate?.fileSize ?? candidate?.resume_size ?? candidate?.resumeSize
@@ -1163,7 +1143,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         ])
         const interviewProbes = probePool.slice(0, 3)
         const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
-        const resumeFileType = resolveResumeFileType(candidate)
+        const resumeFileType = resolveResumeFileTypeLabel(candidate)
         const resumeFileSize = formatResumeSize(candidate)
         const candidateResumeId = resolveCandidateResumeUuid(candidate)
         const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
