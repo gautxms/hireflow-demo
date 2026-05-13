@@ -210,3 +210,16 @@ test('resolveCandidateBasics falls back to candidate title when experience[0] is
 
   assert.equal(basics.title, 'Principal Engineer')
 })
+
+test('resolveCandidateBasics estimates experience from date ranges with non-zero fallback label', () => {
+  const basics = resolveCandidateBasics({
+    experience: [
+      { title: 'Engineer', startDate: '2020-01-01', endDate: '2022-01-01' },
+      { title: 'Senior Engineer', startDate: '2022-02-01', endDate: '2023-02-01' },
+    ],
+  })
+
+  assert.equal(basics.isEstimatedExperience, true)
+  assert.equal(basics.experienceLabel, 'Estimated from date ranges')
+  assert.equal(basics.experienceYears > 0, true)
+})
