@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { dedupeCandidatesByResumeId } from '../components/candidateSelectionState'
 import '../styles/candidates-directory.css'
 import '../styles/ui-primitives.css'
+import '../styles/app-route-states.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -60,7 +62,6 @@ export default function CandidatesPage() {
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [selectedResumeIds, setSelectedResumeIds] = useState([])
-  const [bulkStatus, setBulkStatus] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [bulkFeedback, setBulkFeedback] = useState({ type: 'info', message: '', detail: '' })
   const [page, setPage] = useState(1)
@@ -188,6 +189,13 @@ export default function CandidatesPage() {
 
   const bulkActionsDisabled = !selectedShortlistId || !selectedCount
 
+  const hasCandidates = candidateRows.length > 0
+  const showLoadingState = isLoading
+  const showErrorState = !isLoading && Boolean(error)
+  const showEmptyWithoutFilters = !isLoading && !error && !hasCandidates && !hasActiveFilters
+  const showEmptyWithFilters = !isLoading && !error && !hasCandidates && hasActiveFilters
+  const showLoadedState = !isLoading && !error && hasCandidates
+
   const renderFilterField = (key) => {
     const config = candidateFilterFieldConfig[key] || {}
     return (
@@ -248,12 +256,49 @@ export default function CandidatesPage() {
     {bulkFeedback.message && <p className={`candidates-directory__status candidates-directory__status--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</p>}
     {bulkFeedback.detail && <p className="candidates-directory__status candidates-directory__status--error" role="alert">{bulkFeedback.detail}</p>}
     {bulkFeedback.message && <div className={`candidates-directory__toast candidates-directory__toast--${bulkFeedback.type}`} role="status" aria-live="polite">{bulkFeedback.message}</div>}
-    {error && <p className="candidates-directory__error">{error}</p>}
-    {isLoading && <p className="candidates-directory__status">Loading candidates…</p>}
-    {!isLoading && !error && candidates.length === 0 && !hasActiveFilters && <p className="candidates-directory__status">No candidates yet. Candidate records will appear here once resumes are analyzed.</p>}
-    {!isLoading && !error && candidates.length === 0 && hasActiveFilters && <p className="candidates-directory__status">No results for these filters. Try broadening your search criteria.</p>}
+    {showLoadingState && (
+      <section className="candidates-directory__table-wrap" aria-live="polite" aria-busy="true">
+        <div className="candidates-directory__cards">
+          {Array.from({ length: 5 }).map((_, idx) => (
+            <article key={`loading-card-${idx}`} className="candidate-directory-card" aria-hidden="true">
+              <div className="chip">Loading candidate…</div>
+              <p><strong>Candidate:</strong> <span className="chip">Fetching profile</span></p>
+              <p><strong>Job:</strong> <span className="chip">Loading role fit</span></p>
+              <p><strong>Skills:</strong> <span className="chip">Loading skills</span></p>
+            </article>
+          ))}
+        </div>
+      </section>
+    )}
 
+    {showErrorState && (
+      <StatePattern
+        kind="error"
+        title="Couldn’t load candidates"
+        description={error}
+        action={<button type="button" className="hf-btn hf-btn--primary" onClick={() => setReloadKey((current) => current + 1)}>Retry</button>}
+      />
+    )}
 
+    {showEmptyWithoutFilters && (
+      <StatePattern
+        kind="empty"
+        title="No candidates yet"
+        description="Candidate records will appear here once resumes are analyzed and enriched."
+      />
+    )}
+
+    {showEmptyWithFilters && (
+      <StatePattern
+        kind="empty"
+        title="No matches for these filters"
+        description="Try broadening your search criteria or clear one or more filters."
+        action={<button type="button" className="hf-btn hf-btn--secondary" onClick={() => { setFilters(emptyFilters); setPage(1) }}>Clear filters</button>}
+      />
+    )}
+
+    {showLoadedState && (
+      <>
       <div className="candidates-directory__pagination">
         <label>
           Sort
@@ -288,10 +333,6 @@ export default function CandidatesPage() {
           <tr><th aria-label="Select candidate" /><th>Candidate</th><th>Job</th><th>Score</th><th>Experience</th><th>Skills</th><th>Shortlist / Status</th><th>Last analyzed</th><th>Actions</th></tr>
         </thead>
         <tbody>
-          {isLoading && Array.from({ length: 5 }).map((_, idx) => <tr key={`skeleton-row-${idx}`} aria-hidden="true">
-            <td><div className="chip">Loading…</div></td>
-            <td colSpan={8}><div className="chip">Fetching candidate record</div></td>
-          </tr>)}
           {candidateRows.map((candidate) => <tr key={candidate.resumeId}>
             <td><label className="candidate-select"><input type="checkbox" aria-label={`Select ${candidate.name || 'candidate'}`} checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></label></td>
             <td>{candidate.name || 'Candidate'}</td>
@@ -306,8 +347,7 @@ export default function CandidatesPage() {
         </tbody>
       </table>
 
-      <div className="candidates-directory__cards">
-        {candidateRows.map((candidate) => <article key={`card-${candidate.resumeId}`} className="candidate-directory-card">
+      <div className="candidates-directory__cards"> {candidateRows.map((candidate) => <article key={`card-${candidate.resumeId}`} className="candidate-directory-card">
           <label className="candidate-select"><input type="checkbox" aria-label={`Select ${candidate.name || 'candidate'}`} checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></label>
           <p><strong>Candidate:</strong> {candidate.name || 'Candidate'}</p>
           <p><strong>Job:</strong> {candidate.associatedJob?.title || 'No linked job'}</p>
@@ -316,8 +356,9 @@ export default function CandidatesPage() {
           <p><strong>Status:</strong> {(candidate.tags || []).join(', ') || 'Unassigned'}</p>
           <p><strong>Last analyzed:</strong> {formatDate(candidate.sourceUpdatedAt)}</p>
           <p className="candidate-actions"><a href={`${API_BASE}/resumes/${candidate.resumeId}/view`} target="_blank" rel="noopener noreferrer">Resume</a><a href={`/candidates/${candidate.resumeId}`}>Profile</a></p>
-        </article>)}
-      </div>
+        </article>)} </div>
     </section>
+      </>
+    )}
   </main>
 }
