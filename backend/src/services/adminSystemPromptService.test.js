@@ -131,3 +131,11 @@ test('resetAdminSystemPromptToDefault persists the known default prompt', async 
   assert.equal(result.systemPrompt, DEFAULT_SYSTEM_PROMPT)
   assert.equal(result.promptVersion, 9)
 })
+
+test('DEFAULT_SYSTEM_PROMPT defines matchScore breakdown fields and anti-fabrication rule', () => {
+  assert.match(DEFAULT_SYSTEM_PROMPT, /skills_alignment/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /experience_alignment/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /education_alignment/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /overall/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not fabricate score breakdown values\./)
+})
