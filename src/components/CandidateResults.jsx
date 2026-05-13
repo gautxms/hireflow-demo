@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, AlertCircle, BookmarkPlus, Briefcase, CalendarDays, Check, ChevronLeft, CircleHelp, Clock3, FileText, MapPin, UserRoundCheck, X } from 'lucide-react'
+import { AlertTriangle, AlertCircle, BookmarkPlus, Briefcase, CalendarDays, Check, ChevronLeft, CircleHelp, Clock3, FileText, MapPin, X, GraduationCap } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -935,7 +935,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="shortlist-panel" role="dialog" aria-modal="true" aria-label="Candidate shortlists">
             <div className="sp-header">
               <div className="sp-title">Shortlists</div>
-              <button type="button" className="touch-target sp-close" onClick={() => setShortlistOpen(false)}>✕</button>
+              <button type="button" className="touch-target sp-close" onClick={() => setShortlistOpen(false)} aria-label="Close shortlists panel">
+                <X size={16} strokeWidth={1.5} aria-hidden="true" />
+              </button>
             </div>
 
             <ShortlistManager
@@ -1130,6 +1132,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']).slice(0, 3)
         const decisionVerdict = deriveDecisionVerdict(candidate, score)
         const recommendedAction = deriveRecommendedAction(candidate, score)
+        const nextActions = ensureTextList(candidate?.next_steps || candidate?.recommended_actions, recommendedAction).slice(0, 3)
         const probePool = dedupeTextItems([
           ...candidateConsiderations,
           ...missingSkills,
@@ -1161,20 +1164,33 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-header-info">
                   <div className="dd-name">{toDisplayText(candidate.name)}</div>
                   <div className="dd-meta-row">
-                    <span className="dd-meta-pill"><Briefcase size={14} aria-hidden="true" />{toDisplayText(candidate.current_title, 'Role unavailable')}</span>
-                    <span className="dd-meta-pill"><Clock3 size={14} aria-hidden="true" />{resolveCandidateExperience(candidate)} yrs</span>
-                    <span className="dd-meta-pill"><MapPin size={14} aria-hidden="true" />{toDisplayText(candidate.location, 'Location unavailable')}</span>
-                    <span className="dd-meta-pill"><UserRoundCheck size={14} aria-hidden="true" />{toDisplayText(candidate.seniority || candidate.level, 'Seniority not specified')}</span>
+                    <span className="dd-meta-pill"><Briefcase size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.current_title, 'Role unavailable')}</span>
+                    <span className="dd-meta-pill"><Clock3 size={14} strokeWidth={1.5} aria-hidden="true" />{resolveCandidateExperience(candidate)} yrs</span>
+                    <span className="dd-meta-pill"><MapPin size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.location, 'Location unavailable')}</span>
+                    <span className="dd-meta-pill"><GraduationCap size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Seniority not specified')}</span>
                   </div>
                 </div>
               </div>
-              {displayScore != null && <div className={`dd-score dd-score--${tier}`}>{displayScore}<span>/10</span></div>}
+              {displayScore != null && (
+                <div className={`dd-score-block dd-score-block--${tier}`}>
+                  <div className={`dd-score dd-score--${tier}`}>
+                    {displayScore}
+                    <span>/10</span>
+                  </div>
+                  <div className={`dd-fit-label dd-fit-label--${tier}`}>
+                    {tier === 'strong' ? 'Strong fit' : tier === 'possible' ? 'Potential fit' : 'Low fit'}
+                  </div>
+                  <div className="dd-score-track" aria-hidden="true">
+                    <span className={`dd-score-fill dd-score-fill--${tier}`} style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+                  </div>
+                </div>
+              )}
               <div className="dd-header-actions">
-                {fullProfilePath ? <a className="dd-btn-primary" href={fullProfilePath}><CalendarDays size={15} aria-hidden="true" />Schedule interview</a> : <button className="dd-btn-primary" type="button" disabled><CalendarDays size={15} aria-hidden="true" />Schedule interview</button>}
-                {openResumePath ? <a className="dd-icon-btn" href={openResumePath} target="_blank" rel="noopener noreferrer" aria-label="Open resume" title="Open resume"><FileText size={16} aria-hidden="true" /></a> : null}
-                <button className="dd-icon-btn" type="button" onClick={() => addCandidateToShortlist(candidate)} aria-label="Add to shortlist" title="Add to shortlist"><BookmarkPlus size={16} aria-hidden="true" /></button>
+                {fullProfilePath ? <a className="dd-btn-primary" href={fullProfilePath}><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</a> : <button className="dd-btn-primary" type="button" disabled><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</button>}
+                {openResumePath ? <a className="dd-icon-btn" href={openResumePath} target="_blank" rel="noopener noreferrer" aria-label="Open resume" title="Open resume"><FileText size={16} strokeWidth={1.5} aria-hidden="true" /></a> : null}
+                <button className="dd-icon-btn" type="button" onClick={() => addCandidateToShortlist(candidate)} aria-label="Add to shortlist" title="Add to shortlist"><BookmarkPlus size={16} strokeWidth={1.5} aria-hidden="true" /></button>
               </div>
-              <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details" title="Close"><X size={16} aria-hidden="true" /></button>
+              <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details" title="Close"><X size={16} strokeWidth={1.5} aria-hidden="true" /></button>
             </div>
             <div className="dd-body">
               <div className="dd-col dd-col--left">
