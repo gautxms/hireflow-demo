@@ -465,13 +465,25 @@ export function resolveCandidateBasics(candidate = {}) {
   const seniority = toDisplayText(firstDefined([candidate?.seniority, candidate?.level]), 'N/A')
   const education = resolveCandidateEducationText(candidate)
 
-  const totalExperienceYears = Number(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
+  const parseFiniteNumber = (value) => {
+    if (value === null || value === undefined || value === '') {
+      return null
+    }
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const totalExperienceYears = parseFiniteNumber(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
+  const estimatedExperienceYears = parseFiniteNumber(candidate?.estimatedExperienceYears)
+  const isEstimatedExperience = Boolean(candidate?.isEstimated)
   const experienceYears = Number.isFinite(totalExperienceYears)
     ? totalExperienceYears
-    : (() => {
-      const parsed = String(firstDefined([candidate?.experience, '']) || '').match(/(\d+(?:\.\d+)?)/)
-      return parsed ? Number(parsed[1]) : null
-    })()
+    : Number.isFinite(estimatedExperienceYears)
+      ? estimatedExperienceYears
+      : (() => {
+        const parsed = String(firstDefined([candidate?.experience, '']) || '').match(/(\d+(?:\.\d+)?)/)
+        return parsed ? Number(parsed[1]) : null
+      })()
 
   return {
     title,
@@ -479,6 +491,8 @@ export function resolveCandidateBasics(candidate = {}) {
     seniority,
     education,
     experienceYears,
+    estimatedExperienceYears,
+    isEstimatedExperience,
   }
 }
 
