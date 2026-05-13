@@ -489,7 +489,15 @@ export function resolveCandidateBasics(candidate = {}) {
     candidate?.role,
     candidate?.headline,
   ]), 'N/A')
-  const location = toDisplayText(firstDefined([candidate?.location, candidate?.city, candidate?.region]), 'N/A')
+  const location = toDisplayText(firstDefined([
+    candidate?.location,
+    candidate?.currentLocation,
+    candidate?.current_location,
+    candidate?.city,
+    candidate?.region,
+    candidate?.state,
+    candidate?.country,
+  ]), 'Location unavailable')
   const seniority = toDisplayText(firstDefined([candidate?.seniority, candidate?.level]), 'N/A')
   const education = resolveCandidateEducationText(candidate)
 
