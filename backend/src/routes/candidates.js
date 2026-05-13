@@ -581,16 +581,24 @@ router.get('/directory', requireAuth, async (req, res) => {
       })
 
     const totalCount = Number(result.rows[0]?.total_count || 0)
+    const normalizedSortDirection = sortDirection.toLowerCase()
+    const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0
 
+    // Contract note: shortlist counts are sourced from /shortlists endpoints,
+    // not from /candidates/directory payload fields.
     return res.json({
       candidates: profiles,
       totalCount,
       page,
       pageSize,
+      totalPages,
+      sortBy,
+      sortDirection: normalizedSortDirection,
+      // Legacy fields kept for compatibility with older clients.
       total: totalCount,
       meta: { totalCount, page, pageSize },
+      sort: { sortBy, sortDirection: normalizedSortDirection },
       filtersApplied: { ...filters, sourceJobId: filters.sourceJobId || null, sourceAnalysisId: filters.sourceAnalysisId || null },
-      sort: { sortBy, sortDirection: sortDirection.toLowerCase() },
     })
   } catch (error) {
     console.error('[Candidates] Failed to fetch candidates directory:', error)
