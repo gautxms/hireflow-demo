@@ -11,6 +11,13 @@ Use this checklist in every PR review. A PR is not ready to merge until all requ
 - [ ] Public SEO routes (`/`, `/pricing`, `/about`, `/contact`, `/help`, `/terms`, `/privacy`, `/refund-policy`) return readable heading/body copy in raw HTTP responses.
 - [ ] “View Source” for each public SEO route includes readable marketing/legal text before hydration.
 
+
+### Candidate pipeline regression smoke checks
+- [ ] `/candidates` renders exactly one state at a time (loading, error, empty, or loaded), with no overlap.
+- [ ] `/analyses` table and detail navigation load without scoring/parsing regressions.
+- [ ] Async resume completion path (upload → processing → complete) transitions cleanly and keeps historical records null-safe.
+- [ ] Shortlist bulk add/remove actions complete with accurate success/failure summaries and no score parsing regressions.
+
 ### Token and style compliance
 - [ ] No hardcoded color literals in JSX `style={{ ... }}` blocks.
 - [ ] No hardcoded font stacks in JSX `style={{ ... }}` blocks.
