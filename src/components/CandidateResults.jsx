@@ -12,6 +12,7 @@ import {
   resolveActiveCandidateScore,
   resolveCandidateBasics,
   resolveCandidateKey,
+  resolveCandidateEducationText,
   resolveCandidateResumeMetadata,
   resolveCandidateResumeUuid,
   toDisplayText,
@@ -1152,7 +1153,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const keyFacts = [
           { label: 'Experience', value: `${resolveCandidateExperience(candidate)} yrs` },
           { label: 'Seniority', value: toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Unavailable') },
-          { label: 'Education', value: toDisplayText(candidate.education || candidate.highest_education || candidate.degree, 'Unavailable') },
+          { label: 'Education', value: toDisplayText(resolveCandidateEducationText(candidate), 'Unavailable') },
           { label: 'Location', value: toDisplayText(candidate.location, 'Unavailable') },
         ]
 

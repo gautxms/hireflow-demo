@@ -440,6 +440,19 @@ function resolveEducationDisplay(educationValue) {
   return toDisplayText(educationValue, '')
 }
 
+export function resolveCandidateEducationText(candidate = {}) {
+  return toDisplayText(
+    resolveEducationDisplay(firstDefined([
+      candidate?.education,
+      candidate?.legacyEducation,
+      candidate?.highestEducation,
+      candidate?.highest_education,
+      candidate?.degree,
+    ])),
+    'N/A',
+  )
+}
+
 export function resolveCandidateBasics(candidate = {}) {
   const title = toDisplayText(firstDefined([
     candidate?.current_title,
@@ -450,7 +463,7 @@ export function resolveCandidateBasics(candidate = {}) {
   ]), 'N/A')
   const location = toDisplayText(firstDefined([candidate?.location, candidate?.city, candidate?.region]), 'N/A')
   const seniority = toDisplayText(firstDefined([candidate?.seniority, candidate?.level]), 'N/A')
-  const education = toDisplayText(resolveEducationDisplay(firstDefined([candidate?.education, candidate?.highestEducation])), 'N/A')
+  const education = resolveCandidateEducationText(candidate)
 
   const totalExperienceYears = Number(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
   const experienceYears = Number.isFinite(totalExperienceYears)

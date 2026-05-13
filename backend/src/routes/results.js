@@ -78,6 +78,36 @@ function normalizeText(value, fallback = '') {
   return normalized || fallback
 }
 
+function normalizeEducationEntry(entry) {
+  if (typeof entry === 'string') {
+    const rawText = normalizeText(entry, '')
+    return rawText ? { degree: null, field: null, institution: null, startDate: null, endDate: null, grade: null, gradeType: null, rawText } : null
+  }
+  if (!entry || typeof entry !== 'object') return null
+  const normalized = {
+    degree: normalizeText(entry.degree || entry.qualification || entry.program, ''),
+    field: normalizeText(entry.field || entry.major || entry.specialization, ''),
+    institution: normalizeText(entry.institution || entry.school || entry.university, ''),
+    startDate: normalizeText(entry.startDate || entry.start_date || entry.from, ''),
+    endDate: normalizeText(entry.endDate || entry.end_date || entry.to, ''),
+    grade: normalizeText(entry.grade || entry.gpa || entry.score, ''),
+    gradeType: normalizeText(entry.gradeType || entry.grade_type, ''),
+    rawText: normalizeText(entry.rawText || entry.text || entry.value, ''),
+  }
+  return Object.values(normalized).some(Boolean) ? normalized : null
+}
+
+function normalizeEducation(educationValue, candidate = {}) {
+  const raw = educationValue ?? candidate?.highestEducation ?? candidate?.highest_education ?? candidate?.degree ?? null
+  const canonical = (Array.isArray(raw) ? raw : [raw]).map((entry) => normalizeEducationEntry(entry)).filter(Boolean)
+  const legacyEducation = typeof raw === 'string'
+    ? normalizeText(raw, '')
+    : canonical.map((entry) => [entry.degree, entry.institution].filter(Boolean).join(', ')).filter(Boolean).join(' | ')
+  const highestEducation = normalizeText(candidate?.highestEducation || candidate?.highest_education, '') || canonical[0]?.degree || ''
+  const degree = normalizeText(candidate?.degree, '') || canonical[0]?.degree || ''
+  return { canonical, legacyEducation, highestEducation, degree }
+}
+
 function sentenceSafeClamp(value, maxLength = 240) {
   const normalized = normalizeText(value)
   if (!normalized || normalized.length <= maxLength) {
@@ -164,9 +194,7 @@ export function normalizeCandidate(candidate = {}) {
   const experienceValue = Array.isArray(candidate.experience)
     ? candidate.experience.map((entry) => entry?.duration).filter(Boolean).join(' | ')
     : candidate.experience
-  const educationValue = Array.isArray(candidate.education)
-    ? candidate.education.map((entry) => `${entry?.degree || ''}${entry?.school ? `, ${entry.school}` : ''}`.trim()).filter(Boolean).join(' | ')
-    : candidate.education
+  const normalizedEducation = normalizeEducation(candidate.education, candidate)
 
   const normalizedSkillsObject = candidate.skills_structured && typeof candidate.skills_structured === 'object'
     ? candidate.skills_structured
@@ -247,7 +275,11 @@ export function normalizeCandidate(candidate = {}) {
       ? Number(candidate.experience_years)
       : resolveExperienceYears({ ...candidate, experience: experienceValue || candidate.experience }),
     position: candidate.position || '',
-    education: educationValue || '',
+    education: normalizedEducation.canonical,
+    legacyEducation: normalizedEducation.legacyEducation || '',
+    highestEducation: normalizedEducation.highestEducation || '',
+    highest_education: normalizedEducation.highestEducation || '',
+    degree: normalizedEducation.degree || '',
     fit: candidate.fit || '',
     fit_assessment: {
       matched: matchedRequirements,
