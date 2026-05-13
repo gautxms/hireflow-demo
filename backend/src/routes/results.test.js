@@ -189,3 +189,52 @@ test('normalizeCandidate keeps strict v3 contract fields when provided', () => {
   assert.equal(normalized.parseMeta.contractVersion, 'candidate-v3')
   assert.equal(normalized.parseMeta.contractMode, 'opt_in')
 })
+
+
+test('normalizeCandidate preserves legacy aliases while passing through canonical alias fields when present', () => {
+  const payload = {
+    skills: ['React'],
+    allExtractedSkills: ['React', 'Node'],
+    skills_flat: ['React', 'Node'],
+    skills_structured: { tools_and_platforms: ['React'], methodologies: ['Agile'], domain_expertise: [], soft_skills: [] },
+    education: [{ degree: 'BS', institution: 'State U' }],
+    totalExperienceYears: 7,
+    relevantExperienceYears: 5,
+    experienceLabel: '7 years total',
+    experienceSource: 'resume',
+    isExperienceEstimated: false,
+    experienceExplanation: 'Parsed from structured resume sections.',
+  }
+
+  const normalized = normalizeCandidate(payload)
+
+  assert.deepEqual(normalized.allExtractedSkills, ['React', 'Node'])
+  assert.deepEqual(normalized.skills_flat, ['React', 'Node'])
+  assert.deepEqual(normalized.skills_structured, payload.skills_structured)
+  assert.deepEqual(normalized.education, payload.education)
+  assert.equal(normalized.totalExperienceYears, 7)
+  assert.equal(normalized.relevantExperienceYears, 5)
+  assert.equal(normalized.experienceLabel, '7 years total')
+  assert.equal(normalized.experienceSource, 'resume')
+  assert.equal(normalized.isExperienceEstimated, false)
+  assert.equal(normalized.experienceExplanation, 'Parsed from structured resume sections.')
+
+  assert.ok('skills' in normalized)
+  assert.ok('legacyEducation' in normalized)
+  assert.ok('experience_years' in normalized)
+})
+
+test('normalizeCandidate keeps canonical defaults for legacy payloads without new alias fields', () => {
+  const normalized = normalizeCandidate({
+    skills: 'React, Node',
+    experience: '4 years',
+    highestEducation: 'BSc Computer Science',
+  })
+
+  assert.ok(!('allExtractedSkills' in normalized))
+  assert.ok(!('isExperienceEstimated' in normalized))
+  assert.ok(!('experienceExplanation' in normalized))
+  assert.deepEqual(normalized.skills_flat, ['React', 'Node'])
+  assert.equal(Array.isArray(normalized.education), true)
+  assert.equal(normalized.totalExperienceYears, 4)
+})
