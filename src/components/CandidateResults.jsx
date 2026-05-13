@@ -1195,15 +1195,26 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             </div>
             <section className="dd-body dd-body--target">
               <div className="dd-col dd-col--left dd-col--decision">
-                <div className="dd-col-label">AI Verdict</div>
+                <div className="dd-col-label">Verdict</div>
                 <p className="dd-summary">{verdictText}</p>
-                <div className="dd-col-label dd-col-label--mt-16">Recommended action</div>
+                <div className="dd-col-label dd-col-label--mt-16">Why</div>
+                <div className="dd-analysis-box">
+                  <div className="dd-analysis-item">{reasoningText}</div>
+                </div>
+                <div className="dd-col-label dd-col-label--mt-16">Strengths</div>
+                <div className="dd-analysis-box dd-analysis-box--green">
+                  {candidateStrengths.length > 0
+                    ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-strength-${idx}`}><Check size={14} strokeWidth={1.5} aria-hidden="true" />{strength}</div>)
+                    : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-16">Gaps & uncertainties</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
+                  {uncertaintyItems.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-uncertainty-${idx}`}><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                  {(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.']).map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-16">Recruiter action</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-16">Interview probes</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.']).map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
                 <div className="dd-key-facts-grid">
@@ -1246,28 +1257,15 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
 
               <div className="dd-col dd-col--right dd-col--analysis">
-                <div className="dd-col-label">Strengths</div>
+                <div className="dd-col-label">Resume evidence</div>
                 <div className="dd-analysis-box">
-                  {candidateStrengths.length > 0
-                    ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-strength-${idx}`}><Check size={14} strokeWidth={1.5} aria-hidden="true" />{strength}</div>)
-                    : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-14">Uncertainties</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {uncertaintyItems.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-uncertainty-${idx}`}><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                  {evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
                 <div className="dd-analysis-box">
                   <div className="dd-analysis-item dd-analysis-item--icon"><FileText size={14} strokeWidth={1.5} aria-hidden="true" /><strong>{resumeFilename}</strong></div>
                   <div className="dd-analysis-item">{resumeFileType}{resumeFileSize ? ` · ${resumeFileSize}` : ''}{openResumePath ? <><span> · </span><a href={openResumePath} target="_blank" rel="noopener noreferrer">Open resume</a></> : ''}</div>
                 </div>
-                <details className="dd-details">
-                  <summary>Expandable AI details</summary>
-                  <p className="dd-summary">{reasoningText}</p>
-                  <div className="dd-analysis-box">
-                    {evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
-                  </div>
-                </details>
               </div>
             </section>
           </article>
