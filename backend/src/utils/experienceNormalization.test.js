@@ -70,3 +70,19 @@ test('normalizeCandidateExperience aggregates array-based legacy experience entr
   assert.equal(normalized.totalExperienceYears, 6.5)
   assert.equal(normalized.experienceSource, 'legacy_text_fallback')
 })
+
+test('normalizeCandidateExperience estimates overlapping date ranges without double counting', () => {
+  const normalized = normalizeCandidateExperience({
+    experience: [
+      { startDate: '01/2020', endDate: '12/2021' },
+      { startDate: '2021', endDate: '2023' },
+      { startDate: '2022-06-01', endDate: 'Present' },
+    ],
+  })
+
+  assert.equal(normalized.isEstimated, true)
+  assert.equal(normalized.experienceSource, 'interval_estimate')
+  assert.equal(normalized.totalExperienceYears > 0, true)
+  assert.equal(normalized.totalExperienceYears <= 10, true)
+  assert.equal(normalized.evidence.length, 3)
+})

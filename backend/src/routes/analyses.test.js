@@ -71,6 +71,37 @@ test('GET /analyses failedItems omits raw error text', async (t) => {
   assert.deepEqual(payload.items[0].filesPreview, [{ name: 'Unknown file', status: 'queued' }])
   assert.equal(Object.prototype.hasOwnProperty.call(payload.items[0].failedItems[0], 'error'), false)
 })
+
+test('GET /analyses emits stable status summaries for complete/partial/processing/failed states', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return {
+        rows: [
+          { id: 71, created_at: '2026-05-01T00:00:00.000Z', status: 'complete', job_description_title: 'API', total_count: '2', complete_count: '2', failed_count: '0', processing_count: '0' },
+          { id: 72, created_at: '2026-05-01T00:00:00.000Z', status: 'partial', job_description_title: 'API', total_count: '3', complete_count: '2', failed_count: '1', processing_count: '0' },
+          { id: 73, created_at: '2026-05-01T00:00:00.000Z', status: 'processing', job_description_title: 'API', total_count: '3', complete_count: '1', failed_count: '0', processing_count: '2' },
+          { id: 74, created_at: '2026-05-01T00:00:00.000Z', status: 'failed', job_description_title: 'API', total_count: '2', complete_count: '0', failed_count: '2', processing_count: '0' },
+        ],
+      }
+    }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses`, { headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(payload.items.map((item) => item.status), ['complete', 'partial', 'processing', 'failed'])
+  assert.equal(payload.items[1].summary.failed, 1)
+  assert.equal(payload.items[2].summary.processing, 2)
+  assert.equal(payload.items[3].summary.complete, 0)
+  assert.equal(typeof payload.items[0].createdAt, 'string')
+})
 test('GET /analyses/:id returns owner-only detail payload', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
   t.mock.method(parseQueue, 'getJob', async () => null)
