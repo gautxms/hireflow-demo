@@ -196,3 +196,44 @@
 .candidates-directory__toast--error {
   border-color: color-mix(in srgb, var(--color-error, #d14343), #fff 25%);
 }
+
+
+.candidates-directory__filter-field input[name='job'],
+.candidates-directory__filter-field select[name='job'] {
+  min-width: 0;
+}
+
+.candidates-directory__filters .candidates-directory__filter-field:nth-child(2) {
+  grid-column: span 2;
+}
+
+.candidates-directory__filters .candidates-directory__filter-field:nth-child(2) :is(input, select) {
+  min-width: 14rem;
+  text-overflow: ellipsis;
+}
+
+.candidates-directory__filters .candidates-directory__filter-field:nth-child(2) input::placeholder {
+  letter-spacing: 0.01em;
+}
+
+.candidates-directory__advanced-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.4rem;
+}
+
+.candidates-directory__advanced-trigger-icon {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.candidates-directory__clear-filters {
+  margin: 0.2rem 0 0.6rem;
+}
+
+@media (max-width: 900px) {
+  .candidates-directory__filters .candidates-directory__filter-field:nth-child(2) {
+    grid-column: span 1;
+  }
+}

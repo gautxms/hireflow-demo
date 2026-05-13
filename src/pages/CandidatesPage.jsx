@@ -70,6 +70,8 @@ export default function CandidatesPage() {
   const [isDirectoryDataAvailable, setIsDirectoryDataAvailable] = useState(false)
   const [sortBy, setSortBy] = useState('recent')
   const [sortDirection, setSortDirection] = useState('desc')
+  const [jobOptions, setJobOptions] = useState([])
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
@@ -154,6 +156,33 @@ export default function CandidatesPage() {
     return () => controller.abort()
   }, [selectedShortlistId])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    async function loadJobOptions() {
+      try {
+        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+        const response = await fetch(`${API_BASE}/jobs`, {
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          signal: controller.signal,
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) return
+        const jobs = Array.isArray(payload.jobs) ? payload.jobs : []
+        const safeOptions = jobs
+          .map((job) => ({
+            value: String(job.jobId || job.id || '').trim(),
+            label: String(job.title || job.role || '').trim(),
+          }))
+          .filter((job) => job.value && job.label)
+        setJobOptions(safeOptions)
+      } catch (loadError) {
+        if (loadError.name !== 'AbortError') setJobOptions([])
+      }
+    }
+    loadJobOptions()
+    return () => controller.abort()
+  }, [])
+
   const toggleSelectedCandidate = (resumeId) => {
     setSelectedResumeIds((current) => (current.includes(resumeId) ? current.filter((id) => id !== resumeId) : [...current, resumeId]))
   }
@@ -195,6 +224,7 @@ export default function CandidatesPage() {
   const totalCountLabel = isDirectoryDataAvailable && typeof totalCount === 'number' ? totalCount : '—'
   const totalCountValue = typeof totalCount === 'number' ? totalCount : 0
   const totalPages = Math.max(1, Math.ceil(totalCountValue / pageSize))
+  const hasSafeJobOptions = jobOptions.length > 0
 
   const hasCandidates = candidateRows.length > 0
   const showLoadingState = isLoading
@@ -209,11 +239,17 @@ export default function CandidatesPage() {
       <label key={key} className="candidates-directory__filter-field">
         <span>{config.label || key}</span>
         {config.type === 'select' ? (
-          <select value={filters[key]} onChange={(event) => setFilters((prev) => ({ ...prev, [key]: event.target.value }))}>
+          <select name={key} value={filters[key]} onChange={(event) => setFilters((prev) => ({ ...prev, [key]: event.target.value }))}>
             {config.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        ) : key === 'job' && hasSafeJobOptions ? (
+          <select name={key} value={filters[key]} onChange={(event) => { setFilters((prev) => ({ ...prev, [key]: event.target.value })); setPage(1) }}>
+            <option value="">All jobs</option>
+            {jobOptions.map((option) => <option key={option.value} value={option.label}>{option.label}</option>)}
           </select>
         ) : (
           <input
+            name={key}
             type={config.type || 'text'}
             inputMode={config.inputMode}
             min={config.min}
@@ -232,7 +268,7 @@ export default function CandidatesPage() {
     <header className="candidates-directory__header">
       <div>
         <h1>Candidates</h1>
-        <p>Review talent, apply technical filters, and shortlist quickly.</p>
+        <p>Search and manage candidates across jobs, analyses, skills, and shortlists.</p>
       </div>
       <div className="candidates-directory__chips" aria-label="Directory summary">
         <span className="chip">{totalCountLabel} total</span>
@@ -243,10 +279,20 @@ export default function CandidatesPage() {
 
     <section className="candidates-directory__filters" aria-label="Default candidate filters">{compactFilterKeys.map(renderFilterField)}</section>
 
-    <details className="candidates-directory__advanced-filters">
-      <summary>Advanced technical filters</summary>
-      <section className="candidates-directory__filters" aria-label="Advanced candidate filters">{advancedFilterKeys.map(renderFilterField)}</section>
-    </details>
+    {hasActiveFilters && <button type="button" className="hf-btn hf-btn--secondary candidates-directory__clear-filters" onClick={() => { setFilters(emptyFilters); setPage(1) }}>Clear filters</button>}
+
+    <section className="candidates-directory__advanced-filters">
+      <button
+        type="button"
+        className="candidates-directory__advanced-trigger hf-btn hf-btn--tertiary"
+        aria-expanded={showAdvancedFilters}
+        onClick={() => setShowAdvancedFilters((current) => !current)}
+      >
+        <span aria-hidden="true" className="candidates-directory__advanced-trigger-icon">{showAdvancedFilters ? '▾' : '▸'}</span>
+        Advanced technical filters
+      </button>
+      {showAdvancedFilters && <section className="candidates-directory__filters" aria-label="Advanced candidate filters">{advancedFilterKeys.map(renderFilterField)}</section>}
+    </section>
 
     {selectedCount > 0 && (<section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
       <span className="chip" aria-live="polite">{selectedCount} selected</span>
