@@ -6,6 +6,13 @@ test('normalizeComparableTextKey produces comparable keys for punctuation varian
   assert.equal(normalizeComparableTextKey('Strong fit — React/Node.'), normalizeComparableTextKey('strong fit react node'))
 })
 
+
+test('normalizeComparableTextKey preserves skill-significant punctuation', () => {
+  assert.notEqual(normalizeComparableTextKey('C'), normalizeComparableTextKey('C++'))
+  assert.notEqual(normalizeComparableTextKey('C'), normalizeComparableTextKey('C#'))
+  assert.notEqual(normalizeComparableTextKey('C++'), normalizeComparableTextKey('C#'))
+})
+
 test('resolveCandidateReasoning suppresses duplicate sentence already used as verdict', () => {
   const candidate = {
     summary: 'Strong fit for backend role.',
