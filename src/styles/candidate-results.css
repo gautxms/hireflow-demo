@@ -1767,9 +1767,7 @@
 }
 
 .candidate-filter-toolbar-wrap {
-  position: sticky;
-  top: calc(var(--app-header-height, 64px) + 10px);
-  z-index: 20;
+  position: relative;
   margin-bottom: 14px;
   padding-top: 2px;
 }
