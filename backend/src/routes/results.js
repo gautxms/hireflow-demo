@@ -265,6 +265,7 @@ export function normalizeCandidate(candidate = {}) {
     : (normalizeText(candidate?.experience) ? [{ title: normalizeText(candidate.experience) }] : [])
   const normalizedExperience = normalizeExperienceContract(candidate)
   const resumeIntegrityFlags = normalizeResumeIntegrityFlags(candidate)
+  const has = (key) => Object.prototype.hasOwnProperty.call(candidate, key)
 
   return {
     id,
@@ -280,8 +281,9 @@ export function normalizeCandidate(candidate = {}) {
     },
     summary: sentenceSafeClamp(candidate.summary || 'Summary not provided in this analysis.', 320),
     skills: normalizedSkillsObject,
-    skills_flat: Array.isArray(candidate.skills_flat) ? candidate.skills_flat : parseSkills(candidate.skills),
-    skills_structured: normalizedSkillsObject,
+    skills_flat: has('skills_flat') ? candidate.skills_flat : (Array.isArray(candidate.skills_flat) ? candidate.skills_flat : parseSkills(candidate.skills)),
+    skills_structured: has('skills_structured') ? candidate.skills_structured : normalizedSkillsObject,
+    ...(has('allExtractedSkills') ? { allExtractedSkills: candidate.allExtractedSkills } : {}),
     top_skills: Array.isArray(candidate.top_skills) && candidate.top_skills.length > 0 ? candidate.top_skills : parseSkills(candidate.skills).slice(0, 5),
     strengths: Array.isArray(candidate.pros) ? candidate.pros : Array.isArray(candidate.strengths) ? candidate.strengths : [reasoningFallback],
     considerations: Array.isArray(candidate.considerations) && candidate.considerations.length > 0 ? candidate.considerations : [fitAssessment.risk || 'Validate role-specific depth during interview.'],
@@ -297,7 +299,7 @@ export function normalizeCandidate(candidate = {}) {
       ? Number(candidate.experience_years)
       : resolveExperienceYears({ ...candidate, experience: experienceValue || candidate.experience }),
     position: candidate.position || '',
-    education: normalizedEducation.canonical,
+    education: has('education') ? candidate.education : normalizedEducation.canonical,
     legacyEducation: normalizedEducation.legacyEducation || '',
     highestEducation: normalizedEducation.highestEducation || '',
     highest_education: normalizedEducation.highestEducation || '',
@@ -328,6 +330,12 @@ export function normalizeCandidate(candidate = {}) {
     linkedinProfile: candidate.linkedinProfile || '',
     achievements: Array.isArray(candidate.achievements) ? candidate.achievements : [],
     confidenceScores: candidate.confidenceScores && typeof candidate.confidenceScores === 'object' ? candidate.confidenceScores : {},
+    ...(has('totalExperienceYears') ? { totalExperienceYears: candidate.totalExperienceYears } : {}),
+    ...(has('relevantExperienceYears') ? { relevantExperienceYears: candidate.relevantExperienceYears } : {}),
+    ...(has('experienceLabel') ? { experienceLabel: candidate.experienceLabel } : {}),
+    ...(has('experienceSource') ? { experienceSource: candidate.experienceSource } : {}),
+    ...(has('isExperienceEstimated') ? { isExperienceEstimated: candidate.isExperienceEstimated } : {}),
+    ...(has('experienceExplanation') ? { experienceExplanation: candidate.experienceExplanation } : {}),
     ...(resumeIntegrityFlags.length > 0 ? { resumeIntegrityFlags } : {}),
   }
 }
