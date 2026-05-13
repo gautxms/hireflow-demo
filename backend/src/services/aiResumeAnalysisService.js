@@ -15,14 +15,10 @@ const OPENAI_MODEL_CAPABILITIES = {
     supportsTemperature: false,
   },
 }
-const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
 function isFallbackDisabledOnTruncation() {
   return String(process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION || '').toLowerCase() === 'true'
 }
 
-function getMaxProviderAttemptsPerFile() {
-  return Math.max(1, Number.parseInt(process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE || '8', 10) || 8)
-}
 const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
 const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
 const CANDIDATE_COMPACT_SCHEMA_VERSION = 'compact-v2'
@@ -955,31 +951,11 @@ export async function analyzeWithOpenAI(
     return payload
   }
 
-  let payload = null
-  let responseStatus = ''
-  let incompleteReason = ''
-  const tokenLadder = compactMode ? [1200, 2000, 3000] : OPENAI_OUTPUT_TOKEN_LADDER
-  let attemptedMaxOutputTokens = tokenLadder[0]
-  for (let index = 0; index < tokenLadder.length; index += 1) {
-    const maxOutputTokens = tokenLadder[index]
-    const retryingAfterTokenCeiling = index > 0
-    const retryOutputInstructions = retryingAfterTokenCeiling
-      ? buildCompactOutputInstructions({ compactMode: true, truncationSafeMode: true })
-      : baseOutputInstructions
-    const requestPrompt = `${systemPromptText}\n\n${retryOutputInstructions}`
-
-    attemptedMaxOutputTokens = maxOutputTokens
-    payload = await callOpenAi(maxOutputTokens, requestPrompt)
-    responseStatus = String(payload?.status || '').toLowerCase()
-    incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
-
-    const shouldRetryForTokenCeiling = responseStatus === 'incomplete' && incompleteReason.toLowerCase() === 'max_output_tokens'
-    if (shouldRetryForTokenCeiling) {
-      continue
-    }
-
-    break
-  }
+  const attemptedMaxOutputTokens = compactMode ? 1200 : 2000
+  const requestPrompt = `${systemPromptText}\n\n${baseOutputInstructions}`
+  const payload = await callOpenAi(attemptedMaxOutputTokens, requestPrompt)
+  const responseStatus = String(payload?.status || '').toLowerCase()
+  const incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
 
   if (responseStatus && responseStatus !== 'completed') {
     if (incompleteReason.toLowerCase() === 'max_output_tokens') {
@@ -987,7 +963,7 @@ export async function analyzeWithOpenAI(
         category: 'response_truncated_error',
         provider: 'openai',
         model,
-        technicalDetails: `Provider output was truncated before valid JSON completion after retries (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${tokenLadder.join('->')}).`,
+        technicalDetails: `Provider output was truncated before valid JSON completion after retries (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${attemptedMaxOutputTokens}).`,
       })
     }
 
@@ -1027,6 +1003,40 @@ export async function analyzeWithOpenAI(
   }
 }
 
+
+async function runStrictProviderFallbackSequence({
+  providers,
+  callProvider,
+  attemptHistory,
+}) {
+  const [primary, fallback] = providers
+
+  const primaryAttemptOne = await callProvider(primary)
+  if (primaryAttemptOne.success) {
+    return primaryAttemptOne
+  }
+
+  if (!fallback) {
+    throw createTerminalProviderError(primaryAttemptOne.error, attemptHistory)
+  }
+
+  const fallbackAttempt = await callProvider(fallback)
+  if (fallbackAttempt.success) {
+    return fallbackAttempt
+  }
+
+  if (fallbackAttempt.failureCategory === primaryAttemptOne.failureCategory) {
+    throw createTerminalProviderError(fallbackAttempt.error, attemptHistory)
+  }
+
+  const primaryAttemptFinal = await callProvider(primary)
+  if (primaryAttemptFinal.success) {
+    return primaryAttemptFinal
+  }
+
+  throw createTerminalProviderError(primaryAttemptFinal.error, attemptHistory)
+}
+
 export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, options = {}) {
   const credentials = options.credentials || await getActiveAiProviderCredentials()
   const systemPromptConfig = options.systemPromptConfig || await getRuntimeSystemPromptConfig()
@@ -1036,32 +1046,28 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   if (governance.aiEnabled === false || governance?.workflowToggles?.resumeAnalysisEnabled === false) {
     throw new Error('ai_disabled_error::AI resume analysis is disabled by admin governance policy.')
   }
-  const adapters = {
-    anthropic: options.analyzeWithAnthropic || analyzeWithAnthropic,
-    openai: options.analyzeWithOpenAI || analyzeWithOpenAI,
-  }
-  const attemptPlan = buildProviderAttemptPlan(credentials)
 
-  if (attemptPlan.length === 0) {
+  const adapters = { anthropic: options.analyzeWithAnthropic || analyzeWithAnthropic, openai: options.analyzeWithOpenAI || analyzeWithOpenAI }
+  const rawPlan = buildProviderAttemptPlan(credentials)
+  const providerOrder = []
+  for (const entry of rawPlan) {
+    if (!providerSupportsMimeType(entry.provider, mimeType)) continue
+    if (providerOrder.some((candidate) => candidate.provider === entry.provider)) continue
+    providerOrder.push(entry)
+    if (providerOrder.length === 2) break
+  }
+
+  if (providerOrder.length === 0) {
     throw new Error('No configured AI API keys found. Configure provider primary/fallback keys in Admin Security.')
   }
 
-  let lastError = null
   const attemptHistory = []
   const compactByDefaultForModel = (modelName) => OPENAI_COMPACT_MODEL_PATTERN.test(String(modelName || ''))
   const isTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
 
-  let executedProviderAttempts = 0
-  for (const entry of attemptPlan) {
-    if (!providerSupportsMimeType(entry.provider, mimeType)) {
-      console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${mimeType}.`)
-      continue
-    }
-    if (executedProviderAttempts >= getMaxProviderAttemptsPerFile()) break
-    executedProviderAttempts += 1
-
+  const callProvider = async (entry) => {
     let compactMode = compactByDefaultForModel(entry.model)
     try {
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
@@ -1075,90 +1081,29 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         compactMode,
         promptTextOverride: null,
       })
-      if (cleanedPayload?.metrics) {
-        console.log('[AI Parse] Prompt payload metrics:', {
-          provider: entry.provider,
-          model: entry.model,
-          ...cleanedPayload.metrics,
-        })
-      }
 
-      return {
-        ...response,
-        attempts: [
-          ...attemptHistory,
-          createAttemptRecord({
-            success: true,
-            provider: entry.provider,
-            keyLabel: entry.keyLabel,
-            model: response.model,
-            providerSource: entry.source,
-            promptVersion: response.promptVersion,
-            promptIsDefaultFallback: response.promptIsDefaultFallback,
-            tokenUsage: response.tokenUsage,
-          }),
-        ],
-      }
+      const attemptRecord = createAttemptRecord({
+        success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source,
+        promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage,
+      })
+      attemptHistory.push(attemptRecord)
+      return { success: true, response }
     } catch (error) {
-      const firstFailureCategory = getFailureCategory(normalizeProviderError(error, attemptHistory))
-      if (entry.provider === 'anthropic' && firstFailureCategory === 'response_truncated_error' && compactMode === false) {
-        try {
-          const adapter = adapters[entry.provider] || analyzeWithAnthropic
-          const response = await adapter(cleanedBase64, mimeType, filename, {
-            apiKey: entry.apiKey,
-            model: entry.model,
-            keyLabel: entry.keyLabel,
-            providerSource: entry.source,
-            systemPromptConfig,
-            jobDescriptionContext: options.jobDescriptionContext || null,
-            compactMode: true,
-          })
-          return {
-            ...response,
-            attempts: [
-              ...attemptHistory,
-              createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:first_pass' }, failureCategory: 'response_truncated_error', failureReason: 'first attempt truncated; compact retry succeeded' }),
-              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage }),
-            ],
-          }
-        } catch (compactRetryError) {
-          error = compactRetryError
-        }
-      }
-      lastError = error
       const normalizedMessage = normalizeProviderError(error, attemptHistory)
       const failureCategory = getFailureCategory(normalizedMessage)
       const failureReason = sanitizeSnippet(String(error?.message || 'unknown_error'), 220)
       attemptHistory.push(createAttemptRecord({
-        success: false,
-        provider: entry.provider,
-        keyLabel: entry.keyLabel,
-        model: entry.model,
-        providerSource: entry.source,
-        promptVersion: systemPromptConfig?.promptVersion || 1,
-        promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback),
-        tokenUsage: {
-          usageAvailable: false,
-          unavailableReason: `provider_request_failed:${failureCategory}:${failureReason}`,
-        },
-        mode: compactMode ? 'minimal' : 'compact',
-        failureCategory,
-        failureReason,
+        success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source,
+        promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback),
+        tokenUsage: { usageAvailable: false, unavailableReason: `provider_request_failed:${failureCategory}:${failureReason}` },
+        mode: compactMode ? 'minimal' : 'compact', failureCategory, failureReason,
       }))
-      if (failureCategory === 'response_truncated_error' && isFallbackDisabledOnTruncation()) {
-        throw createTerminalProviderError(error, attemptHistory)
-      }
-      if (failureCategory === 'billing_quota_error') {
-        console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} quota/billing failed; immediate failover.`, error.message)
-      } else if (failureCategory === 'response_format_error') {
-        console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} response format failed after repair retry; failing over.`, error.message)
-      } else {
-        console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} failed:`, error.message)
-      }
+      return { success: false, error, failureCategory }
     }
   }
 
-  throw createTerminalProviderError(lastError, attemptHistory)
+  const sequenceResult = await runStrictProviderFallbackSequence({ providers: providerOrder, callProvider, attemptHistory })
+  return { ...sequenceResult.response, attempts: attemptHistory }
 }
 
 export const analyzeResumeWithClaude = analyzeWithAnthropic
