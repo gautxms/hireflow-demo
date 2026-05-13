@@ -236,6 +236,7 @@
   .candidates-directory__filters .candidates-directory__filter-field:nth-child(2) {
     grid-column: span 1;
   }
+}
 .candidates-directory__table-toolbar {
   display: flex;
   justify-content: space-between;
