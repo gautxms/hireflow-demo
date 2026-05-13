@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { dedupeCandidatesByResumeId } from '../components/candidateSelectionState'
+import { buildCandidatesDirectoryQueryParams, resolveCandidatesDirectoryUiState } from './candidatesDirectoryState'
 import '../styles/candidates-directory.css'
 import '../styles/ui-primitives.css'
 import '../styles/app-route-states.css'
@@ -62,17 +63,7 @@ export default function CandidatesPage() {
   const [jobOptions, setJobOptions] = useState([])
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams()
-    Object.entries(filters).forEach(([key, value]) => {
-      if (String(value || '').trim()) params.set(key, String(value).trim())
-    })
-    params.set('page', String(page))
-    params.set('pageSize', String(pageSize))
-    params.set('sortBy', sortBy)
-    params.set('sortDirection', sortDirection)
-    return params.toString()
-  }, [filters, page, pageSize, sortBy, sortDirection])
+  const queryString = useMemo(() => buildCandidatesDirectoryQueryParams({ filters, page, pageSize, sortBy, sortDirection }).toString(), [filters, page, pageSize, sortBy, sortDirection])
 
   const hasActiveFilters = useMemo(() => Object.values(filters).some((value) => String(value || '').trim().length > 0), [filters])
 
@@ -211,11 +202,13 @@ export default function CandidatesPage() {
   const hasSafeJobOptions = jobOptions.length > 0
 
   const hasCandidates = candidateRows.length > 0
-  const showLoadingState = isLoading
-  const showErrorState = !isLoading && Boolean(error)
-  const showEmptyWithoutFilters = !isLoading && !error && !hasCandidates && !hasActiveFilters
-  const showEmptyWithFilters = !isLoading && !error && !hasCandidates && hasActiveFilters
-  const showLoadedState = !isLoading && !error && hasCandidates
+  const {
+    showLoadingState,
+    showErrorState,
+    showEmptyWithoutFilters,
+    showEmptyWithFilters,
+    showLoadedState,
+  } = resolveCandidatesDirectoryUiState({ isLoading, error, hasCandidates, hasActiveFilters })
 
   const renderFilterField = (key) => {
     const config = candidateFilterFieldConfig[key] || {}

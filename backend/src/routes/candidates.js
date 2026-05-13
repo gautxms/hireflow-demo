@@ -409,8 +409,8 @@ router.get('/directory', requireAuth, async (req, res) => {
       scoreMax: normalizeNumberFilter(req.query.scoreMax),
       sourceJobId: normalizeString(req.query.sourceJobId),
       sourceAnalysisId: normalizeString(req.query.sourceAnalysisId),
-      search: normalizeString(req.query.search).toLowerCase(),
-      job: normalizeString(req.query.job).toLowerCase(),
+      search: (normalizeString(req.query.search) || '').toLowerCase(),
+      job: (normalizeString(req.query.job) || '').toLowerCase(),
     }
 
     const page = normalizePositiveInteger(req.query.page, DEFAULT_DIRECTORY_PAGE)

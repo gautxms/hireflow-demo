@@ -4,7 +4,6 @@ import express from 'express'
 import jwt from 'jsonwebtoken'
 import candidatesRouter from './candidates.js'
 import { pool } from '../db/client.js'
-import * as candidateProfilesService from '../services/candidateProfilesService.js'
 import { once } from 'node:events'
 
 function buildApp() {
@@ -38,6 +37,7 @@ const EXPECTED_KEYS = [
   'latestJobTitle',
   'skills',
   'profileScore',
+  'recruiter',
   'yearsExperience',
   'topSkills',
   'tags',
@@ -52,14 +52,49 @@ const EXPECTED_KEYS = [
 
 test('GET /candidates/directory contract: modern + legacy + null-safe mixed dataset and filters', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
-  t.mock.method(candidateProfilesService, 'syncCandidateProfilesForUser', async () => {})
+  let shouldFailSync = false
 
   const modernResumeId = '11111111-1111-1111-1111-111111111111'
   const legacyResumeId = '22222222-2222-2222-2222-222222222222'
   const mixedResumeId = '33333333-3333-3333-3333-333333333333'
 
   t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM resumes r')) {
+      if (shouldFailSync) throw new Error('sync timed out')
+      return { rows: [] }
+    }
+
     if (sql.includes('FROM candidate_profiles cp')) {
+      if (sql.includes('skill_value = ANY') && sql.includes('>= $')) {
+        return { rows: [] }
+      }
+      if (shouldFailSync) {
+        return {
+          rows: [
+            {
+              resume_id: '44444444-4444-4444-4444-444444444444',
+              profile: { name: null, skills: null, top_skills: null, years_experience: null, profile_score: null },
+              source_parse_job_id: null,
+              source_updated_at: null,
+              updated_at: null,
+              filename: 'historical-import.pdf',
+              profile_score: null,
+              years_experience: null,
+              job_description_id: null,
+              parse_status: null,
+              job_title: null,
+              latest_analysis_id: null,
+              latest_analysis_name: null,
+              latest_analysis_created_at: null,
+              latest_analysis_completed_at: null,
+              latest_analysis_status: null,
+              tags: null,
+              total_count: 1,
+            },
+          ],
+        }
+      }
+
       return {
         rows: [
           {
@@ -92,6 +127,7 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
             latest_analysis_completed_at: '2026-05-10T01:00:00.000Z',
             latest_analysis_status: 'complete',
             tags: ['interview', 'frontend'],
+            total_count: 3,
           },
           {
             resume_id: legacyResumeId,
@@ -111,6 +147,7 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
             latest_analysis_completed_at: null,
             latest_analysis_status: null,
             tags: null,
+            total_count: 3,
           },
           {
             resume_id: mixedResumeId,
@@ -135,6 +172,7 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
             latest_analysis_completed_at: null,
             latest_analysis_status: null,
             tags: ['needs-review'],
+            total_count: 3,
           },
         ],
       }
@@ -206,6 +244,22 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
   assert.equal(filteredPayload.totalCount, 0)
   assert.equal(filteredPayload.totalPages, 0)
   assert.equal(filteredPayload.total, 0)
+
+
+  shouldFailSync = true
+  const syncFailureResponse = await fetch(`http://127.0.0.1:${port}/candidates/directory`, {
+    headers: authHeader(42),
+  })
+  const syncFailurePayload = await syncFailureResponse.json()
+  assert.equal(syncFailureResponse.status, 200)
+  assert.equal(syncFailurePayload.totalCount, 1)
+  assert.equal(syncFailurePayload.candidates[0].name, 'historical-import.pdf')
+  assert.deepEqual(syncFailurePayload.candidates[0].skills, [])
+  assert.deepEqual(syncFailurePayload.candidates[0].topSkills, [])
+  assert.equal(syncFailurePayload.candidates[0].profileScore, null)
+  assert.equal(syncFailurePayload.candidates[0].yearsExperience, null)
+  assert.equal(syncFailurePayload.candidates[0].latestAnalysis, null)
+
   assert.deepEqual(filteredPayload.filtersApplied, {
     skills: ['react'],
     tags: [],
@@ -215,5 +269,9 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
     scoreMax: null,
     sourceJobId: null,
     sourceAnalysisId: null,
+    search: '',
+    job: '',
   })
 })
+
+
