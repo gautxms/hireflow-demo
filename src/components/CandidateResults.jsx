@@ -29,6 +29,7 @@ import {
 import '../styles/candidate-results.css'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
 import { resolveScoreBreakdown, resolveSkillSignals } from './candidateScoreSkillsResolver'
+import { resolveCandidateReasoning, resolveCandidateVerdict, normalizeComparableTextKey } from './candidateDrawerTextResolver'
 import { resolveResumeFileTypeLabel } from './resumeFileTypeResolver'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -174,22 +175,14 @@ function deriveCompactRationale(candidate) {
 
 
 
-function normalizeComparableText(value) {
-  return toDisplayText(value, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[•\-–—]/g, ' ')
-    .trim()
-}
-
 function dedupeTextItems(items, blocked = []) {
-  const blockedSet = new Set(blocked.map(normalizeComparableText).filter(Boolean))
+  const blockedSet = new Set(blocked.map(normalizeComparableTextKey).filter(Boolean))
   const seen = new Set()
   return (Array.isArray(items) ? items : [])
     .map((item) => toDisplayText(item, '').trim())
     .filter(Boolean)
     .filter((item) => {
-      const key = normalizeComparableText(item)
+      const key = normalizeComparableTextKey(item)
       if (!key || seen.has(key) || blockedSet.has(key)) {
         return false
       }
@@ -1121,7 +1114,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             ? normalizeTextList(candidate.achievements).slice(0, 3)
             : []).slice(0, 3)
         const candidateConsiderations = dedupeTextItems(normalizeTextList(candidate.considerations))
-        const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
+        const verdictText = resolveCandidateVerdict(candidate)
+        const reasoningText = resolveCandidateReasoning(candidate, verdictText)
         const scoreBreakdown = resolveScoreBreakdown(candidate)
         const skillSignals = resolveSkillSignals(candidate)
         const primarySkills = skillSignals.primarySkills.length > 0
@@ -1185,7 +1179,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <div className="dd-body">
               <div className="dd-col dd-col--left">
                 <div className="dd-col-label">Decision summary</div>
-                <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
+                <p className="dd-summary">{verdictText}</p>
                 <div className="dd-col-label dd-col-label--mt-16">Recommended action</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}
