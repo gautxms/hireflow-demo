@@ -399,11 +399,58 @@ function firstDefined(values = []) {
   return undefined
 }
 
+function resolveExperienceTitle(candidate = {}) {
+  if (!Array.isArray(candidate?.experience)) {
+    return ''
+  }
+
+  const firstExperience = candidate.experience[0]
+  if (!firstExperience || typeof firstExperience !== 'object') {
+    return ''
+  }
+
+  return toDisplayText(firstExperience.title, '')
+}
+
+function resolveEducationDisplay(educationValue) {
+  const formatEducationObject = (value) => {
+    if (!value || typeof value !== 'object') {
+      return ''
+    }
+
+    const degree = toDisplayText(value.degree || value.qualification || value.program, '')
+    const school = toDisplayText(value.school || value.institution || value.university, '')
+    if (degree && school) {
+      return `${degree} — ${school}`
+    }
+    return degree || school || toDisplayText(value.text || value.value, '')
+  }
+
+  if (Array.isArray(educationValue)) {
+    const entries = educationValue
+      .map((entry) => (typeof entry === 'string' ? toDisplayText(entry, '') : formatEducationObject(entry)))
+      .filter(Boolean)
+    return entries.join(', ')
+  }
+
+  if (typeof educationValue === 'object' && educationValue !== null) {
+    return formatEducationObject(educationValue)
+  }
+
+  return toDisplayText(educationValue, '')
+}
+
 export function resolveCandidateBasics(candidate = {}) {
-  const title = toDisplayText(firstDefined([candidate?.title, candidate?.role, candidate?.headline]), 'N/A')
+  const title = toDisplayText(firstDefined([
+    candidate?.current_title,
+    resolveExperienceTitle(candidate),
+    candidate?.title,
+    candidate?.role,
+    candidate?.headline,
+  ]), 'N/A')
   const location = toDisplayText(firstDefined([candidate?.location, candidate?.city, candidate?.region]), 'N/A')
   const seniority = toDisplayText(firstDefined([candidate?.seniority, candidate?.level]), 'N/A')
-  const education = toDisplayText(firstDefined([candidate?.education, candidate?.highestEducation]), 'N/A')
+  const education = toDisplayText(resolveEducationDisplay(firstDefined([candidate?.education, candidate?.highestEducation])), 'N/A')
 
   const totalExperienceYears = Number(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
   const experienceYears = Number.isFinite(totalExperienceYears)

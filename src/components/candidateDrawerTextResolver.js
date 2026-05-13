@@ -51,7 +51,11 @@ export function resolveCandidateVerdict(candidate = {}) {
 export function resolveCandidateReasoning(candidate = {}, verdict = '') {
   const lines = dedupeByComparableText([
     ...splitReasoningLines(candidate?.matchScore?.reason),
+    ...splitReasoningLines(candidate?.fit_assessment?.rationale),
     ...splitReasoningLines(candidate?.fit_assessment?.reason),
+    ...splitReasoningLines(candidate?.fit_assessment?.risks_or_gaps),
+    ...splitReasoningLines(candidate?.fit_assessment?.uncertainty),
+    ...splitReasoningLines(candidate?.fit_assessment?.risk),
     ...splitReasoningLines(candidate?.summary),
   ], [verdict])
 

@@ -1,8 +1,18 @@
 function normalizeCandidate(candidate = {}) {
+  const fitAssessment = candidate?.fit_assessment && typeof candidate.fit_assessment === 'object'
+    ? candidate.fit_assessment
+    : {}
+
+  const matchedRequirements = Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : []
+  const missingRequirements = Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : []
+  const risksOrGaps = String(fitAssessment.risks_or_gaps || '').trim()
+  const rationale = String(fitAssessment.rationale || '').trim()
+
   const rawScore = Number(candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.score ?? candidate?.profile_score ?? 0)
   const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 0
   const reason = String(
     candidate?.matchScore?.reason
+    || rationale
     || candidate?.fit_assessment?.reason
     || candidate?.summary
     || 'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
@@ -12,7 +22,7 @@ function normalizeCandidate(candidate = {}) {
     : [reason]
   const considerations = Array.isArray(candidate?.considerations) && candidate.considerations.length > 0
     ? candidate.considerations
-    : [candidate?.fit_assessment?.risk || 'Review role-specific fit in interview.']
+    : [risksOrGaps || candidate?.fit_assessment?.risk || 'Review role-specific fit in interview.']
 
   return {
     ...candidate,
@@ -25,15 +35,18 @@ function normalizeCandidate(candidate = {}) {
     strengths,
     considerations,
     top_skills: Array.isArray(candidate?.top_skills) ? candidate.top_skills : [],
-    fit_assessment: candidate?.fit_assessment && typeof candidate.fit_assessment === 'object'
-      ? {
-          matched: Array.isArray(candidate.fit_assessment.matched) ? candidate.fit_assessment.matched : [],
-          missing: Array.isArray(candidate.fit_assessment.missing) ? candidate.fit_assessment.missing : [],
-          risk: String(candidate.fit_assessment.risk || '').trim(),
-          uncertainty: String(candidate.fit_assessment.uncertainty || '').trim(),
-          reason,
-        }
-      : { matched: [], missing: [], risk: '', uncertainty: '', reason },
+    fit_assessment: {
+      ...fitAssessment,
+      matched_requirements: matchedRequirements,
+      missing_requirements: missingRequirements,
+      risks_or_gaps: risksOrGaps,
+      rationale,
+      matched: Array.isArray(fitAssessment.matched) ? fitAssessment.matched : matchedRequirements,
+      missing: Array.isArray(fitAssessment.missing) ? fitAssessment.missing : missingRequirements,
+      risk: String(fitAssessment.risk || risksOrGaps).trim(),
+      uncertainty: String(fitAssessment.uncertainty || risksOrGaps).trim(),
+      reason,
+    },
   }
 }
 

@@ -25,8 +25,11 @@ function dedupe(items) {
 }
 
 export function resolveCandidateScoreBreakdown(candidate = {}) {
+  const matchScoreBreakdown = candidate?.matchScore?.breakdown
   const breakdown = candidate?.score_breakdown && typeof candidate.score_breakdown === 'object'
     ? candidate.score_breakdown
+    : matchScoreBreakdown && typeof matchScoreBreakdown === 'object'
+      ? matchScoreBreakdown
     : candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object'
       ? candidate.scoreBreakdown
       : null
@@ -69,9 +72,21 @@ export function resolveCandidateScoreBreakdown(candidate = {}) {
 export const resolveScoreBreakdown = resolveCandidateScoreBreakdown
 
 export function resolveSkillSignals(candidate = {}) {
-  const explicitMatched = dedupe(normalizeList(candidate?.matchedSkills || candidate?.matched_skills || candidate?.fit_assessment?.matched))
+  const explicitMatched = dedupe(normalizeList(
+    candidate?.fit_assessment?.matched_requirements
+    || candidate?.matchedSkills
+    || candidate?.matched_skills
+    || candidate?.fit_assessment?.matched,
+  ))
   const relevantSkills = dedupe(normalizeList(candidate?.relevantSkills || candidate?.relevant_skills || candidate?.top_skills || candidate?.skills))
-  const skillGaps = dedupe(normalizeList(candidate?.missingSkills || candidate?.missing_skills || candidate?.fit_assessment?.missing || candidate?.skill_gaps || candidate?.skillGaps))
+  const skillGaps = dedupe(normalizeList(
+    candidate?.fit_assessment?.missing_requirements
+    || candidate?.missingSkills
+    || candidate?.missing_skills
+    || candidate?.fit_assessment?.missing
+    || candidate?.skill_gaps
+    || candidate?.skillGaps,
+  ))
   const allSkills = dedupe(normalizeList(candidate?.top_skills || candidate?.skills))
 
   const hasExplicitMatched = explicitMatched.length > 0
