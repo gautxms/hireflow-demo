@@ -412,18 +412,25 @@ function resolveExperienceTitle(candidate = {}) {
   return toDisplayText(firstExperience.title, '').trim()
 }
 
+function normalizeEducationEntry(value) {
+  if (!value || typeof value !== 'object') return null
+  const degree = toDisplayText(value.degree || value.qualification || value.program, '').trim()
+  const institution = toDisplayText(value.school || value.institution || value.university, '').trim()
+  const field = toDisplayText(value.field || value.major || value.field_of_study, '').trim()
+  const startDate = toDisplayText(value.startDate || value.start_date, '').trim()
+  const endDate = toDisplayText(value.endDate || value.end_date, '').trim()
+  const rawText = toDisplayText(value.text || value.value, '').trim()
+  return { degree, institution, field, startDate, endDate, rawText }
+}
+
 function resolveEducationDisplay(educationValue) {
   const formatEducationObject = (value) => {
-    if (!value || typeof value !== 'object') {
-      return ''
-    }
-
-    const degree = toDisplayText(value.degree || value.qualification || value.program, '')
-    const school = toDisplayText(value.school || value.institution || value.university, '')
-    if (degree && school) {
-      return `${degree} — ${school}`
-    }
-    return degree || school || toDisplayText(value.text || value.value, '')
+    const normalized = normalizeEducationEntry(value)
+    if (!normalized) return ''
+    const { degree, institution, field, rawText } = normalized
+    const degreeLabel = [degree, field].filter(Boolean).join(', ')
+    if (degreeLabel && institution) return `${degreeLabel} — ${institution}`
+    return degreeLabel || institution || rawText
   }
 
   if (Array.isArray(educationValue)) {
@@ -474,7 +481,30 @@ export function resolveCandidateBasics(candidate = {}) {
   }
 
   const totalExperienceYears = parseFiniteNumber(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
-  const estimatedExperienceYears = parseFiniteNumber(candidate?.estimatedExperienceYears)
+
+  const estimateFromDateRange = () => {
+    const entries = Array.isArray(candidate?.experience) ? candidate.experience : []
+    const totalMonths = entries.reduce((sum, entry) => {
+      if (!entry || typeof entry !== 'object') return sum
+      const parseDate = (value) => {
+        if (!value) return null
+        const normalized = String(value).trim().toLowerCase()
+        if (!normalized) return null
+        if (normalized === 'present' || normalized === 'current' || normalized === 'now') return new Date()
+        const parsed = new Date(value)
+        return Number.isNaN(parsed.getTime()) ? null : parsed
+      }
+      const start = parseDate(entry.startDate || entry.start_date)
+      const end = parseDate(entry.endDate || entry.end_date) || new Date()
+      if (!start || !end || end < start) return sum
+      const months = ((end.getFullYear() - start.getFullYear()) * 12) + (end.getMonth() - start.getMonth())
+      return sum + Math.max(0, months)
+    }, 0)
+    if (totalMonths <= 0) return null
+    return Number((totalMonths / 12).toFixed(1))
+  }
+
+  const estimatedExperienceYears = parseFiniteNumber(firstDefined([candidate?.estimatedExperienceYears, estimateFromDateRange()]))
   const isEstimatedExperience = Boolean(candidate?.isEstimated)
   const experienceYears = Number.isFinite(totalExperienceYears)
     ? totalExperienceYears
@@ -482,7 +512,7 @@ export function resolveCandidateBasics(candidate = {}) {
       ? estimatedExperienceYears
       : (() => {
         const parsed = String(firstDefined([candidate?.experience, '']) || '').match(/(\d+(?:\.\d+)?)/)
-        return parsed ? Number(parsed[1]) : null
+        return parsed ? Number(parsed[1]) : 0.1
       })()
 
   return {
@@ -492,7 +522,8 @@ export function resolveCandidateBasics(candidate = {}) {
     education,
     experienceYears,
     estimatedExperienceYears,
-    isEstimatedExperience,
+    isEstimatedExperience: isEstimatedExperience || (!Number.isFinite(totalExperienceYears) && Number.isFinite(estimatedExperienceYears)),
+    experienceLabel: !Number.isFinite(totalExperienceYears) && Number.isFinite(estimatedExperienceYears) ? 'Estimated from date ranges' : undefined,
   }
 }
 
@@ -526,12 +557,28 @@ export function resolveCandidateFit(candidate = {}) {
 }
 
 export function resolveCandidateSkills(candidate = {}) {
-  const matchedSkills = Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []
+  const allExtractedSkills = Array.isArray(candidate?.allExtractedSkills)
+    ? candidate.allExtractedSkills
+    : Array.isArray(candidate?.all_extracted_skills)
+      ? candidate.all_extracted_skills
+      : parseSkillList(firstDefined([candidate?.top_skills, candidate?.skills_structured, candidate?.skills]))
+  const matchedSkills = Array.isArray(candidate?.matchedSkills)
+    ? candidate.matchedSkills
+    : Array.isArray(candidate?.matched_skills)
+      ? candidate.matched_skills
+      : []
+  const missingRequirements = Array.isArray(candidate?.missingRequirements)
+    ? candidate.missingRequirements
+    : Array.isArray(candidate?.missing_requirements)
+      ? candidate.missing_requirements
+      : []
   const relevantSkills = parseSkillList(firstDefined([candidate?.top_skills, candidate?.skills_structured, candidate?.skills]))
   const skillGaps = Array.isArray(candidate?.skillGaps) ? candidate.skillGaps : []
 
   return {
+    allExtractedSkills,
     matchedSkills,
+    missingRequirements,
     relevantSkills,
     skillGaps,
     matchedSkillsAvailable: matchedSkills.length > 0,

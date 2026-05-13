@@ -50,3 +50,34 @@ test('normalizes canonical fit_assessment fields into legacy aliases while prese
   assert.equal(candidate.fit_assessment.uncertainty, 'No production-scale Kubernetes example.')
   assert.equal(candidate.fit_assessment.reason, 'Strong frontend depth and leadership evidence.')
 })
+
+test('normalizes skill contract fields with backward-compatible aliases', () => {
+  const payload = normalizeCandidateResultsPayload({
+    candidates: [{
+      all_extracted_skills: ['React', 'Node.js', 'Kubernetes'],
+      matched_skills: ['React'],
+      fit_assessment: { missing_requirements: ['Kubernetes'] },
+    }],
+  })
+
+  const [candidate] = payload.candidates
+  assert.deepEqual(candidate.allExtractedSkills, ['React', 'Node.js', 'Kubernetes'])
+  assert.deepEqual(candidate.matchedSkills, ['React'])
+  assert.deepEqual(candidate.missingRequirements, ['Kubernetes'])
+  assert.deepEqual(candidate.all_extracted_skills, ['React', 'Node.js', 'Kubernetes'])
+})
+
+
+test('preserves top-level missing requirements when fit_assessment is absent', () => {
+  const payload = normalizeCandidateResultsPayload({
+    candidates: [{
+      missing_requirements: ['GraphQL'],
+    }],
+  })
+
+  const [candidate] = payload.candidates
+  assert.deepEqual(candidate.missingRequirements, ['GraphQL'])
+  assert.deepEqual(candidate.missing_requirements, ['GraphQL'])
+  assert.deepEqual(candidate.fit_assessment.missing_requirements, ['GraphQL'])
+  assert.deepEqual(candidate.fit_assessment.missing, ['GraphQL'])
+})
