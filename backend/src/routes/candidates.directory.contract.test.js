@@ -17,6 +17,17 @@ function authHeader(userId) {
   return { Authorization: `Bearer ${jwt.sign({ userId }, process.env.JWT_SECRET)}` }
 }
 
+
+const REQUIRED_RESPONSE_KEYS = [
+  'candidates',
+  'totalCount',
+  'page',
+  'pageSize',
+  'totalPages',
+  'sortBy',
+  'sortDirection',
+]
+
 const EXPECTED_KEYS = [
   'resumeId',
   'candidateId',
@@ -84,7 +95,7 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
           },
           {
             resume_id: legacyResumeId,
-            profile: {},
+            profile: null,
             source_parse_job_id: null,
             source_updated_at: '2026-05-09T00:00:00.000Z',
             updated_at: '2026-05-09T00:00:00.000Z',
@@ -146,6 +157,13 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
   const allPayload = await allResponse.json()
 
   assert.equal(allResponse.status, 200)
+  for (const key of REQUIRED_RESPONSE_KEYS) {
+    assert.ok(Object.hasOwn(allPayload, key), `missing required response key: ${key}`)
+  }
+  assert.equal(allPayload.totalCount, 3)
+  assert.equal(allPayload.totalPages, 1)
+  assert.equal(allPayload.sortBy, 'recent')
+  assert.equal(allPayload.sortDirection, 'desc')
   assert.equal(allPayload.total, 3)
   assert.equal(allPayload.candidates.length, 3)
 
@@ -185,6 +203,8 @@ test('GET /candidates/directory contract: modern + legacy + null-safe mixed data
   const filteredPayload = await filteredResponse.json()
 
   assert.equal(filteredResponse.status, 200)
+  assert.equal(filteredPayload.totalCount, 0)
+  assert.equal(filteredPayload.totalPages, 0)
   assert.equal(filteredPayload.total, 0)
   assert.deepEqual(filteredPayload.filtersApplied, {
     skills: ['react'],
