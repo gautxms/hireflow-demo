@@ -1,4 +1,6 @@
-import { toDisplayText } from './candidateResultsState'
+import { toDisplayText } from './candidateResultsState.js'
+
+export const SCORE_BREAKDOWN_UNAVAILABLE_MESSAGE = 'Detailed score breakdown unavailable for this analysis.'
 
 function normalizeList(value) {
   if (!Array.isArray(value)) {
@@ -22,7 +24,7 @@ function dedupe(items) {
   })
 }
 
-export function resolveScoreBreakdown(candidate = {}) {
+export function resolveCandidateScoreBreakdown(candidate = {}) {
   const breakdown = candidate?.score_breakdown && typeof candidate.score_breakdown === 'object'
     ? candidate.score_breakdown
     : candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object'
@@ -33,11 +35,28 @@ export function resolveScoreBreakdown(candidate = {}) {
     return { isValid: false, items: [] }
   }
 
+  const isValidScore = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
+
+  const skillsAlignment = breakdown.skills_alignment
+  const experienceAlignment = breakdown.experience_alignment
+  const educationAlignment = breakdown.education_alignment
+  const overall = breakdown.overall
+
+  if (![skillsAlignment, experienceAlignment, educationAlignment, overall].every(isValidScore)) {
+    return { isValid: false, items: [] }
+  }
+
+  const subtotal = skillsAlignment + experienceAlignment + educationAlignment
+  const expectedOverall = subtotal / 3
+  if (Math.abs(expectedOverall - overall) > 1) {
+    return { isValid: false, items: [] }
+  }
+
   const allowedFields = [
-    ['Skills alignment', breakdown.skills_alignment],
-    ['Experience alignment', breakdown.experience_alignment],
-    ['Education alignment', breakdown.education_alignment],
-    ['Overall score', breakdown.overall],
+    ['Skills alignment', skillsAlignment],
+    ['Experience alignment', experienceAlignment],
+    ['Education alignment', educationAlignment],
+    ['Overall score', overall],
   ]
 
   const items = allowedFields
@@ -46,6 +65,8 @@ export function resolveScoreBreakdown(candidate = {}) {
 
   return { isValid: items.length > 0, items }
 }
+
+export const resolveScoreBreakdown = resolveCandidateScoreBreakdown
 
 export function resolveSkillSignals(candidate = {}) {
   const explicitMatched = dedupe(normalizeList(candidate?.matchedSkills || candidate?.matched_skills || candidate?.fit_assessment?.matched))
@@ -65,4 +86,3 @@ export function resolveSkillSignals(candidate = {}) {
     allSkills,
   }
 }
-
