@@ -414,28 +414,37 @@ function resolveExperienceTitle(candidate = {}) {
 
 function normalizeEducationEntry(value) {
   if (!value || typeof value !== 'object') return null
-  const degree = toDisplayText(value.degree || value.qualification || value.program, '').trim()
-  const institution = toDisplayText(value.school || value.institution || value.university, '').trim()
-  const field = toDisplayText(value.field || value.major || value.field_of_study, '').trim()
-  const startDate = toDisplayText(value.startDate || value.start_date, '').trim()
-  const endDate = toDisplayText(value.endDate || value.end_date, '').trim()
-  const rawText = toDisplayText(value.text || value.value, '').trim()
-  return { degree, institution, field, startDate, endDate, rawText }
+  const degree = toDisplayText(firstDefined([value.degree, value.qualification, value.program]), '').trim()
+  const institution = toDisplayText(firstDefined([value.institution, value.school, value.university, value.college]), '').trim()
+  const field = toDisplayText(firstDefined([value.field, value.major, value.specialization, value.field_of_study]), '').trim()
+  const startDate = toDisplayText(firstDefined([value.startDate, value.startYear, value.start_date]), '').trim()
+  const endDate = toDisplayText(firstDefined([value.endDate, value.endYear, value.end_date]), '').trim()
+  const year = toDisplayText(value.year, '').trim()
+  const grade = toDisplayText(firstDefined([value.grade, value.percentage, value.cgpa, value.gpa, value.status]), '').trim()
+  const rawText = toDisplayText(firstDefined([value.rawText, value.text, value.value]), '').trim()
+  return { degree, institution, field, startDate, endDate, year, grade, rawText }
 }
 
 function resolveEducationDisplay(educationValue) {
   const formatEducationObject = (value) => {
     const normalized = normalizeEducationEntry(value)
     if (!normalized) return ''
-    const { degree, institution, field, rawText } = normalized
+    const { degree, institution, field, startDate, endDate, year, grade, rawText } = normalized
     const degreeLabel = [degree, field].filter(Boolean).join(', ')
-    if (degreeLabel && institution) return `${degreeLabel} — ${institution}`
-    return degreeLabel || institution || rawText
+    const yearLabel = year || [startDate, endDate].filter(Boolean).join('–')
+    const primary = degreeLabel && institution ? `${degreeLabel} — ${institution}` : (degreeLabel || institution)
+    const detail = [yearLabel, grade].filter(Boolean).join(' • ')
+    const structured = [primary, detail].filter(Boolean).join(' • ')
+    return structured || rawText
   }
 
   if (Array.isArray(educationValue)) {
     const entries = educationValue
-      .map((entry) => (typeof entry === 'string' ? toDisplayText(entry, '') : formatEducationObject(entry)))
+      .map((entry) => {
+        if (typeof entry === 'string') return toDisplayText(entry, '')
+        if (entry && typeof entry === 'object') return formatEducationObject(entry)
+        return ''
+      })
       .filter(Boolean)
     return entries.join(', ')
   }
@@ -448,16 +457,19 @@ function resolveEducationDisplay(educationValue) {
 }
 
 export function resolveCandidateEducationText(candidate = {}) {
-  return toDisplayText(
-    resolveEducationDisplay(firstDefined([
-      candidate?.education,
-      candidate?.legacyEducation,
-      candidate?.highestEducation,
-      candidate?.highest_education,
-      candidate?.degree,
-    ])),
-    'N/A',
-  )
+  const normalizedEducation = resolveEducationDisplay(candidate?.education)
+  if (normalizedEducation) {
+    return normalizedEducation
+  }
+
+  const legacyEducation = resolveEducationDisplay(firstDefined([
+    candidate?.legacyEducation,
+    candidate?.highestEducation,
+    candidate?.highest_education,
+    candidate?.degree,
+  ]))
+
+  return toDisplayText(legacyEducation, 'Education unavailable')
 }
 
 export function resolveCandidateBasics(candidate = {}) {
