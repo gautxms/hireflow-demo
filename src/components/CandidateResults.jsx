@@ -1207,6 +1207,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
+                  <div className="dd-analysis-item"><strong>Confidence:</strong> {skillSignals.confidence} · <strong>Source:</strong> {skillSignals.source}</div>
+                  <div className="dd-analysis-item">{skillSignals.helperCopy}</div>
                   {primarySkills.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-primary-skill-${idx}`}><Check size={14} aria-hidden="true" />{item}</div>)}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>

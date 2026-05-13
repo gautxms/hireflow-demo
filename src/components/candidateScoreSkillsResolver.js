@@ -1,4 +1,4 @@
-import { toDisplayText } from './candidateResultsState'
+import { toDisplayText } from './candidateResultsState.js'
 
 function normalizeList(value) {
   if (!Array.isArray(value)) {
@@ -49,20 +49,27 @@ export function resolveScoreBreakdown(candidate = {}) {
 
 export function resolveSkillSignals(candidate = {}) {
   const explicitMatched = dedupe(normalizeList(candidate?.matchedSkills || candidate?.matched_skills || candidate?.fit_assessment?.matched))
-  const relevantSkills = dedupe(normalizeList(candidate?.relevantSkills || candidate?.relevant_skills))
+  const relevantSkills = dedupe(normalizeList(candidate?.relevantSkills || candidate?.relevant_skills || candidate?.top_skills || candidate?.skills))
   const skillGaps = dedupe(normalizeList(candidate?.missingSkills || candidate?.missing_skills || candidate?.fit_assessment?.missing || candidate?.skill_gaps || candidate?.skillGaps))
   const allSkills = dedupe(normalizeList(candidate?.top_skills || candidate?.skills))
 
   const hasExplicitMatched = explicitMatched.length > 0
-  const label = hasExplicitMatched ? 'Matched skills' : 'Relevant skills'
+  const label = hasExplicitMatched ? 'MATCHED SKILLS' : 'RELEVANT SKILLS'
   const primarySkills = hasExplicitMatched ? explicitMatched : relevantSkills
+  const source = hasExplicitMatched ? 'explicit' : primarySkills.length > 0 ? 'inferred' : 'none'
+  const confidence = hasExplicitMatched ? 'high' : primarySkills.length > 0 ? 'medium' : 'low'
+  const helperCopy = hasExplicitMatched
+    ? 'Directly matched skills from the analysis payload.'
+    : 'Inferred relevant skills based on available profile skill lists.'
 
   return {
     label,
     primarySkills,
     hasExplicitMatched,
+    source,
+    confidence,
+    helperCopy,
     skillGaps,
     allSkills,
   }
 }
-
