@@ -33,6 +33,65 @@ function firstNonEmptyArray(...values) {
   return []
 }
 
+function normalizeCsvString(value) {
+  if (typeof value !== 'string') {
+    return []
+  }
+
+  return value
+    .split(',')
+    .map((entry) => toDisplayText(entry, '').trim())
+    .filter(Boolean)
+}
+
+function flattenStructuredSkills(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return []
+  }
+
+  const flattened = []
+
+  Object.values(value).forEach((entry) => {
+    if (Array.isArray(entry)) {
+      flattened.push(...normalizeList(entry))
+      return
+    }
+
+    if (entry && typeof entry === 'object') {
+      Object.values(entry).forEach((nested) => {
+        if (Array.isArray(nested)) {
+          flattened.push(...normalizeList(nested))
+          return
+        }
+
+        const text = toDisplayText(nested, '').trim()
+        if (text) {
+          flattened.push(text)
+        }
+      })
+      return
+    }
+
+    const text = toDisplayText(entry, '').trim()
+    if (text) {
+      flattened.push(text)
+    }
+  })
+
+  return flattened
+}
+
+function firstNonEmptyNormalizedList(...values) {
+  for (const value of values) {
+    const normalized = normalizeList(value)
+    if (normalized.length > 0) {
+      return normalized
+    }
+  }
+
+  return []
+}
+
 export function resolveCandidateScoreBreakdown(candidate = {}) {
   const matchScoreBreakdown = candidate?.matchScore?.breakdown
   const breakdown = candidate?.score_breakdown && typeof candidate.score_breakdown === 'object'
@@ -89,18 +148,46 @@ export function resolveSkillSignals(candidate = {}) {
       candidate?.fit_assessment?.matched,
     ),
   ))
-  const relevantSkills = dedupe(normalizeList(candidate?.relevantSkills || candidate?.relevant_skills || candidate?.top_skills || candidate?.skills))
+  const relevantSkills = dedupe(firstNonEmptyNormalizedList(
+    candidate?.relevantSkills,
+    candidate?.relevant_skills,
+    candidate?.top_skills,
+    candidate?.skills,
+  ))
   const skillGaps = dedupe(normalizeList(
     firstNonEmptyArray(
       candidate?.fit_assessment?.missing_requirements,
       candidate?.missingSkills,
       candidate?.missing_skills,
       candidate?.fit_assessment?.missing,
-      candidate?.skill_gaps,
-      candidate?.skillGaps,
     ),
   ))
-  const allSkills = dedupe(normalizeList(candidate?.top_skills || candidate?.skills))
+  const legacyArrays = firstNonEmptyArray(
+    candidate?.skillsList,
+    candidate?.skill_list,
+    candidate?.all_skills,
+    candidate?.allSkills,
+    candidate?.skillsArray,
+  )
+  const legacyCsv = normalizeCsvString(
+    candidate?.skills_csv
+    || candidate?.skillsCsv
+    || candidate?.skill_csv
+    || candidate?.skillCsv
+    || candidate?.skills_string
+    || candidate?.skillsString,
+  )
+  const allSkills = dedupe(firstNonEmptyNormalizedList(
+    candidate?.allExtractedSkills,
+    candidate?.skills_flat,
+    flattenStructuredSkills(candidate?.skills_structured),
+    candidate?.skills && typeof candidate.skills === 'object' && !Array.isArray(candidate.skills)
+      ? flattenStructuredSkills(candidate.skills)
+      : [],
+    candidate?.top_skills,
+    legacyArrays,
+    legacyCsv,
+  ))
 
   const hasExplicitMatched = explicitMatched.length > 0
   const label = hasExplicitMatched ? 'MATCHED SKILLS' : 'RELEVANT SKILLS'
