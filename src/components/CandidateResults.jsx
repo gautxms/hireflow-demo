@@ -28,7 +28,7 @@ import {
 } from './candidateSelectionState'
 import '../styles/candidate-results.css'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
-import { resolveScoreBreakdown, resolveSkillSignals } from './candidateScoreSkillsResolver'
+import { SCORE_BREAKDOWN_UNAVAILABLE_MESSAGE, resolveCandidateScoreBreakdown, resolveSkillSignals } from './candidateScoreSkillsResolver'
 import { resolveCandidateReasoning, resolveCandidateVerdict, normalizeComparableTextKey } from './candidateDrawerTextResolver'
 import { resolveResumeFileTypeLabel } from './resumeFileTypeResolver'
 
@@ -1116,7 +1116,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const candidateConsiderations = dedupeTextItems(normalizeTextList(candidate.considerations))
         const verdictText = resolveCandidateVerdict(candidate)
         const reasoningText = resolveCandidateReasoning(candidate, verdictText)
-        const scoreBreakdown = resolveScoreBreakdown(candidate)
+        const scoreBreakdown = resolveCandidateScoreBreakdown(candidate)
         const skillSignals = resolveSkillSignals(candidate)
         const primarySkills = skillSignals.primarySkills.length > 0
           ? dedupeTextItems(skillSignals.primarySkills)
@@ -1197,7 +1197,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {scoreBreakdown.isValid
                     ? scoreBreakdown.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-score-breakdown-${idx}`}>{item.label}: {item.value}</div>)
-                    : <div className="dd-analysis-empty">Score breakdown unavailable for this analysis.</div>}
+                    : <div className="dd-analysis-empty">{SCORE_BREAKDOWN_UNAVAILABLE_MESSAGE}</div>}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
