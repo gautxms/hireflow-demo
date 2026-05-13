@@ -45,7 +45,7 @@ test('buildPromptWithJobDescription uses explicit WITH_JOB_DESCRIPTION contract'
   })
 
   assert.equal(prompt.includes('Analysis Mode: WITH_JOB_DESCRIPTION'), true)
-  assert.equal(prompt.includes('JD-aware fit analysis'), true)
+  assert.equal(prompt.includes('compact resume fact extraction first'), true)
 })
 
 test('buildPromptWithJobDescription uses explicit WITHOUT_JOB_DESCRIPTION contract', () => {
@@ -55,7 +55,7 @@ test('buildPromptWithJobDescription uses explicit WITHOUT_JOB_DESCRIPTION contra
   })
 
   assert.equal(prompt.includes('Analysis Mode: WITHOUT_JOB_DESCRIPTION'), true)
-  assert.equal(prompt.includes('comparative shortlist signals'), true)
+  assert.equal(prompt.includes('compact resume extraction only'), true)
 })
 
 test('provider/model + JD-mode matrix stays compatible with dynamic model values', async () => {
@@ -460,7 +460,7 @@ test('analyzeWithOpenAI makes a single request and surfaces truncation for max_o
       fetchImpl: async (_url, request) => {
         callCount += 1
         const body = JSON.parse(request.body)
-        assert.equal(body.max_output_tokens, 2000)
+        assert.equal(body.max_output_tokens, 3200)
         return {
           ok: true,
           json: async () => ({
@@ -564,6 +564,39 @@ test('analyzeResumeWithConfiguredFallback records failure categories for failove
   assert.equal(response.attempts[1].success, true)
 })
 
+
+
+test('analyzeResumeWithConfiguredFallback allows anthropic for text/plain extracted payloads', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  let anthropicCalled = false
+  const response = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'text/plain', 'resume.txt', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+    analyzeWithAnthropic: async () => {
+      anthropicCalled = true
+      return {
+        result: { candidates: [{ id: 'cand-anthropic-text' }] },
+        provider: 'anthropic-primary',
+        model: 'claude-sonnet-4',
+        tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+      }
+    },
+  })
+
+  assert.equal(anthropicCalled, true)
+  assert.equal(response.result.candidates[0].id, 'cand-anthropic-text')
+  assert.equal(response.attempts.length, 1)
+  assert.equal(response.attempts[0].provider, 'anthropic-primary')
+})
 test('analyzeResumeWithConfiguredFallback skips anthropic for docx mime types and falls back to openai', async () => {
   const credentials = {
     activeProvider: 'anthropic',
