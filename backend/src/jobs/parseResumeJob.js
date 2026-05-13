@@ -5,6 +5,9 @@ import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+
+const MIN_EXTRACTED_TEXT_LENGTH = 80
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -413,16 +416,33 @@ async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
+  const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
+  const extractionResult = await runParseWithOcrFallback({
+    filename,
+    mimeType,
+    fileSize: Number(fileSize || 0),
+    fileBuffer,
+  })
+  const extractedRawText = String(extractionResult?.rawText || '').trim()
+  const hasUsableExtractedText = extractedRawText.length >= MIN_EXTRACTED_TEXT_LENGTH
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
 
   try {
+    if (!hasUsableExtractedText) {
+      throw new Error('extraction_failed::Unable to extract enough resume text for AI parsing after OCR fallback.')
+    }
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    const aiResponse = await analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, {
+    const aiResponse = await analyzeResumeWithConfiguredFallback(
+      Buffer.from(extractedRawText, 'utf8').toString('base64'),
+      'text/plain',
+      filename,
+      {
       jobDescriptionContext,
-    })
+      },
+    )
     const aiResult = aiResponse?.result || {}
     const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
       ? aiResponse.attempts
@@ -605,7 +625,7 @@ async function runParse(job) {
          parse_error = NULL,
          parse_duration_ms = $12,
          updated_at = NOW(),
-         raw_text = COALESCE(raw_text, '')
+         raw_text = $13
      WHERE id = $1`,
     [
       resumeId,
@@ -625,6 +645,7 @@ async function runParse(job) {
       }),
       JSON.stringify(primaryCandidate?.skills_flat || []),
       parseDurationMs,
+      extractedRawText,
     ],
   )
 
@@ -677,13 +698,15 @@ export function registerParseResumeJobProcessor() {
       const normalizedError = normalizeProviderError(error)
       const isTerminalFailure = isTerminalJobFailure(job)
       if (isTerminalFailure) {
+        const parseDurationMs = Date.now() - Number(job.timestamp || Date.now())
         await pool.query(
           `UPDATE resumes
            SET parse_status = 'failed',
                parse_error = $2,
+               parse_duration_ms = COALESCE(parse_duration_ms, $3),
                updated_at = NOW()
            WHERE id = $1`,
-          [job.data.resumeId, normalizedError.normalizedMessage],
+          [job.data.resumeId, normalizedError.normalizedMessage, parseDurationMs],
         )
       }
 

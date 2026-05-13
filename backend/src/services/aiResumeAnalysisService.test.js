@@ -45,7 +45,7 @@ test('buildPromptWithJobDescription uses explicit WITH_JOB_DESCRIPTION contract'
   })
 
   assert.equal(prompt.includes('Analysis Mode: WITH_JOB_DESCRIPTION'), true)
-  assert.equal(prompt.includes('JD-aware fit analysis'), true)
+  assert.equal(prompt.includes('compact resume fact extraction first'), true)
 })
 
 test('buildPromptWithJobDescription uses explicit WITHOUT_JOB_DESCRIPTION contract', () => {
@@ -55,7 +55,7 @@ test('buildPromptWithJobDescription uses explicit WITHOUT_JOB_DESCRIPTION contra
   })
 
   assert.equal(prompt.includes('Analysis Mode: WITHOUT_JOB_DESCRIPTION'), true)
-  assert.equal(prompt.includes('comparative shortlist signals'), true)
+  assert.equal(prompt.includes('compact resume extraction only'), true)
 })
 
 test('provider/model + JD-mode matrix stays compatible with dynamic model values', async () => {
@@ -460,7 +460,7 @@ test('analyzeWithOpenAI makes a single request and surfaces truncation for max_o
       fetchImpl: async (_url, request) => {
         callCount += 1
         const body = JSON.parse(request.body)
-        assert.equal(body.max_output_tokens, 2000)
+        assert.equal(body.max_output_tokens, 3200)
         return {
           ok: true,
           json: async () => ({

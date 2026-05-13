@@ -727,9 +727,8 @@ function buildAnalysisModeDirectives(jobDescriptionContext = null) {
     return [
       'Analysis Mode: WITH_JOB_DESCRIPTION',
       'Contract:',
-      '- Perform resume extraction and JD-aware fit analysis.',
-      '- Map candidate evidence to JD requirements and skills.',
-      '- Include fit rationale and shortlisting signal strengths/risks in your JSON fields.',
+      '- Perform compact resume fact extraction first; keep reasoning terse.',
+      '- Keep JD fit signals bounded and factual (no long narrative).',
       '- Keep output JSON-compatible with existing schema.',
     ].join('\n')
   }
@@ -737,9 +736,8 @@ function buildAnalysisModeDirectives(jobDescriptionContext = null) {
   return [
     'Analysis Mode: WITHOUT_JOB_DESCRIPTION',
     'Contract:',
-    '- Perform resume extraction only (no JD fit scoring assumptions).',
-    '- Provide comparative shortlist signals derived from resume evidence (seniority, skills depth, impact, role alignment confidence).',
-    '- Mark missing JD context clearly using "job_description_missing" in rationale/notes fields when present.',
+    '- Perform compact resume extraction only (no JD fit scoring assumptions).',
+    '- Avoid long comparative reasoning; keep summaries concise and factual.',
     '- Keep output JSON-compatible with existing schema.',
   ].join('\n')
 }
@@ -870,7 +868,7 @@ export async function analyzeWithAnthropic(
 
   const response = await client.messages.create({
     model,
-    max_tokens: compactMode ? 1400 : 2200,
+    max_tokens: compactMode ? 2600 : 3200,
     temperature: 0,
     messages: [
       {
@@ -929,7 +927,7 @@ export async function analyzeWithAnthropic(
 
     const repaired = await client.messages.create({
       model,
-      max_tokens: 1400,
+      max_tokens: 2600,
       messages: [
         {
           role: 'user',
@@ -977,7 +975,7 @@ export async function analyzeWithAnthropic(
     promptIsDefaultFallback,
     mode: compactMode ? 'minimal' : 'compact',
     schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
-    maxOutputTokens: compactMode ? 1400 : 2200,
+    maxOutputTokens: compactMode ? 2600 : 3200,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
     jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
@@ -1074,7 +1072,7 @@ export async function analyzeWithOpenAI(
     return payload
   }
 
-  const attemptedMaxOutputTokens = compactMode ? 1200 : 2000
+  const attemptedMaxOutputTokens = compactMode ? 2600 : 3200
   const requestPrompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const payload = await callOpenAi(attemptedMaxOutputTokens, requestPrompt)
   const responseStatus = String(payload?.status || '').toLowerCase()
