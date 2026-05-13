@@ -663,7 +663,7 @@ function providerSupportsMimeType(provider, mimeType) {
   const normalizedProvider = String(provider || '').trim().toLowerCase()
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
   if (normalizedProvider === 'anthropic') {
-    return ['application/pdf'].includes(normalizedMimeType)
+    return ['application/pdf', 'text/plain'].includes(normalizedMimeType)
   }
   return true
 }

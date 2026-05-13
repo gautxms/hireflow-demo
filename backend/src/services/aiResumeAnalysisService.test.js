@@ -564,6 +564,39 @@ test('analyzeResumeWithConfiguredFallback records failure categories for failove
   assert.equal(response.attempts[1].success, true)
 })
 
+
+
+test('analyzeResumeWithConfiguredFallback allows anthropic for text/plain extracted payloads', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  let anthropicCalled = false
+  const response = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'text/plain', 'resume.txt', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+    analyzeWithAnthropic: async () => {
+      anthropicCalled = true
+      return {
+        result: { candidates: [{ id: 'cand-anthropic-text' }] },
+        provider: 'anthropic-primary',
+        model: 'claude-sonnet-4',
+        tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+      }
+    },
+  })
+
+  assert.equal(anthropicCalled, true)
+  assert.equal(response.result.candidates[0].id, 'cand-anthropic-text')
+  assert.equal(response.attempts.length, 1)
+  assert.equal(response.attempts[0].provider, 'anthropic-primary')
+})
 test('analyzeResumeWithConfiguredFallback skips anthropic for docx mime types and falls back to openai', async () => {
   const credentials = {
     activeProvider: 'anthropic',
