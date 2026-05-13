@@ -87,7 +87,12 @@ JSON schema to return:
       "score_out_of_ten": "number|null",
       "fit": "string|null",
       "reason": "string|null",
-      "breakdown": "object|null"
+      "breakdown": {
+        "skills_alignment": "number 0-100 or null",
+        "experience_alignment": "number 0-100 or null",
+        "education_alignment": "number 0-100 or null",
+        "overall": "number 0-100 or null"
+      }
     },
     "confidence": {
       "name": 0.0,
@@ -128,6 +133,15 @@ IMPORTANT RULES:
 14) tags: 2-4 short category labels describing the candidate's profile for quick filtering. Use the candidate's actual domain, not generic labels.
 15) score_out_of_ten: always equal to (score / 10) rounded to 1 decimal place. If score is 82, score_out_of_ten is 8.2. If score is null, score_out_of_ten is null. This is a convenience field for display — it must always match the score field exactly.
 16) matchScore.reason: REQUIRED when a JD is provided. It must be 2-3 sentences explaining specifically WHY the candidate received their score — reference actual skills, years of experience, and job titles from the resume. If no JD is provided, set reason to a 1-2 sentence general profile summary instead of null.
+17) matchScore.breakdown must be an object with numeric keys:
+   - skills_alignment: number 0-100 or null
+   - experience_alignment: number 0-100 or null
+   - education_alignment: number 0-100 or null
+   - overall: number 0-100 or null
+   When JD context is available, populate these fields from explicit resume-to-JD evidence only.
+   overall should be the average of skills_alignment, experience_alignment, and education_alignment within ±1 tolerance when all three are available.
+   If a component cannot be assessed from resume/JD evidence, set it to null and do not guess.
+   Do not fabricate score breakdown values.
 
 JD-aware behavior:
 - If job_description_context is AVAILABLE, compute fit_assessment scores from explicit evidence only.
