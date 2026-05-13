@@ -79,18 +79,31 @@ function formatSkillLabel(skill) {
 function formatExperienceDisplay(candidate = {}) {
   const basics = resolveCandidateBasics(candidate)
   const explicitYears = Number.isFinite(basics.experienceYears) ? basics.experienceYears : null
-  const estimatedYears = Number.isFinite(basics.estimatedExperienceYears) ? basics.estimatedExperienceYears : null
-  const years = explicitYears ?? estimatedYears
-  if (years == null) return null
-  if (basics.isEstimatedExperience || candidate?.isEstimated) {
-    return `~${years.toFixed(1)} yrs (estimated)`
+  const inferredYears = Number.isFinite(basics.estimatedExperienceYears) ? basics.estimatedExperienceYears : null
+  const years = explicitYears ?? inferredYears
+
+  if (years == null) {
+    return 'Experience unavailable'
   }
+
+  const isEstimated = Boolean(basics.isEstimatedExperience || candidate?.isEstimated)
+  const sourceLabel = toDisplayText(basics.experienceSource || basics.experienceLabel, '').trim()
+
+  if (isEstimated) {
+    const provenanceText = sourceLabel ? ` (${sourceLabel})` : ''
+    return `~${years.toFixed(1)} yrs (estimated${provenanceText})`
+  }
+
   return `${years} yrs exp`
 }
 
 function resolveCandidateExperience(candidate = {}) {
   const basics = resolveCandidateBasics(candidate)
-  return Number.isFinite(basics.experienceYears) ? basics.experienceYears : 0
+  return Number.isFinite(basics.experienceYears) ? basics.experienceYears : null
+}
+
+function resolveCandidateExperienceForSort(candidate = {}) {
+  return resolveCandidateExperience(candidate) ?? 0
 }
 
 function deriveExperienceEntries(candidate) {
@@ -332,7 +345,7 @@ function filterAndSortCandidates(candidates, filters) {
       }
     }
 
-    const years = resolveCandidateExperience(candidate)
+    const years = resolveCandidateExperienceForSort(candidate)
     if (String(expRange?.unknownOnly) === 'true') {
       if (candidate?.totalExperienceYears != null || candidate?.years_experience != null || candidate?.experience_years != null) return false
     }
@@ -354,7 +367,7 @@ function filterAndSortCandidates(candidates, filters) {
     }
 
     if (sortBy === 'experience_desc') {
-      return resolveCandidateExperience(b) - resolveCandidateExperience(a)
+      return resolveCandidateExperienceForSort(b) - resolveCandidateExperienceForSort(a)
     }
 
     return Number(activeScore(b) || 0) - Number(activeScore(a) || 0)
@@ -1165,7 +1178,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
         const initials = String(candidate?.name || '').split(' ').map((part) => part[0] || '').join('').slice(0, 2).toUpperCase()
         const keyFacts = [
-          { label: 'Experience', value: `${resolveCandidateExperience(candidate)} yrs` },
+          { label: 'Experience', value: formatExperienceDisplay(candidate) },
           { label: 'Seniority', value: toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Unavailable') },
           { label: 'Education', value: toDisplayText(resolveCandidateEducationText(candidate), 'Unavailable') },
           { label: 'Location', value: toDisplayText(candidate.location, 'Unavailable') },
@@ -1180,7 +1193,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   <div className="dd-name">{toDisplayText(candidate.name)}</div>
                   <div className="dd-meta-row">
                     <span className="dd-meta-pill"><Briefcase size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.current_title, 'Role unavailable')}</span>
-                    <span className="dd-meta-pill"><Clock3 size={14} strokeWidth={1.5} aria-hidden="true" />{resolveCandidateExperience(candidate)} yrs</span>
+                    <span className="dd-meta-pill"><Clock3 size={14} strokeWidth={1.5} aria-hidden="true" />{formatExperienceDisplay(candidate)}</span>
                     <span className="dd-meta-pill"><MapPin size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.location, 'Location unavailable')}</span>
                     <span className="dd-meta-pill"><GraduationCap size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Seniority not specified')}</span>
                   </div>
