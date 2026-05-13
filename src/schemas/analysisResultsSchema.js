@@ -36,6 +36,54 @@ function normalizeFiniteNumber(value, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback
 }
 
+function clampText(value, fallback, maxLength) {
+  const normalized = typeof value === 'string' ? value.trim() : ''
+  if (!normalized) return fallback
+  return normalized.slice(0, maxLength)
+}
+
+function normalizeEvidenceSnippets(snippets) {
+  if (!Array.isArray(snippets)) {
+    return [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
+  }
+
+  const normalized = snippets
+    .map((snippet) => {
+      if (!snippet || typeof snippet !== 'object') return null
+      return {
+        quote: clampText(snippet.quote, 'No supporting evidence snippets are available.', 280),
+        section: clampText(snippet.section, '', 80),
+        span: clampText(snippet.span, '', 80),
+      }
+    })
+    .filter(Boolean)
+
+  return normalized.length > 0
+    ? normalized.slice(0, 5)
+    : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
+}
+
+function normalizeResumeIntegrityFlags(flags) {
+  if (!Array.isArray(flags)) return []
+  return flags
+    .map((flag) => {
+      if (!flag || typeof flag !== 'object') return null
+      return {
+        issueType: clampText(flag.issueType ?? flag.issue_type, 'general_parsing_concern', 80),
+        severity: ['low', 'medium', 'high'].includes(String(flag.severity || '').toLowerCase())
+          ? String(flag.severity).toLowerCase()
+          : 'low',
+        label: clampText(flag.label, 'Potential issue', 120),
+        evidence: clampText(flag.evidence, 'Needs recruiter review', 240),
+        recruiterAction: clampText(flag.recruiterAction ?? flag.recruiter_action, 'Needs recruiter review', 180),
+        confidence: Math.max(0, Math.min(1, normalizeFiniteNumber(flag.confidence, 0.5))),
+        source: clampText(flag.source, 'ai_assisted', 40),
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 8)
+}
+
 function normalizeCandidate(candidate, index) {
   if (!candidate || typeof candidate !== 'object') {
     return { normalized: null, issue: { code: 'candidate.invalid_type', path: ['candidates', index], expected: 'object', received: typeof candidate } }
@@ -53,6 +101,11 @@ function normalizeCandidate(candidate, index) {
       name,
       score: normalizeFiniteNumber(candidate.score, 0),
       matchScore: normalizeFiniteNumber(candidate.matchScore, normalizeFiniteNumber(candidate.score, 0)),
+      evidenceSnippets: normalizeEvidenceSnippets(candidate.evidenceSnippets),
+      resumeIntegrityFlags: normalizeResumeIntegrityFlags(candidate.resumeIntegrityFlags),
+      uncertaintyItems: Array.isArray(candidate.uncertaintyItems) && candidate.uncertaintyItems.length > 0
+        ? candidate.uncertaintyItems.slice(0, 3).map((item) => clampText(item, 'Needs recruiter review', 140))
+        : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.'],
     },
     issue: null,
   }
