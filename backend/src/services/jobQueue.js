@@ -101,7 +101,7 @@ export async function enqueueParseJob({
     },
     {
       jobId: `resume:${resumeId}`,
-      attempts: 3,
+      attempts: 1,
       backoff: {
         type: 'exponential',
         delay: 5000,

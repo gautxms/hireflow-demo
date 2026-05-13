@@ -33,9 +33,7 @@ test('ocr fallback decision only triggers for scanned/low-confidence/no-text inp
 })
 
 test('queue retry logic marks resume failed only on terminal failure', () => {
-  assert.equal(isTerminalJobFailure({ attemptsMade: 0, opts: { attempts: 3 } }), false)
-  assert.equal(isTerminalJobFailure({ attemptsMade: 1, opts: { attempts: 3 } }), false)
-  assert.equal(isTerminalJobFailure({ attemptsMade: 2, opts: { attempts: 3 } }), true)
+  assert.equal(isTerminalJobFailure({ attemptsMade: 0, opts: { attempts: 1 } }), true)
 })
 
 test('job description context preserves nullable numeric fields', () => {

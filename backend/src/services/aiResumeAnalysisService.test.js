@@ -188,6 +188,7 @@ test('analyzeWithOpenAI embeds JD mode contract in request payload', async () =>
     return {
       ok: true,
       json: async () => ({
+        status: 'completed',
         output_text: '{"candidates":[{"id":"cand-1"}]}',
         usage: { input_tokens: 1, output_tokens: 1 },
       }),
@@ -220,7 +221,7 @@ test('analyzeWithOpenAI omits temperature for modern responses models', async ()
     }
     return {
       ok: true,
-      json: async () => ({ output_text: '{"candidates":[{"id":"cand-1"}]}' }),
+      json: async () => ({ status: 'completed', output_text: '{"candidates":[{"id":"cand-1"}]}' }),
     }
   }
 
@@ -239,7 +240,7 @@ test('analyzeWithOpenAI supports opt-in temperature via model capability flags',
     capturedBody = JSON.parse(request.body)
     return {
       ok: true,
-      json: async () => ({ output_text: '{"candidates":[{"id":"cand-1"}]}' }),
+      json: async () => ({ status: 'completed', output_text: '{"candidates":[{"id":"cand-1"}]}' }),
     }
   }
 
@@ -323,6 +324,7 @@ test('analyzeWithOpenAI supports alternate response shapes without output_text',
   const fetchImpl = async () => ({
     ok: true,
     json: async () => ({
+      status: 'completed',
       output: [
         {
           type: 'message',
@@ -361,15 +363,15 @@ test('analyzeWithOpenAI surfaces provider status failures before parse fallback'
   )
 })
 
-test('analyzeWithOpenAI retries with higher max_output_tokens for incomplete responses', async () => {
+test('analyzeWithOpenAI makes a single request and surfaces truncation for max_output_tokens', async () => {
   let callCount = 0
-  const response = await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
-    apiKey: 'oa-key',
-    model: 'gpt-5-nano-2025-08-07',
-    fetchImpl: async (_url, request) => {
-      callCount += 1
-      const body = JSON.parse(request.body)
-      if (callCount === 1) {
+  await assert.rejects(
+    () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      apiKey: 'oa-key',
+      model: 'gpt-5-nano-2025-08-07',
+      fetchImpl: async (_url, request) => {
+        callCount += 1
+        const body = JSON.parse(request.body)
         assert.equal(body.max_output_tokens, 2000)
         return {
           ok: true,
@@ -379,48 +381,12 @@ test('analyzeWithOpenAI retries with higher max_output_tokens for incomplete res
             incomplete_details: { reason: 'max_output_tokens' },
           }),
         }
-      }
-
-      assert.equal(body.max_output_tokens, 4000)
-      return {
-        ok: true,
-        json: async () => ({
-          id: 'resp_789',
-          status: 'completed',
-          output_text: '{"candidates":[{"id":"cand-openai-retry"}]}',
-        }),
-      }
-    },
-  })
-
-  assert.equal(callCount, 2)
-  assert.equal(response.result.candidates[0].id, 'cand-openai-retry')
-})
-
-test('analyzeWithOpenAI surfaces truncated error when all max_output_tokens retries are still incomplete', async () => {
-  let callCount = 0
-  await assert.rejects(
-    () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
-      apiKey: 'oa-key',
-      model: 'gpt-5-nano-2025-08-07',
-      fetchImpl: async (_url, request) => {
-        callCount += 1
-        const body = JSON.parse(request.body)
-        assert.equal(body.max_output_tokens, [2000, 4000, 8000][callCount - 1])
-        return {
-          ok: true,
-          json: async () => ({
-            id: `resp_${callCount}`,
-            status: 'incomplete',
-            incomplete_details: { reason: 'max_output_tokens' },
-          }),
-        }
       },
     }),
     /response_truncated_error::/,
   )
 
-  assert.equal(callCount, 3)
+  assert.equal(callCount, 1)
 })
 
 test('analyzeWithAnthropic categorizes truncated output failures', async () => {
@@ -567,6 +533,7 @@ test('analyzeWithOpenAI preserves considerations when compact-normalizing', asyn
   const fetchImpl = async () => ({
     ok: true,
     json: async () => ({
+      status: 'completed',
       output_text: JSON.stringify({
         candidates: [{
           id: 'cand-1',
@@ -588,7 +555,7 @@ test('analyzeWithOpenAI preserves considerations when compact-normalizing', asyn
 test('analyzeWithOpenAI throws when parsed candidates is not an array', async () => {
   const fetchImpl = async () => ({
     ok: true,
-    json: async () => ({ output_text: JSON.stringify({ candidates: { id: 'not-array' } }) }),
+    json: async () => ({ status: 'completed', output_text: JSON.stringify({ candidates: { id: 'not-array' } }) }),
   })
 
   await assert.rejects(
@@ -607,73 +574,48 @@ test('buildPromptWithJobDescription does not duplicate output contract directive
   assert.equal(prompt.includes('Return compact JSON only.'), false)
 })
 
-test('analyzeResumeWithConfiguredFallback can disable fallback on truncation', async () => {
-  process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION = 'true'
-  const credentials = {
-    activeProvider: 'anthropic',
-    providers: {
-      anthropic: {
-        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
-      },
-      openai: {
-        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
-      },
-    },
-    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+
+test('strict fallback sequence stops after same-category fallback failure', async () => {
+  const credentials = { activeProvider: 'anthropic', providers: { anthropic: { primary: { apiKey: 'a', model: 'claude', source: 'admin' } }, openai: { primary: { apiKey: 'o', model: 'gpt', source: 'admin' } } }, governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } } }
+  let primaryCalls = 0
+  let fallbackCalls = 0
+  let terminalError = null
+  try {
+    await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      credentials,
+      systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+      analyzeWithAnthropic: async () => { primaryCalls += 1; throw new Error('response_truncated_error::{}') },
+      analyzeWithOpenAI: async () => { fallbackCalls += 1; throw new Error('response_truncated_error::{}') },
+    })
+    assert.fail('expected strict sequence to fail')
+  } catch (error) {
+    terminalError = error
   }
-
-  let openAiCalled = false
-  await assert.rejects(() => analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
-    credentials,
-    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
-    analyzeWithAnthropic: async () => { throw new Error('response_truncated_error::{}') },
-    analyzeWithOpenAI: async () => { openAiCalled = true; return { result: { candidates: [{ id: 'x' }] } } },
-  }), /response_truncated_error::/)
-
-  assert.equal(openAiCalled, false)
-  delete process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION
+  assert.match(String(terminalError?.message || ''), /response_truncated_error::/)
+  assert.equal(primaryCalls, 1)
+  assert.equal(fallbackCalls, 1)
+  assert.equal(Array.isArray(terminalError?.attempts), true)
+  assert.equal(terminalError.attempts.length, 2)
 })
 
-test('analyzeResumeWithConfiguredFallback counts only executed attempts against cap', async () => {
-  process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = '1'
-  const credentials = {
-    activeProvider: 'anthropic',
-    providers: {
-      anthropic: {
-        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
-      },
-      openai: {
-        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
-      },
-    },
-    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+test('strict fallback sequence performs one final primary attempt when categories differ', async () => {
+  const credentials = { activeProvider: 'anthropic', providers: { anthropic: { primary: { apiKey: 'a', model: 'claude', source: 'admin' } }, openai: { primary: { apiKey: 'o', model: 'gpt', source: 'admin' } } }, governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } } }
+  let primaryCalls = 0
+  let terminalError = null
+  try {
+    await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      credentials,
+      systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+      analyzeWithAnthropic: async () => { primaryCalls += 1; throw new Error('timeout_error::{}') },
+      analyzeWithOpenAI: async () => { throw new Error('response_truncated_error::{}') },
+    })
+    assert.fail('expected strict sequence to fail')
+  } catch (error) {
+    terminalError = error
   }
-
-  let anthropicCalled = false
-  let openAiCalled = false
-  const response = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'resume.docx', {
-    credentials,
-    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
-    analyzeWithAnthropic: async () => { anthropicCalled = true; throw new Error('anthropic should be skipped for DOCX') },
-    analyzeWithOpenAI: async () => {
-      openAiCalled = true
-      return {
-        result: { candidates: [{ id: 'cand-1' }] },
-        tokenUsage: { usageAvailable: false },
-        provider: 'openai-primary',
-        model: 'gpt-4.1-mini',
-        credentialLabel: 'primary',
-        providerSource: 'admin',
-        promptVersion: 2,
-        promptIsDefaultFallback: false,
-      }
-    },
-  })
-
-  assert.equal(anthropicCalled, false)
-  assert.equal(openAiCalled, true)
-  assert.equal(response.attempts.length, 1)
-  assert.equal(response.attempts[0].success, true)
-  assert.equal(response.attempts[0].provider, 'openai-primary')
-  delete process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+  assert.match(String(terminalError?.message || ''), /timeout_error::|response_truncated_error::/)
+  assert.equal(primaryCalls, 2)
+  assert.equal(Array.isArray(terminalError?.attempts), true)
+  assert.equal(terminalError.attempts.length, 3)
 })
+
