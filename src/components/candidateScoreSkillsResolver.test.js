@@ -96,3 +96,20 @@ test('resolveSkillSignals handles empty skill payloads', () => {
   assert.equal(result.source, 'none')
   assert.equal(result.confidence, 'low')
 })
+
+test('resolveSkillSignals falls back to legacy skill arrays when canonical arrays are empty', () => {
+  const result = resolveSkillSignals({
+    fit_assessment: {
+      matched_requirements: [],
+      missing_requirements: [],
+      matched: ['Legacy Match'],
+      missing: ['Legacy Gap'],
+    },
+    matchedSkills: ['Matched Skills Fallback'],
+    missing_skills: ['Missing Skills Fallback'],
+  })
+
+  assert.deepEqual(result.primarySkills, ['Matched Skills Fallback'])
+  assert.deepEqual(result.skillGaps, ['Missing Skills Fallback'])
+  assert.equal(result.source, 'explicit')
+})

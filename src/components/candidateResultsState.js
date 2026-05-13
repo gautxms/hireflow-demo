@@ -409,7 +409,7 @@ function resolveExperienceTitle(candidate = {}) {
     return ''
   }
 
-  return toDisplayText(firstExperience.title, '')
+  return toDisplayText(firstExperience.title, '').trim()
 }
 
 function resolveEducationDisplay(educationValue) {
@@ -443,7 +443,7 @@ function resolveEducationDisplay(educationValue) {
 export function resolveCandidateBasics(candidate = {}) {
   const title = toDisplayText(firstDefined([
     candidate?.current_title,
-    resolveExperienceTitle(candidate),
+    resolveExperienceTitle(candidate) || undefined,
     candidate?.title,
     candidate?.role,
     candidate?.headline,
