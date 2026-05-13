@@ -51,3 +51,17 @@ test('CandidateResults title contract: analysis title does not fall back to job 
     /const candidateFields = \[\s*firstCandidate\?\.analysisName,\s*firstCandidate\?\.analysisTitle,\s*firstCandidate\?\.analysis_name,\s*\]/s,
   )
 })
+
+test('CandidateResults renders skills split and integrity fallback sections by default', () => {
+  assert.match(candidateResultsSource, /All skills \(reference\)/)
+  assert.match(candidateResultsSource, /Missing requirements/)
+  assert.match(candidateResultsSource, /skillSignals\.label/)
+  assert.match(candidateResultsSource, /Missing requirements/)
+  assert.match(candidateResultsSource, /Resume integrity checks/)
+  assert.match(candidateResultsSource, /No resume integrity concerns detected/)
+})
+
+test('CandidateResults keeps reasoning visible in default assessment panel copy', () => {
+  assert.match(candidateResultsSource, /<div className=\"dd-col-label dd-col-label--mt-16\">Why<\/div>/)
+  assert.match(candidateResultsSource, /reasoningText/)
+})
