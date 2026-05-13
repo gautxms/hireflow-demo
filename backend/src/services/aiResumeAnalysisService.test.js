@@ -126,6 +126,58 @@ test('provider/model + JD-mode matrix stays compatible with dynamic model values
   }
 })
 
+test('configured fallback preserves extracted profile facts in normalized candidate payload', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  const analyzeWithAnthropicStub = async () => ({
+    result: {
+      candidates: [{
+        name: 'Candidate One',
+        location: 'Pune, Maharashtra, India',
+        education: [
+          { degree: 'MBA', institution: 'Yashwantrao Chavan University', year: '2026', status: 'Pursuing' },
+          { degree: 'BSc Chemistry', institution: 'North Maharashtra University', year: '2024', grade: '83.12' },
+        ],
+        allExtractedSkills: ['SQL', 'Excel', 'Power BI', 'Jira', 'Confluence', 'BRD', 'FRD', 'RTM', 'User stories'],
+        matchedSkills: ['SQL', 'Power BI'],
+        missingRequirements: ['Tableau'],
+        weaklySupportedRequirements: ['RTM'],
+        totalExperienceYears: 2.4,
+        relevantExperienceYears: 1.8,
+        isExperienceEstimated: true,
+        experienceSource: 'ai_inferred',
+        experienceExplanation: 'Estimated from role date ranges',
+      }],
+    },
+    provider: 'anthropic',
+    model: 'claude-sonnet-4',
+    tokenUsage: { usageAvailable: false, unavailableReason: 'test' },
+  })
+
+  const result = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 1, isDefaultFallback: false },
+    analyzeWithAnthropic: analyzeWithAnthropicStub,
+  })
+
+  const candidate = result.result.candidates[0]
+  assert.equal(candidate.education.length >= 2, true)
+  assert.equal(candidate.allExtractedSkills.includes('SQL'), true)
+  assert.deepEqual(candidate.matchedSkills, ['SQL', 'Power BI'])
+  assert.deepEqual(candidate.missingRequirements, ['Tableau'])
+  assert.equal(candidate.totalExperienceYears, 2.4)
+  assert.equal(candidate.isExperienceEstimated, true)
+  assert.equal(candidate.location, 'Pune, Maharashtra, India')
+})
+
 test('analyzeWithAnthropic embeds JD mode contract in request payload', async () => {
   let capturedPrompt = ''
   const anthropicClientFactory = () => ({
@@ -618,4 +670,3 @@ test('strict fallback sequence performs one final primary attempt when categorie
   assert.equal(Array.isArray(terminalError?.attempts), true)
   assert.equal(terminalError.attempts.length, 3)
 })
-

@@ -20,6 +20,11 @@ Hard requirements:
 6) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
 7) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
 8) Confidence values must be numbers from 0 to 1.
+9) STEP 1 — Resume fact extraction: Before scoring, extract explicit resume facts first (name, email, phone, location, education, skills, work experience, projects, certifications, and uncertainty notes).
+10) Extract education from table-like headings and variants including EDUCATIONAL / PROFESSIONAL QUALIFICATION, Education, Academic Details, Qualification, Professional Qualification.
+11) Do not mark explicitly mentioned skills as missing; if evidence is shallow, classify as weakly supported instead.
+12) If total experience is not explicit, infer from role date ranges, avoid overlap double-counting, handle "Present" as current date, and mark inferred values as estimated.
+13) Extract location only when explicit in resume text; never fabricate location.
 
 JSON schema to return:
 {
@@ -47,10 +52,13 @@ JSON schema to return:
     "years_experience": "number|null",
     "totalExperienceYears": "number|null",
     "relevantExperienceYears": "number|null",
+    "isExperienceEstimated": "boolean",
     "experienceLabel": "string|null",
     "experienceConfidence": "high|medium|low|unknown",
     "experienceEvidence": ["string"],
     "experienceSource": "resume|ai_inferred|unknown",
+    "experienceExplanation": "string|null",
+    "extractionUncertainties": ["string"],
     "profile_score": "number|null",
     "strengths": ["string"],
     "considerations": ["string"],
@@ -63,6 +71,17 @@ JSON schema to return:
       "soft_skills": ["string"]
     },
     "top_skills": ["string"],
+    "allExtractedSkills": ["string"],
+    "skills_flat": ["string"],
+    "skills_structured": {
+      "tools_and_platforms": ["string"],
+      "methodologies": ["string"],
+      "domain_expertise": ["string"],
+      "soft_skills": ["string"]
+    },
+    "matchedSkills": ["string"],
+    "missingRequirements": ["string"],
+    "weaklySupportedRequirements": ["string"],
     "projects": [{
       "name": "string",
       "description": "string or null",

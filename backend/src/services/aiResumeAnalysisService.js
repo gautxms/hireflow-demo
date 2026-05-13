@@ -188,6 +188,23 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     matchedSkills,
     missingSkills,
     skills: clampStringArray(candidate?.skills || [...matchedSkills, ...missingSkills], { maxItems: 25, maxItemLength: 80 }),
+    allExtractedSkills: clampStringArray(
+      candidate?.allExtractedSkills || candidate?.skills_flat || candidate?.top_skills || [],
+      { maxItems: 40, maxItemLength: 80 },
+    ),
+    matchedSkills,
+    missingRequirements: clampStringArray(candidate?.missingRequirements || [], { maxItems: 20, maxItemLength: 80 }),
+    weaklySupportedRequirements: clampStringArray(candidate?.weaklySupportedRequirements || [], { maxItems: 20, maxItemLength: 80 }),
+    skills_flat: clampStringArray(candidate?.skills_flat || candidate?.allExtractedSkills || [], { maxItems: 40, maxItemLength: 80 }),
+    skills_structured: candidate?.skills_structured || (candidate?.skills && typeof candidate.skills === 'object' && !Array.isArray(candidate.skills) ? candidate.skills : null),
+    education: Array.isArray(candidate?.education) ? candidate.education.slice(0, 12) : [],
+    location: clampString(candidate?.location || '', 120) || null,
+    totalExperienceYears: Number.isFinite(Number(candidate?.totalExperienceYears)) ? Number(candidate.totalExperienceYears) : null,
+    relevantExperienceYears: Number.isFinite(Number(candidate?.relevantExperienceYears)) ? Number(candidate.relevantExperienceYears) : null,
+    isExperienceEstimated: Boolean(candidate?.isExperienceEstimated),
+    experienceSource: clampString(candidate?.experienceSource || '', 40) || 'unknown',
+    experienceExplanation: clampString(candidate?.experienceExplanation || '', 240) || null,
+    extractionUncertainties: clampStringArray(candidate?.extractionUncertainties || [], { maxItems: 8, maxItemLength: 160 }),
     experienceHighlights: minimalMode ? [] : clampStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
     evidenceSnippets: [],
     recommendation: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', 160),
@@ -1164,6 +1181,18 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const compactByDefaultForModel = (modelName) => OPENAI_COMPACT_MODEL_PATTERN.test(String(modelName || ''))
   const isTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
+  if (cleanedPayload && process.env.NODE_ENV !== 'production') {
+    const headingSignals = ['skills', 'education', 'qualification', 'work experience']
+    const normalizedText = cleanedPayload.cleanedText.toLowerCase()
+    const detectedHeadings = headingSignals.filter((signal) => normalizedText.includes(signal))
+    console.log('[AI Parse][Debug] Extracted text diagnostics:', {
+      filename: sanitizeSnippet(filename, 80),
+      originalCharCount: cleanedPayload.metrics.originalCharCount,
+      cleanedCharCount: cleanedPayload.metrics.cleanedCharCount,
+      truncatedCharCount: cleanedPayload.metrics.finalPromptCharCount,
+      detectedHeadings,
+    })
+  }
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
 
   const callProvider = async (entry) => {
@@ -1185,6 +1214,15 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source,
         promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage,
       })
+      if (process.env.NODE_ENV !== 'production') {
+        const firstCandidate = response?.result?.candidates?.[0] || {}
+        console.log('[AI Parse][Debug] AI fact field presence:', {
+          hasEducation: Array.isArray(firstCandidate.education) && firstCandidate.education.length > 0,
+          hasSkills: Array.isArray(firstCandidate.allExtractedSkills) ? firstCandidate.allExtractedSkills.length > 0 : Array.isArray(firstCandidate.skills_flat) ? firstCandidate.skills_flat.length > 0 : false,
+          hasExperience: Number.isFinite(Number(firstCandidate.totalExperienceYears)) || (Array.isArray(firstCandidate.experience) && firstCandidate.experience.length > 0),
+          hasLocation: Boolean(String(firstCandidate.location || '').trim()),
+        })
+      }
       attemptHistory.push(attemptRecord)
       return { success: true, response }
     } catch (error) {

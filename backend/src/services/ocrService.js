@@ -93,7 +93,11 @@ export async function runOcr({ fileBuffer, mimeType }) {
       maxBuffer: 25 * 1024 * 1024,
     })
 
-    const text = String(stdout || '').replace(/\s+/g, ' ').trim()
+    const text = String(stdout || '')
+      .replace(/[^\S\r\n]+/g, ' ')
+      .replace(/\r/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
     const confidence = Math.max(40, Math.min(95, Math.round((text.length / Math.max(1, fileBuffer.length * 0.02)) * 100)))
 
     return {
