@@ -1652,6 +1652,7 @@
   font-size: 12px;
   color: var(--color-text-secondary);
   line-height: 1.6;
+  overflow-wrap: anywhere;
   padding: 7px 0;
   border-bottom: 1px solid #141414;
   width: 100%;
@@ -1885,15 +1886,11 @@
     padding: 0.65rem 0.8rem 1rem;
   }
   .rc-checkbox-wrap { padding-right: 6px; }
+  .dd-key-facts-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.dd-details summary {
-  cursor: pointer;
-  color: #c8ff00;
-  font-size: 12px;
-  font-weight: 600;
-  margin: 14px 0 10px;
-}
 .resume-modal-backdrop {
   position: fixed;
   inset: 0;
