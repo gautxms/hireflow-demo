@@ -481,6 +481,7 @@ export function resolveCandidateBasics(candidate = {}) {
   }
 
   const totalExperienceYears = parseFiniteNumber(firstDefined([candidate?.totalExperienceYears, candidate?.years_experience, candidate?.experience_years]))
+  const relevantExperienceYears = parseFiniteNumber(candidate?.relevantExperienceYears)
 
   const estimateFromDateRange = () => {
     const entries = Array.isArray(candidate?.experience) ? candidate.experience : []
@@ -504,16 +505,45 @@ export function resolveCandidateBasics(candidate = {}) {
     return Number((totalMonths / 12).toFixed(1))
   }
 
-  const estimatedExperienceYears = parseFiniteNumber(firstDefined([candidate?.estimatedExperienceYears, estimateFromDateRange()]))
-  const isEstimatedExperience = Boolean(candidate?.isEstimated)
-  const experienceYears = Number.isFinite(totalExperienceYears)
-    ? totalExperienceYears
-    : Number.isFinite(estimatedExperienceYears)
-      ? estimatedExperienceYears
-      : (() => {
-        const parsed = String(firstDefined([candidate?.experience, '']) || '').match(/(\d+(?:\.\d+)?)/)
-        return parsed ? Number(parsed[1]) : 0.1
-      })()
+  const inferredExperienceYears = parseFiniteNumber(firstDefined([candidate?.estimatedExperienceYears, estimateFromDateRange()]))
+
+  const explicitExperienceYears = firstDefined([
+    totalExperienceYears,
+    relevantExperienceYears,
+  ])
+
+  const explicitExperienceLabel = toDisplayText(firstDefined([
+    candidate?.experienceLabel,
+    candidate?.experienceSource,
+  ]), '')
+
+  const explicitIsEstimated = firstDefined([
+    candidate?.isExperienceEstimated,
+    candidate?.isEstimated,
+  ])
+
+  const explicitExperienceExplanation = toDisplayText(candidate?.experienceExplanation, '')
+
+  const hasExplicitExperience = Number.isFinite(explicitExperienceYears)
+  const hasInferredExperience = Number.isFinite(inferredExperienceYears)
+
+  const experienceYears = hasExplicitExperience
+    ? explicitExperienceYears
+    : hasInferredExperience
+      ? inferredExperienceYears
+      : null
+
+  const isEstimatedExperience = hasExplicitExperience
+    ? Boolean(explicitIsEstimated)
+    : hasInferredExperience
+      ? true
+      : Boolean(explicitIsEstimated)
+
+  const experienceLabel = hasExplicitExperience
+    ? (explicitExperienceLabel || (isEstimatedExperience ? 'Estimated' : 'Provided by backend'))
+    : hasInferredExperience
+      ? (explicitExperienceLabel || 'Estimated from date ranges')
+      : (explicitExperienceLabel || 'Experience unavailable')
 
   return {
     title,
@@ -521,9 +551,12 @@ export function resolveCandidateBasics(candidate = {}) {
     seniority,
     education,
     experienceYears,
-    estimatedExperienceYears,
-    isEstimatedExperience: isEstimatedExperience || (!Number.isFinite(totalExperienceYears) && Number.isFinite(estimatedExperienceYears)),
-    experienceLabel: !Number.isFinite(totalExperienceYears) && Number.isFinite(estimatedExperienceYears) ? 'Estimated from date ranges' : undefined,
+    estimatedExperienceYears: hasInferredExperience ? inferredExperienceYears : null,
+    relevantExperienceYears,
+    isEstimatedExperience,
+    experienceLabel,
+    experienceSource: toDisplayText(candidate?.experienceSource, ''),
+    experienceExplanation: explicitExperienceExplanation || (hasInferredExperience && !hasExplicitExperience ? 'Estimated from work history date ranges.' : ''),
   }
 }
 
