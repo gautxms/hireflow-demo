@@ -19,10 +19,9 @@ const emptyFilters = {
   tags: '',
   sourceJobId: '',
   sourceAnalysisId: '',
-  sortBySkillMatch: 'score',
 }
 
-const compactFilterKeys = ['search', 'job', 'scoreMin', 'experienceMin', 'skills', 'sortBySkillMatch']
+const compactFilterKeys = ['search', 'job', 'scoreMin', 'experienceMin', 'skills']
 const advancedFilterKeys = ['scoreMax', 'experienceMax', 'tags', 'sourceJobId', 'sourceAnalysisId']
 
 const candidateFilterFieldConfig = {
@@ -36,16 +35,6 @@ const candidateFilterFieldConfig = {
   tags: { label: 'Tags', placeholder: 'e.g. frontend, leadership' },
   sourceJobId: { label: 'Source job ID', placeholder: 'e.g. job_123' },
   sourceAnalysisId: { label: 'Source analysis ID', placeholder: 'e.g. parse_456' },
-  sortBySkillMatch: {
-    label: 'Sort',
-    type: 'select',
-    options: [
-      { label: 'Top score', value: 'score' },
-      { label: 'Best skill match', value: 'skillMatch' },
-      { label: 'Most experience', value: 'experience' },
-      { label: 'Latest analyzed', value: 'recent' },
-    ],
-  },
 }
 
 function formatDate(value) {
@@ -85,12 +74,7 @@ export default function CandidatesPage() {
     return params.toString()
   }, [filters, page, pageSize, sortBy, sortDirection])
 
-  const hasActiveFilters = useMemo(() => (
-    Object.entries(filters).some(([key, value]) => {
-      if (key === 'sortBySkillMatch') return value !== emptyFilters.sortBySkillMatch
-      return String(value || '').trim().length > 0
-    })
-  ), [filters])
+  const hasActiveFilters = useMemo(() => Object.values(filters).some((value) => String(value || '').trim().length > 0), [filters])
 
   const selectedCount = selectedResumeIds.length
   const candidateRows = useMemo(() => {
@@ -352,32 +336,36 @@ export default function CandidatesPage() {
 
     {showLoadedState && (
       <>
-      <div className="candidates-directory__pagination">
-        <label>
-          Sort
-          <select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setPage(1) }}>
+      <div className="candidates-directory__table-toolbar" aria-label="Candidates table controls">
+        <div className="candidates-directory__toolbar-group">
+          <label className="candidates-directory__filter-field" htmlFor="candidates-sort-by">
+            <span>Sort by</span>
+            <select id="candidates-sort-by" className="candidates-directory__shortlist-select" value={sortBy} onChange={(event) => { setSortBy(event.target.value); setPage(1) }} aria-label="Sort candidates by">
             <option value="recent">Latest analyzed</option>
             <option value="score">Top score</option>
             <option value="experience">Most experience</option>
             <option value="name">Name A–Z</option>
           </select>
-        </label>
-        <label>
-          Direction
-          <select value={sortDirection} onChange={(event) => { setSortDirection(event.target.value); setPage(1) }}>
-            <option value="desc">Desc</option>
-            <option value="asc">Asc</option>
-          </select>
-        </label>
-        <label>
-          Page size
-          <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}>
-            <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
-          </select>
-        </label>
-        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button>
-        <span>Page {page} of {totalPages}</span>
-        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => (current < totalPages ? current + 1 : current))} disabled={page >= totalPages}>Next</button>
+          </label>
+          <label className="candidates-directory__filter-field" htmlFor="candidates-sort-direction">
+            <span>Direction</span>
+            <select id="candidates-sort-direction" className="candidates-directory__shortlist-select" value={sortDirection} onChange={(event) => { setSortDirection(event.target.value); setPage(1) }} aria-label="Sort direction">
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </label>
+        </div>
+        <div className="candidates-directory__toolbar-group">
+          <label className="candidates-directory__filter-field" htmlFor="candidates-page-size">
+            <span>Page size</span>
+            <select id="candidates-page-size" className="candidates-directory__shortlist-select" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }} aria-label="Candidates per page">
+              <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+            </select>
+          </label>
+          <button type="button" aria-label="Go to previous page" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button>
+          <span className="chip" aria-live="polite">Page {page} of {totalPages}</span>
+          <button type="button" aria-label="Go to next page" className="hf-btn hf-btn--secondary" onClick={() => setPage((current) => (current < totalPages ? current + 1 : current))} disabled={page >= totalPages}>Next</button>
+        </div>
       </div>
 
     <section className="candidates-directory__table-wrap" aria-live="polite">
