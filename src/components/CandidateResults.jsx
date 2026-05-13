@@ -74,6 +74,19 @@ function formatSkillLabel(skill) {
   return skill
 }
 
+
+function formatExperienceDisplay(candidate = {}) {
+  const basics = resolveCandidateBasics(candidate)
+  const explicitYears = Number.isFinite(basics.experienceYears) ? basics.experienceYears : null
+  const estimatedYears = Number.isFinite(basics.estimatedExperienceYears) ? basics.estimatedExperienceYears : null
+  const years = explicitYears ?? estimatedYears
+  if (years == null) return null
+  if (basics.isEstimatedExperience || candidate?.isEstimated) {
+    return `~${years.toFixed(1)} yrs (estimated)`
+  }
+  return `${years} yrs exp`
+}
+
 function resolveCandidateExperience(candidate = {}) {
   const basics = resolveCandidateBasics(candidate)
   return Number.isFinite(basics.experienceYears) ? basics.experienceYears : 0
@@ -1077,7 +1090,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="rc-footer">
                 <span className="rc-footer-meta">
                   {[
-                    (candidate.experienceLabel || (resolveCandidateExperience(candidate) ? `${resolveCandidateExperience(candidate)} yrs exp` : null)),
+                    (candidate.experienceLabel || formatExperienceDisplay(candidate)),
                     candidate.seniority_level,
                   ].filter(Boolean).join(' · ')}
                 </span>
