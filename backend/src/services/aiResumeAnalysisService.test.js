@@ -178,6 +178,42 @@ test('configured fallback preserves extracted profile facts in normalized candid
   assert.equal(candidate.location, 'Pune, Maharashtra, India')
 })
 
+
+test('normalizeCompactCandidate preserves null experience values', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  const analyzeWithAnthropicStub = async () => ({
+    result: {
+      candidates: [{
+        name: 'Candidate Null Experience',
+        totalExperienceYears: null,
+        relevantExperienceYears: null,
+      }],
+    },
+    provider: 'anthropic',
+    model: 'claude-sonnet-4',
+    tokenUsage: { usageAvailable: false, unavailableReason: 'test' },
+  })
+
+  const result = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 1, isDefaultFallback: false },
+    analyzeWithAnthropic: analyzeWithAnthropicStub,
+  })
+
+  const candidate = result.result.candidates[0]
+  assert.equal(candidate.totalExperienceYears, null)
+  assert.equal(candidate.relevantExperienceYears, null)
+})
+
 test('analyzeWithAnthropic embeds JD mode contract in request payload', async () => {
   let capturedPrompt = ''
   const anthropicClientFactory = () => ({

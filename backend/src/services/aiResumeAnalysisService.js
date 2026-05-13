@@ -199,8 +199,14 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     skills_structured: candidate?.skills_structured || (candidate?.skills && typeof candidate.skills === 'object' && !Array.isArray(candidate.skills) ? candidate.skills : null),
     education: Array.isArray(candidate?.education) ? candidate.education.slice(0, 12) : [],
     location: clampString(candidate?.location || '', 120) || null,
-    totalExperienceYears: Number.isFinite(Number(candidate?.totalExperienceYears)) ? Number(candidate.totalExperienceYears) : null,
-    relevantExperienceYears: Number.isFinite(Number(candidate?.relevantExperienceYears)) ? Number(candidate.relevantExperienceYears) : null,
+    totalExperienceYears:
+      candidate?.totalExperienceYears === null
+        ? null
+        : (Number.isFinite(Number(candidate?.totalExperienceYears)) ? Number(candidate.totalExperienceYears) : null),
+    relevantExperienceYears:
+      candidate?.relevantExperienceYears === null
+        ? null
+        : (Number.isFinite(Number(candidate?.relevantExperienceYears)) ? Number(candidate.relevantExperienceYears) : null),
     isExperienceEstimated: Boolean(candidate?.isExperienceEstimated),
     experienceSource: clampString(candidate?.experienceSource || '', 40) || 'unknown',
     experienceExplanation: clampString(candidate?.experienceExplanation || '', 240) || null,
