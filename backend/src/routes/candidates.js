@@ -17,7 +17,7 @@ const DEFAULT_DIRECTORY_PAGE_SIZE = 25
 const MAX_DIRECTORY_PAGE_SIZE = 100
 const PROFILE_SCORE_NUMERIC_SQL = `(
   CASE
-    WHEN NULLIF(BTRIM(cp.profile->>'profile_score'), '') ~ '^[-+]?[0-9]*\.?[0-9]+$'
+    WHEN NULLIF(BTRIM(cp.profile->>'profile_score'), '') ~ '^[-+]?[0-9]*\\.?[0-9]+$'
       THEN NULLIF(BTRIM(cp.profile->>'profile_score'), '')::numeric
     ELSE NULL
   END
@@ -25,7 +25,7 @@ const PROFILE_SCORE_NUMERIC_SQL = `(
 
 const YEARS_EXPERIENCE_NUMERIC_SQL = `(
   CASE
-    WHEN NULLIF(BTRIM(cp.profile->>'years_experience'), '') ~ '^[-+]?[0-9]*\.?[0-9]+$'
+    WHEN NULLIF(BTRIM(cp.profile->>'years_experience'), '') ~ '^[-+]?[0-9]*\\.?[0-9]+$'
       THEN NULLIF(BTRIM(cp.profile->>'years_experience'), '')::numeric
     ELSE NULL
   END
