@@ -188,3 +188,25 @@ test('resolver bundle returns safe defaults and availability flags without throw
   assert.equal(skills.matchedSkillsAvailable, false)
   assert.equal(resume.resumeUrlAvailable, false)
 })
+
+test('resolveCandidateBasics derives current title from experience[0].title and formats education arrays safely', () => {
+  const basics = resolveCandidateBasics({
+    experience: [{ title: 'Staff Engineer' }],
+    education: [
+      { degree: 'B.S. Computer Science', school: 'UT Austin' },
+      'AWS Certified Developer',
+    ],
+  })
+
+  assert.equal(basics.title, 'Staff Engineer')
+  assert.equal(basics.education, 'B.S. Computer Science — UT Austin, AWS Certified Developer')
+})
+
+test('resolveCandidateBasics falls back to candidate title when experience[0] is missing', () => {
+  const basics = resolveCandidateBasics({
+    experience: [],
+    title: 'Principal Engineer',
+  })
+
+  assert.equal(basics.title, 'Principal Engineer')
+})

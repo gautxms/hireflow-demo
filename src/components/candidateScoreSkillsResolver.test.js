@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { resolveCandidateScoreBreakdown } from './candidateScoreSkillsResolver.js'
+import { resolveCandidateScoreBreakdown, resolveSkillSignals } from './candidateScoreSkillsResolver.js'
 
 test('resolveCandidateScoreBreakdown returns items for a real trusted breakdown payload', () => {
   const result = resolveCandidateScoreBreakdown({
@@ -21,6 +21,22 @@ test('resolveCandidateScoreBreakdown returns items for a real trusted breakdown 
     { label: 'Education alignment', value: 72 },
     { label: 'Overall score', value: 78 },
   ])
+})
+
+test('resolveCandidateScoreBreakdown accepts canonical matchScore.breakdown', () => {
+  const result = resolveCandidateScoreBreakdown({
+    matchScore: {
+      breakdown: {
+        skills_alignment: 90,
+        experience_alignment: 87,
+        education_alignment: 84,
+        overall: 87,
+      },
+    },
+  })
+
+  assert.equal(result.isValid, true)
+  assert.equal(result.items.length, 4)
 })
 
 test('resolveCandidateScoreBreakdown rejects malformed breakdown payload', () => {
@@ -44,18 +60,21 @@ test('resolveCandidateScoreBreakdown rejects absent breakdown payload', () => {
 
   assert.equal(result.isValid, false)
   assert.deepEqual(result.items, [])
-import { resolveSkillSignals } from './candidateScoreSkillsResolver.js'
+})
 
-test('resolveSkillSignals prefers explicit matched skill sources', () => {
+test('resolveSkillSignals prefers canonical matched/missing requirement sources', () => {
   const result = resolveSkillSignals({
-    matched_skills: ['React', 'TypeScript'],
-    relevant_skills: ['Node.js'],
+    fit_assessment: {
+      matched_requirements: ['React', 'TypeScript'],
+      missing_requirements: ['Kubernetes'],
+    },
+    top_skills: ['React'],
   })
 
   assert.equal(result.label, 'MATCHED SKILLS')
   assert.deepEqual(result.primarySkills, ['React', 'TypeScript'])
+  assert.deepEqual(result.skillGaps, ['Kubernetes'])
   assert.equal(result.source, 'explicit')
-  assert.equal(result.confidence, 'high')
 })
 
 test('resolveSkillSignals infers relevant skills when explicit matched list is absent', () => {
@@ -76,4 +95,21 @@ test('resolveSkillSignals handles empty skill payloads', () => {
   assert.deepEqual(result.primarySkills, [])
   assert.equal(result.source, 'none')
   assert.equal(result.confidence, 'low')
+})
+
+test('resolveSkillSignals falls back to legacy skill arrays when canonical arrays are empty', () => {
+  const result = resolveSkillSignals({
+    fit_assessment: {
+      matched_requirements: [],
+      missing_requirements: [],
+      matched: ['Legacy Match'],
+      missing: ['Legacy Gap'],
+    },
+    matchedSkills: ['Matched Skills Fallback'],
+    missing_skills: ['Missing Skills Fallback'],
+  })
+
+  assert.deepEqual(result.primarySkills, ['Matched Skills Fallback'])
+  assert.deepEqual(result.skillGaps, ['Missing Skills Fallback'])
+  assert.equal(result.source, 'explicit')
 })

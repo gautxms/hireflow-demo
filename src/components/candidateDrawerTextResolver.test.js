@@ -34,6 +34,18 @@ test('resolveCandidateVerdict returns meaningful fallback for legacy records', (
   assert.match(verdict, /potential match/i)
 })
 
+test('resolveCandidateReasoning falls back to canonical rationale and risks_or_gaps', () => {
+  const reasoning = resolveCandidateReasoning({
+    fit_assessment: {
+      rationale: 'Demonstrates strong ownership across complex projects.',
+      risks_or_gaps: 'Depth in distributed systems is uncertain.',
+    },
+  })
+
+  assert.match(reasoning, /strong ownership/i)
+  assert.match(reasoning, /distributed systems/i)
+})
+
 test('dedupeByComparableText removes repeated lines when summary and reason are identical', () => {
   const duplicated = ['Excellent SQL depth.', 'Excellent SQL depth', 'Excellent SQL depth.']
   assert.deepEqual(dedupeByComparableText(duplicated), ['Excellent SQL depth.'])

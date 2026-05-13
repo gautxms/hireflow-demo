@@ -28,3 +28,25 @@ test('normalizes payload candidates and parseMeta object', () => {
   assert.equal(payload.candidates[0].matchScore.score, 0)
   assert.equal(typeof payload.candidates[0].matchScore.reason, 'string')
 })
+
+test('normalizes canonical fit_assessment fields into legacy aliases while preserving canonicals', () => {
+  const payload = normalizeCandidateResultsPayload({
+    candidates: [{
+      fit_assessment: {
+        matched_requirements: ['React'],
+        missing_requirements: ['Kubernetes'],
+        risks_or_gaps: 'No production-scale Kubernetes example.',
+        rationale: 'Strong frontend depth and leadership evidence.',
+      },
+    }],
+  })
+
+  const [candidate] = payload.candidates
+  assert.deepEqual(candidate.fit_assessment.matched_requirements, ['React'])
+  assert.deepEqual(candidate.fit_assessment.matched, ['React'])
+  assert.deepEqual(candidate.fit_assessment.missing_requirements, ['Kubernetes'])
+  assert.deepEqual(candidate.fit_assessment.missing, ['Kubernetes'])
+  assert.equal(candidate.fit_assessment.risks_or_gaps, 'No production-scale Kubernetes example.')
+  assert.equal(candidate.fit_assessment.uncertainty, 'No production-scale Kubernetes example.')
+  assert.equal(candidate.fit_assessment.reason, 'Strong frontend depth and leadership evidence.')
+})
