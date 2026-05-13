@@ -1877,3 +1877,94 @@
   display: inline-flex;
   margin-top: 10px;
 }
+
+
+/* Final polish: interaction and link-state normalization */
+.candidate-results-page a,
+.candidate-results-page a:visited {
+  color: var(--color-text-secondary);
+}
+
+.candidate-results-page a:not(.dd-btn-primary):not(.dd-btn-secondary):hover {
+  color: #c8ff00;
+}
+
+.candidate-results-page__header,
+.bulk-toolbar,
+.jd-panel,
+.filter-popover,
+.shortlist-panel,
+.resume-modal-panel {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+}
+
+.bulk-toolbar,
+.jd-panel,
+.filter-popover {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.bulk-btn,
+.jd-toggle,
+.jd-btn-apply,
+.candidate-results-page__back-button,
+.filter-filters-btn,
+.filter-shortlist-btn,
+.filter-sort-select,
+.fp-skill-pill,
+.fp-show-more,
+.fp-clear,
+.fp-apply {
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.bulk-btn:focus-visible,
+.jd-toggle:focus-visible,
+.jd-btn-apply:focus-visible,
+.candidate-results-page__back-button:focus-visible,
+.candidate-results-page__tag-input:focus-visible,
+.bulk-select input:focus-visible {
+  outline: 2px solid #c8ff00;
+  outline-offset: 2px;
+}
+
+.bulk-btn:disabled,
+.jd-btn-apply:disabled,
+.filter-filters-btn:disabled,
+.filter-shortlist-btn:disabled,
+.fp-apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jd-toggle {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dd-meta-pill,
+.dd-top-skill,
+.dd-skill-pill,
+.rc-skill,
+.rc-skill-more,
+.filter-chip {
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 640px) {
+  .candidate-results-page__header {
+    padding: 0.72rem 0.8rem;
+  }
+
+  .bulk-toolbar,
+  .jd-toggle,
+  .jd-body,
+  .filter-popover,
+  .resume-modal-panel {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .dd-header {
+    gap: 10px;
+  }
+}
