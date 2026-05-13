@@ -218,6 +218,23 @@ function dedupeTextItems(items, blocked = []) {
     })
 }
 
+function sanitizePillValues(items) {
+  const seen = new Set()
+  const normalized = Array.isArray(items) ? items : [items]
+
+  return normalized
+    .map((item) => String(formatSkillLabel(item) || '').trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase()
+      if (seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
+}
+
 
 function formatResumeSize(candidate) {
   const rawSize = candidate?.file_size ?? candidate?.fileSize ?? candidate?.resume_size ?? candidate?.resumeSize
@@ -386,6 +403,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
   const [expandedId, setExpandedId] = useState(null)
+  const [expandedSections, setExpandedSections] = useState({})
   const [shortlistOpen, setShortlistOpen] = useState(false)
 
   const [shortlists, setShortlists] = useState([])
@@ -403,6 +421,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [hasJobDescription, setHasJobDescription] = useState(Boolean(parseMeta?.hasJobDescription))
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
+  const toggleSectionExpanded = useCallback((candidateKey, sectionKey) => {
+    const compoundKey = `${candidateKey}:${sectionKey}`
+    setExpandedSections((current) => ({ ...current, [compoundKey]: !current[compoundKey] }))
+  }, [])
 
   useEffect(() => {
     setLiveCandidates(rawCandidates)
@@ -1148,12 +1170,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const scoreBreakdown = resolveCandidateScoreBreakdown(candidate)
         const skillSignals = resolveSkillSignals(candidate)
         const primarySkills = skillSignals.primarySkills.length > 0
-          ? dedupeTextItems(skillSignals.primarySkills)
+          ? sanitizePillValues(skillSignals.primarySkills)
           : [skillSignals.hasExplicitMatched ? 'No confirmed matched skills were detected.' : 'Relevant skills unavailable for this analysis.']
         const missingSkills = skillSignals.skillGaps.length > 0
-          ? dedupeTextItems(skillSignals.skillGaps, primarySkills)
+          ? sanitizePillValues(dedupeTextItems(skillSignals.skillGaps, primarySkills))
           : ['No explicit skill gaps were detected.']
-        const allSkills = skillSignals.allSkills.length > 0 ? dedupeTextItems(skillSignals.allSkills) : ['No skills were extracted for this profile.']
+        const allSkills = skillSignals.allSkills.length > 0 ? sanitizePillValues(dedupeTextItems(skillSignals.allSkills)) : ['No skills were extracted for this profile.']
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']).slice(0, 3)
@@ -1177,6 +1199,23 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const optimisticTags = candidateTags[candidate._bulkKey] || []
         const visibleTags = [...new Set([...persistedTags, ...optimisticTags].map((tag) => String(tag || '').trim()).filter(Boolean))]
         const initials = String(candidate?.name || '').split(' ').map((part) => part[0] || '').join('').slice(0, 2).toUpperCase()
+        const sectionStateKey = (sectionKey) => `${candidate._bulkKey}:${sectionKey}`
+        const isSectionExpanded = (sectionKey) => Boolean(expandedSections[sectionStateKey(sectionKey)])
+        const previewList = (items, sectionKey, limit = 4) => {
+          const hasOverflow = items.length > limit
+          const expanded = isSectionExpanded(sectionKey)
+          return {
+            items: expanded || !hasOverflow ? items : items.slice(0, limit),
+            hasOverflow,
+            expanded,
+          }
+        }
+        const primarySkillsPreview = previewList(primarySkills, 'primary-skills', 5)
+        const missingSkillsPreview = previewList(missingSkills, 'missing-skills', 4)
+        const allSkillsPreview = previewList(allSkills, 'all-skills', 8)
+        const uncertaintyPreview = previewList(uncertaintyItems, 'uncertainty', 3)
+        const probesPreview = previewList(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.'], 'probes', 2)
+        const evidencePreview = previewList(evidenceItems, 'evidence', 4)
         const keyFacts = [
           { label: 'Experience', value: formatExperienceDisplay(candidate) },
           { label: 'Seniority', value: toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Unavailable') },
@@ -1236,8 +1275,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
                 <div className="dd-col-label dd-col-label--mt-16">Gaps & uncertainties</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
-                  {uncertaintyItems.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-uncertainty-${idx}`}><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
-                  {(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.']).map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                  {uncertaintyPreview.items.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-uncertainty-${idx}`}><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                  {probesPreview.items.map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                  {(uncertaintyPreview.hasOverflow || probesPreview.hasOverflow) ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'uncertainty')}>{isSectionExpanded('uncertainty') ? 'Less' : 'More'}</button> : null}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-16">Recruiter action</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
@@ -1271,22 +1311,26 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
-                  {primarySkills.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
+                  {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
+                  {primarySkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'primary-skills')}>{primarySkillsPreview.expanded ? 'Less' : 'More'}</button> : null}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
-                  {missingSkills.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
+                  {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
+                  {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Less' : 'More'}</button> : null}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">All skills (reference)</div>
                 <div className="dd-analysis-box">
-                  {allSkills.map((item, idx) => <span className="dd-skill-pill" key={`${candidate._bulkKey}-all-skills-${idx}`}>{item}</span>)}
+                  {allSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill" key={`${candidate._bulkKey}-all-skills-${idx}`}>{item}</span>)}
+                  {allSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'all-skills')}>{allSkillsPreview.expanded ? 'Less' : 'More'}</button> : null}
                 </div>
               </div>
 
               <div className="dd-col dd-col--right dd-col--analysis">
                 <div className="dd-col-label">Resume evidence</div>
                 <div className="dd-analysis-box">
-                  {evidenceItems.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
+                  {evidencePreview.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
+                  {evidencePreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'evidence')}>{evidencePreview.expanded ? 'Less' : 'More'}</button> : null}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
