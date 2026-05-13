@@ -64,6 +64,60 @@ function normalizeExperienceSource(value) {
   return ['resume', 'ai_inferred', 'unknown'].includes(normalized) ? normalized : 'unknown'
 }
 
+function normalizeEducationEntry(entry) {
+  if (typeof entry === 'string') {
+    const rawText = normalizeString(entry)
+    return rawText ? {
+      degree: null,
+      field: null,
+      institution: null,
+      startDate: null,
+      endDate: null,
+      grade: null,
+      gradeType: null,
+      rawText,
+    } : null
+  }
+
+  if (!entry || typeof entry !== 'object') return null
+
+  const degree = normalizeString(entry.degree ?? entry.qualification ?? entry.program)
+  const field = normalizeString(entry.field ?? entry.major ?? entry.specialization)
+  const institution = normalizeString(entry.institution ?? entry.school ?? entry.university)
+  const startDate = normalizeString(entry.startDate ?? entry.start_date ?? entry.from)
+  const endDate = normalizeString(entry.endDate ?? entry.end_date ?? entry.to)
+  const grade = normalizeString(entry.grade ?? entry.gpa ?? entry.score)
+  const gradeType = normalizeString(entry.gradeType ?? entry.grade_type)
+  const rawText = normalizeString(entry.rawText ?? entry.text ?? entry.value)
+
+  if (!degree && !field && !institution && !startDate && !endDate && !grade && !gradeType && !rawText) {
+    return null
+  }
+
+  return { degree, field, institution, startDate, endDate, grade, gradeType, rawText }
+}
+
+function normalizeEducation(education, candidate = {}) {
+  const rawEducation = education ?? candidate?.highest_education ?? candidate?.highestEducation ?? candidate?.degree ?? null
+  const normalizedArray = Array.isArray(rawEducation)
+    ? rawEducation.map((entry) => normalizeEducationEntry(entry)).filter(Boolean)
+    : [normalizeEducationEntry(rawEducation)].filter(Boolean)
+
+  const legacyEducation = typeof rawEducation === 'string'
+    ? clampString(rawEducation, 300)
+    : normalizedArray
+      .map((entry) => [entry.degree, entry.institution].filter(Boolean).join(', '))
+      .filter(Boolean)
+      .join(' | ')
+
+  return {
+    canonical: normalizedArray,
+    legacyEducation: legacyEducation || null,
+    highestEducation: normalizeString(candidate?.highestEducation ?? candidate?.highest_education) || (normalizedArray[0]?.degree || null),
+    degree: normalizeString(candidate?.degree) || (normalizedArray[0]?.degree || null),
+  }
+}
+
 function normalizeStructuredSkills(skills) {
   if (Array.isArray(skills) || typeof skills === 'string') {
     return {
@@ -457,6 +511,7 @@ async function runParse(job) {
           candidate,
           `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
         )
+        const normalizedEducation = normalizeEducation(candidate?.education, candidate)
         return {
           id: identity.id,
           candidateId: identity.candidateId,
@@ -480,6 +535,11 @@ async function runParse(job) {
           skills: skillsStructured,
           skills_flat: normalizeStringArray(resolvedSkillsFlat).slice(0, 25),
           confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
+          education: normalizedEducation.canonical,
+          highestEducation: normalizedEducation.highestEducation,
+          highest_education: normalizedEducation.highestEducation,
+          degree: normalizedEducation.degree,
+          legacyEducation: normalizedEducation.legacyEducation,
         }
       })
     : []
