@@ -579,25 +579,43 @@ test('strict fallback sequence stops after same-category fallback failure', asyn
   const credentials = { activeProvider: 'anthropic', providers: { anthropic: { primary: { apiKey: 'a', model: 'claude', source: 'admin' } }, openai: { primary: { apiKey: 'o', model: 'gpt', source: 'admin' } } }, governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } } }
   let primaryCalls = 0
   let fallbackCalls = 0
-  await assert.rejects(() => analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
-    credentials,
-    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
-    analyzeWithAnthropic: async () => { primaryCalls += 1; throw new Error('response_truncated_error::{}') },
-    analyzeWithOpenAI: async () => { fallbackCalls += 1; throw new Error('response_truncated_error::{}') },
-  }), /response_truncated_error::/)
+  let terminalError = null
+  try {
+    await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      credentials,
+      systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+      analyzeWithAnthropic: async () => { primaryCalls += 1; throw new Error('response_truncated_error::{}') },
+      analyzeWithOpenAI: async () => { fallbackCalls += 1; throw new Error('response_truncated_error::{}') },
+    })
+    assert.fail('expected strict sequence to fail')
+  } catch (error) {
+    terminalError = error
+  }
+  assert.match(String(terminalError?.message || ''), /response_truncated_error::/)
   assert.equal(primaryCalls, 1)
   assert.equal(fallbackCalls, 1)
+  assert.equal(Array.isArray(terminalError?.attempts), true)
+  assert.equal(terminalError.attempts.length, 2)
 })
 
 test('strict fallback sequence performs one final primary attempt when categories differ', async () => {
   const credentials = { activeProvider: 'anthropic', providers: { anthropic: { primary: { apiKey: 'a', model: 'claude', source: 'admin' } }, openai: { primary: { apiKey: 'o', model: 'gpt', source: 'admin' } } }, governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } } }
   let primaryCalls = 0
-  await assert.rejects(() => analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
-    credentials,
-    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
-    analyzeWithAnthropic: async () => { primaryCalls += 1; throw new Error('timeout_error::{}') },
-    analyzeWithOpenAI: async () => { throw new Error('response_truncated_error::{}') },
-  }), /timeout_error::|response_truncated_error::/)
+  let terminalError = null
+  try {
+    await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      credentials,
+      systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+      analyzeWithAnthropic: async () => { primaryCalls += 1; throw new Error('timeout_error::{}') },
+      analyzeWithOpenAI: async () => { throw new Error('response_truncated_error::{}') },
+    })
+    assert.fail('expected strict sequence to fail')
+  } catch (error) {
+    terminalError = error
+  }
+  assert.match(String(terminalError?.message || ''), /timeout_error::|response_truncated_error::/)
   assert.equal(primaryCalls, 2)
+  assert.equal(Array.isArray(terminalError?.attempts), true)
+  assert.equal(terminalError.attempts.length, 3)
 })
 

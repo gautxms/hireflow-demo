@@ -963,7 +963,7 @@ export async function analyzeWithOpenAI(
         category: 'response_truncated_error',
         provider: 'openai',
         model,
-        technicalDetails: `Provider output was truncated before valid JSON completion after retries (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${attemptedMaxOutputTokens}).`,
+        technicalDetails: `Provider output was truncated before valid JSON completion (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${attemptedMaxOutputTokens}).`,
       })
     }
 
