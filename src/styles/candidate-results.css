@@ -64,6 +64,26 @@
   margin: 0;
 }
 
+
+
+.candidate-results-page,
+.bulk-toolbar,
+.jd-panel,
+.result-card,
+.detail-drawer {
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+}
+
+.candidate-results__name,
+.candidate-results__section-title,
+.candidate-results__evaluation-title,
+.profile-name,
+.dd-name,
+.dd-col-label,
+.profile-section-heading {
+  font-family: var(--font-heading, 'Syne', sans-serif);
+}
+
 .candidate-results-page__progress {
   color: var(--color-accent-green);
   margin-bottom: var(--spacing-lg);
@@ -1277,11 +1297,6 @@
   color: #b4b7bf;
   line-height: 1.4;
   min-height: 1.35em;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
   word-break: normal;
   overflow-wrap: break-word;
 }
@@ -1361,7 +1376,7 @@
 
 /* ── Detail drawer ────────────────────────────────── */
 .detail-drawer {
-  background: #2b2b29;
+  background: #1b1b1b;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 16px;
   padding: 0;
@@ -1924,9 +1939,12 @@
 
 
 /* Final polish: interaction and link-state normalization */
-.candidate-results-page a,
-.candidate-results-page a:visited {
+.candidate-results-page a {
   color: var(--color-text-secondary);
+}
+
+.candidate-results-page a:visited {
+  color: #a4acb8;
 }
 
 .candidate-results-page a:not(.dd-btn-primary):not(.dd-btn-secondary):hover {
