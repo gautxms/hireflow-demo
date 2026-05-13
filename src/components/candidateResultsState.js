@@ -399,6 +399,15 @@ function firstDefined(values = []) {
   return undefined
 }
 
+function firstPresent(values = []) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue
+    if (typeof value === 'string' && !value.trim()) continue
+    return value
+  }
+  return undefined
+}
+
 function resolveExperienceTitle(candidate = {}) {
   if (!Array.isArray(candidate?.experience)) {
     return ''
@@ -414,14 +423,14 @@ function resolveExperienceTitle(candidate = {}) {
 
 function normalizeEducationEntry(value) {
   if (!value || typeof value !== 'object') return null
-  const degree = toDisplayText(firstDefined([value.degree, value.qualification, value.program]), '').trim()
-  const institution = toDisplayText(firstDefined([value.institution, value.school, value.university, value.college]), '').trim()
-  const field = toDisplayText(firstDefined([value.field, value.major, value.specialization, value.field_of_study]), '').trim()
-  const startDate = toDisplayText(firstDefined([value.startDate, value.startYear, value.start_date]), '').trim()
-  const endDate = toDisplayText(firstDefined([value.endDate, value.endYear, value.end_date]), '').trim()
+  const degree = toDisplayText(firstPresent([value.degree, value.qualification, value.program]), '').trim()
+  const institution = toDisplayText(firstPresent([value.institution, value.school, value.university, value.college]), '').trim()
+  const field = toDisplayText(firstPresent([value.field, value.major, value.specialization, value.field_of_study]), '').trim()
+  const startDate = toDisplayText(firstPresent([value.startDate, value.startYear, value.start_date]), '').trim()
+  const endDate = toDisplayText(firstPresent([value.endDate, value.endYear, value.end_date]), '').trim()
   const year = toDisplayText(value.year, '').trim()
-  const grade = toDisplayText(firstDefined([value.grade, value.percentage, value.cgpa, value.gpa, value.status]), '').trim()
-  const rawText = toDisplayText(firstDefined([value.rawText, value.text, value.value]), '').trim()
+  const grade = toDisplayText(firstPresent([value.grade, value.percentage, value.cgpa, value.gpa, value.status]), '').trim()
+  const rawText = toDisplayText(firstPresent([value.rawText, value.text, value.value]), '').trim()
   return { degree, institution, field, startDate, endDate, year, grade, rawText }
 }
 
