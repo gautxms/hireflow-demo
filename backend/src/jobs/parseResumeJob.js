@@ -416,6 +416,9 @@ async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
+  let parseProvider = null
+  let parseModel = null
+  let parseMaxOutputTokens = null
   const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
   const extractionResult = await runParseWithOcrFallback({
     filename,
@@ -434,7 +437,11 @@ async function runParse(job) {
     if (!hasUsableExtractedText) {
       throw new Error('extraction_failed::Unable to extract enough resume text for AI parsing after OCR fallback.')
     }
-    console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
+    console.log('[Parse] Attempting AI analysis with primary/fallback keys', {
+      jobId: job.id,
+      resumeId,
+      jobDescriptionId: job.data.jobDescriptionId || null,
+    })
     const aiResponse = await analyzeResumeWithConfiguredFallback(
       Buffer.from(extractedRawText, 'utf8').toString('base64'),
       'text/plain',
@@ -484,9 +491,17 @@ async function runParse(job) {
       })
     }
 
-    console.log('[Parse] AI analysis successful')
+    console.log('[Parse] AI analysis successful', {
+      jobId: job.id,
+      resumeId,
+      provider: aiResponse?.provider || null,
+      model: aiResponse?.model || null,
+    })
     analysisResult = aiResult
     parseMethod = aiResponse?.provider || 'anthropic-primary'
+    parseProvider = aiResponse?.provider || null
+    parseModel = aiResponse?.model || null
+    parseMaxOutputTokens = Number(aiResponse?.maxOutputTokens || aiResult?.maxOutputTokens || 0) || null
   } catch (aiError) {
     const failedAttempts = Array.isArray(aiError?.attempts) ? aiError.attempts : []
     if (failedAttempts.length > 0) {
@@ -607,6 +622,15 @@ async function runParse(job) {
       ? null
       : (jobDescriptionContext?.missingReason || 'job_description_missing'),
     candidates: normalizedCandidates,
+    parseMeta: {
+      extractionMethod: extractionResult?.methodUsed || 'failed',
+      rawTextCharCount: extractedRawText.length,
+      parseStatus: 'complete',
+      scoringStatus: jobDescriptionContext?.hasContext ? 'complete' : 'skipped_no_job_description',
+      provider: analysisResult?.provider || parseMethod,
+      model: parseModel || analysisResult?.model || null,
+      maxOutputTokens: parseMaxOutputTokens,
+    },
   }
 
   const parseDurationMs = Date.now() - startedAt
