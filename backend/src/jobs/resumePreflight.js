@@ -13,10 +13,11 @@ function detectPdfEncryption(raw = '') {
 
 function looksLikeLikelyNonPdfPayload(raw = '') {
   const head = String(raw || '').slice(0, 4096).toLowerCase()
-  return head.includes('<html')
-    || head.includes('<!doctype html')
-    || head.includes('{"error"')
-    || head.includes('{"message"')
+  const headWithoutHeader = head.replace(/^%pdf-[^\n\r]*[\r\n]*/, '')
+  const likelyPdfStructure = /(\b\d+\s+\d+\s+obj\b|\bxref\b|\bstream\b|\/type\s*\/)/.test(headWithoutHeader)
+  const htmlPayloadEarly = /^\s*(<!doctype\s+html|<html)\b/.test(headWithoutHeader)
+  const jsonErrorPayloadEarly = /^\s*\{\s*"(?:error|message)"\s*:/.test(headWithoutHeader)
+  return !likelyPdfStructure && (htmlPayloadEarly || jsonErrorPayloadEarly)
 }
 
 function mapHardFailure(failureCategory, message) {
