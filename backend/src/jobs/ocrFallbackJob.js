@@ -311,6 +311,14 @@ export function shouldUseOcrFallback({ scannedPdf, extractionLength, aiConfidenc
   return Boolean(scannedPdf || extractionLength === 0 || aiConfidence < 70)
 }
 
+function mapFinalExtractionMethod({ selectedMethod, usedOcrText }) {
+  if (usedOcrText) return 'ocr'
+  if (selectedMethod === 'pdf_text') return 'pdf_text'
+  if (selectedMethod === 'docx_text') return 'docx_text'
+  if (selectedMethod === 'plain_text') return 'plain_text'
+  return 'failed'
+}
+
 export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer }) {
   const extraction = await extractTextFromResume({ fileBuffer, mimeType })
   const aiConfidence = scoreTextConfidence(extraction.length, fileSize)
@@ -330,8 +338,12 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   })
 
   if (!shouldRunOcr) {
+    const finalMethod = mapFinalExtractionMethod({
+      selectedMethod: extraction.method,
+      usedOcrText: false,
+    })
     return {
-      methodUsed: 'ai-extraction',
+      methodUsed: finalMethod,
       confidence: aiConfidence,
       extractedTextLength: extraction.length,
       rawText: extraction.text,
@@ -352,9 +364,13 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   const useOcrText = ocrText.length > extraction.length && ocrConfidence >= aiConfidence
   const selectedText = useOcrText ? ocrText : extraction.text
   const overallConfidence = clampConfidence(Math.max(aiConfidence, ocrConfidence), 10, 99)
+  const finalMethod = mapFinalExtractionMethod({
+    selectedMethod: extraction.method,
+    usedOcrText: useOcrText,
+  })
 
   return {
-    methodUsed: useOcrText ? 'ocr-fallback' : 'ai-extraction',
+    methodUsed: finalMethod,
     confidence: overallConfidence,
     extractedTextLength: selectedText.length,
     rawText: selectedText,
