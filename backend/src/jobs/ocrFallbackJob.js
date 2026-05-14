@@ -343,6 +343,7 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
       usedOcrText: false,
     })
     return {
+      ocrConfidence: null,
       methodUsed: finalMethod,
       confidence: aiConfidence,
       extractedTextLength: extraction.length,
@@ -370,6 +371,7 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   })
 
   return {
+    ocrConfidence,
     methodUsed: finalMethod,
     confidence: overallConfidence,
     extractedTextLength: selectedText.length,

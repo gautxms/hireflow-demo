@@ -3,6 +3,7 @@ const ADMIN_SECURITY_PATH = '/admin/security'
 
 const CATEGORY_MESSAGES = {
   extraction_failed: 'Resume text extraction failed; upload a clearer PDF/DOCX or retry with OCR-ready content.',
+  image_only_low_ocr: 'Resume appears image-only and OCR confidence is too low; upload a clearer text-based resume.',
   response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
   response_truncated_error: 'AI output exceeded response size; retry with compact analysis or reduce schema detail.',
   invalid_request_error: 'AI model configuration issue in Admin Security.',
@@ -15,7 +16,7 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(extraction_failed|response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(extraction_failed|image_only_low_ocr|response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
 
 function toMessage(value) {
   if (value instanceof Error) {
@@ -191,6 +192,18 @@ function buildHints(category, { provider, model } = {}) {
         'Retry with a text-based PDF or DOCX when possible.',
         'If the file is scanned, upload a cleaner version with higher contrast/quality.',
         'Confirm the uploaded file is not password-protected or image-only with unreadable text.',
+      ],
+    }
+  }
+
+  if (category === 'image_only_low_ocr') {
+    return {
+      action: 'review_resume_file_quality',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        'Upload a text-based PDF or DOCX exported directly from the source document.',
+        'If the resume is scanned, re-scan at higher quality/contrast and retry OCR.',
+        'Ensure text is readable (not blurred, skewed, or obstructed) before re-uploading.',
       ],
     }
   }
