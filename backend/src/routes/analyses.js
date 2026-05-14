@@ -46,6 +46,8 @@ function extractCandidatesFromResult(result) {
   const diagnostics = {
     parseableObject: false,
     malformed: false,
+    extractionOutcome: 'schema_mismatch',
+    schemaVersion: 'parse_jobs.result.candidates.v1',
   }
 
   const parseStringSafely = (value) => {
@@ -69,6 +71,7 @@ function extractCandidatesFromResult(result) {
 
   const parsed = resolveObject(result)
   if (!parsed || typeof parsed !== 'object') {
+    diagnostics.extractionOutcome = diagnostics.malformed ? 'malformed_json' : 'schema_mismatch'
     return {
       candidates: [],
       diagnostics,
@@ -79,19 +82,41 @@ function extractCandidatesFromResult(result) {
   }
 
   diagnostics.parseableObject = true
-
   const candidateFields = [parsed.candidates, parsed.results, parsed.output]
+
   for (const field of candidateFields) {
     if (Array.isArray(field)) {
-      return { candidates: field, diagnostics, normalizedResult: parsed, resultShape: 'array_candidates', extractionErrorReason: null }
+      diagnostics.extractionOutcome = field.length > 0 ? 'success' : 'empty_candidates'
+      return {
+        candidates: field,
+        diagnostics,
+        normalizedResult: parsed,
+        resultShape: 'array_candidates',
+        extractionErrorReason: null,
+      }
     }
+
     const nested = resolveObject(field)
     if (nested && Array.isArray(nested.candidates)) {
-      return { candidates: nested.candidates, diagnostics, normalizedResult: parsed, resultShape: 'nested_array_candidates', extractionErrorReason: null }
+      diagnostics.extractionOutcome = nested.candidates.length > 0 ? 'success' : 'empty_candidates'
+      return {
+        candidates: nested.candidates,
+        diagnostics,
+        normalizedResult: parsed,
+        resultShape: 'nested_array_candidates',
+        extractionErrorReason: null,
+      }
     }
   }
 
-  return { candidates: [], diagnostics, normalizedResult: parsed, resultShape: 'object_without_candidates', extractionErrorReason: 'missing_candidates_array' }
+  diagnostics.extractionOutcome = diagnostics.malformed ? 'malformed_json' : 'schema_mismatch'
+  return {
+    candidates: [],
+    diagnostics,
+    normalizedResult: parsed,
+    resultShape: 'object_without_candidates',
+    extractionErrorReason: 'missing_candidates_array',
+  }
 }
 
 function deriveAggregateStatus(counts, totalItems) {
@@ -144,7 +169,7 @@ function deriveResultQualityStatus(extractionDiagnostics = {}, parseTerminalComp
 
 async function loadAnalysisStatus(analysisId, userId) {
   const analysisResult = await pool.query(
-     `SELECT a.id,
+    `SELECT a.id,
             a.user_id,
             a.status,
             a.name,
@@ -189,7 +214,13 @@ async function loadAnalysisStatus(analysisId, userId) {
   const items = []
   const failures = []
   const counts = { queued: 0, processing: 0, retrying: 0, complete: 0, failed: 0 }
-  const extractionDiagnostics = { totalItems: 0, parseableObjectCount: 0, candidateBearingItemCount: 0, malformedItemCount: 0 }
+  const extractionDiagnostics = {
+    totalItems: 0,
+    parseableObjectCount: 0,
+    candidateBearingItemCount: 0,
+    malformedItemCount: 0,
+    outcomes: { success: 0, empty_candidates: 0, schema_mismatch: 0, malformed_json: 0 },
+  }
   let maxProgress = 0
 
   for (const row of itemsResult.rows) {
@@ -225,14 +256,30 @@ async function loadAnalysisStatus(analysisId, userId) {
 
     const extracted = canonicalStatus === 'complete'
       ? extractCandidatesFromResult(row.parse_result)
-      : { candidates: [], diagnostics: { parseableObject: false, malformed: false }, normalizedResult: null }
+      : {
+          candidates: [],
+          diagnostics: {
+            parseableObject: false,
+            malformed: false,
+            extractionOutcome: 'schema_mismatch',
+            schemaVersion: 'parse_jobs.result.candidates.v1',
+          },
+          normalizedResult: null,
+          resultShape: 'not_evaluated',
+          extractionErrorReason: 'not_complete_status',
+        }
+
     extractionDiagnostics.totalItems += 1
     if (extracted.diagnostics.parseableObject) extractionDiagnostics.parseableObjectCount += 1
     if (extracted.diagnostics.malformed) extractionDiagnostics.malformedItemCount += 1
     if (extracted.candidates.length > 0) extractionDiagnostics.candidateBearingItemCount += 1
+    extractionDiagnostics.outcomes[extracted.diagnostics.extractionOutcome] += 1
 
     const parsedResult = extracted.normalizedResult
-    const parseOutcome = normalizeParseOutcome(canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : null), 'partial')
+    const parseOutcome = normalizeParseOutcome(
+      canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : null),
+      'partial',
+    )
     const failureCategory = canonicalStatus === 'failed'
       ? normalizeFailureCategory(safeParseResult(row.parse_result)?.failureCategory, { fallback: 'unknown' })
       : null
@@ -252,6 +299,10 @@ async function loadAnalysisStatus(analysisId, userId) {
       failureCategory,
       result: parsedResult,
       normalizedCandidates: extracted.candidates,
+      extraction: {
+        outcome: extracted.diagnostics.extractionOutcome,
+        schemaVersion: extracted.diagnostics.schemaVersion,
+      },
       extractionMeta: {
         hasCandidates: extracted.candidates.length > 0,
         resultShape: extracted.resultShape || 'unknown',
@@ -382,13 +433,20 @@ router.get('/', requireAuth, async (req, res) => {
     for (const row of extractionByAnalysisResult.rows) {
       const analysisId = String(row.analysis_id || '')
       if (!analysisId) continue
-      const existing = extractionByAnalysis.get(analysisId) || { totalItems: 0, parseableObjectCount: 0, candidateBearingItemCount: 0, malformedItemCount: 0 }
+      const existing = extractionByAnalysis.get(analysisId) || {
+        totalItems: 0,
+        parseableObjectCount: 0,
+        candidateBearingItemCount: 0,
+        malformedItemCount: 0,
+        outcomes: { success: 0, empty_candidates: 0, schema_mismatch: 0, malformed_json: 0 },
+      }
       existing.totalItems += 1
       if (row.status === 'complete') {
         const extracted = extractCandidatesFromResult(row.parse_result)
         if (extracted.diagnostics.parseableObject) existing.parseableObjectCount += 1
         if (extracted.diagnostics.malformed) existing.malformedItemCount += 1
         if (extracted.candidates.length > 0) existing.candidateBearingItemCount += 1
+        existing.outcomes[extracted.diagnostics.extractionOutcome] += 1
       }
       extractionByAnalysis.set(analysisId, existing)
     }
@@ -421,7 +479,13 @@ router.get('/', requireAuth, async (req, res) => {
         name: row.name || null,
         status: row.status || 'queued',
         liveStatus: deriveAggregateStatus({
-          queued: Math.max(0, Number(row.total_count || 0) - Number(row.complete_count || 0) - Number(row.failed_count || 0) - Number(row.processing_count || 0)),
+          queued: Math.max(
+            0,
+            Number(row.total_count || 0)
+            - Number(row.complete_count || 0)
+            - Number(row.failed_count || 0)
+            - Number(row.processing_count || 0),
+          ),
           processing: Number(row.processing_count || 0),
           retrying: 0,
           complete: Number(row.complete_count || 0),
@@ -524,7 +588,6 @@ router.get('/:id/status', requireAuth, async (req, res) => {
   }
 })
 
-
 router.delete('/:id', requireAuth, async (req, res) => {
   const client = await pool.connect()
   try {
@@ -557,3 +620,4 @@ router.delete('/:id', requireAuth, async (req, res) => {
 })
 
 export default router
+export { extractCandidatesFromResult }

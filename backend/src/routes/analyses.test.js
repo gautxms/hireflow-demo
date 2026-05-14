@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import jwt from 'jsonwebtoken'
-import analysesRouter from './analyses.js'
+import analysesRouter, { extractCandidatesFromResult } from './analyses.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
 
@@ -149,6 +149,12 @@ test('GET /analyses/:id returns owner-only detail payload', async (t) => {
     parseableObjectCount: 1,
     candidateBearingItemCount: 1,
     malformedItemCount: 0,
+    outcomes: {
+      success: 1,
+      empty_candidates: 0,
+      schema_mismatch: 0,
+      malformed_json: 0,
+    },
   })
 })
 
@@ -186,7 +192,32 @@ test('GET /analyses/:id normalizes historical parse result envelopes and malform
     parseableObjectCount: 1,
     candidateBearingItemCount: 1,
     malformedItemCount: 1,
+    outcomes: {
+      success: 1,
+      empty_candidates: 0,
+      schema_mismatch: 0,
+      malformed_json: 1,
+    },
   })
+  assert.equal(payload.items[0].extraction.outcome, 'success')
+  assert.equal(payload.items[1].extraction.outcome, 'malformed_json')
+})
+
+test('extractCandidatesFromResult contract classifies nested-string JSON, wrappers, and missing arrays', () => {
+  const nested = extractCandidatesFromResult(JSON.stringify({ output: JSON.stringify({ candidates: [{ name: 'Nested' }] }) }))
+  assert.deepEqual(nested.candidates, [{ name: 'Nested' }])
+  assert.equal(nested.diagnostics.extractionOutcome, 'success')
+
+  const alternateWrapper = extractCandidatesFromResult({ results: [{ name: 'Alt' }] })
+  assert.deepEqual(alternateWrapper.candidates, [{ name: 'Alt' }])
+  assert.equal(alternateWrapper.diagnostics.extractionOutcome, 'success')
+
+  const missingArrays = extractCandidatesFromResult({ output: { notCandidates: [] } })
+  assert.deepEqual(missingArrays.candidates, [])
+  assert.equal(missingArrays.diagnostics.extractionOutcome, 'schema_mismatch')
+
+  const emptyCandidates = extractCandidatesFromResult({ candidates: [] })
+  assert.equal(emptyCandidates.diagnostics.extractionOutcome, 'empty_candidates')
 })
 
 
@@ -219,6 +250,12 @@ test('GET /analyses/:id regression: does not reference undefined diagnostics var
       parseableObjectCount: 1,
       candidateBearingItemCount: 1,
       malformedItemCount: 0,
+      outcomes: {
+        success: 1,
+        empty_candidates: 0,
+        schema_mismatch: 0,
+        malformed_json: 0,
+      },
     },
   })
 })
