@@ -12,6 +12,23 @@ const shareTokenStore = new Map()
 const ALLOWED_SORT_BY = new Set(['score', 'match_score', 'name', 'location', 'seniority', 'experience', 'upload_date', 'uploadDate'])
 const ALLOWED_SORT_ORDER = new Set(['asc', 'desc'])
 
+
+const FAILED_RESUME_PROCESSING_STATUSES = new Set(['extraction_failed', 'parse_failed', 'scoring_failed'])
+
+function normalizeResumeProcessingStatus(candidate = {}) {
+  const rawStatus = candidate?.resumeProcessingStatus ?? candidate?.resume_processing_status ?? candidate?.status
+  const normalizedStatus = String(rawStatus || '').trim().toLowerCase()
+  return normalizedStatus || null
+}
+
+function hasRankableScore(candidate = {}) {
+  return Number.isFinite(candidate?.score)
+}
+
+function isNonRankableCandidate(candidate = {}) {
+  return FAILED_RESUME_PROCESSING_STATUSES.has(String(candidate?.resumeProcessingStatus || '').toLowerCase()) || !hasRankableScore(candidate)
+}
+
 function sanitizeSortBy(value) {
   const normalized = String(value || 'score')
   return ALLOWED_SORT_BY.has(normalized) ? normalized : 'score'
@@ -228,11 +245,14 @@ export function normalizeCandidate(candidate = {}) {
           soft_skills: [],
         })
 
-  const canonicalScoreSource = candidate?.matchScore && typeof candidate.matchScore === 'object'
-    ? candidate?.matchScore?.score
-    : candidate?.matchScore
-  const canonicalScore = Number(canonicalScoreSource ?? candidate?.score ?? 0)
-  const safeScore = Number.isFinite(canonicalScore) ? Math.max(0, Math.min(100, canonicalScore)) : 0
+  const rawScore = candidate?.matchScore && typeof candidate.matchScore === 'object'
+    ? (candidate?.matchScore?.score ?? candidate?.score)
+    : (candidate?.matchScore ?? candidate?.score)
+  const numericScore = Number(rawScore)
+  const safeScore = Number.isFinite(numericScore) ? Math.max(0, Math.min(100, numericScore)) : null
+  const resumeProcessingStatus = normalizeResumeProcessingStatus(candidate)
+  const isFailedProcessingStatus = FAILED_RESUME_PROCESSING_STATUSES.has(String(resumeProcessingStatus || '').toLowerCase())
+  const isRankable = !isFailedProcessingStatus && safeScore !== null
   const reasoningFallback = sentenceSafeClamp(
     candidate?.fit_assessment?.reason
     || candidate?.recommendation
@@ -274,9 +294,9 @@ export function normalizeCandidate(candidate = {}) {
     name: candidate.name || 'Unknown Candidate',
     email: candidate.email || '',
     phone: candidate.phone || '',
-    score: safeScore,
+    score: isRankable ? safeScore : null,
     matchScore: {
-      score: safeScore,
+      score: isRankable ? safeScore : null,
       reason: sentenceSafeClamp(candidate?.matchScore?.reason || reasoningFallback),
     },
     summary: sentenceSafeClamp(candidate.summary || 'Summary not provided in this analysis.', 320),
@@ -319,6 +339,7 @@ export function normalizeCandidate(candidate = {}) {
     suggestedRecruiterAction: sentenceSafeClamp(candidate?.suggestedRecruiterAction || fitAssessment?.risk || 'Schedule targeted interview follow-up for validation.'),
     resumeFilename: normalizeText(candidate?.resumeFilename || candidate?.filename || ''),
     resumeAssetRef: normalizeText(candidate?.resumeAssetRef || candidate?.resumeId || candidate?.resume_id || ''),
+    resumeProcessingStatus,
     parseMeta: candidate?.parseMeta && typeof candidate.parseMeta === 'object'
       ? { ...candidate.parseMeta }
       : {},
@@ -359,12 +380,18 @@ export function applyCandidateFilters(candidates, {
     const effectiveMinScore = matchMin ?? scoreMin
     const effectiveMaxScore = matchMax ?? scoreMax
 
-    if (effectiveMinScore !== undefined && effectiveMinScore !== null && effectiveMinScore !== '' && candidate.score < Number(effectiveMinScore)) {
-      return false
+    const hasScore = hasRankableScore(candidate)
+
+    if (effectiveMinScore !== undefined && effectiveMinScore !== null && effectiveMinScore !== '') {
+      if (!hasScore || candidate.score < Number(effectiveMinScore)) {
+        return false
+      }
     }
 
-    if (effectiveMaxScore !== undefined && effectiveMaxScore !== null && effectiveMaxScore !== '' && candidate.score > Number(effectiveMaxScore)) {
-      return false
+    if (effectiveMaxScore !== undefined && effectiveMaxScore !== null && effectiveMaxScore !== '') {
+      if (!hasScore || candidate.score > Number(effectiveMaxScore)) {
+        return false
+      }
     }
 
     if (location && location !== 'all' && candidate.location.toLowerCase() !== String(location).toLowerCase()) {
@@ -435,7 +462,9 @@ export function sortCandidates(candidates, sortBy = 'score', sortOrder = 'desc')
       const aValue = aPrimary ?? aFallback ?? -1
       const bValue = bPrimary ?? bFallback ?? -1
       if (aValue !== bValue) return aValue - bValue
-      if (a.score !== b.score) return a.score - b.score
+      const aScore = hasRankableScore(a) ? a.score : -1
+      const bScore = hasRankableScore(b) ? b.score : -1
+      if (aScore !== bScore) return aScore - bScore
       return b.name.localeCompare(a.name)
     }
 
@@ -443,7 +472,12 @@ export function sortCandidates(candidates, sortBy = 'score', sortOrder = 'desc')
       return parseUploadedAt(a) - parseUploadedAt(b)
     }
 
-    return a.score - b.score
+    const aNonRankable = isNonRankableCandidate(a)
+    const bNonRankable = isNonRankableCandidate(b)
+    if (aNonRankable !== bNonRankable) return aNonRankable ? -1 : 1
+    const aScore = hasRankableScore(a) ? a.score : -1
+    const bScore = hasRankableScore(b) ? b.score : -1
+    return aScore - bScore
   })
 
   if (normalizedSortOrder === 'desc') {
