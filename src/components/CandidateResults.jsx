@@ -475,7 +475,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
-  const { candidates: rawCandidates, parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
+  const { candidates: rawCandidates, failedResumes = [], parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
   const [hasJobDescription, setHasJobDescription] = useState(Boolean(parseMeta?.hasJobDescription))
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
@@ -721,6 +721,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       .map((candidate, index) => normalizeCandidateForResults(candidate, index))
       .filter((candidate) => candidate._isRenderable)
       .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
+      .filter((candidate) => activeScore(candidate) !== null)
   }, [deletedIds, displayCandidates])
 
   const hasCandidatesToRender = hasRenderableCandidates(candidateRows)
@@ -1016,8 +1017,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             {jobDescriptionSubtitle || (hasJobDescription ? 'Job description' : 'No job description')}
           </p>
           <p className="candidate-results-page__state-copy">
-            {hasJobDescription ? `${pagination.total} ranked candidates` : `${pagination.total} analyzed candidates`}
+            {`${pagination.total} ranked candidate${pagination.total === 1 ? '' : 's'}`}
           </p>
+          {failedResumes.length > 0 && (
+            <p className="candidate-results-page__state-copy">
+              {`${failedResumes.length} resume${failedResumes.length === 1 ? '' : 's'} need attention`}
+            </p>
+          )}
         </div>
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
@@ -1036,6 +1042,22 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         shortlistOpen={shortlistOpen}
         onToggleShortlist={setShortlistOpen}
       />
+      {failedResumes.length > 0 && (
+        <section className="dd-analysis-box dd-analysis-box--amber" style={{ marginBottom: '14px' }}>
+          <div className="dd-col-label">Resume processing issues</div>
+          <div className="dd-analysis-empty">{`${failedResumes.length} file${failedResumes.length === 1 ? '' : 's'} need attention before they can be ranked.`}</div>
+          {failedResumes.map((item, idx) => (
+            <div className="dd-analysis-item dd-analysis-item--icon" key={`failed-resume-${item?.resumeId || idx}`}>
+              <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />
+              <span>
+                <strong>{toDisplayText(item?.filename, 'Unknown file')}</strong>
+                {` · ${toDisplayText(item?.resumeProcessingStatus, 'parse_failed')}`}
+                {` · ${toDisplayText(item?.parseError || item?.reason, 'Resume processing failed')}`}
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
 
       {shortlistV2Enabled && shortlistOpen && (
         <>
@@ -1403,12 +1425,15 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   })}
                   {missingMustHavesPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-must-haves')}>{missingMustHavesPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
                 </div>
-                <div className="dd-col-label dd-col-label--mt-16">Suggested interview probes</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {probesPreview.items.map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
-                  {(uncertaintyPreview.hasOverflow || probesPreview.hasOverflow) ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'uncertainty')}>{isSectionExpanded('uncertainty') ? 'Show fewer details' : 'Show all matched details'}</button> : null}
-                  {probesPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'interview-probes')}>{probesPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
-                </div>
+                {probesPreview.items.some((item) => item.includes('?')) && (
+                  <>
+                    <div className="dd-col-label dd-col-label--mt-16">Suggested interview probes</div>
+                    <div className="dd-analysis-box dd-analysis-box--amber">
+                      {probesPreview.items.map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                      {probesPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'interview-probes')}>{probesPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
+                    </div>
+                  </>
+                )}
                 <div className="dd-col-label dd-col-label--mt-16">Recruiter action</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}
@@ -1434,12 +1459,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
 
               <div className="dd-col dd-col--center dd-col--score-skills">
-                <div className="dd-col-label">Score breakdown</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {scoreBreakdown.isValid
-                    ? scoreBreakdown.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-score-breakdown-${idx}`}>{item.label.replace('alignment', 'match')}: {item.value}%</div>)
-                    : <div className="dd-analysis-empty">{SCORE_BREAKDOWN_UNAVAILABLE_MESSAGE}</div>}
-                </div>
+                {scoreBreakdown.isValid && (
+                  <>
+                    <div className="dd-col-label">Score breakdown</div>
+                    <div className="dd-analysis-box dd-analysis-box--green">
+                      {scoreBreakdown.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-score-breakdown-${idx}`}>{item.label.replace('alignment', 'match')}: {item.value}%</div>)}
+                    </div>
+                  </>
+                )}
                 <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
@@ -1450,79 +1477,28 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
                   {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Show fewer missing requirements' : 'Show all missing requirements'}</button> : null}
                 </div>
-                {isLowFitCandidate ? (
-                  <>
-                    <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
-                    <div className="dd-analysis-box dd-analysis-box--amber">
-                      {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
-                      {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
-                    </div>
-                    <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
-                    <div className="dd-analysis-box dd-analysis-box--green">
-                      {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
-                      {primarySkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'primary-skills')}>{primarySkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
-                    <div className="dd-analysis-box dd-analysis-box--green">
-                      {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
-                      {primarySkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'primary-skills')}>{primarySkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
-                    </div>
-                    <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
-                    <div className="dd-analysis-box dd-analysis-box--amber">
-                      {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
-                      {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
-                    </div>
-                  </>
-                )}
-                <div className="dd-col-label dd-col-label--mt-14">All skills (reference)</div>
-                <div className="dd-analysis-box">
-                  {allSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill" key={`${candidate._bulkKey}-all-skills-${idx}`}>{item}</span>)}
-                  {allSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'all-skills')}>{allSkillsPreview.expanded ? 'Show fewer skills' : 'Show all skills'}</button> : null}
-                </div>
+                
               </div>
 
               <div className="dd-col dd-col--right dd-col--analysis">
-                <div className="dd-col-label">Resume evidence</div>
+                {hasEvidence && (<><div className="dd-col-label">Resume evidence</div>
                 <div className="dd-analysis-box">
                   {evidencePreview.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
                   {evidencePreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'evidence')}>{evidencePreview.expanded ? 'Show fewer excerpts' : 'Show all evidence excerpts'}</button> : null}
-                  <div className="dd-inline-actions">
-                    {hasEvidence
-                      ? (
-                        <>
-                          <button type="button" className="dd-inline-action-btn">Jump to resume passage</button>
-                          <button type="button" className="dd-inline-action-btn">Show extraction source</button>
-                        </>
-                      )
-                      : (
-                        <>
-                          <button type="button" className="dd-inline-action-btn">Open resume at relevant keyword highlights</button>
-                          <button type="button" className="dd-inline-action-btn">Re-run parsing</button>
-                        </>
-                      )}
-                  </div>
-                </div>
-                <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
+                </div></>)}
+                {integrityFlags.length > 0 && <><div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
-                  {integrityFlags.length > 0
-                    ? integrityFlags.map((flag, idx) => (
+                  {integrityFlags.map((flag, idx) => (
                       <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-integrity-${idx}`}>
                         <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />
                         {toDisplayText(flag.label, 'Potential issue')}: {toDisplayText(flag.evidence, 'Needs recruiter review')}
                       </div>
-                    ))
-                    : <div className="dd-analysis-empty">No resume integrity concerns detected. Continue with normal recruiter review.</div>}
+                    ))}
                   <div className="dd-analysis-meta">
                     <span>Checked: {formatAnalysisTimestamp(analysisTimestamp)}</span>
                     <span>Analysis version: {analysisVersion}</span>
                   </div>
-                  <div className="dd-inline-actions">
-                    <button type="button" className="dd-inline-action-btn">View integrity checks run</button>
-                  </div>
-                </div>
+                </div></>}
                 <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
                 <div className="dd-analysis-box">
                   <div className="dd-analysis-item dd-analysis-item--icon"><FileText size={14} strokeWidth={1.5} aria-hidden="true" /><strong>{resumeFilename}</strong></div>
