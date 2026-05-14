@@ -1197,8 +1197,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   ].filter(Boolean).join(' · ')}
                 </span>
                 <span className="rc-expand-hint" aria-hidden="true">
-                  <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
-                  Expand details
+                  {expandedId === candidate._bulkKey ? <ChevronUp size={14} strokeWidth={1.75} aria-hidden="true" /> : <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />}
+                  {expandedId === candidate._bulkKey ? 'Collapse details' : 'Expand details'}
                 </span>
               </div>
 
@@ -1339,17 +1339,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-header-info">
                   <div className="dd-name-row">
                     <div className="dd-name">{toDisplayText(candidate.name)}</div>
-                    <button
-                      className="dd-collapse-toggle"
-                      type="button"
-                      onClick={() => setExpandedId(null)}
-                      aria-expanded="true"
-                      aria-label="Collapse candidate details"
-                      title="Collapse candidate details"
-                    >
-                      <ChevronUp size={15} strokeWidth={1.8} aria-hidden="true" />
-                      <span>Collapse details</span>
-                    </button>
                   </div>
                   <div className="dd-meta-row">
                     {snapshotItems.filter((item) => item.value).map((item) => {
@@ -1359,22 +1348,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     {hasIncompleteSnapshot ? <span className="dd-meta-pill dd-meta-pill--warning"><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />Incomplete profile</span> : null}
                     <span className="dd-meta-pill"><GraduationCap size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Seniority not specified')}</span>
                   </div>
-                  <div className="dd-inline-edit-row">
-                    <label>
-                      Role
-                      <input type="text" value={toDisplayText(mergedCandidate.current_title, '')} onChange={(event) => onInlineMetadataChange('current_title', event.target.value)} placeholder="Current role/title" />
-                    </label>
-                    <label>
-                      Years
-                      <input type="number" min="0" step="0.5" value={toDisplayText(mergedCandidate.years_experience, '')} onChange={(event) => onInlineMetadataChange('years_experience', event.target.value)} placeholder="Years of experience" />
-                    </label>
-                  </div>
-                  {missingCount > 0 ? (
-                    <div className="dd-data-quality-note">
-                      {dataQualityMessage}
-                      {fullProfilePath ? <a href={fullProfilePath}>View parsed text</a> : null}
-                    </div>
-                  ) : null}
                 </div>
               </div>
               {displayScore != null && (
@@ -1387,14 +1360,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     {tier === 'strong' ? 'Strong match' : tier === 'possible' ? 'Potential match' : 'Low match'}
                   </div>
                   <div className={`dd-confidence dd-confidence--${confidence.level}`}>{confidence.label}</div>
-                  <div className="dd-rubric">
-                    <span>{SCORE_RUBRIC_SUMMARY}</span>
-                    <span className="dd-score-help" title={SCORE_FORMULA_TOOLTIP} aria-label={SCORE_FORMULA_TOOLTIP}>ⓘ</span>
-                  </div>
-                  {confidence.low ? <div className="dd-confidence-flag">Low confidence: missing {confidence.missingFields.join(', ')}.</div> : null}
-                  <div className="dd-score-track" aria-hidden="true">
-                    <span className={`dd-score-fill dd-score-fill--${tier}`} style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
-                  </div>
                 </div>
               )}
               <div className="dd-header-actions" aria-label="Candidate actions">
@@ -1405,15 +1370,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   </button>
                   {fullProfilePath ? <a className="dd-btn-secondary" href={fullProfilePath}><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</a> : <button className="dd-btn-secondary" type="button" disabled><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</button>}
                   {openResumePath ? <a className="dd-icon-btn" href={openResumePath} target="_blank" rel="noopener noreferrer" aria-label="Open resume" title="Open resume"><FileText size={16} strokeWidth={1.5} aria-hidden="true" /></a> : null}
-                </div>
-                <div className="dd-action-group dd-action-group--destructive" role="group" aria-label="Dismissive actions">
-                  <button className="dd-btn-danger" type="button" disabled aria-label="Reject candidate" title="Reject candidate (coming soon)">
-                    Reject
-                  </button>
-                  <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details" title="Close candidate details">
-                    <X size={16} strokeWidth={1.5} aria-hidden="true" />
-                    <span>Close</span>
-                  </button>
                 </div>
               </div>
             </div>
