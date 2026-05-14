@@ -1252,12 +1252,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   </div>
                 </div>
               )}
-              <div className="dd-header-actions">
-                {fullProfilePath ? <a className="dd-btn-ghost" href={fullProfilePath}><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</a> : <button className="dd-btn-ghost" type="button" disabled><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</button>}
-                <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}><BookmarkPlus size={15} strokeWidth={1.5} aria-hidden="true" />Add to shortlist</button>
-                {openResumePath ? <a className="dd-icon-btn" href={openResumePath} target="_blank" rel="noopener noreferrer" aria-label="Open resume" title="Open resume"><FileText size={16} strokeWidth={1.5} aria-hidden="true" /></a> : null}
+              <div className="dd-header-actions" aria-label="Candidate actions">
+                <div className="dd-action-group dd-action-group--positive" role="group" aria-label="Primary next steps">
+                  <button className="dd-btn-primary" type="button" onClick={() => addCandidateToShortlist(candidate)}>
+                    <BookmarkPlus size={15} strokeWidth={1.5} aria-hidden="true" />
+                    Add to shortlist
+                  </button>
+                  {fullProfilePath ? <a className="dd-btn-secondary" href={fullProfilePath}><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</a> : <button className="dd-btn-secondary" type="button" disabled><CalendarDays size={15} strokeWidth={1.5} aria-hidden="true" />Schedule interview</button>}
+                  {openResumePath ? <a className="dd-icon-btn" href={openResumePath} target="_blank" rel="noopener noreferrer" aria-label="Open resume" title="Open resume"><FileText size={16} strokeWidth={1.5} aria-hidden="true" /></a> : null}
+                </div>
+                <div className="dd-action-group dd-action-group--destructive" role="group" aria-label="Dismissive actions">
+                  <button className="dd-btn-danger" type="button" disabled aria-label="Reject candidate" title="Reject candidate (coming soon)">
+                    Reject
+                  </button>
+                  <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details" title="Close candidate details">
+                    <X size={16} strokeWidth={1.5} aria-hidden="true" />
+                    <span>Close</span>
+                  </button>
+                </div>
               </div>
-              <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details" title="Close"><X size={16} strokeWidth={1.5} aria-hidden="true" /></button>
             </div>
             <section className="dd-body dd-body--target">
               <div className="dd-col dd-col--left dd-col--decision">
