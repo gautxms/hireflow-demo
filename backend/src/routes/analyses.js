@@ -76,6 +76,8 @@ function extractCandidatesFromResult(result) {
       candidates: [],
       diagnostics,
       normalizedResult: safeParseResult(result),
+      resultShape: 'non_object',
+      extractionErrorReason: diagnostics.malformed ? 'malformed_json' : 'non_object_result',
     }
   }
 
@@ -96,6 +98,15 @@ function extractCandidatesFromResult(result) {
 
   diagnostics.extractionOutcome = diagnostics.malformed ? 'malformed_json' : 'schema_mismatch'
   return { candidates: [], diagnostics, normalizedResult: parsed }
+      return { candidates: field, diagnostics, normalizedResult: parsed, resultShape: 'array_candidates', extractionErrorReason: null }
+    }
+    const nested = resolveObject(field)
+    if (nested && Array.isArray(nested.candidates)) {
+      return { candidates: nested.candidates, diagnostics, normalizedResult: parsed, resultShape: 'nested_array_candidates', extractionErrorReason: null }
+    }
+  }
+
+  return { candidates: [], diagnostics, normalizedResult: parsed, resultShape: 'object_without_candidates', extractionErrorReason: 'missing_candidates_array' }
 }
 
 function deriveAggregateStatus(counts, totalItems) {
@@ -266,6 +277,12 @@ async function loadAnalysisStatus(analysisId, userId) {
       extraction: {
         outcome: extracted.diagnostics.extractionOutcome,
         schemaVersion: extracted.diagnostics.schemaVersion,
+      extractionMeta: {
+        hasCandidates: extracted.candidates.length > 0,
+        resultShape: extracted.resultShape || 'unknown',
+        malformedResult: Boolean(extracted.diagnostics.malformed),
+        parseableObject: Boolean(extracted.diagnostics.parseableObject),
+        extractionErrorReason: extracted.candidates.length > 0 ? null : (extracted.extractionErrorReason || 'no_candidates_extracted'),
       },
     })
   }

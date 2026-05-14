@@ -140,6 +140,20 @@ function toCandidateResultsPayload(analysis) {
   const items = Array.isArray(analysis?.items) ? analysis.items : []
   const directCandidates = Array.isArray(analysis?.candidates) ? analysis.candidates : []
 
+  const itemMetadata = items.map((item, index) => {
+    const extractionMeta = item?.extractionMeta && typeof item.extractionMeta === 'object' ? item.extractionMeta : {}
+    return {
+      itemId: normalizeString(item?.id || item?.itemId || `item-${index}`, `item-${index}`),
+      resumeId: normalizeString(item?.resumeId || '', ''),
+      filename: normalizeString(item?.filename || '', ''),
+      status: normalizeString(item?.status || 'queued', 'queued'),
+      hasCandidates: Boolean(extractionMeta?.hasCandidates),
+      resultShape: normalizeString(extractionMeta?.resultShape || 'unknown', 'unknown'),
+      malformedResult: Boolean(extractionMeta?.malformedResult),
+      extractionErrorReason: normalizeString(extractionMeta?.extractionErrorReason || '', ''),
+    }
+  })
+
   const itemCandidates = items.flatMap((item) => {
     const normalizedCandidates = Array.isArray(item?.normalizedCandidates) ? item.normalizedCandidates : []
     if (normalizedCandidates.length > 0) {
@@ -204,6 +218,10 @@ function toCandidateResultsPayload(analysis) {
   const hasInvalidPayload = inputCount > 0 && outputCount === 0
   const hasPartiallyInvalidPayload = droppedCount > 0 && outputCount > 0
 
+  const filesTotal = itemMetadata.length
+  const filesWithCandidateOutput = itemMetadata.filter((item) => item.hasCandidates).length
+  const filesWithResultShapeErrors = itemMetadata.filter((item) => !item.hasCandidates && (item.malformedResult || item.resultShape === 'non_object' || item.resultShape === 'object_without_candidates')).length
+
   if ((droppedCount > 0 || diagnostics.fixedFieldCount > 0) && isNonProductionBuild) {
     console.warn('[AnalysisDetailPage] Candidate normalization adjusted records.', {
       ...diagnostics,
@@ -230,7 +248,13 @@ function toCandidateResultsPayload(analysis) {
       jobDescriptionTitle: normalizeString(analysis?.jobDescriptionTitle || analysis?.jobDescription?.title, ''),
       hasJobDescription: Boolean(analysis?.jobDescriptionId || analysis?.jobDescriptionTitle),
       methodUsed: analysis?.parseMeta?.methodUsed || 'ai-extraction',
+      fileSummary: {
+        totalFiles: filesTotal,
+        filesWithCandidateOutput,
+        filesWithParseShapeErrors: filesWithResultShapeErrors,
+      },
     },
+    itemMetadata,
   }
 }
 
