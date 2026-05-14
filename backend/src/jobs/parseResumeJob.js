@@ -349,6 +349,7 @@ async function persistTokenUsageMetric({
   model = null,
   tokenUsage,
   metadata = {},
+  stage = 'parse',
 }) {
   await ensureTokenUsageTable()
 
@@ -385,7 +386,7 @@ async function persistTokenUsageMetric({
       usageAvailable ? Number(tokenUsage.outputTokens || 0) : null,
       usageAvailable ? Number(tokenUsage.totalTokens || 0) : null,
       usageAvailable ? Number(tokenUsage.estimatedCostUsd || 0) : null,
-      JSON.stringify(metadata || {}),
+      JSON.stringify({ ...((metadata && typeof metadata === "object") ? metadata : {}), stage }),
     ],
   )
 }
@@ -501,6 +502,7 @@ async function runParse(job) {
       error_message: preflight.failureMessageUserSafe,
       attempts: job.attemptsMade + 1,
     })
+    console.log('[Parse][StageUsage]', { resumeId, parseJobId: job.id, failureCategory: preflight.failureCategory || "unknown", stageUsage: { parse: { attempted: true }, ocr: { attempted: Boolean(preflight.routeToOcr), status: "skipped_preflight" }, score: { attempted: false, skipped: true, skipReason: "preflight_hard_fail" }, fallback: { attempted: false } } })
     return parseResult
   }
 
@@ -554,6 +556,13 @@ async function runParse(job) {
           tokenUsage: aiResponse?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
         }]
 
+    const parseAttemptStage = (attempt) => {
+      const providerSource = String(attempt?.providerSource || '').toLowerCase()
+      const credentialLabel = String(attempt?.credentialLabel || '').toLowerCase()
+      if (providerSource === 'fallback' || credentialLabel === 'fallback') return 'fallback'
+      return 'parse'
+    }
+
     for (const attempt of usageAttempts) {
       await persistTokenUsageMetric({
         resumeId,
@@ -576,6 +585,7 @@ async function runParse(job) {
           jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
           jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
         },
+        stage: parseAttemptStage(attempt),
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
       })
@@ -620,6 +630,7 @@ async function runParse(job) {
             jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
             jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
           },
+          stage: parseAttemptStage(attempt),
         }).catch((persistError) => {
           console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
         })
@@ -642,6 +653,7 @@ async function runParse(job) {
           jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
           jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
         },
+        stage: 'fallback',
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
       })
@@ -843,6 +855,7 @@ async function runParse(job) {
   }
 
   await job.progress(100)
+  console.log('[Parse][StageUsage]', { resumeId, parseJobId: job.id, failureCategory: null, stageUsage: { parse: { attempted: true }, ocr: { attempted: Boolean(preflight.routeToOcr), status: ocrOutcome ? "failed" : (preflight.routeToOcr ? "success" : "skipped") }, score: { attempted: true, skipped: false }, fallback: { attempted: true } } })
   return parseResult
 }
 
@@ -882,6 +895,7 @@ export function registerParseResumeJobProcessor() {
       })
 
       if (isTerminalFailure) {
+        console.log('[Parse][StageUsage]', { resumeId: job.data.resumeId, parseJobId: job.id, failureCategory: normalizedErrorCategory || "unknown", stageUsage: { parse: { attempted: true }, ocr: { attempted: Boolean(error?.preflightFailure), status: error?.preflightFailure ? "failed" : "unknown" }, score: { attempted: false, skipped: true, skipReason: "parse_or_preflight_failure" }, fallback: { attempted: true } } })
         await cacheJobResult(String(job.id), {
           status: 'failed',
           progress: 100,
