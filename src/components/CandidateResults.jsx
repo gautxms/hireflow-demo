@@ -106,6 +106,14 @@ function resolveCandidateExperienceForSort(candidate = {}) {
   return resolveCandidateExperience(candidate) ?? 0
 }
 
+function formatAnalysisTimestamp(value) {
+  const timestamp = Date.parse(String(value || ''))
+  if (Number.isNaN(timestamp)) {
+    return 'Timestamp unavailable'
+  }
+  return new Date(timestamp).toLocaleString()
+}
+
 function deriveExperienceEntries(candidate) {
   if (Array.isArray(candidate?.experience) && candidate.experience.length > 0) {
     return candidate.experience.slice(0, 2)
@@ -1226,6 +1234,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
         const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.'])
         const integrityFlags = Array.isArray(candidate?.resumeIntegrityFlags) ? candidate.resumeIntegrityFlags : []
+        const analysisTimestamp = candidate?.provenance?.latestAnalysisTimestamp || candidate?.analysisTimestamp || candidate?.updatedAt
+        const analysisVersion = toDisplayText(candidate?.provenance?.analysisVersion || candidate?.analysisVersion, 'Version unavailable')
+        const hasEvidence = evidenceObjects.length > 0
         const decisionVerdict = deriveDecisionVerdict(candidate, score)
         const recommendedAction = deriveRecommendedAction(candidate, score)
         const nextActions = ensureTextList(candidate?.next_steps || candidate?.recommended_actions, recommendedAction).slice(0, 3)
@@ -1477,6 +1488,21 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box">
                   {evidencePreview.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
                   {evidencePreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'evidence')}>{evidencePreview.expanded ? 'Show fewer excerpts' : 'Show all evidence excerpts'}</button> : null}
+                  <div className="dd-inline-actions">
+                    {hasEvidence
+                      ? (
+                        <>
+                          <button type="button" className="dd-inline-action-btn">Jump to resume passage</button>
+                          <button type="button" className="dd-inline-action-btn">Show extraction source</button>
+                        </>
+                      )
+                      : (
+                        <>
+                          <button type="button" className="dd-inline-action-btn">Open resume at relevant keyword highlights</button>
+                          <button type="button" className="dd-inline-action-btn">Re-run parsing</button>
+                        </>
+                      )}
+                  </div>
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
@@ -1488,6 +1514,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                       </div>
                     ))
                     : <div className="dd-analysis-empty">No resume integrity concerns detected. Continue with normal recruiter review.</div>}
+                  <div className="dd-analysis-meta">
+                    <span>Checked: {formatAnalysisTimestamp(analysisTimestamp)}</span>
+                    <span>Analysis version: {analysisVersion}</span>
+                  </div>
+                  <div className="dd-inline-actions">
+                    <button type="button" className="dd-inline-action-btn">View integrity checks run</button>
+                  </div>
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
                 <div className="dd-analysis-box">
