@@ -246,7 +246,7 @@ export function normalizeCandidate(candidate = {}) {
         })
 
   const rawScore = candidate?.matchScore && typeof candidate.matchScore === 'object'
-    ? candidate?.matchScore?.score
+    ? (candidate?.matchScore?.score ?? candidate?.score)
     : (candidate?.matchScore ?? candidate?.score)
   const numericScore = Number(rawScore)
   const safeScore = Number.isFinite(numericScore) ? Math.max(0, Math.min(100, numericScore)) : null
