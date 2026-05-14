@@ -37,6 +37,53 @@ export function estimateExtractableText(fileBuffer) {
   }
 }
 
+function normalizeExtractedText(value = '') {
+  return String(value || '')
+    .replace(/[^\S\r\n]+/g, ' ')
+    .replace(/\r/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+async function extractDocxText(fileBuffer) {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hireflow-docx-'))
+  const docxPath = path.join(tmpDir, 'resume.docx')
+  try {
+    await fs.writeFile(docxPath, fileBuffer)
+    const { stdout } = await execFileAsync('unzip', ['-p', docxPath, 'word/document.xml'], {
+      timeout: 45_000,
+      maxBuffer: 15 * 1024 * 1024,
+    })
+    const xml = String(stdout || '')
+    if (!xml.trim()) return ''
+    return normalizeExtractedText(xml.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&'))
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true })
+  }
+}
+
+export async function extractTextFromResume({ fileBuffer, mimeType }) {
+  if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+    return { text: '', length: 0, method: 'failed' }
+  }
+  const normalizedMimeType = String(mimeType || '').toLowerCase()
+  if (normalizedMimeType === 'text/plain') {
+    const text = normalizeExtractedText(fileBuffer.toString('utf8'))
+    return { text, length: text.length, method: 'plain_text' }
+  }
+  if (normalizedMimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    try {
+      const text = await extractDocxText(fileBuffer)
+      if (text) return { text, length: text.length, method: 'docx_text' }
+    } catch {
+      // fallback below
+    }
+  }
+  const extraction = estimateExtractableText(fileBuffer)
+  const inferredMethod = normalizedMimeType === 'application/pdf' ? 'pdf_text' : 'binary_heuristic'
+  return { ...extraction, method: extraction.length > 0 ? inferredMethod : 'failed' }
+}
+
 export function isLikelyScannedPdf({ mimeType, fileBuffer }) {
   if (mimeType !== 'application/pdf') {
     return false
@@ -93,11 +140,7 @@ export async function runOcr({ fileBuffer, mimeType }) {
       maxBuffer: 25 * 1024 * 1024,
     })
 
-    const text = String(stdout || '')
-      .replace(/[^\S\r\n]+/g, ' ')
-      .replace(/\r/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
+    const text = normalizeExtractedText(stdout)
     const confidence = Math.max(40, Math.min(95, Math.round((text.length / Math.max(1, fileBuffer.length * 0.02)) * 100)))
 
     return {

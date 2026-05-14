@@ -5,6 +5,9 @@ import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+
+const MIN_EXTRACTED_TEXT_LENGTH = 80
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -413,16 +416,42 @@ async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
+  let parseProvider = null
+  let parseModel = null
+  let parseMaxOutputTokens = null
+  const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
+  const extractionResult = await runParseWithOcrFallback({
+    filename,
+    mimeType,
+    fileSize: Number(fileSize || 0),
+    fileBuffer,
+  })
+  const extractedRawText = String(extractionResult?.rawText || '').trim()
+  const hasUsableExtractedText = extractedRawText.length >= MIN_EXTRACTED_TEXT_LENGTH
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
 
   try {
-    console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    const aiResponse = await analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, {
-      jobDescriptionContext,
+    if (!hasUsableExtractedText) {
+      throw new Error('extraction_failed::Unable to extract enough resume text for AI parsing after OCR fallback.')
+    }
+    console.log('[Parse] Attempting AI analysis with primary/fallback keys', {
+      jobId: job.id,
+      resumeId,
+      jobDescriptionId: job.data.jobDescriptionId || null,
     })
+    const aiResponse = await analyzeResumeWithConfiguredFallback(
+      Buffer.from(extractedRawText, 'utf8').toString('base64'),
+      'text/plain',
+      filename,
+      {
+      jobDescriptionContext,
+      resumeId,
+      jobId: job.id,
+      },
+    )
     const aiResult = aiResponse?.result || {}
     const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
       ? aiResponse.attempts
@@ -462,9 +491,17 @@ async function runParse(job) {
       })
     }
 
-    console.log('[Parse] AI analysis successful')
+    console.log('[Parse] AI analysis successful', {
+      jobId: job.id,
+      resumeId,
+      provider: aiResponse?.provider || null,
+      model: aiResponse?.model || null,
+    })
     analysisResult = aiResult
     parseMethod = aiResponse?.provider || 'anthropic-primary'
+    parseProvider = aiResponse?.provider || null
+    parseModel = aiResponse?.model || null
+    parseMaxOutputTokens = Number(aiResponse?.maxOutputTokens || aiResult?.maxOutputTokens || 0) || null
   } catch (aiError) {
     const failedAttempts = Array.isArray(aiError?.attempts) ? aiError.attempts : []
     if (failedAttempts.length > 0) {
@@ -539,6 +576,7 @@ async function runParse(job) {
           id: identity.id,
           candidateId: identity.candidateId,
           resumeId: identity.resumeId || String(resumeId || ''),
+          resumeProcessingStatus: 'scored',
           ...candidate,
           summary: clampString(candidate?.summary, 400),
           years_experience: normalizeNullableNumber(candidate?.years_experience),
@@ -584,6 +622,15 @@ async function runParse(job) {
       ? null
       : (jobDescriptionContext?.missingReason || 'job_description_missing'),
     candidates: normalizedCandidates,
+    parseMeta: {
+      extractionMethod: extractionResult?.methodUsed || 'failed',
+      rawTextCharCount: extractedRawText.length,
+      parseStatus: 'complete',
+      scoringStatus: jobDescriptionContext?.hasContext ? 'complete' : 'skipped_no_job_description',
+      provider: analysisResult?.provider || parseMethod,
+      model: parseModel || analysisResult?.model || null,
+      maxOutputTokens: parseMaxOutputTokens,
+    },
   }
 
   const parseDurationMs = Date.now() - startedAt
@@ -605,7 +652,7 @@ async function runParse(job) {
          parse_error = NULL,
          parse_duration_ms = $12,
          updated_at = NOW(),
-         raw_text = COALESCE(raw_text, '')
+         raw_text = $13
      WHERE id = $1`,
     [
       resumeId,
@@ -625,6 +672,7 @@ async function runParse(job) {
       }),
       JSON.stringify(primaryCandidate?.skills_flat || []),
       parseDurationMs,
+      extractedRawText,
     ],
   )
 
@@ -676,21 +724,27 @@ export function registerParseResumeJobProcessor() {
     } catch (error) {
       const normalizedError = normalizeProviderError(error)
       const isTerminalFailure = isTerminalJobFailure(job)
+      const normalizedMessage = String(normalizedError.normalizedMessage || '').trim()
+      const parseErrorWithReasonPrefix = normalizedMessage.includes('::')
+        ? normalizedMessage
+        : `parse_failed::${normalizedMessage || 'Unknown parsing failure.'}`
       if (isTerminalFailure) {
+        const parseDurationMs = Date.now() - Number(job.timestamp || Date.now())
         await pool.query(
           `UPDATE resumes
            SET parse_status = 'failed',
                parse_error = $2,
+               parse_duration_ms = COALESCE(parse_duration_ms, $3),
                updated_at = NOW()
            WHERE id = $1`,
-          [job.data.resumeId, normalizedError.normalizedMessage],
+          [job.data.resumeId, parseErrorWithReasonPrefix, parseDurationMs],
         )
       }
 
       await setJobState(job.id, {
         status: isTerminalFailure ? 'failed' : 'retrying',
         progress: isTerminalFailure ? 100 : Number(job.progress() || 0),
-        error_message: normalizedError.normalizedMessage,
+        error_message: parseErrorWithReasonPrefix,
         attempts: job.attemptsMade + 1,
       })
 
@@ -699,7 +753,7 @@ export function registerParseResumeJobProcessor() {
           status: 'failed',
           progress: 100,
           result: null,
-          error: normalizedError.normalizedMessage,
+          error: parseErrorWithReasonPrefix,
         })
       }
 

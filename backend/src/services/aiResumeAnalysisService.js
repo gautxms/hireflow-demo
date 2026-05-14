@@ -6,9 +6,7 @@ import { getRuntimeSystemPromptConfig } from './adminSystemPromptService.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
-const MIME_TYPE_MAP = {
-  'application/pdf': 'application/pdf',
-}
+const MIME_TYPE_MAP = { 'application/pdf': 'application/pdf' }
 const PROVIDER_ORDER = ['anthropic', 'openai']
 const OPENAI_MODEL_CAPABILITIES = {
   default: {
@@ -663,7 +661,7 @@ function providerSupportsMimeType(provider, mimeType) {
   const normalizedProvider = String(provider || '').trim().toLowerCase()
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
   if (normalizedProvider === 'anthropic') {
-    return ['application/pdf'].includes(normalizedMimeType)
+    return ['application/pdf', 'text/plain'].includes(normalizedMimeType)
   }
   return true
 }
@@ -727,9 +725,8 @@ function buildAnalysisModeDirectives(jobDescriptionContext = null) {
     return [
       'Analysis Mode: WITH_JOB_DESCRIPTION',
       'Contract:',
-      '- Perform resume extraction and JD-aware fit analysis.',
-      '- Map candidate evidence to JD requirements and skills.',
-      '- Include fit rationale and shortlisting signal strengths/risks in your JSON fields.',
+      '- Perform compact resume fact extraction first; keep reasoning terse.',
+      '- Keep JD fit signals bounded and factual (no long narrative).',
       '- Keep output JSON-compatible with existing schema.',
     ].join('\n')
   }
@@ -737,9 +734,8 @@ function buildAnalysisModeDirectives(jobDescriptionContext = null) {
   return [
     'Analysis Mode: WITHOUT_JOB_DESCRIPTION',
     'Contract:',
-    '- Perform resume extraction only (no JD fit scoring assumptions).',
-    '- Provide comparative shortlist signals derived from resume evidence (seniority, skills depth, impact, role alignment confidence).',
-    '- Mark missing JD context clearly using "job_description_missing" in rationale/notes fields when present.',
+    '- Perform compact resume extraction only (no JD fit scoring assumptions).',
+    '- Avoid long comparative reasoning; keep summaries concise and factual.',
     '- Keep output JSON-compatible with existing schema.',
   ].join('\n')
 }
@@ -845,13 +841,16 @@ export async function analyzeWithAnthropic(
     anthropicClientFactory = null,
     compactMode = false,
     promptTextOverride = null,
+    resumeId = null,
+    jobId = null,
   } = {},
 ) {
   if (!apiKey) {
     throw new Error('Anthropic API key not configured. Claude analysis unavailable.')
   }
 
-  const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
+  const isExtractedTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
+  const mediaType = MIME_TYPE_MAP[mimeType] || null
   const client = anthropicClientFactory
     ? anthropicClientFactory({ apiKey })
     : new Anthropic({ apiKey })
@@ -861,8 +860,9 @@ export async function analyzeWithAnthropic(
   const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
-  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: isExtractedTextPayload ? 'extracted_text' : 'document_file' })
   console.log('[AI Parse] Prompt metrics:', { provider: 'anthropic', model, ...promptMetrics })
+  console.log('[AI Parse] Provider call metadata:', { provider: 'anthropic', model, mimeType, isExtractedTextPayload, maxOutputTokens: compactMode ? 2600 : 3200, compactMode, rawTextCharCount: isExtractedTextPayload ? Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8').length : null, resumeId, jobId })
   console.log(
     '[HireFlow] JD in AI user message:',
     prompt.includes('Job Description Context:\nAVAILABLE') ? 'YES' : 'NO — JD missing from prompt',
@@ -870,20 +870,18 @@ export async function analyzeWithAnthropic(
 
   const response = await client.messages.create({
     model,
-    max_tokens: compactMode ? 1400 : 2200,
+    max_tokens: compactMode ? 2600 : 3200,
     temperature: 0,
     messages: [
       {
         role: 'user',
         content: [
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: fileBufferBase64,
-            },
-          },
+          ...(isExtractedTextPayload
+            ? [{ type: 'text', text: Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8') }]
+            : [{
+                type: 'document',
+                source: { type: 'base64', media_type: mediaType || 'application/pdf', data: fileBufferBase64 },
+              }]),
           {
             type: 'text',
             text: prompt,
@@ -929,7 +927,7 @@ export async function analyzeWithAnthropic(
 
     const repaired = await client.messages.create({
       model,
-      max_tokens: 1400,
+      max_tokens: 2600,
       messages: [
         {
           role: 'user',
@@ -977,7 +975,7 @@ export async function analyzeWithAnthropic(
     promptIsDefaultFallback,
     mode: compactMode ? 'minimal' : 'compact',
     schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
-    maxOutputTokens: compactMode ? 1400 : 2200,
+    maxOutputTokens: compactMode ? 2600 : 3200,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
     jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
@@ -999,20 +997,24 @@ export async function analyzeWithOpenAI(
     fetchImpl = fetch,
     compactMode = false,
     promptTextOverride = null,
+    resumeId = null,
+    jobId = null,
   } = {},
 ) {
   if (!apiKey) {
     throw new Error('OpenAI API key not configured. OpenAI analysis unavailable.')
   }
 
-  const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
+  const isExtractedTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
+  const mediaType = MIME_TYPE_MAP[mimeType] || null
   const baseOutputInstructions = buildCompactOutputInstructions({ compactMode })
   const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
-  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: isExtractedTextPayload ? 'extracted_text' : 'document_file' })
   console.log('[AI Parse] Prompt metrics:', { provider: 'openai', model, ...promptMetrics })
+  console.log('[AI Parse] Provider call metadata:', { provider: 'openai', model, mimeType, isExtractedTextPayload, maxOutputTokens: compactMode ? 2600 : 3200, compactMode, rawTextCharCount: isExtractedTextPayload ? Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8').length : null, resumeId, jobId })
   console.log(
     '[HireFlow] JD in AI user message:',
     prompt.includes('Job Description Context:\nAVAILABLE') ? 'YES' : 'NO — JD missing from prompt',
@@ -1030,11 +1032,13 @@ export async function analyzeWithOpenAI(
         {
           role: 'user',
           content: [
-            {
-              type: 'input_file',
-              filename: 'resume',
-              file_data: `data:${mediaType};base64,${fileBufferBase64}`,
-            },
+            ...(isExtractedTextPayload
+              ? [{ type: 'input_text', text: Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8') }]
+              : [{
+                  type: 'input_file',
+                  filename: 'resume',
+                  file_data: `data:${mediaType || 'application/pdf'};base64,${fileBufferBase64}`,
+                }]),
             {
               type: 'input_text',
               text: promptText,
@@ -1074,7 +1078,7 @@ export async function analyzeWithOpenAI(
     return payload
   }
 
-  const attemptedMaxOutputTokens = compactMode ? 1200 : 2000
+  const attemptedMaxOutputTokens = compactMode ? 2600 : 3200
   const requestPrompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const payload = await callOpenAi(attemptedMaxOutputTokens, requestPrompt)
   const responseStatus = String(payload?.status || '').toLowerCase()
@@ -1214,6 +1218,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         jobDescriptionContext: options.jobDescriptionContext || null,
         compactMode,
         promptTextOverride: null,
+        resumeId: options.resumeId || null,
+        jobId: options.jobId || null,
       })
 
       const attemptRecord = createAttemptRecord({
