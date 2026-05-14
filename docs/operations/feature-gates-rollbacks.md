@@ -115,3 +115,22 @@ Expected fallback:
 2. Confirm `/` -> uploader -> `/results` still works end-to-end.
 3. Confirm no auth regression on protected routes.
 4. Re-enable for a small cohort using `ROLLOUT` after fix verification.
+
+## Resume parse failure transparency rollout (recommended)
+
+If rollout risk is a concern for mixed success/failure batch rendering, gate the UI wiring behind `ANALYSES_PAGES` cohorts first, then ramp to 100% after KPI validation.
+
+### KPI monitoring window
+
+Monitor for **1–2 weeks** after enabling for production traffic:
+
+- Parse-failure rate (`failedCount / totalResumes`) by file type and provider.
+- Retry/re-upload rate for failed resumes.
+- Token-per-successful-resume (provider usage divided by successful parses).
+- Reduction in ambiguous `Unknown Candidate` incidents in support tickets and logs.
+
+### Rollout checkpoints
+
+1. Day 0–2: 10% cohort, verify no spike in parse-failure or re-upload metrics.
+2. Day 3–7: 50% cohort, compare token-per-successful-resume against baseline.
+3. Day 8–14: 100% cohort if KPI deltas are neutral or improved.

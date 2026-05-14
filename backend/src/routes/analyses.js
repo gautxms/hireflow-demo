@@ -96,7 +96,7 @@ function deriveAggregateStatus(counts, totalItems) {
 
   const terminalCount = counts.complete + counts.failed
   if (terminalCount === totalItems) {
-    return counts.failed > 0 ? 'failed' : 'complete'
+    return counts.complete > 0 ? 'complete' : 'failed'
   }
 
   if (counts.processing > 0 || counts.retrying > 0) {
@@ -209,6 +209,10 @@ async function loadAnalysisStatus(analysisId, userId) {
     if (extracted.candidates.length > 0) extractionDiagnostics.candidateBearingItemCount += 1
 
     const parsedResult = extracted.normalizedResult
+    const parseOutcome = canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : 'pending')
+    const failureCategory = canonicalStatus === 'failed'
+      ? (safeParseResult(row.parse_result)?.failureCategory || null)
+      : null
 
     items.push({
       id: String(row.id),
@@ -221,6 +225,8 @@ async function loadAnalysisStatus(analysisId, userId) {
       createdAt: row.created_at,
       updatedAt: row.parse_job_updated_at || row.created_at,
       error: row.error_message || row.parse_error || null,
+      parseOutcome,
+      failureCategory,
       result: parsedResult,
       normalizedCandidates: extracted.candidates,
     })
