@@ -17,6 +17,7 @@ const isNonProductionBuild = (() => {
  *   hasInvalidPayload?: boolean
  *   hasPartiallyInvalidPayload?: boolean
  *   parseMeta?: Record<string, unknown>
+ *   failedResumes?: unknown[]
  * }
  *
  * Normalized CandidateResults contract (output):
@@ -28,6 +29,7 @@ const isNonProductionBuild = (() => {
  *   hasInvalidPayload: boolean
  *   hasPartiallyInvalidPayload: boolean
  *   parseMeta: Record<string, unknown>
+ *   failedResumes: unknown[]
  * }
  */
 
@@ -145,6 +147,7 @@ export function validateAnalysisResultsPayload(rawPayload, { logger = console } 
     hasInvalidPayload: outputCount === 0 && inputCount > 0,
     hasPartiallyInvalidPayload: outputCount > 0 && droppedCount > 0,
     parseMeta: rawPayload?.parseMeta && typeof rawPayload.parseMeta === 'object' ? rawPayload.parseMeta : {},
+    failedResumes: Array.isArray(rawPayload?.failedResumes) ? rawPayload.failedResumes : [],
   }
 
   if (issues.length > 0) {
