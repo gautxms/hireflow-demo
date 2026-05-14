@@ -104,7 +104,6 @@ function extractCandidatesFromResult(result) {
     if (nested && Array.isArray(nested.candidates)) {
       return { candidates: nested.candidates, diagnostics, normalizedResult: parsed, resultShape: 'nested_array_candidates', extractionErrorReason: null }
     }
-  }
 
   return { candidates: [], diagnostics, normalizedResult: parsed, resultShape: 'object_without_candidates', extractionErrorReason: 'missing_candidates_array' }
 }
