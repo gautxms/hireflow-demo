@@ -1769,6 +1769,22 @@
   color: var(--hf-surface-muted);
   font-style: italic;
 }
+.dd-analysis-empty--action {
+  margin-top: 10px;
+  font-style: normal;
+  color: var(--color-text-secondary);
+}
+.dd-data-quality-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--hf-surface-muted);
+}
+.dd-data-quality-note a {
+  color: var(--hf-color-lime);
+  margin-left: 4px;
+  text-decoration: none;
+}
+.dd-data-quality-note a:hover { text-decoration: underline; }
 
 /* Skills in drawer */
 .dd-top-skills { display: flex; gap: 5px; flex-wrap: wrap; }

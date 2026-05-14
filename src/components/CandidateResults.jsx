@@ -245,6 +245,13 @@ function formatResumeSize(candidate) {
   return `${(size / (1024 ** 2)).toFixed(1)} MB`
 }
 
+function getFieldPresenceStatus(value) {
+  if (value == null) return 'not_present'
+  if (typeof value === 'string' && value.trim() === '') return 'not_present'
+  if (Array.isArray(value) && value.length === 0) return 'not_present'
+  return 'present'
+}
+
 function deriveDecisionVerdict(candidate, score) {
   const title = toDisplayText(candidate?.current_title, 'this candidate')
   const matchedSkills = dedupeTextItems(candidate?.matchedSkills || candidate?.matched_skills || [])
@@ -1222,6 +1229,21 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           { label: 'Education', value: toDisplayText(resolveCandidateEducationText(candidate), 'Unavailable') },
           { label: 'Location', value: toDisplayText(candidate.location, 'Unavailable') },
         ]
+        const missingFieldStatuses = {
+          currentRole: getFieldPresenceStatus(candidate.current_title),
+          location: getFieldPresenceStatus(candidate.location),
+          seniority: getFieldPresenceStatus(candidate.seniority || candidate.level || candidate.seniority_level),
+          experience: formatExperienceDisplay(candidate) === 'Experience unavailable' ? 'extraction_failed' : 'present',
+          reasoning: toDisplayText(reasoningText, '').includes('unavailable') ? 'extraction_failed' : 'present',
+          strengths: candidateStrengths.length > 0 ? 'present' : 'extraction_failed',
+        }
+        const missingCount = Object.values(missingFieldStatuses).filter((status) => status !== 'present').length
+        const totalTrackedFields = Object.keys(missingFieldStatuses).length
+        const shouldCollapseLowValueBlocks = (missingCount / totalTrackedFields) > 0.5
+        const dataQualityMessage = Object.values(missingFieldStatuses).includes('extraction_failed')
+          ? 'Data quality: Some fields could not be extracted from this resume format. '
+          : 'Data quality: Some details were not present in the resume. '
+        const dataQualityAction = Object.values(missingFieldStatuses).includes('extraction_failed') ? 'Run re-analysis' : 'Upload clearer resume'
 
         return (
           <article id="detail-drawer" className="detail-drawer dd-card dd-card--target">
@@ -1231,11 +1253,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-header-info">
                   <div className="dd-name">{toDisplayText(candidate.name)}</div>
                   <div className="dd-meta-row">
-                    <span className="dd-meta-pill"><Briefcase size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.current_title, 'Role unavailable')}</span>
+                    <span className="dd-meta-pill"><Briefcase size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.current_title, '—')}</span>
                     <span className="dd-meta-pill"><Clock3 size={14} strokeWidth={1.5} aria-hidden="true" />{formatExperienceDisplay(candidate)}</span>
-                    <span className="dd-meta-pill"><MapPin size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.location, 'Location unavailable')}</span>
+                    <span className="dd-meta-pill"><MapPin size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.location, '—')}</span>
                     <span className="dd-meta-pill"><GraduationCap size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Seniority not specified')}</span>
                   </div>
+                  {missingCount > 0 ? (
+                    <div className="dd-data-quality-note">
+                      {dataQualityMessage}
+                      {fullProfilePath ? <a href={fullProfilePath}>View parsed text</a> : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               {displayScore != null && (
@@ -1280,12 +1308,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box">
                   <div className="dd-analysis-item">{reasoningText}</div>
                 </div>
-                <div className="dd-col-label dd-col-label--mt-16">Strengths</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {candidateStrengths.length > 0
-                    ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-strength-${idx}`}><Check size={14} strokeWidth={1.5} aria-hidden="true" />{strength}</div>)
-                    : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-                </div>
+                {!shouldCollapseLowValueBlocks && (
+                  <>
+                    <div className="dd-col-label dd-col-label--mt-16">Strengths</div>
+                    <div className="dd-analysis-box dd-analysis-box--green">
+                      {candidateStrengths.length > 0
+                        ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-strength-${idx}`}><Check size={14} strokeWidth={1.5} aria-hidden="true" />{strength}</div>)
+                        : <div className="dd-analysis-empty">Extraction failed. Run re-analysis.</div>}
+                    </div>
+                  </>
+                )}
                 <div className="dd-col-label dd-col-label--mt-16">Gaps & uncertainties</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
                   {uncertaintyPreview.items.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-uncertainty-${idx}`}><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
@@ -1296,6 +1328,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {nextActions.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-next-${idx}`}>{item}</div>)}
                 </div>
+                {shouldCollapseLowValueBlocks ? <div className="dd-analysis-empty dd-analysis-empty--action">{dataQualityAction}</div> : null}
                 <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
                 <div className="dd-key-facts-grid">
                   {keyFacts.map((fact) => (
