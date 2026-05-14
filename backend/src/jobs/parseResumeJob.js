@@ -13,6 +13,26 @@ export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
 }
 
+function mapParseErrorCode(errorCode) {
+  const normalized = String(errorCode || '').trim().toLowerCase()
+  if (normalized === 'extraction_failed') return 'extraction_failed'
+  if (
+    normalized === 'response_truncated_error'
+    || normalized === 'response_format_error'
+    || normalized === 'invalid_request_error'
+    || normalized === 'not_found_error'
+    || normalized === 'auth_error'
+    || normalized === 'billing_quota_error'
+    || normalized === 'rate_limit_error'
+    || normalized === 'timeout_error'
+    || normalized === 'network_error'
+    || normalized === 'unknown_error'
+  ) {
+    return 'parse_failed'
+  }
+  return 'parse_failed'
+}
+
 function normalizeUnavailableReason(reason) {
   const raw = String(reason || '').trim()
   return raw ? raw.slice(0, 180) : 'unknown'
@@ -692,6 +712,7 @@ async function runParse(job) {
          skills_structured = $10::jsonb,
          skills = $11::jsonb,
          parse_error = NULL,
+         parse_error_code = NULL,
          parse_duration_ms = $12,
          updated_at = NOW(),
          raw_text = $13
@@ -767,6 +788,9 @@ export function registerParseResumeJobProcessor() {
       const normalizedError = normalizeProviderError(error)
       const isTerminalFailure = isTerminalJobFailure(job)
       const normalizedMessage = String(normalizedError.normalizedMessage || '').trim()
+      const normalizedErrorCategory = String(normalizedError.category || '').trim()
+      const parseErrorCode = mapParseErrorCode(normalizedErrorCategory)
+      const parseErrorHuman = String(normalizedError.userMessage || 'Unknown parsing failure.').trim().slice(0, 500)
       const parseErrorWithReasonPrefix = normalizedMessage.includes('::')
         ? normalizedMessage
         : `parse_failed::${normalizedMessage || 'Unknown parsing failure.'}`
@@ -775,11 +799,12 @@ export function registerParseResumeJobProcessor() {
         await pool.query(
           `UPDATE resumes
            SET parse_status = 'failed',
-               parse_error = $2,
-               parse_duration_ms = COALESCE(parse_duration_ms, $3),
+               parse_error_code = $2,
+               parse_error = $3,
+               parse_duration_ms = COALESCE(parse_duration_ms, $4),
                updated_at = NOW()
            WHERE id = $1`,
-          [job.data.resumeId, parseErrorWithReasonPrefix, parseDurationMs],
+          [job.data.resumeId, parseErrorCode, parseErrorHuman, parseDurationMs],
         )
       }
 
