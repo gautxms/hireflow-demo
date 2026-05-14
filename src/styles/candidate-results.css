@@ -617,7 +617,6 @@
   color: #ffffff;
 }
 
-.dd-collapse-toggle:focus-visible,
 .page-btn:focus-visible,
 .page-size-select:focus-visible {
   outline: 2px solid #c8ff00;
@@ -1407,7 +1406,7 @@
 /* ── Detail drawer ────────────────────────────────── */
 .detail-drawer {
   background: var(--hf-surface);
-  border: 1px solid var(--hf-border);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 16px;
   padding: 0;
   overflow: hidden;
@@ -1461,28 +1460,6 @@
 }
 .dd-meta-pill--warning svg { color: #ffc55c; }
 
-.dd-inline-edit-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-.dd-inline-edit-row label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-.dd-inline-edit-row input {
-  height: 30px;
-  min-width: 160px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text-primary);
-}
 
 .dd-avatar {
   width: 46px;
@@ -1512,27 +1489,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.dd-collapse-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--color-text-secondary);
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.dd-collapse-toggle:hover {
-  background: rgba(200, 255, 0, 0.12);
-  border-color: rgba(200, 255, 0, 0.55);
-  color: #f8ffe0;
 }
 
 
@@ -1568,21 +1524,6 @@
 .dd-fit-label--strong { color: #c8ff00; }
 .dd-fit-label--possible { color: #ffa500; }
 .dd-fit-label--low { color: #f87171; }
-.dd-score-track {
-  width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.dd-score-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-}
-.dd-score-fill--strong { background: #c8ff00; }
-.dd-score-fill--possible { background: #ffa500; }
-.dd-score-fill--low { background: #ef4444; }
 .dd-score--strong  { color: #c8ff00; }
 .dd-score--possible { color: #ffa500; }
 .dd-score--low     { color: #ef4444; }
@@ -1592,6 +1533,7 @@
   align-items: center;
   gap: 20px;
   margin-left: auto;
+  align-self: flex-start;
 }
 
 .dd-action-group {
@@ -1605,9 +1547,6 @@
   border-right: 1px solid rgba(255, 255, 255, 0.14);
 }
 
-.dd-action-group--destructive {
-  justify-content: flex-end;
-}
 
 .dd-btn-primary {
   display: inline-flex;
@@ -1640,20 +1579,6 @@
 .dd-btn-secondary:hover { border-color: var(--hf-color-lime); color: var(--color-text-primary); }
 .dd-btn-secondary:active { border-color: #d8ff4c; background: rgba(200, 255, 0, 0.12); color: #ffffff; }
 
-.dd-btn-danger {
-  background: transparent;
-  color: #fda4af;
-  font-size: 13px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(253, 164, 175, 0.45);
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-.dd-btn-danger:hover { border-color: #fb7185; color: #ffe4e6; }
-.dd-btn-danger:active { border-color: #fb7185; background: rgba(251, 113, 133, 0.12); }
-.dd-btn-danger:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .dd-icon-btn {
   width: 34px;
@@ -1673,32 +1598,11 @@
 
 .dd-btn-primary:focus-visible,
 .dd-btn-secondary:focus-visible,
-.dd-btn-danger:focus-visible,
-.dd-icon-btn:focus-visible,
-.dd-close:focus-visible {
+.dd-icon-btn:focus-visible {
   outline: 2px solid #c8ff00;
   outline-offset: 2px;
 }
 
-.dd-close {
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid #2a2a2a;
-  background: transparent;
-  color: var(--hf-surface-muted);
-  cursor: pointer;
-  padding: 0 11px;
-  margin-left: 0;
-  transition: color 0.15s;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  justify-content: center;
-  font-size: 13px;
-  white-space: nowrap;
-}
-.dd-close:hover { color: #ffffff; border-color: #4a4a4a; }
-.dd-close:active { color: #ffffff; border-color: #6b6b6b; background: rgba(255, 255, 255, 0.1); }
 
 @media (max-width: 1080px) {
   .dd-header-actions {
@@ -1895,18 +1799,11 @@
   font-size: 11px;
   color: var(--hf-surface-muted);
 }
-.dd-data-quality-note {
-  margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: #cfd5df;
-}
 .dd-data-quality-note a {
   color: var(--hf-color-lime);
   margin-left: 4px;
   text-decoration: none;
 }
-.dd-data-quality-note a:hover { text-decoration: underline; }
 
 /* Skills in drawer */
 .dd-top-skills { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -2200,10 +2097,7 @@
 .dd-icon-btn:focus-visible,
 .dd-btn-primary:focus-visible,
 .dd-btn-secondary:focus-visible,
-.dd-btn-danger:focus-visible,
-.dd-close:focus-visible,
 .dd-analysis-box a:focus-visible,
-.dd-data-quality-note a:focus-visible,
 .dd-score-help:focus-visible {
   outline: 2px solid #f8fbff;
   outline-offset: 2px;
