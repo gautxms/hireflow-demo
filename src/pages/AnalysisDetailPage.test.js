@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
+import { validateAnalysisResultsPayload } from '../schemas/analysisResultsSchema.js'
 
 const analysisDetailSource = readFileSync(new URL('./AnalysisDetailPage.jsx', import.meta.url), 'utf8')
 
@@ -29,6 +30,16 @@ test('toCandidateResultsPayload preserves backend failedResumes for UI failure m
 
   assert.equal(payload.candidates.length, 0)
   assert.equal(payload.failedResumes.length, 2)
+  assert.equal(payload.failedResumes[0].filename, 'bad.pdf')
+})
+
+test('validateAnalysisResultsPayload preserves failedResumes for downstream CandidateResults rendering', () => {
+  const { payload } = validateAnalysisResultsPayload({
+    candidates: [],
+    failedResumes: [{ resumeId: 'r-1', filename: 'bad.pdf', reason: 'parse_failed::corrupt_or_unreadable' }],
+  })
+
+  assert.equal(payload.failedResumes.length, 1)
   assert.equal(payload.failedResumes[0].filename, 'bad.pdf')
 })
 
