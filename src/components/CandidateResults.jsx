@@ -208,7 +208,21 @@ function resolveScoreConfidence(candidate = {}) {
   const hasExperience = Number.isFinite(resolveCandidateExperience(candidate))
   const skillSignals = resolveSkillSignals(candidate)
   const hasSkills = skillSignals.primarySkills.length > 0 || skillSignals.allSkills.length > 0
-  const hasDomain = Boolean(toDisplayText(candidate?.domain || candidate?.industry || candidate?.domain_expertise, '').trim())
+
+  const normalizedDomainSignals = sanitizePillValues([
+    candidate?.domain,
+    candidate?.industry,
+    candidate?.domain_expertise,
+    candidate?.skills_structured?.domain_expertise,
+    candidate?.skills?.domain_expertise,
+  ].flatMap((value) => {
+    if (Array.isArray(value)) return value
+    if (value && typeof value === 'object') {
+      return [value.name, value.label, value.value]
+    }
+    return [value]
+  }))
+  const hasDomain = normalizedDomainSignals.length > 0
 
   const present = [hasExperience, hasSkills, hasDomain].filter(Boolean).length
   const missingFields = []
