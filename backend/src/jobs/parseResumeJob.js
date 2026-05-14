@@ -561,6 +561,7 @@ async function runParse(job) {
           id: identity.id,
           candidateId: identity.candidateId,
           resumeId: identity.resumeId || String(resumeId || ''),
+          resumeProcessingStatus: 'scored',
           ...candidate,
           summary: clampString(candidate?.summary, 400),
           years_experience: normalizeNullableNumber(candidate?.years_experience),
@@ -699,6 +700,10 @@ export function registerParseResumeJobProcessor() {
     } catch (error) {
       const normalizedError = normalizeProviderError(error)
       const isTerminalFailure = isTerminalJobFailure(job)
+      const normalizedMessage = String(normalizedError.normalizedMessage || '').trim()
+      const parseErrorWithReasonPrefix = normalizedMessage.includes('::')
+        ? normalizedMessage
+        : `parse_failed::${normalizedMessage || 'Unknown parsing failure.'}`
       if (isTerminalFailure) {
         const parseDurationMs = Date.now() - Number(job.timestamp || Date.now())
         await pool.query(
@@ -708,14 +713,14 @@ export function registerParseResumeJobProcessor() {
                parse_duration_ms = COALESCE(parse_duration_ms, $3),
                updated_at = NOW()
            WHERE id = $1`,
-          [job.data.resumeId, normalizedError.normalizedMessage, parseDurationMs],
+          [job.data.resumeId, parseErrorWithReasonPrefix, parseDurationMs],
         )
       }
 
       await setJobState(job.id, {
         status: isTerminalFailure ? 'failed' : 'retrying',
         progress: isTerminalFailure ? 100 : Number(job.progress() || 0),
-        error_message: normalizedError.normalizedMessage,
+        error_message: parseErrorWithReasonPrefix,
         attempts: job.attemptsMade + 1,
       })
 
@@ -724,7 +729,7 @@ export function registerParseResumeJobProcessor() {
           status: 'failed',
           progress: 100,
           result: null,
-          error: normalizedError.normalizedMessage,
+          error: parseErrorWithReasonPrefix,
         })
       }
 
