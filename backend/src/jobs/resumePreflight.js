@@ -14,7 +14,11 @@ function detectPdfEncryption(raw = '') {
 function looksLikeLikelyNonPdfPayload(raw = '') {
   const head = String(raw || '').slice(0, 4096).toLowerCase()
   const headWithoutHeader = head.replace(/^%pdf-[^\n\r]*[\r\n]*/, '')
-  const likelyPdfStructure = /(\b\d+\s+\d+\s+obj\b|\bxref\b|\bstream\b|\/type\s*\/)/.test(headWithoutHeader)
+  const hasPdfObjectMarker = /\b\d+\s+\d+\s+obj\b/.test(headWithoutHeader)
+  const hasXrefMarker = /\bxref\b/.test(headWithoutHeader)
+  const hasTypeDictionaryMarker = /\/type\s*\//.test(headWithoutHeader)
+  const hasStreamBlockMarker = /\bstream\b[\s\S]{0,512}\bendstream\b/.test(headWithoutHeader)
+  const likelyPdfStructure = hasPdfObjectMarker || hasXrefMarker || hasTypeDictionaryMarker || hasStreamBlockMarker
   const htmlPayloadEarly = /^\s*(<!doctype\s+html|<html)\b/.test(headWithoutHeader)
   const jsonErrorPayloadEarly = /^\s*\{\s*"(?:error|message)"\s*:/.test(headWithoutHeader)
   return !likelyPdfStructure && (htmlPayloadEarly || jsonErrorPayloadEarly)

@@ -35,6 +35,13 @@ test('hard-fails header-spoofed HTML payloads that lack PDF structure', () => {
   assert.equal(result.failureCategory, 'unsupported_encoding_or_format')
 })
 
+test('hard-fails header-spoofed payloads with incidental stream wording but no PDF markers', () => {
+  const fileBuffer = Buffer.from('%PDF-1.7\n<html>download stream unavailable</html>', 'latin1')
+  const result = runResumePreflight({ mimeType: 'application/pdf', fileBuffer })
+  assert.equal(result.ok, false)
+  assert.equal(result.failureCategory, 'unsupported_encoding_or_format')
+})
+
 test('returns partial for low OCR confidence', () => {
   const result = evaluateOcrOutcome({ ocrConfidence: 50 })
   assert.equal(result.parseOutcome, 'partial')
