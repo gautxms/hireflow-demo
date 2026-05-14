@@ -477,14 +477,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
-  const { candidates: rawCandidates, failedResumes = [], itemMetadata = [], parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
-  const extractionSummary = useMemo(() => {
-    const parsedSummary = parseMeta?.fileSummary && typeof parseMeta.fileSummary === 'object' ? parseMeta.fileSummary : {}
-    const totalFiles = Number(parsedSummary.totalFiles ?? itemMetadata.length ?? 0)
-    const filesWithCandidateOutput = Number(parsedSummary.filesWithCandidateOutput ?? itemMetadata.filter((item) => item?.hasCandidates).length ?? 0)
-    const filesWithParseShapeErrors = Number(parsedSummary.filesWithParseShapeErrors ?? itemMetadata.filter((item) => item?.malformedResult || item?.resultShape === 'non_object' || item?.resultShape === 'object_without_candidates').length ?? 0)
-    return { totalFiles, filesWithCandidateOutput, filesWithParseShapeErrors }
-  }, [itemMetadata, parseMeta])
+  const { candidates: rawCandidates, failedResumes = [], parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
   const derivedFailedIssues = useMemo(() => {
     const fromCandidatePlaceholders = (Array.isArray(rawCandidates) ? rawCandidates : [])
       .filter((candidate) => candidateLooksLikeFailurePlaceholder(candidate))
@@ -1020,12 +1013,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               ? 'We could not read the results payload. Please retry from Analyses or upload resumes again.'
               : 'Please upload resumes before viewing analysis.'}
           </p>
-          <section className="dd-analysis-box dd-analysis-box--amber">
-            <div className="dd-col-label">Extraction summary</div>
-            <div className="dd-analysis-item">{`Total files: ${extractionSummary.totalFiles}`}</div>
-            <div className="dd-analysis-item">{`Files with candidate output: ${extractionSummary.filesWithCandidateOutput}`}</div>
-            <div className="dd-analysis-item">{`Files with malformed/shape errors: ${extractionSummary.filesWithParseShapeErrors}`}</div>
-          </section>
         </div>
       </div>
     )
@@ -1056,12 +1043,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               {`${derivedFailedIssues.length} resume${derivedFailedIssues.length === 1 ? '' : 's'} need attention`}
             </p>
           )}
-          <section className="dd-analysis-box">
-            <div className="dd-col-label">Extraction summary</div>
-            <div className="dd-analysis-item">{`Total files: ${extractionSummary.totalFiles}`}</div>
-            <div className="dd-analysis-item">{`Files with candidate output: ${extractionSummary.filesWithCandidateOutput}`}</div>
-            <div className="dd-analysis-item">{`Files with malformed/shape errors: ${extractionSummary.filesWithParseShapeErrors}`}</div>
-          </section>
         </div>
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>

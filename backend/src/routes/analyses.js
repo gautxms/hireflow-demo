@@ -73,8 +73,6 @@ function extractCandidatesFromResult(result) {
       candidates: [],
       diagnostics,
       normalizedResult: safeParseResult(result),
-      resultShape: 'non_object',
-      extractionErrorReason: diagnostics.malformed ? 'malformed_json' : 'non_object_result',
     }
   }
 
@@ -83,15 +81,15 @@ function extractCandidatesFromResult(result) {
   const candidateFields = [parsed.candidates, parsed.results, parsed.output]
   for (const field of candidateFields) {
     if (Array.isArray(field)) {
-      return { candidates: field, diagnostics, normalizedResult: parsed, resultShape: 'array_candidates', extractionErrorReason: null }
+      return { candidates: field, diagnostics, normalizedResult: parsed }
     }
     const nested = resolveObject(field)
     if (nested && Array.isArray(nested.candidates)) {
-      return { candidates: nested.candidates, diagnostics, normalizedResult: parsed, resultShape: 'nested_array_candidates', extractionErrorReason: null }
+      return { candidates: nested.candidates, diagnostics, normalizedResult: parsed }
     }
   }
 
-  return { candidates: [], diagnostics, normalizedResult: parsed, resultShape: 'object_without_candidates', extractionErrorReason: 'missing_candidates_array' }
+  return { candidates: [], diagnostics, normalizedResult: parsed }
 }
 
 function deriveAggregateStatus(counts, totalItems) {
@@ -252,13 +250,6 @@ async function loadAnalysisStatus(analysisId, userId) {
       failureCategory,
       result: parsedResult,
       normalizedCandidates: extracted.candidates,
-      extractionMeta: {
-        hasCandidates: extracted.candidates.length > 0,
-        resultShape: extracted.resultShape || 'unknown',
-        malformedResult: Boolean(extracted.diagnostics.malformed),
-        parseableObject: Boolean(extracted.diagnostics.parseableObject),
-        extractionErrorReason: extracted.candidates.length > 0 ? null : (extracted.extractionErrorReason || 'no_candidates_extracted'),
-      },
     })
   }
 
