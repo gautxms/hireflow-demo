@@ -230,9 +230,12 @@ async function loadAnalysisStatus(analysisId, userId) {
     if (extracted.candidates.length > 0) extractionDiagnostics.candidateBearingItemCount += 1
 
     const parsedResult = extracted.normalizedResult
-    const parseOutcome = normalizeParseOutcome(canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : null), 'partial')
-    const failureCategory = canonicalStatus === 'failed'
-      ? normalizeFailureCategory(safeParseResult(row.parse_result)?.failureCategory, { fallback: 'unknown' })
+    const scoringFailures = Array.isArray(parsedResult?.scoringFailures) ? parsedResult.scoringFailures : []
+    const candidatesWithScoringFailures = Array.isArray(parsedResult?.candidatesWithScoringFailures) ? parsedResult.candidatesWithScoringFailures : []
+    const implicitFailure = canonicalStatus === 'complete' && extracted.candidates.length === 0 && (scoringFailures.length > 0 || candidatesWithScoringFailures.length > 0)
+    const parseOutcome = normalizeParseOutcome(implicitFailure ? 'failed' : (canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : null)), 'partial')
+    const failureCategory = (canonicalStatus === 'failed' || implicitFailure)
+      ? normalizeFailureCategory(safeParseResult(row.parse_result)?.failureCategory || scoringFailures[0]?.reason, { fallback: 'unknown' })
       : null
 
     items.push({
@@ -250,6 +253,8 @@ async function loadAnalysisStatus(analysisId, userId) {
       failureCategory,
       result: parsedResult,
       normalizedCandidates: extracted.candidates,
+      scoringFailures,
+      candidatesWithScoringFailures,
     })
   }
 
@@ -467,6 +472,14 @@ router.get('/:id', requireAuth, async (req, res) => {
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,
     items,
+    failedResumes: items.filter((item) => item.parseOutcome === 'failed').map((item) => ({
+      resumeId: item.resumeId || null,
+      parseJobId: item.parseJobId || null,
+      filename: item.filename || null,
+      reason: item.error || item.scoringFailures?.[0]?.reason || 'parse_failed::unknown',
+      failureCategory: item.failureCategory || 'unknown',
+      resumeProcessingStatus: item.status === 'failed' ? 'parse_failed' : 'scoring_failed',
+    })),
     diagnostics: {
       resultExtraction: extractionDiagnostics,
     },

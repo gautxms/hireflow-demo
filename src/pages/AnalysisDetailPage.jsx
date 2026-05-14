@@ -178,6 +178,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   }, [analysis])
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
   const candidateCount = candidateResultsPayload.candidates.length
+  const failedResumeCount = Array.isArray(candidateResultsPayload.failedResumes) ? candidateResultsPayload.failedResumes.length : 0
   const failedCount = Number(summary.failed || 0)
   const pageTitle = useMemo(() => deriveAnalysisPageTitle(analysis, analysisId), [analysis, analysisId])
 
@@ -192,11 +193,12 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
     liveStatus: analysis?.liveStatus || '',
     summary: analysis?.summary || {},
     candidateCount,
+    failedResumeCount,
     itemCount,
     candidateSampleKeys: candidateResultsPayload?.candidates?.[0] && typeof candidateResultsPayload.candidates[0] === 'object'
       ? Object.keys(candidateResultsPayload.candidates[0]).slice(0, 20)
       : [],
-  }), [analysis, candidateCount, candidateResultsPayload, itemCount])
+  }), [analysis, candidateCount, candidateResultsPayload, failedResumeCount, itemCount])
 
   useEffect(() => {
     if (isNonProductionBuild && (displayStatus === 'complete' || displayStatus === 'partial' || displayStatus === 'failed')) {
@@ -222,7 +224,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
     displayStatus === 'completed' ||
     displayStatus === 'partial' ||
     displayStatus === 'failed') &&
-  candidateResultsPayload.candidates.length > 0
+  (candidateResultsPayload.candidates.length > 0 || failedResumeCount > 0)
 ) {
   return (
     <main className="analyses-layout">
