@@ -467,7 +467,25 @@ async function getLatestCandidatesForUser(userId) {
 
   const latestResult = result.rows[0]?.result
   const rawCandidates = Array.isArray(latestResult?.candidates) ? latestResult.candidates : []
-  return rawCandidates.map(normalizeCandidate)
+  const candidates = rawCandidates.map(normalizeCandidate)
+
+  const failedResumesResult = await pool.query(
+    `SELECT id, filename, parse_error
+     FROM resumes
+     WHERE user_id = $1
+       AND parse_status = 'failed'
+     ORDER BY updated_at DESC`,
+    [userId],
+  )
+
+  const failedResumes = failedResumesResult.rows.map((row) => ({
+    resumeId: String(row.id || ''),
+    filename: normalizeText(row.filename || '', 'Unknown file'),
+    parseError: normalizeText(row.parse_error || '', 'parse_failed::Unknown parsing failure.'),
+    resumeProcessingStatus: 'failed',
+  }))
+
+  return { candidates, failedResumes }
 }
 
 function cleanupExpiredShareTokens() {
@@ -504,7 +522,7 @@ router.get('/', requireAuth, async (req, res) => {
     const safeSortBy = sanitizeSortBy(sortBy)
     const safeSortOrder = sanitizeSortOrder(sortOrder, safeSortBy)
 
-    const candidates = await getLatestCandidatesForUser(req.userId)
+    const { candidates, failedResumes } = await getLatestCandidatesForUser(req.userId)
     const filtered = applyCandidateFilters(candidates, {
       scoreMin,
       scoreMax,
@@ -527,6 +545,7 @@ router.get('/', requireAuth, async (req, res) => {
 
     return res.json({
       candidates: rows,
+      failedResumes,
       pagination: {
         page: safePage,
         pageSize: safePageSize,
@@ -559,7 +578,8 @@ router.post('/share', requireAuth, async (req, res) => {
     cleanupExpiredShareTokens()
 
     const incoming = Array.isArray(req.body?.candidates) ? req.body.candidates : null
-    const candidates = (incoming ? incoming : await getLatestCandidatesForUser(req.userId)).map(normalizeCandidate)
+    const latestPayload = incoming ? null : await getLatestCandidatesForUser(req.userId)
+    const candidates = (incoming ? incoming : latestPayload.candidates).map(normalizeCandidate)
 
     if (candidates.length === 0) {
       return res.status(400).json({ error: 'No candidates available to share' })
