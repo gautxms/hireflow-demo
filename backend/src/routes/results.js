@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { normalizeCandidateExperience } from '../utils/experienceNormalization.js'
+import { normalizeFailureCategory, normalizeParseOutcome } from '../contracts/parseResultEnums.js'
 
 const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -293,16 +294,14 @@ export function normalizeCandidate(candidate = {}) {
     || candidate?.parseMeta?.parse_outcome
     || '',
   ).toLowerCase()
-  const parseOutcome = ['success', 'partial', 'failed'].includes(parseOutcomeRaw)
-    ? parseOutcomeRaw
-    : (isFailedProcessingStatus ? 'failed' : 'success')
-  const failureCategory = normalizeText(
+  const parseOutcome = normalizeParseOutcome(parseOutcomeRaw, isFailedProcessingStatus ? 'failed' : 'success')
+  const failureCategory = normalizeFailureCategory(normalizeText(
     candidate?.failureCategory
     || candidate?.failure_category
     || candidate?.parseMeta?.failureCategory
     || candidate?.parseMeta?.failure_category
     || '',
-  ) || null
+  ) || null, { fallback: 'unknown' })
   const failureMessageUserSafe = normalizeText(
     candidate?.failureMessageUserSafe
     || candidate?.failure_message_user_safe

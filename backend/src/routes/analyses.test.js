@@ -255,7 +255,7 @@ test('GET /analyses/:id mixed batch completes with per-resume parse outcomes and
     if (sql.includes('FROM analysis_items ai')) {
       return { rows: [
         { id: 401, resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'good.pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: JSON.stringify({ candidates: [{ name: 'Alice' }] }) },
-        { id: 402, resume_id: 'r-2', parse_job_id: 'p-2', created_at: '2026-05-01T00:00:11.000Z', filename: 'corrupt.pdf', resume_parse_status: 'failed', parse_error: 'Corrupted PDF', parse_job_status: 'failed', progress: 100, error_message: 'Corrupted PDF', parse_job_updated_at: '2026-05-01T00:01:01.000Z', parse_result: JSON.stringify({ failureCategory: 'corrupted_pdf' }) },
+        { id: 402, resume_id: 'r-2', parse_job_id: 'p-2', created_at: '2026-05-01T00:00:11.000Z', filename: 'corrupt.pdf', resume_parse_status: 'failed', parse_error: 'Corrupted PDF', parse_job_status: 'failed', progress: 100, error_message: 'Corrupted PDF', parse_job_updated_at: '2026-05-01T00:01:01.000Z', parse_result: JSON.stringify({ failureCategory: 'corrupt_or_unreadable' }) },
         { id: 403, resume_id: 'r-3', parse_job_id: 'p-3', created_at: '2026-05-01T00:00:12.000Z', filename: 'locked.pdf', resume_parse_status: 'failed', parse_error: 'Encrypted PDF', parse_job_status: 'failed', progress: 100, error_message: 'Encrypted PDF', parse_job_updated_at: '2026-05-01T00:01:02.000Z', parse_result: JSON.stringify({ failureCategory: 'encrypted_or_password_protected_pdf' }) },
       ] }
     }
@@ -277,7 +277,7 @@ test('GET /analyses/:id mixed batch completes with per-resume parse outcomes and
   assert.equal(payload.summary.failedCount, 2)
   assert.equal(payload.items[0].parseOutcome, 'success')
   assert.equal(payload.items[1].parseOutcome, 'failed')
-  assert.equal(payload.items[1].failureCategory, 'corrupted_pdf')
+  assert.equal(payload.items[1].failureCategory, 'corrupt_or_unreadable')
   assert.equal(payload.items[2].failureCategory, 'encrypted_or_password_protected_pdf')
 })
 test('DELETE /analyses/:id deletes owner analysis transactionally', async (t) => {
