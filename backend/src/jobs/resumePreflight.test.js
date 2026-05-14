@@ -22,6 +22,26 @@ test('does not hard-fail compressed/binary PDF-like content before OCR/extractio
   assert.equal(result.ok, true)
 })
 
+test('does not hard-fail valid PDFs containing HTML or JSON snippets in content', () => {
+  const fileBuffer = Buffer.from('%PDF-1.7\n1 0 obj\n<< /Length 70 >>\nstream\n<html><body>portfolio sample</body></html>\n{"error":"demo json"}\nendstream\nendobj\n', 'latin1')
+  const result = runResumePreflight({ mimeType: 'application/pdf', fileBuffer })
+  assert.equal(result.ok, true)
+})
+
+test('hard-fails header-spoofed HTML payloads that lack PDF structure', () => {
+  const fileBuffer = Buffer.from('%PDF-1.7\n<html><body>not actually a PDF</body></html>', 'latin1')
+  const result = runResumePreflight({ mimeType: 'application/pdf', fileBuffer })
+  assert.equal(result.ok, false)
+  assert.equal(result.failureCategory, 'unsupported_encoding_or_format')
+})
+
+test('hard-fails header-spoofed payloads with incidental stream wording but no PDF markers', () => {
+  const fileBuffer = Buffer.from('%PDF-1.7\n<html>download stream unavailable</html>', 'latin1')
+  const result = runResumePreflight({ mimeType: 'application/pdf', fileBuffer })
+  assert.equal(result.ok, false)
+  assert.equal(result.failureCategory, 'unsupported_encoding_or_format')
+})
+
 test('returns partial for low OCR confidence', () => {
   const result = evaluateOcrOutcome({ ocrConfidence: 50 })
   assert.equal(result.parseOutcome, 'partial')
