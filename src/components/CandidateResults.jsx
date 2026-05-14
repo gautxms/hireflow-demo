@@ -190,6 +190,18 @@ function parseUploadDate(candidate) {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
+function formatSnapshotDate(candidate = {}) {
+  const raw = candidate?.sourceUpdatedAt || candidate?.updatedAt || candidate?.updated_at || candidate?.latestAnalysis?.date
+  const timestamp = Date.parse(String(raw || ''))
+  if (Number.isNaN(timestamp)) return null
+  return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function formatNoticePeriod(candidate = {}) {
+  const raw = toDisplayText(candidate?.notice_period || candidate?.noticePeriod || candidate?.availability_notice, '').trim()
+  return raw || null
+}
+
 const toTenScale = (score) => {
   if (score == null) return null
   return (score / 10).toFixed(1)
@@ -446,6 +458,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [pageSize, setPageSize] = useState(25)
   const [resultsError, setResultsError] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
+  const [metadataOverrides, setMetadataOverrides] = useState({})
   const [deletedIds, setDeletedIds] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [expandedSections, setExpandedSections] = useState({})
@@ -1208,6 +1221,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
       {expandedCandidate && (() => {
         const candidate = expandedCandidate
+        const candidateOverride = metadataOverrides[candidate._bulkKey] || {}
+        const mergedCandidate = { ...candidate, ...candidateOverride }
         const score = activeScore(candidate)
         const tier = scoreTier(score)
         const displayScore = toTenScale(score)
@@ -1246,10 +1261,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           ...(Array.isArray(candidate?.questions) ? candidate.questions : []),
         ])
         const interviewProbes = probePool
-        const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
-        const resumeFileType = resolveResumeFileTypeLabel(candidate)
-        const resumeFileSize = formatResumeSize(candidate)
-        const candidateResumeId = resolveCandidateResumeUuid(candidate)
+        const resumeFilename = resolveCandidateResumeMetadata(mergedCandidate).resumeFilename
+        const resumeFileType = resolveResumeFileTypeLabel(mergedCandidate)
+        const resumeFileSize = formatResumeSize(mergedCandidate)
+        const candidateResumeId = resolveCandidateResumeUuid(mergedCandidate)
         const fullProfilePath = candidateResumeId ? `/candidates/${candidateResumeId}` : null
         const openResumePath = candidateResumeId ? `${API_BASE}/resumes/${candidateResumeId}/view` : null
         const persistedTags = Array.isArray(candidate?.tags) ? candidate.tags : []
@@ -1297,6 +1312,23 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           ? 'Data quality: Some fields could not be extracted from this resume format. '
           : 'Data quality: Some details were not present in the resume. '
         const dataQualityAction = Object.values(missingFieldStatuses).includes('extraction_failed') ? 'Run re-analysis' : 'Upload clearer resume'
+        const snapshotItems = [
+          { key: 'current_title', icon: Briefcase, label: 'Role', value: toDisplayText(mergedCandidate.current_title, '') },
+          { key: 'years_experience', icon: Clock3, label: 'Years', value: formatExperienceDisplay(mergedCandidate) === 'Experience unavailable' ? '' : formatExperienceDisplay(mergedCandidate) },
+          { key: 'location', icon: MapPin, label: 'Location', value: toDisplayText(mergedCandidate.location, '') },
+          { key: 'notice_period', icon: CircleHelp, label: 'Notice', value: formatNoticePeriod(mergedCandidate) || '' },
+          { key: 'last_updated', icon: CalendarDays, label: 'Updated', value: formatSnapshotDate(mergedCandidate) || '' },
+        ]
+        const hasIncompleteSnapshot = snapshotItems.some((item) => !item.value)
+        const onInlineMetadataChange = (field, value) => {
+          setMetadataOverrides((current) => ({
+            ...current,
+            [candidate._bulkKey]: {
+              ...(current[candidate._bulkKey] || {}),
+              [field]: value,
+            },
+          }))
+        }
 
         return (
           <article id="detail-drawer" className="detail-drawer dd-card dd-card--target">
@@ -1319,10 +1351,22 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     </button>
                   </div>
                   <div className="dd-meta-row">
-                    <span className="dd-meta-pill"><Briefcase size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.current_title, '—')}</span>
-                    <span className="dd-meta-pill"><Clock3 size={14} strokeWidth={1.5} aria-hidden="true" />{formatExperienceDisplay(candidate)}</span>
-                    <span className="dd-meta-pill"><MapPin size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.location, '—')}</span>
+                    {snapshotItems.filter((item) => item.value).map((item) => {
+                      const Icon = item.icon
+                      return <span key={item.key} className="dd-meta-pill"><Icon size={14} strokeWidth={1.5} aria-hidden="true" /><strong>{item.label}:</strong> {item.value}</span>
+                    })}
+                    {hasIncompleteSnapshot ? <span className="dd-meta-pill dd-meta-pill--warning"><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />Incomplete profile</span> : null}
                     <span className="dd-meta-pill"><GraduationCap size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.seniority || candidate.level || candidate.seniority_level, 'Seniority not specified')}</span>
+                  </div>
+                  <div className="dd-inline-edit-row">
+                    <label>
+                      Role
+                      <input type="text" value={toDisplayText(mergedCandidate.current_title, '')} onChange={(event) => onInlineMetadataChange('current_title', event.target.value)} placeholder="Current role/title" />
+                    </label>
+                    <label>
+                      Years
+                      <input type="number" min="0" step="0.5" value={toDisplayText(mergedCandidate.years_experience, '')} onChange={(event) => onInlineMetadataChange('years_experience', event.target.value)} placeholder="Years of experience" />
+                    </label>
                   </div>
                   {missingCount > 0 ? (
                     <div className="dd-data-quality-note">
