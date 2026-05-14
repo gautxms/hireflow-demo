@@ -6,6 +6,7 @@ import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../ser
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 
 const MIN_EXTRACTED_TEXT_LENGTH = 80
 
@@ -16,6 +17,10 @@ export function isTerminalJobFailure(job) {
 function mapParseErrorCode(errorCode) {
   const normalized = String(errorCode || '').trim().toLowerCase()
   if (normalized === 'extraction_failed') return 'extraction_failed'
+  if (normalized === 'encrypted_or_password_protected_pdf') return 'encrypted_or_password_protected_pdf'
+  if (normalized === 'corrupt_or_unreadable') return 'corrupt_or_unreadable'
+  if (normalized === 'unsupported_encoding_or_format') return 'unsupported_encoding_or_format'
+  if (normalized === 'image_only_low_ocr') return 'image_only_low_ocr'
   if (
     normalized === 'response_truncated_error'
     || normalized === 'response_format_error'
@@ -424,6 +429,26 @@ export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionCo
   }))
 }
 
+
+function buildPreflightFailureParseResult({ filename, mimeType, fileSize, preflight }) {
+  return {
+    filename,
+    mimeType,
+    fileSize,
+    parserVersion: 'ai-only',
+    analyzerUsed: 'AI',
+    parseOutcome: preflight.parseOutcome || 'failed',
+    failureCategory: preflight.failureCategory || 'parse_failed',
+    failureMessageUserSafe: preflight.failureMessageUserSafe || 'Unable to parse this resume file.',
+    candidates: [],
+    parseMeta: {
+      parseStatus: preflight.parseOutcome || 'failed',
+      scoringStatus: 'skipped_preflight_unrecoverable',
+      preflight,
+    },
+  }
+}
+
 async function runParse(job) {
   const { resumeId, filename, mimeType, fileSize, fileBufferBase64 } = job.data
   const startedAt = Date.now()
@@ -454,6 +479,31 @@ async function runParse(job) {
   let parseModel = null
   let parseMaxOutputTokens = null
   const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
+  const preflight = runResumePreflight({ mimeType, fileBuffer })
+  if (!preflight.ok && preflight.unrecoverable) {
+    const parseDurationMs = Date.now() - startedAt
+    const parseResult = buildPreflightFailureParseResult({ filename, mimeType, fileSize, preflight })
+    await pool.query(
+      `UPDATE resumes
+       SET parse_status = 'failed',
+           parse_result = $2::jsonb,
+           parse_error = $3,
+           parse_error_code = $4,
+           parse_duration_ms = $5,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [resumeId, JSON.stringify(parseResult), preflight.failureMessageUserSafe, preflight.failureCategory, parseDurationMs],
+    )
+    await setJobState(job.id, {
+      status: 'failed',
+      progress: 100,
+      result: JSON.stringify(parseResult),
+      error_message: preflight.failureMessageUserSafe,
+      attempts: job.attemptsMade + 1,
+    })
+    return parseResult
+  }
+
   const extractionResult = await runParseWithOcrFallback({
     filename,
     mimeType,
@@ -462,12 +512,18 @@ async function runParse(job) {
   })
   const extractedRawText = String(extractionResult?.rawText || '').trim()
   const hasUsableExtractedText = extractedRawText.length >= MIN_EXTRACTED_TEXT_LENGTH
+  const ocrOutcome = preflight.routeToOcr ? evaluateOcrOutcome({ ocrConfidence: extractionResult?.ocrConfidence }) : null
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
 
   try {
+    if (ocrOutcome) {
+      const error = new Error(`${ocrOutcome.failureCategory}::${ocrOutcome.failureMessageUserSafe}`)
+      error.preflightFailure = ocrOutcome
+      throw error
+    }
     if (!hasUsableExtractedText) {
       throw new Error('extraction_failed::Unable to extract enough resume text for AI parsing after OCR fallback.')
     }
@@ -689,7 +745,12 @@ async function runParse(job) {
         resumeProcessingStatus: 'scoring_failed',
         scoringFailureReason: 'scoring_failed::missing_finite_score',
       })),
+    parseOutcome: 'complete',
     parseMeta: {
+      preflight: {
+        extractableTextRatio: preflight.extractableTextRatio,
+        imageOnlyLikely: preflight.imageOnlyLikely,
+      },
       extractionMethod: extractionResult?.methodUsed || 'failed',
       rawTextCharCount: extractedRawText.length,
       parseStatus: 'complete',
