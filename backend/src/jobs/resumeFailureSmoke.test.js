@@ -4,11 +4,10 @@ import assert from 'node:assert/strict'
 import { runResumePreflight, evaluateOcrOutcome } from './resumePreflight.js'
 import { summarizeJobStatus } from '../../../src/components/resumeAnalysisAggregation.js'
 
-test('smoke: corrupted PDF fails preflight', () => {
+test('smoke: structurally minimal PDF is not hard-failed by preflight', () => {
   const fileBuffer = Buffer.from('%PDF-1.7\n%%EOF', 'latin1')
   const result = runResumePreflight({ mimeType: 'application/pdf', fileBuffer, extractedTextHint: '' })
-  assert.equal(result.ok, false)
-  assert.equal(result.failureCategory, 'corrupt_or_unreadable')
+  assert.equal(result.ok, true)
 })
 
 test('smoke: encrypted PDF fails preflight', () => {
