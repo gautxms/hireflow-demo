@@ -89,6 +89,7 @@ export function normalizeCandidateResultsPayload(payload) {
     return {
       candidates: payload.candidates.map((candidate) => normalizeCandidate(candidate)),
       failedResumes: Array.isArray(payload.failedResumes) ? payload.failedResumes : [],
+      itemMetadata: Array.isArray(payload.itemMetadata) ? payload.itemMetadata : [],
       parseMeta: payload.parseMeta && typeof payload.parseMeta === 'object' ? payload.parseMeta : {},
       isInvalid: false,
     }
