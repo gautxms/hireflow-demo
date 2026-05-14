@@ -2,6 +2,7 @@ const MAX_TECHNICAL_DETAILS_LENGTH = 500
 const ADMIN_SECURITY_PATH = '/admin/security'
 
 const CATEGORY_MESSAGES = {
+  extraction_failed: 'Resume text extraction failed; upload a clearer PDF/DOCX or retry with OCR-ready content.',
   response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
   response_truncated_error: 'AI output exceeded response size; retry with compact analysis or reduce schema detail.',
   invalid_request_error: 'AI model configuration issue in Admin Security.',
@@ -14,7 +15,7 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(extraction_failed|response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
 
 function toMessage(value) {
   if (value instanceof Error) {
@@ -178,6 +179,18 @@ function buildHints(category, { provider, model } = {}) {
         'Reduce output detail/schema size (shorter strings, fewer list items, omit optional fields).',
         'Use larger output budget or a stronger model only if compact mode still fails.',
         modelStep,
+      ],
+    }
+  }
+
+  if (category === 'extraction_failed') {
+    return {
+      action: 'review_resume_file_quality',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        'Retry with a text-based PDF or DOCX when possible.',
+        'If the file is scanned, upload a cleaner version with higher contrast/quality.',
+        'Confirm the uploaded file is not password-protected or image-only with unreadable text.',
       ],
     }
   }

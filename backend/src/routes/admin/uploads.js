@@ -98,6 +98,7 @@ async function ensureUploadMonitoringColumns() {
     ADD COLUMN IF NOT EXISTS parse_status TEXT DEFAULT 'pending',
     ADD COLUMN IF NOT EXISTS parse_result JSONB,
     ADD COLUMN IF NOT EXISTS parse_error TEXT,
+    ADD COLUMN IF NOT EXISTS parse_error_code TEXT,
     ADD COLUMN IF NOT EXISTS parse_duration_ms INTEGER,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS retried_at TIMESTAMP;
@@ -618,6 +619,7 @@ async function handleRetryUpload(req, res) {
       `UPDATE resumes
        SET parse_status = 'pending',
            parse_error = NULL,
+           parse_error_code = NULL,
            parse_result = NULL,
            parse_duration_ms = NULL,
            updated_at = NOW()

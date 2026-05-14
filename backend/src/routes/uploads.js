@@ -44,6 +44,7 @@ async function ensureResumeParseColumns() {
     ADD COLUMN IF NOT EXISTS parse_status TEXT DEFAULT 'pending',
     ADD COLUMN IF NOT EXISTS parse_result JSONB,
     ADD COLUMN IF NOT EXISTS parse_error TEXT,
+    ADD COLUMN IF NOT EXISTS parse_error_code TEXT,
     ADD COLUMN IF NOT EXISTS parse_duration_ms INTEGER,
     ADD COLUMN IF NOT EXISTS years_experience INTEGER,
     ADD COLUMN IF NOT EXISTS profile_score INTEGER,

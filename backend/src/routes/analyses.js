@@ -187,7 +187,9 @@ async function loadAnalysisStatus(analysisId, userId) {
       })
     }
 
-    const extracted = extractCandidatesFromResult(row.parse_result)
+    const extracted = canonicalStatus === 'complete'
+      ? extractCandidatesFromResult(row.parse_result)
+      : { candidates: [], diagnostics: { parseableObject: false, malformed: false }, normalizedResult: null }
     extractionDiagnostics.totalItems += 1
     if (extracted.diagnostics.parseableObject) extractionDiagnostics.parseableObjectCount += 1
     if (extracted.diagnostics.malformed) extractionDiagnostics.malformedItemCount += 1
