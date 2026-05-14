@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, AlertCircle, BookmarkPlus, Briefcase, CalendarDays, Check, ChevronLeft, CircleHelp, Clock3, FileText, MapPin, X, GraduationCap } from 'lucide-react'
+import { AlertTriangle, AlertCircle, BookmarkPlus, Briefcase, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronUp, CircleHelp, Clock3, FileText, MapPin, X, GraduationCap } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -1174,8 +1174,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     candidate.seniority_level,
                   ].filter(Boolean).join(' · ')}
                 </span>
-                <span className="rc-expand-hint" role="button" aria-label={isExpanded ? 'Collapse candidate details' : 'Expand candidate details'}>
-                  {isExpanded ? 'Collapse details' : 'Expand details'}
+                <span className="rc-expand-hint" aria-hidden="true">
+                  <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
+                  Expand details
                 </span>
               </div>
 
@@ -1292,7 +1293,20 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="dd-header-identity">
                 <div className="dd-avatar">{initials || 'NA'}</div>
                 <div className="dd-header-info">
-                  <div className="dd-name">{toDisplayText(candidate.name)}</div>
+                  <div className="dd-name-row">
+                    <div className="dd-name">{toDisplayText(candidate.name)}</div>
+                    <button
+                      className="dd-collapse-toggle"
+                      type="button"
+                      onClick={() => setExpandedId(null)}
+                      aria-expanded="true"
+                      aria-label="Collapse candidate details"
+                      title="Collapse candidate details"
+                    >
+                      <ChevronUp size={15} strokeWidth={1.8} aria-hidden="true" />
+                      <span>Collapse details</span>
+                    </button>
+                  </div>
                   <div className="dd-meta-row">
                     <span className="dd-meta-pill"><Briefcase size={14} strokeWidth={1.5} aria-hidden="true" />{toDisplayText(candidate.current_title, '—')}</span>
                     <span className="dd-meta-pill"><Clock3 size={14} strokeWidth={1.5} aria-hidden="true" />{formatExperienceDisplay(candidate)}</span>
@@ -1380,6 +1394,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-col-label dd-col-label--mt-16">Suggested interview probes</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
                   {probesPreview.items.map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                  {(uncertaintyPreview.hasOverflow || probesPreview.hasOverflow) ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'uncertainty')}>{isSectionExpanded('uncertainty') ? 'Show fewer details' : 'Show all matched details'}</button> : null}
                   {probesPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'interview-probes')}>{probesPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-16">Recruiter action</div>
@@ -1413,6 +1428,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     ? scoreBreakdown.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-score-breakdown-${idx}`}>{item.label.replace('alignment', 'match')}: {item.value}%</div>)
                     : <div className="dd-analysis-empty">{SCORE_BREAKDOWN_UNAVAILABLE_MESSAGE}</div>}
                 </div>
+                <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
+                <div className="dd-analysis-box dd-analysis-box--green">
+                  {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
+                  {primarySkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'primary-skills')}>{primarySkillsPreview.expanded ? 'Show fewer matched skills' : 'Show all matched skills'}</button> : null}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
+                  {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
+                  {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Show fewer missing requirements' : 'Show all missing requirements'}</button> : null}
+                </div>
                 {isLowFitCandidate ? (
                   <>
                     <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
@@ -1443,7 +1468,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-col-label dd-col-label--mt-14">All skills (reference)</div>
                 <div className="dd-analysis-box">
                   {allSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill" key={`${candidate._bulkKey}-all-skills-${idx}`}>{item}</span>)}
-                  {allSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'all-skills')}>{allSkillsPreview.expanded ? 'Less' : 'More'}</button> : null}
+                  {allSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'all-skills')}>{allSkillsPreview.expanded ? 'Show fewer skills' : 'Show all skills'}</button> : null}
                 </div>
               </div>
 
@@ -1451,7 +1476,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-col-label">Resume evidence</div>
                 <div className="dd-analysis-box">
                   {evidencePreview.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-evidence-${idx}`}>{item.quote || 'Snippet unavailable'}</div>)}
-                  {evidencePreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'evidence')}>{evidencePreview.expanded ? 'Less' : 'More'}</button> : null}
+                  {evidencePreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'evidence')}>{evidencePreview.expanded ? 'Show fewer excerpts' : 'Show all evidence excerpts'}</button> : null}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
