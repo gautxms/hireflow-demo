@@ -24,11 +24,24 @@ test('smoke: image-only low OCR PDF is categorized consistently', () => {
   assert.equal(ocr.failureCategory, 'image_only_low_ocr')
 })
 
-test('smoke: mixed batch summary includes at least one success', () => {
-  const summary = summarizeJobStatus([
-    { status: 'complete' },
-    { status: 'failed' },
-    { status: 'failed' },
+test('smoke: 3-file mixed batch produces deterministic per-file outcomes and aggregate counts', () => {
+  const statuses = [
+    { status: 'complete', parseOutcome: 'success', failureCategory: null },
+    { status: 'failed', parseOutcome: 'failed', failureCategory: 'corrupt_or_unreadable' },
+    { status: 'failed', parseOutcome: 'failed', failureCategory: 'encrypted_or_password_protected_pdf' },
+  ]
+
+  const perFileOutcomes = statuses.map((item) => ({
+    parseOutcome: item.parseOutcome,
+    failureCategory: item.failureCategory,
+  }))
+
+  assert.deepEqual(perFileOutcomes, [
+    { parseOutcome: 'success', failureCategory: null },
+    { parseOutcome: 'failed', failureCategory: 'corrupt_or_unreadable' },
+    { parseOutcome: 'failed', failureCategory: 'encrypted_or_password_protected_pdf' },
   ])
+
+  const summary = summarizeJobStatus(statuses)
   assert.deepEqual(summary, { uploaded: 3, analyzed: 1, failed: 2, pending: 0 })
 })
