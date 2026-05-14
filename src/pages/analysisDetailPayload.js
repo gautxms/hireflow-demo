@@ -214,8 +214,11 @@ function toCandidateResultsPayload(analysis) {
     })
   }
 
+  const failedResumes = Array.isArray(analysis?.failedResumes) ? analysis.failedResumes : []
+
   return {
     candidates,
+    failedResumes,
     droppedCount,
     inputCount,
     outputCount,

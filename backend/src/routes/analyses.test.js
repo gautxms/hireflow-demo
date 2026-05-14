@@ -279,6 +279,9 @@ test('GET /analyses/:id mixed batch completes with per-resume parse outcomes and
   assert.equal(payload.items[1].parseOutcome, 'failed')
   assert.equal(payload.items[1].failureCategory, 'corrupt_or_unreadable')
   assert.equal(payload.items[2].failureCategory, 'encrypted_or_password_protected_pdf')
+  assert.equal(Array.isArray(payload.failedResumes), true)
+  assert.equal(payload.failedResumes.length, 2)
+  assert.equal(payload.failedResumes[0].filename, 'corrupt.pdf')
 })
 test('DELETE /analyses/:id deletes owner analysis transactionally', async (t) => {
   process.env.JWT_SECRET = 'test-secret'

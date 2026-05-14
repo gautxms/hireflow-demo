@@ -16,6 +16,22 @@ function withWarnSpy(fn) {
   }
 }
 
+
+test('toCandidateResultsPayload preserves backend failedResumes for UI failure messaging', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-failures-1',
+    items: [],
+    failedResumes: [
+      { resumeId: 'r-1', filename: 'bad.pdf', reason: 'parse_failed::corrupt_or_unreadable' },
+      { resumeId: 'r-2', filename: 'bad2.pdf', reason: 'scoring_failed::missing_finite_score' },
+    ],
+  })
+
+  assert.equal(payload.candidates.length, 0)
+  assert.equal(payload.failedResumes.length, 2)
+  assert.equal(payload.failedResumes[0].filename, 'bad.pdf')
+})
+
 test('toCandidateResultsPayload keeps valid candidates and drops malformed entries without invalidating payload', () => {
   withWarnSpy((warnCalls) => {
     const payload = toCandidateResultsPayload({
