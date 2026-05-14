@@ -79,7 +79,6 @@
 .candidate-results__evaluation-title,
 .profile-name,
 .dd-name,
-.dd-col-label,
 .profile-section-heading {
   font-family: var(--font-heading, 'Syne', sans-serif);
 }
@@ -1376,8 +1375,8 @@
 
 /* ── Detail drawer ────────────────────────────────── */
 .detail-drawer {
-  background: #1b1b1b;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--hf-surface);
+  border: 1px solid var(--hf-border);
   border-radius: 16px;
   padding: 0;
   overflow: hidden;
@@ -1597,6 +1596,7 @@
 .dd-col--right { grid-area: right; }
 
 .dd-col-label {
+  font-family: var(--font-body, 'DM Sans', sans-serif);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
