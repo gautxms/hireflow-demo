@@ -34,22 +34,31 @@ Enum: `success | partial | failed`
 
 Enum:
 
-- `corrupt_pdf`
-- `encrypted_pdf`
+- `corrupt_or_unreadable`
+- `encrypted_or_password_protected_pdf`
 - `image_only_low_ocr`
-- `unsupported_encoding`
-- `provider_format_error`
-- `timeout`
+- `unsupported_encoding_or_format`
+- `extraction_failed`
+- `response_format_error`
+- `response_truncated_error`
+- `invalid_request_error`
+- `not_found_error`
+- `auth_error`
+- `billing_quota_error`
+- `rate_limit_error`
+- `timeout_error`
+- `network_error`
+- `unknown_error`
 - `unknown`
 
 Exact meanings:
 
-- `corrupt_pdf`: The source PDF is malformed or unreadable.
-- `encrypted_pdf`: The PDF is password-protected or otherwise encrypted.
+- `corrupt_or_unreadable`: The source PDF is malformed or unreadable.
+- `encrypted_or_password_protected_pdf`: The PDF is password-protected or otherwise encrypted.
 - `image_only_low_ocr`: Content is image-only and OCR quality is insufficient for reliable extraction.
-- `unsupported_encoding`: File encoding/content format cannot be decoded by the parser stack.
-- `provider_format_error`: Upstream parsing/model provider returned an invalid or unusable response format.
-- `timeout`: Processing exceeded configured timeout thresholds.
+- `unsupported_encoding_or_format`: File encoding/content format cannot be decoded by the parser stack.
+- `response_format_error`: Upstream parsing/model provider returned an invalid or unusable response format.
+- `timeout_error`: Processing exceeded configured timeout thresholds.
 - `unknown`: Failure reason is not confidently classifiable into another category.
 
 ### `failureMessageUserSafe`
@@ -123,13 +132,13 @@ Constraint:
       {
         "resumeId": "r_102",
         "parseOutcome": "failed",
-        "failureCategory": "encrypted_pdf",
+        "failureCategory": "encrypted_or_password_protected_pdf",
         "failureMessageUserSafe": "This file is password-protected. Please upload an unlocked PDF."
       },
       {
         "resumeId": "r_103",
         "parseOutcome": "failed",
-        "failureCategory": "timeout",
+        "failureCategory": "timeout_error",
         "failureMessageUserSafe": "We could not finish processing this file in time. Please try again."
       }
     ]
@@ -152,7 +161,7 @@ Constraint:
       {
         "resumeId": "r_201",
         "parseOutcome": "failed",
-        "failureCategory": "corrupt_pdf",
+        "failureCategory": "corrupt_or_unreadable",
         "failureMessageUserSafe": "This PDF appears corrupted and could not be read."
       },
       {

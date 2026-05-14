@@ -757,7 +757,7 @@ async function runParse(job) {
         resumeProcessingStatus: 'scoring_failed',
         scoringFailureReason: 'scoring_failed::missing_finite_score',
       })),
-    parseOutcome: 'complete',
+    parseOutcome: 'success',
     parseMeta: {
       preflight: {
         extractableTextRatio: preflight.extractableTextRatio,

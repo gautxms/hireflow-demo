@@ -3,6 +3,7 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { parseQueue } from '../services/jobQueue.js'
 import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
+import { normalizeFailureCategory, normalizeParseOutcome } from '../contracts/parseResultEnums.js'
 
 const router = Router()
 
@@ -209,9 +210,9 @@ async function loadAnalysisStatus(analysisId, userId) {
     if (extracted.candidates.length > 0) extractionDiagnostics.candidateBearingItemCount += 1
 
     const parsedResult = extracted.normalizedResult
-    const parseOutcome = canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : 'pending')
+    const parseOutcome = normalizeParseOutcome(canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : null), 'partial')
     const failureCategory = canonicalStatus === 'failed'
-      ? (safeParseResult(row.parse_result)?.failureCategory || null)
+      ? normalizeFailureCategory(safeParseResult(row.parse_result)?.failureCategory, { fallback: 'unknown' })
       : null
 
     items.push({
