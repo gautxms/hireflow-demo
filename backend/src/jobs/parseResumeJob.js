@@ -556,6 +556,13 @@ async function runParse(job) {
           tokenUsage: aiResponse?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
         }]
 
+    const parseAttemptStage = (attempt) => {
+      const providerSource = String(attempt?.providerSource || '').toLowerCase()
+      const credentialLabel = String(attempt?.credentialLabel || '').toLowerCase()
+      if (providerSource === 'fallback' || credentialLabel === 'fallback') return 'fallback'
+      return 'parse'
+    }
+
     for (const attempt of usageAttempts) {
       await persistTokenUsageMetric({
         resumeId,
@@ -578,7 +585,7 @@ async function runParse(job) {
           jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
           jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
         },
-        stage: 'fallback',
+        stage: parseAttemptStage(attempt),
       }).catch((persistError) => {
         console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
       })
@@ -623,6 +630,7 @@ async function runParse(job) {
             jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
             jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
           },
+          stage: parseAttemptStage(attempt),
         }).catch((persistError) => {
           console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
         })
