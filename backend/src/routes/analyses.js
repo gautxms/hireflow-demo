@@ -120,6 +120,26 @@ function buildOutcomeSummary({ total, complete, failed }) {
   }
 }
 
+function deriveResultQualityStatus(extractionDiagnostics = {}, parseTerminalComplete = false) {
+  const totalItems = Number(extractionDiagnostics.totalItems || 0)
+  const candidateBearingItemCount = Number(extractionDiagnostics.candidateBearingItemCount || 0)
+  const missingCandidateItemCount = Math.max(0, totalItems - candidateBearingItemCount)
+
+  const allItemsCandidateBearing = totalItems > 0 && candidateBearingItemCount === totalItems
+  const partialResults = parseTerminalComplete && totalItems > 0 && candidateBearingItemCount > 0 && candidateBearingItemCount < totalItems
+  const resultExtractionFailures = parseTerminalComplete && totalItems > 0 && candidateBearingItemCount === 0
+
+  return {
+    parseTerminalComplete,
+    allItemsCandidateBearing,
+    partialResults,
+    resultExtractionFailures,
+    candidateBearingItemCount,
+    missingCandidateItemCount,
+    qualityStatus: resultExtractionFailures ? 'missing' : (partialResults ? 'partial' : (allItemsCandidateBearing ? 'complete' : 'pending')),
+  }
+}
+
 async function loadAnalysisStatus(analysisId, userId) {
   const analysisResult = await pool.query(
      `SELECT a.id,
@@ -237,6 +257,8 @@ async function loadAnalysisStatus(analysisId, userId) {
   const completedItems = counts.complete + counts.failed
   const aggregateStatus = deriveAggregateStatus(counts, totalItems)
   const isComplete = totalItems > 0 && completedItems === totalItems
+  const parseTerminalComplete = isComplete && TERMINAL_STATUSES.has(aggregateStatus)
+  const resultQuality = deriveResultQualityStatus(extractionDiagnostics, parseTerminalComplete)
   const percentComplete = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
   const computedCompletedAt = isComplete ? (analysis.completed_at || new Date().toISOString()) : null
 
@@ -262,6 +284,8 @@ async function loadAnalysisStatus(analysisId, userId) {
     computedCompletedAt,
     maxProgress,
     extractionDiagnostics,
+    resultQuality,
+    parseTerminalComplete,
   }
 }
 
@@ -332,6 +356,34 @@ router.get('/', requireAuth, async (req, res) => {
       [req.userId],
     )
 
+    const extractionByAnalysisResult = await pool.query(
+      `SELECT ai.analysis_id,
+              COALESCE(pj.status, r.parse_status, 'queued') AS status,
+              pj.result AS parse_result
+       FROM analysis_items ai
+       INNER JOIN analyses a ON a.id = ai.analysis_id
+       LEFT JOIN resumes r ON r.id = ai.resume_id
+       LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
+       WHERE a.user_id = $1
+       ORDER BY ai.analysis_id ASC, ai.created_at ASC`,
+      [req.userId],
+    )
+
+    const extractionByAnalysis = new Map()
+    for (const row of extractionByAnalysisResult.rows) {
+      const analysisId = String(row.analysis_id || '')
+      if (!analysisId) continue
+      const existing = extractionByAnalysis.get(analysisId) || { totalItems: 0, parseableObjectCount: 0, candidateBearingItemCount: 0, malformedItemCount: 0 }
+      existing.totalItems += 1
+      if (row.status === 'complete') {
+        const extracted = extractCandidatesFromResult(row.parse_result)
+        if (extracted.diagnostics.parseableObject) existing.parseableObjectCount += 1
+        if (extracted.diagnostics.malformed) existing.malformedItemCount += 1
+        if (extracted.candidates.length > 0) existing.candidateBearingItemCount += 1
+      }
+      extractionByAnalysis.set(analysisId, existing)
+    }
+
     const filesByAnalysis = new Map()
     for (const row of filesByAnalysisResult.rows) {
       const analysisId = String(row.analysis_id || '')
@@ -352,6 +404,8 @@ router.get('/', requireAuth, async (req, res) => {
         processing: Number(row.processing_count || 0),
       }
       const outcomeSummary = buildOutcomeSummary(summary)
+      const parseTerminalComplete = summary.total > 0 && summary.complete + summary.failed === summary.total
+      const resultQuality = deriveResultQualityStatus(extractionByAnalysis.get(String(row.id)), parseTerminalComplete)
       return {
         id: String(row.id),
         createdAt: row.created_at,
@@ -368,6 +422,7 @@ router.get('/', requireAuth, async (req, res) => {
           ...summary,
           pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing),
           ...outcomeSummary,
+          resultQuality,
         },
         failedItems: failedItemsByAnalysis.get(String(row.id)) || [],
         fileCount: summary.total,
@@ -391,7 +446,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   if (analysisData === '__error__') return res.status(500).json({ error: 'Unable to fetch analysis status' })
   if (!analysisData) return res.status(404).json({ error: 'Analysis not found' })
 
-  const { analysis, aggregateStatus, counts, items, computedCompletedAt, extractionDiagnostics } = analysisData
+  const { analysis, aggregateStatus, counts, items, computedCompletedAt, extractionDiagnostics, resultQuality, parseTerminalComplete } = analysisData
   return res.json({
     id: String(analysis.id),
     analysisId: String(analysis.id),
@@ -407,12 +462,17 @@ router.get('/:id', requireAuth, async (req, res) => {
       processing: counts.processing + counts.retrying,
       pending: counts.queued,
       ...buildOutcomeSummary({ total: items.length, complete: counts.complete, failed: counts.failed }),
+      resultQuality,
     },
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,
     items,
     diagnostics: {
       resultExtraction: extractionDiagnostics,
+    },
+    completion: {
+      parseTerminalComplete,
+      resultQuality,
     },
   })
 })
