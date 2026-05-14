@@ -344,7 +344,7 @@ export function candidateLooksLikeFailurePlaceholder(candidate = {}) {
   ].map((value) => String(value || '').toLowerCase()).join(' ')
 
   const hasFailureText = FAILURE_TEXT_PATTERNS.some((pattern) => mergedText.includes(pattern))
-  return (name === FAILURE_PLACEHOLDER_NAME && hasFailureText) || hasFailureText
+  return name === FAILURE_PLACEHOLDER_NAME && hasFailureText
 }
 
 export function isRankableCandidate(candidate = {}) {

@@ -34,7 +34,7 @@ export function isFailurePlaceholderCandidate(candidate = {}) {
     candidate?.parse_error,
   ].map((value) => String(value || '').toLowerCase()).join(' ')
   const hasFailureText = FAILURE_PLACEHOLDER_PATTERNS.some((pattern) => merged.includes(pattern))
-  return (name === 'unknown candidate' && hasFailureText) || hasFailureText
+  return name === 'unknown candidate' && hasFailureText
 }
 
 function mapParseErrorCode(errorCode) {

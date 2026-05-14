@@ -115,3 +115,17 @@ test('unknown candidate parse placeholder with zero score is not rankable', () =
   })
   assert.equal(isRankableCandidate(payload.candidates[0]), false)
 })
+
+
+test('scored named candidate with generic failure tokens remains rankable', () => {
+  const payload = normalizeCandidateResultsPayload({
+    candidates: [{
+      name: 'Ada Lovelace',
+      score: 76,
+      resumeProcessingStatus: 'scored',
+      summary: 'Led data recovery work for corrupted files and binary content imports.',
+    }],
+  })
+
+  assert.equal(isRankableCandidate(payload.candidates[0]), true)
+})

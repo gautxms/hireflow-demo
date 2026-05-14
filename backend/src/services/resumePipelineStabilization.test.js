@@ -110,6 +110,13 @@ test('parse placeholder classifier detects unknown candidate parse failures and 
     resumeProcessingStatus: 'scored',
     summary: 'Early-career candidate with limited but relevant project work.',
   }), false)
+
+  assert.equal(isFailurePlaceholderCandidate({
+    name: 'Real Candidate',
+    score: 78,
+    resumeProcessingStatus: 'scored',
+    summary: 'Handled corrupted records migration and binary content ingestion pipelines.',
+  }), false)
 })
 
 test('health queue response normalizes numeric counts safely', () => {
