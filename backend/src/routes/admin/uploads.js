@@ -545,6 +545,23 @@ router.get('/:uploadId', async (req, res) => {
       createdAt: toIso(usageRow.created_at),
     }))
 
+
+    const stageUsageByResume = tokenUsageHistory.reduce((acc, usage) => {
+      const stage = String(usage?.metadata?.stage || 'parse')
+      if (!acc[stage]) {
+        acc[stage] = { runs: 0, usageAvailableRuns: 0, totalTokens: 0, totalEstimatedCostUsd: 0 }
+      }
+      acc[stage].runs += 1
+      if (usage.usageAvailable) {
+        acc[stage].usageAvailableRuns += 1
+        acc[stage].totalTokens += Number(usage.totalTokens || 0)
+        acc[stage].totalEstimatedCostUsd += Number(usage.estimatedCostUsd || 0)
+      }
+      return acc
+    }, {})
+
+    const parseFailureCause = row.parse_result?.failureCategory || row.parse_error_code || classifyFailure(row.parse_error)
+
     const tokenUsageSummary = tokenUsageHistory.reduce((acc, usage) => {
       if (usage.usageAvailable) {
         acc.availableRuns += 1
@@ -570,6 +587,8 @@ router.get('/:uploadId', async (req, res) => {
       upload: mapUploadRow(row),
       retriedAt: toIso(row.retried_at),
       tokenUsageHistory,
+      stageUsageByResume,
+      failureCause: parseFailureCause,
       tokenUsageSummary: {
         ...tokenUsageSummary,
         avgTokensPerRun: tokenUsageSummary.availableRuns > 0
