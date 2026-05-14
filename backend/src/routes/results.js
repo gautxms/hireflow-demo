@@ -295,13 +295,17 @@ export function normalizeCandidate(candidate = {}) {
     || '',
   ).toLowerCase()
   const parseOutcome = normalizeParseOutcome(parseOutcomeRaw, isFailedProcessingStatus ? 'failed' : 'success')
-  const failureCategory = normalizeFailureCategory(normalizeText(
+  const failureCategoryRaw = normalizeText(
     candidate?.failureCategory
     || candidate?.failure_category
     || candidate?.parseMeta?.failureCategory
     || candidate?.parseMeta?.failure_category
     || '',
-  ) || null, { fallback: 'unknown' })
+  ) || null
+  const failureCategory = normalizeFailureCategory(
+    failureCategoryRaw,
+    { fallback: failureCategoryRaw },
+  )
   const failureMessageUserSafe = normalizeText(
     candidate?.failureMessageUserSafe
     || candidate?.failure_message_user_safe
