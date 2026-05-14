@@ -237,4 +237,22 @@ test('normalizeCandidate keeps canonical defaults for legacy payloads without ne
   assert.deepEqual(normalized.skills_flat, ['React', 'Node'])
   assert.equal(Array.isArray(normalized.education), true)
   assert.equal(normalized.totalExperienceYears, 4)
+  assert.equal(normalized.parseOutcome, 'success')
+  assert.equal(normalized.failureCategory, null)
+  assert.equal(normalized.failureMessageUserSafe, null)
+})
+
+test('normalizeCandidate exposes parse failure fields without changing fallback naming behavior', () => {
+  const normalized = normalizeCandidate({
+    name: '',
+    resumeProcessingStatus: 'failed',
+    parseOutcome: 'failed',
+    failureCategory: 'provider_timeout',
+    failureMessageUserSafe: 'We could not parse this file. Please retry.',
+  })
+
+  assert.equal(normalized.name, 'Unknown Candidate')
+  assert.equal(normalized.parseOutcome, 'failed')
+  assert.equal(normalized.failureCategory, 'provider_timeout')
+  assert.equal(normalized.failureMessageUserSafe, 'We could not parse this file. Please retry.')
 })
