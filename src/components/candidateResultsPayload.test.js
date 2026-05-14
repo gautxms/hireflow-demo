@@ -25,7 +25,7 @@ test('normalizes payload candidates and parseMeta object', () => {
   assert.equal(payload.isInvalid, false)
   assert.equal(payload.candidates.length, 1)
   assert.equal(payload.parseMeta.hasJobDescription, true)
-  assert.equal(payload.candidates[0].matchScore.score, 0)
+  assert.equal(payload.candidates[0].matchScore.score, null)
   assert.equal(typeof payload.candidates[0].matchScore.reason, 'string')
 })
 
@@ -80,4 +80,11 @@ test('preserves top-level missing requirements when fit_assessment is absent', (
   assert.deepEqual(candidate.missing_requirements, ['GraphQL'])
   assert.deepEqual(candidate.fit_assessment.missing_requirements, ['GraphQL'])
   assert.deepEqual(candidate.fit_assessment.missing, ['GraphQL'])
+})
+
+
+test('preserves explicit scored zero', () => {
+  const payload = normalizeCandidateResultsPayload({ candidates: [{ score: 0, resumeProcessingStatus: 'scored' }] })
+  assert.equal(payload.candidates[0].matchScore.score, 0)
+  assert.equal(payload.candidates[0].isScored, true)
 })

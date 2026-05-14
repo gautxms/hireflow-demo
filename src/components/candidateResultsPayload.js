@@ -24,8 +24,12 @@ function normalizeCandidate(candidate = {}) {
   const risksOrGaps = String(fitAssessment.risks_or_gaps || '').trim()
   const rationale = String(fitAssessment.rationale || '').trim()
 
-  const rawScore = Number(candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.score ?? candidate?.profile_score ?? 0)
-  const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 0
+  const rawScoreValue = candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.score ?? candidate?.profile_score
+  const rawScore = Number(rawScoreValue)
+  const normalizedStatus = String(candidate?.resumeProcessingStatus || candidate?.processingStatus || '').toLowerCase()
+  const hasExplicitScore = Number.isFinite(rawScore)
+  const score = hasExplicitScore ? Math.max(0, Math.min(100, rawScore)) : null
+  const isScored = normalizedStatus === 'scored' && score !== null
   const reason = String(
     candidate?.matchScore?.reason
     || rationale
@@ -48,9 +52,11 @@ function normalizeCandidate(candidate = {}) {
     matched_skills: matchedSkills,
     missingRequirements,
     missing_requirements: missingRequirements,
-    score,
+    score: isScored ? score : null,
+    isScored,
+    resumeProcessingStatus: candidate?.resumeProcessingStatus || candidate?.processingStatus || null,
     matchScore: {
-      score,
+      score: isScored ? score : null,
       reason,
     },
     summary: String(candidate?.summary || 'Summary not available for this analysis.').trim(),
@@ -80,6 +86,7 @@ export function normalizeCandidateResultsPayload(payload) {
   if (payload && typeof payload === 'object' && Array.isArray(payload.candidates)) {
     return {
       candidates: payload.candidates.map((candidate) => normalizeCandidate(candidate)),
+      failedResumes: Array.isArray(payload.failedResumes) ? payload.failedResumes : [],
       parseMeta: payload.parseMeta && typeof payload.parseMeta === 'object' ? payload.parseMeta : {},
       isInvalid: false,
     }
