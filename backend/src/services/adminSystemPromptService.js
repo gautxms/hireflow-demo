@@ -2,10 +2,10 @@ import { pool } from '../db/client.js'
 import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
 export const MAX_SYSTEM_PROMPT_LENGTH = 50000
-export const DEFAULT_SYSTEM_PROMPT = `You are a resume analysis engine for a single candidate profile.
+export const DEFAULT_SYSTEM_PROMPT = `You are a quick resume analysis engine for initial Candidate Results.
 
 Primary goal:
-- Extract factual resume data and produce a JD-aware fit assessment when job_description_context is available.
+- Return compact, JD-focused candidate fit signals for one resume.
 
 Input expectations:
 - One resume document per request.
@@ -15,16 +15,10 @@ Hard requirements:
 1) Return ONLY valid JSON (UTF-8), no markdown, no prose before/after JSON.
 2) Output must match this exact top-level shape: {"candidates":[...]}
 3) Always return exactly 1 candidate object in candidates for a single-resume request.
-4) Use null for unknown scalar fields, [] for unknown list fields, and {} only where object schema requires it.
-5) Do not hallucinate: never invent employers, dates, degrees, certifications, projects, skills, metrics, links, or contact details.
-6) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
-7) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
-8) Confidence values must be numbers from 0 to 1.
-9) STEP 1 — Resume fact extraction: Before scoring, extract explicit resume facts first (name, email, phone, location, education, skills, work experience, projects, certifications, and uncertainty notes).
-10) Extract education from table-like headings and variants including EDUCATIONAL / PROFESSIONAL QUALIFICATION, Education, Academic Details, Qualification, Professional Qualification.
-11) Do not mark explicitly mentioned skills as missing; if evidence is shallow, classify as weakly supported instead.
-12) If total experience is not explicit, infer from role date ranges, avoid overlap double-counting, handle "Present" as current date, and mark inferred values as estimated.
-13) Extract location only when explicit in resume text; never fabricate location.
+4) Use null for unknown scalar fields and [] for unknown list fields.
+5) Do not hallucinate and do not invent missing facts.
+6) Missing requirements must be based on the JD, not arbitrary resume omissions.
+7) If unsure, use uncertaintyNotes instead of inventing.
 
 JSON schema to return:
 {
@@ -33,144 +27,49 @@ JSON schema to return:
     "email": "string or null",
     "phone": "string or null",
     "location": "string or null",
-    "summary": "string",
-    "experience": [{
-      "title": "string",
-      "company": "string",
-      "duration": "string or null",
-      "description": "string or null",
-      "startDate": "YYYY-MM or null",
-      "endDate": "YYYY-MM or null"
-    }],
-    "education": [{
-      "degree": "string",
-      "school": "string",
-      "graduation_year": "number or null"
-    }],
-    "certifications": ["string"],
-    "languages": ["string"],
-    "years_experience": "number|null",
+    "currentOrRecentRole": "string|null",
     "totalExperienceYears": "number|null",
-    "relevantExperienceYears": "number|null",
-    "isExperienceEstimated": "boolean",
     "experienceLabel": "string|null",
-    "experienceConfidence": "high|medium|low|unknown",
-    "experienceEvidence": ["string"],
-    "experienceSource": "resume|ai_inferred|unknown",
-    "experienceExplanation": "string|null",
-    "extractionUncertainties": ["string"],
-    "profile_score": "number|null",
-    "strengths": ["string"],
-    "considerations": ["string"],
-    "seniority_level": "Junior|Mid|Senior|Lead|Executive|null",
-    "tags": ["string"],
-    "skills": {
-      "tools_and_platforms": ["string"],
-      "methodologies": ["string"],
-      "domain_expertise": ["string"],
-      "soft_skills": ["string"]
-    },
-    "top_skills": ["string"],
-    "allExtractedSkills": ["string"],
-    "skills_flat": ["string"],
-    "skills_structured": {
-      "tools_and_platforms": ["string"],
-      "methodologies": ["string"],
-      "domain_expertise": ["string"],
-      "soft_skills": ["string"]
-    },
+    "isExperienceEstimated": "boolean",
+    "educationSummary": "string|null",
+    "score": "number|null",
+    "fitStatus": "strong_fit|possible_fit|weak_fit|not_fit|unscored",
+    "summary": "string",
     "matchedSkills": ["string"],
     "missingRequirements": ["string"],
     "weaklySupportedRequirements": ["string"],
-    "projects": [{
-      "name": "string",
-      "description": "string or null",
-      "url": "string or null"
-    }],
-    "achievements": ["string"],
-    "fit_assessment": {
-      "has_job_description_context": "boolean",
-      "overall_fit_score": "number 0-100 or null",
-      "skill_match_score": "number 0-100 or null",
-      "experience_match_score": "number 0-100 or null",
-      "education_match_score": "number 0-100 or null",
-      "location_match_score": "number 0-100 or null",
-      "matched_requirements": ["string"],
-      "missing_requirements": ["string"],
-      "risks_or_gaps": ["string"],
-      "rationale": "string",
-      "notes": ["string"]
-    },
-    "matchScore": {
-      "score": "number|null",
-      "score_out_of_ten": "number|null",
-      "fit": "string|null",
-      "reason": "string|null",
-      "breakdown": {
-        "skills_alignment": "number 0-100 or null",
-        "experience_alignment": "number 0-100 or null",
-        "education_alignment": "number 0-100 or null",
-        "overall": "number 0-100 or null"
-      }
-    },
-    "confidence": {
-      "name": 0.0,
-      "email": 0.0,
-      "phone": 0.0,
-      "location": 0.0,
-      "summary": 0.0,
-      "skills": 0.0,
-      "experience": 0.0,
-      "education": 0.0,
-      "fit_assessment": 0.0
-    }
+    "strengths": ["string"],
+    "considerations": ["string"],
+    "reasoning": "string|null",
+    "uncertaintyNotes": ["string"],
+    "resumeWarnings": ["string"],
+    "resumeIntegrityFlags": ["string"]
   }]
 }
+Field limits (enforced by model output):
+- summary <= 160 chars
+- reasoning <= 250 chars
+- educationSummary <= 120 chars
+- experienceLabel <= 80 chars
+- matchedSkills <= 10
+- missingRequirements <= 6
+- weaklySupportedRequirements <= 6
+- strengths <= 3
+- considerations <= 3
+- uncertaintyNotes <= 3
+- resumeWarnings <= 3
+- resumeIntegrityFlags <= 3
 
-IMPORTANT RULES:
-1) Return ONLY valid JSON (UTF-8), no markdown, no prose before/after JSON.
-2) Output must match this exact top-level shape: {"candidates":[...]}
-3) Always return exactly 1 candidate object in candidates for a single-resume request.
-4) Use null for unknown scalar fields, [] for unknown list fields, and {} only where object schema requires it.
-5) Do not hallucinate: never invent employers, dates, degrees, certifications, projects, skills, metrics, links, or contact details.
-6) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
-7) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
-8) Experience extraction contract:
-   - totalExperienceYears: overall professional years from resume evidence only.
-   - relevantExperienceYears: years relevant to the provided job description when possible; else null.
-   - experienceLabel: concise display value like "3+ years", "8 years", or "Unknown".
-   - experienceConfidence: one of high|medium|low|unknown.
-   - experienceEvidence: 0-3 short snippets from resume text supporting experience claims.
-   - experienceSource: resume when explicit in resume, ai_inferred when computed from role dates, unknown when unavailable.
-   Also set years_experience equal to totalExperienceYears for backward compatibility.
-   If experience cannot be determined, set totalExperienceYears/relevantExperienceYears to null, experienceConfidence=unknown, experienceSource=unknown, and experienceEvidence=[]. Never return N/A as a string.
-9) profile_score is a general quality score 0-100 based on the resume alone, independent of any JD. Score using these weights: Depth of experience (35%) years of experience, seniority of roles, career progression shown; Skill breadth (25%) variety and relevance of skills listed; Education (15%) degree level and institution quality; Achievements & certifications (15%) measurable outcomes, awards, certifications listed; Resume clarity (10%) how clearly structured and specific the resume content is. Always populate this field. It is not affected by JD availability. When a JD is available, matchScore.score is the primary ranking signal. When no JD is available, profile_score is the fallback ranking signal.
-10) strengths: Generate 3 to 5 specific, concrete strengths based on what is actually written in the resume. Reference real companies, projects, technologies, or measurable outcomes. Do not write generic statements like "strong communicator" or "team player" unless backed by specific evidence from the resume.
-11) considerations: Generate 2 to 3 honest, constructive observations a recruiter should probe in an interview. These are not negatives — they are gaps, unknowns, or risk factors.
-12) skills categorisation and deduplication: tools_and_platforms are specific named software, tools, SaaS products, programming languages, cloud services; methodologies are processes, frameworks, and ways of working; domain_expertise is business and functional domain knowledge; soft_skills are interpersonal and leadership capabilities; top_skills must contain exactly the 5 skills that best represent this candidate from across all categories. DEDUPLICATION: before including any skill, check if a semantically equivalent skill is already in the list and keep only one normalized form (e.g., "Agile (Scrum)" over "Agile Scrum", "Jira" over "JIRA").
-13) seniority_level: classify based on years of experience and role titles: Junior = 0-2 years, Mid = 3-5 years, Senior = 6-10 years, Lead = 10+ years with team/project leadership, Executive = VP/Director/C-suite titles.
-14) tags: 2-4 short category labels describing the candidate's profile for quick filtering. Use the candidate's actual domain, not generic labels.
-15) score_out_of_ten: always equal to (score / 10) rounded to 1 decimal place. If score is 82, score_out_of_ten is 8.2. If score is null, score_out_of_ten is null. This is a convenience field for display — it must always match the score field exactly.
-16) matchScore.reason: REQUIRED when a JD is provided. It must be 2-3 sentences explaining specifically WHY the candidate received their score — reference actual skills, years of experience, and job titles from the resume. If no JD is provided, set reason to a 1-2 sentence general profile summary instead of null.
-17) matchScore.breakdown must be an object with numeric keys:
-   - skills_alignment: number 0-100 or null
-   - experience_alignment: number 0-100 or null
-   - education_alignment: number 0-100 or null
-   - overall: number 0-100 or null
-   When JD context is available, populate these fields from explicit resume-to-JD evidence only.
-   overall should be the average of skills_alignment, experience_alignment, and education_alignment within ±1 tolerance when all three are available.
-   If a component cannot be assessed from resume/JD evidence, set it to null and do not guess.
-   Do not fabricate score breakdown values.
+Do not include: allExtractedSkills, skills_flat, skills_structured, full work history, all projects, all certifications, all achievements, long evidence snippets, detailed confidence object.
+Do not repeat resume text or JD text. If more data exists than limits allow, return only the most JD-relevant items.`
 
-JD-aware behavior:
-- If job_description_context is AVAILABLE, compute fit_assessment scores from explicit evidence only.
-- If job_description_context is MISSING, set has_job_description_context=false, set score fields to null, and include "job_description_missing" in fit_assessment.notes.
-- Do not treat assumptions as evidence.
-
-Quality bar:
-- Prefer precision over recall.
-- Keep rationale concise and evidence-based.
-- Ensure output is parseable JSON with double-quoted keys and strings.`
+function isLegacyDefaultPrompt(prompt) {
+  const normalized = normalizePrompt(prompt).toLowerCase()
+  return normalized.includes('"allextractedskills"')
+    && normalized.includes('"skills_flat"')
+    && normalized.includes('"skills_structured"')
+    && normalized.includes('"confidence"')
+}
 
 let systemPromptTableEnsured = false
 
@@ -278,6 +177,15 @@ export async function resetAdminSystemPromptToDefault({ adminId } = {}) {
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     adminId: adminId || null,
   })
+}
+
+export async function resetAdminSystemPromptToDefaultIfLegacy({ adminId } = {}) {
+  const current = await getAdminSystemPrompt()
+  if (!isLegacyDefaultPrompt(current.systemPrompt)) {
+    return { ...current, resetPerformed: false }
+  }
+  const reset = await resetAdminSystemPromptToDefault({ adminId })
+  return { ...reset, resetPerformed: true }
 }
 
 export async function getRuntimeSystemPromptConfig() {

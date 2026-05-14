@@ -214,6 +214,40 @@ test('normalizeCompactCandidate preserves null experience values', async () => {
   assert.equal(candidate.relevantExperienceYears, null)
 })
 
+test('quick-analysis compact fields map into normalized candidate payload', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: { anthropic: { primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' } } },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+  const analyzeWithAnthropicStub = async () => ({
+    result: {
+      candidates: [{
+        name: 'Compact Candidate',
+        educationSummary: 'B.Tech, IIT Bombay',
+        score: 84,
+        matchedSkills: ['Node.js', 'PostgreSQL'],
+        missingRequirements: ['Kubernetes'],
+        summary: 'Strong backend profile with relevant API and data platform experience.',
+      }],
+    },
+    provider: 'anthropic',
+    model: 'claude-sonnet-4',
+    tokenUsage: { usageAvailable: false, unavailableReason: 'test' },
+  })
+
+  const result = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 1, isDefaultFallback: false },
+    analyzeWithAnthropic: analyzeWithAnthropicStub,
+  })
+  const candidate = result.result.candidates[0]
+  assert.equal(candidate.score, 84)
+  assert.deepEqual(candidate.matchedSkills, ['Node.js', 'PostgreSQL'])
+  assert.deepEqual(candidate.missingRequirements, ['Kubernetes'])
+  assert.equal(candidate.educationSummary, 'B.Tech, IIT Bombay')
+})
+
 test('analyzeWithAnthropic embeds JD mode contract in request payload', async () => {
   let capturedPrompt = ''
   const anthropicClientFactory = () => ({
@@ -461,6 +495,7 @@ test('analyzeWithOpenAI makes a single request and surfaces truncation for max_o
         callCount += 1
         const body = JSON.parse(request.body)
         assert.equal(body.max_output_tokens, 3200)
+        assert.notEqual(body.max_output_tokens, 1200)
         return {
           ok: true,
           json: async () => ({
