@@ -78,6 +78,15 @@ test('normalizeProviderError maps truncated provider outputs', () => {
   assert.equal(result.action, 'retry_compact_or_adjust_output_schema')
 })
 
+test('normalizeProviderError preserves image_only_low_ocr category from normalized prefixes', () => {
+  const result = normalizeProviderError('image_only_low_ocr::OCR confidence is below threshold')
+
+  assert.equal(result.category, 'image_only_low_ocr')
+  assert.equal(result.userMessage, 'Resume appears image-only and OCR confidence is too low; upload a clearer text-based resume.')
+  assert.equal(result.action, 'review_resume_file_quality')
+  assert.match(result.normalizedMessage, /^image_only_low_ocr::\{/)
+})
+
 
 test('normalizeProviderError includes provider chain details for primary failure followed by fallback failure', () => {
   const providerFailure = new Error('response_truncated_error::{"technicalDetails":"Provider output was truncated"}')
