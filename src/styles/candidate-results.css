@@ -1498,7 +1498,27 @@
 .dd-score--possible { color: #ffa500; }
 .dd-score--low     { color: #ef4444; }
 
-.dd-header-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-left: auto;
+}
+
+.dd-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dd-action-group--positive {
+  padding-right: 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.dd-action-group--destructive {
+  justify-content: flex-end;
+}
 
 .dd-btn-primary {
   display: inline-flex;
@@ -1517,7 +1537,7 @@
 }
 .dd-btn-primary:hover { background: #b8ec00; }
 
-.dd-btn-ghost {
+.dd-btn-secondary {
   background: var(--hf-surface-2);
   color: var(--color-text-secondary);
   font-size: 13px;
@@ -1528,7 +1548,21 @@
   transition: all 0.15s;
   white-space: nowrap;
 }
-.dd-btn-ghost:hover { border-color: var(--hf-color-lime); color: var(--color-text-primary); }
+.dd-btn-secondary:hover { border-color: var(--hf-color-lime); color: var(--color-text-primary); }
+
+.dd-btn-danger {
+  background: transparent;
+  color: #fda4af;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(253, 164, 175, 0.45);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dd-btn-danger:hover { border-color: #fb7185; color: #ffe4e6; }
+.dd-btn-danger:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .dd-icon-btn {
   width: 34px;
@@ -1546,7 +1580,8 @@
 .dd-icon-btn:hover { border-color: var(--hf-color-lime); color: #fff; }
 
 .dd-btn-primary:focus-visible,
-.dd-btn-ghost:focus-visible,
+.dd-btn-secondary:focus-visible,
+.dd-btn-danger:focus-visible,
 .dd-icon-btn:focus-visible,
 .dd-close:focus-visible {
   outline: 2px solid #c8ff00;
@@ -1554,21 +1589,31 @@
 }
 
 .dd-close {
-  width: 34px;
   height: 34px;
   border-radius: 8px;
   border: 1px solid #2a2a2a;
   background: transparent;
   color: var(--hf-surface-muted);
   cursor: pointer;
-  padding: 0;
+  padding: 0 11px;
   margin-left: 0;
   transition: color 0.15s;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   justify-content: center;
+  font-size: 13px;
+  white-space: nowrap;
 }
 .dd-close:hover { color: #ffffff; border-color: #4a4a4a; }
+
+@media (max-width: 1080px) {
+  .dd-header-actions {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+}
 
 /* Drawer 3-column shell */
 .dd-body {
