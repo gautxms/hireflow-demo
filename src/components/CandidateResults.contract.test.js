@@ -17,7 +17,7 @@ test('normalizeCandidateResultsPayload handles array payload', () => {
   const candidate = { id: 'c1', name: 'Alice' }
   const normalized = normalizeCandidateResultsPayload([candidate])
   assert.equal(normalized.isInvalid, false)
-  assert.equal(normalized.candidates[0].matchScore.score, 0)
+  assert.equal(normalized.candidates[0].matchScore.score, null)
   assert.equal(typeof normalized.candidates[0].matchScore.reason, 'string')
 })
 
@@ -52,13 +52,11 @@ test('CandidateResults title contract: analysis title does not fall back to job 
   )
 })
 
-test('CandidateResults renders skills split and integrity fallback sections by default', () => {
-  assert.match(candidateResultsSource, /All skills \(reference\)/)
+test('CandidateResults renders processing issues panel and keeps core fit sections', () => {
+  assert.match(candidateResultsSource, /Resume processing issues/)
   assert.match(candidateResultsSource, /Missing requirements/)
   assert.match(candidateResultsSource, /skillSignals\.label/)
-  assert.match(candidateResultsSource, /Missing requirements/)
   assert.match(candidateResultsSource, /Resume integrity checks/)
-  assert.match(candidateResultsSource, /No resume integrity concerns detected/)
 })
 
 test('CandidateResults keeps reasoning visible in default assessment panel copy', () => {
