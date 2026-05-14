@@ -1046,16 +1046,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         <section className="dd-analysis-box dd-analysis-box--amber resume-processing-issues-panel">
           <div className="dd-col-label">Resume processing issues</div>
           <div className="dd-analysis-empty">{`${failedResumes.length} file${failedResumes.length === 1 ? '' : 's'} need attention before they can be ranked.`}</div>
-          {failedResumes.map((item, idx) => (
-            <div className="dd-analysis-item dd-analysis-item--icon" key={`failed-resume-${item?.resumeId || idx}`}>
-              <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />
-              <span>
-                <strong>{toDisplayText(item?.filename, 'Unknown file')}</strong>
-                {` · ${toDisplayText(item?.resumeProcessingStatus, 'parse_failed')}`}
-                {` · ${toDisplayText(item?.parseError || item?.reason, 'Resume processing failed')}`}
-              </span>
-            </div>
-          ))}
+          {failedResumes.map((item, idx) => {
+            const failureCategory = toDisplayText(item?.resumeProcessingStatus, 'parse_failed')
+            const failureReason = toDisplayText(item?.parseError || item?.reason, 'Resume processing failed')
+            const nextAction = toDisplayText(
+              item?.recommendedAction || item?.nextAction,
+              'Re-upload as PDF/DOCX or retry this resume from the analyses page.',
+            )
+            return (
+              <div className="dd-analysis-item dd-analysis-item--icon" key={`failed-resume-${item?.resumeId || idx}`}>
+                <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />
+                <span>
+                  <strong>{toDisplayText(item?.filename, 'Unknown file')}</strong>
+                  {` · ${failureCategory}`}
+                  {` · ${failureReason}`}
+                  {` · Next action: ${nextAction}`}
+                </span>
+              </div>
+            )
+          })}
         </section>
       )}
 
