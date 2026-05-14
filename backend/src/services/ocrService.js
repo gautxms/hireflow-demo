@@ -64,7 +64,7 @@ async function extractDocxText(fileBuffer) {
 
 export async function extractTextFromResume({ fileBuffer, mimeType }) {
   if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
-    return { text: '', length: 0, method: 'empty' }
+    return { text: '', length: 0, method: 'failed' }
   }
   const normalizedMimeType = String(mimeType || '').toLowerCase()
   if (normalizedMimeType === 'text/plain') {
@@ -74,13 +74,14 @@ export async function extractTextFromResume({ fileBuffer, mimeType }) {
   if (normalizedMimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     try {
       const text = await extractDocxText(fileBuffer)
-      if (text) return { text, length: text.length, method: 'docx_xml' }
+      if (text) return { text, length: text.length, method: 'docx_text' }
     } catch {
       // fallback below
     }
   }
   const extraction = estimateExtractableText(fileBuffer)
-  return { ...extraction, method: 'heuristic' }
+  const inferredMethod = normalizedMimeType === 'application/pdf' ? 'pdf_text' : 'binary_heuristic'
+  return { ...extraction, method: extraction.length > 0 ? inferredMethod : 'failed' }
 }
 
 export function isLikelyScannedPdf({ mimeType, fileBuffer }) {

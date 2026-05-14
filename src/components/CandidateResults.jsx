@@ -1214,7 +1214,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const missingSkillsPreview = previewList(missingSkills, 'missing-skills', 4)
         const allSkillsPreview = previewList(allSkills, 'all-skills', 8)
         const uncertaintyPreview = previewList(uncertaintyItems, 'uncertainty', 3)
-        const probesPreview = previewList(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.'], 'probes', 2)
+        const probesPreview = previewList(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.'], 'uncertainty', 2)
         const evidencePreview = previewList(evidenceItems, 'evidence', 4)
         const keyFacts = [
           { label: 'Experience', value: formatExperienceDisplay(candidate) },
