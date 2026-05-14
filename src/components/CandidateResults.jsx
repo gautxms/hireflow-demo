@@ -193,6 +193,7 @@ const scoreTier = (score) => {
   if (score >= 60) return 'possible'
   return 'low'
 }
+const LOW_FIT_THRESHOLD = 60
 
 function deriveCompactRationale(candidate) {
   const reason = String(candidate?.matchScore?.reason || '').trim()
@@ -286,6 +287,13 @@ function deriveRecommendedAction(candidate, score) {
     return `Run a targeted recruiter screen before advancing; confirm ${missingSkills[0] || considerations[0] || 'critical requirement coverage'}.`
   }
   return `Hold progression until core fit is validated; prioritize screening around ${missingSkills[0] || 'required role capabilities'}.`
+}
+
+function deriveMissingRequirementSeverity(item) {
+  const text = String(item || '').toLowerCase()
+  if (/must|required|requirement|core|critical|mandatory/.test(text)) return 'critical'
+  if (/preferred|plus|nice to have|bonus/.test(text)) return 'preferred'
+  return 'nice-to-have'
 }
 function activeScore(candidate) {
   const resolved = resolveActiveCandidateScore(candidate)
@@ -1170,7 +1178,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           ? normalizeTextList(candidate.strengths)
           : Array.isArray(candidate.achievements)
             ? normalizeTextList(candidate.achievements).slice(0, 3)
-            : []).slice(0, 3)
+            : [])
         const candidateConsiderations = dedupeTextItems(normalizeTextList(candidate.considerations))
         const verdictText = resolveCandidateVerdict(candidate)
         const reasoningText = resolveCandidateReasoning(candidate, verdictText)
@@ -1185,7 +1193,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const allSkills = skillSignals.allSkills.length > 0 ? sanitizePillValues(dedupeTextItems(skillSignals.allSkills)) : ['No skills were extracted for this profile.']
         const evidenceObjects = normalizeEvidenceList(candidate?.evidence || candidate?.evidence_snippets || candidate?.highlights?.achievements)
         const evidenceItems = evidenceObjects.length > 0 ? evidenceObjects : [{ quote: 'No supporting evidence snippets are available.', section: '', span: '' }]
-        const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.']).slice(0, 3)
+        const uncertaintyItems = (candidateConsiderations.length > 0 ? candidateConsiderations : ['No uncertainty markers were provided. Re-run analysis for richer risk flags.'])
         const integrityFlags = Array.isArray(candidate?.resumeIntegrityFlags) ? candidate.resumeIntegrityFlags : []
         const decisionVerdict = deriveDecisionVerdict(candidate, score)
         const recommendedAction = deriveRecommendedAction(candidate, score)
@@ -1195,7 +1203,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           ...missingSkills,
           ...(Array.isArray(candidate?.questions) ? candidate.questions : []),
         ])
-        const interviewProbes = probePool.slice(0, 3)
+        const interviewProbes = probePool
         const resumeFilename = resolveCandidateResumeMetadata(candidate).resumeFilename
         const resumeFileType = resolveResumeFileTypeLabel(candidate)
         const resumeFileSize = formatResumeSize(candidate)
@@ -1220,8 +1228,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const primarySkillsPreview = previewList(primarySkills, 'primary-skills', 5)
         const missingSkillsPreview = previewList(missingSkills, 'missing-skills', 4)
         const allSkillsPreview = previewList(allSkills, 'all-skills', 8)
-        const uncertaintyPreview = previewList(uncertaintyItems, 'uncertainty', 3)
-        const probesPreview = previewList(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.'], 'uncertainty', 2)
+        const uncertaintyPreview = previewList(uncertaintyItems, 'top-risks', 3)
+        const probesPreview = previewList(interviewProbes.length > 0 ? interviewProbes : ['No interview probes were extracted.'], 'interview-probes', 3)
+        const matchReasonsPreview = previewList(candidateStrengths.length > 0 ? candidateStrengths : ['No top match reasons were extracted.'], 'top-reasons', 3)
+        const missingMustHavesPreview = previewList(missingSkills, 'missing-must-haves', 3)
+        const isLowFitCandidate = score < LOW_FIT_THRESHOLD
         const evidencePreview = previewList(evidenceItems, 'evidence', 4)
         const keyFacts = [
           { label: 'Experience', value: formatExperienceDisplay(candidate) },
@@ -1310,19 +1321,30 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
                 {!shouldCollapseLowValueBlocks && (
                   <>
-                    <div className="dd-col-label dd-col-label--mt-16">Strengths</div>
+                    <div className="dd-col-label dd-col-label--mt-16">Top match reasons</div>
                     <div className="dd-analysis-box dd-analysis-box--green">
-                      {candidateStrengths.length > 0
-                        ? candidateStrengths.map((strength, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-strength-${idx}`}><Check size={14} strokeWidth={1.5} aria-hidden="true" />{strength}</div>)
-                        : <div className="dd-analysis-empty">Extraction failed. Run re-analysis.</div>}
+                      {matchReasonsPreview.items.map((reason, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-reason-${idx}`}><Check size={14} strokeWidth={1.5} aria-hidden="true" />{reason}</div>)}
+                      {matchReasonsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'top-reasons')}>{matchReasonsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
                     </div>
                   </>
                 )}
-                <div className="dd-col-label dd-col-label--mt-16">Gaps & uncertainties</div>
+                <div className="dd-col-label dd-col-label--mt-16">Top risks</div>
                 <div className="dd-analysis-box dd-analysis-box--amber">
                   {uncertaintyPreview.items.map((item, idx) => <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-uncertainty-${idx}`}><AlertCircle size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
+                  {uncertaintyPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'top-risks')}>{uncertaintyPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-16">Missing must-haves</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
+                  {missingMustHavesPreview.items.map((item, idx) => {
+                    const severity = deriveMissingRequirementSeverity(item)
+                    return <div className="dd-analysis-item dd-analysis-item--icon" key={`${candidate._bulkKey}-must-have-${idx}`}><AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />{item} <span className={`dd-skill-pill dd-skill-pill--gap`}>{severity}</span></div>
+                  })}
+                  {missingMustHavesPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-must-haves')}>{missingMustHavesPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
+                </div>
+                <div className="dd-col-label dd-col-label--mt-16">Suggested interview probes</div>
+                <div className="dd-analysis-box dd-analysis-box--amber">
                   {probesPreview.items.map((item, idx) => <div className="dd-analysis-item dd-probe-item" key={`${candidate._bulkKey}-probe-${idx}`}><CircleHelp size={14} strokeWidth={1.5} aria-hidden="true" />{item}</div>)}
-                  {(uncertaintyPreview.hasOverflow || probesPreview.hasOverflow) ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'uncertainty')}>{isSectionExpanded('uncertainty') ? 'Less' : 'More'}</button> : null}
+                  {probesPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'interview-probes')}>{probesPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
                 </div>
                 <div className="dd-col-label dd-col-label--mt-16">Recruiter action</div>
                 <div className="dd-analysis-box dd-analysis-box--green">
@@ -1355,16 +1377,33 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     ? scoreBreakdown.items.map((item, idx) => <div className="dd-analysis-item" key={`${candidate._bulkKey}-score-breakdown-${idx}`}>{item.label.replace('alignment', 'match')}: {item.value}%</div>)
                     : <div className="dd-analysis-empty">{SCORE_BREAKDOWN_UNAVAILABLE_MESSAGE}</div>}
                 </div>
-                <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
-                  {primarySkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'primary-skills')}>{primarySkillsPreview.expanded ? 'Less' : 'More'}</button> : null}
-                </div>
-                <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
-                  {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Less' : 'More'}</button> : null}
-                </div>
+                {isLowFitCandidate ? (
+                  <>
+                    <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
+                    <div className="dd-analysis-box dd-analysis-box--amber">
+                      {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
+                      {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
+                    </div>
+                    <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
+                    <div className="dd-analysis-box dd-analysis-box--green">
+                      {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
+                      {primarySkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'primary-skills')}>{primarySkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="dd-col-label dd-col-label--mt-14">{skillSignals.label}</div>
+                    <div className="dd-analysis-box dd-analysis-box--green">
+                      {primarySkillsPreview.items.map((item, idx) => <span className="dd-top-skill" key={`${candidate._bulkKey}-primary-skill-${idx}`}>{item}</span>)}
+                      {primarySkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'primary-skills')}>{primarySkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
+                    </div>
+                    <div className="dd-col-label dd-col-label--mt-14">Missing requirements</div>
+                    <div className="dd-analysis-box dd-analysis-box--amber">
+                      {missingSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill dd-skill-pill--gap" key={`${candidate._bulkKey}-missing-${idx}`}>{item}</span>)}
+                      {missingSkillsPreview.hasOverflow ? <button type="button" className="dd-expand-btn" onClick={() => toggleSectionExpanded(candidate._bulkKey, 'missing-skills')}>{missingSkillsPreview.expanded ? 'Show less' : 'Show more'}</button> : null}
+                    </div>
+                  </>
+                )}
                 <div className="dd-col-label dd-col-label--mt-14">All skills (reference)</div>
                 <div className="dd-analysis-box">
                   {allSkillsPreview.items.map((item, idx) => <span className="dd-skill-pill" key={`${candidate._bulkKey}-all-skills-${idx}`}>{item}</span>)}
