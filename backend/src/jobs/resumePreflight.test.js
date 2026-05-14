@@ -16,6 +16,12 @@ test('routes likely image-only PDF to OCR', () => {
   assert.equal(result.routeToOcr, true)
 })
 
+test('does not hard-fail compressed/binary PDF-like content before OCR/extraction', () => {
+  const fileBuffer = Buffer.from('%PDF-1.5\n1 0 obj\n<< /Length 18 /Filter /FlateDecode >>\nstream\nx\x9c+I-.)V\x00\x00\x04]\x01\xc1\nendstream\nendobj\n', 'latin1')
+  const result = runResumePreflight({ mimeType: 'application/pdf', fileBuffer })
+  assert.equal(result.ok, true)
+})
+
 test('returns partial for low OCR confidence', () => {
   const result = evaluateOcrOutcome({ ocrConfidence: 50 })
   assert.equal(result.parseOutcome, 'partial')

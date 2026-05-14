@@ -11,8 +11,12 @@ function detectPdfEncryption(raw = '') {
   return /\/Encrypt\b/i.test(raw)
 }
 
-function detectCorruption(raw = '') {
-  return !/%%EOF/i.test(raw) || !/xref/i.test(raw)
+function looksLikeLikelyNonPdfPayload(raw = '') {
+  const head = String(raw || '').slice(0, 4096).toLowerCase()
+  return head.includes('<html')
+    || head.includes('<!doctype html')
+    || head.includes('{"error"')
+    || head.includes('{"message"')
 }
 
 function mapHardFailure(failureCategory, message) {
@@ -43,8 +47,8 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
       return mapHardFailure('encrypted_or_password_protected_pdf', 'This PDF is password protected. Please upload an unlocked copy.')
     }
 
-    if (detectCorruption(raw)) {
-      return mapHardFailure('corrupt_or_unreadable', 'This PDF appears corrupted or unreadable. Please upload a new file.')
+    if (looksLikeLikelyNonPdfPayload(raw)) {
+      return mapHardFailure('unsupported_encoding_or_format', 'This file appears to be a non-PDF payload. Please upload a valid PDF file.')
     }
   }
 
