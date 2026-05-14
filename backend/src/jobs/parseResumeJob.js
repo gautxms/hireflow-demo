@@ -181,6 +181,20 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
+
+function resolveCandidateScore(candidate = {}) {
+  const directScore = normalizeNullableNumber(candidate?.score)
+  if (directScore !== null) return { value: directScore, source: 'score' }
+
+  const matchScoreValue = normalizeNullableNumber(candidate?.matchScore?.score)
+  if (matchScoreValue !== null) return { value: matchScoreValue, source: 'matchScore.score' }
+
+  const profileScore = normalizeNullableNumber(candidate?.profile_score)
+  if (profileScore !== null) return { value: profileScore, source: 'profile_score' }
+
+  return { value: null, source: null }
+}
+
 function getPreferredJobDescriptionText(row = {}) {
   const candidates = [
     row.file_text,
@@ -591,6 +605,25 @@ async function runParse(job) {
       })
     : []
   const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
+  const scoredCandidates = []
+  const scoringFailures = []
+
+  for (const candidate of normalizedCandidates) {
+    const resolvedScore = resolveCandidateScore(candidate)
+    if (resolvedScore.value === null) {
+      scoringFailures.push({
+        candidateId: candidate?.candidateId || candidate?.id || null,
+        resumeId: candidate?.resumeId || String(resumeId || ''),
+        reason: 'scoring_failed::missing_finite_score',
+      })
+      continue
+    }
+
+    scoredCandidates.push({
+      ...candidate,
+      resumeProcessingStatus: 'scored',
+    })
+  }
 
   const parseResult = {
     filename,
@@ -606,12 +639,20 @@ async function runParse(job) {
     jobDescriptionContextMissingReason: jobDescriptionContext?.hasContext
       ? null
       : (jobDescriptionContext?.missingReason || 'job_description_missing'),
-    candidates: normalizedCandidates,
+    candidates: scoredCandidates,
+    scoringFailures,
+    candidatesWithScoringFailures: normalizedCandidates
+      .filter((candidate) => !scoredCandidates.some((scored) => scored.id === candidate.id))
+      .map((candidate) => ({
+        ...candidate,
+        resumeProcessingStatus: 'scoring_failed',
+        scoringFailureReason: 'scoring_failed::missing_finite_score',
+      })),
   }
 
   const parseDurationMs = Date.now() - startedAt
 
-  const primaryCandidate = normalizedCandidates[0] || null
+  const primaryCandidate = scoredCandidates[0] || null
   await pool.query(
     `UPDATE resumes
      SET parse_status = 'complete',
