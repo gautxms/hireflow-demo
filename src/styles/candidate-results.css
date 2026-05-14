@@ -1414,13 +1414,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 9px;
+  padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 11px;
-  line-height: 1.2;
-  color: var(--color-text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  line-height: 1.4;
+  color: #edf1f7;
 }
 
 .dd-meta-pill svg { color: var(--hf-color-lime); }
@@ -1449,8 +1449,9 @@
 }
 
 .dd-subtitle {
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  color: #d8dee9;
 }
 
 /* Score in drawer header */
@@ -1471,8 +1472,8 @@
   color: var(--color-text-muted);
 }
 .dd-fit-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1642,11 +1643,12 @@
 
 .dd-col-label {
   font-family: var(--font-body, 'DM Sans', sans-serif);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--color-text-muted);
+  color: #c4cad4;
   margin-bottom: 10px;
 }
 .dd-col-label--mt-16 { margin-top: 16px; }
@@ -1710,9 +1712,9 @@
 .dd-analysis-box--amber { border-top-color: rgba(255, 165, 0, 0.2); }
 
 .dd-analysis-item {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
+  font-size: 14px;
+  color: #e6ebf3;
+  line-height: 1.7;
   overflow-wrap: anywhere;
   padding: 7px 0;
   border-bottom: 1px solid #141414;
@@ -1765,8 +1767,9 @@
 }
 
 .dd-analysis-empty {
-  font-size: 12px;
-  color: var(--hf-surface-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  color: #cfd5df;
   font-style: italic;
 }
 .dd-analysis-empty--action {
@@ -1776,8 +1779,9 @@
 }
 .dd-data-quality-note {
   margin-top: 8px;
-  font-size: 11px;
-  color: var(--hf-surface-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  color: #cfd5df;
 }
 .dd-data-quality-note a {
   color: var(--hf-color-lime);
@@ -1790,32 +1794,32 @@
 .dd-top-skills { display: flex; gap: 5px; flex-wrap: wrap; }
 
 .dd-top-skill {
-  font-size: 11px;
-  line-height: 1.25;
-  color: var(--hf-color-lime);
-  background: rgba(200, 255, 0, 0.06);
-  border: 1px solid rgba(200, 255, 0, 0.22);
-  padding: 3px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #f0f6cf;
+  background: rgba(200, 255, 0, 0.14);
+  border: 1px solid rgba(200, 255, 0, 0.5);
+  padding: 5px 10px;
   border-radius: 999px;
 }
 
 .dd-skill-cat {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--hf-surface-muted);
+  color: #c5cbd6;
   margin-bottom: 6px;
 }
 .dd-skill-row { display: flex; gap: 5px; flex-wrap: wrap; }
 
 .dd-skill-pill {
-  font-size: 11px;
-  line-height: 1.25;
-  color: var(--color-text-secondary);
-  background: #232323;
-  border: 1px solid #4a4a4a;
-  padding: 3px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e8ecf2;
+  background: #1d1d1d;
+  border: 1px solid #676f7d;
+  padding: 5px 10px;
   border-radius: 999px;
 }
 .dd-skill-pill--gap {
@@ -1825,15 +1829,15 @@
 }
 
 .dd-skill-more {
-  font-size: 11px;
-  color: var(--hf-surface-muted);
+  font-size: 12px;
+  color: #c5cbd6;
   padding: 3px 4px;
 }
 .dd-expand-btn {
   background: transparent;
   border: none;
   color: var(--hf-color-lime);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   padding: 2px 4px;
   cursor: pointer;
@@ -2066,6 +2070,20 @@
   outline-offset: 2px;
 }
 
+.dd-icon-btn:focus-visible,
+.dd-btn-primary:focus-visible,
+.dd-btn-secondary:focus-visible,
+.dd-btn-danger:focus-visible,
+.dd-close:focus-visible,
+.dd-analysis-box a:focus-visible,
+.dd-data-quality-note a:focus-visible,
+.dd-score-help:focus-visible {
+  outline: 2px solid #f8fbff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(200, 255, 0, 0.72);
+  border-radius: 8px;
+}
+
 .bulk-btn:disabled,
 .jd-btn-apply:disabled,
 .filter-filters-btn:disabled,
@@ -2136,7 +2154,8 @@
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.38);
+  color: #e8edf5;
   cursor: help;
 }
 .rc-confidence-flag,
