@@ -29,6 +29,21 @@ test('accepts legacy-normalized payload shape and keeps candidates', () => {
   assert.equal(payload.candidates[0].matchScore, 82)
 })
 
+
+test('preserves failedResumes so failed-only analyses can render UI state', () => {
+  const failedResumes = [
+    { resumeId: 'r-1', filename: 'missing-skills.pdf', reason: 'Scoring failed' },
+  ]
+  const { payload, isValid } = validateAnalysisResultsPayload({
+    candidates: [],
+    failedResumes,
+    inputCount: 0,
+  })
+
+  assert.equal(isValid, true)
+  assert.deepEqual(payload.failedResumes, failedResumes)
+})
+
 test('rejects malformed shape and downgrades to safe defaults without throwing', () => {
   withErrorSpy((errorCalls) => {
     const { payload, isValid, issues } = validateAnalysisResultsPayload({
