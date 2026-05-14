@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { pool } from '../db/client.js'
 import {
   DEFAULT_SYSTEM_PROMPT,
+  getRuntimeSystemPromptConfig,
+  resetAdminSystemPromptToDefaultIfLegacy,
   resetAdminSystemPromptToDefault,
   upsertAdminSystemPrompt,
 } from './adminSystemPromptService.js'
@@ -132,10 +134,54 @@ test('resetAdminSystemPromptToDefault persists the known default prompt', async 
   assert.equal(result.promptVersion, 9)
 })
 
-test('DEFAULT_SYSTEM_PROMPT defines matchScore breakdown fields and anti-fabrication rule', () => {
-  assert.match(DEFAULT_SYSTEM_PROMPT, /skills_alignment/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /experience_alignment/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /education_alignment/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /overall/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not fabricate score breakdown values\./)
+test('DEFAULT_SYSTEM_PROMPT uses compact quick-analysis contract and limits', () => {
+  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"allExtractedSkills":/)
+  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_flat":/)
+  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_structured":/)
+  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"confidence":/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not include: allExtractedSkills, skills_flat, skills_structured, full work history/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /summary <= 160 chars/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /reasoning <= 250 chars/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /matchedSkills <= 10/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Always return exactly 1 candidate object/)
+})
+
+test('getRuntimeSystemPromptConfig returns stored admin prompt over default', async () => {
+  pool.query = async (queryText) => {
+    const sql = String(queryText).trim().replace(/\s+/g, ' ')
+    if (sql.startsWith('SELECT system_prompt, prompt_version, updated_by, created_at, updated_at')) {
+      return {
+        rows: [{
+          system_prompt: 'Custom admin prompt',
+          prompt_version: 4,
+          updated_by: 'admin-99',
+          created_at: '2026-04-20T00:00:00.000Z',
+          updated_at: '2026-04-22T00:00:00.000Z',
+        }],
+      }
+    }
+    return { rows: [] }
+  }
+
+  const result = await getRuntimeSystemPromptConfig()
+  assert.equal(result.systemPrompt, 'Custom admin prompt')
+  assert.equal(result.promptVersion, 4)
+})
+
+test('resetAdminSystemPromptToDefaultIfLegacy does not overwrite custom prompt', async () => {
+  let updateCalled = false
+  pool.query = async (queryText) => {
+    const sql = String(queryText).trim().replace(/\s+/g, ' ')
+    if (sql.startsWith('SELECT system_prompt, prompt_version, updated_by, created_at, updated_at')) {
+      return { rows: [{ system_prompt: 'My custom prompt', prompt_version: 2 }] }
+    }
+    if (sql.startsWith('UPDATE admin_system_prompts')) {
+      updateCalled = true
+    }
+    return { rows: [] }
+  }
+
+  const result = await resetAdminSystemPromptToDefaultIfLegacy({ adminId: 'admin-safe' })
+  assert.equal(result.resetPerformed, false)
+  assert.equal(updateCalled, false)
 })
