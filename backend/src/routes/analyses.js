@@ -106,6 +106,19 @@ function deriveAggregateStatus(counts, totalItems) {
   return 'queued'
 }
 
+function buildOutcomeSummary({ total, complete, failed }) {
+  const totalResumes = Number(total || 0)
+  const successCount = Number(complete || 0)
+  const failedCount = Number(failed || 0)
+  const partialCount = Math.max(0, totalResumes - successCount - failedCount)
+  return {
+    totalResumes,
+    successCount,
+    partialCount,
+    failedCount,
+  }
+}
+
 async function loadAnalysisStatus(analysisId, userId) {
   const analysisResult = await pool.query(
      `SELECT a.id,
@@ -331,6 +344,7 @@ router.get('/', requireAuth, async (req, res) => {
         failed: Number(row.failed_count || 0),
         processing: Number(row.processing_count || 0),
       }
+      const outcomeSummary = buildOutcomeSummary(summary)
       return {
         id: String(row.id),
         createdAt: row.created_at,
@@ -343,7 +357,11 @@ router.get('/', requireAuth, async (req, res) => {
           complete: Number(row.complete_count || 0),
           failed: Number(row.failed_count || 0),
         }, Number(row.total_count || 0)),
-        summary: { ...summary, pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing) },
+        summary: {
+          ...summary,
+          pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing),
+          ...outcomeSummary,
+        },
         failedItems: failedItemsByAnalysis.get(String(row.id)) || [],
         fileCount: summary.total,
         files: filesByAnalysis.get(String(row.id)) || [],
@@ -381,6 +399,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       failed: counts.failed,
       processing: counts.processing + counts.retrying,
       pending: counts.queued,
+      ...buildOutcomeSummary({ total: items.length, complete: counts.complete, failed: counts.failed }),
     },
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,

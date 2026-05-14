@@ -286,6 +286,30 @@ export function normalizeCandidate(candidate = {}) {
   const normalizedExperience = normalizeExperienceContract(candidate)
   const resumeIntegrityFlags = normalizeResumeIntegrityFlags(candidate)
   const has = (key) => Object.prototype.hasOwnProperty.call(candidate, key)
+  const parseOutcomeRaw = normalizeText(
+    candidate?.parseOutcome
+    || candidate?.parse_outcome
+    || candidate?.parseMeta?.parseOutcome
+    || candidate?.parseMeta?.parse_outcome
+    || '',
+  ).toLowerCase()
+  const parseOutcome = ['success', 'partial', 'failed'].includes(parseOutcomeRaw)
+    ? parseOutcomeRaw
+    : (isFailedProcessingStatus ? 'failed' : 'success')
+  const failureCategory = normalizeText(
+    candidate?.failureCategory
+    || candidate?.failure_category
+    || candidate?.parseMeta?.failureCategory
+    || candidate?.parseMeta?.failure_category
+    || '',
+  ) || null
+  const failureMessageUserSafe = normalizeText(
+    candidate?.failureMessageUserSafe
+    || candidate?.failure_message_user_safe
+    || candidate?.parseMeta?.failureMessageUserSafe
+    || candidate?.parseMeta?.failure_message_user_safe
+    || '',
+  ) || null
 
   return {
     id,
@@ -340,6 +364,9 @@ export function normalizeCandidate(candidate = {}) {
     resumeFilename: normalizeText(candidate?.resumeFilename || candidate?.filename || ''),
     resumeAssetRef: normalizeText(candidate?.resumeAssetRef || candidate?.resumeId || candidate?.resume_id || ''),
     resumeProcessingStatus,
+    parseOutcome,
+    failureCategory,
+    failureMessageUserSafe,
     parseMeta: candidate?.parseMeta && typeof candidate.parseMeta === 'object'
       ? { ...candidate.parseMeta }
       : {},
