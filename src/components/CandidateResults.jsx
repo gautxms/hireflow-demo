@@ -352,6 +352,26 @@ function activeScore(candidate) {
   return Number.isFinite(numeric) ? numeric : null
 }
 
+
+function isFailedProcessingCandidate(candidate) {
+  const status = String(candidate?.resumeProcessingStatus || candidate?.processingStatus || '').toLowerCase()
+  if (['scoring_failed', 'failed', 'error', 'parse_failed'].includes(status)) {
+    return true
+  }
+
+  return activeScore(candidate) === null && status.includes('failed')
+}
+
+function toFailedResumeFromCandidate(candidate, index) {
+  return {
+    resumeId: candidate?.resumeId || candidate?.id || candidate?._bulkKey || `candidate-failure-${index}`,
+    filename: candidate?.filename || candidate?.fileName || candidate?.resumeFileName || candidate?.name || `Resume ${index + 1}`,
+    fileName: candidate?.fileName || candidate?.filename || candidate?.resumeFileName || candidate?.name || `Resume ${index + 1}`,
+    resumeProcessingStatus: candidate?.resumeProcessingStatus || candidate?.processingStatus || 'scoring_failed',
+    parseError: candidate?.parseError || candidate?.reason || candidate?.summary || 'Resume processing failed',
+  }
+}
+
 function resolveAnalysisTitle(parseMeta, candidates) {
   const parseMetaCandidates = [
     parseMeta?.analysisName,
@@ -476,6 +496,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
   const { candidates: rawCandidates, failedResumes = [], parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
+  const derivedFailedResumes = useMemo(() => {
+    if (failedResumes.length > 0) {
+      return failedResumes
+    }
+
+    return rawCandidates
+      .map((candidate, index) => normalizeCandidateForResults(candidate, index))
+      .filter((candidate) => candidate?._isRenderable && isFailedProcessingCandidate(candidate))
+      .map((candidate, index) => toFailedResumeFromCandidate(candidate, index))
+  }, [failedResumes, rawCandidates])
   const [hasJobDescription, setHasJobDescription] = useState(Boolean(parseMeta?.hasJobDescription))
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
@@ -721,7 +751,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       .map((candidate, index) => normalizeCandidateForResults(candidate, index))
       .filter((candidate) => candidate._isRenderable)
       .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
-      .filter((candidate) => activeScore(candidate) !== null)
+      .filter((candidate) => activeScore(candidate) !== null || isFailedProcessingCandidate(candidate))
   }, [deletedIds, displayCandidates])
 
   const hasCandidatesToRender = hasRenderableCandidates(candidateRows)
@@ -1019,9 +1049,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <p className="candidate-results-page__state-copy">
             {`${pagination.total} ranked candidate${pagination.total === 1 ? '' : 's'}`}
           </p>
-          {failedResumes.length > 0 && (
+          {derivedFailedResumes.length > 0 && (
             <p className="candidate-results-page__state-copy">
-              {`${failedResumes.length} resume${failedResumes.length === 1 ? '' : 's'} need attention`}
+              {`${derivedFailedResumes.length} resume${derivedFailedResumes.length === 1 ? '' : 's'} need attention`}
             </p>
           )}
         </div>
@@ -1042,11 +1072,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         shortlistOpen={shortlistOpen}
         onToggleShortlist={setShortlistOpen}
       />
-      {failedResumes.length > 0 && (
+      {derivedFailedResumes.length > 0 && (
         <section className="dd-analysis-box dd-analysis-box--amber" style={{ marginBottom: '14px' }}>
           <div className="dd-col-label">Resume processing issues</div>
-          <div className="dd-analysis-empty">{`${failedResumes.length} file${failedResumes.length === 1 ? '' : 's'} need attention before they can be ranked.`}</div>
-          {failedResumes.map((item, idx) => (
+          <div className="dd-analysis-empty">{`${derivedFailedResumes.length} file${derivedFailedResumes.length === 1 ? '' : 's'} need attention before they can be ranked.`}</div>
+          {derivedFailedResumes.map((item, idx) => (
             <div className="dd-analysis-item dd-analysis-item--icon" key={`failed-resume-${item?.resumeId || idx}`}>
               <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />
               <span>
