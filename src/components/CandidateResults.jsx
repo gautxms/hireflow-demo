@@ -15,6 +15,8 @@ import {
   resolveCandidateEducationText,
   resolveCandidateResumeMetadata,
   resolveCandidateResumeUuid,
+  candidateLooksLikeFailurePlaceholder,
+  isRankableCandidate,
   toDisplayText,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
@@ -476,6 +478,24 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
   const { candidates: rawCandidates, failedResumes = [], parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
+  const derivedFailedIssues = useMemo(() => {
+    const fromCandidatePlaceholders = (Array.isArray(rawCandidates) ? rawCandidates : [])
+      .filter((candidate) => candidateLooksLikeFailurePlaceholder(candidate))
+      .map((candidate) => ({
+        resumeId: candidate?.resumeId || candidate?.resume_id || candidate?.id || null,
+        filename: candidate?.resumeFilename || candidate?.filename || null,
+        reason: candidate?.parseError || candidate?.matchScore?.reason || candidate?.summary || 'Resume processing failed.',
+        resumeProcessingStatus: String(candidate?.resumeProcessingStatus || candidate?.processingStatus || 'parse_failed').toLowerCase(),
+      }))
+
+    const seen = new Set()
+    return [...failedResumes, ...fromCandidatePlaceholders].filter((item) => {
+      const key = `${item?.resumeId || ''}|${item?.filename || ''}|${String(item?.reason || '').toLowerCase()}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [failedResumes, rawCandidates])
   const [hasJobDescription, setHasJobDescription] = useState(Boolean(parseMeta?.hasJobDescription))
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
@@ -721,7 +741,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       .map((candidate, index) => normalizeCandidateForResults(candidate, index))
       .filter((candidate) => candidate._isRenderable)
       .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
-      .filter((candidate) => activeScore(candidate) !== null)
+      .filter((candidate) => isRankableCandidate(candidate))
   }, [deletedIds, displayCandidates])
 
   const hasCandidatesToRender = hasRenderableCandidates(candidateRows)
@@ -752,11 +772,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds)
 
-  const scoredFiltered = filtered.filter((candidate) => activeScore(candidate) !== null)
-  const avgScore = scoredFiltered.length
-    ? Math.round(scoredFiltered.reduce((sum, candidate) => sum + Number(activeScore(candidate)), 0) / scoredFiltered.length)
+  const avgScore = filtered.length
+    ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate)), 0) / filtered.length)
     : 0
-  const strongCount = scoredFiltered.filter((candidate) => activeScore(candidate) >= 80).length
+  const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
 
   const toggleCandidateSelection = (candidateKey) => {
     setSelectedIds((currentSelected) => toggleSelection(currentSelected, candidateKey))
@@ -1019,9 +1038,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <p className="candidate-results-page__state-copy">
             {`${pagination.total} ranked candidate${pagination.total === 1 ? '' : 's'}`}
           </p>
-          {failedResumes.length > 0 && (
+          {derivedFailedIssues.length > 0 && (
             <p className="candidate-results-page__state-copy">
-              {`${failedResumes.length} resume${failedResumes.length === 1 ? '' : 's'} need attention`}
+              {`${derivedFailedIssues.length} resume${derivedFailedIssues.length === 1 ? '' : 's'} need attention`}
             </p>
           )}
         </div>
@@ -1042,11 +1061,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         shortlistOpen={shortlistOpen}
         onToggleShortlist={setShortlistOpen}
       />
-      {failedResumes.length > 0 && (
+      {derivedFailedIssues.length > 0 && (
         <section className="dd-analysis-box dd-analysis-box--amber resume-processing-issues-panel">
           <div className="dd-col-label">Resume processing issues</div>
-          <div className="dd-analysis-empty">{`${failedResumes.length} file${failedResumes.length === 1 ? '' : 's'} need attention before they can be ranked.`}</div>
-          {failedResumes.map((item, idx) => {
+          <div className="dd-analysis-empty">{`${derivedFailedIssues.length} file${derivedFailedIssues.length === 1 ? '' : 's'} need attention before they can be ranked.`}</div>
+          {derivedFailedIssues.map((item, idx) => {
             const failureCategory = toDisplayText(item?.resumeProcessingStatus, 'parse_failed')
             const failureReason = toDisplayText(item?.parseError || item?.reason, 'Resume processing failed')
             const nextAction = toDisplayText(
