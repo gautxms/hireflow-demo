@@ -29,7 +29,9 @@ function normalizeCandidate(candidate = {}) {
   const normalizedStatus = String(candidate?.resumeProcessingStatus || candidate?.processingStatus || '').toLowerCase()
   const hasExplicitScore = Number.isFinite(rawScore)
   const score = hasExplicitScore ? Math.max(0, Math.min(100, rawScore)) : null
-  const isScored = normalizedStatus === 'scored' && score !== null
+  const failedStatuses = new Set(['scoring_failed', 'failed', 'error'])
+  const isExplicitFailure = failedStatuses.has(normalizedStatus)
+  const isScored = score !== null && !isExplicitFailure
   const reason = String(
     candidate?.matchScore?.reason
     || rationale

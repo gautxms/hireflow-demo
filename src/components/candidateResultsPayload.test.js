@@ -83,6 +83,20 @@ test('preserves top-level missing requirements when fit_assessment is absent', (
 })
 
 
+
+
+test('treats finite numeric scores as scored when processing status is absent', () => {
+  const payload = normalizeCandidateResultsPayload({ candidates: [{ score: 87 }] })
+  assert.equal(payload.candidates[0].matchScore.score, 87)
+  assert.equal(payload.candidates[0].isScored, true)
+})
+
+test('treats explicit failure status as unscored even with numeric score', () => {
+  const payload = normalizeCandidateResultsPayload({ candidates: [{ score: 42, resumeProcessingStatus: 'scoring_failed' }] })
+  assert.equal(payload.candidates[0].matchScore.score, null)
+  assert.equal(payload.candidates[0].isScored, false)
+})
+
 test('preserves explicit scored zero', () => {
   const payload = normalizeCandidateResultsPayload({ candidates: [{ score: 0, resumeProcessingStatus: 'scored' }] })
   assert.equal(payload.candidates[0].matchScore.score, 0)
