@@ -202,6 +202,28 @@ function deriveCompactRationale(candidate) {
 
 
 
+
+
+function resolveScoreConfidence(candidate = {}) {
+  const hasExperience = Number.isFinite(resolveCandidateExperience(candidate))
+  const skillSignals = resolveSkillSignals(candidate)
+  const hasSkills = skillSignals.primarySkills.length > 0 || skillSignals.allSkills.length > 0
+  const hasDomain = Boolean(toDisplayText(candidate?.domain || candidate?.industry || candidate?.domain_expertise, '').trim())
+
+  const present = [hasExperience, hasSkills, hasDomain].filter(Boolean).length
+  const missingFields = []
+  if (!hasExperience) missingFields.push('experience')
+  if (!hasSkills) missingFields.push('skills')
+  if (!hasDomain) missingFields.push('domain context')
+
+  if (present >= 3) return { level: 'high', label: 'High confidence', missingFields, low: false }
+  if (present == 2) return { level: 'medium', label: 'Medium confidence', missingFields, low: false }
+  return { level: 'low', label: 'Low confidence', missingFields, low: true }
+}
+
+const SCORE_RUBRIC_SUMMARY = 'Score weighted by experience, required skills, and domain match.'
+const SCORE_FORMULA_TOOLTIP = 'Formula: Required skills (50%), experience alignment (30%), domain match (20%). Confidence drops when profile fields are missing.'
+
 function dedupeTextItems(items, blocked = []) {
   const blockedSet = new Set(blocked.map(normalizeComparableTextKey).filter(Boolean))
   const seen = new Set()
@@ -1069,6 +1091,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             .toUpperCase()
           const topSkills = deriveTopSkills(candidate)
           const compactRationale = deriveCompactRationale(candidate)
+          const confidence = resolveScoreConfidence(candidate)
           const selected = selectedIds.includes(candidate._bulkKey)
 
           return (
@@ -1090,7 +1113,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="rc-score-block">
                   {displayScore != null ? (
                     <>
-                      <div className="rc-score-num">
+                      <div className={`rc-score-num${confidence.low ? ' rc-score-num--deemphasized' : ''}`}>
                         {displayScore}
                         <span className="rc-score-denom">/10</span>
                       </div>
@@ -1101,6 +1124,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                             ? 'Possible match'
                             : 'Low match'}
                       </div>
+                      <div className={`rc-confidence rc-confidence--${confidence.level}`}>{confidence.label}</div>
                     </>
                   ) : (
                     <div className="rc-score-empty">Not scored</div>
@@ -1111,6 +1135,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="rc-rationale" title={compactRationale}>
                 {compactRationale}
               </div>
+              <div className="rc-rubric">
+                <span>{SCORE_RUBRIC_SUMMARY}</span>
+                <span className="rc-score-help" title={SCORE_FORMULA_TOOLTIP} aria-label={SCORE_FORMULA_TOOLTIP}>ⓘ</span>
+              </div>
+              {confidence.low ? <div className="rc-confidence-flag">Low confidence due to missing {confidence.missingFields.join(', ')}.</div> : null}
 
               <div className="rc-skills">
                 {topSkills.slice(0, 3).map((skill) => (
@@ -1158,6 +1187,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const score = activeScore(candidate)
         const tier = scoreTier(score)
         const displayScore = toTenScale(score)
+        const confidence = resolveScoreConfidence(candidate)
         const normalizeTextList = (list) => (Array.isArray(list) ? list.map((entry) => toDisplayText(entry, '')).filter(Boolean) : [])
         const candidateStrengths = dedupeTextItems(Array.isArray(candidate.strengths) && candidate.strengths.length > 0
           ? normalizeTextList(candidate.strengths)
@@ -1240,13 +1270,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
               {displayScore != null && (
                 <div className={`dd-score-block dd-score-block--${tier}`}>
-                  <div className={`dd-score dd-score--${tier}`}>
+                  <div className={`dd-score dd-score--${tier}${confidence.low ? ' dd-score--deemphasized' : ''}`}>
                     {displayScore}
                     <span>/10</span>
                   </div>
                   <div className={`dd-fit-label dd-fit-label--${tier}`}>
-                    {tier === 'strong' ? 'Strong fit' : tier === 'possible' ? 'Potential fit' : 'Low fit'}
+                    {tier === 'strong' ? 'Strong match' : tier === 'possible' ? 'Potential match' : 'Low match'}
                   </div>
+                  <div className={`dd-confidence dd-confidence--${confidence.level}`}>{confidence.label}</div>
+                  <div className="dd-rubric">
+                    <span>{SCORE_RUBRIC_SUMMARY}</span>
+                    <span className="dd-score-help" title={SCORE_FORMULA_TOOLTIP} aria-label={SCORE_FORMULA_TOOLTIP}>ⓘ</span>
+                  </div>
+                  {confidence.low ? <div className="dd-confidence-flag">Low confidence: missing {confidence.missingFields.join(', ')}.</div> : null}
                   <div className="dd-score-track" aria-hidden="true">
                     <span className={`dd-score-fill dd-score-fill--${tier}`} style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
                   </div>
