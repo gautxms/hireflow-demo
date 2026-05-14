@@ -170,14 +170,15 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     candidate?.missingSkills || candidate?.fit_assessment?.missing_requirements || [],
     { maxItems: minimalMode ? 5 : 10, maxItemLength: 80 },
   )
+  const explicitScore = Number.isFinite(Number(candidate?.score))
+    ? Number(candidate.score)
+    : (Number.isFinite(Number(candidate?.matchScore?.score)) ? Number(candidate?.matchScore?.score) : null)
   const normalizedCandidate = {
     id: clampString(candidate?.id || '', 120),
     name: clampString(candidate?.name || candidate?.full_name || 'Unknown Candidate', 80),
     email: clampString(candidate?.email || '', 120),
     phone: clampString(candidate?.phone || candidate?.phone_number || '', 40),
-    score: Number.isFinite(Number(candidate?.score))
-      ? Math.max(0, Math.min(100, Number(candidate.score)))
-      : Math.max(0, Math.min(100, Number(candidate?.matchScore?.score || 0))),
+    score: explicitScore === null ? null : Math.max(0, Math.min(100, explicitScore)),
     verdict: clampString(candidate?.verdict || candidate?.matchScore?.fit || 'review', 30),
     summary: clampString(candidate?.summary || candidate?.profile_summary || '', 250),
     strengths: clampStringArray(candidate?.strengths || [], { maxItems: 3, maxItemLength: 120 }),

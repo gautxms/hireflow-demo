@@ -516,7 +516,7 @@ async function getLatestCandidatesForUser(userId) {
     resumeId: String(row.id || ''),
     filename: normalizeText(row.filename || '', 'Unknown file'),
     parseError: normalizeText(row.parse_error || '', 'parse_failed::Unknown parsing failure.'),
-    resumeProcessingStatus: 'failed',
+    resumeProcessingStatus: normalizeResumeProcessingStatus({ resumeProcessingStatus: row.parse_status }) || 'parse_failed',
   }))
 
   return { candidates, failedResumes }

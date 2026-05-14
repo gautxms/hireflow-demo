@@ -680,10 +680,15 @@ async function runParse(job) {
       .filter((candidate) => !scoredCandidates.some((scored) => scored.id === candidate.id))
       .map((candidate) => ({
         ...candidate,
+        score: null,
+        profile_score: null,
+        matchScore: {
+          ...(candidate?.matchScore && typeof candidate.matchScore === 'object' ? candidate.matchScore : {}),
+          score: null,
+        },
         resumeProcessingStatus: 'scoring_failed',
         scoringFailureReason: 'scoring_failed::missing_finite_score',
       })),
-    candidates: normalizedCandidates,
     parseMeta: {
       extractionMethod: extractionResult?.methodUsed || 'failed',
       rawTextCharCount: extractedRawText.length,

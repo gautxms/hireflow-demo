@@ -345,11 +345,11 @@ function activeScore(candidate) {
     ?? candidate?.score
     ?? candidate?.profile_score
     ?? candidate?.scoreBreakdown?.overall
-    ?? 0
+    ?? null
   )
 
   const numeric = Number(resolved ?? fallbackScore)
-  return Number.isFinite(numeric) ? numeric : 0
+  return Number.isFinite(numeric) ? numeric : null
 }
 
 function resolveAnalysisTitle(parseMeta, candidates) {
@@ -751,10 +751,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds)
 
-  const avgScore = filtered.length
-    ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
+  const scoredFiltered = filtered.filter((candidate) => activeScore(candidate) !== null)
+  const avgScore = scoredFiltered.length
+    ? Math.round(scoredFiltered.reduce((sum, candidate) => sum + Number(activeScore(candidate)), 0) / scoredFiltered.length)
     : 0
-  const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
+  const strongCount = scoredFiltered.filter((candidate) => activeScore(candidate) >= 80).length
 
   const toggleCandidateSelection = (candidateKey) => {
     setSelectedIds((currentSelected) => toggleSelection(currentSelected, candidateKey))
