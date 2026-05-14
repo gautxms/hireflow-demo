@@ -198,3 +198,17 @@ Add tests/fixtures requested:
 - Keep scoring/ranking contract unchanged unless additive and tested.
 - Validate job creation/editing untouched.
 - UI updates must remain within `docs/DESIGN_CONSTITUTION.md` constraints.
+
+## Rollout readiness + approval criteria
+Before approving full rollout, confirm the following operational controls are active in production/staging:
+
+- Dashboards are live for resume failure spikes segmented by **failure category** (OCR/extraction, schema validation, normalization, persistence, API mapping, frontend rendering).
+- Alerting is enabled (and routed) for anomaly thresholds on failure rate and time-to-recovery.
+- Stage-level token usage views are available so on-call teams can diagnose cost/performance regressions at each processing stage.
+- Runbook links from alerts point responders to category-specific triage steps.
+
+Full rollout decision rule:
+- **Approve full rollout only if both conditions are true:**
+  1) token-per-successful-resume improves versus baseline, and
+  2) mixed-batch user clarity metrics meet target.
+- If either condition fails, hold rollout at canary/partial stage and continue remediation.
