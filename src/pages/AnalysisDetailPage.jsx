@@ -221,7 +221,8 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   (displayStatus === 'complete' ||
     displayStatus === 'completed' ||
     displayStatus === 'partial' ||
-    displayStatus === 'failed')
+    displayStatus === 'failed') &&
+  candidateResultsPayload.candidates.length > 0
 ) {
   return (
     <main className="analyses-layout">
