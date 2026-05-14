@@ -14,6 +14,29 @@ export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
 }
 
+const FAILURE_PLACEHOLDER_PATTERNS = [
+  'could not be parsed',
+  'unable to extract',
+  'corrupted',
+  'unreadable',
+  'compressed/encrypted',
+  'binary content',
+  'pdf content',
+]
+
+export function isFailurePlaceholderCandidate(candidate = {}) {
+  const name = String(candidate?.name || '').trim().toLowerCase()
+  const merged = [
+    candidate?.summary,
+    candidate?.reasoning,
+    candidate?.matchScore?.reason,
+    candidate?.parseError,
+    candidate?.parse_error,
+  ].map((value) => String(value || '').toLowerCase()).join(' ')
+  const hasFailureText = FAILURE_PLACEHOLDER_PATTERNS.some((pattern) => merged.includes(pattern))
+  return (name === 'unknown candidate' && hasFailureText) || hasFailureText
+}
+
 function mapParseErrorCode(errorCode) {
   const normalized = String(errorCode || '').trim().toLowerCase()
   if (normalized === 'extraction_failed') return 'extraction_failed'
@@ -712,6 +735,14 @@ async function runParse(job) {
   const scoringFailures = []
 
   for (const candidate of normalizedCandidates) {
+    if (isFailurePlaceholderCandidate(candidate)) {
+      scoringFailures.push({
+        candidateId: candidate?.candidateId || candidate?.id || null,
+        resumeId: candidate?.resumeId || String(resumeId || ''),
+        reason: 'parse_failed::ai_failure_placeholder',
+      })
+      continue
+    }
     const resolvedScore = resolveCandidateScore(candidate)
     if (resolvedScore.value === null) {
       scoringFailures.push({
@@ -746,7 +777,10 @@ async function runParse(job) {
     scoringFailures,
     candidatesWithScoringFailures: normalizedCandidates
       .filter((candidate) => !scoredCandidates.some((scored) => scored.id === candidate.id))
-      .map((candidate) => ({
+      .map((candidate) => {
+        const failure = scoringFailures.find((entry) => (entry?.candidateId && entry.candidateId === candidate.id) || (entry?.resumeId && entry.resumeId === candidate?.resumeId))
+        const placeholderFailure = String(failure?.reason || '').startsWith('parse_failed::')
+        return ({
         ...candidate,
         score: null,
         profile_score: null,
@@ -754,9 +788,10 @@ async function runParse(job) {
           ...(candidate?.matchScore && typeof candidate.matchScore === 'object' ? candidate.matchScore : {}),
           score: null,
         },
-        resumeProcessingStatus: 'scoring_failed',
-        scoringFailureReason: 'scoring_failed::missing_finite_score',
-      })),
+        resumeProcessingStatus: placeholderFailure ? 'parse_failed' : 'scoring_failed',
+        scoringFailureReason: failure?.reason || 'scoring_failed::missing_finite_score',
+      })
+      }),
     parseOutcome: 'success',
     parseMeta: {
       preflight: {

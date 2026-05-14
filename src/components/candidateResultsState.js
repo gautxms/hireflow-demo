@@ -321,6 +321,43 @@ export function resolveActiveCandidateScore(candidate = {}) {
   return null
 }
 
+const FAILURE_STATUS_KEYS = new Set(['extraction_failed', 'parse_failed', 'scoring_failed', 'failed', 'partial', 'unscored', 'error'])
+const FAILURE_PLACEHOLDER_NAME = 'unknown candidate'
+const FAILURE_TEXT_PATTERNS = [
+  'could not be parsed',
+  'unable to extract',
+  'corrupted',
+  'unreadable',
+  'compressed/encrypted',
+  'binary content',
+  'pdf content',
+]
+
+export function candidateLooksLikeFailurePlaceholder(candidate = {}) {
+  const name = String(candidate?.name || '').trim().toLowerCase()
+  const mergedText = [
+    candidate?.summary,
+    candidate?.reasoning,
+    candidate?.matchScore?.reason,
+    candidate?.parseError,
+    candidate?.parse_error,
+  ].map((value) => String(value || '').toLowerCase()).join(' ')
+
+  const hasFailureText = FAILURE_TEXT_PATTERNS.some((pattern) => mergedText.includes(pattern))
+  return (name === FAILURE_PLACEHOLDER_NAME && hasFailureText) || hasFailureText
+}
+
+export function isRankableCandidate(candidate = {}) {
+  const normalizedStatus = String(candidate?.resumeProcessingStatus || candidate?.processingStatus || '').trim().toLowerCase()
+  const score = resolveActiveCandidateScore(candidate)
+  if (!Number.isFinite(score)) return false
+  if (FAILURE_STATUS_KEYS.has(normalizedStatus)) return false
+  if (candidateLooksLikeFailurePlaceholder(candidate)) return false
+  if (normalizedStatus === 'scored') return true
+  // Legacy payload safety: allow finite numeric score only when status is absent.
+  return normalizedStatus === ''
+}
+
 export function buildCandidateRenderContract(candidate = {}) {
   const score = resolveActiveCandidateScore(candidate)
   const scoreTenPoint = score == null ? null : (score / 10).toFixed(1)

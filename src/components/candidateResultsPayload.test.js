@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload.js'
+import { isRankableCandidate } from './candidateResultsState.js'
 
 test('normalizes invalid payload to empty shape', () => {
   assert.deepEqual(normalizeCandidateResultsPayload(null), {
@@ -101,4 +102,16 @@ test('preserves explicit scored zero', () => {
   const payload = normalizeCandidateResultsPayload({ candidates: [{ score: 0, resumeProcessingStatus: 'scored' }] })
   assert.equal(payload.candidates[0].matchScore.score, 0)
   assert.equal(payload.candidates[0].isScored, true)
+  assert.equal(isRankableCandidate(payload.candidates[0]), true)
+})
+
+test('unknown candidate parse placeholder with zero score is not rankable', () => {
+  const payload = normalizeCandidateResultsPayload({
+    candidates: [{
+      name: 'Unknown Candidate',
+      score: 0,
+      summary: 'Resume document could not be parsed. PDF content is compressed/encrypted or corrupted.',
+    }],
+  })
+  assert.equal(isRankableCandidate(payload.candidates[0]), false)
 })

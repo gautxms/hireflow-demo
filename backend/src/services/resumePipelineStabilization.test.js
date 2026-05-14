@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { hasCompleteChunkSet } from './fileUploadService.js'
 import { isScanResultSafe } from './virusScanService.js'
 import { shouldUseOcrFallback } from '../jobs/ocrFallbackJob.js'
-import { applyJobDescriptionScoringMode, buildJobDescriptionContext, isTerminalJobFailure } from '../jobs/parseResumeJob.js'
+import { applyJobDescriptionScoringMode, buildJobDescriptionContext, isFailurePlaceholderCandidate, isTerminalJobFailure } from '../jobs/parseResumeJob.js'
 import { SCORING_MODE_FIXTURES } from '../jobs/__fixtures__/scoringModeFixtures.js'
 import { normalizeQueueCounts } from '../routes/admin/health.js'
 import { redactValue } from '../routes/admin/logs.js'
@@ -95,6 +95,21 @@ test('fixture: no-JD scoring mode nulls score fields and adds missing context re
   assert.equal(candidate.fit_assessment.skill_match_score, null)
   assert.equal(candidate.fit_assessment.experience_match_score, null)
   assert.equal(candidate.fit_assessment.notes.filter((note) => note === 'job_description_missing').length, 1)
+})
+
+test('parse placeholder classifier detects unknown candidate parse failures and preserves explicit scored zero candidates', () => {
+  assert.equal(isFailurePlaceholderCandidate({
+    name: 'Unknown Candidate',
+    score: 0,
+    summary: 'Resume document could not be parsed. PDF content is compressed/encrypted or corrupted.',
+  }), true)
+
+  assert.equal(isFailurePlaceholderCandidate({
+    name: 'Real Candidate',
+    score: 0,
+    resumeProcessingStatus: 'scored',
+    summary: 'Early-career candidate with limited but relevant project work.',
+  }), false)
 })
 
 test('health queue response normalizes numeric counts safely', () => {
