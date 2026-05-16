@@ -809,6 +809,35 @@ async function runParse(job) {
   }
 
   const parseDurationMs = Date.now() - startedAt
+  if (scoredCandidates.length === 0) {
+    const fallbackFailureCategory = mapParseErrorCode(scoringFailures[0]?.reason || 'parse_failed')
+    const terminalFailureReason = scoringFailures[0]?.reason || 'scoring_failed::missing_candidate_score_or_reasoning'
+    await pool.query(
+      `UPDATE resumes
+       SET parse_status = 'failed',
+           parse_result = $2::jsonb,
+           parse_error = $3,
+           parse_error_code = $4,
+           parse_duration_ms = $5,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [resumeId, JSON.stringify(parseResult), terminalFailureReason, fallbackFailureCategory, parseDurationMs],
+    )
+    await setJobState(job.id, {
+      status: 'failed',
+      progress: 100,
+      result: JSON.stringify(parseResult),
+      error_message: terminalFailureReason,
+      attempts: job.attemptsMade + 1,
+    })
+    await cacheJobResult(String(job.id), {
+      status: 'failed',
+      progress: 100,
+      result: parseResult,
+      error: terminalFailureReason,
+    })
+    throw new Error(terminalFailureReason)
+  }
 
   const primaryCandidate = scoredCandidates[0] || null
   await pool.query(

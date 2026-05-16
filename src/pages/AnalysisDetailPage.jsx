@@ -180,6 +180,8 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   const candidateCount = candidateResultsPayload.candidates.length
   const failedResumeCount = Array.isArray(candidateResultsPayload.failedResumes) ? candidateResultsPayload.failedResumes.length : 0
   const failedCount = Number(summary.failed || 0)
+  const totalCount = Number(summary.total || 0)
+  const completeButIncompleteResults = (displayStatus === 'complete' || displayStatus === 'completed') && totalCount > 0 && candidateCount < totalCount
   const pageTitle = useMemo(() => deriveAnalysisPageTitle(analysis, analysisId), [analysis, analysisId])
 
   useEffect(() => {
@@ -214,6 +216,19 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
           <h1>Analysis {analysisId || '—'}</h1>
           {loading && <p>Loading analysis…</p>}
           {!loading && error && <p role="alert">{error}</p>}
+        </section>
+      </main>
+    )
+  }
+
+  if (completeButIncompleteResults) {
+    return (
+      <main className="route-state">
+        <section className="route-state-card" role="alert">
+          <a href="/analyses">← Back to Analyses</a>
+          <h1>{pageTitle}</h1>
+          <p>This analysis was marked complete but returned incomplete candidate results.</p>
+          <p>Please retry this analysis. If this persists, contact support with analysis ID {analysisId || '—'}.</p>
         </section>
       </main>
     )

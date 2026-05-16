@@ -92,12 +92,21 @@ function extractCandidatesFromResult(result) {
   return { candidates: [], diagnostics, normalizedResult: parsed }
 }
 
-function deriveAggregateStatus(counts, totalItems) {
+function hasRenderableCandidate(candidate) {
+  if (!candidate || typeof candidate !== 'object') return false
+  const rawScore = Number(candidate?.score ?? candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.profile_score)
+  const reasoning = String(candidate?.matchScore?.reason || candidate?.reasoning || candidate?.summary || '').trim()
+  return Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 100 && Boolean(reasoning)
+}
+
+function deriveAggregateStatus(counts, totalItems, extractionDiagnostics = {}) {
   if (totalItems === 0) return 'queued'
 
   const terminalCount = counts.complete + counts.failed
+  const candidateBearingItemCount = Number(extractionDiagnostics.candidateBearingItemCount || 0)
   if (terminalCount === totalItems) {
-    return counts.complete > 0 ? 'complete' : 'failed'
+    if (counts.complete > 0 && candidateBearingItemCount === totalItems) return 'complete'
+    return 'failed'
   }
 
   if (counts.processing > 0 || counts.retrying > 0) {
@@ -227,7 +236,7 @@ async function loadAnalysisStatus(analysisId, userId) {
     extractionDiagnostics.totalItems += 1
     if (extracted.diagnostics.parseableObject) extractionDiagnostics.parseableObjectCount += 1
     if (extracted.diagnostics.malformed) extractionDiagnostics.malformedItemCount += 1
-    if (extracted.candidates.length > 0) extractionDiagnostics.candidateBearingItemCount += 1
+    if (extracted.candidates.some((candidate) => hasRenderableCandidate(candidate))) extractionDiagnostics.candidateBearingItemCount += 1
 
     const parsedResult = extracted.normalizedResult
     const scoringFailures = Array.isArray(parsedResult?.scoringFailures) ? parsedResult.scoringFailures : []
@@ -260,7 +269,7 @@ async function loadAnalysisStatus(analysisId, userId) {
 
   const totalItems = items.length
   const completedItems = counts.complete + counts.failed
-  const aggregateStatus = deriveAggregateStatus(counts, totalItems)
+  const aggregateStatus = deriveAggregateStatus(counts, totalItems, extractionDiagnostics)
   const isComplete = totalItems > 0 && completedItems === totalItems
   const parseTerminalComplete = isComplete && TERMINAL_STATUSES.has(aggregateStatus)
   const resultQuality = deriveResultQualityStatus(extractionDiagnostics, parseTerminalComplete)
@@ -422,7 +431,7 @@ router.get('/', requireAuth, async (req, res) => {
           retrying: 0,
           complete: Number(row.complete_count || 0),
           failed: Number(row.failed_count || 0),
-        }, Number(row.total_count || 0)),
+        }, Number(row.total_count || 0), extractionByAnalysis.get(String(row.id))),
         summary: {
           ...summary,
           pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing),
@@ -472,7 +481,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
     jobDescriptionTitle: analysis.job_description_title || null,
     items,
-    failedResumes: items.filter((item) => item.parseOutcome === 'failed').map((item) => ({
+    failedResumes: aggregateStatus === 'complete' ? [] : items.filter((item) => item.parseOutcome === 'failed').map((item) => ({
       resumeId: item.resumeId || null,
       parseJobId: item.parseJobId || null,
       filename: item.filename || null,
