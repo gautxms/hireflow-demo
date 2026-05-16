@@ -15,7 +15,6 @@ import {
   resolveCandidateEducationText,
   resolveCandidateResumeMetadata,
   resolveCandidateResumeUuid,
-  candidateLooksLikeFailurePlaceholder,
   isRankableCandidate,
   toDisplayText,
 } from './candidateResultsState'
@@ -477,25 +476,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
-  const { candidates: rawCandidates, failedResumes = [], parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
-  const derivedFailedIssues = useMemo(() => {
-    const fromCandidatePlaceholders = (Array.isArray(rawCandidates) ? rawCandidates : [])
-      .filter((candidate) => candidateLooksLikeFailurePlaceholder(candidate))
-      .map((candidate) => ({
-        resumeId: candidate?.resumeId || candidate?.resume_id || candidate?.id || null,
-        filename: candidate?.resumeFilename || candidate?.filename || null,
-        reason: candidate?.parseError || candidate?.matchScore?.reason || candidate?.summary || 'Resume processing failed.',
-        resumeProcessingStatus: String(candidate?.resumeProcessingStatus || candidate?.processingStatus || 'parse_failed').toLowerCase(),
-      }))
-
-    const seen = new Set()
-    return [...failedResumes, ...fromCandidatePlaceholders].filter((item) => {
-      const key = `${item?.resumeId || ''}|${item?.filename || ''}|${String(item?.reason || '').toLowerCase()}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }, [failedResumes, rawCandidates])
+  const { candidates: rawCandidates, parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
   const [hasJobDescription, setHasJobDescription] = useState(Boolean(parseMeta?.hasJobDescription))
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
@@ -1038,11 +1019,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <p className="candidate-results-page__state-copy">
             {`${pagination.total} ranked candidate${pagination.total === 1 ? '' : 's'}`}
           </p>
-          {derivedFailedIssues.length > 0 && (
-            <p className="candidate-results-page__state-copy">
-              {`${derivedFailedIssues.length} resume${derivedFailedIssues.length === 1 ? '' : 's'} need attention`}
-            </p>
-          )}
         </div>
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
@@ -1061,31 +1037,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         shortlistOpen={shortlistOpen}
         onToggleShortlist={setShortlistOpen}
       />
-      {derivedFailedIssues.length > 0 && (
-        <section className="dd-analysis-box dd-analysis-box--amber resume-processing-issues-panel">
-          <div className="dd-col-label">Resume processing issues</div>
-          <div className="dd-analysis-empty">{`${derivedFailedIssues.length} file${derivedFailedIssues.length === 1 ? '' : 's'} need attention before they can be ranked.`}</div>
-          {derivedFailedIssues.map((item, idx) => {
-            const failureCategory = toDisplayText(item?.resumeProcessingStatus, 'parse_failed')
-            const failureReason = toDisplayText(item?.parseError || item?.reason, 'Resume processing failed')
-            const nextAction = toDisplayText(
-              item?.recommendedAction || item?.nextAction,
-              'Re-upload as PDF/DOCX or retry this resume from the analyses page.',
-            )
-            return (
-              <div className="dd-analysis-item dd-analysis-item--icon" key={`failed-resume-${item?.resumeId || idx}`}>
-                <AlertTriangle size={14} strokeWidth={1.5} aria-hidden="true" />
-                <span>
-                  <strong>{toDisplayText(item?.filename, 'Unknown file')}</strong>
-                  {` · ${failureCategory}`}
-                  {` · ${failureReason}`}
-                  {` · Next action: ${nextAction}`}
-                </span>
-              </div>
-            )
-          })}
-        </section>
-      )}
 
       {shortlistV2Enabled && shortlistOpen && (
         <>
