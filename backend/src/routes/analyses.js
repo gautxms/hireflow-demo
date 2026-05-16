@@ -393,7 +393,7 @@ router.get('/', requireAuth, async (req, res) => {
         const extracted = extractCandidatesFromResult(row.parse_result)
         if (extracted.diagnostics.parseableObject) existing.parseableObjectCount += 1
         if (extracted.diagnostics.malformed) existing.malformedItemCount += 1
-        if (extracted.candidates.length > 0) existing.candidateBearingItemCount += 1
+        if (extracted.candidates.some((candidate) => hasRenderableCandidate(candidate))) existing.candidateBearingItemCount += 1
       }
       extractionByAnalysis.set(analysisId, existing)
     }

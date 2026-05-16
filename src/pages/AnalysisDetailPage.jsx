@@ -41,6 +41,40 @@ function deriveDisplayStatus(analysis) {
   return normalizeStatus(analysis?.liveStatus || analysis?.status)
 }
 
+function normalizeResumeIdentity(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function deriveResumeCoverage({ items = [], candidates = [] }) {
+  const candidateResumeIds = new Set()
+  const candidateFilenames = new Set()
+
+  for (const candidate of candidates) {
+    const resumeId = normalizeResumeIdentity(candidate?.resumeId || candidate?.resume_id || candidate?.id)
+    if (resumeId) {
+      candidateResumeIds.add(resumeId)
+    }
+    const filename = normalizeResumeIdentity(candidate?.filename)
+    if (filename) {
+      candidateFilenames.add(filename)
+    }
+  }
+
+  let resumesWithRenderableCandidates = 0
+  for (const item of items) {
+    const itemResumeId = normalizeResumeIdentity(item?.resumeId || item?.resume_id || item?.id)
+    const itemFilename = normalizeResumeIdentity(item?.filename || item?.name)
+    if ((itemResumeId && candidateResumeIds.has(itemResumeId)) || (itemFilename && candidateFilenames.has(itemFilename))) {
+      resumesWithRenderableCandidates += 1
+    }
+  }
+
+  return {
+    resumesWithRenderableCandidates,
+    totalResumes: items.length,
+  }
+}
+
 
 function shortenAnalysisId(value) {
   const normalized = String(value || '').trim()
@@ -181,7 +215,15 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   const failedResumeCount = Array.isArray(candidateResultsPayload.failedResumes) ? candidateResultsPayload.failedResumes.length : 0
   const failedCount = Number(summary.failed || 0)
   const totalCount = Number(summary.total || 0)
-  const completeButIncompleteResults = (displayStatus === 'complete' || displayStatus === 'completed') && totalCount > 0 && candidateCount < totalCount
+  const resumeCoverage = useMemo(
+    () => deriveResumeCoverage({ items: Array.isArray(analysis?.items) ? analysis.items : [], candidates: candidateResultsPayload.candidates }),
+    [analysis?.items, candidateResultsPayload.candidates],
+  )
+  const completeButIncompleteResults = (
+    (displayStatus === 'complete' || displayStatus === 'completed') &&
+    totalCount > 0 &&
+    resumeCoverage.resumesWithRenderableCandidates < resumeCoverage.totalResumes
+  )
   const pageTitle = useMemo(() => deriveAnalysisPageTitle(analysis, analysisId), [analysis, analysisId])
 
   useEffect(() => {
