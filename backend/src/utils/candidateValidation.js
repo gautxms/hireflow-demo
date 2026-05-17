@@ -57,12 +57,13 @@ function hasFailureStructure(candidate = {}) {
 
   const fitStatus = normalizeText(candidate?.fitStatus)
   const isUnscored = fitStatus === 'unscored'
+  const isFitStatusMissing = !fitStatus
 
   return skillsCount === 0
     && educationCount === 0
     && hasNullExperience
     && scoreIsZero
-    && isUnscored
+    && (isUnscored || isFitStatusMissing)
 }
 
 function hasRealEvidence(candidate = {}) {
