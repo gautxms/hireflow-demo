@@ -125,10 +125,18 @@ function isMeaningfulScoredCandidate(candidate) {
   ].map((value) => String(value || '').trim()).filter(Boolean)
   if (rawScore === 0 && evidence.length === 0) return false
 
-  const structuredSkills = Array.isArray(candidate?.skills_structured) ? candidate.skills_structured : []
+  const structuredSkills = candidate?.skills_structured
+  const structuredSkillCount = Array.isArray(structuredSkills)
+    ? structuredSkills.length
+    : (structuredSkills && typeof structuredSkills === 'object'
+      ? Object.values(structuredSkills).reduce((count, bucket) => {
+        if (Array.isArray(bucket)) return count + bucket.length
+        return bucket ? count + 1 : count
+      }, 0)
+      : 0)
   const skills = Array.isArray(candidate?.skills) ? candidate.skills : []
   const education = Array.isArray(candidate?.education) ? candidate.education : []
-  if (structuredSkills.length === 0 && skills.length === 0 && education.length === 0) return false
+  if (structuredSkillCount === 0 && skills.length === 0 && education.length === 0) return false
 
   const experienceFields = [
     candidate?.years_experience,
