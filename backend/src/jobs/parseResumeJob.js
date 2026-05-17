@@ -61,7 +61,7 @@ export function isFailurePlaceholderCandidate(candidate = {}) {
     && educationCount === 0
     && experienceValue === null
     && scoreValue === 0
-    && fitStatus === 'unscored'
+    && (!fitStatus || fitStatus === 'unscored')
 
   const hasRealEvidence = skillsCount > 0
     || educationCount > 0
