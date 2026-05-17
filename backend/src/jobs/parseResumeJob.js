@@ -5,6 +5,7 @@ import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { isCandidateExtractionValid, isCandidateValidForScoredOutcome, isFailurePlaceholderCandidate } from '../utils/candidateValidation.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
 import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 
@@ -73,6 +74,7 @@ export function isFailurePlaceholderCandidate(candidate = {}) {
 
   return hasFailureText && hasFailureStructure
 }
+export { isFailurePlaceholderCandidate }
 
 function mapParseErrorCode(errorCode) {
   const normalized = String(errorCode || '').trim().toLowerCase()
@@ -266,19 +268,6 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
-
-function resolveCandidateScore(candidate = {}) {
-  const directScore = normalizeNullableNumber(candidate?.score)
-  if (directScore !== null) return { value: directScore, source: 'score' }
-
-  const matchScoreValue = normalizeNullableNumber(candidate?.matchScore?.score)
-  if (matchScoreValue !== null) return { value: matchScoreValue, source: 'matchScore.score' }
-
-  const profileScore = normalizeNullableNumber(candidate?.profile_score)
-  if (profileScore !== null) return { value: profileScore, source: 'profile_score' }
-
-  return { value: null, source: null }
-}
 
 function getPreferredJobDescriptionText(row = {}) {
   const candidates = [
@@ -738,7 +727,6 @@ async function runParse(job) {
           id: identity.id,
           candidateId: identity.candidateId,
           resumeId: identity.resumeId || String(resumeId || ''),
-          resumeProcessingStatus: 'scored',
           ...candidate,
           summary: clampString(candidate?.summary, 400),
           years_experience: normalizeNullableNumber(candidate?.years_experience),
@@ -769,10 +757,13 @@ async function runParse(job) {
     : []
   const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const scoredCandidates = []
+  const parseFailedCandidates = []
+  const scoringFailedCandidates = []
   const scoringFailures = []
 
   for (const candidate of normalizedCandidates) {
-    if (isFailurePlaceholderCandidate(candidate)) {
+    if (!isCandidateExtractionValid(candidate)) {
+      parseFailedCandidates.push({ ...candidate, resumeProcessingStatus: 'parse_failed' })
       scoringFailures.push({
         candidateId: candidate?.candidateId || candidate?.id || null,
         resumeId: candidate?.resumeId || String(resumeId || ''),
@@ -780,8 +771,18 @@ async function runParse(job) {
       })
       continue
     }
-    const resolvedScore = resolveCandidateScore(candidate)
-    if (resolvedScore.value === null) {
+    if (!isCandidateValidForScoredOutcome(candidate)) {
+      scoringFailedCandidates.push({
+        ...candidate,
+        score: null,
+        profile_score: null,
+        matchScore: {
+          ...(candidate?.matchScore && typeof candidate.matchScore === 'object' ? candidate.matchScore : {}),
+          score: null,
+        },
+        resumeProcessingStatus: 'scoring_failed',
+        scoringFailureReason: 'scoring_failed::missing_finite_score',
+      })
       scoringFailures.push({
         candidateId: candidate?.candidateId || candidate?.id || null,
         resumeId: candidate?.resumeId || String(resumeId || ''),
@@ -812,24 +813,8 @@ async function runParse(job) {
       : (jobDescriptionContext?.missingReason || 'job_description_missing'),
     candidates: scoredCandidates,
     scoringFailures,
-    candidatesWithScoringFailures: normalizedCandidates
-      .filter((candidate) => !scoredCandidates.some((scored) => scored.id === candidate.id))
-      .map((candidate) => {
-        const failure = scoringFailures.find((entry) => (entry?.candidateId && entry.candidateId === candidate.id) || (entry?.resumeId && entry.resumeId === candidate?.resumeId))
-        const placeholderFailure = String(failure?.reason || '').startsWith('parse_failed::')
-        return ({
-        ...candidate,
-        score: null,
-        profile_score: null,
-        matchScore: {
-          ...(candidate?.matchScore && typeof candidate.matchScore === 'object' ? candidate.matchScore : {}),
-          score: null,
-        },
-        resumeProcessingStatus: placeholderFailure ? 'parse_failed' : 'scoring_failed',
-        scoringFailureReason: failure?.reason || 'scoring_failed::missing_finite_score',
-      })
-      }),
-    parseOutcome: 'success',
+    candidatesWithScoringFailures: [...parseFailedCandidates, ...scoringFailedCandidates],
+    parseOutcome: scoredCandidates.length > 0 ? 'success' : (parseFailedCandidates.length > 0 ? 'failed' : 'partial'),
     parseMeta: {
       preflight: {
         extractableTextRatio: preflight.extractableTextRatio,
@@ -837,8 +822,10 @@ async function runParse(job) {
       },
       extractionMethod: extractionResult?.methodUsed || 'failed',
       rawTextCharCount: extractedRawText.length,
-      parseStatus: 'complete',
-      scoringStatus: jobDescriptionContext?.hasContext ? 'complete' : 'skipped_no_job_description',
+      parseStatus: scoredCandidates.length > 0 ? 'complete' : (parseFailedCandidates.length > 0 ? 'failed' : 'partial'),
+      scoringStatus: scoringFailedCandidates.length > 0
+        ? 'failed'
+        : (jobDescriptionContext?.hasContext ? (scoredCandidates.length > 0 ? 'complete' : 'partial') : 'skipped_no_job_description'),
       provider: analysisResult?.provider || parseMethod,
       model: parseModel || analysisResult?.model || null,
       maxOutputTokens: parseMaxOutputTokens,
