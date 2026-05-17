@@ -180,9 +180,13 @@ function deriveAggregateStatus(counts, totalItems, extractionDiagnostics = {}) {
   if (totalItems === 0) return 'queued'
 
   const terminalCount = counts.complete + counts.failed
-  const candidateBearingItemCount = Number(extractionDiagnostics.candidateBearingItemCount || 0)
+  const validScoredCandidateItemCount = Number(
+    extractionDiagnostics.validScoredCandidateItemCount
+      ?? extractionDiagnostics.candidateBearingItemCount
+      ?? 0,
+  )
   if (terminalCount === totalItems) {
-    if (counts.complete > 0 && candidateBearingItemCount === totalItems) return 'complete'
+    if (counts.complete > 0 && validScoredCandidateItemCount === totalItems) return 'complete'
     return 'failed'
   }
 
@@ -208,21 +212,34 @@ function buildOutcomeSummary({ total, complete, failed }) {
 
 function deriveResultQualityStatus(extractionDiagnostics = {}, parseTerminalComplete = false) {
   const totalItems = Number(extractionDiagnostics.totalItems || 0)
-  const candidateBearingItemCount = Number(extractionDiagnostics.candidateBearingItemCount || 0)
-  const missingCandidateItemCount = Math.max(0, totalItems - candidateBearingItemCount)
+  const validScoredCandidateItemCount = Number(
+    extractionDiagnostics.validScoredCandidateItemCount
+      ?? extractionDiagnostics.candidateBearingItemCount
+      ?? 0,
+  )
+  const invalidPlaceholderItemCount = Number(
+    extractionDiagnostics.invalidPlaceholderItemCount
+      ?? Math.max(0, totalItems - validScoredCandidateItemCount),
+  )
+  const missingValidScoredCandidateItemCount = Math.max(0, totalItems - validScoredCandidateItemCount)
 
-  const allItemsCandidateBearing = totalItems > 0 && candidateBearingItemCount === totalItems
-  const partialResults = parseTerminalComplete && totalItems > 0 && candidateBearingItemCount > 0 && candidateBearingItemCount < totalItems
-  const resultExtractionFailures = parseTerminalComplete && totalItems > 0 && candidateBearingItemCount === 0
+  const allItemsValidScoredCandidateBearing = totalItems > 0 && validScoredCandidateItemCount === totalItems
+  const partialResults = parseTerminalComplete && totalItems > 0 && validScoredCandidateItemCount > 0 && validScoredCandidateItemCount < totalItems
+  const resultExtractionFailures = parseTerminalComplete && totalItems > 0 && validScoredCandidateItemCount === 0
 
   return {
     parseTerminalComplete,
-    allItemsCandidateBearing,
+    allItemsValidScoredCandidateBearing,
     partialResults,
     resultExtractionFailures,
-    candidateBearingItemCount,
-    missingCandidateItemCount,
-    qualityStatus: resultExtractionFailures ? 'missing' : (partialResults ? 'partial' : (allItemsCandidateBearing ? 'complete' : 'pending')),
+    validScoredCandidateItemCount,
+    invalidPlaceholderItemCount,
+    missingValidScoredCandidateItemCount,
+    // Backward-compatible keys now reflect strict valid-scored semantics.
+    allItemsCandidateBearing: allItemsValidScoredCandidateBearing,
+    candidateBearingItemCount: validScoredCandidateItemCount,
+    missingCandidateItemCount: missingValidScoredCandidateItemCount,
+    qualityStatus: resultExtractionFailures ? 'missing' : (partialResults ? 'partial' : (allItemsValidScoredCandidateBearing ? 'complete' : 'pending')),
   }
 }
 
@@ -273,7 +290,7 @@ async function loadAnalysisStatus(analysisId, userId) {
   const items = []
   const failures = []
   const counts = { queued: 0, processing: 0, retrying: 0, complete: 0, failed: 0 }
-  const extractionDiagnostics = { totalItems: 0, parseableObjectCount: 0, candidateBearingItemCount: 0, malformedItemCount: 0 }
+  const extractionDiagnostics = { totalItems: 0, parseableObjectCount: 0, validScoredCandidateItemCount: 0, invalidPlaceholderItemCount: 0, malformedItemCount: 0 }
   let maxProgress = 0
 
   for (const row of itemsResult.rows) {
@@ -313,7 +330,10 @@ async function loadAnalysisStatus(analysisId, userId) {
     extractionDiagnostics.totalItems += 1
     if (extracted.diagnostics.parseableObject) extractionDiagnostics.parseableObjectCount += 1
     if (extracted.diagnostics.malformed) extractionDiagnostics.malformedItemCount += 1
-    if (extracted.candidates.some((candidate) => isMeaningfulScoredCandidate(candidate))) extractionDiagnostics.candidateBearingItemCount += 1
+    if (canonicalStatus === 'complete') {
+      if (extracted.candidates.some((candidate) => isMeaningfulScoredCandidate(candidate))) extractionDiagnostics.validScoredCandidateItemCount += 1
+      else extractionDiagnostics.invalidPlaceholderItemCount += 1
+    }
 
     const parsedResult = extracted.normalizedResult
     const scoringFailures = Array.isArray(parsedResult?.scoringFailures) ? parsedResult.scoringFailures : []
@@ -464,13 +484,14 @@ router.get('/', requireAuth, async (req, res) => {
     for (const row of extractionByAnalysisResult.rows) {
       const analysisId = String(row.analysis_id || '')
       if (!analysisId) continue
-      const existing = extractionByAnalysis.get(analysisId) || { totalItems: 0, parseableObjectCount: 0, candidateBearingItemCount: 0, malformedItemCount: 0 }
+      const existing = extractionByAnalysis.get(analysisId) || { totalItems: 0, parseableObjectCount: 0, validScoredCandidateItemCount: 0, invalidPlaceholderItemCount: 0, malformedItemCount: 0 }
       existing.totalItems += 1
       if (row.status === 'complete') {
         const extracted = extractCandidatesFromResult(row.parse_result)
         if (extracted.diagnostics.parseableObject) existing.parseableObjectCount += 1
         if (extracted.diagnostics.malformed) existing.malformedItemCount += 1
-        if (extracted.candidates.some((candidate) => isMeaningfulScoredCandidate(candidate))) existing.candidateBearingItemCount += 1
+        if (extracted.candidates.some((candidate) => isMeaningfulScoredCandidate(candidate))) existing.validScoredCandidateItemCount += 1
+        else existing.invalidPlaceholderItemCount += 1
       }
       extractionByAnalysis.set(analysisId, existing)
     }
