@@ -266,7 +266,6 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
-
 function resolveCandidateScore(candidate = {}) {
   const directScore = normalizeNullableNumber(candidate?.score)
   if (directScore !== null) return { value: directScore, source: 'score' }
@@ -446,7 +445,7 @@ async function persistTokenUsageMetric({
       usageAvailable ? Number(tokenUsage.outputTokens || 0) : null,
       usageAvailable ? Number(tokenUsage.totalTokens || 0) : null,
       usageAvailable ? Number(tokenUsage.estimatedCostUsd || 0) : null,
-      JSON.stringify({ ...((metadata && typeof metadata === "object") ? metadata : {}), stage }),
+      JSON.stringify({ ...((metadata && typeof metadata === 'object') ? metadata : {}), stage }),
     ],
   )
 }
@@ -489,7 +488,6 @@ export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionCo
     },
   }))
 }
-
 
 function buildPreflightFailureParseResult({ filename, mimeType, fileSize, preflight }) {
   return {
@@ -562,7 +560,17 @@ async function runParse(job) {
       error_message: preflight.failureMessageUserSafe,
       attempts: job.attemptsMade + 1,
     })
-    console.log('[Parse][StageUsage]', { resumeId, parseJobId: job.id, failureCategory: preflight.failureCategory || "unknown", stageUsage: { parse: { attempted: true }, ocr: { attempted: Boolean(preflight.routeToOcr), status: "skipped_preflight" }, score: { attempted: false, skipped: true, skipReason: "preflight_hard_fail" }, fallback: { attempted: false } } })
+    console.log('[Parse][StageUsage]', {
+      resumeId,
+      parseJobId: job.id,
+      failureCategory: preflight.failureCategory || 'unknown',
+      stageUsage: {
+        parse: { attempted: true },
+        ocr: { attempted: Boolean(preflight.routeToOcr), status: 'skipped_preflight' },
+        score: { attempted: false, skipped: true, skipReason: 'preflight_hard_fail' },
+        fallback: { attempted: false },
+      },
+    })
     return parseResult
   }
 
@@ -599,9 +607,9 @@ async function runParse(job) {
       'text/plain',
       filename,
       {
-      jobDescriptionContext,
-      resumeId,
-      jobId: job.id,
+        jobDescriptionContext,
+        resumeId,
+        jobId: job.id,
       },
     )
     const aiResult = aiResponse?.result || {}
@@ -817,17 +825,17 @@ async function runParse(job) {
       .map((candidate) => {
         const failure = scoringFailures.find((entry) => (entry?.candidateId && entry.candidateId === candidate.id) || (entry?.resumeId && entry.resumeId === candidate?.resumeId))
         const placeholderFailure = String(failure?.reason || '').startsWith('parse_failed::')
-        return ({
-        ...candidate,
-        score: null,
-        profile_score: null,
-        matchScore: {
-          ...(candidate?.matchScore && typeof candidate.matchScore === 'object' ? candidate.matchScore : {}),
+        return {
+          ...candidate,
           score: null,
-        },
-        resumeProcessingStatus: placeholderFailure ? 'parse_failed' : 'scoring_failed',
-        scoringFailureReason: failure?.reason || 'scoring_failed::missing_finite_score',
-      })
+          profile_score: null,
+          matchScore: {
+            ...(candidate?.matchScore && typeof candidate.matchScore === 'object' ? candidate.matchScore : {}),
+            score: null,
+          },
+          resumeProcessingStatus: placeholderFailure ? 'parse_failed' : 'scoring_failed',
+          scoringFailureReason: failure?.reason || 'scoring_failed::missing_finite_score',
+        }
       }),
     parseOutcome: 'success',
     parseMeta: {
@@ -956,7 +964,17 @@ async function runParse(job) {
   }
 
   await job.progress(100)
-  console.log('[Parse][StageUsage]', { resumeId, parseJobId: job.id, failureCategory: null, stageUsage: { parse: { attempted: true }, ocr: { attempted: Boolean(preflight.routeToOcr), status: ocrOutcome ? "failed" : (preflight.routeToOcr ? "success" : "skipped") }, score: { attempted: true, skipped: false }, fallback: { attempted: true } } })
+  console.log('[Parse][StageUsage]', {
+    resumeId,
+    parseJobId: job.id,
+    failureCategory: null,
+    stageUsage: {
+      parse: { attempted: true },
+      ocr: { attempted: Boolean(preflight.routeToOcr), status: ocrOutcome ? 'failed' : (preflight.routeToOcr ? 'success' : 'skipped') },
+      score: { attempted: true, skipped: false },
+      fallback: { attempted: true },
+    },
+  })
   return parseResult
 }
 
@@ -996,7 +1014,17 @@ export function registerParseResumeJobProcessor() {
       })
 
       if (isTerminalFailure) {
-        console.log('[Parse][StageUsage]', { resumeId: job.data.resumeId, parseJobId: job.id, failureCategory: normalizedErrorCategory || "unknown", stageUsage: { parse: { attempted: true }, ocr: { attempted: Boolean(error?.preflightFailure), status: error?.preflightFailure ? "failed" : "unknown" }, score: { attempted: false, skipped: true, skipReason: "parse_or_preflight_failure" }, fallback: { attempted: true } } })
+        console.log('[Parse][StageUsage]', {
+          resumeId: job.data.resumeId,
+          parseJobId: job.id,
+          failureCategory: normalizedErrorCategory || 'unknown',
+          stageUsage: {
+            parse: { attempted: true },
+            ocr: { attempted: Boolean(error?.preflightFailure), status: error?.preflightFailure ? 'failed' : 'unknown' },
+            score: { attempted: false, skipped: true, skipReason: 'parse_or_preflight_failure' },
+            fallback: { attempted: true },
+          },
+        })
         await cacheJobResult(String(job.id), {
           status: 'failed',
           progress: 100,
