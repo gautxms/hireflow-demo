@@ -74,7 +74,6 @@ export function isFailurePlaceholderCandidate(candidate = {}) {
 
   return hasFailureText && hasFailureStructure
 }
-export { isFailurePlaceholderCandidate }
 
 function mapParseErrorCode(errorCode) {
   const normalized = String(errorCode || '').trim().toLowerCase()
