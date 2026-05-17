@@ -22,7 +22,11 @@ export function isFailurePlaceholderCandidate(candidate = {}) {
 }
 
 function resolveRawScore(candidate = {}) {
-  return Number(candidate?.score ?? candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.profile_score)
+  if (candidate?.score != null) return Number(candidate.score)
+  if (candidate?.matchScore?.score != null) return Number(candidate.matchScore.score)
+  if (candidate?.profile_score != null) return Number(candidate.profile_score)
+  if (typeof candidate?.matchScore !== 'object') return Number(candidate.matchScore)
+  return Number.NaN
 }
 
 function resolveReasoning(candidate = {}) {
