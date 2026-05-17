@@ -92,11 +92,88 @@ function extractCandidatesFromResult(result) {
   return { candidates: [], diagnostics, normalizedResult: parsed }
 }
 
-function hasRenderableCandidate(candidate) {
+function isMeaningfulScoredCandidate(candidate) {
   if (!candidate || typeof candidate !== 'object') return false
-  const rawScore = Number(candidate?.score ?? candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.profile_score)
-  const reasoning = String(candidate?.matchScore?.reason || candidate?.reasoning || candidate?.summary || '').trim()
-  return Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 100 && Boolean(reasoning)
+
+  const fitStatus = String(candidate?.fitStatus || '').trim().toLowerCase()
+  if (fitStatus === 'unscored') return false
+
+  const scoreCandidates = [
+    candidate?.score,
+    candidate?.matchScore?.score,
+    candidate?.matchScore,
+    candidate?.fitScore,
+    candidate?.overallFitScore,
+    candidate?.profile_score,
+  ]
+  const finiteScores = scoreCandidates
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value))
+  const hasFiniteFitScore = finiteScores.length > 0
+  const rawScore = hasFiniteFitScore ? finiteScores[0] : null
+  const profileScore = candidate?.profile_score == null ? null : Number(candidate.profile_score)
+  if (profileScore == null && !hasFiniteFitScore) return false
+  if (rawScore != null && (rawScore < 0 || rawScore > 100)) return false
+
+  const evidence = [
+    candidate?.matchScore?.reason,
+    candidate?.reasoning,
+    candidate?.summary,
+    candidate?.evidence,
+    candidate?.scoreEvidence,
+    candidate?.scoringEvidence,
+  ].map((value) => String(value || '').trim()).filter(Boolean)
+  if (rawScore === 0 && evidence.length === 0) return false
+
+  const structuredSkills = candidate?.skills_structured
+  const structuredSkillCount = Array.isArray(structuredSkills)
+    ? structuredSkills.length
+    : (structuredSkills && typeof structuredSkills === 'object'
+      ? Object.values(structuredSkills).reduce((count, bucket) => {
+        if (Array.isArray(bucket)) return count + bucket.length
+        return bucket ? count + 1 : count
+      }, 0)
+      : 0)
+  const skills = Array.isArray(candidate?.skills) ? candidate.skills : []
+  const education = Array.isArray(candidate?.education) ? candidate.education : []
+  if (structuredSkillCount === 0 && skills.length === 0 && education.length === 0) return false
+
+  const experienceFields = [
+    candidate?.years_experience,
+    candidate?.totalExperienceYears,
+    candidate?.relevantExperienceYears,
+  ]
+  const hasAnyExperienceValue = experienceFields.some((value) => value !== null && value !== undefined)
+  if (!hasAnyExperienceValue) return false
+
+  const failurePhrasePattern = /(parsing failed|unreadable|corrupted|manual review required|scoring deferred)/i
+  const failureNarratives = [
+    candidate?.summary,
+    candidate?.concerns,
+    candidate?.warnings,
+    candidate?.matchScore?.reason,
+    candidate?.reasoning,
+  ].map((value) => String(value || ''))
+  if (failureNarratives.some((value) => failurePhrasePattern.test(value))) return false
+
+  const resumeProcessingStatus = String(candidate?.resumeProcessingStatus || candidate?.resume_processing_status || '').trim().toLowerCase()
+  const invalidProcessingStatuses = new Set([
+    'failed',
+    'parse_failed',
+    'parsing_failed',
+    'unreadable',
+    'corrupted',
+    'manual_review_required',
+    'manual review required',
+    'scoring_deferred',
+    'unscored',
+    'not_scored',
+    'non_scored',
+    'nonscored',
+  ])
+  if (resumeProcessingStatus && invalidProcessingStatuses.has(resumeProcessingStatus)) return false
+
+  return evidence.length > 0
 }
 
 function deriveAggregateStatus(counts, totalItems, extractionDiagnostics = {}) {
@@ -236,7 +313,7 @@ async function loadAnalysisStatus(analysisId, userId) {
     extractionDiagnostics.totalItems += 1
     if (extracted.diagnostics.parseableObject) extractionDiagnostics.parseableObjectCount += 1
     if (extracted.diagnostics.malformed) extractionDiagnostics.malformedItemCount += 1
-    if (extracted.candidates.some((candidate) => hasRenderableCandidate(candidate))) extractionDiagnostics.candidateBearingItemCount += 1
+    if (extracted.candidates.some((candidate) => isMeaningfulScoredCandidate(candidate))) extractionDiagnostics.candidateBearingItemCount += 1
 
     const parsedResult = extracted.normalizedResult
     const scoringFailures = Array.isArray(parsedResult?.scoringFailures) ? parsedResult.scoringFailures : []
@@ -393,7 +470,7 @@ router.get('/', requireAuth, async (req, res) => {
         const extracted = extractCandidatesFromResult(row.parse_result)
         if (extracted.diagnostics.parseableObject) existing.parseableObjectCount += 1
         if (extracted.diagnostics.malformed) existing.malformedItemCount += 1
-        if (extracted.candidates.some((candidate) => hasRenderableCandidate(candidate))) existing.candidateBearingItemCount += 1
+        if (extracted.candidates.some((candidate) => isMeaningfulScoredCandidate(candidate))) existing.candidateBearingItemCount += 1
       }
       extractionByAnalysis.set(analysisId, existing)
     }
