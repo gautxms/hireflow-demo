@@ -588,7 +588,14 @@ router.get('/:id', requireAuth, async (req, res) => {
       resumeProcessingStatus: item.status === 'failed' ? 'parse_failed' : 'scoring_failed',
     })),
     diagnostics: {
-      resultExtraction: extractionDiagnostics,
+      resultExtraction: {
+        ...extractionDiagnostics,
+        candidateBearingItemCount: Number(
+          extractionDiagnostics.validScoredCandidateItemCount
+            ?? extractionDiagnostics.candidateBearingItemCount
+            ?? 0,
+        ),
+      },
     },
     completion: {
       parseTerminalComplete,
