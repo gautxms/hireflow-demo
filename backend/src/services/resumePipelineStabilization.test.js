@@ -101,7 +101,21 @@ test('parse placeholder classifier detects unknown candidate parse failures and 
   assert.equal(isFailurePlaceholderCandidate({
     name: 'Unknown Candidate',
     score: 0,
+    fitStatus: null,
     summary: 'Resume document could not be parsed. PDF content is compressed/encrypted or corrupted.',
+  }), true)
+
+  assert.equal(isFailurePlaceholderCandidate({
+    name: 'Unknown Candidate',
+    score: 0,
+    summary: 'Failed to parse resume and extraction failed due to unreadable content.',
+  }), true)
+
+  assert.equal(isFailurePlaceholderCandidate({
+    name: 'Unknown Candidate',
+    score: 0,
+    fitStatus: '',
+    summary: 'Unable to extract text. Manual review required after failed extraction.',
   }), true)
 
   assert.equal(isFailurePlaceholderCandidate({
