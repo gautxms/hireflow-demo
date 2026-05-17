@@ -17,24 +17,61 @@ export function isTerminalJobFailure(job) {
 const FAILURE_PLACEHOLDER_PATTERNS = [
   'could not be parsed',
   'unable to extract',
+  'failed to parse',
+  'parse failed',
+  'parsing failed',
+  'extraction failed',
+  'failed extraction',
   'corrupted',
   'unreadable',
   'compressed/encrypted',
+  'compressed content',
   'binary content',
   'pdf content',
+  'no skills extracted',
+  'no education extracted',
+  'no work history extracted',
+  'manual review required',
+  'scoring deferred',
 ]
 
 export function isFailurePlaceholderCandidate(candidate = {}) {
-  const name = String(candidate?.name || '').trim().toLowerCase()
   const merged = [
     candidate?.summary,
+    candidate?.concerns,
+    candidate?.considerations,
+    candidate?.resumeWarnings,
+    candidate?.uncertaintyNotes,
     candidate?.reasoning,
-    candidate?.matchScore?.reason,
     candidate?.parseError,
     candidate?.parse_error,
-  ].map((value) => String(value || '').toLowerCase()).join(' ')
+  ]
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .map((value) => String(value || '').toLowerCase())
+    .join(' ')
+
   const hasFailureText = FAILURE_PLACEHOLDER_PATTERNS.some((pattern) => merged.includes(pattern))
-  return name === 'unknown candidate' && hasFailureText
+
+  const skillsCount = Array.isArray(candidate?.skills) ? candidate.skills.length : 0
+  const educationCount = Array.isArray(candidate?.education) ? candidate.education.length : 0
+  const experienceValue = normalizeNullableNumber(candidate?.experience)
+  const scoreValue = resolveCandidateScore(candidate).value
+  const fitStatus = String(candidate?.fitStatus || '').trim().toLowerCase()
+  const hasFailureStructure = skillsCount === 0
+    && educationCount === 0
+    && experienceValue === null
+    && scoreValue === 0
+    && (!fitStatus || fitStatus === 'unscored')
+
+  const hasRealEvidence = skillsCount > 0
+    || educationCount > 0
+    || experienceValue !== null
+    || (scoreValue !== null && scoreValue > 0)
+    || ['fit', 'potential_fit', 'not_fit'].includes(fitStatus)
+
+  if (hasRealEvidence && !hasFailureStructure) return false
+
+  return hasFailureText && hasFailureStructure
 }
 
 function mapParseErrorCode(errorCode) {
