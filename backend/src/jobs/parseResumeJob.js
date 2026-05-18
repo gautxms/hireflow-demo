@@ -513,6 +513,7 @@ async function runParse(job) {
   const forcedExtractionFailure = preflight.routeToOcr
     && preflightLowQualityLikely
     && extractionResult?.methodUsed !== 'ocr'
+    && !hasUsableExtractedText
     ? {
         failureCategory: 'extraction_failed',
         failureMessageUserSafe: 'PDF text extraction quality was too low, and OCR fallback was unavailable or did not improve extraction.',
