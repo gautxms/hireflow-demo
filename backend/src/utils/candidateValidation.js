@@ -117,7 +117,7 @@ export function isCandidateExtractionValid(candidate = {}) {
 }
 
 export function isFailureNarrativeCandidate(candidate = {}) {
-  const failurePhrasePattern = /(parsing failed|unreadable|corrupted|content is not extractable|unable to assess|cannot be reliably extracted)/i
+  const failurePhrasePattern = /(parsing failed|parser failed|unreadable|corrupted|content is not extractable|unable to assess|cannot be reliably extracted|pdf parsing failed|no (?:work history|skills|education|achievements)(?:\s+are)?\s+(?:readable|extractable|available|found))/i
   const failureNarratives = [
     candidate?.summary,
     candidate?.reasoning,
