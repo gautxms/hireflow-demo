@@ -8,6 +8,7 @@ import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js
 import { isCandidateExtractionValid, isCandidateValidForScoredOutcome, isFailurePlaceholderCandidate } from '../utils/candidateValidation.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
 import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
+import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
 
 const MIN_EXTRACTED_TEXT_LENGTH = 80
 
@@ -40,6 +41,7 @@ function mapParseErrorCode(errorCode) {
   }
   return 'parse_failed'
 }
+
 
 function normalizeUnavailableReason(reason) {
   const raw = String(reason || '').trim()
@@ -777,6 +779,18 @@ async function runParse(job) {
   if (scoredCandidates.length === 0) {
     const fallbackFailureCategory = mapParseErrorCode(scoringFailures[0]?.reason || 'parse_failed')
     const terminalFailureReason = scoringFailures[0]?.reason || 'scoring_failed::missing_candidate_score_or_reasoning'
+    const terminalFailureError = new Error(terminalFailureReason)
+    terminalFailureError.parseFailureDetails = {
+      technicalDetails: terminalFailureReason,
+      provider: parseProvider || parseMethod || null,
+      model: parseModel || analysisResult?.model || null,
+      attempts: usageAttempts,
+      tokenUsage: usageAttempts.map((attempt) => ({
+        provider: attempt?.provider || null,
+        model: attempt?.model || null,
+        tokenUsage: attempt?.tokenUsage || null,
+      })),
+    }
     await pool.query(
       `UPDATE resumes
        SET parse_status = 'failed',
@@ -801,7 +815,7 @@ async function runParse(job) {
       result: parseResult,
       error: terminalFailureReason,
     })
-    throw new Error(terminalFailureReason)
+    throw terminalFailureError
   }
 
   const primaryCandidate = scoredCandidates[0] || null
@@ -893,7 +907,9 @@ export function registerParseResumeJobProcessor() {
     try {
       return await runParse(job)
     } catch (error) {
-      const normalizedError = normalizeProviderError(error)
+      const normalizedError = isLocalPostAiValidationFailure(error)
+        ? buildLocalPostAiFailureNormalizedPayload(error)
+        : normalizeProviderError(error)
       const isTerminalFailure = isTerminalJobFailure(job)
       const normalizedMessage = String(normalizedError.normalizedMessage || '').trim()
       const normalizedErrorCategory = String(normalizedError.category || '').trim()
