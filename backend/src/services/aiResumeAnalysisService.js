@@ -835,6 +835,10 @@ function buildPromptMetrics({ prompt, systemPrompt, outputInstruction, jobDescri
   }
 }
 
+// Adapter contract note:
+// - `fileBufferBase64` accepts base64-encoded file payloads (PDF at minimum via `application/pdf`).
+// - This is intentionally different from extracted-text mode (`mimeType === 'text/plain'`), where the base64 decodes to UTF-8 text.
+// - Callers must choose the mode deliberately based on extraction quality (for example fallback to file mode when extracted text is noisy/incomplete).
 export async function analyzeWithAnthropic(
   fileBufferBase64,
   mimeType,
@@ -990,6 +994,10 @@ export async function analyzeWithAnthropic(
   }
 }
 
+// Adapter contract note:
+// - `fileBufferBase64` accepts base64-encoded file payloads (PDF at minimum via `application/pdf`).
+// - This is intentionally different from extracted-text mode (`mimeType === 'text/plain'`), where the base64 decodes to UTF-8 text.
+// - Callers must choose the mode deliberately based on extraction quality (for example fallback to file mode when extracted text is noisy/incomplete).
 export async function analyzeWithOpenAI(
   fileBufferBase64,
   mimeType,
