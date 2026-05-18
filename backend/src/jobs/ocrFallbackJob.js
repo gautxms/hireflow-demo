@@ -354,11 +354,18 @@ function buildInitialStageDiagnostics() {
   }
 }
 
-export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer, forceOcr = false, preflightLowQuality = false }) {
+export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer, forceOcr = false, preflightLowQuality = false, dependencies = {} }) {
+  const {
+    extractTextFromResumeFn = extractTextFromResume,
+    isLikelyScannedPdfFn = isLikelyScannedPdf,
+    runOcrWithCacheFn = runOcrWithCache,
+    getActiveAiProviderCredentialsFn = getActiveAiProviderCredentials,
+    resolveDirectPdfVisionCapabilityFn = resolveDirectPdfVisionCapability,
+  } = dependencies
   const stageDiagnostics = buildInitialStageDiagnostics()
-  const extraction = await extractTextFromResume({ fileBuffer, mimeType })
+  const extraction = await extractTextFromResumeFn({ fileBuffer, mimeType })
   const aiConfidence = scoreTextConfidence(extraction.length, fileSize)
-  const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
+  const scannedPdf = isLikelyScannedPdfFn({ mimeType, fileBuffer })
 
   const aiAttempt = {
     method: 'ai-extraction',
@@ -414,7 +421,7 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
     }
   }
 
-  const ocrAttempt = await runOcrWithCache({ fileBuffer, mimeType })
+  const ocrAttempt = await runOcrWithCacheFn({ fileBuffer, mimeType })
   const ocrConfidence = clampConfidence(ocrAttempt.confidence, 10, 99)
   const ocrText = String(ocrAttempt.text || '').trim()
   const useOcrText = shouldPreferOcrText({
@@ -454,8 +461,8 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
 
   if (shouldAttemptDirectPdfVision) {
     try {
-      const credentials = await getActiveAiProviderCredentials()
-      directPdfVisionCapability = resolveDirectPdfVisionCapability(credentials, mimeType)
+      const credentials = await getActiveAiProviderCredentialsFn()
+      directPdfVisionCapability = resolveDirectPdfVisionCapabilityFn(credentials, mimeType)
 
       if (directPdfVisionCapability.supported) {
         stageDiagnostics.direct_pdf_vision = {
