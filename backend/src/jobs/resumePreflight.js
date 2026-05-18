@@ -1,7 +1,11 @@
 import { estimateExtractableText } from '../services/ocrService.js'
 
 const IMAGE_ONLY_RATIO_THRESHOLD = 0.01
+const LOW_QUALITY_RATIO_THRESHOLD = 0.18
 const OCR_MIN_CONFIDENCE = 65
+const RESUME_SECTION_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|summary|employment|certifications?)\b/i
+const BINARY_ARTIFACT_PATTERN = /\b(?:obj|endobj|stream|endstream|xref|flatedecode|\/filter|\/length)\b/gi
+const TOKEN_PATTERN = /[A-Za-z]{2,}/g
 
 function hasPdfHeader(fileBuffer) {
   return String(fileBuffer.subarray(0, 8).toString('latin1')).includes('%PDF-')
@@ -54,15 +58,37 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
 
   const extractableTextRatio = extraction.ratio
   const imageOnlyLikely = normalizedMime === 'application/pdf' && extractableTextRatio <= IMAGE_ONLY_RATIO_THRESHOLD
+  const extractedText = String(extraction?.text || '')
+  const alphaTokens = extractedText.match(TOKEN_PATTERN) || []
+  const readableTokenCount = alphaTokens.filter((token) => token.length >= 3).length
+  const readableTokenRatio = alphaTokens.length > 0 ? readableTokenCount / alphaTokens.length : 0
+  const hasResumeSectionSignals = RESUME_SECTION_SIGNAL_PATTERN.test(extractedText)
+  const artifactMatches = extractedText.match(BINARY_ARTIFACT_PATTERN) || []
+  const binaryArtifactRatio = extractedText.length > 0
+    ? artifactMatches.join('').length / extractedText.length
+    : 1
+  const lowExtractableTextLikely = normalizedMime === 'application/pdf' && extractableTextRatio < LOW_QUALITY_RATIO_THRESHOLD
+  const lowReadableQualityLikely = normalizedMime === 'application/pdf'
+    && !hasResumeSectionSignals
+    && (readableTokenRatio < 0.62 || binaryArtifactRatio > 0.08)
+  const routeToOcr = imageOnlyLikely || lowExtractableTextLikely || lowReadableQualityLikely
 
   return {
     ok: true,
     unrecoverable: false,
     extractableTextRatio,
     imageOnlyLikely,
-    routeToOcr: imageOnlyLikely,
+    routeToOcr,
+    textQuality: {
+      lowExtractableTextLikely,
+      lowReadableQualityLikely,
+      readableTokenRatio,
+      binaryArtifactRatio,
+      hasResumeSectionSignals,
+    },
     thresholds: {
       imageOnlyRatio: IMAGE_ONLY_RATIO_THRESHOLD,
+      lowQualityRatio: LOW_QUALITY_RATIO_THRESHOLD,
       ocrMinConfidence: OCR_MIN_CONFIDENCE,
     },
   }

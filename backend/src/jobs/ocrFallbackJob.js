@@ -310,6 +310,33 @@ function scoreTextConfidence(textLength, fileSize) {
 export function shouldUseOcrFallback({ scannedPdf, extractionLength, aiConfidence }) {
   return Boolean(scannedPdf || extractionLength === 0 || aiConfidence < 70)
 }
+const RESUME_SECTION_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|summary|employment|certifications?)\b/i
+const ALPHA_TOKEN_PATTERN = /[A-Za-z]{2,}/g
+
+function scoreTextQuality(text = '') {
+  const normalized = String(text || '').trim()
+  const alphaTokens = normalized.match(ALPHA_TOKEN_PATTERN) || []
+  const readableTokenCount = alphaTokens.filter((token) => token.length >= 3).length
+  const readableTokenRatio = alphaTokens.length > 0 ? readableTokenCount / alphaTokens.length : 0
+  const hasResumeSignals = RESUME_SECTION_SIGNAL_PATTERN.test(normalized)
+  const qualityScore = (hasResumeSignals ? 0.55 : 0) + (readableTokenRatio * 0.45)
+  return { qualityScore, readableTokenRatio, hasResumeSignals, textLength: normalized.length }
+}
+
+export function shouldPreferOcrText({ extractionText = '', ocrText = '', aiConfidence = 0, ocrConfidence = 0, forceOcr = false, preflightLowQuality = false }) {
+  const extractionQuality = scoreTextQuality(extractionText)
+  const ocrQuality = scoreTextQuality(ocrText)
+  const ocrUsable = ocrQuality.textLength >= 80 && ocrConfidence >= 55 && ocrQuality.readableTokenRatio >= 0.55
+  if (!ocrUsable) return false
+
+  if (forceOcr) {
+    if (preflightLowQuality) return true
+    return ocrQuality.qualityScore >= extractionQuality.qualityScore
+  }
+
+  return (ocrQuality.textLength > extractionQuality.textLength && ocrConfidence >= aiConfidence)
+    || (ocrQuality.qualityScore > extractionQuality.qualityScore && ocrConfidence >= 65)
+}
 
 function mapFinalExtractionMethod({ selectedMethod, usedOcrText }) {
   if (usedOcrText) return 'ocr'
@@ -319,7 +346,7 @@ function mapFinalExtractionMethod({ selectedMethod, usedOcrText }) {
   return 'failed'
 }
 
-export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer }) {
+export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer, forceOcr = false, preflightLowQuality = false }) {
   const extraction = await extractTextFromResume({ fileBuffer, mimeType })
   const aiConfidence = scoreTextConfidence(extraction.length, fileSize)
   const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
@@ -335,7 +362,7 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
     scannedPdf,
     extractionLength: extraction.length,
     aiConfidence,
-  })
+  }) || forceOcr
 
   if (!shouldRunOcr) {
     const finalMethod = mapFinalExtractionMethod({
@@ -362,7 +389,14 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   const ocrAttempt = await runOcrWithCache({ fileBuffer, mimeType })
   const ocrConfidence = clampConfidence(ocrAttempt.confidence, 10, 99)
   const ocrText = String(ocrAttempt.text || '').trim()
-  const useOcrText = ocrText.length > extraction.length && ocrConfidence >= aiConfidence
+  const useOcrText = shouldPreferOcrText({
+    extractionText: extraction.text,
+    ocrText,
+    aiConfidence,
+    ocrConfidence,
+    forceOcr,
+    preflightLowQuality,
+  })
   const selectedText = useOcrText ? ocrText : extraction.text
   const overallConfidence = clampConfidence(Math.max(aiConfidence, ocrConfidence), 10, 99)
   const finalMethod = mapFinalExtractionMethod({
