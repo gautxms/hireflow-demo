@@ -12,6 +12,14 @@ test('parseOutcome canonical enum rejects non-canonical values', () => {
 
 test('failureCategory must be canonical or explicitly mapped to unknown', () => {
   assert.equal(normalizeFailureCategory('encrypted_or_password_protected_pdf', { fallback: 'unknown' }), 'encrypted_or_password_protected_pdf')
+  assert.equal(
+    normalizeFailureCategory('parse_failed::{"failureType":"ai_output_validation_failed"}', { fallback: 'unknown' }),
+    'ai_output_validation_failed',
+  )
+  assert.equal(
+    normalizeFailureCategory('parse_failed::ai_output_validation_failed', { fallback: 'unknown' }),
+    'ai_output_validation_failed',
+  )
   assert.equal(normalizeFailureCategory('legacy_unmapped_reason', { fallback: 'unknown' }), 'unknown')
   assert.equal(normalizeFailureCategory(null, { fallback: 'unknown' }), null)
 })
