@@ -45,3 +45,23 @@ test('low confidence + unusable pdf_text + no direct fallback yields extraction 
   assert.equal(result.ocrUsable, false)
   assert.match(result.skippedReasons.join(','), /unsupported_model_input_mode/)
 })
+
+test('enough extracted text without section labels is warning-only quality, not unusable', () => {
+  const result = buildExtractionSelectionDiagnostics({
+    extractionResult: {
+      rawText: 'John Doe Senior Software Engineer at Acme Corp built distributed systems and improved reliability by 42 percent '.repeat(3),
+      methodUsed: 'pdf_text',
+      stageDiagnostics: {
+        pdf_text: { attempted: true, extractedTextLength: 300, status: 'success' },
+        ocr: { attempted: false, extractedTextLength: 0, confidence: 0, status: 'skipped' },
+        direct_pdf_vision: { attempted: false, status: 'skipped', reason: 'pdf_text_usable' },
+      },
+    },
+    ocrOutcome: null,
+    hasUsableExtractedText: true,
+  })
+
+  assert.equal(result.pdfTextQuality, 'missing_resume_signals')
+  assert.equal(result.hasResumeSignals, false)
+  assert.equal(result.terminalReason, null)
+})
