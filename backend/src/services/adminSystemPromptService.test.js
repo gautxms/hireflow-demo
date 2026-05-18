@@ -134,16 +134,23 @@ test('resetAdminSystemPromptToDefault persists the known default prompt', async 
   assert.equal(result.promptVersion, 9)
 })
 
-test('DEFAULT_SYSTEM_PROMPT uses compact quick-analysis contract and limits', () => {
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"allExtractedSkills":/)
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_flat":/)
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_structured":/)
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"confidence":/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not include: allExtractedSkills, skills_flat, skills_structured, full work history/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /summary <= 160 chars/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /reasoning <= 250 chars/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /matchedSkills <= 10/)
+test('DEFAULT_SYSTEM_PROMPT enforces v9 rich compact contract and strict failure rules', () => {
   assert.match(DEFAULT_SYSTEM_PROMPT, /Always return exactly 1 candidate object/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /resumeProcessingStatus must be one of: scored \| parse_failed \| scoring_failed/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /score must be 0\.\.100 only when resumeProcessingStatus=\"scored\"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /For parse_failed or scoring_failed: score must be null and fitStatus must be "unscored"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /For parse_failed or scoring_failed: allExtractedSkills=\[\], skills_structured arrays=\[\], education=\[\], experienceHighlights=\[\], matchedSkills=\[\], missingRequirements=\[\], weaklySupportedRequirements=\[\], strengths=\[\]\./)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"allExtractedSkills": \["Java", "AWS", "PostgreSQL"\]/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"skills_structured": \{/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"tools_and_platforms": \["AWS", "Docker"\]/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"education": \[\{"degree":"B\.S\."/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"highestEducation": "Bachelor's"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"relevantExperienceYears": 5/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"experienceHighlights": \["Led migration to event-driven architecture"\]/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"experienceConfidence": "high"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"resumeIntegrityFlags": \[\{/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"issueType": "ocr_low_confidence"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not include: full work history, all projects, all certifications, all achievements, long evidence snippets, detailed confidence object\./)
 })
 
 test('getRuntimeSystemPromptConfig returns stored admin prompt over default', async () => {
@@ -184,4 +191,15 @@ test('resetAdminSystemPromptToDefaultIfLegacy does not overwrite custom prompt',
   const result = await resetAdminSystemPromptToDefaultIfLegacy({ adminId: 'admin-safe' })
   assert.equal(result.resetPerformed, false)
   assert.equal(updateCalled, false)
+})
+
+
+test('DEFAULT_SYSTEM_PROMPT avoids literal type labels and includes scoring bands', () => {
+  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"string\|null"/)
+  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"number\|null"/)
+  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"number 0\.\.1"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Scoring bands for readable resumes:/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /80-100 = strong fit/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not use 0 for unreadable\/failed parsing; use score=null/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /If estimated from dates, set isExperienceEstimated=true and experienceSource="interval_estimate"/)
 })
