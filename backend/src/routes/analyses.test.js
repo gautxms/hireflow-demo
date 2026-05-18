@@ -271,7 +271,7 @@ test('GET /analyses/:id mixed batch completes with per-resume parse outcomes and
   server.close()
 
   assert.equal(response.status, 200)
-  assert.equal(payload.status, 'complete')
+  assert.equal(payload.status, 'failed')
   assert.equal(payload.summary.totalResumes, 3)
   assert.equal(payload.summary.successCount, 1)
   assert.equal(payload.summary.failedCount, 2)

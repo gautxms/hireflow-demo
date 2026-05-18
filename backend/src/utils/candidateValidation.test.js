@@ -49,3 +49,20 @@ test('meaningful scored candidate remains valid', () => {
   assert.equal(isFailureNarrativeCandidate(candidate), false)
   assert.equal(isCandidateValidForScoredOutcome(candidate), true)
 })
+
+
+test('AG-style failure narrative with scored status is rejected', () => {
+  const candidate = {
+    summary: 'PDF parsing failed and content is not extractable.',
+    reasoning: 'No work history, skills, education, or achievements are readable.',
+    resumeProcessingStatus: 'scored',
+    score: 15,
+    skills_flat: [],
+    education: [],
+    experience: null,
+    years_experience: null,
+  }
+
+  assert.equal(isFailureNarrativeCandidate(candidate), true)
+  assert.equal(isCandidateValidForScoredOutcome(candidate), false)
+})
