@@ -453,30 +453,40 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   }
 
   if (shouldAttemptDirectPdfVision) {
-    const credentials = await getActiveAiProviderCredentials()
-    directPdfVisionCapability = resolveDirectPdfVisionCapability(credentials, mimeType)
+    try {
+      const credentials = await getActiveAiProviderCredentials()
+      directPdfVisionCapability = resolveDirectPdfVisionCapability(credentials, mimeType)
 
-    if (directPdfVisionCapability.supported) {
-      stageDiagnostics.direct_pdf_vision = {
-        attempted: true,
-        status: 'failed',
-        reason: 'not_implemented_no_usable_upstream_text',
-        provider: directPdfVisionCapability.attemptedProvider,
-        model: directPdfVisionCapability.attemptedModel,
-        activeProvider: directPdfVisionCapability.activeProvider,
-        activeModel: directPdfVisionCapability.activeModel,
-        fallbackProvider: directPdfVisionCapability.fallbackProvider,
-        fallbackModel: directPdfVisionCapability.fallbackModel,
+      if (directPdfVisionCapability.supported) {
+        stageDiagnostics.direct_pdf_vision = {
+          attempted: true,
+          status: 'failed',
+          reason: 'not_implemented_no_usable_upstream_text',
+          provider: directPdfVisionCapability.attemptedProvider,
+          model: directPdfVisionCapability.attemptedModel,
+          activeProvider: directPdfVisionCapability.activeProvider,
+          activeModel: directPdfVisionCapability.activeModel,
+          fallbackProvider: directPdfVisionCapability.fallbackProvider,
+          fallbackModel: directPdfVisionCapability.fallbackModel,
+        }
+      } else {
+        stageDiagnostics.direct_pdf_vision = {
+          attempted: false,
+          status: 'skipped',
+          reason: 'unsupported_model_input_mode',
+          activeProvider: directPdfVisionCapability.activeProvider,
+          activeModel: directPdfVisionCapability.activeModel,
+          fallbackProvider: directPdfVisionCapability.fallbackProvider,
+          fallbackModel: directPdfVisionCapability.fallbackModel,
+        }
       }
-    } else {
+    } catch (error) {
+      const capabilityResolutionError = error instanceof Error ? error.message : String(error)
       stageDiagnostics.direct_pdf_vision = {
         attempted: false,
         status: 'skipped',
-        reason: 'unsupported_model_input_mode',
-        activeProvider: directPdfVisionCapability.activeProvider,
-        activeModel: directPdfVisionCapability.activeModel,
-        fallbackProvider: directPdfVisionCapability.fallbackProvider,
-        fallbackModel: directPdfVisionCapability.fallbackModel,
+        reason: 'capability_resolution_failed',
+        error: capabilityResolutionError,
       }
     }
   } else {
