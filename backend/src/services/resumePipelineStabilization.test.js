@@ -25,11 +25,12 @@ test('virus scan safety classification enforces safe/unsafe states', () => {
   assert.equal(isScanResultSafe({ status: 'clean', malicious: true }), false)
 })
 
-test('ocr fallback decision only triggers for scanned/low-confidence/no-text inputs', () => {
+test('ocr fallback decision only triggers for scanned/low-confidence/no-text inputs unless force-routed', () => {
   assert.equal(shouldUseOcrFallback({ scannedPdf: false, extractionLength: 5000, aiConfidence: 92 }), false)
   assert.equal(shouldUseOcrFallback({ scannedPdf: true, extractionLength: 5000, aiConfidence: 92 }), true)
   assert.equal(shouldUseOcrFallback({ scannedPdf: false, extractionLength: 0, aiConfidence: 92 }), true)
   assert.equal(shouldUseOcrFallback({ scannedPdf: false, extractionLength: 5000, aiConfidence: 69 }), true)
+  assert.equal(shouldUseOcrFallback({ scannedPdf: false, extractionLength: 5000, aiConfidence: 92, forceOcr: true }), true)
 })
 
 test('queue retry logic marks resume failed only on terminal failure', () => {

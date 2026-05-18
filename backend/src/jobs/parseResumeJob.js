@@ -503,6 +503,7 @@ async function runParse(job) {
     mimeType,
     fileSize: Number(fileSize || 0),
     fileBuffer,
+    forceOcr: Boolean(preflight.routeToOcr),
   })
   const extractedRawText = String(extractionResult?.rawText || '').trim()
   const hasUsableExtractedText = extractedRawText.length >= MIN_EXTRACTED_TEXT_LENGTH

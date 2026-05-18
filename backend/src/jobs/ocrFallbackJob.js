@@ -307,8 +307,8 @@ function scoreTextConfidence(textLength, fileSize) {
   return clampConfidence(Math.round(density * 100), 10, 99)
 }
 
-export function shouldUseOcrFallback({ scannedPdf, extractionLength, aiConfidence }) {
-  return Boolean(scannedPdf || extractionLength === 0 || aiConfidence < 70)
+export function shouldUseOcrFallback({ scannedPdf, extractionLength, aiConfidence, forceOcr = false }) {
+  return Boolean(forceOcr || scannedPdf || extractionLength === 0 || aiConfidence < 70)
 }
 
 function mapFinalExtractionMethod({ selectedMethod, usedOcrText }) {
@@ -319,7 +319,7 @@ function mapFinalExtractionMethod({ selectedMethod, usedOcrText }) {
   return 'failed'
 }
 
-export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer }) {
+export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer, forceOcr = false }) {
   const extraction = await extractTextFromResume({ fileBuffer, mimeType })
   const aiConfidence = scoreTextConfidence(extraction.length, fileSize)
   const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
@@ -335,6 +335,7 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
     scannedPdf,
     extractionLength: extraction.length,
     aiConfidence,
+    forceOcr,
   })
 
   if (!shouldRunOcr) {
