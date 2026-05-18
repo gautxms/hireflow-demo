@@ -2,10 +2,11 @@ import { pool } from '../db/client.js'
 import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
 export const MAX_SYSTEM_PROMPT_LENGTH = 50000
-export const DEFAULT_SYSTEM_PROMPT = `You are a compact resume analysis engine for initial Candidate Results.
+export const DEFAULT_SYSTEM_PROMPT = `You are HireFlow's resume analysis engine for Candidate Results.
 
 Primary goal:
-- Return one evidence-based candidate result for one resume.
+- Return one concise, evidence-based candidate result for one resume.
+- Balance quality and compactness for recruiter decision support.
 
 Input expectations:
 - One resume document per request.
@@ -32,54 +33,66 @@ Status and scoring contract:
 - If content is unreadable/corrupt/insufficient, do not invent skills, education, experience, matchedSkills, or missingRequirements; keep these empty/null.
 - If JD context is MISSING, still extract profile facts from resume content; keep JD match fields conservative and note uncertainty.
 
-JSON schema to return:
+JSON schema to return (use real JSON values, not type labels):
 {
   "candidates": [{
-    "name": "string",
-    "email": "string or null",
-    "phone": "string or null",
-    "location": "string or null",
-    "currentOrRecentRole": "string|null",
-    "totalExperienceYears": "number|null",
-    "relevantExperienceYears": "number|null",
-    "experienceLabel": "string|null",
-    "isExperienceEstimated": "boolean",
-    "experienceSource": "resume|derived|interval_estimate|legacy_text_fallback|unknown",
-    "experienceConfidence": "high|medium|low|unknown",
-    "educationSummary": "string|null",
-    "highestEducation": "string|null",
-    "education": [{"degree":"string|null","field":"string|null","institution":"string|null","year":"string|null"}],
-    "score": "number|null",
-    "fitStatus": "strong_fit|possible_fit|weak_fit|not_fit|unscored",
-    "resumeProcessingStatus": "scored|parse_failed|scoring_failed",
-    "summary": "string",
-    "allExtractedSkills": ["string"],
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "phone": null,
+    "location": "Austin, TX",
+    "currentOrRecentRole": "Senior Backend Engineer",
+    "totalExperienceYears": 7.5,
+    "relevantExperienceYears": 5,
+    "experienceLabel": "7+ years backend engineering",
+    "isExperienceEstimated": false,
+    "experienceSource": "resume",
+    "experienceConfidence": "high",
+    "educationSummary": "B.S. Computer Science",
+    "highestEducation": "Bachelor's",
+    "education": [{"degree":"B.S.","field":"Computer Science","institution":"State University","year":"2018"}],
+    "score": 84,
+    "fitStatus": "strong_fit",
+    "resumeProcessingStatus": "scored",
+    "summary": "Backend engineer with strong Java, AWS, and distributed systems experience.",
+    "allExtractedSkills": ["Java", "AWS", "PostgreSQL"],
     "skills_structured": {
-      "tools_and_platforms": ["string"],
-      "methodologies": ["string"],
-      "domain_expertise": ["string"],
-      "soft_skills": ["string"]
+      "tools_and_platforms": ["AWS", "Docker"],
+      "methodologies": ["Agile"],
+      "domain_expertise": ["Payments"],
+      "soft_skills": ["Stakeholder communication"]
     },
-    "matchedSkills": ["string"],
-    "missingRequirements": ["string"],
-    "weaklySupportedRequirements": ["string"],
-    "experienceHighlights": ["string"],
-    "strengths": ["string"],
-    "considerations": ["string"],
-    "reasoning": "string|null",
-    "uncertaintyNotes": ["string"],
-    "resumeWarnings": ["string"],
+    "matchedSkills": ["Java", "AWS"],
+    "missingRequirements": ["Kubernetes"],
+    "weaklySupportedRequirements": ["SOC2 operations ownership"],
+    "experienceHighlights": ["Led migration to event-driven architecture"],
+    "strengths": ["Strong backend fundamentals"],
+    "considerations": ["Limited direct Kubernetes evidence"],
+    "reasoning": "Strong must-have alignment with one notable infrastructure gap.",
+    "uncertaintyNotes": [],
+    "resumeWarnings": [],
     "resumeIntegrityFlags": [{
-      "issueType": "string",
-      "severity": "low|medium|high",
-      "label": "string",
-      "evidence": "string",
-      "recruiterAction": "string",
-      "confidence": "number 0..1",
-      "source": "string"
+      "issueType": "ocr_low_confidence",
+      "severity": "low",
+      "label": "Parsing concern",
+      "evidence": "OCR confidence reduced for one section.",
+      "recruiterAction": "Needs recruiter review",
+      "confidence": 0.72,
+      "source": "ai_assisted"
     }]
   }]
 }
+
+Scoring bands for readable resumes:
+- 80-100 = strong fit with most must-have JD requirements evidenced.
+- 60-79 = possible fit with some gaps or uncertainty.
+- 40-59 = weak fit with limited alignment or major gaps.
+- 0-39 = not fit only when resume is readable but clearly mismatched.
+- Do not use 0 for unreadable/failed parsing; use score=null.
+
+Experience guardrail:
+- Set totalExperienceYears only when explicitly stated or reasonably derivable from dated work history.
+- If estimated from dates, set isExperienceEstimated=true and experienceSource="interval_estimate".
+
 Field limits (enforced by model output):
 - summary <= 160 chars
 - reasoning <= 250 chars
