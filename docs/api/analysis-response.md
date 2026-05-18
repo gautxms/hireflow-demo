@@ -35,6 +35,7 @@ Enum: `success | partial | failed`
 Enum:
 
 - `corrupt_or_unreadable`
+- `ai_output_validation_failed`
 - `encrypted_or_password_protected_pdf`
 - `image_only_low_ocr`
 - `unsupported_encoding_or_format`
@@ -54,6 +55,7 @@ Enum:
 Exact meanings:
 
 - `corrupt_or_unreadable`: The source PDF is malformed or unreadable.
+- `ai_output_validation_failed`: AI responded, but candidate output failed strict post-parse validation and was rejected as non-usable.
 - `encrypted_or_password_protected_pdf`: The PDF is password-protected or otherwise encrypted.
 - `image_only_low_ocr`: Content is image-only and OCR quality is insufficient for reliable extraction.
 - `unsupported_encoding_or_format`: File encoding/content format cannot be decoded by the parser stack.
