@@ -11,6 +11,7 @@ import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
 
 const MIN_EXTRACTED_TEXT_LENGTH = 80
+const RESUME_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|employment|certifications?|summary)\b/i
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -162,6 +163,49 @@ function buildExtractionDiagnosticsSummary({
       reason: directPdfVisionReason,
     },
     final_extraction_method: finalExtractionMethod,
+  }
+}
+
+function hasMeaningfulResumeSignals(text = '') {
+  const normalized = String(text || '').trim()
+  if (!normalized) return false
+  return normalized.length >= MIN_EXTRACTED_TEXT_LENGTH && RESUME_SIGNAL_PATTERN.test(normalized)
+}
+
+export function buildExtractionSelectionDiagnostics({ extractionResult, ocrOutcome, hasUsableExtractedText }) {
+  const stageDiagnostics = extractionResult?.stageDiagnostics || {}
+  const pdfStage = stageDiagnostics.pdf_text || {}
+  const ocrStage = stageDiagnostics.ocr || {}
+  const visionStage = stageDiagnostics.direct_pdf_vision || {}
+  const extractedRawText = String(extractionResult?.rawText || '').trim()
+
+  const pdfTextAvailable = Number(pdfStage.extractedTextLength || 0) > 0
+  const pdfTextLength = Number(pdfStage.extractedTextLength || 0)
+  const ocrTextLength = Number(ocrStage.extractedTextLength || 0)
+  const ocrConfidence = Number(extractionResult?.ocrConfidence ?? ocrStage.confidence ?? 0)
+  const selectedExtractionMethod = extractionResult?.methodUsed || 'failed'
+  const pdfTextQuality = hasMeaningfulResumeSignals(extractedRawText)
+    ? 'usable_resume_signals'
+    : (hasUsableExtractedText ? 'usable_length_only' : 'unusable')
+  const ocrUsable = ocrTextLength >= MIN_EXTRACTED_TEXT_LENGTH && ocrConfidence >= 55
+
+  const skippedReasons = []
+  if (ocrOutcome) skippedReasons.push('ocr_confidence_below_threshold')
+  if (!pdfTextAvailable) skippedReasons.push('pdf_text_unavailable')
+  if (visionStage.status === 'skipped' && visionStage.reason) skippedReasons.push(`direct_pdf_vision_${visionStage.reason}`)
+
+  return {
+    pdfTextAvailable,
+    pdfTextLength,
+    pdfTextQuality,
+    ocrAttempted: Boolean(ocrStage.attempted),
+    ocrConfidence,
+    ocrTextLength,
+    ocrUsable,
+    selectedExtractionMethod,
+    skippedReasons,
+    terminalReason: null,
+    aiCalled: false,
   }
 }
 
@@ -602,20 +646,25 @@ async function runParse(job) {
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
   let usageAttempts = []
+  const selectionDiagnostics = buildExtractionSelectionDiagnostics({
+    extractionResult,
+    ocrOutcome,
+    hasUsableExtractedText,
+  })
 
   try {
-    if (ocrOutcome) {
-      const error = new Error(`${ocrOutcome.failureCategory}::${ocrOutcome.failureMessageUserSafe}`)
-      error.preflightFailure = ocrOutcome
-      throw error
-    }
     if (forcedExtractionFailure) {
       const error = new Error(`${forcedExtractionFailure.failureCategory}::${forcedExtractionFailure.failureMessageUserSafe}`)
       error.preflightFailure = forcedExtractionFailure
       throw error
     }
     if (!hasUsableExtractedText) {
+      selectionDiagnostics.terminalReason = 'no_usable_text_after_pdf_ocr_and_direct_vision'
       throw new Error('extraction_failed::Unable to extract enough resume text for AI parsing after OCR fallback.')
+    }
+    if (!hasMeaningfulResumeSignals(extractedRawText)) {
+      selectionDiagnostics.terminalReason = 'text_missing_resume_signals'
+      throw new Error('extraction_failed::Unable to recover meaningful resume content from available extraction paths.')
     }
     console.log('[Parse] Attempting AI analysis with primary/fallback keys', {
       jobId: job.id,
@@ -686,6 +735,7 @@ async function runParse(job) {
       model: aiResponse?.model || null,
     })
     analysisResult = aiResult
+    selectionDiagnostics.aiCalled = true
     parseMethod = aiResponse?.provider || 'anthropic-primary'
     parseProvider = aiResponse?.provider || null
     parseModel = aiResponse?.model || null
@@ -865,6 +915,7 @@ async function runParse(job) {
         extractionResult,
         hasUsableExtractedText,
       }),
+      extractionSelectionDiagnostics: selectionDiagnostics,
       extractionStageDiagnostics: extractionResult?.stageDiagnostics || null,
       rawTextCharCount: extractedRawText.length,
       parseStatus: scoredCandidates.length > 0 ? 'complete' : (parseFailedCandidates.length > 0 ? 'failed' : 'partial'),
