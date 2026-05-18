@@ -116,6 +116,35 @@ export function isCandidateExtractionValid(candidate = {}) {
   return !isFailurePlaceholderCandidate(candidate)
 }
 
+export function isFailureNarrativeCandidate(candidate = {}) {
+  const failurePhrasePattern = /(parsing failed|unreadable|corrupted|content is not extractable|unable to assess|cannot be reliably extracted)/i
+  const failureNarratives = [
+    candidate?.summary,
+    candidate?.reasoning,
+    candidate?.matchScore?.reason,
+    candidate?.concerns,
+    candidate?.warnings,
+    candidate?.resumeWarnings,
+    candidate?.uncertaintyNotes,
+  ]
+    .flat()
+    .map((value) => String(value || ''))
+
+  if (!failureNarratives.some((value) => failurePhrasePattern.test(value))) return false
+
+  const hasSkills = Array.isArray(candidate?.skills_flat) ? candidate.skills_flat.filter(Boolean).length > 0 : false
+  const hasEducation = Array.isArray(candidate?.education) ? candidate.education.filter(Boolean).length > 0 : false
+  const hasExperienceEvidence = Array.isArray(candidate?.experienceEvidence) ? candidate.experienceEvidence.filter(Boolean).length > 0 : false
+  const hasExperienceEntries = Array.isArray(candidate?.experience) ? candidate.experience.filter(Boolean).length > 0 : candidate?.experience != null
+  const hasExperienceValue = candidate?.years_experience != null
+    || candidate?.experience_years != null
+    || candidate?.experienceYears != null
+    || candidate?.totalExperienceYears != null
+    || candidate?.relevantExperienceYears != null
+
+  return !hasSkills && !hasEducation && !hasExperienceEvidence && !hasExperienceEntries && !hasExperienceValue
+}
+
 export function isCandidateScoringValid(candidate = {}) {
   const rawScore = resolveRawScore(candidate)
   const reasoning = resolveReasoning(candidate)
@@ -123,5 +152,5 @@ export function isCandidateScoringValid(candidate = {}) {
 }
 
 export function isCandidateValidForScoredOutcome(candidate = {}) {
-  return isCandidateExtractionValid(candidate) && isCandidateScoringValid(candidate)
+  return isCandidateExtractionValid(candidate) && !isFailureNarrativeCandidate(candidate) && isCandidateScoringValid(candidate)
 }

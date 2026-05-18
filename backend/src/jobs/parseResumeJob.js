@@ -5,7 +5,7 @@ import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
-import { isCandidateExtractionValid, isCandidateValidForScoredOutcome, isFailurePlaceholderCandidate } from '../utils/candidateValidation.js'
+import { isCandidateExtractionValid, isCandidateValidForScoredOutcome, isFailureNarrativeCandidate, isFailurePlaceholderCandidate } from '../utils/candidateValidation.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
 import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
@@ -706,12 +706,12 @@ async function runParse(job) {
   const scoringFailures = []
 
   for (const candidate of normalizedCandidates) {
-    if (!isCandidateExtractionValid(candidate)) {
+    if (!isCandidateExtractionValid(candidate) || isFailureNarrativeCandidate(candidate)) {
       parseFailedCandidates.push({ ...candidate, resumeProcessingStatus: 'parse_failed' })
       scoringFailures.push({
         candidateId: candidate?.candidateId || candidate?.id || null,
         resumeId: candidate?.resumeId || String(resumeId || ''),
-        reason: 'parse_failed::ai_failure_placeholder',
+        reason: 'parse_failed::ai_output_validation_failed',
       })
       continue
     }
@@ -759,6 +759,7 @@ async function runParse(job) {
     scoringFailures,
     candidatesWithScoringFailures: [...parseFailedCandidates, ...scoringFailedCandidates],
     parseOutcome: scoredCandidates.length > 0 ? 'success' : (parseFailedCandidates.length > 0 ? 'failed' : 'partial'),
+    failureCategory: scoredCandidates.length > 0 ? null : (parseFailedCandidates.length > 0 ? 'ai_output_validation_failed' : null),
     parseMeta: {
       preflight: {
         extractableTextRatio: preflight.extractableTextRatio,
@@ -767,7 +768,7 @@ async function runParse(job) {
       extractionMethod: extractionResult?.methodUsed || 'failed',
       rawTextCharCount: extractedRawText.length,
       parseStatus: scoredCandidates.length > 0 ? 'complete' : (parseFailedCandidates.length > 0 ? 'failed' : 'partial'),
-      scoringStatus: scoringFailedCandidates.length > 0
+      scoringStatus: (parseFailedCandidates.length > 0 || scoringFailedCandidates.length > 0)
         ? 'failed'
         : (jobDescriptionContext?.hasContext ? (scoredCandidates.length > 0 ? 'complete' : 'partial') : 'skipped_no_job_description'),
       provider: analysisResult?.provider || parseMethod,
