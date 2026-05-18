@@ -939,7 +939,7 @@ export function registerParseResumeJobProcessor() {
       const parseErrorWithReasonPrefix = normalizedMessage.includes('::')
         ? normalizedMessage
         : `parse_failed::${normalizedMessage || 'Unknown parsing failure.'}`
-      const parseErrorCode = mapParseErrorCode(parseErrorWithReasonPrefix || normalizedErrorCategory)
+      const parseErrorCode = mapParseErrorCode(normalizedErrorCategory || parseErrorWithReasonPrefix)
       if (isTerminalFailure) {
         const parseDurationMs = Date.now() - Number(job.timestamp || Date.now())
         await pool.query(
