@@ -1,4 +1,6 @@
 import { extractTextFromResume, isLikelyScannedPdf, runOcrWithCache } from '../services/ocrService.js'
+import { getActiveAiProviderCredentials } from '../services/aiProviderConfigService.js'
+import { resolveDirectPdfVisionCapability } from '../services/aiResumeAnalysisService.js'
 
 const SECTION_PATTERNS = {
   experience: /^(professional\s+)?experience|work\s+history|employment|internships?$/i,
@@ -440,12 +442,42 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   const pdfTextUsable = extraction.length >= 80
   const ocrTextUsable = ocrText.length >= 80 && ocrConfidence >= 55
   const shouldAttemptDirectPdfVision = !pdfTextUsable && !ocrTextUsable
+  let directPdfVisionCapability = {
+    supported: false,
+    activeProvider: null,
+    activeModel: null,
+    fallbackProvider: null,
+    fallbackModel: null,
+    attemptedProvider: null,
+    attemptedModel: null,
+  }
 
   if (shouldAttemptDirectPdfVision) {
-    stageDiagnostics.direct_pdf_vision = {
-      attempted: true,
-      status: 'failed',
-      reason: 'not_implemented_no_usable_upstream_text',
+    const credentials = await getActiveAiProviderCredentials()
+    directPdfVisionCapability = resolveDirectPdfVisionCapability(credentials, mimeType)
+
+    if (directPdfVisionCapability.supported) {
+      stageDiagnostics.direct_pdf_vision = {
+        attempted: true,
+        status: 'failed',
+        reason: 'not_implemented_no_usable_upstream_text',
+        provider: directPdfVisionCapability.attemptedProvider,
+        model: directPdfVisionCapability.attemptedModel,
+        activeProvider: directPdfVisionCapability.activeProvider,
+        activeModel: directPdfVisionCapability.activeModel,
+        fallbackProvider: directPdfVisionCapability.fallbackProvider,
+        fallbackModel: directPdfVisionCapability.fallbackModel,
+      }
+    } else {
+      stageDiagnostics.direct_pdf_vision = {
+        attempted: false,
+        status: 'skipped',
+        reason: 'unsupported_model_input_mode',
+        activeProvider: directPdfVisionCapability.activeProvider,
+        activeModel: directPdfVisionCapability.activeModel,
+        fallbackProvider: directPdfVisionCapability.fallbackProvider,
+        fallbackModel: directPdfVisionCapability.fallbackModel,
+      }
     }
   } else {
     stageDiagnostics.direct_pdf_vision = {
@@ -462,7 +494,9 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
     usedOcrText: useOcrText,
   })
   if (!pdfTextUsable && !ocrTextUsable && !selectedText.trim()) {
-    finalMethod = shouldAttemptDirectPdfVision ? 'direct_pdf_vision' : 'failed'
+    finalMethod = shouldAttemptDirectPdfVision && directPdfVisionCapability.supported
+      ? 'direct_pdf_vision'
+      : 'failed'
   }
 
   if (finalMethod === 'direct_pdf_vision' && stageDiagnostics.direct_pdf_vision.status === 'failed') {

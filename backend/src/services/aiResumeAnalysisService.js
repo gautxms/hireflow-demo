@@ -665,6 +665,51 @@ function getFailureCategory(message = '') {
   return match?.[1] ? String(match[1]).toLowerCase() : 'unknown_error'
 }
 
+
+function isPdfMimeType(mimeType) {
+  return String(mimeType || '').trim().toLowerCase() === 'application/pdf'
+}
+
+export function supportsDirectPdfVision(provider, model, mimeType) {
+  const normalizedProvider = String(provider || '').trim().toLowerCase()
+  const normalizedModel = String(model || '').trim()
+  if (!isPdfMimeType(mimeType)) return false
+
+  if (normalizedProvider === 'anthropic') return true
+  if (normalizedProvider === 'openai') {
+    return !OPENAI_COMPACT_MODEL_PATTERN.test(normalizedModel)
+  }
+  return false
+}
+
+export function resolveDirectPdfVisionCapability(credentials = {}, mimeType) {
+  const rawPlan = buildProviderAttemptPlan(credentials)
+  const providerOrder = []
+  for (const entry of rawPlan) {
+    if (!providerSupportsMimeType(entry.provider, mimeType)) continue
+    providerOrder.push(entry)
+    if (providerOrder.length === 2) break
+  }
+
+  const active = providerOrder[0] || null
+  const fallback = providerOrder[1] || null
+  const activeCapability = active ? supportsDirectPdfVision(active.provider, active.model, mimeType) : false
+  const fallbackCapability = fallback ? supportsDirectPdfVision(fallback.provider, fallback.model, mimeType) : false
+
+  return {
+    supported: activeCapability || fallbackCapability,
+    activeProvider: active?.provider || null,
+    activeModel: active?.model || null,
+    fallbackProvider: fallback?.provider || null,
+    fallbackModel: fallback?.model || null,
+    attemptedProvider: activeCapability
+      ? active?.provider
+      : (fallbackCapability ? fallback?.provider : active?.provider || fallback?.provider || null),
+    attemptedModel: activeCapability
+      ? active?.model
+      : (fallbackCapability ? fallback?.model : active?.model || fallback?.model || null),
+  }
+}
 function providerSupportsMimeType(provider, mimeType) {
   const normalizedProvider = String(provider || '').trim().toLowerCase()
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
