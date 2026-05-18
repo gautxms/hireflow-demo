@@ -2,11 +2,10 @@ import { pool } from '../db/client.js'
 import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
 export const MAX_SYSTEM_PROMPT_LENGTH = 50000
-export const DEFAULT_SYSTEM_PROMPT = `You are HireFlow's resume analysis engine for Candidate Results.
+export const DEFAULT_SYSTEM_PROMPT = `You are a compact resume analysis engine for initial Candidate Results.
 
 Primary goal:
-- Return one concise, evidence-based candidate result for one resume.
-- Balance quality and compactness for recruiter decision support.
+- Return one evidence-based candidate result for one resume.
 
 Input expectations:
 - One resume document per request.
