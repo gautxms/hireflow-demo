@@ -172,6 +172,10 @@ function hasMeaningfulResumeSignals(text = '') {
   return normalized.length >= MIN_EXTRACTED_TEXT_LENGTH && RESUME_SIGNAL_PATTERN.test(normalized)
 }
 
+export function shouldFailBeforeAi({ hasUsableExtractedText }) {
+  return !hasUsableExtractedText
+}
+
 export function buildExtractionSelectionDiagnostics({ extractionResult, ocrOutcome, hasUsableExtractedText }) {
   const stageDiagnostics = extractionResult?.stageDiagnostics || {}
   const pdfStage = stageDiagnostics.pdf_text || {}
@@ -184,9 +188,10 @@ export function buildExtractionSelectionDiagnostics({ extractionResult, ocrOutco
   const ocrTextLength = Number(ocrStage.extractedTextLength || 0)
   const ocrConfidence = Number(extractionResult?.ocrConfidence ?? ocrStage.confidence ?? 0)
   const selectedExtractionMethod = extractionResult?.methodUsed || 'failed'
-  const pdfTextQuality = hasMeaningfulResumeSignals(extractedRawText)
+  const hasResumeSignals = hasMeaningfulResumeSignals(extractedRawText)
+  const pdfTextQuality = hasResumeSignals
     ? 'usable_resume_signals'
-    : (hasUsableExtractedText ? 'usable_length_only' : 'unusable')
+    : (hasUsableExtractedText ? 'missing_resume_signals' : 'unusable')
   const ocrUsable = ocrTextLength >= MIN_EXTRACTED_TEXT_LENGTH && ocrConfidence >= 55
 
   const skippedReasons = []
@@ -203,6 +208,7 @@ export function buildExtractionSelectionDiagnostics({ extractionResult, ocrOutco
     ocrTextLength,
     ocrUsable,
     selectedExtractionMethod,
+    hasResumeSignals,
     skippedReasons,
     terminalReason: null,
     aiCalled: false,
@@ -658,13 +664,12 @@ async function runParse(job) {
       error.preflightFailure = forcedExtractionFailure
       throw error
     }
-    if (!hasUsableExtractedText) {
+    if (shouldFailBeforeAi({ hasUsableExtractedText })) {
       selectionDiagnostics.terminalReason = 'no_usable_text_after_pdf_ocr_and_direct_vision'
       throw new Error('extraction_failed::Unable to extract enough resume text for AI parsing after OCR fallback.')
     }
     if (!hasMeaningfulResumeSignals(extractedRawText)) {
-      selectionDiagnostics.terminalReason = 'text_missing_resume_signals'
-      throw new Error('extraction_failed::Unable to recover meaningful resume content from available extraction paths.')
+      selectionDiagnostics.terminalReason = 'warning_missing_resume_signals'
     }
     console.log('[Parse] Attempting AI analysis with primary/fallback keys', {
       jobId: job.id,
