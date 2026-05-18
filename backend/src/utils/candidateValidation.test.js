@@ -21,6 +21,21 @@ test('failure-narrative candidate is rejected even when score > 0', () => {
   assert.equal(isCandidateValidForScoredOutcome(candidate), false)
 })
 
+
+test('candidate with extracted experience is not treated as failure narrative', () => {
+  const candidate = {
+    summary: 'Unable to assess some sections due to formatting issues.',
+    reasoning: 'Parser flagged uncertainty for one subsection.',
+    score: 40,
+    skills_flat: [],
+    education: [],
+    experienceEvidence: [],
+    experience: [{ title: 'Software Engineer', company: 'Acme Corp' }],
+  }
+
+  assert.equal(isFailureNarrativeCandidate(candidate), false)
+})
+
 test('meaningful scored candidate remains valid', () => {
   const candidate = {
     summary: 'Business analyst with 5 years in fintech.',

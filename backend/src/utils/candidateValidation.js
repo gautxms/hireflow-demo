@@ -135,8 +135,14 @@ export function isFailureNarrativeCandidate(candidate = {}) {
   const hasSkills = Array.isArray(candidate?.skills_flat) ? candidate.skills_flat.filter(Boolean).length > 0 : false
   const hasEducation = Array.isArray(candidate?.education) ? candidate.education.filter(Boolean).length > 0 : false
   const hasExperienceEvidence = Array.isArray(candidate?.experienceEvidence) ? candidate.experienceEvidence.filter(Boolean).length > 0 : false
-  const hasExperienceValue = candidate?.years_experience != null || candidate?.totalExperienceYears != null || candidate?.relevantExperienceYears != null
-  return !hasSkills && !hasEducation && !hasExperienceEvidence && !hasExperienceValue
+  const hasExperienceEntries = Array.isArray(candidate?.experience) ? candidate.experience.filter(Boolean).length > 0 : candidate?.experience != null
+  const hasExperienceValue = candidate?.years_experience != null
+    || candidate?.experience_years != null
+    || candidate?.experienceYears != null
+    || candidate?.totalExperienceYears != null
+    || candidate?.relevantExperienceYears != null
+
+  return !hasSkills && !hasEducation && !hasExperienceEvidence && !hasExperienceEntries && !hasExperienceValue
 }
 
 export function isCandidateScoringValid(candidate = {}) {
