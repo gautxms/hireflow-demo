@@ -134,21 +134,23 @@ test('resetAdminSystemPromptToDefault persists the known default prompt', async 
   assert.equal(result.promptVersion, 9)
 })
 
-test('DEFAULT_SYSTEM_PROMPT enforces compact contract and failure-safe scoring rules', () => {
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"allExtractedSkills":/)
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_flat":/)
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_structured":/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not include: allExtractedSkills, skills_flat, skills_structured, full work history/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /summary <= 160 chars/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /reasoning <= 250 chars/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /matchedSkills <= 10/)
+test('DEFAULT_SYSTEM_PROMPT enforces v9 rich compact contract and strict failure rules', () => {
   assert.match(DEFAULT_SYSTEM_PROMPT, /Always return exactly 1 candidate object/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /resumeProcessingStatus must be one of: scored \| parse_failed \| scoring_failed/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /score must be 0\.\.100 only when resumeProcessingStatus=\"scored\"/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /For parse_failed or scoring_failed: score must be null and fitStatus must be "unscored"/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not set resumeProcessingStatus="scored" when resume text is unreadable, corrupt, missing, or insufficient for JD scoring/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /For parse_failed or scoring_failed: allExtractedSkills=\[\], skills_structured arrays=\[\], education=\[\], experienceHighlights=\[\], matchedSkills=\[\], missingRequirements=\[\], weaklySupportedRequirements=\[\], strengths=\[\]\./)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"allExtractedSkills": \["string"\]/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"skills_structured": \{/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"tools_and_platforms": \["string"\]/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"education": \[\{"degree":"string\|null"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"highestEducation": "string\|null"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"relevantExperienceYears": "number\|null"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"experienceHighlights": \["string"\]/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"experienceConfidence": "high\|medium\|low\|unknown"/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /"resumeIntegrityFlags": \[\{/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /"issueType": "string"/)
-  assert.match(DEFAULT_SYSTEM_PROMPT, /"recruiterAction": "string"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not include: full work history, all projects, all certifications, all achievements, long evidence snippets, detailed confidence object\./)
 })
 
 test('getRuntimeSystemPromptConfig returns stored admin prompt over default', async () => {
