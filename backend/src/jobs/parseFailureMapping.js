@@ -5,7 +5,16 @@ function normalizeString(value) {
 
 export function isLocalPostAiValidationFailure(error) {
   const message = String(error?.message || '').trim().toLowerCase()
-  return message.startsWith('parse_failed::') || message.startsWith('scoring_failed::')
+  if (!message.startsWith('parse_failed::')) return false
+
+  const details = error?.parseFailureDetails && typeof error.parseFailureDetails === 'object'
+    ? error.parseFailureDetails
+    : null
+  const explicitFailureType = String(details?.failureType || '').trim().toLowerCase()
+  if (explicitFailureType === 'ai_output_validation_failed') return true
+
+  return message.includes('ai_failure_placeholder')
+    || message.includes('ai_response_candidate_validation_failed')
 }
 
 export function buildLocalPostAiFailureNormalizedPayload(error) {

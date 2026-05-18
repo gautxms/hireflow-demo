@@ -50,6 +50,23 @@ test('ai called and no scored candidates remain does not serialize null provider
   assert.doesNotMatch(normalized.normalizedMessage, /"providerChain":null/)
 })
 
+
+test('terminal scoring failures are not treated as post-ai validation failures', () => {
+  const error = new Error('scoring_failed::missing_finite_score')
+  error.parseFailureDetails = {
+    provider: 'anthropic-primary',
+    model: 'claude-haiku-4-5-20251001',
+    technicalDetails: 'scoring_failed::missing_finite_score',
+  }
+
+  assert.equal(isLocalPostAiValidationFailure(error), false)
+})
+
+test('generic parse_failed messages are not treated as post-ai validation failures', () => {
+  const error = new Error('parse_failed::invalid_json_payload')
+  assert.equal(isLocalPostAiValidationFailure(error), false)
+})
+
 test('analysis status aggregation remains failed when one success and two failures exist', () => {
   const statuses = ['complete', 'failed', 'failed']
   const hasFailed = statuses.includes('failed')
