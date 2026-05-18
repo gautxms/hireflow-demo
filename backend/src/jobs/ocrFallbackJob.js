@@ -341,12 +341,19 @@ export function shouldPreferOcrText({ extractionText = '', ocrText = '', aiConfi
 function mapFinalExtractionMethod({ selectedMethod, usedOcrText }) {
   if (usedOcrText) return 'ocr'
   if (selectedMethod === 'pdf_text') return 'pdf_text'
-  if (selectedMethod === 'docx_text') return 'docx_text'
-  if (selectedMethod === 'plain_text') return 'plain_text'
   return 'failed'
 }
 
+function buildInitialStageDiagnostics() {
+  return {
+    pdf_text: { attempted: false, status: 'skipped', reason: 'not_started' },
+    ocr: { attempted: false, status: 'skipped', reason: 'not_started' },
+    direct_pdf_vision: { attempted: false, status: 'skipped', reason: 'not_started' },
+  }
+}
+
 export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fileBuffer, forceOcr = false, preflightLowQuality = false }) {
+  const stageDiagnostics = buildInitialStageDiagnostics()
   const extraction = await extractTextFromResume({ fileBuffer, mimeType })
   const aiConfidence = scoreTextConfidence(extraction.length, fileSize)
   const scannedPdf = isLikelyScannedPdf({ mimeType, fileBuffer })
@@ -357,6 +364,14 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
     extractedTextLength: extraction.length,
     status: extraction.length > 0 ? 'success' : 'failed',
   }
+  stageDiagnostics.pdf_text = {
+    attempted: true,
+    status: extraction.length > 0 ? 'success' : 'failed',
+    reason: extraction.length > 0 ? 'text_extracted' : 'empty_or_unusable_text',
+    method: extraction.method,
+    extractedTextLength: extraction.length,
+    confidence: aiConfidence,
+  }
 
   const shouldRunOcr = shouldUseOcrFallback({
     scannedPdf,
@@ -365,6 +380,16 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
   }) || forceOcr
 
   if (!shouldRunOcr) {
+    stageDiagnostics.ocr = {
+      attempted: false,
+      status: 'skipped',
+      reason: forceOcr ? 'force_ocr_disabled_by_flow' : 'pdf_text_sufficient',
+    }
+    stageDiagnostics.direct_pdf_vision = {
+      attempted: false,
+      status: 'skipped',
+      reason: 'fallback_chain_not_required',
+    }
     const finalMethod = mapFinalExtractionMethod({
       selectedMethod: extraction.method,
       usedOcrText: false,
@@ -377,6 +402,7 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
       rawText: extraction.text,
       candidates: [buildCandidateFromText(filename, extraction.text)],
       attempts: [aiAttempt],
+      stageDiagnostics,
       requiresManualCorrection: aiConfidence < 70,
       scannedPdfDetected: scannedPdf,
       feedback: {
@@ -397,12 +423,51 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
     forceOcr,
     preflightLowQuality,
   })
+  stageDiagnostics.ocr = {
+    attempted: true,
+    status: useOcrText ? 'success' : (ocrText ? 'failed' : 'failed'),
+    reason: useOcrText
+      ? 'selected_for_final_text'
+      : (ocrText ? 'ocr_output_not_preferred' : 'empty_or_unusable_text'),
+    method: ocrAttempt.method,
+    provider: ocrAttempt.provider,
+    confidence: ocrConfidence,
+    extractedTextLength: ocrText.length,
+    cacheHit: Boolean(ocrAttempt.cacheHit),
+  }
   const selectedText = useOcrText ? ocrText : extraction.text
   const overallConfidence = clampConfidence(Math.max(aiConfidence, ocrConfidence), 10, 99)
-  const finalMethod = mapFinalExtractionMethod({
+  const pdfTextUsable = extraction.length >= 80
+  const ocrTextUsable = ocrText.length >= 80 && ocrConfidence >= 55
+  const shouldAttemptDirectPdfVision = !pdfTextUsable && !ocrTextUsable
+
+  if (shouldAttemptDirectPdfVision) {
+    stageDiagnostics.direct_pdf_vision = {
+      attempted: true,
+      status: 'failed',
+      reason: 'not_implemented_no_usable_upstream_text',
+    }
+  } else {
+    stageDiagnostics.direct_pdf_vision = {
+      attempted: false,
+      status: 'skipped',
+      reason: pdfTextUsable
+        ? 'pdf_text_usable'
+        : 'ocr_usable_or_selected',
+    }
+  }
+
+  let finalMethod = mapFinalExtractionMethod({
     selectedMethod: extraction.method,
     usedOcrText: useOcrText,
   })
+  if (!pdfTextUsable && !ocrTextUsable && !selectedText.trim()) {
+    finalMethod = shouldAttemptDirectPdfVision ? 'direct_pdf_vision' : 'failed'
+  }
+
+  if (finalMethod === 'direct_pdf_vision' && stageDiagnostics.direct_pdf_vision.status === 'failed') {
+    finalMethod = 'failed'
+  }
 
   return {
     ocrConfidence,
@@ -421,6 +486,7 @@ export async function runParseWithOcrFallback({ filename, mimeType, fileSize, fi
         status: ocrText ? 'success' : 'failed',
       },
     ],
+    stageDiagnostics,
     requiresManualCorrection: overallConfidence < 70,
     scannedPdfDetected: scannedPdf,
     feedback: {

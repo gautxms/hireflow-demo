@@ -783,6 +783,7 @@ async function runParse(job) {
         imageOnlyLikely: preflight.imageOnlyLikely,
       },
       extractionMethod: extractionResult?.methodUsed || 'failed',
+      extractionStageDiagnostics: extractionResult?.stageDiagnostics || null,
       rawTextCharCount: extractedRawText.length,
       parseStatus: scoredCandidates.length > 0 ? 'complete' : (parseFailedCandidates.length > 0 ? 'failed' : 'partial'),
       scoringStatus: (parseFailedCandidates.length > 0 || scoringFailedCandidates.length > 0)
@@ -917,7 +918,7 @@ async function runParse(job) {
   }
 
   await job.progress(100)
-  console.log('[Parse][StageUsage]', { resumeId, parseJobId: job.id, failureCategory: null, stageUsage: { parse: { attempted: true }, ocr: { attempted: Boolean(preflight.routeToOcr), status: ocrOutcome ? "failed" : (preflight.routeToOcr ? "success" : "skipped") }, score: { attempted: true, skipped: false }, fallback: { attempted: true } } })
+  console.log('[Parse][StageUsage]', { resumeId, parseJobId: job.id, failureCategory: null, stageUsage: { parse: { attempted: true }, extraction: extractionResult?.stageDiagnostics || null, ocr: { attempted: Boolean(preflight.routeToOcr), status: ocrOutcome ? "failed" : (preflight.routeToOcr ? "success" : "skipped") }, score: { attempted: true, skipped: false }, fallback: { attempted: true } } })
   return parseResult
 }
 
