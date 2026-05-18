@@ -41,6 +41,14 @@ node backend/src/index.js
 
 Render/Railway provide HTTPS at the edge; cookies are marked `secure` in production.
 
+## Backend architecture note: resume AI analysis input modes
+
+Resume AI analysis is **not text-only**. The provider adapters in `aiResumeAnalysisService` support two explicit modes:
+- **Document payload mode**: base64 file payloads (PDF at minimum) sent as a file/document input to Anthropic/OpenAI.
+- **Extracted-text mode**: base64-encoded UTF-8 extracted text sent as plain text (`text/plain`).
+
+Callers should intentionally choose mode per resume based on extraction quality. If extracted text is low-confidence, incomplete, or noisy, prefer file/document mode so the model can analyze the original document payload.
+
 
 ### S3 setup for Railway production
 
