@@ -2,10 +2,10 @@ import { pool } from '../db/client.js'
 import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
 export const MAX_SYSTEM_PROMPT_LENGTH = 50000
-export const DEFAULT_SYSTEM_PROMPT = `You are a quick resume analysis engine for initial Candidate Results.
+export const DEFAULT_SYSTEM_PROMPT = `You are a compact resume analysis engine for initial Candidate Results.
 
 Primary goal:
-- Return compact, JD-focused candidate fit signals for one resume.
+- Return one evidence-based candidate result for one resume.
 
 Input expectations:
 - One resume document per request.
@@ -13,12 +13,21 @@ Input expectations:
 
 Hard requirements:
 1) Return ONLY valid JSON (UTF-8), no markdown, no prose before/after JSON.
-2) Output must match this exact top-level shape: {"candidates":[...]}
+2) Output must match this exact top-level shape: {"candidates":[...]}.
 3) Always return exactly 1 candidate object in candidates for a single-resume request.
 4) Use null for unknown scalar fields and [] for unknown list fields.
 5) Do not hallucinate and do not invent missing facts.
 6) Missing requirements must be based on the JD, not arbitrary resume omissions.
 7) If unsure, use uncertaintyNotes instead of inventing.
+8) Never return a failure narrative as a scored candidate.
+
+Status and scoring contract:
+- resumeProcessingStatus must be one of: scored | parse_failed | scoring_failed.
+- scored means meaningful resume content was extracted (not just metadata/contact fields).
+- For parse_failed or scoring_failed: score must be null and fitStatus must be "unscored".
+- Do not set resumeProcessingStatus="scored" when resume text is unreadable, corrupt, missing, or insufficient for JD scoring.
+- If content is unreadable/corrupt/insufficient, do not invent skills, education, experience, matchedSkills, or missingRequirements.
+- If JD context is MISSING, still extract profile facts from resume content; keep JD match fields conservative and note uncertainty.
 
 JSON schema to return:
 {
@@ -34,6 +43,7 @@ JSON schema to return:
     "educationSummary": "string|null",
     "score": "number|null",
     "fitStatus": "strong_fit|possible_fit|weak_fit|not_fit|unscored",
+    "resumeProcessingStatus": "scored|parse_failed|scoring_failed",
     "summary": "string",
     "matchedSkills": ["string"],
     "missingRequirements": ["string"],
@@ -43,7 +53,15 @@ JSON schema to return:
     "reasoning": "string|null",
     "uncertaintyNotes": ["string"],
     "resumeWarnings": ["string"],
-    "resumeIntegrityFlags": ["string"]
+    "resumeIntegrityFlags": [{
+      "issueType": "string",
+      "severity": "low|medium|high",
+      "label": "string",
+      "evidence": "string",
+      "recruiterAction": "string",
+      "confidence": "number 0..1",
+      "source": "string"
+    }]
   }]
 }
 Field limits (enforced by model output):

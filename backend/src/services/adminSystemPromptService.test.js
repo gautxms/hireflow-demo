@@ -134,16 +134,21 @@ test('resetAdminSystemPromptToDefault persists the known default prompt', async 
   assert.equal(result.promptVersion, 9)
 })
 
-test('DEFAULT_SYSTEM_PROMPT uses compact quick-analysis contract and limits', () => {
+test('DEFAULT_SYSTEM_PROMPT enforces compact contract and failure-safe scoring rules', () => {
   assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"allExtractedSkills":/)
   assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_flat":/)
   assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"skills_structured":/)
-  assert.doesNotMatch(DEFAULT_SYSTEM_PROMPT, /"confidence":/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /Do not include: allExtractedSkills, skills_flat, skills_structured, full work history/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /summary <= 160 chars/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /reasoning <= 250 chars/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /matchedSkills <= 10/)
   assert.match(DEFAULT_SYSTEM_PROMPT, /Always return exactly 1 candidate object/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /resumeProcessingStatus must be one of: scored \| parse_failed \| scoring_failed/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /For parse_failed or scoring_failed: score must be null and fitStatus must be "unscored"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Do not set resumeProcessingStatus="scored" when resume text is unreadable, corrupt, missing, or insufficient for JD scoring/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"resumeIntegrityFlags": \[\{/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"issueType": "string"/)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /"recruiterAction": "string"/)
 })
 
 test('getRuntimeSystemPromptConfig returns stored admin prompt over default', async () => {
