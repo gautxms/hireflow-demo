@@ -511,6 +511,7 @@ async function runParse(job) {
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
+  let usageAttempts = []
 
   try {
     if (ocrOutcome) {
@@ -537,7 +538,7 @@ async function runParse(job) {
       },
     )
     const aiResult = aiResponse?.result || {}
-    const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
+    usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
       ? aiResponse.attempts
       : [{
           success: true,
