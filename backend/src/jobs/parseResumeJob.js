@@ -507,6 +507,15 @@ async function runParse(job) {
   const extractedRawText = String(extractionResult?.rawText || '').trim()
   const hasUsableExtractedText = extractedRawText.length >= MIN_EXTRACTED_TEXT_LENGTH
   const ocrOutcome = preflight.routeToOcr ? evaluateOcrOutcome({ ocrConfidence: extractionResult?.ocrConfidence }) : null
+  const preflightLowQualityLikely = Boolean(preflight?.textQuality?.lowExtractableTextLikely || preflight?.textQuality?.lowReadableQualityLikely)
+  const forcedExtractionFailure = preflight.routeToOcr
+    && preflightLowQualityLikely
+    && extractionResult?.methodUsed !== 'ocr'
+    ? {
+        failureCategory: 'extraction_failed',
+        failureMessageUserSafe: 'PDF text extraction quality was too low, and OCR fallback was unavailable or did not improve extraction.',
+      }
+    : null
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
@@ -517,6 +526,11 @@ async function runParse(job) {
     if (ocrOutcome) {
       const error = new Error(`${ocrOutcome.failureCategory}::${ocrOutcome.failureMessageUserSafe}`)
       error.preflightFailure = ocrOutcome
+      throw error
+    }
+    if (forcedExtractionFailure) {
+      const error = new Error(`${forcedExtractionFailure.failureCategory}::${forcedExtractionFailure.failureMessageUserSafe}`)
+      error.preflightFailure = forcedExtractionFailure
       throw error
     }
     if (!hasUsableExtractedText) {
