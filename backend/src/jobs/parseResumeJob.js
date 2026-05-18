@@ -20,11 +20,14 @@ export { isFailurePlaceholderCandidate }
 
 function mapParseErrorCode(errorCode) {
   const normalized = String(errorCode || '').trim().toLowerCase()
+  if (normalized.startsWith('parse_failed::')) return normalized.slice(0, 120)
+  if (normalized.startsWith('scoring_failed::')) return normalized.slice(0, 120)
   if (normalized === 'extraction_failed') return 'extraction_failed'
   if (normalized === 'encrypted_or_password_protected_pdf') return 'encrypted_or_password_protected_pdf'
   if (normalized === 'corrupt_or_unreadable') return 'corrupt_or_unreadable'
   if (normalized === 'unsupported_encoding_or_format') return 'unsupported_encoding_or_format'
   if (normalized === 'image_only_low_ocr') return 'image_only_low_ocr'
+  if (normalized === 'scoring_failed' || normalized.startsWith('scoring_failed::')) return normalized.startsWith('scoring_failed::') ? normalized.slice(0, 120) : 'scoring_failed'
   if (
     normalized === 'response_truncated_error'
     || normalized === 'response_format_error'
@@ -933,11 +936,10 @@ export function registerParseResumeJobProcessor() {
       const isTerminalFailure = isTerminalJobFailure(job)
       const normalizedMessage = String(normalizedError.normalizedMessage || '').trim()
       const normalizedErrorCategory = String(normalizedError.category || '').trim()
-      const parseErrorCode = mapParseErrorCode(normalizedErrorCategory)
-      const parseErrorHuman = String(normalizedError.userMessage || 'Unknown parsing failure.').trim().slice(0, 500)
       const parseErrorWithReasonPrefix = normalizedMessage.includes('::')
         ? normalizedMessage
         : `parse_failed::${normalizedMessage || 'Unknown parsing failure.'}`
+      const parseErrorCode = mapParseErrorCode(normalizedErrorCategory || parseErrorWithReasonPrefix)
       if (isTerminalFailure) {
         const parseDurationMs = Date.now() - Number(job.timestamp || Date.now())
         await pool.query(
@@ -948,7 +950,7 @@ export function registerParseResumeJobProcessor() {
                parse_duration_ms = COALESCE(parse_duration_ms, $4),
                updated_at = NOW()
            WHERE id = $1`,
-          [job.data.resumeId, parseErrorCode, parseErrorHuman, parseDurationMs],
+          [job.data.resumeId, parseErrorCode, parseErrorWithReasonPrefix.slice(0, 500), parseDurationMs],
         )
       }
 
