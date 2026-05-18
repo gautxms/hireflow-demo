@@ -90,6 +90,81 @@ function clampStringArray(value, maxItems = 5, maxItemLength = 160) {
     .slice(0, maxItems)
 }
 
+function buildExtractionDiagnosticsSummary({
+  extractionResult,
+  hasUsableExtractedText,
+}) {
+  const stageDiagnostics = extractionResult?.stageDiagnostics || {}
+  const pdfStage = stageDiagnostics.pdf_text || {}
+  const ocrStage = stageDiagnostics.ocr || {}
+  const visionStage = stageDiagnostics.direct_pdf_vision || {}
+  const finalMethod = extractionResult?.methodUsed || 'failed'
+
+  const pdfTextExtractedTextLength = Number(pdfStage.extractedTextLength || 0)
+  const ocrExtractedTextLength = Number(ocrStage.extractedTextLength || 0)
+  const ocrConfidence = Number(ocrStage.confidence || 0)
+
+  const pdfTextUsable = (
+    (Boolean(pdfStage.attempted) && pdfStage.status === 'success' && pdfTextExtractedTextLength >= MIN_EXTRACTED_TEXT_LENGTH)
+    || pdfStage.reason === 'text_quality_meets_threshold'
+    || (visionStage.reason === 'pdf_text_usable')
+    || (hasUsableExtractedText && finalMethod === 'pdf_text')
+  )
+  const ocrUsable = (
+    (Boolean(ocrStage.attempted) && ocrExtractedTextLength >= MIN_EXTRACTED_TEXT_LENGTH && ocrConfidence >= 55)
+    || ocrStage.reason === 'ocr_confidence_meets_threshold'
+    || ocrStage.reason === 'selected_for_final_text'
+    || (hasUsableExtractedText && finalMethod === 'ocr')
+  )
+
+  const pdfTextReason = pdfTextUsable
+    ? 'text_quality_meets_threshold'
+    : (pdfStage.attempted
+        ? 'text_quality_below_threshold'
+        : 'pdf_text_not_attempted')
+
+  const ocrReason = !ocrStage.attempted
+    ? 'ocr_not_required'
+    : (ocrUsable ? 'ocr_confidence_meets_threshold' : 'ocr_confidence_below_threshold')
+
+  let directPdfVisionReason = 'vision_not_required'
+  if (!visionStage.attempted && visionStage.status === 'skipped') {
+    if (visionStage.reason === 'unsupported_model_input_mode') {
+      directPdfVisionReason = 'model_capability_unsupported'
+    } else if (visionStage.reason === 'capability_resolution_failed') {
+      directPdfVisionReason = 'model_capability_resolution_failed'
+    } else {
+      directPdfVisionReason = 'vision_not_required'
+    }
+  }
+  if (visionStage.attempted) {
+    directPdfVisionReason = visionStage.status === 'success' ? 'vision_parse_succeeded' : 'vision_parse_failed'
+  }
+
+  const finalExtractionMethod = ['pdf_text', 'ocr', 'direct_pdf_vision'].includes(finalMethod)
+    ? finalMethod
+    : 'failed'
+
+  return {
+    pdf_text: {
+      attempted: Boolean(pdfStage.attempted),
+      usability: pdfTextUsable ? 'usable' : 'unusable',
+      reason: pdfTextReason,
+    },
+    ocr: {
+      status: ocrStage.attempted ? 'attempted' : 'skipped',
+      usability: ocrUsable ? 'usable' : 'unusable',
+      reason: ocrReason,
+    },
+    direct_pdf_vision: {
+      status: visionStage.attempted ? 'attempted' : 'skipped',
+      outcome: finalMethod === 'direct_pdf_vision' ? 'success' : 'failure',
+      reason: directPdfVisionReason,
+    },
+    final_extraction_method: finalExtractionMethod,
+  }
+}
+
 function normalizeExperienceConfidence(value) {
   const normalized = String(value || '').trim().toLowerCase()
   return ['high', 'medium', 'low', 'unknown'].includes(normalized) ? normalized : 'unknown'
@@ -786,6 +861,10 @@ async function runParse(job) {
         imageOnlyLikely: preflight.imageOnlyLikely,
       },
       extractionMethod: extractionResult?.methodUsed || 'failed',
+      extractionDiagnosticsSummary: buildExtractionDiagnosticsSummary({
+        extractionResult,
+        hasUsableExtractedText,
+      }),
       extractionStageDiagnostics: extractionResult?.stageDiagnostics || null,
       rawTextCharCount: extractedRawText.length,
       parseStatus: scoredCandidates.length > 0 ? 'complete' : (parseFailedCandidates.length > 0 ? 'failed' : 'partial'),
