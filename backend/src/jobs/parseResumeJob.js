@@ -97,8 +97,22 @@ function buildExtractionDiagnosticsSummary({
   const visionStage = stageDiagnostics.direct_pdf_vision || {}
   const finalMethod = extractionResult?.methodUsed || 'failed'
 
-  const pdfTextUsable = hasUsableExtractedText && finalMethod === 'pdf_text'
-  const ocrUsable = hasUsableExtractedText && finalMethod === 'ocr'
+  const pdfTextExtractedTextLength = Number(pdfStage.extractedTextLength || 0)
+  const ocrExtractedTextLength = Number(ocrStage.extractedTextLength || 0)
+  const ocrConfidence = Number(ocrStage.confidence || 0)
+
+  const pdfTextUsable = (
+    (Boolean(pdfStage.attempted) && pdfStage.status === 'success' && pdfTextExtractedTextLength >= MIN_EXTRACTED_TEXT_LENGTH)
+    || pdfStage.reason === 'text_quality_meets_threshold'
+    || (visionStage.reason === 'pdf_text_usable')
+    || (hasUsableExtractedText && finalMethod === 'pdf_text')
+  )
+  const ocrUsable = (
+    (Boolean(ocrStage.attempted) && ocrExtractedTextLength >= MIN_EXTRACTED_TEXT_LENGTH && ocrConfidence >= 55)
+    || ocrStage.reason === 'ocr_confidence_meets_threshold'
+    || ocrStage.reason === 'selected_for_final_text'
+    || (hasUsableExtractedText && finalMethod === 'ocr')
+  )
 
   const pdfTextReason = pdfTextUsable
     ? 'text_quality_meets_threshold'
