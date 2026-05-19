@@ -1535,6 +1535,7 @@
   font-size: 13px;
   color: var(--color-text-secondary);
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .dd-facts { display: flex; flex-direction: column; gap: 7px; }
@@ -1589,6 +1590,7 @@
   line-height: 1.6;
   padding: 7px 0;
   border-bottom: 1px solid #141414;
+  overflow-wrap: anywhere;
 }
 .dd-analysis-item:last-child { border-bottom: none; padding-bottom: 0; }
 
@@ -1608,6 +1610,12 @@
   border: 1px solid rgba(200, 255, 0, 0.18);
   padding: 4px 10px;
   border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.dd-top-skill--gap {
+  color: var(--hf-score-possible, #f59e0b);
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
 }
 
 .dd-skill-cat {

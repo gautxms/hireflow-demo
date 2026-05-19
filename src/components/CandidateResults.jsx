@@ -38,6 +38,51 @@ function safeSerialize(value) {
   }
 }
 
+function hasRenderableContent(value) {
+  if (value == null) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.some((entry) => hasRenderableContent(entry))
+  if (typeof value === 'object') return Object.values(value).some((entry) => hasRenderableContent(entry))
+  return Boolean(value)
+}
+
+function safeText(value, fallback = 'Unavailable') {
+  if (value == null) return fallback
+  if (typeof value === 'string') return value.trim() || fallback
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : fallback
+  return fallback
+}
+
+function safeArray(value) {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry) => hasRenderableContent(entry))
+}
+
+function formatScore(score) {
+  const numeric = Number(score)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  return Math.max(0, Math.min(10, numeric / 10)).toFixed(1)
+}
+
+function getScoreTone(score) {
+  const numeric = Number(score)
+  if (!Number.isFinite(numeric) || numeric < 0) return 'unscored'
+  if (numeric >= 80) return 'strong'
+  if (numeric >= 60) return 'possible'
+  return 'low'
+}
+
+function getMatchLabel(score, explicitLabel = '') {
+  const tone = getScoreTone(score)
+  const cleanLabel = safeText(explicitLabel, '')
+  if (cleanLabel) return cleanLabel
+  if (tone === 'strong') return 'Strong match'
+  if (tone === 'possible') return 'Possible match'
+  if (tone === 'low') return 'Low match'
+  return 'Unable to score'
+}
+
 
 function parseSkills(skills) {
   if (Array.isArray(skills)) {
@@ -123,18 +168,6 @@ function parseUploadDate(candidate) {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
-const toTenScale = (score) => {
-  if (score == null) return null
-  return (score / 10).toFixed(1)
-}
-
-const scoreTier = (score) => {
-  if (score == null) return 'unscored'
-  if (score >= 80) return 'strong'
-  if (score >= 60) return 'possible'
-  return 'low'
-}
-
 function deriveCompactRationale(candidate) {
   const reason = String(candidate?.matchScore?.reason || '').trim()
   if (reason) return reason
@@ -153,7 +186,7 @@ function activeScore(candidate) {
   )
 
   const numeric = Number(resolved ?? fallbackScore)
-  return Number.isFinite(numeric) ? numeric : 0
+  return Number.isFinite(numeric) ? numeric : null
 }
 
 
@@ -985,8 +1018,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
           const score = activeScore(candidate)
-          const tier = scoreTier(score)
-          const displayScore = toTenScale(score)
+          const tier = getScoreTone(score)
+          const displayScore = formatScore(score)
           const candidateKey = resolveCandidateKey(candidate, index)
           const isExpanded = expandedId === candidateKey
           const initials = String(candidate?.name || '')
@@ -1023,15 +1056,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                         <span className="rc-score-denom">/10</span>
                       </div>
                       <div className={`rc-fit-label rc-fit--${tier}`}>
-                        {tier === 'strong'
-                          ? 'Strong match'
-                          : tier === 'possible'
-                            ? 'Possible match'
-                            : 'Low match'}
+                        {getMatchLabel(score)}
                       </div>
                     </>
                   ) : (
-                    <div className="rc-score-empty">Not scored</div>
+                    <div className="rc-score-empty">N/A</div>
                   )}
                 </div>
               </div>
@@ -1049,13 +1078,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 {topSkills.length > 3 && (
                   <span className="rc-skill-more">+{topSkills.length - 3}</span>
                 )}
+                {topSkills.length === 0 && (
+                  <span className="rc-skill-more">Relevant skills unavailable for this analysis</span>
+                )}
               </div>
 
               <div className="rc-footer">
                 <span className="rc-footer-meta">
                   {[
-                    candidate.years_experience != null ? `${candidate.years_experience} yrs exp` : null,
-                    candidate.seniority_level,
+                    hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : 'Experience unavailable',
+                    safeText(candidate.seniority_level, 'Seniority unavailable'),
                   ].filter(Boolean).join(' · ')}
                 </span>
                 <span className="rc-expand-hint" role="button" aria-label={isExpanded ? 'Collapse candidate details' : 'Expand candidate details'}>
@@ -1085,25 +1117,33 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       {expandedCandidate && (() => {
         const candidate = expandedCandidate
         const score = activeScore(candidate)
-        const tier = scoreTier(score)
-        const displayScore = toTenScale(score)
+        const tier = getScoreTone(score)
+        const displayScore = formatScore(score)
         const hasDisplayScore = displayScore != null && Number.isFinite(Number(displayScore))
         const verdictLabel = resolveVerdictLabel(candidate, tier, hasDisplayScore)
         const confidenceLabel = resolveConfidenceLabel(candidate, hasDisplayScore)
-        const candidateTitle = toDisplayText(candidate.current_title, 'Unavailable')
-        const experienceLabel = candidate.years_experience != null ? `${candidate.years_experience} yrs exp` : 'Unavailable'
-        const locationLabel = toDisplayText(candidate.location, 'Unavailable')
-        const seniorityLabel = toDisplayText(candidate.seniority_level, 'Unavailable')
-        const normalizeTextList = (list) => (Array.isArray(list) ? list.map((entry) => toDisplayText(entry, '')).filter(Boolean) : [])
+        const candidateTitle = safeText(candidate.current_title, 'Unavailable')
+        const experienceLabel = hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : 'Unavailable'
+        const locationLabel = safeText(candidate.location, 'Unavailable')
+        const seniorityLabel = safeText(candidate.seniority_level, 'Unavailable')
+        const normalizeTextList = (list) => safeArray(list).map((entry) => safeText(entry, '')).filter(Boolean)
         const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
           ? normalizeTextList(candidate.strengths)
           : Array.isArray(candidate.achievements)
             ? normalizeTextList(candidate.achievements).slice(0, 3)
             : []
         const candidateConsiderations = normalizeTextList(candidate.considerations)
-        const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
+        const reasoningText = safeText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
         const experienceEntries = deriveExperienceEntries(candidate)
-        const topSkills = deriveTopSkills(candidate).slice(0, 6)
+        const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
+        const scoreBreakdown = candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object'
+          ? Object.entries(candidate.scoreBreakdown).filter(([key, value]) => key !== 'overall' && Number.isFinite(Number(value)))
+          : []
+        const mergedSkillGaps = [...new Set([
+          ...safeArray(candidate?.mustHaveSkills),
+          ...safeArray(candidate?.missingSkills),
+          ...safeArray(candidate?.fit_assessment?.missing),
+        ].map((entry) => safeText(entry, '')).filter(Boolean))]
         const initials = String(candidate?.name || '')
           .split(' ')
           .map((part) => part[0] || '')
@@ -1159,18 +1199,22 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
                 <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
                 <div className="dd-facts">
-                  {candidate.years_experience != null && (
-                    <div className="dd-fact">
-                      <span className="dd-fact-k">Experience</span>
-                      <span className="dd-fact-v">{candidate.years_experience} years</span>
-                    </div>
-                  )}
-                  {candidate.seniority_level && (
-                    <div className="dd-fact">
-                      <span className="dd-fact-k">Seniority</span>
-                      <span className="dd-fact-v">{candidate.seniority_level}</span>
-                    </div>
-                  )}
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Experience</span>
+                    <span className="dd-fact-v">{hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} years` : 'Unavailable'}</span>
+                  </div>
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Seniority</span>
+                    <span className="dd-fact-v">{safeText(candidate.seniority_level, 'Unavailable')}</span>
+                  </div>
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Education</span>
+                    <span className="dd-fact-v">{safeText(candidate.education, 'Unavailable')}</span>
+                  </div>
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Location</span>
+                    <span className="dd-fact-v">{safeText(candidate.location, 'Unavailable')}</span>
+                  </div>
                   {candidate.email && (
                     <div className="dd-fact">
                       <span className="dd-fact-k">Email</span>
@@ -1180,6 +1224,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
 
                 <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
+                {experienceEntries.length === 0 && <p className="dd-summary">Unavailable</p>}
                 {experienceEntries.map((job, idx) => (
                   <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
                     <div className="dd-job-title">{toDisplayText(job.title, 'Role not provided')}</div>
@@ -1219,6 +1264,28 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
 
               <div className="dd-col">
+                <div className="dd-col-label">Score breakdown</div>
+                {scoreBreakdown.length > 0 ? (
+                  <div className="dd-analysis-box">
+                    {scoreBreakdown.map(([key, value]) => (
+                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-breakdown-${key}`}>{safeText(key)}: {Math.max(0, Math.min(100, Number(value)))}%</div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="dd-summary">Score breakdown unavailable</p>
+                )}
+
+                <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
+                {mergedSkillGaps.length > 0 ? (
+                  <div className="dd-top-skills">
+                    {mergedSkillGaps.map((gap) => (
+                      <span className="dd-top-skill dd-top-skill--gap" key={`${candidate._bulkKey}-gap-${gap}`}>{gap}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="dd-summary">No explicit skill gaps identified</p>
+                )}
+
                 <div className="dd-col-label">Top skills</div>
                 <div className="dd-top-skills">
                   {topSkills.map((skill) => (
@@ -1226,6 +1293,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                       {formatSkillLabel(skill)}
                     </span>
                   ))}
+                  {topSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
                 </div>
 
                 {candidate.skills_structured && (
