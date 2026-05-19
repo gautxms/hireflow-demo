@@ -69,6 +69,16 @@ Exact meanings:
 - Must not include sensitive internal diagnostics, stack traces, or provider secrets.
 - May be `null` when `parseOutcome = "success"`.
 
+## Provider context fields on failures
+
+Some failure payloads include provider metadata fields (for example `provider`, `model`, `providerChain`) used for diagnostics.
+
+Rules:
+
+- **Pre-AI failures** may legitimately set `provider = null`, `model = null`, and `providerChain = null` because no AI provider call was attempted. This applies in particular to `extraction_failed` and `image_only_low_ocr`.
+- **Post-AI failures** should include provider context when at least one AI attempt exists (for example provider/model used during the attempt chain).
+- Consumers must treat null provider fields as expected for pre-AI categories, not as provider malfunction.
+
 ## Batch aggregate fields
 
 The analysis response includes batch-level aggregates:
