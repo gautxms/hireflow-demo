@@ -898,6 +898,7 @@ export async function analyzeWithAnthropic(
     anthropicClientFactory = null,
     compactMode = false,
     promptTextOverride = null,
+    promptHardeningSuffix = '',
     resumeId = null,
     jobId = null,
   } = {},
@@ -913,7 +914,8 @@ export async function analyzeWithAnthropic(
     : new Anthropic({ apiKey })
 
   const baseOutputInstructions = buildCompactOutputInstructions({ compactMode })
-  const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const baseSystemPrompt = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const systemPromptText = `${baseSystemPrompt}${promptHardeningSuffix ? `\n\n${promptHardeningSuffix}` : ''}`
   const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
@@ -1058,6 +1060,7 @@ export async function analyzeWithOpenAI(
     fetchImpl = fetch,
     compactMode = false,
     promptTextOverride = null,
+    promptHardeningSuffix = '',
     resumeId = null,
     jobId = null,
   } = {},
@@ -1069,7 +1072,8 @@ export async function analyzeWithOpenAI(
   const isExtractedTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
   const mediaType = MIME_TYPE_MAP[mimeType] || null
   const baseOutputInstructions = buildCompactOutputInstructions({ compactMode })
-  const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const baseSystemPrompt = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
+  const systemPromptText = `${baseSystemPrompt}${promptHardeningSuffix ? `\n\n${promptHardeningSuffix}` : ''}`
   const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
@@ -1278,7 +1282,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         systemPromptConfig,
         jobDescriptionContext: options.jobDescriptionContext || null,
         compactMode,
-        promptTextOverride: null,
+        promptTextOverride: options.promptTextOverride || null,
+        promptHardeningSuffix: options.promptHardeningSuffix || '',
         resumeId: options.resumeId || null,
         jobId: options.jobId || null,
       })

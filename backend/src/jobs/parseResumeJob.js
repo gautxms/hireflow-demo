@@ -11,6 +11,13 @@ import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
 
 const MIN_EXTRACTED_TEXT_LENGTH = 80
+const PLACEHOLDER_RETRY_MIN_TEXT_LENGTH = 1000
+const PLACEHOLDER_RETRY_PROMPT_SUFFIX = [
+  'Critical output guardrail:',
+  '- The resume text is substantial. Do not return failure placeholders or parser-failure narratives.',
+  '- Produce a best-effort candidate extraction from available text, even when some fields are uncertain.',
+  '- Do not use phrases like "unable to parse", "cannot extract", or "no resume content found" in candidate fields.',
+].join('\n')
 const RESUME_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|employment|certifications?|summary)\b/i
 
 export function isTerminalJobFailure(job) {
@@ -174,6 +181,12 @@ function hasMeaningfulResumeSignals(text = '') {
 
 export function shouldFailBeforeAi({ hasUsableExtractedText }) {
   return !hasUsableExtractedText
+}
+
+export function shouldTriggerPlaceholderRetry({ candidates, extractedTextLength }) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return false
+  if (!Number.isFinite(Number(extractedTextLength)) || Number(extractedTextLength) < PLACEHOLDER_RETRY_MIN_TEXT_LENGTH) return false
+  return candidates.some((candidate) => isFailurePlaceholderCandidate(candidate) || isFailureNarrativeCandidate(candidate))
 }
 
 export function buildExtractionSelectionDiagnostics({ extractionResult, ocrOutcome, hasUsableExtractedText }) {
@@ -658,6 +671,9 @@ async function runParse(job) {
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
   let usageAttempts = []
+  let placeholderRetryAttempted = false
+  let placeholderRetrySucceeded = false
+  let placeholderRetryReason = null
   const selectionDiagnostics = buildExtractionSelectionDiagnostics({
     extractionResult,
     ocrOutcome,
@@ -751,6 +767,31 @@ async function runParse(job) {
     parseProvider = aiResponse?.provider || null
     parseModel = aiResponse?.model || null
     parseMaxOutputTokens = Number(aiResponse?.maxOutputTokens || aiResult?.maxOutputTokens || 0) || null
+
+    if (shouldTriggerPlaceholderRetry({ candidates: aiResult?.candidates, extractedTextLength: extractedRawText.length })) {
+      placeholderRetryAttempted = true
+      placeholderRetryReason = 'placeholder_detected_with_substantial_extracted_text'
+      const retryResponse = await analyzeResumeWithConfiguredFallback(
+        Buffer.from(extractedRawText, 'utf8').toString('base64'),
+        'text/plain',
+        filename,
+        {
+          jobDescriptionContext,
+          resumeId,
+          jobId: job.id,
+          promptHardeningSuffix: PLACEHOLDER_RETRY_PROMPT_SUFFIX,
+        },
+      )
+      const retryResult = retryResponse?.result || {}
+      const retryAttempts = Array.isArray(retryResponse?.attempts) ? retryResponse.attempts : []
+      usageAttempts = [...usageAttempts, ...retryAttempts]
+      placeholderRetrySucceeded = !shouldTriggerPlaceholderRetry({ candidates: retryResult?.candidates, extractedTextLength: extractedRawText.length })
+      analysisResult = retryResult
+      parseMethod = retryResponse?.provider || parseMethod
+      parseProvider = retryResponse?.provider || parseProvider
+      parseModel = retryResponse?.model || parseModel
+      parseMaxOutputTokens = Number(retryResponse?.maxOutputTokens || retryResult?.maxOutputTokens || parseMaxOutputTokens || 0) || parseMaxOutputTokens
+    }
   } catch (aiError) {
     const failedAttempts = Array.isArray(aiError?.attempts) ? aiError.attempts : []
     if (failedAttempts.length > 0) {
@@ -950,6 +991,9 @@ async function runParse(job) {
       provider: analysisResult?.provider || parseMethod,
       model: parseModel || analysisResult?.model || null,
       maxOutputTokens: parseMaxOutputTokens,
+      placeholderRetryAttempted,
+      placeholderRetrySucceeded,
+      placeholderRetryReason,
     },
   }
 
