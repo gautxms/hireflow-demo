@@ -1408,5 +1408,4 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       </div>
     </div>
   )
-}
-)
+)}
