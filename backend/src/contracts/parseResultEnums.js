@@ -40,6 +40,9 @@ export function normalizeFailureCategory(value, { fallback = null } = {}) {
       const validationReason = Array.isArray(parsed?.validationReasons)
         ? String(parsed.validationReasons[0] || '').trim().toLowerCase()
         : String(parsed?.validationReason || '').trim().toLowerCase()
+      if (structured === 'ai_placeholder_output') {
+        return 'ai_output_validation_failed::ai_placeholder_output'
+      }
       if (structured === 'ai_output_validation_failed' && validationReason) {
         return `ai_output_validation_failed::${validationReason}`.slice(0, 180)
       }
