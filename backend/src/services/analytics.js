@@ -21,6 +21,7 @@ const ALLOWED_EVENTS = new Set([
   'admin_2fa_started',
   'admin_2fa_completed',
   'admin_page_feedback_submitted',
+  'parse_validation_failure_reason',
 ])
 
 const PII_FIELD_PATTERN = /(email|phone|name|ip|address|password|token)/i

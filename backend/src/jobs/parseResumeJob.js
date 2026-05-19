@@ -7,6 +7,7 @@ import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { getCandidateValidationFailureReasons, isCandidateExtractionValid, isCandidateValidForScoredOutcome, isFailureNarrativeCandidate, isFailurePlaceholderCandidate } from '../utils/candidateValidation.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
+import { trackEvent } from '../services/analytics.js'
 import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
 
@@ -175,6 +176,40 @@ function buildExtractionDiagnosticsSummary({
   }
 }
 
+
+
+function normalizeMetricTag(value, fallback = 'unknown') {
+  const normalized = String(value || '').trim()
+  return normalized ? normalized.slice(0, 120) : fallback
+}
+
+async function emitParseValidationReasonMetrics({
+  userId,
+  validationFailureCounters,
+  tags,
+}) {
+  const entries = Object.entries(validationFailureCounters || {}).filter(([reason, count]) => reason.startsWith('failure_') && Number(count) > 0)
+  if (entries.length === 0) return
+
+  for (const [reason, count] of entries) {
+    const eventMetadata = {
+      metric: 'parse_validation_failure_reason_total',
+      reason,
+      count: Number(count),
+      model: normalizeMetricTag(tags?.model),
+      provider: normalizeMetricTag(tags?.provider),
+      promptVersion: Number(tags?.promptVersion || 1),
+      mimeType: normalizeMetricTag(tags?.mimeType),
+      extractionMethod: normalizeMetricTag(tags?.extractionMethod),
+    }
+    console.log('[ParseValidationMetrics] parse_validation_failure_reason_total', eventMetadata)
+    await trackEvent({
+      userId: userId || null,
+      eventType: 'parse_validation_failure_reason',
+      metadata: eventMetadata,
+    })
+  }
+}
 function hasMeaningfulResumeSignals(text = '') {
   const normalized = String(text || '').trim()
   if (!normalized) return false
@@ -617,7 +652,23 @@ async function runParse(job) {
   const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
   const preflight = runResumePreflight({ mimeType, fileBuffer })
   if (!preflight.ok && preflight.unrecoverable) {
-    const parseDurationMs = Date.now() - startedAt
+    const latestPromptVersion = usageAttempts.length > 0
+    ? Number(usageAttempts[usageAttempts.length - 1]?.promptVersion || 1)
+    : 1
+
+  await emitParseValidationReasonMetrics({
+    userId: job.data.userId,
+    validationFailureCounters,
+    tags: {
+      model: parseModel || analysisResult?.model || null,
+      provider: parseProvider || analysisResult?.provider || parseMethod,
+      promptVersion: latestPromptVersion,
+      mimeType,
+      extractionMethod: extractionResult?.methodUsed || 'failed',
+    },
+  })
+
+  const parseDurationMs = Date.now() - startedAt
     const parseResult = buildPreflightFailureParseResult({ filename, mimeType, fileSize, preflight })
     await pool.query(
       `UPDATE resumes
@@ -1016,6 +1067,22 @@ async function runParse(job) {
       placeholderRetryReason,
     },
   }
+
+  const latestPromptVersion = usageAttempts.length > 0
+    ? Number(usageAttempts[usageAttempts.length - 1]?.promptVersion || 1)
+    : 1
+
+  await emitParseValidationReasonMetrics({
+    userId: job.data.userId,
+    validationFailureCounters,
+    tags: {
+      model: parseModel || analysisResult?.model || null,
+      provider: parseProvider || analysisResult?.provider || parseMethod,
+      promptVersion: latestPromptVersion,
+      mimeType,
+      extractionMethod: extractionResult?.methodUsed || 'failed',
+    },
+  })
 
   const parseDurationMs = Date.now() - startedAt
   if (scoredCandidates.length === 0) {

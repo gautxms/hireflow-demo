@@ -134,3 +134,42 @@ Monitor for **1–2 weeks** after enabling for production traffic:
 1. Day 0–2: 10% cohort, verify no spike in parse-failure or re-upload metrics.
 2. Day 3–7: 50% cohort, compare token-per-successful-resume against baseline.
 3. Day 8–14: 100% cohort if KPI deltas are neutral or improved.
+
+## Parse validation reason observability (Task 4.1)
+
+### Metric/event emitted
+- Event type: `parse_validation_failure_reason`
+- Metric key in metadata: `parse_validation_failure_reason_total`
+- Dimensions/tags: `reason`, `model`, `provider`, `promptVersion`, `mimeType`, `extractionMethod`
+- Count value in metadata: `count`
+
+### Single-query top-5 failure reasons (last 24h)
+```sql
+SELECT
+  metadata->>'reason' AS reason,
+  SUM(COALESCE((metadata->>'count')::int, 0)) AS failure_count
+FROM events
+WHERE event_type = 'parse_validation_failure_reason'
+  AND timestamp >= NOW() - INTERVAL '24 hours'
+GROUP BY 1
+ORDER BY 2 DESC
+LIMIT 5;
+```
+
+### Dashboard panels
+1. **Top parse failure reasons (24h)**
+   - Query: top-5 SQL above.
+2. **Failure reason trend by hour**
+   - Group by `date_trunc('hour', timestamp)` and `reason`.
+3. **Failure reason breakdown by provider/model**
+   - Group by `provider`, `model`, and `reason`.
+4. **Failure reason by extraction method + MIME**
+   - Group by `extractionMethod`, `mimeType`, and `reason`.
+
+### Alert threshold
+- Alert name: `parse-validation-failure-spike`
+- Condition: in a 15-minute window, either:
+  - `failure_placeholder_detected` total count >= 25, or
+  - `failure_narrative_detected` total count >= 25, or
+  - combined total (`failure_placeholder_detected` + `failure_narrative_detected`) >= 40.
+- Severity: warning (page on-call only if sustained for 3 consecutive windows).
