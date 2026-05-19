@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { BriefcaseBusiness, ChevronLeft, MapPin, TrendingUp } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -154,6 +154,27 @@ function activeScore(candidate) {
 
   const numeric = Number(resolved ?? fallbackScore)
   return Number.isFinite(numeric) ? numeric : 0
+}
+
+
+
+function resolveVerdictLabel(candidate, tier, hasScore) {
+  const explicitVerdict = [candidate?.fit_assessment?.verdict, candidate?.match_label, candidate?.matchLabel]
+    .map((value) => String(value || '').trim())
+    .find(Boolean)
+  if (explicitVerdict) return explicitVerdict
+  if (!hasScore) return 'Unable to score'
+  if (tier === 'strong') return 'Strong match'
+  if (tier === 'possible') return 'Possible match'
+  return 'Low match'
+}
+
+function resolveConfidenceLabel(candidate, hasScore) {
+  const explicitConfidence = [candidate?.fit_assessment?.confidence, candidate?.confidence, candidate?.match_confidence]
+    .map((value) => String(value || '').trim())
+    .find(Boolean)
+  if (explicitConfidence) return explicitConfidence
+  return hasScore ? '' : 'Low confidence'
 }
 
 function resolveAnalysisTitle(parseMeta, candidates) {
@@ -1066,6 +1087,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const score = activeScore(candidate)
         const tier = scoreTier(score)
         const displayScore = toTenScale(score)
+        const hasDisplayScore = displayScore != null && Number.isFinite(Number(displayScore))
+        const verdictLabel = resolveVerdictLabel(candidate, tier, hasDisplayScore)
+        const confidenceLabel = resolveConfidenceLabel(candidate, hasDisplayScore)
+        const candidateTitle = toDisplayText(candidate.current_title, 'Unavailable')
+        const experienceLabel = candidate.years_experience != null ? `${candidate.years_experience} yrs exp` : 'Unavailable'
+        const locationLabel = toDisplayText(candidate.location, 'Unavailable')
+        const seniorityLabel = toDisplayText(candidate.seniority_level, 'Unavailable')
         const normalizeTextList = (list) => (Array.isArray(list) ? list.map((entry) => toDisplayText(entry, '')).filter(Boolean) : [])
         const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
           ? normalizeTextList(candidate.strengths)
@@ -1086,23 +1114,30 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         return (
           <div id="detail-drawer" className="detail-drawer">
             <div className="dd-header">
-              <div className="dd-avatar">{initials || 'NA'}</div>
-              <div className="dd-header-info">
-                <div className="dd-name">{toDisplayText(candidate.name)}</div>
-                <div className="dd-subtitle">
-                  {[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}
+              <div className="dd-header-left">
+                <div className="dd-avatar">{initials || 'NA'}</div>
+                <div className="dd-header-info">
+                  <div className="dd-name">{toDisplayText(candidate.name)}</div>
+                  <div className="dd-subtitle">{candidateTitle}</div>
+                  <div className="dd-meta-facts">
+                    <span className="dd-meta-item"><BriefcaseBusiness size={16} strokeWidth={1.5} aria-hidden="true" />{experienceLabel}</span>
+                    <span className="dd-meta-item"><MapPin size={16} strokeWidth={1.5} aria-hidden="true" />{locationLabel}</span>
+                    <span className="dd-meta-item"><TrendingUp size={16} strokeWidth={1.5} aria-hidden="true" />{seniorityLabel}</span>
+                  </div>
                 </div>
               </div>
-              {displayScore != null && (
-                <div className={`dd-score dd-score--${tier}`}>
-                  {displayScore}<span>/10</span>
+              <div className={`dd-score-panel dd-score-panel--${tier}`}>
+                <div className="dd-score">
+                  {hasDisplayScore ? displayScore : '—'}<span>{hasDisplayScore ? '/10' : ''}</span>
                 </div>
-              )}
+                <div className={`dd-fit-label dd-fit--${tier}`}>{verdictLabel}</div>
+                {confidenceLabel && <div className="dd-confidence">{confidenceLabel}</div>}
+              </div>
               <div className="dd-header-actions">
-                <button className="dd-btn-primary" type="button">Schedule Interview</button>
-                <button className="dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to Shortlist</button>
+                <button className="hf-btn hf-btn--primary dd-btn-primary" type="button">Schedule interview</button>
+                <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to shortlist</button>
                 <button
-                  className="dd-btn-ghost"
+                  className="hf-btn dd-btn-ghost"
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation()
