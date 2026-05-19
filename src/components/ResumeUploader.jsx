@@ -1125,7 +1125,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 <p>
                   {providerErrorGuidance.provider || providerErrorGuidance.model
                     ? `Provider context: ${[providerErrorGuidance.provider, providerErrorGuidance.model].filter(Boolean).join(' / ')}`
-                    : 'Provider context: check the active AI provider configuration.'}
+                    : 'Provider context not available for this failure category (this can be expected before any AI provider call).'}
                 </p>
                 {providerErrorGuidance.remediationSteps.length > 0 && (
                   <ol>
