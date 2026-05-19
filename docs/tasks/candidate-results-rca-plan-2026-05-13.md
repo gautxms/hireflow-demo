@@ -109,6 +109,19 @@ Primary root cause for 0.1 yrs symptom:
 - Frontend reading wrong fields / only matched skills: **Yes (primary for skills/all-skills display)**.
 - Fallback logic converting missing to N/A incorrectly: **Yes (education/location/execution nuance), and especially experience 0.1 fallback**.
 
+## Error Code Mismatch (corrected)
+
+The earlier hypothesis that these error codes were absent and invented by a transformation layer is incorrect. The codes are **first-class internal categories propagated across layers**.
+
+Concrete evidence:
+- `backend/src/jobs/parseResumeJob.js` defines `mapParseErrorCode` with explicit mappings for provider/system categories (e.g., `image_only_low_ocr`, `response_format_error`, `rate_limit_error`, `network_error`) and explicit failover behavior to `parse_failed`; it also throws categorized failures such as `extraction_failed::...` and records `failureCategory` in parse outcomes.
+- `backend/src/jobs/resumePreflight.js` emits `failureCategory: 'image_only_low_ocr'` in `evaluateOcrOutcome` when OCR confidence is below threshold.
+- `backend/src/jobs/parseProviderError.js` declares `CATEGORY_MESSAGES` for the same category family and uses `NORMALIZED_PREFIX_PATTERN` to normalize category-prefixed provider messages (including `image_only_low_ocr`, `response_format_error`, `timeout_error`, etc.).
+- `backend/src/contracts/parseResultEnums.js` defines `FAILURE_CATEGORIES` as allowed contract enums (including `image_only_low_ocr`, `response_format_error`, `rate_limit_error`, `unknown_error`, etc.) and `normalizeFailureCategory` to normalize/validate incoming category values.
+
+RCA conclusion update:
+- Replace “transformation layer invented these codes” with: **“these codes are first-class internal failure categories that are intentionally emitted, normalized, and contract-validated across preflight, parse job, provider-error normalization, and parse-result enum layers.”**
+
 ## Does system prompt need update?
 Yes, but as a **Phase 5 hardening step** after data-loss point confirmation.
 Recommended targeted additions:
