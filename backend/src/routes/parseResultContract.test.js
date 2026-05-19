@@ -16,6 +16,10 @@ test('failureCategory must be canonical or explicitly mapped to unknown', () => 
     normalizeFailureCategory('parse_failed::{"failureType":"ai_output_validation_failed"}', { fallback: 'unknown' }),
     'ai_output_validation_failed',
   )
+  assert.equal(
+    normalizeFailureCategory('parse_failed::{"failureType":"ai_output_validation_failed","validationReasons":["skills_malformed_array"]}', { fallback: 'unknown' }),
+    'ai_output_validation_failed::skills_malformed_array',
+  )
   assert.equal(normalizeFailureCategory('legacy_unmapped_reason', { fallback: 'unknown' }), 'unknown')
   assert.equal(normalizeFailureCategory(null, { fallback: 'unknown' }), null)
 })

@@ -37,6 +37,12 @@ export function normalizeFailureCategory(value, { fallback = null } = {}) {
     try {
       const parsed = JSON.parse(payload)
       const structured = String(parsed?.failureType || '').trim().toLowerCase()
+      const validationReason = Array.isArray(parsed?.validationReasons)
+        ? String(parsed.validationReasons[0] || '').trim().toLowerCase()
+        : String(parsed?.validationReason || '').trim().toLowerCase()
+      if (structured === 'ai_output_validation_failed' && validationReason) {
+        return `ai_output_validation_failed::${validationReason}`.slice(0, 180)
+      }
       if (FAILURE_CATEGORY_SET.has(structured)) return structured
       const technicalDetails = String(parsed?.technicalDetails || '').trim().toLowerCase()
       if (technicalDetails.includes('ai_failure_placeholder')) return 'ai_output_validation_failed'

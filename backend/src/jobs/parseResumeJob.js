@@ -5,7 +5,7 @@ import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
-import { isCandidateExtractionValid, isCandidateValidForScoredOutcome, isFailureNarrativeCandidate, isFailurePlaceholderCandidate } from '../utils/candidateValidation.js'
+import { getCandidateValidationFailureReasons, isCandidateExtractionValid, isCandidateValidForScoredOutcome, isFailureNarrativeCandidate, isFailurePlaceholderCandidate } from '../utils/candidateValidation.js'
 import { runParseWithOcrFallback } from './ocrFallbackJob.js'
 import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
@@ -860,9 +860,19 @@ async function runParse(job) {
   const parseFailedCandidates = []
   const scoringFailedCandidates = []
   const scoringFailures = []
+  const validationFailureCounters = {}
+
+  const incrementValidationFailureCounter = (reason) => {
+    const key = String(reason || '').trim().toLowerCase()
+    if (!key) return
+    validationFailureCounters[key] = (validationFailureCounters[key] || 0) + 1
+  }
 
   for (const candidate of normalizedCandidates) {
     if (!isCandidateExtractionValid(candidate) || isFailureNarrativeCandidate(candidate)) {
+      getCandidateValidationFailureReasons(candidate)
+        .filter((reason) => reason.startsWith('failure_'))
+        .forEach(incrementValidationFailureCounter)
       parseFailedCandidates.push({ ...candidate, resumeProcessingStatus: 'parse_failed' })
       scoringFailures.push({
         candidateId: candidate?.candidateId || candidate?.id || null,
@@ -872,6 +882,9 @@ async function runParse(job) {
       continue
     }
     if (!isCandidateValidForScoredOutcome(candidate)) {
+      getCandidateValidationFailureReasons(candidate)
+        .filter((reason) => !reason.startsWith('failure_'))
+        .forEach(incrementValidationFailureCounter)
       scoringFailedCandidates.push({
         ...candidate,
         score: null,
@@ -933,6 +946,7 @@ async function runParse(job) {
       scoringStatus: (parseFailedCandidates.length > 0 || scoringFailedCandidates.length > 0)
         ? 'failed'
         : (jobDescriptionContext?.hasContext ? (scoredCandidates.length > 0 ? 'complete' : 'partial') : 'skipped_no_job_description'),
+      validationFailureCounters,
       provider: analysisResult?.provider || parseMethod,
       model: parseModel || analysisResult?.model || null,
       maxOutputTokens: parseMaxOutputTokens,
