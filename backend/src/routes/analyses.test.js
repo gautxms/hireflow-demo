@@ -256,7 +256,9 @@ test('GET /analyses/:id mixed batch completes with per-resume parse outcomes and
       return { rows: [
         { id: 401, resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'good.pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: JSON.stringify({ candidates: [{ name: 'Alice' }] }) },
         { id: 402, resume_id: 'r-2', parse_job_id: 'p-2', created_at: '2026-05-01T00:00:11.000Z', filename: 'corrupt.pdf', resume_parse_status: 'failed', parse_error: 'Corrupted PDF', parse_job_status: 'failed', progress: 100, error_message: 'Corrupted PDF', parse_job_updated_at: '2026-05-01T00:01:01.000Z', parse_result: JSON.stringify({ failureCategory: 'corrupt_or_unreadable' }) },
-        { id: 403, resume_id: 'r-3', parse_job_id: 'p-3', created_at: '2026-05-01T00:00:12.000Z', filename: 'locked.pdf', resume_parse_status: 'failed', parse_error: 'Encrypted PDF', parse_job_status: 'failed', progress: 100, error_message: 'Encrypted PDF', parse_job_updated_at: '2026-05-01T00:01:02.000Z', parse_result: JSON.stringify({ failureCategory: 'encrypted_or_password_protected_pdf' }) },
+        { id: 403, resume_id: 'r-3', parse_job_id: 'p-3', created_at: '2026-05-01T00:00:12.000Z', filename: 'locked.pdf', resume_parse_status: 'failed', parse_error: 'Encrypted PDF', parse_error_code: 'image_only_low_ocr', parse_job_status: 'failed', progress: 100, error_message: 'Encrypted PDF', parse_job_updated_at: '2026-05-01T00:01:02.000Z', parse_result: JSON.stringify({}) },
+        { id: 404, resume_id: 'r-4', parse_job_id: 'p-4', created_at: '2026-05-01T00:00:13.000Z', filename: 'extract.pdf', resume_parse_status: 'failed', parse_error: 'Extraction failed due to parser crash', parse_error_code: null, parse_job_status: 'failed', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:03.000Z', parse_result: JSON.stringify({}) },
+        { id: 405, resume_id: 'r-5', parse_job_id: 'p-5', created_at: '2026-05-01T00:00:14.000Z', filename: 'validation.pdf', resume_parse_status: 'failed', parse_error: null, parse_error_code: null, parse_job_status: 'failed', progress: 100, error_message: 'AI output validation failed: schema mismatch', parse_job_updated_at: '2026-05-01T00:01:04.000Z', parse_result: JSON.stringify({}) },
       ] }
     }
     if (sql.includes('UPDATE analyses')) return { rows: [] }
@@ -272,16 +274,21 @@ test('GET /analyses/:id mixed batch completes with per-resume parse outcomes and
 
   assert.equal(response.status, 200)
   assert.equal(payload.status, 'failed')
-  assert.equal(payload.summary.totalResumes, 3)
+  assert.equal(payload.summary.totalResumes, 5)
   assert.equal(payload.summary.successCount, 1)
-  assert.equal(payload.summary.failedCount, 2)
+  assert.equal(payload.summary.failedCount, 4)
   assert.equal(payload.items[0].parseOutcome, 'success')
   assert.equal(payload.items[1].parseOutcome, 'failed')
   assert.equal(payload.items[1].failureCategory, 'corrupt_or_unreadable')
-  assert.equal(payload.items[2].failureCategory, 'encrypted_or_password_protected_pdf')
+  assert.equal(payload.items[2].failureCategory, 'image_only_low_ocr')
+  assert.equal(payload.items[3].failureCategory, 'extraction_failed')
+  assert.equal(payload.items[4].failureCategory, 'ai_output_validation_failed')
   assert.equal(Array.isArray(payload.failedResumes), true)
-  assert.equal(payload.failedResumes.length, 2)
+  assert.equal(payload.failedResumes.length, 4)
   assert.equal(payload.failedResumes[0].filename, 'corrupt.pdf')
+  assert.equal(payload.failedResumes[1].failureCategory, 'image_only_low_ocr')
+  assert.equal(payload.failedResumes[2].failureCategory, 'extraction_failed')
+  assert.equal(payload.failedResumes[3].failureCategory, 'ai_output_validation_failed')
 })
 test('DELETE /analyses/:id deletes owner analysis transactionally', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
