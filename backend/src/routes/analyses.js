@@ -274,6 +274,7 @@ async function loadAnalysisStatus(analysisId, userId) {
             r.filename,
             r.parse_status AS resume_parse_status,
             r.parse_error,
+            r.parse_error_code,
             pj.status AS parse_job_status,
             pj.progress,
             pj.error_message,
@@ -341,7 +342,14 @@ async function loadAnalysisStatus(analysisId, userId) {
     const implicitFailure = canonicalStatus === 'complete' && extracted.candidates.length === 0 && (scoringFailures.length > 0 || candidatesWithScoringFailures.length > 0)
     const parseOutcome = normalizeParseOutcome(implicitFailure ? 'failed' : (canonicalStatus === 'complete' ? 'success' : (canonicalStatus === 'failed' ? 'failed' : null)), 'partial')
     const failureCategory = (canonicalStatus === 'failed' || implicitFailure)
-      ? normalizeFailureCategory(safeParseResult(row.parse_result)?.failureCategory || scoringFailures[0]?.reason, { fallback: 'unknown' })
+      ? normalizeFailureCategory(
+        safeParseResult(row.parse_result)?.failureCategory
+        || row.parse_error_code
+        || scoringFailures[0]?.reason
+        || row.error_message
+        || row.parse_error,
+        { fallback: 'unknown' },
+      )
       : null
 
     items.push({
