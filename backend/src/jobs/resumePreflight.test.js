@@ -25,6 +25,8 @@ test('routes low extractable-text ratio pdf to OCR fallback', () => {
   assert.equal(result.ok, true)
   assert.equal(result.textQuality.lowExtractableTextLikely, true)
   assert.equal(result.routeToOcr, true)
+  assert.equal(typeof result.diagnostics.extractableTextRatio, 'number')
+  assert.equal(typeof result.diagnostics.readableTokenRatio, 'number')
 })
 
 test('routes artifact-heavy extracted text to OCR fallback despite high text length', () => {
@@ -46,4 +48,14 @@ test('returns partial for low OCR confidence', () => {
   const result = evaluateOcrOutcome({ ocrConfidence: 50 })
   assert.equal(result.parseOutcome, 'partial')
   assert.equal(result.failureCategory, 'image_only_low_ocr')
+  assert.equal(result.diagnostics.thresholdDecision, 'below_threshold')
+})
+
+test('does not terminal-fail OCR low confidence when guardrail conditions are met', () => {
+  const result = evaluateOcrOutcome({
+    ocrConfidence: 52,
+    extractedTextLength: 1200,
+    preflightDiagnostics: { readableTokenRatio: 0.64 },
+  })
+  assert.equal(result, null)
 })
