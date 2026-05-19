@@ -1521,11 +1521,12 @@
 .dd-col { min-width: 0; }
 
 .dd-col-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
+  font-family: var(--font-body, 'DM Sans', sans-serif);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #444444;
+  color: var(--hf-text-4);
   margin-bottom: 10px;
 }
 .dd-col-label--mt-16 { margin-top: 16px; }
@@ -1535,7 +1536,28 @@
   font-size: 13px;
   color: var(--color-text-secondary);
   line-height: 1.7;
+  font-family: var(--font-body, 'DM Sans', sans-serif);
 }
+.dd-summary--clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dd-recommended-action {
+  border-left: 2px solid var(--hf-lime);
+  background: var(--hf-lime-dim);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--color-text-secondary);
+}
+.dd-list-item { display: flex; gap: 8px; align-items: flex-start; color: var(--color-text-secondary); padding: 6px 0; }
+.dd-list-item svg { color: var(--hf-lime); flex: 0 0 auto; margin-top: 2px; }
+.dd-list-item--warn svg { color: var(--hf-warning); }
+.dd-list { display: flex; flex-direction: column; }
+
+.dd-facts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dd-fact-card { background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
 .dd-facts { display: flex; flex-direction: column; gap: 7px; }
 
@@ -1578,7 +1600,7 @@
   background: #0d0d0d;
   border-radius: 10px;
   padding: 12px;
-  border-top: 2px solid transparent;
+  border: 1px solid #1e1e1e;
 }
 .dd-analysis-box--green { border-top-color: rgba(200, 255, 0, 0.2); }
 .dd-analysis-box--amber { border-top-color: rgba(255, 165, 0, 0.2); }
@@ -1609,6 +1631,18 @@
   padding: 4px 10px;
   border-radius: 6px;
 }
+.dd-top-skill--warn {
+  color: var(--hf-warning);
+  background: rgba(255, 165, 0, 0.1);
+  border-color: rgba(255, 165, 0, 0.25);
+}
+.dd-breakdown { display: flex; flex-direction: column; gap: 8px; }
+.dd-breakdown-row { display: grid; grid-template-columns: minmax(92px, 1fr) 1fr auto; gap: 8px; align-items: center; font-size: 12px; color: var(--color-text-secondary); }
+.dd-breakdown-track { background: #2a2a2a; border-radius: 999px; height: 8px; overflow: hidden; }
+.dd-breakdown-fill { background: var(--hf-lime); height: 100%; border-radius: 999px; }
+.dd-toggle-skills { margin-top: 8px; }
+.dd-resume-file { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border: 1px solid #2a2a2a; border-radius: 10px; background: #0d0d0d; color: var(--color-text-secondary); }
+.dd-resume-meta { color: var(--hf-text-4); font-size: 12px; }
 
 .dd-skill-cat {
   font-size: 10px;
