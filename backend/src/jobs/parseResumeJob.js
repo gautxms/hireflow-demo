@@ -223,8 +223,13 @@ export function shouldFailBeforeAi({ hasUsableExtractedText }) {
 export function shouldTriggerPlaceholderRetry({ candidates, extractedTextLength }) {
   if (!Array.isArray(candidates) || candidates.length === 0) return false
   if (!Number.isFinite(Number(extractedTextLength)) || Number(extractedTextLength) < PLACEHOLDER_RETRY_MIN_TEXT_LENGTH) return false
-  return candidates.some((candidate) => isFailurePlaceholderCandidate(candidate) || isFailureNarrativeCandidate(candidate))
+  return candidates.some((candidate) => {
+    if (isFailurePlaceholderCandidate(candidate) || isFailureNarrativeCandidate(candidate)) return true
+    const reasons = getCandidateValidationFailureReasons(candidate)
+    return reasons.includes('failure_placeholder_detected') || reasons.includes('failure_narrative_detected')
+  })
 }
+
 
 export function buildExtractionSelectionDiagnostics({ extractionResult, ocrOutcome, hasUsableExtractedText }) {
   const stageDiagnostics = extractionResult?.stageDiagnostics || {}
@@ -1017,6 +1022,8 @@ async function runParse(job) {
       resumeProcessingStatus: 'scored',
     })
   }
+
+
 
   const parseResult = {
     filename,
