@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { getCandidateValidationFailureReasons, isCandidateValidForScoredOutcome, isFailureNarrativeCandidate } from './candidateValidation.js'
+import { noisyExtractedTextCandidateFixture, placeholderTemplateCandidateFixture } from './__fixtures__/promptBehaviorFixtures.js'
 
 test('failure-narrative candidate is rejected even when score > 0', () => {
   const candidate = {
@@ -129,4 +130,18 @@ test('overly strict borderline output is rejected with explicit failure reasons'
     ],
   )
   assert.equal(isCandidateValidForScoredOutcome(candidate), false)
+})
+
+
+test('fixture regression: noisy extracted text output remains non-placeholder and valid for scored outcome', () => {
+  assert.equal(isFailureNarrativeCandidate(noisyExtractedTextCandidateFixture), false)
+  assert.equal(isCandidateValidForScoredOutcome(noisyExtractedTextCandidateFixture), true)
+  assert.notEqual(noisyExtractedTextCandidateFixture.name, 'Parsing Failed')
+  assert.match(String(noisyExtractedTextCandidateFixture.reasoning), /Node\.js services/i)
+})
+
+test('fixture regression: placeholder template output is always treated as failure narrative', () => {
+  assert.equal(isFailureNarrativeCandidate(placeholderTemplateCandidateFixture), true)
+  assert.equal(isCandidateValidForScoredOutcome(placeholderTemplateCandidateFixture), false)
+  assert.match(String(placeholderTemplateCandidateFixture.reasoning), /unable to extract enough text/i)
 })
