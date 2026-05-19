@@ -101,6 +101,16 @@ export function runResumePreflight({ mimeType, fileBuffer, thresholds = {} }) {
   const lowReadableQualityLikely = normalizedMime === 'application/pdf'
     && !hasResumeSectionSignals
     && ((readableTokenRatio < appliedThresholds.lowReadableTokenRatio || binaryArtifactRatio > appliedThresholds.lowReadableBinaryArtifactRatio) && (!hasStrongTextLength || binaryArtifactRatio > appliedThresholds.strongTextBinaryArtifactRatio))
+
+  const recruiterLikeStructureLikely = hasStrongTextLength
+    && hasModerateReadability
+    && resumeSignalCount >= 4
+
+  const strongNegativeSignals = lowReadableQualityLikely
+    || readableTokenRatio < appliedThresholds.lowReadableTokenRatio
+    || binaryArtifactRatio > appliedThresholds.strongTextBinaryArtifactRatio
+    || resumeSignalCount <= 1
+
   const routeToOcr = imageOnlyLikely || lowExtractableTextLikely || lowReadableQualityLikely
   const diagnostics = {
     extractableTextRatio,

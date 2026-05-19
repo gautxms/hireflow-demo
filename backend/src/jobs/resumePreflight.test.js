@@ -57,6 +57,25 @@ Led backend projects and improved ATS integrations.
   assert.ok(result.diagnostics.resumeSignalCount >= 4)
 })
 
+
+test('does not throw and returns boolean diagnostics fields for valid PDF-like input', () => {
+  const resumeLikeText = `%PDF-1.7
+Jane Doe
+jane.doe@example.com
+Experience
+Senior Software Engineer
+Jan 2020 - Present
+`.repeat(12)
+  const fileBuffer = Buffer.from(resumeLikeText, 'latin1')
+
+  assert.doesNotThrow(() => runResumePreflight({ mimeType: 'application/pdf', fileBuffer }))
+
+  const result = runResumePreflight({ mimeType: 'application/pdf', fileBuffer })
+  assert.equal(result.ok, true)
+  assert.equal(typeof result.diagnostics.strongNegativeSignals, 'boolean')
+  assert.equal(typeof result.diagnostics.recruiterLikeStructureLikely, 'boolean')
+})
+
 test('can still route to OCR when recruiter-like length is paired with multiple strong negatives', () => {
   const weakButLong = `%PDF-1.7
 obj endobj stream endstream xref /Filter /Length
