@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { isFailurePlaceholderCandidate, shouldFailBeforeAi, shouldTriggerPlaceholderRetry } from './parseResumeJob.js'
+import { placeholderTemplateCandidateFixture } from '../utils/__fixtures__/promptBehaviorFixtures.js'
 
 test('pre-AI short-circuit only when extracted text is not usable length', () => {
   assert.equal(shouldFailBeforeAi({ hasUsableExtractedText: true }), false)
