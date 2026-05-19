@@ -1214,104 +1214,115 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
 
                 <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
-                {experienceEntries.length === 0 && <p className="dd-summary">Unavailable</p>}
-                {experienceEntries.map((job, idx) => (
-                  <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
-                    <div className="dd-job-title">{toDisplayText(job.title, 'Role not provided')}</div>
-                    <div className="dd-job-meta">
-                      {toDisplayText(job.company, 'N/A')} · {toDisplayText(job.durationText, [job.startDate, job.endDate].filter(Boolean).join(' – ') || 'N/A')}
-                    </div>
-                  </div>
-                ))}
-              </div>
+{experienceEntries.length === 0 && <p className="dd-summary">Unavailable</p>}
+{experienceEntries.map((job, idx) => (
+  <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
+    <div className="dd-job-title">{toDisplayText(job.title, 'Role not provided')}</div>
+    <div className="dd-job-meta">
+      {toDisplayText(job.company, 'N/A')} · {toDisplayText(job.durationText, [job.startDate, job.endDate].filter(Boolean).join(' – ') || 'N/A')}
+    </div>
+  </div>
+))}
+</div>
 
-              <div className="dd-col">
-                <div className="dd-col-label">Strengths</div>
-                <div className="dd-analysis-box dd-analysis-box--green">
-                  {candidateStrengths.length > 0
-                    ? candidateStrengths.map((strength, idx) => (
-                      <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><span>{strength}</span></div>
-                    ))
-                    : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-                </div>
+<div className="dd-col">
+  <div className="dd-col-label">Strengths</div>
+  <div className="dd-analysis-box dd-analysis-box--green">
+    {candidateStrengths.length > 0
+      ? candidateStrengths.map((strength, idx) => (
+        <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}>
+          <CheckCircle size={18} strokeWidth={1.5} />
+          <span>{strength}</span>
+        </div>
+      ))
+      : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+  </div>
 
-                <div className="dd-col-label dd-col-label--mt-14">Considerations</div>
-                <div className="dd-analysis-box dd-analysis-box--amber">
-                  {candidateConsiderations.length > 0
-                    ? candidateConsiderations.map((consideration, idx) => (
-                      <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><span>{consideration}</span></div>
-                    ))
-                    : (
-                      <div className="dd-analysis-item">
-                        {candidate.years_experience == null
-                          ? 'Experience duration could not be determined — verify dates in resume'
-                          : candidate.years_experience < 3
-                            ? 'Early-career candidate — assess growth trajectory in interview'
-                            : 'Run re-analysis to generate detailed AI considerations'}
-                      </div>
-                    )}
-                </div>
-              </div>
+  <div className="dd-col-label dd-col-label--mt-14">Considerations</div>
+  <div className="dd-analysis-box dd-analysis-box--amber">
+    {candidateConsiderations.length > 0
+      ? candidateConsiderations.map((consideration, idx) => (
+        <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}>
+          <AlertTriangle size={18} strokeWidth={1.5} />
+          <span>{consideration}</span>
+        </div>
+      ))
+      : (
+        <div className="dd-analysis-item">
+          {candidate.years_experience == null
+            ? 'Experience duration could not be determined — verify dates in resume'
+            : candidate.years_experience < 3
+              ? 'Early-career candidate — assess growth trajectory in interview'
+              : 'Run re-analysis to generate detailed AI considerations'}
+        </div>
+      )}
+  </div>
+</div>
 
-              <div className="dd-col">
-                <div className="dd-col-label">Score breakdown</div>
-                {scoreBreakdown.length > 0 ? (
-                  <div className="dd-analysis-box">
-                    {scoreBreakdown.map(([key, value]) => (
-                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-breakdown-${key}`}>{safeText(key)}: {Math.max(0, Math.min(100, Number(value)))}%</div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="dd-summary">Score breakdown unavailable</p>
-                )}
+<div className="dd-col">
+  <div className="dd-col-label">Score breakdown</div>
+  {scoreBreakdown.length > 0 ? (
+    <div className="dd-analysis-box">
+      {scoreBreakdown.map(([key, value]) => (
+        <div className="dd-analysis-item" key={`${candidate._bulkKey}-breakdown-${key}`}>
+          {safeText(key)}: {Math.max(0, Math.min(100, Number(value)))}%
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p className="dd-summary">Score breakdown unavailable</p>
+  )}
 
-                <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
-                {mergedSkillGaps.length > 0 ? (
-                  <div className="dd-top-skills">
-                    {mergedSkillGaps.map((gap) => (
-                      <span className="dd-top-skill dd-top-skill--gap" key={`${candidate._bulkKey}-gap-${gap}`}>{gap}</span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="dd-summary">No explicit skill gaps identified</p>
-                )}
+  <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
+  {mergedSkillGaps.length > 0 ? (
+    <div className="dd-top-skills">
+      {mergedSkillGaps.map((gap) => (
+        <span className="dd-top-skill dd-top-skill--gap" key={`${candidate._bulkKey}-gap-${gap}`}>{gap}</span>
+      ))}
+    </div>
+  ) : (
+    <p className="dd-summary">No explicit skill gaps identified</p>
+  )}
 
-                <div className="dd-col-label">Top skills</div>
-                <div className="dd-top-skills">
-                  {topSkills.map((skill) => (
-                    <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
-                      {formatSkillLabel(skill)}
-                    </span>
-                  ))}
-                  {topSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
-                </div>
+  <div className="dd-col-label">Top skills</div>
+  <div className="dd-top-skills">
+    {topSkills.map((skill) => (
+      <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
+        {formatSkillLabel(skill)}
+      </span>
+    ))}
+    {topSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
+  </div>
 
-                {candidate.skills_structured && (
-                  <>
-                    <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
-                    <div className="dd-analysis-box">
-                      {candidate.integrity_checks.map((check, idx) => (
-                        <div className="dd-list-item" key={`${candidate._bulkKey}-integrity-${idx}`}>
-                          {check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}
-                          <span>{toDisplayText(check?.label || check, 'Unavailable')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
-                <div className="dd-resume-file">
-                  <FileText size={18} strokeWidth={1.5} />
-                  <div>
-                    <div>{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
-                    <div className="dd-resume-meta">Use View full profile to open this resume.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+  {candidate.skills_structured && Array.isArray(candidate.integrity_checks) && candidate.integrity_checks.length > 0 && (
+    <>
+      <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
+      <div className="dd-analysis-box">
+        {candidate.integrity_checks.map((check, idx) => (
+          <div className="dd-list-item" key={`${candidate._bulkKey}-integrity-${idx}`}>
+            {check?.status === 'issue'
+              ? <AlertTriangle size={18} strokeWidth={1.5} />
+              : <CheckCircle size={18} strokeWidth={1.5} />}
+            <span>{toDisplayText(check?.label || check, 'Unavailable')}</span>
           </div>
-        )
-      })()}
+        ))}
+      </div>
+    </>
+  )}
+
+  <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
+  <div className="dd-resume-file">
+    <FileText size={18} strokeWidth={1.5} />
+    <div>
+      <div>{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
+      <div className="dd-resume-meta">Use View full profile to open this resume.</div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+)
+})()}
 
       {visibleCandidates.length === 0 && (
         <div className="candidate-results-page__empty-note">
