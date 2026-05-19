@@ -1209,7 +1209,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                       <span className="dd-fact-k">Email</span>
                       <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
