@@ -1,8 +1,10 @@
 import { estimateExtractableText } from '../services/ocrService.js'
 
 const IMAGE_ONLY_RATIO_THRESHOLD = 0.01
-const LOW_QUALITY_RATIO_THRESHOLD = 0.18
-const OCR_MIN_CONFIDENCE = 65
+const LOW_QUALITY_RATIO_THRESHOLD = 0.14
+const OCR_MIN_CONFIDENCE = 60
+const STRONG_TEXT_LENGTH_THRESHOLD = 800
+const MODERATE_READABLE_TOKEN_RATIO = 0.58
 const RESUME_SECTION_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|summary|employment|certifications?)\b/i
 const BINARY_ARTIFACT_PATTERN = /\b(?:obj|endobj|stream|endstream|xref|flatedecode|\/filter|\/length)\b/gi
 const TOKEN_PATTERN = /[A-Za-z]{2,}/g
@@ -68,10 +70,23 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
     ? artifactMatches.join('').length / extractedText.length
     : 1
   const lowExtractableTextLikely = normalizedMime === 'application/pdf' && extractableTextRatio < LOW_QUALITY_RATIO_THRESHOLD
+  const hasStrongTextLength = extractedText.length >= STRONG_TEXT_LENGTH_THRESHOLD
+  const hasModerateReadability = readableTokenRatio >= MODERATE_READABLE_TOKEN_RATIO && binaryArtifactRatio <= 0.12
   const lowReadableQualityLikely = normalizedMime === 'application/pdf'
     && !hasResumeSectionSignals
-    && (readableTokenRatio < 0.62 || binaryArtifactRatio > 0.08)
+    && ((readableTokenRatio < 0.58 || binaryArtifactRatio > 0.1) && (!hasStrongTextLength || binaryArtifactRatio > 0.2))
   const routeToOcr = imageOnlyLikely || lowExtractableTextLikely || lowReadableQualityLikely
+  const diagnostics = {
+    extractableTextRatio,
+    readableTokenRatio,
+    binaryArtifactRatio,
+    hasResumeSectionSignals,
+    routeToOcr,
+    hasStrongTextLength,
+    hasModerateReadability,
+    extractedTextLength: extractedText.length,
+    readableQualityGatePassed: !lowReadableQualityLikely,
+  }
 
   return {
     ok: true,
@@ -79,6 +94,7 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
     extractableTextRatio,
     imageOnlyLikely,
     routeToOcr,
+    diagnostics,
     textQuality: {
       lowExtractableTextLikely,
       lowReadableQualityLikely,
@@ -94,15 +110,27 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
   }
 }
 
-export function evaluateOcrOutcome({ ocrConfidence }) {
+export function evaluateOcrOutcome({ ocrConfidence, preflightDiagnostics = {}, extractedTextLength = 0 }) {
   const confidence = Number(ocrConfidence || 0)
-  if (!Number.isFinite(confidence) || confidence < OCR_MIN_CONFIDENCE) {
+  const guardrailBypass = Number(extractedTextLength || 0) >= STRONG_TEXT_LENGTH_THRESHOLD
+    && Number(preflightDiagnostics?.readableTokenRatio || 0) >= MODERATE_READABLE_TOKEN_RATIO
+  const confidenceValid = Number.isFinite(confidence)
+  const confidenceBelowThreshold = !confidenceValid || confidence < OCR_MIN_CONFIDENCE
+  const decisionDiagnostics = {
+    ocrConfidence: confidence,
+    ocrMinConfidence: OCR_MIN_CONFIDENCE,
+    confidenceBelowThreshold,
+    thresholdDecision: confidenceBelowThreshold ? 'below_threshold' : 'pass',
+    guardrailBypass,
+  }
+  if (confidenceBelowThreshold && !guardrailBypass) {
     return {
       parseOutcome: confidence > 0 ? 'partial' : 'failed',
       failureCategory: 'image_only_low_ocr',
       failureMessageUserSafe: 'We could only read limited text from this image-based resume. Please upload a clearer file.',
       ocrConfidence: confidence,
       ocrMinConfidence: OCR_MIN_CONFIDENCE,
+      diagnostics: decisionDiagnostics,
     }
   }
 

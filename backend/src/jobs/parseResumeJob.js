@@ -636,7 +636,13 @@ async function runParse(job) {
   })
   const extractedRawText = String(extractionResult?.rawText || '').trim()
   const hasUsableExtractedText = extractedRawText.length >= MIN_EXTRACTED_TEXT_LENGTH
-  const ocrOutcome = preflight.routeToOcr ? evaluateOcrOutcome({ ocrConfidence: extractionResult?.ocrConfidence }) : null
+  const ocrOutcome = preflight.routeToOcr
+    ? evaluateOcrOutcome({
+        ocrConfidence: extractionResult?.ocrConfidence,
+        preflightDiagnostics: preflight?.diagnostics,
+        extractedTextLength: extractedRawText.length,
+      })
+    : null
   const preflightLowQualityLikely = Boolean(preflight?.textQuality?.lowExtractableTextLikely || preflight?.textQuality?.lowReadableQualityLikely)
   const forcedExtractionFailure = preflight.routeToOcr
     && preflightLowQualityLikely
