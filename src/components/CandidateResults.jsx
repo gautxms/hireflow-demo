@@ -38,6 +38,51 @@ function safeSerialize(value) {
   }
 }
 
+function hasRenderableContent(value) {
+  if (value == null) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.some((entry) => hasRenderableContent(entry))
+  if (typeof value === 'object') return Object.values(value).some((entry) => hasRenderableContent(entry))
+  return Boolean(value)
+}
+
+function safeText(value, fallback = 'Unavailable') {
+  if (value == null) return fallback
+  if (typeof value === 'string') return value.trim() || fallback
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : fallback
+  return fallback
+}
+
+function safeArray(value) {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry) => hasRenderableContent(entry))
+}
+
+function formatScore(score) {
+  const numeric = Number(score)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  return Math.max(0, Math.min(10, numeric / 10)).toFixed(1)
+}
+
+function getScoreTone(score) {
+  const numeric = Number(score)
+  if (!Number.isFinite(numeric) || numeric < 0) return 'unscored'
+  if (numeric >= 80) return 'strong'
+  if (numeric >= 60) return 'possible'
+  return 'low'
+}
+
+function getMatchLabel(score, explicitLabel = '') {
+  const tone = getScoreTone(score)
+  const cleanLabel = safeText(explicitLabel, '')
+  if (cleanLabel) return cleanLabel
+  if (tone === 'strong') return 'Strong match'
+  if (tone === 'possible') return 'Possible match'
+  if (tone === 'low') return 'Low match'
+  return 'Unable to score'
+}
+
 
 function parseSkills(skills) {
   if (Array.isArray(skills)) {
@@ -141,18 +186,6 @@ function parseUploadDate(candidate) {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
-const toTenScale = (score) => {
-  if (score == null) return null
-  return (score / 10).toFixed(1)
-}
-
-const scoreTier = (score) => {
-  if (score == null) return 'unscored'
-  if (score >= 80) return 'strong'
-  if (score >= 60) return 'possible'
-  return 'low'
-}
-
 function deriveCompactRationale(candidate) {
   const reason = String(candidate?.matchScore?.reason || '').trim()
   if (reason) return reason
@@ -171,7 +204,7 @@ function activeScore(candidate) {
   )
 
   const numeric = Number(resolved ?? fallbackScore)
-  return Number.isFinite(numeric) ? numeric : 0
+  return Number.isFinite(numeric) ? numeric : null
 }
 
 
@@ -1008,8 +1041,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
           const score = activeScore(candidate)
-          const tier = scoreTier(score)
-          const displayScore = toTenScale(score)
+          const tier = getScoreTone(score)
+          const displayScore = formatScore(score)
           const candidateKey = resolveCandidateKey(candidate, index)
           const isExpanded = expandedId === candidateKey
           const initials = String(candidate?.name || '')
@@ -1046,15 +1079,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                         <span className="rc-score-denom">/10</span>
                       </div>
                       <div className={`rc-fit-label rc-fit--${tier}`}>
-                        {tier === 'strong'
-                          ? 'Strong match'
-                          : tier === 'possible'
-                            ? 'Possible match'
-                            : 'Low match'}
+                        {getMatchLabel(score)}
                       </div>
                     </>
                   ) : (
-                    <div className="rc-score-empty">Not scored</div>
+                    <div className="rc-score-empty">N/A</div>
                   )}
                 </div>
               </div>
@@ -1072,13 +1101,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 {topSkills.length > 3 && (
                   <span className="rc-skill-more">+{topSkills.length - 3}</span>
                 )}
+                {topSkills.length === 0 && (
+                  <span className="rc-skill-more">Relevant skills unavailable for this analysis</span>
+                )}
               </div>
 
               <div className="rc-footer">
                 <span className="rc-footer-meta">
                   {[
-                    candidate.years_experience != null ? `${candidate.years_experience} yrs exp` : null,
-                    candidate.seniority_level,
+                    hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : 'Experience unavailable',
+                    safeText(candidate.seniority_level, 'Seniority unavailable'),
                   ].filter(Boolean).join(' · ')}
                 </span>
                 <span className="rc-expand-hint" role="button" aria-label={isExpanded ? 'Collapse candidate details' : 'Expand candidate details'}>
@@ -1105,19 +1137,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         })}
       </div>
 
-      {expandedCandidate && (() => {
+            {expandedCandidate && (() => {
         const candidate = expandedCandidate
         const score = activeScore(candidate)
-        const tier = scoreTier(score)
-        const displayScore = toTenScale(score)
+        const tier = getScoreTone(score)
+        const displayScore = formatScore(score)
         const hasDisplayScore = displayScore != null && Number.isFinite(Number(displayScore))
         const verdictLabel = resolveVerdictLabel(candidate, tier, hasDisplayScore)
         const confidenceLabel = resolveConfidenceLabel(candidate, hasDisplayScore)
-        const candidateTitle = toDisplayText(candidate.current_title, 'Unavailable')
-        const experienceLabel = candidate.years_experience != null ? `${candidate.years_experience} yrs exp` : 'Unavailable'
-        const locationLabel = toDisplayText(candidate.location, 'Unavailable')
-        const seniorityLabel = toDisplayText(candidate.seniority_level, 'Unavailable')
-        const normalizeTextList = (list) => (Array.isArray(list) ? list.map((entry) => toDisplayText(entry, '')).filter(Boolean) : [])
+        const candidateTitle = safeText(candidate.current_title, 'Unavailable')
+        const experienceLabel = hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : 'Unavailable'
+        const locationLabel = safeText(candidate.location, 'Unavailable')
+        const seniorityLabel = safeText(candidate.seniority_level, 'Unavailable')
+        const normalizeTextList = (list) => safeArray(list).map((entry) => safeText(entry, '')).filter(Boolean)
         const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
           ? normalizeTextList(candidate.strengths)
           : Array.isArray(candidate.achievements)
@@ -1175,38 +1207,36 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
             <div className="dd-body">
               <div className="dd-col">
-                <div className="dd-col-label">AI Verdict</div>
-                <p className="dd-summary dd-summary--clamp">{toDisplayText(candidate.summary, 'No summary available')}</p>
-                <div className="dd-col-label dd-col-label--mt-16">Recommended action</div>
-                <div className="dd-recommended-action">{reasoningText}</div>
-                {Array.isArray(candidate.interview_questions) && candidate.interview_questions.length > 0 && (
-                  <>
-                    <div className="dd-col-label dd-col-label--mt-16">Interview probes</div>
-                    <div className="dd-list">
-                      {candidate.interview_questions.map((question, idx) => (
-                        <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-probe-${idx}`}>
-                          <CircleHelp size={18} strokeWidth={1.5} />
-                          <span>{toDisplayText(question, 'Unavailable')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                <div className="dd-col-label">Summary</div>
+                <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
+                <div className="dd-col-label dd-col-label--mt-16">AI reasoning</div>
+                <p className="dd-summary">{reasoningText}</p>
+
                 <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
-                <div className="dd-facts-grid">
-                  {[
-                    ['Experience', candidate.years_experience != null ? `${candidate.years_experience} years` : 'Unavailable'],
-                    ['Seniority', toDisplayText(candidate.seniority_level, 'Unavailable')],
-                    ['Education', toDisplayText(candidate.education, 'Unavailable')],
-                    ['Location', toDisplayText(candidate.location, 'Unavailable')],
-                  ].map(([label, value]) => (
-                    <div className="dd-fact-card" key={`${candidate._bulkKey}-${label}`}>
-                      <span className="dd-fact-k">{label}</span>
-                      <span className="dd-fact-v">{value}</span>
+                <div className="dd-facts">
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Experience</span>
+                    <span className="dd-fact-v">{hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} years` : 'Unavailable'}</span>
+                  </div>
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Seniority</span>
+                    <span className="dd-fact-v">{safeText(candidate.seniority_level, 'Unavailable')}</span>
+                  </div>
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Education</span>
+                    <span className="dd-fact-v">{safeText(candidate.education, 'Unavailable')}</span>
+                  </div>
+                  <div className="dd-fact">
+                    <span className="dd-fact-k">Location</span>
+                    <span className="dd-fact-v">{safeText(candidate.location, 'Unavailable')}</span>
+                  </div>
+                  {candidate.email && (
+                    <div className="dd-fact">
+                      <span className="dd-fact-k">Email</span>
+                      <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
 
               <div className="dd-col">
                 <div className="dd-col-label">Score breakdown</div>
@@ -1266,7 +1296,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {candidateStrengths.length > 0
                     ? candidateStrengths.map((strength, idx) => (
-                      <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><span>{strength}</span></div>
+                      <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}>
+                        <CheckCircle size={18} strokeWidth={1.5} />
+                        <span>{strength}</span>
+                      </div>
                     ))
                     : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
                 </div>
@@ -1275,7 +1308,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box dd-analysis-box--amber">
                   {candidateConsiderations.length > 0
                     ? candidateConsiderations.map((consideration, idx) => (
-                      <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><span>{consideration}</span></div>
+                      <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}>
+                        <AlertTriangle size={18} strokeWidth={1.5} />
+                        <span>{consideration}</span>
+                      </div>
                     ))
                     : (
                       <div className="dd-analysis-item">
@@ -1290,29 +1326,56 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
 
               <div className="dd-col">
-                {Array.isArray(candidate.risks) && candidate.risks.length > 0 && (
-                  <>
-                    <div className="dd-col-label dd-col-label--mt-14">Top risks</div>
-                    <div className="dd-analysis-box dd-analysis-box--amber">
-                      {candidate.risks.map((risk, idx) => (
-                        <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-risk-${idx}`}><TriangleAlert size={18} strokeWidth={1.5} /><span>{toDisplayText(risk, 'Unavailable')}</span></div>
-                      ))}
-                    </div>
-                  </>
+                <div className="dd-col-label">Score breakdown</div>
+                {scoreBreakdown.length > 0 ? (
+                  <div className="dd-analysis-box">
+                    {scoreBreakdown.map(([key, value]) => (
+                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-breakdown-${key}`}>
+                        {safeText(key)}: {Math.max(0, Math.min(100, Number(value)))}%
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="dd-summary">Score breakdown unavailable</p>
                 )}
-                {Array.isArray(candidate.integrity_checks) && candidate.integrity_checks.length > 0 && (
+
+                <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
+                {mergedSkillGaps.length > 0 ? (
+                  <div className="dd-top-skills">
+                    {mergedSkillGaps.map((gap) => (
+                      <span className="dd-top-skill dd-top-skill--gap" key={`${candidate._bulkKey}-gap-${gap}`}>{gap}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="dd-summary">No explicit skill gaps identified</p>
+                )}
+
+                <div className="dd-col-label">Top skills</div>
+                <div className="dd-top-skills">
+                  {topSkills.map((skill) => (
+                    <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
+                      {formatSkillLabel(skill)}
+                    </span>
+                  ))}
+                  {topSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
+                </div>
+
+                {candidate.skills_structured && Array.isArray(candidate.integrity_checks) && candidate.integrity_checks.length > 0 && (
                   <>
                     <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
                     <div className="dd-analysis-box">
                       {candidate.integrity_checks.map((check, idx) => (
                         <div className="dd-list-item" key={`${candidate._bulkKey}-integrity-${idx}`}>
-                          {check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}
+                          {check?.status === 'issue'
+                            ? <AlertTriangle size={18} strokeWidth={1.5} />
+                            : <CheckCircle size={18} strokeWidth={1.5} />}
                           <span>{toDisplayText(check?.label || check, 'Unavailable')}</span>
                         </div>
                       ))}
                     </div>
                   </>
                 )}
+
                 <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
                 <div className="dd-resume-file">
                   <FileText size={18} strokeWidth={1.5} />
