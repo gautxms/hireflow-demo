@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BriefcaseBusiness, ChevronLeft, MapPin, TrendingUp } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ChevronLeft, CircleHelp, FileText, TriangleAlert, BriefcaseBusiness, MapPin, TrendingUp } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -124,22 +124,6 @@ function parseYears(experience) {
   return match ? Number(match[1]) : 0
 }
 
-function deriveExperienceEntries(candidate) {
-  if (Array.isArray(candidate?.experience) && candidate.experience.length > 0) {
-    return candidate.experience.slice(0, 2)
-  }
-
-  const structuredHighlights = Array.isArray(candidate?.highlights?.experience) ? candidate.highlights.experience : []
-  if (structuredHighlights.length > 0) {
-    return structuredHighlights.slice(0, 2).map((entry) => (typeof entry === 'string' ? { title: entry } : entry))
-  }
-
-  if (typeof candidate?.experience === 'string' && candidate.experience.trim()) {
-    return [{ title: candidate.experience.trim() }]
-  }
-
-  return []
-}
 
 function deriveTopSkills(candidate) {
   if (Array.isArray(candidate?.top_skills) && candidate.top_skills.length > 0) {
@@ -318,6 +302,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [selectedIds, setSelectedIds] = useState([])
   const [deletedIds, setDeletedIds] = useState([])
   const [expandedId, setExpandedId] = useState(null)
+  const [showAllDrawerSkills, setShowAllDrawerSkills] = useState(false)
   const [shortlistOpen, setShortlistOpen] = useState(false)
 
   const [shortlists, setShortlists] = useState([])
@@ -595,6 +580,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   useEffect(() => {
     setPage(1)
   }, [searchText, selectedSkills, expRange.min, expRange.max, sortBy])
+
+  useEffect(() => {
+    setShowAllDrawerSkills(false)
+  }, [expandedId])
 
   useEffect(() => {
     setSelectedIds((current) => pruneSelection(current, filtered))
@@ -1220,8 +1209,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                       <span className="dd-fact-k">Email</span>
                       <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
                     </div>
-                  )}
+                  ))}
                 </div>
+              </div>
 
                 <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
                 {experienceEntries.length === 0 && <p className="dd-summary">Unavailable</p>}
@@ -1240,7 +1230,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box dd-analysis-box--green">
                   {candidateStrengths.length > 0
                     ? candidateStrengths.map((strength, idx) => (
-                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-strength-${idx}`}>{strength}</div>
+                      <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><span>{strength}</span></div>
                     ))
                     : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
                 </div>
@@ -1249,7 +1239,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 <div className="dd-analysis-box dd-analysis-box--amber">
                   {candidateConsiderations.length > 0
                     ? candidateConsiderations.map((consideration, idx) => (
-                      <div className="dd-analysis-item" key={`${candidate._bulkKey}-consideration-${idx}`}>{consideration}</div>
+                      <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><span>{consideration}</span></div>
                     ))
                     : (
                       <div className="dd-analysis-item">
@@ -1298,38 +1288,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
                 {candidate.skills_structured && (
                   <>
-                    {Object.entries({
-                      Tools: candidate.skills_structured.tools_and_platforms,
-                      Methods: candidate.skills_structured.methodologies,
-                      Domain: candidate.skills_structured.domain_expertise,
-                    }).map(([category, skills]) => {
-                      const safeSkills = Array.isArray(skills) ? skills : []
-                      const hasMalformedCategory = skills != null && !Array.isArray(skills)
-                      if (safeSkills.length === 0 && !hasMalformedCategory) {
-                        return null
-                      }
-
-                      return (
-                        <div key={`${candidate._bulkKey}-${category}`} className="dd-skill-group">
-                          <div className="dd-skill-cat">{category}</div>
-                          <div className="dd-skill-row">
-                            {safeSkills.slice(0, 6).map((skill) => (
-                              <span className="dd-skill-pill" key={`${candidate._bulkKey}-${category}-${String(formatSkillLabel(skill))}`}>
-                                {formatSkillLabel(skill)}
-                              </span>
-                            ))}
-                            {safeSkills.length > 6 && (
-                              <span className="dd-skill-more">+{safeSkills.length - 6}</span>
-                            )}
-                            {hasMalformedCategory && safeSkills.length === 0 && (
-                              <span className="dd-skill-more">Unavailable (invalid format)</span>
-                            )}
-                          </div>
+                    <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
+                    <div className="dd-analysis-box">
+                      {candidate.integrity_checks.map((check, idx) => (
+                        <div className="dd-list-item" key={`${candidate._bulkKey}-integrity-${idx}`}>
+                          {check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}
+                          <span>{toDisplayText(check?.label || check, 'Unavailable')}</span>
                         </div>
-                      )
-                    })}
+                      ))}
+                    </div>
                   </>
                 )}
+                <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
+                <div className="dd-resume-file">
+                  <FileText size={18} strokeWidth={1.5} />
+                  <div>
+                    <div>{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
+                    <div className="dd-resume-meta">Use View full profile to open this resume.</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
