@@ -37,6 +37,23 @@ test('placeholder retry triggers once only for substantial extracted text', () =
 })
 
 
-test('placeholder retry guardrail also triggers from validation-level placeholder signals', () => {
-  assert.equal(shouldTriggerPlaceholderRetry({ candidates: [placeholderTemplateCandidateFixture], extractedTextLength: 26519 }), true)
+test('contradictory-state guard retries placeholder narrative when extracted text is substantial (no first-pass terminal parse_failed)', () => {
+  const placeholderNarrativeCandidate = {
+    id: 'c-1',
+    name: 'Unknown Candidate',
+    score: 0,
+    reasoning: 'Unable to extract enough text for reliable resume analysis.',
+    summary: 'Resume document could not be parsed. PDF content is compressed/encrypted or corrupted.',
+    pros: [],
+    cons: ['No reliable resume content available'],
+  }
+
+  assert.equal(isFailurePlaceholderCandidate(placeholderNarrativeCandidate), true)
+  assert.equal(
+    shouldTriggerPlaceholderRetry({
+      candidates: [placeholderNarrativeCandidate],
+      extractedTextLength: 1400,
+    }),
+    true,
+  )
 })
