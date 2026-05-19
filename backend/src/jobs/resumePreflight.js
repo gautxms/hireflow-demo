@@ -1,10 +1,16 @@
 import { estimateExtractableText } from '../services/ocrService.js'
 
-const IMAGE_ONLY_RATIO_THRESHOLD = 0.01
-const LOW_QUALITY_RATIO_THRESHOLD = 0.14
-const OCR_MIN_CONFIDENCE = 60
-const STRONG_TEXT_LENGTH_THRESHOLD = 800
-const MODERATE_READABLE_TOKEN_RATIO = 0.58
+const DEFAULT_THRESHOLDS = Object.freeze({
+  imageOnlyRatio: 0.01,
+  lowQualityRatio: 0.12,
+  ocrMinConfidence: 56,
+  strongTextLength: 800,
+  moderateReadableTokenRatio: 0.58,
+  lowReadableTokenRatio: 0.58,
+  moderateBinaryArtifactRatio: 0.12,
+  lowReadableBinaryArtifactRatio: 0.1,
+  strongTextBinaryArtifactRatio: 0.2,
+})
 const RESUME_SECTION_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|summary|employment|certifications?)\b/i
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
 const PHONE_PATTERN = /\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?){1}\d{3}[-.\s]?\d{4}\b/
@@ -41,7 +47,8 @@ function mapHardFailure(failureCategory, message) {
   }
 }
 
-export function runResumePreflight({ mimeType, fileBuffer }) {
+export function runResumePreflight({ mimeType, fileBuffer, thresholds = {} }) {
+  const appliedThresholds = { ...DEFAULT_THRESHOLDS, ...(thresholds || {}) }
   if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
     return mapHardFailure('corrupt_or_unreadable', 'This file is empty or unreadable. Please upload a different copy.')
   }
@@ -65,7 +72,7 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
   }
 
   const extractableTextRatio = extraction.ratio
-  const imageOnlyLikely = normalizedMime === 'application/pdf' && extractableTextRatio <= IMAGE_ONLY_RATIO_THRESHOLD
+  const imageOnlyLikely = normalizedMime === 'application/pdf' && extractableTextRatio <= appliedThresholds.imageOnlyRatio
   const extractedText = String(extraction?.text || '')
   const alphaTokens = extractedText.match(TOKEN_PATTERN) || []
   const readableTokenCount = alphaTokens.filter((token) => token.length >= 3).length
@@ -88,21 +95,12 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
   const binaryArtifactRatio = extractedText.length > 0
     ? artifactMatches.join('').length / extractedText.length
     : 1
-  const lowExtractableTextLikely = normalizedMime === 'application/pdf' && extractableTextRatio < LOW_QUALITY_RATIO_THRESHOLD
-  const hasStrongTextLength = extractedText.length >= STRONG_TEXT_LENGTH_THRESHOLD
-  const hasModerateReadability = readableTokenRatio >= MODERATE_READABLE_TOKEN_RATIO && binaryArtifactRatio <= 0.12
-  const strongNegativeSignals = [
-    readableTokenRatio < 0.45,
-    binaryArtifactRatio > 0.15,
-    resumeSignalCount === 0,
-  ].filter(Boolean).length
-  const recruiterLikeStructureLikely = hasStrongTextLength && hasModerateReadability && resumeSignalCount >= 2
+  const lowExtractableTextLikely = normalizedMime === 'application/pdf' && extractableTextRatio < appliedThresholds.lowQualityRatio
+  const hasStrongTextLength = extractedText.length >= appliedThresholds.strongTextLength
+  const hasModerateReadability = readableTokenRatio >= appliedThresholds.moderateReadableTokenRatio && binaryArtifactRatio <= appliedThresholds.moderateBinaryArtifactRatio
   const lowReadableQualityLikely = normalizedMime === 'application/pdf'
-    && (
-      !recruiterLikeStructureLikely
-        ? ((readableTokenRatio < 0.58 || binaryArtifactRatio > 0.1) && (!hasStrongTextLength || binaryArtifactRatio > 0.2))
-        : strongNegativeSignals >= 2
-    )
+    && !hasResumeSectionSignals
+    && ((readableTokenRatio < appliedThresholds.lowReadableTokenRatio || binaryArtifactRatio > appliedThresholds.lowReadableBinaryArtifactRatio) && (!hasStrongTextLength || binaryArtifactRatio > appliedThresholds.strongTextBinaryArtifactRatio))
   const routeToOcr = imageOnlyLikely || lowExtractableTextLikely || lowReadableQualityLikely
   const diagnostics = {
     extractableTextRatio,
@@ -145,22 +143,23 @@ export function runResumePreflight({ mimeType, fileBuffer }) {
       resumeSignalCount,
     },
     thresholds: {
-      imageOnlyRatio: IMAGE_ONLY_RATIO_THRESHOLD,
-      lowQualityRatio: LOW_QUALITY_RATIO_THRESHOLD,
-      ocrMinConfidence: OCR_MIN_CONFIDENCE,
+      imageOnlyRatio: appliedThresholds.imageOnlyRatio,
+      lowQualityRatio: appliedThresholds.lowQualityRatio,
+      ocrMinConfidence: appliedThresholds.ocrMinConfidence,
     },
   }
 }
 
-export function evaluateOcrOutcome({ ocrConfidence, preflightDiagnostics = {}, extractedTextLength = 0 }) {
+export function evaluateOcrOutcome({ ocrConfidence, preflightDiagnostics = {}, extractedTextLength = 0, thresholds = {} }) {
+  const appliedThresholds = { ...DEFAULT_THRESHOLDS, ...(thresholds || {}) }
   const confidence = Number(ocrConfidence || 0)
-  const guardrailBypass = Number(extractedTextLength || 0) >= STRONG_TEXT_LENGTH_THRESHOLD
-    && Number(preflightDiagnostics?.readableTokenRatio || 0) >= MODERATE_READABLE_TOKEN_RATIO
+  const guardrailBypass = Number(extractedTextLength || 0) >= appliedThresholds.strongTextLength
+    && Number(preflightDiagnostics?.readableTokenRatio || 0) >= appliedThresholds.moderateReadableTokenRatio
   const confidenceValid = Number.isFinite(confidence)
-  const confidenceBelowThreshold = !confidenceValid || confidence < OCR_MIN_CONFIDENCE
+  const confidenceBelowThreshold = !confidenceValid || confidence < appliedThresholds.ocrMinConfidence
   const decisionDiagnostics = {
     ocrConfidence: confidence,
-    ocrMinConfidence: OCR_MIN_CONFIDENCE,
+    ocrMinConfidence: appliedThresholds.ocrMinConfidence,
     confidenceBelowThreshold,
     thresholdDecision: confidenceBelowThreshold ? 'below_threshold' : 'pass',
     guardrailBypass,
@@ -171,10 +170,13 @@ export function evaluateOcrOutcome({ ocrConfidence, preflightDiagnostics = {}, e
       failureCategory: 'image_only_low_ocr',
       failureMessageUserSafe: 'We could only read limited text from this image-based resume. Please upload a clearer file.',
       ocrConfidence: confidence,
-      ocrMinConfidence: OCR_MIN_CONFIDENCE,
+      ocrMinConfidence: appliedThresholds.ocrMinConfidence,
       diagnostics: decisionDiagnostics,
     }
   }
 
   return null
 }
+
+
+export { DEFAULT_THRESHOLDS }
