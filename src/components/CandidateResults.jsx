@@ -99,8 +99,8 @@ function buildSkillGapItems(candidate) {
   }
 
   addItems(candidate?.missingSkills, 'nice-to-have')
-  addItems(candidate?.fit_assessment?.missing, 'nice-to-have')
   addItems(candidate?.mustHaveSkills, 'must-have')
+  addItems(candidate?.fit_assessment?.missing, 'nice-to-have')
 
   return Array.from(merged.values())
 }
