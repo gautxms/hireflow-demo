@@ -173,3 +173,50 @@ LIMIT 5;
   - `failure_narrative_detected` total count >= 25, or
   - combined total (`failure_placeholder_detected` + `failure_narrative_detected`) >= 40.
 - Severity: warning (page on-call only if sustained for 3 consecutive windows).
+
+## Backend parse stabilization staged rollout (Task 6.1)
+
+Feature flags (server-side, deterministic cohorting):
+
+- `enable_placeholder_retry`
+  - Env: `FF_ENABLE_PLACEHOLDER_RETRY_ROLLOUT`
+- `enable_extended_resume_signals`
+  - Env: `FF_ENABLE_EXTENDED_RESUME_SIGNALS_ROLLOUT`
+- `enable_validation_sample_logging`
+  - Env: `FF_ENABLE_VALIDATION_SAMPLE_LOGGING_ROLLOUT`
+
+Each env value is a rollout percentage (`0-100`) evaluated against a stable hash of `userId:resumeId`.
+
+### Staged rollout sequence
+
+1. Start at `10%` for all three flags.
+2. Ramp to `50%` if KPI deltas remain within limits.
+3. Ramp to `100%` when the 50% window remains healthy.
+
+Recommended production env progression:
+
+```bash
+# Stage 1 (10%)
+FF_ENABLE_PLACEHOLDER_RETRY_ROLLOUT=10
+FF_ENABLE_EXTENDED_RESUME_SIGNALS_ROLLOUT=10
+FF_ENABLE_VALIDATION_SAMPLE_LOGGING_ROLLOUT=10
+
+# Stage 2 (50%)
+FF_ENABLE_PLACEHOLDER_RETRY_ROLLOUT=50
+FF_ENABLE_EXTENDED_RESUME_SIGNALS_ROLLOUT=50
+FF_ENABLE_VALIDATION_SAMPLE_LOGGING_ROLLOUT=50
+
+# Stage 3 (100%)
+FF_ENABLE_PLACEHOLDER_RETRY_ROLLOUT=100
+FF_ENABLE_EXTENDED_RESUME_SIGNALS_ROLLOUT=100
+FF_ENABLE_VALIDATION_SAMPLE_LOGGING_ROLLOUT=100
+```
+
+### Acceptance criteria guardrail
+
+Do not advance between stages unless both hold vs the 7-day pre-rollout baseline:
+
+- P95 parse latency regression <= agreed threshold.
+- Token/cost per successfully scored resume regression <= agreed threshold.
+
+If either exceeds limits, hold current stage or roll back impacted flags to the prior percentage.
