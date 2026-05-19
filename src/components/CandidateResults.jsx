@@ -1103,7 +1103,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         })}
       </div>
 
-      {expandedCandidate && (() => {
+            {expandedCandidate && (() => {
         const candidate = expandedCandidate
         const score = activeScore(candidate)
         const tier = getScoreTone(score)
@@ -1211,7 +1211,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     </div>
                   )}
                 </div>
-              </div>
 
                 <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
                 {experienceEntries.length === 0 && <p className="dd-summary">Unavailable</p>}
