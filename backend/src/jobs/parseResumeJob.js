@@ -11,6 +11,7 @@ import { trackEvent } from '../services/analytics.js'
 import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
 import { recordValidationFailureSample } from '../services/parseValidationFailureSamplesService.js'
+import { getRolloutConfig } from '../config/featureFlags.js'
 
 const MIN_EXTRACTED_TEXT_LENGTH = 80
 const PLACEHOLDER_RETRY_MIN_TEXT_LENGTH = 1000
@@ -733,6 +734,8 @@ async function runParse(job) {
   let placeholderRetryAttempted = false
   let placeholderRetrySucceeded = false
   let placeholderRetryReason = null
+  const rolloutIdentity = `${job.data.userId || 'anon'}:${resumeId || job.id}`
+  const rolloutFlags = getRolloutConfig(rolloutIdentity)
   const selectionDiagnostics = buildExtractionSelectionDiagnostics({
     extractionResult,
     ocrOutcome,
@@ -749,7 +752,7 @@ async function runParse(job) {
       selectionDiagnostics.terminalReason = 'no_usable_text_after_pdf_ocr_and_direct_vision'
       throw new Error('extraction_failed::Unable to extract enough resume text for AI parsing after OCR fallback.')
     }
-    if (!hasMeaningfulResumeSignals(extractedRawText)) {
+    if (!hasMeaningfulResumeSignals(extractedRawText) && rolloutFlags.enable_extended_resume_signals) {
       selectionDiagnostics.terminalReason = 'warning_missing_resume_signals'
     }
     console.log('[Parse] Attempting AI analysis with primary/fallback keys', {
@@ -827,7 +830,7 @@ async function runParse(job) {
     parseModel = aiResponse?.model || null
     parseMaxOutputTokens = Number(aiResponse?.maxOutputTokens || aiResult?.maxOutputTokens || 0) || null
 
-    if (shouldTriggerPlaceholderRetry({ candidates: aiResult?.candidates, extractedTextLength: extractedRawText.length })) {
+    if (rolloutFlags.enable_placeholder_retry && shouldTriggerPlaceholderRetry({ candidates: aiResult?.candidates, extractedTextLength: extractedRawText.length })) {
       placeholderRetryAttempted = true
       placeholderRetryReason = 'placeholder_detected_with_substantial_extracted_text'
       const retryResponse = await analyzeResumeWithConfiguredFallback(
@@ -993,15 +996,17 @@ async function runParse(job) {
         reason: 'parse_failed::ai_output_validation_failed',
         parseFailureSubtype,
       })
-      await recordValidationFailureSample({
-        resumeId,
-        parseJobId: String(job.id),
-        userId: job.data.userId,
-        provider: parseProvider || analysisResult?.provider || parseMethod,
-        model: parseModel || analysisResult?.model || null,
-        failureReason: parseFailureSubtype,
-        candidate,
-      })
+      if (rolloutFlags.enable_validation_sample_logging) {
+        await recordValidationFailureSample({
+          resumeId,
+          parseJobId: String(job.id),
+          userId: job.data.userId,
+          provider: parseProvider || analysisResult?.provider || parseMethod,
+          model: parseModel || analysisResult?.model || null,
+          failureReason: parseFailureSubtype,
+          candidate,
+        })
+      }
       continue
     }
     if (!isCandidateValidForScoredOutcome(candidate)) {
@@ -1076,6 +1081,9 @@ async function runParse(job) {
       parseFailureSubtype: parseFailureSubtypeCounters.ai_placeholder_output > 0
         ? 'ai_placeholder_output'
         : (parseFailureSubtypeCounters.ai_output_validation_failed > 0 ? 'ai_output_validation_failed' : null),
+      featureFlags: {
+        ...rolloutFlags,
+      },
       provider: analysisResult?.provider || parseMethod,
       model: parseModel || analysisResult?.model || null,
       maxOutputTokens: parseMaxOutputTokens,
