@@ -268,6 +268,50 @@ router.get('/analysis-render-crashes', async (req, res) => {
   }
 })
 
+router.get('/parse-validation-failure-samples', async (req, res) => {
+  const limit = toInt(req.query.limit, 50, { min: 5, max: 200 })
+  const reason = String(req.query.reason || '').trim().toLowerCase()
+
+  try {
+    const result = await pool.query(
+      `SELECT
+         id,
+         resume_id,
+         parse_job_id,
+         provider,
+         model,
+         failure_reason,
+         sample_snippet,
+         created_at,
+         expires_at
+       FROM parse_validation_failure_samples
+       WHERE expires_at > NOW()
+         AND ($1 = '' OR failure_reason = $1)
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [reason, limit],
+    )
+
+    return res.json({
+      retentionDays: 7,
+      items: result.rows.map((row) => ({
+        id: row.id,
+        resumeId: row.resume_id,
+        parseJobId: row.parse_job_id,
+        provider: row.provider,
+        model: row.model,
+        failureReason: row.failure_reason,
+        sampleSnippet: redactValue(row.sample_snippet),
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+      })),
+    })
+  } catch (error) {
+    console.error('[Admin logs] failed to fetch parse validation failure samples', error)
+    return res.status(500).json({ error: 'Failed to fetch parse validation failure samples' })
+  }
+})
+
 router.get('/audit-trail', async (req, res) => {
   const page = toInt(req.query.page, 1)
   const pageSize = toInt(req.query.pageSize, 25, { min: 5, max: 100 })

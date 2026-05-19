@@ -10,6 +10,7 @@ import { runParseWithOcrFallback } from './ocrFallbackJob.js'
 import { trackEvent } from '../services/analytics.js'
 import { evaluateOcrOutcome, runResumePreflight } from './resumePreflight.js'
 import { buildLocalPostAiFailureNormalizedPayload, isLocalPostAiValidationFailure } from './parseFailureMapping.js'
+import { recordValidationFailureSample } from '../services/parseValidationFailureSamplesService.js'
 
 const MIN_EXTRACTED_TEXT_LENGTH = 80
 const PLACEHOLDER_RETRY_MIN_TEXT_LENGTH = 1000
@@ -986,6 +987,15 @@ async function runParse(job) {
         resumeId: candidate?.resumeId || String(resumeId || ''),
         reason: 'parse_failed::ai_output_validation_failed',
         parseFailureSubtype,
+      })
+      await recordValidationFailureSample({
+        resumeId,
+        parseJobId: String(job.id),
+        userId: job.data.userId,
+        provider: parseProvider || analysisResult?.provider || parseMethod,
+        model: parseModel || analysisResult?.model || null,
+        failureReason: parseFailureSubtype,
+        candidate,
       })
       continue
     }
