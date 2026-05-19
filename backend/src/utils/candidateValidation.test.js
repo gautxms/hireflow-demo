@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { isCandidateValidForScoredOutcome, isFailureNarrativeCandidate } from './candidateValidation.js'
+import { getCandidateValidationFailureReasons, isCandidateValidForScoredOutcome, isFailureNarrativeCandidate } from './candidateValidation.js'
 
 test('failure-narrative candidate is rejected even when score > 0', () => {
   const candidate = {
@@ -64,5 +64,45 @@ test('AG-style failure narrative with scored status is rejected', () => {
   }
 
   assert.equal(isFailureNarrativeCandidate(candidate), true)
+  assert.equal(isCandidateValidForScoredOutcome(candidate), false)
+})
+
+test('borderline model output with partial evidence remains acceptable', () => {
+  const candidate = {
+    summary: 'Some sections were noisy but work history and skills were extracted.',
+    reasoning: 'Candidate matches core backend requirements and has relevant project depth.',
+    score: 61,
+    skills_flat: ['Node.js', 'PostgreSQL'],
+    education: [],
+    experienceEvidence: ['Built API services in production'],
+    fitStatus: 'potential_fit',
+  }
+
+  assert.deepEqual(getCandidateValidationFailureReasons(candidate), [])
+  assert.equal(isCandidateValidForScoredOutcome(candidate), true)
+})
+
+test('overly strict borderline output is rejected with explicit failure reasons', () => {
+  const candidate = {
+    summary: 'Parser uncertainty detected for multiple fields.',
+    score: 105,
+    skills_flat: 'Node.js,SQL',
+    education: {},
+    experienceEvidence: 'five years claimed',
+    fitStatus: 'excellent_fit',
+    matchScore: 'likely fit',
+  }
+
+  assert.deepEqual(
+    getCandidateValidationFailureReasons(candidate),
+    [
+      'score_out_of_range',
+      'match_score_malformed',
+      'skills_flat_malformed_array',
+      'education_malformed_array',
+      'experience_evidence_malformed_array',
+      'fit_status_enum_mismatch',
+    ],
+  )
   assert.equal(isCandidateValidForScoredOutcome(candidate), false)
 })

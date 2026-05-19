@@ -155,6 +155,45 @@ export function isCandidateScoringValid(candidate = {}) {
   return Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 100 && Boolean(reasoning)
 }
 
+export function getCandidateValidationFailureReasons(candidate = {}) {
+  const reasons = []
+
+  if (!candidate || typeof candidate !== 'object') {
+    return ['candidate_not_object']
+  }
+
+  if (isFailurePlaceholderCandidate(candidate)) reasons.push('failure_placeholder_detected')
+  if (isFailureNarrativeCandidate(candidate)) reasons.push('failure_narrative_detected')
+
+  const rawScore = resolveRawScore(candidate)
+  if (!Number.isFinite(rawScore)) {
+    reasons.push('score_not_finite')
+  } else if (rawScore < 0 || rawScore > 100) {
+    reasons.push('score_out_of_range')
+  }
+
+  const reasoning = resolveReasoning(candidate)
+  if (!reasoning) reasons.push('missing_required_reasoning')
+
+  const matchScore = candidate?.matchScore
+  if (matchScore != null && typeof matchScore !== 'object') reasons.push('match_score_malformed')
+
+  if (candidate?.skills != null && !Array.isArray(candidate.skills)) reasons.push('skills_malformed_array')
+  if (candidate?.skills_flat != null && !Array.isArray(candidate.skills_flat)) reasons.push('skills_flat_malformed_array')
+  if (candidate?.education != null && !Array.isArray(candidate.education)) reasons.push('education_malformed_array')
+  if (candidate?.experienceEvidence != null && !Array.isArray(candidate.experienceEvidence)) reasons.push('experience_evidence_malformed_array')
+
+  const fitStatus = candidate?.fitStatus
+  if (fitStatus != null) {
+    const normalizedFit = normalizeText(fitStatus)
+    if (!['strong_fit', 'good_fit', 'potential_fit', 'not_a_fit', 'unscored'].includes(normalizedFit)) {
+      reasons.push('fit_status_enum_mismatch')
+    }
+  }
+
+  return reasons
+}
+
 export function isCandidateValidForScoredOutcome(candidate = {}) {
-  return isCandidateExtractionValid(candidate) && !isFailureNarrativeCandidate(candidate) && isCandidateScoringValid(candidate)
+  return getCandidateValidationFailureReasons(candidate).length === 0
 }
