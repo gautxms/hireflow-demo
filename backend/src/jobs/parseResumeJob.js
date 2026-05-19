@@ -14,9 +14,11 @@ const MIN_EXTRACTED_TEXT_LENGTH = 80
 const PLACEHOLDER_RETRY_MIN_TEXT_LENGTH = 1000
 const PLACEHOLDER_RETRY_PROMPT_SUFFIX = [
   'Critical output guardrail:',
-  '- The resume text is substantial. Do not return failure placeholders or parser-failure narratives.',
-  '- Produce a best-effort candidate extraction from available text, even when some fields are uncertain.',
-  '- Do not use phrases like "unable to parse", "cannot extract", or "no resume content found" in candidate fields.',
+  '- The resume text is substantial. If extracted text exists, do best-effort structured extraction using the existing schema.',
+  '- Do not return failure placeholders or parser-failure narratives when extracted text is present.',
+  '- Do not return "Unknown Candidate" or unreadable/corrupt-document narratives unless extracted text is genuinely empty.',
+  '- For uncertain optional fields, use null/empty values instead of failure templates or generic corruption narratives.',
+  '- Do not use phrases like "unable to parse", "cannot extract", or "no resume content found" in candidate fields when text exists.',
 ].join('\n')
 const RESUME_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|employment|certifications?|summary)\b/i
 
