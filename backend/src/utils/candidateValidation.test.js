@@ -82,6 +82,30 @@ test('borderline model output with partial evidence remains acceptable', () => {
   assert.equal(isCandidateValidForScoredOutcome(candidate), true)
 })
 
+test('candidate with structured skills object remains valid', () => {
+  const candidate = {
+    summary: 'Backend engineer with cloud deployment experience.',
+    reasoning: 'Candidate aligns with Node.js, AWS, and CI/CD requirements.',
+    score: 79,
+    skills: {
+      languages_and_frameworks: ['Node.js', 'Express'],
+      tools_and_platforms: ['AWS', 'Docker'],
+      domains: ['Fintech'],
+    },
+    skills_structured: {
+      languages_and_frameworks: ['Node.js', 'Express'],
+      tools_and_platforms: ['AWS', 'Docker'],
+      domains: ['Fintech'],
+    },
+    education: [{ degree: 'B.S. Computer Science' }],
+    experienceEvidence: ['Shipped and maintained production APIs'],
+    fitStatus: 'good_fit',
+  }
+
+  assert.deepEqual(getCandidateValidationFailureReasons(candidate), [])
+  assert.equal(isCandidateValidForScoredOutcome(candidate), true)
+})
+
 test('overly strict borderline output is rejected with explicit failure reasons', () => {
   const candidate = {
     summary: 'Parser uncertainty detected for multiple fields.',
