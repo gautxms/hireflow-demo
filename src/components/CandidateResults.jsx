@@ -70,6 +70,40 @@ function formatSkillLabel(skill) {
   return skill
 }
 
+
+
+function buildSkillGapItems(candidate) {
+  const merged = new Map()
+
+  const addItems = (items, sourceType) => {
+    if (!Array.isArray(items)) return
+    items.forEach((item) => {
+      const label = toDisplayText(item, '').trim()
+      if (!label) return
+      const key = normalizeSkillKey(label)
+      if (!key) return
+
+      const existing = merged.get(key)
+      if (existing) {
+        if (sourceType === 'must-have') {
+          existing.type = 'must-have'
+        }
+        return
+      }
+
+      merged.set(key, {
+        label,
+        type: sourceType,
+      })
+    })
+  }
+
+  addItems(candidate?.missingSkills, 'nice-to-have')
+  addItems(candidate?.fit_assessment?.missing, 'nice-to-have')
+  addItems(candidate?.mustHaveSkills, 'must-have')
+
+  return Array.from(merged.values())
+}
 function parseYears(experience) {
   if (typeof experience === 'number' && Number.isFinite(experience)) {
     return experience
@@ -1092,6 +1126,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         const candidateConsiderations = normalizeTextList(candidate.considerations)
         const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
         const topSkills = deriveTopSkills(candidate).slice(0, 6)
+        const skillGaps = buildSkillGapItems(candidate).slice(0, 8)
         const initials = String(candidate?.name || '')
           .split(' ')
           .map((part) => part[0] || '')
@@ -1194,12 +1229,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>{formatSkillLabel(skill)}</span>
                   )) : <span className="dd-skill-more">Relevant skills unavailable for this analysis</span>}
                 </div>
-                <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
-                <div className="dd-top-skills">
-                  {[...(Array.isArray(candidate.missingSkills) ? candidate.missingSkills : []), ...(Array.isArray(candidate.mustHaveSkills) ? candidate.mustHaveSkills : []), ...(Array.isArray(candidate?.fit_assessment?.missing) ? candidate.fit_assessment.missing : [])]
-                    .slice(0, 8)
-                    .map((skill) => <span className="dd-top-skill dd-top-skill--warn" key={`${candidate._bulkKey}-gap-${skill}`}>{toDisplayText(skill, 'Unavailable')}</span>)}
-                </div>
+                {skillGaps.length > 0 && (
+                  <>
+                    <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
+                    <div className="dd-top-skills">
+                      {skillGaps.map((gap) => {
+                        const isMustHave = gap.type === 'must-have'
+                        return (
+                          <span
+                            className={`dd-top-skill ${isMustHave ? 'dd-top-skill--warn' : 'dd-top-skill--warn-soft'}`}
+                            key={`${candidate._bulkKey}-gap-${gap.label}`}
+                          >
+                            <span className="dd-gap-label">{gap.label}</span>
+                            <span className="dd-gap-type">{isMustHave ? 'must-have' : 'nice-to-have'}</span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
                 <div className="dd-col-label dd-col-label--mt-14">All skills</div>
                 <div className="dd-top-skills">
                   {deriveTopSkills(candidate).slice(0, showAllDrawerSkills ? 100 : 8).map((skill) => (
