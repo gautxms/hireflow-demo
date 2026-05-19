@@ -12,6 +12,12 @@ const DEFAULT_THRESHOLDS = Object.freeze({
   strongTextBinaryArtifactRatio: 0.2,
 })
 const RESUME_SECTION_SIGNAL_PATTERN = /\b(experience|education|skills?|projects?|summary|employment|certifications?)\b/i
+const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
+const PHONE_PATTERN = /\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?){1}\d{3}[-.\s]?\d{4}\b/
+const PROFESSIONAL_PROFILE_PATTERN = /\b(?:https?:\/\/)?(?:www\.)?(?:linkedin\.com\/in\/|github\.com\/)[A-Za-z0-9-_/%.]+\b/i
+const DATE_RANGE_PATTERN = /\b(?:19|20)\d{2}\s*[-–]\s*(?:(?:19|20)\d{2}|present|current)\b/i
+const MONTH_DATE_PATTERN = /\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+(?:19|20)\d{2}\b/i
+const ROLE_PATTERN = /\b(?:software|senior|staff|lead|principal|frontend|backend|full[-\s]?stack|data|product|project|sales|marketing|operations|design|qa|devops|engineering)\s+(?:engineer|developer|manager|analyst|specialist|consultant|designer|architect|director)\b/i
 const BINARY_ARTIFACT_PATTERN = /\b(?:obj|endobj|stream|endstream|xref|flatedecode|\/filter|\/length)\b/gi
 const TOKEN_PATTERN = /[A-Za-z]{2,}/g
 
@@ -72,6 +78,19 @@ export function runResumePreflight({ mimeType, fileBuffer, thresholds = {} }) {
   const readableTokenCount = alphaTokens.filter((token) => token.length >= 3).length
   const readableTokenRatio = alphaTokens.length > 0 ? readableTokenCount / alphaTokens.length : 0
   const hasResumeSectionSignals = RESUME_SECTION_SIGNAL_PATTERN.test(extractedText)
+  const hasEmailSignal = EMAIL_PATTERN.test(extractedText)
+  const hasPhoneSignal = PHONE_PATTERN.test(extractedText)
+  const hasProfessionalProfileSignal = PROFESSIONAL_PROFILE_PATTERN.test(extractedText)
+  const hasDateRangeSignal = DATE_RANGE_PATTERN.test(extractedText) || MONTH_DATE_PATTERN.test(extractedText)
+  const hasRolePatternSignal = ROLE_PATTERN.test(extractedText)
+  const resumeSignalCount = [
+    hasResumeSectionSignals,
+    hasEmailSignal,
+    hasPhoneSignal,
+    hasProfessionalProfileSignal,
+    hasDateRangeSignal,
+    hasRolePatternSignal,
+  ].filter(Boolean).length
   const artifactMatches = extractedText.match(BINARY_ARTIFACT_PATTERN) || []
   const binaryArtifactRatio = extractedText.length > 0
     ? artifactMatches.join('').length / extractedText.length
@@ -88,6 +107,14 @@ export function runResumePreflight({ mimeType, fileBuffer, thresholds = {} }) {
     readableTokenRatio,
     binaryArtifactRatio,
     hasResumeSectionSignals,
+    hasEmailSignal,
+    hasPhoneSignal,
+    hasProfessionalProfileSignal,
+    hasDateRangeSignal,
+    hasRolePatternSignal,
+    resumeSignalCount,
+    strongNegativeSignals,
+    recruiterLikeStructureLikely,
     routeToOcr,
     hasStrongTextLength,
     hasModerateReadability,
@@ -108,6 +135,12 @@ export function runResumePreflight({ mimeType, fileBuffer, thresholds = {} }) {
       readableTokenRatio,
       binaryArtifactRatio,
       hasResumeSectionSignals,
+      hasEmailSignal,
+      hasPhoneSignal,
+      hasProfessionalProfileSignal,
+      hasDateRangeSignal,
+      hasRolePatternSignal,
+      resumeSignalCount,
     },
     thresholds: {
       imageOnlyRatio: appliedThresholds.imageOnlyRatio,
