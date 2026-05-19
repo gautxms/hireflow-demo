@@ -651,24 +651,25 @@ async function runParse(job) {
   let parseMaxOutputTokens = null
   const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
   const preflight = runResumePreflight({ mimeType, fileBuffer })
+  let usageAttempts = []
   if (!preflight.ok && preflight.unrecoverable) {
     const latestPromptVersion = usageAttempts.length > 0
-    ? Number(usageAttempts[usageAttempts.length - 1]?.promptVersion || 1)
-    : 1
+      ? Number(usageAttempts[usageAttempts.length - 1]?.promptVersion || 1)
+      : 1
 
-  await emitParseValidationReasonMetrics({
-    userId: job.data.userId,
-    validationFailureCounters,
-    tags: {
-      model: parseModel || analysisResult?.model || null,
-      provider: parseProvider || analysisResult?.provider || parseMethod,
-      promptVersion: latestPromptVersion,
-      mimeType,
-      extractionMethod: extractionResult?.methodUsed || 'failed',
-    },
-  })
+    await emitParseValidationReasonMetrics({
+      userId: job.data.userId,
+      validationFailureCounters: {},
+      tags: {
+        model: parseModel || analysisResult?.model || null,
+        provider: parseProvider || analysisResult?.provider || parseMethod,
+        promptVersion: latestPromptVersion,
+        mimeType,
+        extractionMethod: 'failed',
+      },
+    })
 
-  const parseDurationMs = Date.now() - startedAt
+    const parseDurationMs = Date.now() - startedAt
     const parseResult = buildPreflightFailureParseResult({ filename, mimeType, fileSize, preflight })
     await pool.query(
       `UPDATE resumes
@@ -723,7 +724,6 @@ async function runParse(job) {
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
-  let usageAttempts = []
   let placeholderRetryAttempted = false
   let placeholderRetrySucceeded = false
   let placeholderRetryReason = null
