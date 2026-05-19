@@ -861,28 +861,42 @@ async function runParse(job) {
   const scoringFailedCandidates = []
   const scoringFailures = []
   const validationFailureCounters = {}
+  const parseFailureSubtypeCounters = {}
 
   const incrementValidationFailureCounter = (reason) => {
     const key = String(reason || '').trim().toLowerCase()
     if (!key) return
     validationFailureCounters[key] = (validationFailureCounters[key] || 0) + 1
   }
+  const incrementParseFailureSubtypeCounter = (subtype) => {
+    const key = String(subtype || '').trim().toLowerCase()
+    if (!key) return
+    parseFailureSubtypeCounters[key] = (parseFailureSubtypeCounters[key] || 0) + 1
+  }
 
   for (const candidate of normalizedCandidates) {
-    if (!isCandidateExtractionValid(candidate) || isFailureNarrativeCandidate(candidate)) {
-      getCandidateValidationFailureReasons(candidate)
+    const candidateValidationReasons = getCandidateValidationFailureReasons(candidate)
+    const placeholderNarrativeFailure = isFailureNarrativeCandidate(candidate) || isFailurePlaceholderCandidate(candidate)
+
+    if (!isCandidateExtractionValid(candidate) || placeholderNarrativeFailure) {
+      candidateValidationReasons
         .filter((reason) => reason.startsWith('failure_'))
         .forEach(incrementValidationFailureCounter)
+      const parseFailureSubtype = placeholderNarrativeFailure
+        ? 'ai_placeholder_output'
+        : 'ai_output_validation_failed'
+      incrementParseFailureSubtypeCounter(parseFailureSubtype)
       parseFailedCandidates.push({ ...candidate, resumeProcessingStatus: 'parse_failed' })
       scoringFailures.push({
         candidateId: candidate?.candidateId || candidate?.id || null,
         resumeId: candidate?.resumeId || String(resumeId || ''),
         reason: 'parse_failed::ai_output_validation_failed',
+        parseFailureSubtype,
       })
       continue
     }
     if (!isCandidateValidForScoredOutcome(candidate)) {
-      getCandidateValidationFailureReasons(candidate)
+      candidateValidationReasons
         .filter((reason) => !reason.startsWith('failure_'))
         .forEach(incrementValidationFailureCounter)
       scoringFailedCandidates.push({
@@ -947,6 +961,10 @@ async function runParse(job) {
         ? 'failed'
         : (jobDescriptionContext?.hasContext ? (scoredCandidates.length > 0 ? 'complete' : 'partial') : 'skipped_no_job_description'),
       validationFailureCounters,
+      parseFailureSubtypeCounters,
+      parseFailureSubtype: parseFailureSubtypeCounters.ai_placeholder_output > 0
+        ? 'ai_placeholder_output'
+        : (parseFailureSubtypeCounters.ai_output_validation_failed > 0 ? 'ai_output_validation_failed' : null),
       provider: analysisResult?.provider || parseMethod,
       model: parseModel || analysisResult?.model || null,
       maxOutputTokens: parseMaxOutputTokens,
