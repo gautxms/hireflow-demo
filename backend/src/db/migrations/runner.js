@@ -32,6 +32,7 @@ const migrationFiles = [
   '029-add-shortlist-candidate-metadata',
   '028-add-report-definitions',
   '030-add-analysis-name',
+  '031-add-parse-validation-failure-samples',
 ]
 
 async function ensureMigrationsTable(client) {
