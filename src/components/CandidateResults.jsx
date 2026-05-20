@@ -228,6 +228,74 @@ function resolveConfidenceLabel(candidate, hasScore) {
   return hasScore ? '' : 'Low confidence'
 }
 
+function toHumanIssueLabel(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const normalized = raw.toLowerCase()
+  if (normalized.includes('ocr') || normalized.includes('optical character recognition')) return 'OCR could not recover readable resume content.'
+  if (normalized.includes('pdf') && (normalized.includes('unextract') || normalized.includes('extract'))) return 'PDF content was not extractable from this file.'
+  if (normalized.includes('parse')) return 'Resume parsing was incomplete or failed.'
+  if (normalized.includes('unable to score') || normalized.includes('cannot score') || normalized.includes('low confidence')) return 'Candidate could not be scored confidently from available resume content.'
+  if (normalized.includes('corrupt') || normalized.includes('invalid pdf')) return 'Resume file appears corrupted or unreadable.'
+  return raw
+}
+
+function deriveResumeIntegrityChecks(candidate, hasDisplayScore) {
+  const existing = safeArray(candidate?.integrity_checks)
+    .map((check) => {
+      if (typeof check === 'string') {
+        return { status: 'issue', label: toHumanIssueLabel(check) }
+      }
+      const label = toHumanIssueLabel(check?.label || check?.message || check?.issue || check?.detail || '')
+      if (!label) return null
+      return { status: check?.status === 'pass' ? 'pass' : 'issue', label }
+    })
+    .filter(Boolean)
+
+  const issuePool = [
+    candidate?.resume_processing_issue,
+    candidate?.resume_processing_issues,
+    candidate?.processing_issue,
+    candidate?.processing_issues,
+    candidate?.parse_error,
+    candidate?.ocr_error,
+    candidate?.error,
+    candidate?.analysis_error,
+    candidate?.failure_reason,
+  ]
+
+  const normalizedIssues = issuePool.flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .map((entry) => toHumanIssueLabel(entry))
+    .filter(Boolean)
+
+  const checks = [...existing]
+  normalizedIssues.forEach((label) => checks.push({ status: 'issue', label }))
+
+  const asTextBlob = safeSerialize(candidate).toLowerCase()
+  const mentionsUnextractable = asTextBlob.includes('unextractable') || asTextBlob.includes('not extractable')
+  const mentionsOcrOrParseFailure = asTextBlob.includes('ocr') || asTextBlob.includes('parse')
+
+  if (mentionsUnextractable && !checks.some((check) => check.label.toLowerCase().includes('extractable'))) {
+    checks.push({ status: 'issue', label: 'PDF content was not extractable from this file.' })
+  }
+  if (mentionsOcrOrParseFailure && !checks.some((check) => check.label.toLowerCase().includes('pars') || check.label.toLowerCase().includes('ocr'))) {
+    checks.push({ status: 'issue', label: 'Resume parsing was incomplete or failed.' })
+  }
+  if (!hasDisplayScore) {
+    checks.push({ status: 'issue', label: 'Low confidence — candidate could not be scored from available content.' })
+  }
+
+  const deduped = []
+  const seen = new Set()
+  checks.forEach((check) => {
+    const key = `${check.status}:${String(check.label || '').toLowerCase().trim()}`
+    if (!check.label || seen.has(key)) return
+    seen.add(key)
+    deduped.push(check)
+  })
+  return deduped
+}
+
 function resolveAnalysisTitle(parseMeta, candidates) {
   const parseMetaCandidates = [
     parseMeta?.analysisName,
@@ -1156,15 +1224,24 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       ? normalizeTextList(candidate.achievements).slice(0, 3)
       : []
   const candidateConsiderations = normalizeTextList(candidate.considerations)
-  const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
-  const topSkills = deriveTopSkills(candidate).slice(0, 6)
-  const skillGaps = buildSkillGapItems(candidate).slice(0, 8)
+  const reasoningText = safeText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
+  const experienceEntries = deriveExperienceEntries(candidate)
+  const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
+  const scoreBreakdown = candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object'
+    ? Object.entries(candidate.scoreBreakdown).filter(([key, value]) => key !== 'overall' && Number.isFinite(Number(value)))
+    : []
+  const mergedSkillGaps = [...new Set([
+    ...safeArray(candidate?.mustHaveSkills),
+    ...safeArray(candidate?.missingSkills),
+    ...safeArray(candidate?.fit_assessment?.missing),
+  ].map((entry) => safeText(entry, '')).filter(Boolean))]
   const initials = String(candidate?.name || '')
     .split(' ')
     .map((part) => part[0] || '')
     .join('')
     .slice(0, 2)
     .toUpperCase()
+  const integrityChecks = deriveResumeIntegrityChecks(candidate, hasDisplayScore)
 
   return (
     <div id="detail-drawer" className="detail-drawer">
@@ -1237,62 +1314,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
             )}
           </div>
-        </div>
 
-        <div className="dd-col">
-          <div className="dd-col-label">Score breakdown</div>
-          <div className="dd-breakdown">
-            {candidate.scoreBreakdown ? Object.entries(candidate.scoreBreakdown).map(([key, value]) => {
-              const numeric = Number(value)
-              if (!Number.isFinite(numeric)) return null
-              return (
-                <div key={`${candidate._bulkKey}-score-${key}`} className="dd-breakdown-row">
-                  <span>{toDisplayText(key, 'Score')}</span>
-                  <div className="dd-breakdown-track"><div className="dd-breakdown-fill" style={{ width: `${Math.max(0, Math.min(100, numeric))}%` }} /></div>
-                  <span>{numeric}%</span>
-                </div>
-              )
-            }) : <div className="dd-analysis-empty">Score breakdown unavailable</div>}
-          </div>
-
-          <div className="dd-col-label dd-col-label--mt-14">Matched skills</div>
-          <div className="dd-top-skills">
-            {topSkills.length > 0 ? topSkills.map((skill) => (
-              <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>{formatSkillLabel(skill)}</span>
-            )) : <span className="dd-skill-more">Relevant skills unavailable for this analysis</span>}
-          </div>
-
-          {skillGaps.length > 0 && (
-            <>
-              <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
-              <div className="dd-top-skills">
-                {skillGaps.map((gap) => {
-                  const isMustHave = gap.type === 'must-have'
-                  return (
-                    <span
-                      className={`dd-top-skill ${isMustHave ? 'dd-top-skill--warn' : 'dd-top-skill--warn-soft'}`}
-                      key={`${candidate._bulkKey}-gap-${gap.label}`}
-                    >
-                      <span className="dd-gap-label">{gap.label}</span>
-                      <span className="dd-gap-type">{isMustHave ? 'must-have' : 'nice-to-have'}</span>
-                    </span>
-                  )
-                })}
+          <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
+          {experienceEntries.length === 0 && <p className="dd-summary">Unavailable</p>}
+          {experienceEntries.map((job, idx) => (
+            <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
+              <div className="dd-job-title">{toDisplayText(job.title, 'Role not provided')}</div>
+              <div className="dd-job-meta">
+                {toDisplayText(job.company, 'N/A')} · {toDisplayText(job.durationText, [job.startDate, job.endDate].filter(Boolean).join(' – ') || 'N/A')}
               </div>
-            </>
-          )}
-
-          <div className="dd-col-label dd-col-label--mt-14">All skills</div>
-          <div className="dd-top-skills">
-            {deriveTopSkills(candidate).slice(0, showAllDrawerSkills ? 100 : 8).map((skill) => (
-              <span className="dd-skill-pill" key={`${candidate._bulkKey}-all-${String(formatSkillLabel(skill))}`}>{formatSkillLabel(skill)}</span>
-            ))}
-          </div>
-          {deriveTopSkills(candidate).length > 8 && (
-            <button className="dd-btn-ghost dd-toggle-skills" type="button" onClick={() => setShowAllDrawerSkills((current) => !current)}>
-              {showAllDrawerSkills ? 'Show less' : 'Show all'}
-            </button>
-          )}
+            </div>
+          ))}
         </div>
 
         <div className="dd-col">
@@ -1327,13 +1359,49 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
               )}
           </div>
+        </div>
 
-          {candidate.skills_structured && Array.isArray(candidate.integrity_checks) && candidate.integrity_checks.length > 0 && (
+        <div className="dd-col">
+          <div className="dd-col-label">Score breakdown</div>
+          {scoreBreakdown.length > 0 ? (
+            <div className="dd-analysis-box">
+              {scoreBreakdown.map(([key, value]) => (
+                <div className="dd-analysis-item" key={`${candidate._bulkKey}-breakdown-${key}`}>
+                  {safeText(key)}: {Math.max(0, Math.min(100, Number(value)))}%
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="dd-summary">Score breakdown unavailable</p>
+          )}
+
+          <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
+          {mergedSkillGaps.length > 0 ? (
+            <div className="dd-top-skills">
+              {mergedSkillGaps.map((gap) => (
+                <span className="dd-top-skill dd-top-skill--gap" key={`${candidate._bulkKey}-gap-${gap}`}>{gap}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="dd-summary">No explicit skill gaps identified</p>
+          )}
+
+          <div className="dd-col-label">Top skills</div>
+          <div className="dd-top-skills">
+            {topSkills.map((skill) => (
+              <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
+                {formatSkillLabel(skill)}
+              </span>
+            ))}
+            {topSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
+          </div>
+
+          {integrityChecks.length > 0 && (
             <>
               <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
               <div className="dd-analysis-box">
-                {candidate.integrity_checks.map((check, idx) => (
-                  <div className="dd-list-item" key={`${candidate._bulkKey}-integrity-${idx}`}>
+                {integrityChecks.map((check, idx) => (
+                  <div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${candidate._bulkKey}-integrity-${idx}`}>
                     {check?.status === 'issue'
                       ? <AlertTriangle size={18} strokeWidth={1.5} />
                       : <CheckCircle size={18} strokeWidth={1.5} />}
