@@ -150,7 +150,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     verdict: clampString(candidate?.verdict || candidate?.matchScore?.fit || 'review', 30),
     summary: clampString(candidate?.summary || candidate?.profile_summary || '', 250),
     strengths: clampStringArray(candidate?.strengths || [], { maxItems: 3, maxItemLength: 120 }),
-    considerations: clampStringArray(candidate?.considerations || [], { maxItems: 3, maxItemLength: 120 }),
+    considerations: clampStringArray(candidate?.considerations || candidate?.concerns || [], { maxItems: 3, maxItemLength: 120 }),
     concerns: clampStringArray(
       candidate?.concerns || candidate?.fit_assessment?.risks_or_gaps || [],
       { maxItems: 3, maxItemLength: 120 },

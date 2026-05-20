@@ -88,13 +88,13 @@ test('normalizeCompactAnalysis maps considerations only without duplicating conc
   assert.deepEqual(result.candidates[0].concerns, [])
 })
 
-test('normalizeCompactAnalysis maps concerns only without duplicating considerations', () => {
+test('normalizeCompactAnalysis maps concerns-only payloads into considerations for compatibility', () => {
   const result = normalizeCompactAnalysis({
     candidates: [{ concerns: ['No production ownership evidence'] }],
   })
 
   assert.deepEqual(result.candidates[0].concerns, ['No production ownership evidence'])
-  assert.deepEqual(result.candidates[0].considerations, [])
+  assert.deepEqual(result.candidates[0].considerations, ['No production ownership evidence'])
 })
 
 test('normalizeCompactAnalysis maps concerns from fit_assessment.risks_or_gaps when candidate.concerns is missing', () => {
