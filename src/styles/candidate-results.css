@@ -1472,25 +1472,54 @@
 
 .dd-btn-primary,
 .dd-btn-ghost {
+  font-family: var(--font-body, 'DM Sans', sans-serif);
   font-size: 14px;
-  min-height: 42px;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  line-height: 1.35;
+  min-height: auto;
+  padding: 10px 14px;
+  border-radius: 8px;
   white-space: nowrap;
 }
 
+.dd-btn-primary {
+  background: var(--hf-lime);
+  border-color: var(--hf-lime);
+  color: #0a0a0a;
+  font-weight: 700;
+}
+
+.dd-btn-primary:hover {
+  background: var(--hf-lime-hover);
+  border-color: var(--hf-lime-hover);
+}
+
+.dd-btn-ghost {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--hf-text-4) 70%, transparent);
+  color: var(--hf-text-2);
+  font-weight: 500;
+}
+
+.dd-btn-ghost:hover {
+  border-color: color-mix(in srgb, var(--hf-text-3) 80%, transparent);
+  color: var(--hf-text-1);
+  background: color-mix(in srgb, var(--hf-text-1) 6%, transparent);
+}
+
 .dd-close {
-  min-width: 42px;
-  min-height: 42px;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
   padding: 0;
-  color: var(--hf-surface-muted);
+  border-radius: 8px;
+  color: var(--hf-text-4);
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 
 .dd-close:hover {
-  color: var(--color-text-primary);
-  border-color: #444444;
-  background: #0d0d0d;
+  color: var(--hf-text-2);
+  border-color: color-mix(in srgb, var(--hf-text-4) 72%, transparent);
+  background: color-mix(in srgb, var(--hf-text-1) 8%, transparent);
 }
 
 .dd-fact-link,
@@ -1508,6 +1537,16 @@
   .dd-header-actions {
     text-align: left;
     justify-content: flex-start;
+  }
+
+  .dd-header-actions {
+    width: 100%;
+    gap: 6px;
+  }
+
+  .dd-header-actions .hf-btn {
+    flex: 1 1 160px;
+    min-width: 0;
   }
 
   .dd-name {
