@@ -360,3 +360,65 @@ export function toSafeScore(value, fallback = 0) {
 
   return Math.max(0, Math.min(100, parsed))
 }
+
+function toStringArray(value) {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => toDisplayText(entry, '')).filter(Boolean)
+}
+
+function toPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+export function sanitizeExpandedCandidate(candidate = {}) {
+  const source = toPlainObject(candidate)
+  const fitAssessment = toPlainObject(source.fit_assessment)
+  const skillsStructured = toPlainObject(source.skills_structured)
+  const scoreBreakdownSource = toPlainObject(source.scoreBreakdown)
+
+  const scoreBreakdown = Object.fromEntries(
+    Object.entries(scoreBreakdownSource).map(([key, value]) => [String(key), value]),
+  )
+
+  return {
+    ...source,
+    name: toDisplayText(source.name, 'Candidate'),
+    summary: toDisplayText(source.summary, ''),
+    current_title: toDisplayText(source.current_title, ''),
+    location: toDisplayText(source.location, ''),
+    seniority_level: toDisplayText(source.seniority_level, ''),
+    education: toDisplayText(source.education, ''),
+    email: toDisplayText(source.email, ''),
+    years_experience: toDisplayText(source.years_experience, ''),
+    skills: Array.isArray(source.skills) ? source.skills : (typeof source.skills === 'string' ? source.skills : []),
+    top_skills: toStringArray(source.top_skills),
+    strengths: toStringArray(source.strengths),
+    achievements: toStringArray(source.achievements),
+    considerations: toStringArray(source.considerations),
+    mustHaveSkills: toStringArray(source.mustHaveSkills),
+    missingSkills: toStringArray(source.missingSkills),
+    experience: Array.isArray(source.experience) ? source.experience.map((entry) => toPlainObject(entry)) : [],
+    integrity_checks: Array.isArray(source.integrity_checks) ? source.integrity_checks : [],
+    fit_assessment: {
+      ...fitAssessment,
+      matched: toStringArray(fitAssessment.matched),
+      missing: toStringArray(fitAssessment.missing),
+      reason: toDisplayText(fitAssessment.reason, ''),
+      risk: toDisplayText(fitAssessment.risk, ''),
+      confidence: toDisplayText(fitAssessment.confidence, ''),
+      verdict: toDisplayText(fitAssessment.verdict, ''),
+    },
+    skills_structured: {
+      ...skillsStructured,
+      tools_and_platforms: toStringArray(skillsStructured.tools_and_platforms),
+      methodologies: toStringArray(skillsStructured.methodologies),
+      domain_expertise: toStringArray(skillsStructured.domain_expertise),
+      soft_skills: toStringArray(skillsStructured.soft_skills),
+    },
+    scoreBreakdown,
+    matchScore: {
+      ...toPlainObject(source.matchScore),
+      reason: toDisplayText(source?.matchScore?.reason, ''),
+    },
+  }
+}
