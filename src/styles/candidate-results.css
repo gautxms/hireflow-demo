@@ -1632,6 +1632,11 @@
   border: 1px solid rgba(200, 255, 0, 0.18);
   padding: 4px 10px;
   border-radius: 6px;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
 }
 .dd-top-skill--gap {
@@ -1643,6 +1648,21 @@
   color: var(--hf-warning);
   background: rgba(255, 165, 0, 0.1);
   border-color: rgba(255, 165, 0, 0.25);
+}
+.dd-top-skill--warn-soft {
+  color: var(--hf-warning-text);
+  background: rgba(255, 165, 0, 0.06);
+  border-color: rgba(255, 165, 0, 0.18);
+}
+.dd-gap-label {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.dd-gap-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
 }
 .dd-breakdown { display: flex; flex-direction: column; gap: 8px; }
 .dd-breakdown-row { display: grid; grid-template-columns: minmax(92px, 1fr) 1fr auto; gap: 8px; align-items: center; font-size: 12px; color: var(--color-text-secondary); }
