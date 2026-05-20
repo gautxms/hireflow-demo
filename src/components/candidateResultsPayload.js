@@ -1,5 +1,14 @@
 function normalizeCandidate(candidate = {}) {
-  const rawScore = Number(candidate?.matchScore?.score ?? candidate?.matchScore ?? candidate?.score ?? candidate?.profile_score ?? 0)
+  const rawScore = Number(candidate?.matchScore?.score
+    ?? candidate?.matchScore
+    ?? candidate?.score
+    ?? candidate?.profile_score
+    ?? candidate?.scoreBreakdown?.overall
+    ?? candidate?.overall_score
+    ?? candidate?.overallScore
+    ?? candidate?.total_score
+    ?? candidate?.totalScore
+    ?? 0)
   const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : 0
   const reason = String(
     candidate?.matchScore?.reason

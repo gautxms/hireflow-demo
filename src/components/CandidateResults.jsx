@@ -921,16 +921,20 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }
 
   const skeletonCards = Array.from({ length: 3 }, (_, index) => `candidate-skeleton-${index}`)
+  const candidateByKey = useMemo(() => {
+    const map = new Map()
+    sortedCandidates.forEach((candidate, index) => {
+      map.set(resolveCandidateKey(candidate, index), candidate)
+    })
+    return map
+  }, [sortedCandidates])
+
   const expandedCandidate = useMemo(() => {
     if (!expandedId) return null
-    return sortedCandidates.find((candidate, index) => resolveCandidateKey(candidate, index) === expandedId) || null
-  }, [expandedId, sortedCandidates])
+    return candidateByKey.get(expandedId) || null
+  }, [candidateByKey, expandedId])
 
-  useEffect(() => {
-    if (expandedId && !expandedCandidate) {
-      setExpandedId(null)
-    }
-  }, [expandedCandidate, expandedId])
+  const isExpandedCandidateMissing = Boolean(expandedId) && !expandedCandidate
 
   if (isLoading || isSharedLoading) {
     return (
@@ -1273,7 +1277,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             type="button"
             onClick={(event) => {
               event.stopPropagation()
-              window.location.href = `/candidates/${candidate.id}`
+              const candidateProfileId = String(resolveCandidateResumeUuid(candidate) || '').trim()
+              if (!candidateProfileId) {
+                setResultsError('Resume unavailable for this candidate. Please retry from Analyses or open another profile.')
+                return
+              }
+              window.location.href = `/candidates/${candidateProfileId}`
             }}
           >
             View full profile →
@@ -1425,6 +1434,21 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     </div>
   )
 })()}
+
+
+      {isExpandedCandidateMissing && (
+        <div className="candidate-results-page__state-wrap" role="status">
+          <h2 className="candidate-results-page__state-title candidate-results-page__state-title--compact">Candidate details unavailable</h2>
+          <p className="candidate-results-page__state-copy">The selected candidate could not be found in this analysis payload. This can happen after filtering, pagination changes, or older analysis data shapes.</p>
+          <div className="candidate-results-page__state-actions">
+            <button className="touch-target candidate-results-page__back-button" type="button" onClick={onBack}>
+              <ChevronLeft size={14} aria-hidden="true" />
+              Back to Analyses
+            </button>
+            <button className="touch-target page-btn" type="button" onClick={() => setExpandedId(null)}>Back to Results</button>
+          </div>
+        </div>
+      )}
 
       {visibleCandidates.length === 0 && (
         <div className="candidate-results-page__empty-note">
