@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle, ChevronLeft, CircleHelp, ExternalLink, FileText, Mail, Minus, Plus, Share2, Star, Tag, Trash2, TriangleAlert, Upload, BriefcaseBusiness, MapPin, TrendingUp, X } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
@@ -27,8 +27,62 @@ import {
 } from './candidateSelectionState'
 import '../styles/candidate-results.css'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
+import { logResultsRenderError } from '../pages/resultsErrorBoundaryTelemetry'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+
+
+class CandidateDetailErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('[CandidateDetailErrorBoundary] candidate detail drawer render crash.', {
+      analysisId: this.props.analysisId,
+      candidateCount: this.props.candidateCount,
+      selectedCandidateKey: this.props.selectedCandidateKey,
+      renderException: {
+        name: error?.name || 'Error',
+        message: error?.message || String(error),
+        stack: error?.stack || '',
+      },
+      componentStack: errorInfo?.componentStack || '',
+    })
+
+    logResultsRenderError({
+      analysisId: this.props.analysisId,
+      candidateCount: this.props.candidateCount,
+      normalizationStats: this.props.normalizationStats,
+      candidatePayloadShape: this.props.candidatePayloadShape,
+      candidateFieldTypeSummary: this.props.candidateFieldTypeSummary,
+      error,
+      errorInfo,
+    })
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div id="detail-drawer" className="detail-drawer" role="status" aria-live="polite">
+          <div className="dd-body">
+            <div className="dd-col">
+              <p className="dd-summary">Candidate details are temporarily unavailable for this profile. Please close this drawer and open another candidate.</p>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
 
 function safeSerialize(value) {
   try {
@@ -106,6 +160,25 @@ function normalizeSkillKey(skill) {
     .trim()
     .toLowerCase()
     .replace(/\s*[()]/g, '')
+}
+
+
+function deriveExperienceEntries(candidate) {
+  const entries = safeArray(candidate?.experience)
+  if (entries.length === 0) return []
+
+  return entries
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+      return {
+        title: safeText(entry.title || entry.role, ''),
+        company: safeText(entry.company || entry.organization, ''),
+        startDate: safeText(entry.startDate || entry.start, ''),
+        endDate: safeText(entry.endDate || entry.end, ''),
+        durationText: safeText(entry.duration || entry.period, ''),
+      }
+    })
+    .filter(Boolean)
 }
 
 function formatSkillLabel(skill) {
@@ -398,7 +471,7 @@ function filterAndSortCandidates(candidates, filters) {
 }
 
 
-export default function CandidateResults({ candidates: candidatePayload, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null }) {
+export default function CandidateResults({ candidates: candidatePayload, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null, analysisId = '', candidateCount = 0, normalizationStats = null, candidatePayloadShape = null, candidateFieldTypeSummary = [] }) {
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
@@ -1253,7 +1326,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const integrityChecks = deriveResumeIntegrityChecks(candidate, hasDisplayScore)
 
   return (
-    <div id="detail-drawer" className="detail-drawer">
+    <CandidateDetailErrorBoundary
+      key={String(candidate._bulkKey || resolveCandidateKey(candidate) || "candidate-detail")}
+      analysisId={analysisId}
+      candidateCount={candidateCount}
+      normalizationStats={normalizationStats}
+      candidatePayloadShape={candidatePayloadShape}
+      candidateFieldTypeSummary={candidateFieldTypeSummary}
+      selectedCandidateKey={candidate._bulkKey}
+    >
+      <div id="detail-drawer" className="detail-drawer">
       <div className="dd-header">
         <div className="dd-header-left">
           <div className="dd-avatar">{initials || 'NA'}</div>
@@ -1436,7 +1518,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </CandidateDetailErrorBoundary>
   )
 })()}
 
