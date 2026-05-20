@@ -1513,40 +1513,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         </div>
 
         <div className="dd-col">
-          <div className="dd-col-label section-heading">Strengths</div>
-          <div className="dd-analysis-box dd-analysis-box--green">
-            {candidateStrengths.length > 0
-              ? candidateStrengths.map((strength, idx) => (
-                <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}>
-                  <CheckCircle size={18} strokeWidth={1.5} />
-                  <ExpandableText text={strength} />
-                </div>
-              ))
-              : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-          </div>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
-          <div className="dd-analysis-box dd-analysis-box--amber">
-            {candidateConsiderations.length > 0
-              ? candidateConsiderations.map((consideration, idx) => (
-                <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}>
-                  <AlertTriangle size={18} strokeWidth={1.5} />
-                  <ExpandableText text={consideration} />
-                </div>
-              ))
-              : (
-                <div className="dd-analysis-item">
-                  {candidate.years_experience == null
-                    ? 'Experience duration could not be determined — verify dates in resume'
-                    : candidate.years_experience < 3
-                      ? 'Early-career candidate — assess growth trajectory in interview'
-                      : 'Run re-analysis to generate detailed AI considerations'}
-                </div>
-              )}
-          </div>
-        </div>
-
-        <div className="dd-col">
           <div className="dd-col-label section-heading">Score breakdown</div>
           {matchBreakdown ? (
             <div className="dd-analysis-box dd-breakdown">
@@ -1603,6 +1569,39 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
             </>
           )}
+
+
+          <div className="dd-col-label section-heading dd-col-label--mt-14">Strengths</div>
+          <div className="dd-analysis-box dd-analysis-box--green">
+            {candidateStrengths.length > 0
+              ? candidateStrengths.map((strength, idx) => (
+                <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}>
+                  <CheckCircle size={18} strokeWidth={1.5} />
+                  <ExpandableText text={strength} />
+                </div>
+              ))
+              : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+          </div>
+
+          <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
+          <div className="dd-analysis-box dd-analysis-box--amber">
+            {candidateConsiderations.length > 0
+              ? candidateConsiderations.map((consideration, idx) => (
+                <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}>
+                  <AlertTriangle size={18} strokeWidth={1.5} />
+                  <ExpandableText text={consideration} />
+                </div>
+              ))
+              : (
+                <div className="dd-analysis-item">
+                  {candidate.years_experience == null
+                    ? 'Experience duration could not be determined — verify dates in resume'
+                    : candidate.years_experience < 3
+                      ? 'Early-career candidate — assess growth trajectory in interview'
+                      : 'Run re-analysis to generate detailed AI considerations'}
+                </div>
+              )}
+          </div>
 
           <div className="dd-col-label section-heading dd-col-label--mt-14">Resume file</div>
           <div className="dd-resume-file">
