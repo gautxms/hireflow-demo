@@ -599,6 +599,7 @@ function createAttemptRecord({
   retryReason = null,
   statusCode = null,
   tokenBudgetAttempts = [],
+  complexityEstimator = null,
 }) {
   return {
     success: Boolean(success),
@@ -621,6 +622,34 @@ function createAttemptRecord({
     retryReason,
     statusCode,
     tokenBudgetAttempts: Array.isArray(tokenBudgetAttempts) ? tokenBudgetAttempts : [],
+    complexityEstimator: complexityEstimator && typeof complexityEstimator === 'object' ? complexityEstimator : null,
+  }
+}
+
+function estimateAnalysisComplexity({ mimeType, cleanedResumeCharCount, jdCharCount, inputMode }) {
+  const normalizedMimeType = String(mimeType || '').trim().toLowerCase() || 'unknown'
+  const normalizedInputMode = String(inputMode || '').trim().toLowerCase() || 'binary'
+  const resumeChars = Number.isFinite(Number(cleanedResumeCharCount)) ? Number(cleanedResumeCharCount) : 0
+  const jdChars = Number.isFinite(Number(jdCharCount)) ? Number(jdCharCount) : 0
+
+  const resumeScore = resumeChars >= 32000 ? 3 : resumeChars >= 20000 ? 2 : resumeChars >= 9000 ? 1 : 0
+  const jdScore = jdChars >= 14000 ? 2 : jdChars >= 7000 ? 1 : 0
+  const mimeScore = normalizedMimeType === 'application/pdf' ? 1 : 0
+  const inputModeScore = normalizedInputMode === 'text' ? 0 : 1
+  const totalScore = resumeScore + jdScore + mimeScore + inputModeScore
+
+  const recommendedMode = totalScore >= 4 ? 'COMPACT_MINIMAL' : 'COMPACT_STANDARD'
+
+  return {
+    recommendedMode,
+    totalScore,
+    factors: {
+      resumeChars,
+      jdChars,
+      mimeType: normalizedMimeType,
+      inputMode: normalizedInputMode,
+    },
+    advisoryOnly: true,
   }
 }
 
@@ -1200,6 +1229,14 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const isTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
+  const jdCharCount = String(options?.jobDescriptionContext?.description || '').length + String(options?.jobDescriptionContext?.requirements || '').length
+  const complexityEstimator = estimateAnalysisComplexity({
+    mimeType,
+    cleanedResumeCharCount: cleanedPayload?.metrics?.cleanedCharCount || cleanedPayload?.cleanedText?.length || 0,
+    jdCharCount,
+    inputMode: cleanedPayload ? 'text' : 'binary',
+  })
+  console.log('[AI Parse] Complexity estimator output:', complexityEstimator)
 
   let executedProviderAttempts = 0
   for (const entry of attemptPlan) {
@@ -1210,7 +1247,9 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     if (executedProviderAttempts >= getMaxProviderAttemptsPerFile()) break
     executedProviderAttempts += 1
 
-    let compactMode = compactByDefaultForEntry(entry)
+    let compactMode = complexityEstimator.recommendedMode === 'COMPACT_MINIMAL'
+      ? true
+      : compactByDefaultForEntry(entry)
     try {
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
       const response = await adapter(cleanedBase64, mimeType, filename, {
@@ -1245,6 +1284,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             promptIsDefaultFallback: response.promptIsDefaultFallback,
             tokenUsage: response.tokenUsage,
             tokenBudgetAttempts: response.tokenBudgetAttempts,
+            complexityEstimator,
           }),
         ],
       }
@@ -1290,6 +1330,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
                   retryPolicy: `overload_backoff_${retryBackoffMs.join('->')}ms`,
                   retryReason: 'overload_retried_same_provider_model_key',
                   statusCode,
+                  complexityEstimator,
                 }),
               ],
             }
@@ -1322,8 +1363,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             ...response,
             attempts: [
               ...attemptHistory,
-              createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:compact_pass' }, failureCategory: 'response_truncated_error', failureReason: 'compact attempt truncated; bare minimum retry succeeded', mode: 'minimal' }),
-              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage, tokenBudgetAttempts: response.tokenBudgetAttempts, mode: response.mode || 'bare_minimum' }),
+              createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:compact_pass' }, failureCategory: 'response_truncated_error', failureReason: 'compact attempt truncated; bare minimum retry succeeded', mode: 'minimal', complexityEstimator }),
+              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage, tokenBudgetAttempts: response.tokenBudgetAttempts, mode: response.mode || 'bare_minimum', complexityEstimator }),
             ],
           }
         } catch (bareMinimumRetryError) {
@@ -1349,8 +1390,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             ...response,
             attempts: [
               ...attemptHistory,
-              createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:first_pass' }, failureCategory: 'response_truncated_error', failureReason: 'first attempt truncated; compact retry succeeded' }),
-              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage, tokenBudgetAttempts: response.tokenBudgetAttempts }),
+              createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:first_pass' }, failureCategory: 'response_truncated_error', failureReason: 'first attempt truncated; compact retry succeeded', complexityEstimator }),
+              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage, tokenBudgetAttempts: response.tokenBudgetAttempts, complexityEstimator }),
             ],
           }
         } catch (compactRetryError) {
@@ -1378,6 +1419,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         retryPolicy: overloadFailure ? `overload_backoff_${retryBackoffMs.join('->')}ms` : null,
         retryReason: overloadFailure ? 'overload_retries_exhausted' : null,
         statusCode,
+        complexityEstimator,
       }))
       if (failureCategory === 'response_truncated_error' && isFallbackDisabledOnTruncation()) {
         throw createTerminalProviderError(error, attemptHistory)
