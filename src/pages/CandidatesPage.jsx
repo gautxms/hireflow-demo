@@ -176,6 +176,9 @@ export default function CandidatesPage() {
     ))
   }
 
+
+
+
   const runBulkShortlistAction = async (mode) => {
     if (!selectedShortlistId) {
       setBulkStatus('Select a shortlist first.')

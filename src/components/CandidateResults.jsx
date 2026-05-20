@@ -767,6 +767,31 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
 
+  const openCandidateResumeInNewTab = useCallback(async (candidate) => {
+    const resumeId = resolveCandidateResumeUuid(candidate)
+    if (!resumeId) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/resumes/${encodeURIComponent(resumeId)}/resume`, {
+        method: 'GET',
+        headers: authHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error('Unable to open candidate resume')
+      }
+
+      const fileBlob = await response.blob()
+      const fileUrl = URL.createObjectURL(fileBlob)
+      window.open(fileUrl, '_blank', 'noopener,noreferrer')
+      setTimeout(() => URL.revokeObjectURL(fileUrl), 30_000)
+    } catch (error) {
+      setResultsError(error.message || 'Unable to open candidate resume')
+    }
+  }, [authHeaders])
+
   useEffect(() => {
     if (!shortlistV2Enabled) {
       return
@@ -1428,12 +1453,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             type="button"
             onClick={(event) => {
               event.stopPropagation()
-              const candidateProfileId = String(resolveCandidateResumeUuid(candidate) || '').trim()
-              if (!candidateProfileId) {
-                setResultsError('Resume unavailable for this candidate. Please retry from Analyses or open another profile.')
-                return
-              }
-              window.location.href = `/candidates/${candidateProfileId}`
+              openCandidateResumeInNewTab(candidate)
             }}
           >
             <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
@@ -1588,7 +1608,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <FileText size={18} strokeWidth={1.5} />
             <div>
               <div>{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
-              <div className="dd-resume-meta">Use View full profile to open this resume.</div>
+              <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View resume</button>
             </div>
           </div>
         </div>
