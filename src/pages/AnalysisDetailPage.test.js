@@ -99,6 +99,25 @@ test('toCandidateResultsPayload can normalize nested item result candidates from
   assert.equal(payload.hasInvalidPayload, false)
 })
 
+
+test('toCandidateResultsPayload derives score from profile_score when score is absent', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-profile-score',
+    candidates: [
+      {
+        id: 'profile-only',
+        name: 'Profile Score Candidate',
+        profile_score: 52,
+      },
+    ],
+  })
+
+  assert.equal(payload.candidates.length, 1)
+  assert.equal(payload.candidates[0].score, 52)
+  assert.equal(payload.candidates[0].matchScore, 52)
+  assert.equal(payload.candidates[0].scoreBreakdown.overall, 52)
+})
+
 test('e2e: analysis detail terminal response with one malformed candidate still renders results and non-prod debug banner', () => {
   const analysisResponse = {
     id: 'analysis-e2e-partial',
