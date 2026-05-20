@@ -280,6 +280,31 @@ function deriveTopSkills(candidate) {
   return parseSkills(candidate?.skills)
 }
 
+function deriveAllSkills(candidate) {
+  const deduped = new Map()
+  const addSkills = (skills) => {
+    parseSkills(skills).forEach((skill) => {
+      const label = safeText(formatSkillLabel(skill), '').trim()
+      if (!label) return
+      const key = normalizeSkillKey(label)
+      if (!key || deduped.has(key)) return
+      deduped.set(key, label)
+    })
+  }
+
+  addSkills(candidate?.top_skills)
+  addSkills(candidate?.skills)
+  if (candidate?.skills_structured) {
+    const structured = candidate.skills_structured
+    addSkills(structured.tools_and_platforms)
+    addSkills(structured.methodologies)
+    addSkills(structured.domain_expertise)
+    addSkills(structured.soft_skills)
+  }
+
+  return Array.from(deduped.values())
+}
+
 function parseUploadDate(candidate) {
   const value = candidate?.uploadDate || candidate?.uploadedAt || candidate?.created_at || candidate?.createdAt
   const timestamp = Date.parse(String(value || ''))
@@ -1399,6 +1424,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const candidateConsiderations = normalizeTextList(candidate.considerations)
   const reasoningText = safeText(resolveMatchScoreReason(candidate), 'Reasoning unavailable for this profile.')
   const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
+  const allSkills = deriveAllSkills(candidate)
   const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
   const scoreBreakdownRows = matchBreakdown ? [
     {
@@ -1589,14 +1615,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <p className="dd-summary">No explicit skill gaps identified</p>
           )}
 
-          <div className="dd-col-label section-heading">All skills</div>
-          <div className="dd-top-skills">
-            {topSkills.map((skill) => (
-              <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
+          <div className="dd-col-label section-heading dd-col-label--mt-14">All skills</div>
+          <div className="dd-top-skills dd-top-skills--all">
+            {allSkills.map((skill) => (
+              <span className="dd-top-skill dd-top-skill--all" key={`${candidate._bulkKey}-all-${String(formatSkillLabel(skill))}`}>
                 {formatSkillLabel(skill)}
               </span>
             ))}
-            {topSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
+            {allSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
           </div>
 
           {integrityChecks.length > 0 && (

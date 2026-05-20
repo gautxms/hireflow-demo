@@ -1699,6 +1699,17 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+.dd-top-skills--all { gap: 6px; }
+.dd-top-skill--all {
+  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 3px 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .dd-top-skill--gap {
   background: rgba(255, 165, 0, 0.1);
   color: var(--hf-warning);
