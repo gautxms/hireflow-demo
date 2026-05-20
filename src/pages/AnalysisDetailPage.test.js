@@ -151,10 +151,9 @@ test('e2e: analysis detail terminal response with one malformed candidate still 
   assert.equal(normalized.candidates[1].name, 'Valid Two')
 
   assert.match(analysisDetailSource, /CandidateResults/)
-  assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
   assert.match(analysisDetailSource, /Candidate payload validation issues\./)
   assert.match(analysisDetailSource, /issueCount: issues\.length/)
-  assert.doesNotMatch(analysisDetailSource, /<ResultsErrorBoundary[^]*We could not render these results/s)
+  assert.doesNotMatch(analysisDetailSource, /We could not render these results\./)
   assert.match(analysisDetailSource, /isNonProductionBuild && candidateResultsPayload\.droppedCount > 0/)
 })
 
@@ -171,7 +170,6 @@ test('e2e: analysis detail terminal response with fully malformed candidates res
   assert.equal(normalized.hasPartiallyInvalidPayload, false)
   assert.equal(normalized.candidates.length, 0)
 
-  assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
   assert.match(analysisDetailSource, /This analysis is still processing\. Results will be available when processing completes\./)
 })
 
@@ -253,8 +251,11 @@ test('e2e: malformed nested skills_structured variants do not trigger boundary f
   assert.deepEqual(normalized.candidates[3].skills_structured.tools_and_platforms, [])
   assert.equal(normalized.normalizationDiagnostics.fixedSkillsStructuredFieldCount, 3)
 
-  assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
-  assert.doesNotMatch(analysisDetailSource, /<ResultsErrorBoundary[^]*We could not render these results/s)
+  assert.doesNotMatch(analysisDetailSource, /We could not render these results\./)
+})
+
+test('AnalysisDetailPage source never includes crash popup copy for completed results flow', () => {
+  assert.doesNotMatch(analysisDetailSource, /We could not render these results\. Please return to Analyses or retry\./)
 })
 
 test('toCandidateResultsPayload prefers backend normalizedCandidates when parse result payload is malformed', () => {

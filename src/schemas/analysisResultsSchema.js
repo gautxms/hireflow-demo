@@ -100,7 +100,10 @@ function normalizeCandidate(candidate, index) {
     ? candidate.name
     : (candidate.name == null ? 'Candidate' : String(candidate.name))
 
-  const score = resolveCandidateScore(candidate)
+  const score = Math.max(0, Math.min(100, resolveCandidateScore(candidate)))
+  const toStringArray = (value) => (Array.isArray(value)
+    ? value.map((item) => String(item ?? '').trim()).filter(Boolean)
+    : [])
 
   const candidateIssues = []
   if (candidate.matchScore !== undefined && candidate.matchScore !== null) {
@@ -135,6 +138,13 @@ function normalizeCandidate(candidate, index) {
       name,
       score,
       matchScore: normalizeMatchScore(candidate, score),
+      summary: String(candidate?.summary ?? '').trim(),
+      title: String(candidate?.title ?? '').trim(),
+      location: String(candidate?.location ?? '').trim(),
+      skills: toStringArray(candidate?.skills),
+      top_skills: toStringArray(candidate?.top_skills),
+      strengths: toStringArray(candidate?.strengths),
+      considerations: toStringArray(candidate?.considerations),
     },
     issues: candidateIssues,
   }
