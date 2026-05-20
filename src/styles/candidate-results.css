@@ -1506,20 +1506,24 @@
   background: color-mix(in srgb, var(--hf-text-1) 6%, transparent);
 }
 
-.dd-close {
+.dd-close,
+.sp-close {
   width: 36px;
   min-width: 36px;
   min-height: 36px;
   padding: 0;
   border-radius: 8px;
-  color: var(--hf-text-4);
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+  border: 1px solid color-mix(in srgb, var(--hf-text-3) 44%, transparent);
+  background: color-mix(in srgb, var(--hf-text-1) 4%, transparent);
+  color: var(--hf-text-2);
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
 }
 
-.dd-close:hover {
-  color: var(--hf-text-2);
-  border-color: color-mix(in srgb, var(--hf-text-4) 72%, transparent);
-  background: color-mix(in srgb, var(--hf-text-1) 8%, transparent);
+.dd-close:hover,
+.sp-close:hover {
+  color: var(--hf-text-1);
+  border-color: color-mix(in srgb, var(--hf-text-3) 72%, transparent);
+  background: color-mix(in srgb, var(--hf-text-1) 10%, transparent);
 }
 
 .dd-fact-link,
@@ -1975,8 +1979,6 @@
 
 .bulk-btn:focus-visible,
 .page-btn:focus-visible,
-.dd-close:focus-visible,
-.sp-close:focus-visible,
 .candidate-results-page__back-button:focus-visible,
 .page-size-select:focus-visible,
 .rc-checkbox:focus-visible,
@@ -1986,6 +1988,13 @@
 .result-card:focus-visible {
   outline: 2px solid var(--hf-lime);
   outline-offset: 3px;
+}
+
+.dd-close:focus-visible,
+.sp-close:focus-visible {
+  outline: 2px solid var(--hf-lime);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hf-bg) 88%, transparent);
 }
 
 .dd-header-actions,
