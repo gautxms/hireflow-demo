@@ -1604,6 +1604,10 @@
   border-radius: 0;
   padding: 10px 12px;
   color: var(--color-text-secondary);
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .dd-list-item { display: flex; gap: 8px; align-items: flex-start; color: var(--color-text-secondary); font-size: 13px; line-height: 1.45; padding: 4px 0; }
 .dd-list-item svg { color: var(--hf-lime); flex: 0 0 auto; margin-top: 2px; }
@@ -1745,7 +1749,19 @@
 .dd-read-more { margin-left: 8px; background: transparent; border: none; color: var(--hf-lime); cursor: pointer; font-size: 12px; }
 .dd-toggle-skills { margin-top: 8px; }
 .dd-resume-file { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border: 1px solid #2a2a2a; border-radius: 10px; background: #0d0d0d; color: var(--color-text-secondary); }
-.dd-resume-meta { color: var(--hf-text-4); font-size: 12px; }
+.dd-resume-filename {
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+.dd-resume-meta {
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
 
 .dd-skill-cat {
   font-size: 10px;
