@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
 
 const analysisDetailSource = readFileSync(new URL('./AnalysisDetailPage.jsx', import.meta.url), 'utf8')
+const candidateResultsSource = readFileSync(new URL('../components/CandidateResults.jsx', import.meta.url), 'utf8')
 
 function withWarnSpy(fn) {
   const originalWarn = console.warn
@@ -358,6 +359,78 @@ test('toCandidateResultsPayload does not promote job description title to analys
 })
 
 
+
+
+test('e2e: analysis detail fixture with profile_score, fit assessment, and skills renders stable candidate payload for detail expansion flow', () => {
+  const analysisResponse = {
+    id: 'analysis-e2e-profile-score-details',
+    status: 'complete',
+    liveStatus: 'complete',
+    summary: { total: 1, complete: 1, failed: 0, processing: 0, pending: 0 },
+    candidates: [
+      {
+        id: 'profile-score-1',
+        name: 'Jordan Backend',
+        profile_score: 52,
+        fit_assessment: {
+          verdict: 'Possible match',
+          confidence: 'Medium',
+          reason: 'Candidate aligns with core backend requirements and some preferred skills.',
+          missing: ['AWS Lambda'],
+        },
+        skills: 'Node.js, PostgreSQL, REST APIs',
+        skills_structured: {
+          tools_and_platforms: ['Node.js', 'PostgreSQL'],
+          methodologies: ['TDD'],
+          domain_expertise: ['B2B SaaS'],
+          soft_skills: ['Communication'],
+        },
+      },
+    ],
+  }
+
+  const normalized = toCandidateResultsPayload(analysisResponse)
+
+  assert.equal(normalized.hasInvalidPayload, false)
+  assert.equal(normalized.candidates.length, 1)
+  assert.equal(normalized.candidates[0].score, 52)
+  assert.equal(normalized.candidates[0].matchScore.score, 52)
+  assert.equal((normalized.candidates[0].matchScore.score / 10).toFixed(1), '5.2')
+  assert.equal(normalized.candidates[0].fit_assessment.reason, 'Candidate aligns with core backend requirements and some preferred skills.')
+  assert.ok(normalized.candidates[0].skills_structured.tools_and_platforms.includes('Node.js'))
+
+  assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
+  assert.doesNotMatch(analysisDetailSource, /<ResultsErrorBoundary[^]*We could not render these results/s)
+  assert.match(analysisDetailSource, /<CandidateResults/)
+  assert.match(candidateResultsSource, /Expand details/)
+})
+
+test('e2e: analysis detail fixture with legacy numeric matchScore keeps list score and detail interactions stable', () => {
+  const analysisResponse = {
+    id: 'analysis-e2e-legacy-matchscore',
+    status: 'complete',
+    summary: { total: 1, complete: 1, failed: 0, processing: 0, pending: 0 },
+    candidates: [
+      {
+        id: 'legacy-score-1',
+        name: 'Legacy Candidate',
+        matchScore: 52,
+        fit_assessment: { reason: 'Legacy payload still has enough fit signals.' },
+      },
+    ],
+  }
+
+  const normalized = toCandidateResultsPayload(analysisResponse)
+
+  assert.equal(normalized.hasInvalidPayload, false)
+  assert.equal(normalized.candidates.length, 1)
+  assert.equal(normalized.candidates[0].matchScore.score, 52)
+  assert.equal((normalized.candidates[0].matchScore.score / 10).toFixed(1), '5.2')
+  assert.equal(typeof normalized.candidates[0].matchScore.reason, 'string')
+
+  assert.match(candidateResultsSource, /Collapse details/)
+  assert.match(candidateResultsSource, /View full profile/)
+})
 test('analysis detail page defines page title fallback priority matrix and shell callback propagation', () => {
   assert.match(analysisDetailSource, /function deriveAnalysisPageTitle\(analysis, analysisId\)/)
   assert.match(analysisDetailSource, /analysis\?\.name/)
