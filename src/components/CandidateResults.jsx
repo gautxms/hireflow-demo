@@ -359,6 +359,18 @@ function parseBreakdownPercent(value) {
   return match ? Number.parseInt(match[1], 10) : null
 }
 
+function resolveBreakdownMetric(matchBreakdown, keys = [], fallback = 0) {
+  if (!matchBreakdown || typeof matchBreakdown !== 'object') return fallback
+
+  for (const key of keys) {
+    if (!key || !(key in matchBreakdown)) continue
+    const parsed = parseBreakdownPercent(matchBreakdown[key])
+    if (parsed != null) return parsed
+  }
+
+  return fallback
+}
+
 function toHumanIssueLabel(value) {
   const raw = String(value || '').trim()
   if (!raw) return ''
@@ -1389,12 +1401,43 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
   const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
   const scoreBreakdownRows = matchBreakdown ? [
-    { label: 'Skills match', value: parseBreakdownPercent(matchBreakdown.technical_skills) },
-    { label: 'Experience', value: parseBreakdownPercent(matchBreakdown.experience_years) },
-    { label: 'Role alignment', value: parseBreakdownPercent(matchBreakdown.methodologies) },
-    { label: 'Domain', value: parseBreakdownPercent(matchBreakdown.domain_expertise) },
-    { label: 'Location', value: parseBreakdownPercent(matchBreakdown.location) },
-  ].filter((row) => row.value != null) : []
+    {
+      label: 'Skills match',
+      value: resolveBreakdownMetric(matchBreakdown, [
+        'technical_skills',
+        'skills_match',
+        'skills',
+        'technicalSkills',
+      ]),
+    },
+    {
+      label: 'Experience',
+      value: resolveBreakdownMetric(matchBreakdown, [
+        'experience_years',
+        'experience',
+        'years_experience',
+        'experienceYears',
+      ]),
+    },
+    {
+      label: 'Role alignment',
+      value: resolveBreakdownMetric(matchBreakdown, [
+        'methodologies',
+        'role_alignment',
+        'role_fit',
+        'roleAlignment',
+      ]),
+    },
+    {
+      label: 'Education',
+      value: resolveBreakdownMetric(matchBreakdown, [
+        'education',
+        'education_match',
+        'academic_background',
+        'educationMatch',
+      ]),
+    },
+  ] : []
   const mergedSkillGaps = [...new Set([
     ...safeArray(candidate?.mustHaveSkills),
     ...safeArray(candidate?.missingSkills),
