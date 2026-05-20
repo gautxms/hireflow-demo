@@ -8,6 +8,8 @@ import { validateAnalysisResultsPayload } from '../schemas/analysisResultsSchema
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
+const FRONTEND_BUILD_ID = import.meta.env.VITE_BUILD_ID || 'unknown'
+const FRONTEND_COMMIT_HASH = import.meta.env.VITE_GIT_COMMIT_HASH || 'unknown'
 const isNonProductionBuild = (() => {
   if (typeof process !== 'undefined' && process?.env?.NODE_ENV) {
     return process.env.NODE_ENV !== 'production'
@@ -133,6 +135,12 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [analysis, setAnalysis] = useState(null)
+
+  useEffect(() => {
+    console.info(
+      `[BuildCorrelation] AnalysisDetailPage mounted | build_id=${FRONTEND_BUILD_ID} | commit=${FRONTEND_COMMIT_HASH} | analysis_id=${analysisId || 'unknown'}`,
+    )
+  }, [analysisId])
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
