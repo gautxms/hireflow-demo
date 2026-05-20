@@ -595,6 +595,9 @@ function createAttemptRecord({
   jdCharCount = null,
   failureCategory = null,
   failureReason = null,
+  retryPolicy = null,
+  retryReason = null,
+  statusCode = null,
   tokenBudgetAttempts = [],
 }) {
   return {
@@ -614,6 +617,9 @@ function createAttemptRecord({
     jdCharCount,
     failureCategory,
     failureReason,
+    retryPolicy,
+    retryReason,
+    statusCode,
     tokenBudgetAttempts: Array.isArray(tokenBudgetAttempts) ? tokenBudgetAttempts : [],
   }
 }
@@ -632,6 +638,31 @@ function getFailureCategory(message = '') {
   const normalized = String(message || '').trim()
   const match = normalized.match(/^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::|$)/i)
   return match?.[1] ? String(match[1]).toLowerCase() : 'unknown_error'
+}
+
+
+function extractStatusCodeFromError(error) {
+  const directStatus = Number(error?.status ?? error?.statusCode ?? error?.code)
+  if (Number.isInteger(directStatus) && directStatus >= 100 && directStatus <= 599) {
+    return directStatus
+  }
+
+  const message = String(error?.message || '')
+  const statusMatch = message.match(/\bstatus\s*(?:code)?\s*[:=]?\s*(\d{3})\b/i) || message.match(/\b(\d{3})\b/)
+  const parsed = Number(statusMatch?.[1])
+  return Number.isInteger(parsed) && parsed >= 100 && parsed <= 599 ? parsed : null
+}
+
+function isOverloadFailure({ failureCategory, normalizedMessage, statusCode }) {
+  const lower = String(normalizedMessage || '').toLowerCase()
+  if (statusCode === 529 || statusCode === 503) return true
+  if (failureCategory === 'rate_limit_error' && statusCode === 429) return true
+  if (lower.includes('overloaded') || lower.includes('overload') || lower.includes('server is busy') || lower.includes('capacity')) return true
+  return false
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function providerSupportsMimeType(provider, mimeType) {
@@ -1201,7 +1232,63 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         ],
       }
     } catch (error) {
-      const firstFailureCategory = getFailureCategory(normalizeProviderError(error, attemptHistory))
+      let normalizedMessage = normalizeProviderError(error, attemptHistory)
+      let failureCategory = getFailureCategory(normalizedMessage)
+      let statusCode = extractStatusCodeFromError(error)
+      const retryBackoffMs = [1000, 2000]
+      const overloadFailure = isOverloadFailure({ failureCategory, normalizedMessage, statusCode })
+
+      if (overloadFailure) {
+        let retryError = error
+        let overloadRecovered = false
+        for (let retryIndex = 0; retryIndex < retryBackoffMs.length; retryIndex += 1) {
+          await sleep(retryBackoffMs[retryIndex])
+          try {
+            const adapter = adapters[entry.provider] || analyzeWithAnthropic
+            const retryResponse = await adapter(cleanedBase64, mimeType, filename, {
+              apiKey: entry.apiKey,
+              model: entry.model,
+              keyLabel: entry.keyLabel,
+              providerSource: entry.source,
+              systemPromptConfig,
+              jobDescriptionContext: options.jobDescriptionContext || null,
+              compactMode,
+              promptTextOverride: null,
+            })
+            overloadRecovered = true
+            return {
+              ...retryResponse,
+              attempts: [
+                ...attemptHistory,
+                createAttemptRecord({
+                  success: true,
+                  provider: entry.provider,
+                  keyLabel: entry.keyLabel,
+                  model: retryResponse.model,
+                  providerSource: entry.source,
+                  promptVersion: retryResponse.promptVersion,
+                  promptIsDefaultFallback: retryResponse.promptIsDefaultFallback,
+                  tokenUsage: retryResponse.tokenUsage,
+                  mode: compactMode ? 'minimal' : 'compact',
+                  retryPolicy: `overload_backoff_${retryBackoffMs.join('->')}ms`,
+                  retryReason: 'overload_retried_same_provider_model_key',
+                  statusCode,
+                }),
+              ],
+            }
+          } catch (retryAttemptError) {
+            retryError = retryAttemptError
+          }
+        }
+        if (!overloadRecovered) {
+          error = retryError
+          normalizedMessage = normalizeProviderError(error, attemptHistory)
+          failureCategory = getFailureCategory(normalizedMessage)
+          statusCode = extractStatusCodeFromError(error)
+        }
+      }
+
+      const firstFailureCategory = failureCategory
       if (entry.provider === 'anthropic' && firstFailureCategory === 'response_truncated_error' && compactMode === false) {
         try {
           const adapter = adapters[entry.provider] || analyzeWithAnthropic
@@ -1227,8 +1314,6 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         }
       }
       lastError = error
-      const normalizedMessage = normalizeProviderError(error, attemptHistory)
-      const failureCategory = getFailureCategory(normalizedMessage)
       const failureReason = sanitizeSnippet(String(error?.message || 'unknown_error'), 220)
       attemptHistory.push(createAttemptRecord({
         success: false,
@@ -1246,11 +1331,16 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         tokenBudgetAttempts: Array.isArray(error?.tokenBudgetAttempts) ? error.tokenBudgetAttempts : [],
         failureCategory,
         failureReason,
+        retryPolicy: overloadFailure ? `overload_backoff_${retryBackoffMs.join('->')}ms` : null,
+        retryReason: overloadFailure ? 'overload_retries_exhausted' : null,
+        statusCode,
       }))
       if (failureCategory === 'response_truncated_error' && isFallbackDisabledOnTruncation()) {
         throw createTerminalProviderError(error, attemptHistory)
       }
-      if (failureCategory === 'billing_quota_error') {
+      if (overloadFailure) {
+        console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} overloaded/capacity (${statusCode || 'unknown'}); retries exhausted, failing over.`, error.message)
+      } else if (failureCategory === 'billing_quota_error') {
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} quota/billing failed; immediate failover.`, error.message)
       } else if (failureCategory === 'response_format_error') {
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} response format failed after repair retry; failing over.`, error.message)
