@@ -272,6 +272,10 @@ export function resolveActiveCandidateScore(candidate = {}) {
     candidate?.score,
     candidate?.profile_score,
     candidate?.scoreBreakdown?.overall,
+    candidate?.overall_score,
+    candidate?.overallScore,
+    candidate?.total_score,
+    candidate?.totalScore,
   ]
 
   for (const rawScore of possibleScores) {
