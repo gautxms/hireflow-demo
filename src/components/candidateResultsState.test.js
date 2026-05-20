@@ -152,6 +152,16 @@ test('no-diff gate: buildCandidateRenderContract score-related fields are identi
   )
 })
 
+
+test('sanitizeExpandedCandidate preserves numeric matchScore for score resolution compatibility', () => {
+  const sanitized = sanitizeExpandedCandidate({
+    matchScore: 87,
+  })
+
+  assert.equal(sanitized.matchScore, 87)
+  assert.equal(resolveActiveCandidateScore(sanitized), 87)
+})
+
 test('sanitizeExpandedCandidate strictly defaults arrays, nested objects, and display fields', () => {
   const sanitized = sanitizeExpandedCandidate({
     name: { first: 'Sam' },

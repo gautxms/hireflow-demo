@@ -416,9 +416,11 @@ export function sanitizeExpandedCandidate(candidate = {}) {
       soft_skills: toStringArray(skillsStructured.soft_skills),
     },
     scoreBreakdown,
-    matchScore: {
-      ...toPlainObject(source.matchScore),
-      reason: toDisplayText(source?.matchScore?.reason, ''),
-    },
+    matchScore: typeof source.matchScore === 'number'
+      ? source.matchScore
+      : {
+        ...toPlainObject(source.matchScore),
+        reason: toDisplayText(source?.matchScore?.reason, ''),
+      },
   }
 }
