@@ -128,11 +128,13 @@ export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
   const page = parsePositiveInteger(query.page, 1)
   const pageSize = parsePositiveInteger(query.pageSize, totalCount > 0 ? totalCount : 1)
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const startIndex = (page - 1) * pageSize
+  const paginatedCandidates = profiles.slice(startIndex, startIndex + pageSize)
   const sortBy = normalizeSortBy(query.sortBy)
   const sortDirection = normalizeSortDirection(query.sortDirection)
 
   return {
-    candidates: profiles,
+    candidates: paginatedCandidates,
     total: totalCount,
     totalCount,
     page,

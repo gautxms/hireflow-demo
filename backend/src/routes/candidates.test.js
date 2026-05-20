@@ -35,4 +35,5 @@ test('buildDirectoryResponse honors provided pagination and sort params', () => 
   assert.equal(response.totalPages, 3)
   assert.equal(response.sortBy, 'name')
   assert.equal(response.sortDirection, 'asc')
+  assert.deepEqual(response.candidates, [{ resumeId: '3' }, { resumeId: '4' }])
 })
