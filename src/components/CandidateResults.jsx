@@ -767,6 +767,31 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
 
+  const openCandidateResumeInNewTab = useCallback(async (candidate) => {
+    const resumeId = resolveCandidateResumeUuid(candidate)
+    if (!resumeId) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/resumes/${encodeURIComponent(resumeId)}/resume`, {
+        method: 'GET',
+        headers: authHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error('Unable to open candidate resume')
+      }
+
+      const fileBlob = await response.blob()
+      const fileUrl = URL.createObjectURL(fileBlob)
+      window.open(fileUrl, '_blank', 'noopener,noreferrer')
+      setTimeout(() => URL.revokeObjectURL(fileUrl), 30_000)
+    } catch (error) {
+      setResultsError(error.message || 'Unable to open candidate resume')
+    }
+  }, [authHeaders])
+
   useEffect(() => {
     if (!shortlistV2Enabled) {
       return
