@@ -73,7 +73,10 @@ class CandidateDetailErrorBoundary extends React.Component {
         <div id="detail-drawer" className="detail-drawer" role="status" aria-live="polite">
           <div className="dd-body">
             <div className="dd-col">
-              <p className="dd-summary">Candidate details are temporarily unavailable for this profile. Please close this drawer and open another candidate.</p>
+              <p className="dd-summary">This candidate details payload is incompatible. Try another candidate.</p>
+              <div className="candidate-results-page__state-actions">
+                <button className="touch-target page-btn" type="button" onClick={this.props.onBackToResults}>Back to Results</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1335,6 +1338,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       candidatePayloadShape={candidatePayloadShape}
       candidateFieldTypeSummary={candidateFieldTypeSummary}
       selectedCandidateKey={candidate._bulkKey}
+      onBackToResults={() => setExpandedId(null)}
     >
       <div id="detail-drawer" className="detail-drawer">
       <div className="dd-header">
@@ -1526,9 +1530,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
 
       {isExpandedCandidateMissing && (
-        <p className="candidate-results-page__empty-note" role="status">
-          Candidate details are unavailable for this entry. Select another candidate from the list.
-        </p>
+        <div className="candidate-results-page__state-wrap" role="status">
+          <h2 className="candidate-results-page__state-title candidate-results-page__state-title--compact">Candidate details unavailable</h2>
+          <p className="candidate-results-page__state-copy">This candidate details payload is incompatible. Try another candidate.</p>
+          <div className="candidate-results-page__state-actions">
+            <button className="touch-target candidate-results-page__back-button" type="button" onClick={onBack}>
+              <ChevronLeft size={14} aria-hidden="true" />
+              Back to Analyses
+            </button>
+            <button className="touch-target page-btn" type="button" onClick={() => setExpandedId(null)}>Back to Results</button>
+          </div>
+        </div>
       )}
 
       {visibleCandidates.length === 0 && (
