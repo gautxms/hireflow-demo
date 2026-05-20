@@ -51,3 +51,22 @@ test('CandidateResults title contract: analysis title does not fall back to job 
     /const candidateFields = \[\s*firstCandidate\?\.analysisName,\s*firstCandidate\?\.analysisTitle,\s*firstCandidate\?\.analysis_name,\s*\]/s,
   )
 })
+
+
+test('click-path regression: malformed expanded candidate only shows inline fallback note and keeps list rendering', () => {
+  assert.match(
+    candidateResultsSource,
+    /\{isExpandedCandidateMissing && \(\s*<p className="candidate-results-page__empty-note" role="status">\s*Candidate details are unavailable for this entry\. Select another candidate from the list\./s,
+  )
+  assert.doesNotMatch(candidateResultsSource, /Back to Analyses/)
+})
+
+test('click-path regression: legacy matchScore numeric and object payload variants are both supported in score resolution', () => {
+  assert.match(candidateResultsSource, /candidate\?\.matchScore\?\.score/)
+  assert.match(candidateResultsSource, /candidate\?\.matchScore\s*\?\?/)
+})
+
+test('click-path regression: crash panel copy is never used for candidate click interactions', () => {
+  assert.doesNotMatch(candidateResultsSource, /We could not render these results\./)
+  assert.doesNotMatch(candidateResultsSource, /Please return to Analyses or retry\./)
+})
