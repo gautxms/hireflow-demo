@@ -77,3 +77,56 @@ test('normalizeCompactAnalysis preserves rich candidate fields in compact pipeli
   assert.deepEqual(candidate.strengths, fixtureCandidate.strengths)
   assert.deepEqual(candidate.considerations, fixtureCandidate.considerations)
 })
+
+
+test('normalizeCompactAnalysis maps considerations only without duplicating concerns', () => {
+  const result = normalizeCompactAnalysis({
+    candidates: [{ considerations: ['Probe system design depth'] }],
+  })
+
+  assert.deepEqual(result.candidates[0].considerations, ['Probe system design depth'])
+  assert.deepEqual(result.candidates[0].concerns, [])
+})
+
+test('normalizeCompactAnalysis maps concerns-only payloads into considerations for compatibility', () => {
+  const result = normalizeCompactAnalysis({
+    candidates: [{ concerns: ['No production ownership evidence'] }],
+  })
+
+  assert.deepEqual(result.candidates[0].concerns, ['No production ownership evidence'])
+  assert.deepEqual(result.candidates[0].considerations, ['No production ownership evidence'])
+})
+
+test('normalizeCompactAnalysis maps concerns from fit_assessment.risks_or_gaps when candidate.concerns is missing', () => {
+  const result = normalizeCompactAnalysis({
+    candidates: [{
+      considerations: ['Ask about stakeholder conflict handling'],
+      fit_assessment: { risks_or_gaps: ['No Terraform experience listed'] },
+    }],
+  })
+
+  assert.deepEqual(result.candidates[0].considerations, ['Ask about stakeholder conflict handling'])
+  assert.deepEqual(result.candidates[0].concerns, ['No Terraform experience listed'])
+})
+
+test('normalizeCompactAnalysis keeps concerns and considerations separate when both exist', () => {
+  const result = normalizeCompactAnalysis({
+    candidates: [{
+      considerations: ['Ask for largest dataset handled'],
+      concerns: ['Frequent short tenures over last 2 years'],
+      fit_assessment: { risks_or_gaps: ['Should not override candidate.concerns'] },
+    }],
+  })
+
+  assert.deepEqual(result.candidates[0].considerations, ['Ask for largest dataset handled'])
+  assert.deepEqual(result.candidates[0].concerns, ['Frequent short tenures over last 2 years'])
+})
+
+test('normalizeCompactAnalysis defaults both concerns and considerations to arrays when missing', () => {
+  const result = normalizeCompactAnalysis({
+    candidates: [{}],
+  })
+
+  assert.deepEqual(result.candidates[0].considerations, [])
+  assert.deepEqual(result.candidates[0].concerns, [])
+})
