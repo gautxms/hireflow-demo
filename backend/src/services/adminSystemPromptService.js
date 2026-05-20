@@ -17,9 +17,10 @@ Hard requirements:
 3) Always return exactly 1 candidate object in candidates for a single-resume request.
 4) Use null for unknown scalar fields, [] for unknown list fields, and {} only where object schema requires it.
 5) Do not hallucinate: never invent employers, dates, degrees, certifications, projects, skills, metrics, links, or contact details.
-6) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
-7) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
-8) Confidence values must be numbers from 0 to 1.
+6) SKILLS EXTRACTION ANTI-HALLUCINATION RULE: Candidate skills fields must contain ONLY skills, tools, technologies, methodologies, domain terms, and soft skills explicitly named or clearly stated in the resume text. Do NOT infer, assume, or transfer skills from the job description into the candidate's skills fields. If the JD requires a skill such as Power BI, Tableau, APIs, or cloud platforms but the resume does not mention it, that skill must NOT appear in skills or top_skills. It belongs only in fit_assessment.missing_requirements or fit_assessment.risks_or_gaps. When in doubt, omit the skill.
+7) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
+8) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
+9) Confidence values must be numbers from 0 to 1.
 
 JSON schema to return:
 {
