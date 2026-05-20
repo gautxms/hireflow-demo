@@ -68,6 +68,44 @@ const candidateFilterFieldConfig = {
   },
 }
 
+
+function getScoreLabel(candidate) {
+  if (candidate.profileScore !== null && candidate.profileScore !== undefined) {
+    return String(candidate.profileScore)
+  }
+
+  if (candidate.normalized?.profileScore === null || candidate.parseHints?.scoreNullable) {
+    return 'Score pending'
+  }
+
+  return 'Score pending'
+}
+
+function getExperienceLabel(candidate) {
+  if (candidate.yearsExperience !== null && candidate.yearsExperience !== undefined) {
+    return `${candidate.yearsExperience} years`
+  }
+
+  if (candidate.normalized?.yearsExperience === null || candidate.parseHints?.experienceNullable) {
+    return 'Experience unavailable'
+  }
+
+  return 'Experience unavailable'
+}
+
+function getSkillsLabel(candidate) {
+  const listedSkills = Array.isArray(candidate.skills) ? candidate.skills.slice(0, 6) : []
+  if (listedSkills.length > 0) {
+    return listedSkills.join(', ')
+  }
+
+  if (candidate.normalized?.skills === null || candidate.parseHints?.skillsNullable) {
+    return 'Not extracted'
+  }
+
+  return 'Not extracted'
+}
+
 function formatDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -289,9 +327,9 @@ export default function CandidatesPage() {
               Select
             </label>
             <h2>{candidate.name || 'Candidate'}</h2>
-            <p><strong>Score:</strong> {candidate.profileScore ?? 'N/A'}</p>
-            <p><strong>Experience:</strong> {candidate.yearsExperience ?? 'N/A'} years</p>
-            <p><strong>Skills:</strong> {(candidate.skills || []).slice(0, 6).join(', ') || 'None listed'}</p>
+            <p><strong>Score:</strong> {getScoreLabel(candidate)}</p>
+            <p><strong>Experience:</strong> {getExperienceLabel(candidate)}</p>
+            <p><strong>Skills:</strong> {getSkillsLabel(candidate)}</p>
             <p><strong>Tags:</strong> {(candidate.tags || []).join(', ') || 'No tags'}</p>
             <p><strong>Analysis:</strong> {formatDate(candidate.sourceUpdatedAt)}</p>
             <p><strong>Job:</strong> {candidate.associatedJob?.title || 'No linked job description'}</p>
