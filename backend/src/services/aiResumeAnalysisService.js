@@ -665,8 +665,6 @@ export function buildProviderAttemptPlan(credentials = {}) {
         model: candidate.model || MODEL,
         source: candidate.source || 'unknown',
       })
-      truncationError.tokenBudgetAttempts = attemptedTokenBudgets
-      throw truncationError
     }
   }
 
