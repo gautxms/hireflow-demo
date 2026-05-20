@@ -13,6 +13,7 @@ import {
   resolveActiveCandidateScore,
   resolveCandidateKey,
   resolveCandidateResumeUuid,
+  sanitizeExpandedCandidate,
   toDisplayText,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
@@ -1288,7 +1289,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       </div>
 
             {expandedCandidate && (() => {
-  const candidate = expandedCandidate
+  const candidate = sanitizeExpandedCandidate(expandedCandidate)
   const score = activeScore(candidate)
   const tier = getScoreTone(score)
   const displayScore = formatScore(score)

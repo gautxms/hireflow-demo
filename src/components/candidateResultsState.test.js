@@ -12,6 +12,7 @@ import {
   resolveCandidateResumeUuid,
   resolveCandidateKey,
   resolveActiveCandidateScore,
+  sanitizeExpandedCandidate,
   toDisplayText,
   toSafeScore,
 } from './candidateResultsState.js'
@@ -149,4 +150,35 @@ test('no-diff gate: buildCandidateRenderContract score-related fields are identi
       topSkills: modernContract.topSkills,
     },
   )
+})
+
+
+test('sanitizeExpandedCandidate preserves numeric matchScore for score resolution compatibility', () => {
+  const sanitized = sanitizeExpandedCandidate({
+    matchScore: 87,
+  })
+
+  assert.equal(sanitized.matchScore, 87)
+  assert.equal(resolveActiveCandidateScore(sanitized), 87)
+})
+
+test('sanitizeExpandedCandidate strictly defaults arrays, nested objects, and display fields', () => {
+  const sanitized = sanitizeExpandedCandidate({
+    name: { first: 'Sam' },
+    summary: 123,
+    skills: { primary: 'React' },
+    top_skills: [null, ' React '],
+    fit_assessment: { missing: 'TypeScript', reason: ['good'] },
+    scoreBreakdown: new Map([['overall', 82]]),
+    experience: [{ title: 'Engineer' }, null],
+  })
+
+  assert.equal(sanitized.name, 'Candidate')
+  assert.equal(sanitized.summary, '123')
+  assert.deepEqual(sanitized.skills, [])
+  assert.deepEqual(sanitized.top_skills, ['React'])
+  assert.deepEqual(sanitized.fit_assessment.missing, [])
+  assert.equal(sanitized.fit_assessment.reason, 'good')
+  assert.deepEqual(sanitized.scoreBreakdown, {})
+  assert.deepEqual(sanitized.experience, [{ title: 'Engineer' }, {}])
 })
