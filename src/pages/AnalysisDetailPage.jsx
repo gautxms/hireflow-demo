@@ -264,12 +264,24 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
           </section>
         )}
 
-        <CandidateResults
-          candidates={candidateResultsPayload}
-          onBack={() => {
-            window.location.assign('/analyses')
+        <ResultsErrorBoundary
+          analysisId={analysisId}
+          candidateCount={candidateCount}
+          normalizationStats={{
+            droppedCount: candidateResultsPayload.droppedCount,
+            inputCount: candidateResultsPayload.inputCount,
+            validCount: candidateResultsPayload.validCount,
           }}
-        />
+          candidatePayloadShape={candidatePayloadShape}
+          candidateFieldTypeSummary={candidateFieldTypeSummary}
+        >
+          <CandidateResults
+            candidates={candidateResultsPayload}
+            onBack={() => {
+              window.location.assign('/analyses')
+            }}
+          />
+        </ResultsErrorBoundary>
       </section>
     </main>
   )
