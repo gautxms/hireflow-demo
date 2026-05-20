@@ -345,6 +345,7 @@ router.get('/', requireAuth, async (req, res) => {
         failedItems: failedItemsByAnalysis.get(String(row.id)) || [],
         fileCount: summary.total,
         files: filesByAnalysis.get(String(row.id)) || [],
+        filesPreview: (filesByAnalysis.get(String(row.id)) || []).slice(0, 5),
         jobDescriptionTitle: row.job_description_title || null,
       }
     })
