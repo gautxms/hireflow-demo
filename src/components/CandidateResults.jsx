@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle, ChevronLeft, CircleHelp, FileText, TriangleAlert, BriefcaseBusiness, MapPin, TrendingUp } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ChevronLeft, CircleHelp, ExternalLink, FileText, Mail, Minus, Plus, Share2, Star, Tag, Trash2, TriangleAlert, Upload, BriefcaseBusiness, MapPin, TrendingUp, X } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -1034,7 +1034,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="shortlist-panel" role="dialog" aria-modal="true" aria-label="Candidate shortlists">
             <div className="sp-header">
               <div className="sp-title">Shortlists</div>
-              <button type="button" className="touch-target sp-close" onClick={() => setShortlistOpen(false)}>✕</button>
+              <button type="button" className="touch-target sp-close" onClick={() => setShortlistOpen(false)} aria-label="Close shortlist panel"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
             </div>
 
             <ShortlistManager
@@ -1062,20 +1062,20 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
       {selectedCandidates.length > 0 && (
         <BulkActions selectedCount={selectedCandidates.length}>
-          <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button">📥 Export CSV</button>
-          <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button">📤 Export to Email</button>
-          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button">⭐ Add to Shortlist</button>
-          <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button">📧 Send Feedback</button>
-          <button className="touch-target bulk-btn" onClick={createShareLink} type="button">🔗 Share View</button>
-          <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button">🗑️ Delete</button>
+          <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button"><Upload size={18} strokeWidth={1.5} aria-hidden="true" />Export CSV</button>
+          <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
+          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button"><Star size={18} strokeWidth={1.5} aria-hidden="true" />Add to Shortlist</button>
+          <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
+          <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
+          <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button"><Trash2 size={18} strokeWidth={1.5} aria-hidden="true" />Delete</button>
           <input
             className="touch-target candidate-results-page__tag-input"
             value={tagDraft}
             onChange={(event) => setTagDraft(event.target.value)}
             placeholder="tag1, tag2"
           />
-          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button">🏷️ Add Tags</button>
-          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button">➖ Remove Tags</button>
+          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button"><Tag size={18} strokeWidth={1.5} aria-hidden="true" />Add Tags</button>
+          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button"><Minus size={18} strokeWidth={1.5} aria-hidden="true" />Remove Tags</button>
         </BulkActions>
       )}
 
@@ -1181,7 +1181,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     safeText(candidate.seniority_level, 'Seniority unavailable'),
                   ].filter(Boolean).join(' · ')}
                 </span>
-                <span className="rc-expand-hint" role="button" aria-label={isExpanded ? 'Collapse candidate details' : 'Expand candidate details'}>
+                <span className="rc-expand-hint" aria-hidden="true">
                   {isExpanded ? 'Collapse details' : 'Expand details'}
                 </span>
               </div>
@@ -1252,9 +1252,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <div className="dd-name">{toDisplayText(candidate.name)}</div>
             <div className="dd-subtitle">{candidateTitle}</div>
             <div className="dd-meta-facts">
-              <span className="dd-meta-item"><BriefcaseBusiness size={16} strokeWidth={1.5} aria-hidden="true" />{experienceLabel}</span>
-              <span className="dd-meta-item"><MapPin size={16} strokeWidth={1.5} aria-hidden="true" />{locationLabel}</span>
-              <span className="dd-meta-item"><TrendingUp size={16} strokeWidth={1.5} aria-hidden="true" />{seniorityLabel}</span>
+              <span className="dd-meta-item"><BriefcaseBusiness size={18} strokeWidth={1.5} aria-hidden="true" />{experienceLabel}</span>
+              <span className="dd-meta-item"><MapPin size={18} strokeWidth={1.5} aria-hidden="true" />{locationLabel}</span>
+              <span className="dd-meta-item"><TrendingUp size={18} strokeWidth={1.5} aria-hidden="true" />{seniorityLabel}</span>
             </div>
           </div>
         </div>
@@ -1279,7 +1279,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             View full profile →
           </button>
         </div>
-        <button className="dd-close" type="button" onClick={() => setExpandedId(null)}>✕</button>
+        <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
       </div>
 
       <div className="dd-body">

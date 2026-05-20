@@ -1831,3 +1831,85 @@
   .rc-checkbox-label { display: none; }
   .rc-checkbox-wrap { padding-right: 6px; }
 }
+
+/* Candidate results constitution/accessibility polish */
+.candidate-results-page,
+.candidate-results-page button,
+.candidate-results-page input,
+.candidate-results-page select,
+.candidate-results-page textarea,
+.candidate-results-page a { font-family: var(--font-body, 'DM Sans', sans-serif); }
+
+.candidate-results-page__state-title,
+.rc-name,
+.dd-name { font-family: var(--font-heading, 'Syne', sans-serif); font-weight: 700; }
+
+.rc-score-num,
+.dd-score { font-family: var(--font-heading, 'Syne', sans-serif); font-weight: 800; }
+
+.dd-col-label,
+.ranking-stat-label { text-transform: uppercase; letter-spacing: 0.08em; color: var(--hf-text-4); }
+
+.candidate-results-page a,
+.dd-fact-link,
+.profile-contact-item { color: var(--hf-info); }
+
+.candidate-results-page a:visited,
+.dd-fact-link:visited,
+.profile-contact-item:visited { color: var(--hf-info); }
+
+.bulk-btn,
+.page-btn,
+.dd-close,
+.sp-close,
+.candidate-results-page__back-button,
+.page-size-select,
+.rc-checkbox,
+.results-select-all input,
+.dd-btn-ghost,
+.dd-btn-primary {
+  outline: none;
+}
+
+.bulk-btn:focus-visible,
+.page-btn:focus-visible,
+.dd-close:focus-visible,
+.sp-close:focus-visible,
+.candidate-results-page__back-button:focus-visible,
+.page-size-select:focus-visible,
+.rc-checkbox:focus-visible,
+.results-select-all input:focus-visible,
+.dd-btn-ghost:focus-visible,
+.dd-btn-primary:focus-visible,
+.result-card:focus-visible {
+  outline: 2px solid var(--hf-lime);
+  outline-offset: 3px;
+}
+
+.dd-header-actions,
+.rc-meta,
+.rc-rationale,
+.rc-skill,
+.rc-skill-more,
+.dd-summary,
+.dd-meta-item,
+.dd-resume-file,
+.dd-resume-meta,
+.dd-gap-label,
+.dd-gap-type,
+.dd-analysis-item,
+.dd-list-item span { overflow-wrap: anywhere; }
+
+.rc-fit--strong, .dd-fit--strong { color: var(--hf-score-strong); }
+.rc-fit--possible, .dd-fit--possible { color: var(--hf-score-possible); }
+.rc-fit--low, .dd-fit--low { color: var(--hf-score-low); }
+
+.dd-top-skill--warn { color: var(--hf-score-possible); border-color: color-mix(in srgb, var(--hf-score-possible) 40%, transparent); background: color-mix(in srgb, var(--hf-score-possible) 12%, transparent); }
+.dd-top-skill--warn-soft { color: var(--hf-warning); border-color: color-mix(in srgb, var(--hf-warning) 35%, transparent); background: color-mix(in srgb, var(--hf-warning) 8%, transparent); }
+
+@media (max-width: 900px) {
+  .dd-header { gap: 12px; }
+  .dd-header-actions { width: 100%; flex-wrap: wrap; }
+  .dd-header-actions .hf-btn { flex: 1 1 180px; }
+  .dd-close { margin-left: auto; }
+}
