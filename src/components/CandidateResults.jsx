@@ -1428,12 +1428,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             type="button"
             onClick={(event) => {
               event.stopPropagation()
-              const candidateProfileId = String(resolveCandidateResumeUuid(candidate) || '').trim()
-              if (!candidateProfileId) {
-                setResultsError('Resume unavailable for this candidate. Please retry from Analyses or open another profile.')
-                return
-              }
-              window.location.href = `/candidates/${candidateProfileId}`
+              openCandidateResumeInNewTab(candidate)
             }}
           >
             <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
@@ -1588,7 +1583,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <FileText size={18} strokeWidth={1.5} />
             <div>
               <div>{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
-              <div className="dd-resume-meta">Use View full profile to open this resume.</div>
+              <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View resume</button>
             </div>
           </div>
         </div>

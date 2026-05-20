@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Buffer } from 'node:buffer'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { matchCandidatesToJob } from '../services/matchingService.js'
@@ -10,6 +11,28 @@ import { syncCandidateProfilesForUser } from '../services/candidateProfilesServi
 import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 
 const router = Router()
+
+const s3Bucket = process.env.AWS_S3_BUCKET
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+    ? {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      }
+    : undefined,
+})
+
+async function streamToBuffer(streamOrBuffer) {
+  if (Buffer.isBuffer(streamOrBuffer)) return streamOrBuffer
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    streamOrBuffer.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    streamOrBuffer.on('end', () => resolve(Buffer.concat(chunks)))
+    streamOrBuffer.on('error', reject)
+  })
+}
+
 
 function normalizeString(value) {
   const normalized = String(value || '').trim()
@@ -517,6 +540,53 @@ router.post('/tags/bulk', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('[Candidates] Failed to mutate tags:', error)
     return res.status(500).json({ error: 'Unable to update candidate tags' })
+  }
+})
+
+
+router.get('/:resumeId/resume', requireAuth, async (req, res) => {
+  const resumeId = normalizeString(req.params.resumeId)
+  if (!resumeId) {
+    return res.status(400).json({ error: 'resumeId is required' })
+  }
+
+  if (!s3Bucket) {
+    return res.status(503).json({ error: 'Resume file storage is not configured' })
+  }
+
+  try {
+    const uploadResult = await pool.query(
+      `SELECT assembled_s3_key, filename, mime_type
+       FROM upload_chunks
+       WHERE user_id = $1
+         AND resume_id = $2
+         AND status = 'completed'
+         AND assembled_s3_key IS NOT NULL
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [req.userId, resumeId],
+    )
+
+    const upload = uploadResult.rows[0]
+    if (!upload?.assembled_s3_key) {
+      return res.status(404).json({ error: 'Resume file not found for this candidate' })
+    }
+
+    const objectResponse = await s3Client.send(new GetObjectCommand({
+      Bucket: s3Bucket,
+      Key: upload.assembled_s3_key,
+    }))
+
+    const fileBuffer = await streamToBuffer(objectResponse.Body)
+    const filename = normalizeString(upload.filename) || `resume-${resumeId}`
+    const contentType = normalizeString(upload.mime_type) || objectResponse.ContentType || 'application/octet-stream'
+
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`)
+    return res.send(fileBuffer)
+  } catch (error) {
+    console.error('[Candidates] Failed to open candidate resume:', error)
+    return res.status(500).json({ error: 'Unable to load candidate resume file' })
   }
 })
 
