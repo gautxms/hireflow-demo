@@ -60,18 +60,26 @@ function toCandidateResultsPayload(analysis) {
     return normalized
   }
 
-  const resolveCandidateScore = (rawCandidate) => (
-    rawCandidate?.matchScore?.score
-    ?? rawCandidate?.matchScore
-    ?? rawCandidate?.score
-    ?? rawCandidate?.profile_score
-    ?? rawCandidate?.scoreBreakdown?.overall
-    ?? rawCandidate?.overall_score
-    ?? rawCandidate?.overallScore
-    ?? rawCandidate?.total_score
-    ?? rawCandidate?.totalScore
-    ?? 0
-  )
+  const resolveCandidateScore = (rawCandidate) => {
+    const scoreCandidates = [
+      rawCandidate?.matchScore?.score,
+      rawCandidate?.matchScore,
+      rawCandidate?.score,
+      rawCandidate?.profile_score,
+      rawCandidate?.scoreBreakdown?.overall,
+      rawCandidate?.overall_score,
+      rawCandidate?.overallScore,
+      rawCandidate?.total_score,
+      rawCandidate?.totalScore,
+    ]
+
+    for (const candidateScore of scoreCandidates) {
+      const numeric = Number(candidateScore)
+      if (Number.isFinite(numeric)) return numeric
+    }
+
+    return 0
+  }
 
   const normalizeCandidateForResults = (raw, index) => {
     if (!raw || typeof raw !== 'object') return null

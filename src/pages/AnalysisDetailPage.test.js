@@ -118,6 +118,27 @@ test('toCandidateResultsPayload derives score from profile_score when score is a
   assert.equal(payload.candidates[0].scoreBreakdown.overall, 52)
 })
 
+
+test('toCandidateResultsPayload ignores non-numeric matchScore objects and uses numeric score fallbacks', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-matchscore-object-fallback',
+    candidates: [
+      {
+        id: 'fallback-score',
+        name: 'Fallback Score Candidate',
+        matchScore: { overall: 78 },
+        score: 64,
+        profile_score: 52,
+      },
+    ],
+  })
+
+  assert.equal(payload.candidates.length, 1)
+  assert.equal(payload.candidates[0].score, 64)
+  assert.equal(payload.candidates[0].matchScore, 64)
+  assert.equal(payload.candidates[0].scoreBreakdown.overall, 64)
+})
+
 test('e2e: analysis detail terminal response with one malformed candidate still renders results and non-prod debug banner', () => {
   const analysisResponse = {
     id: 'analysis-e2e-partial',
