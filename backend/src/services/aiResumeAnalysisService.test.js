@@ -347,7 +347,7 @@ test('analyzeWithOpenAI surfaces provider status failures before parse fallback'
   await assert.rejects(
     () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
       apiKey: 'oa-key',
-      model: 'gpt-5-nano-2025-08-07',
+      model: 'gpt-5-mini-2026-01-15',
       fetchImpl: async () => ({
         ok: true,
         json: async () => ({
@@ -365,7 +365,7 @@ test('analyzeWithOpenAI retries with higher max_output_tokens for incomplete res
   let callCount = 0
   const response = await analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
     apiKey: 'oa-key',
-    model: 'gpt-5-nano-2025-08-07',
+    model: 'gpt-5-mini-2026-01-15',
     fetchImpl: async (_url, request) => {
       callCount += 1
       const body = JSON.parse(request.body)
@@ -402,7 +402,7 @@ test('analyzeWithOpenAI surfaces truncated error when all max_output_tokens retr
   await assert.rejects(
     () => analyzeWithOpenAI('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
       apiKey: 'oa-key',
-      model: 'gpt-5-nano-2025-08-07',
+      model: 'gpt-5-mini-2026-01-15',
       fetchImpl: async (_url, request) => {
         callCount += 1
         const body = JSON.parse(request.body)
@@ -634,6 +634,49 @@ test('analyzeResumeWithConfiguredFallback can disable fallback on truncation', a
   delete process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION
 })
 
+
+
+test('analyzeResumeWithConfiguredFallback uses configured OpenAI model defaults for compact+truncation-safe escalation', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+      openai: {
+        fallback: { apiKey: 'oa-key', model: 'gpt-5-mini-2026-01-15', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  const openAiModes = []
+  const response = await analyzeResumeWithConfiguredFallback('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+    credentials,
+    systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+    analyzeWithAnthropic: async () => {
+      throw new Error('response_truncated_error::{"technicalDetails":"anthropic truncated"}')
+    },
+    analyzeWithOpenAI: async (_file, _mime, _name, options) => {
+      openAiModes.push(options.compactMode ? 'COMPACT_FULL' : 'BARE_MINIMUM')
+      if (options.compactMode) {
+        throw new Error('response_truncated_error::{"technicalDetails":"compact truncated"}')
+      }
+      return {
+        result: { candidates: [{ id: 'cand-openai-bare-minimum' }] },
+        provider: 'openai-fallback',
+        model: options.model,
+        tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+        mode: 'bare_minimum',
+      }
+    },
+  })
+
+  assert.equal(response.result.candidates[0].id, 'cand-openai-bare-minimum')
+  assert.deepEqual(openAiModes, ['COMPACT_FULL', 'BARE_MINIMUM'])
+  assert.equal(response.attempts.at(-1).provider, 'openai-fallback')
+  assert.equal(response.attempts.at(-1).success, true)
+})
 test('analyzeResumeWithConfiguredFallback counts only executed attempts against cap', async () => {
   process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = '1'
   const credentials = {

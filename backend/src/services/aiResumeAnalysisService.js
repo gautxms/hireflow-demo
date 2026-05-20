@@ -53,7 +53,6 @@ function getMaxProviderAttemptsPerFile() {
 const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
 const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
 const CANDIDATE_COMPACT_SCHEMA_VERSION = 'compact-v2'
-const OPENAI_COMPACT_MODEL_PATTERN = /gpt-5-nano/i
 
 let claudeTokensUsed = {
   input: 0,
@@ -1179,7 +1178,18 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 
   let lastError = null
   const attemptHistory = []
-  const compactByDefaultForModel = (modelName) => OPENAI_COMPACT_MODEL_PATTERN.test(String(modelName || ''))
+  const compactByDefaultForEntry = (entry) => {
+    if (String(entry?.provider || '').toLowerCase() !== 'openai') return false
+    const providerSettings = credentials?.providers?.openai
+    if (!providerSettings || typeof providerSettings !== 'object') return false
+
+    const configuredModels = ['primary', 'fallback']
+      .map((label) => String(providerSettings?.[label]?.model || '').trim())
+      .filter(Boolean)
+
+    if (!configuredModels.length) return false
+    return configuredModels.includes(String(entry?.model || '').trim())
+  }
   const isTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
@@ -1193,7 +1203,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     if (executedProviderAttempts >= getMaxProviderAttemptsPerFile()) break
     executedProviderAttempts += 1
 
-    let compactMode = compactByDefaultForModel(entry.model)
+    let compactMode = compactByDefaultForEntry(entry)
     try {
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
       const response = await adapter(cleanedBase64, mimeType, filename, {
@@ -1289,6 +1299,33 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       }
 
       const firstFailureCategory = failureCategory
+      if (firstFailureCategory === 'response_truncated_error' && compactMode === true) {
+        try {
+          const adapter = adapters[entry.provider] || analyzeWithAnthropic
+          const response = await adapter(cleanedBase64, mimeType, filename, {
+            apiKey: entry.apiKey,
+            model: entry.model,
+            keyLabel: entry.keyLabel,
+            providerSource: entry.source,
+            systemPromptConfig,
+            jobDescriptionContext: options.jobDescriptionContext || null,
+            compactMode: false,
+          })
+          return {
+            ...response,
+            attempts: [
+              ...attemptHistory,
+              createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:compact_pass' }, failureCategory: 'response_truncated_error', failureReason: 'compact attempt truncated; bare minimum retry succeeded', mode: 'minimal' }),
+              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage, tokenBudgetAttempts: response.tokenBudgetAttempts, mode: response.mode || 'bare_minimum' }),
+            ],
+          }
+        } catch (bareMinimumRetryError) {
+          error = bareMinimumRetryError
+          normalizedMessage = normalizeProviderError(error, attemptHistory)
+          failureCategory = getFailureCategory(normalizedMessage)
+          statusCode = extractStatusCodeFromError(error)
+        }
+      }
       if (entry.provider === 'anthropic' && firstFailureCategory === 'response_truncated_error' && compactMode === false) {
         try {
           const adapter = adapters[entry.provider] || analyzeWithAnthropic
