@@ -125,6 +125,45 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
   })
 }
 
+
+
+function normalizeAttemptMode(value) {
+  const normalized = String(value || '').trim()
+  return normalized || null
+}
+
+function normalizeAttemptOutcome(attempt = {}) {
+  if (attempt?.success === true) return 'succeeded'
+  if (attempt?.success === false) return 'failed'
+  return 'unknown'
+}
+
+function buildFailureAttemptMetadata(error) {
+  const attempts = Array.isArray(error?.attempts) ? error.attempts : []
+  return attempts.map((attempt) => ({
+    provider: normalizeString(attempt?.provider),
+    model: normalizeString(attempt?.model),
+    mode: normalizeAttemptMode(attempt?.mode || attempt?.analysisMode),
+    maxTokens: normalizeNullableNumber(attempt?.maxTokens || attempt?.max_tokens),
+    outcome: normalizeAttemptOutcome(attempt),
+    failureCategory: normalizeString(attempt?.failureCategory),
+  }))
+}
+
+function buildFailureSummaryMetadata(error, { fileBufferBase64, jobDescriptionContext }) {
+  const analysisSummary = error?.analysisSummary && typeof error.analysisSummary === 'object'
+    ? error.analysisSummary
+    : {}
+
+  return {
+    usedFallback: Boolean(analysisSummary.usedFallback ?? error?.usedFallback),
+    usedEscalation: Boolean(analysisSummary.usedEscalation ?? error?.usedEscalation),
+    finalMode: normalizeAttemptMode(analysisSummary.finalMode || error?.finalMode),
+    resumeCharacterCount: Number(fileBufferBase64 ? String(fileBufferBase64).length : 0),
+    hasJobDescriptionContext: Boolean(jobDescriptionContext?.hasContext),
+  }
+}
+
 function getPreferredJobDescriptionText(row = {}) {
   const candidates = [
     row.file_text,
@@ -580,6 +619,21 @@ parseQueue.process(async (job) => {
     } catch (error) {
       const normalizedError = normalizeProviderError(error)
       const isTerminalFailure = isTerminalJobFailure(job)
+      const providerChainAttempts = buildFailureAttemptMetadata(error)
+      const providerChainSummary = buildFailureSummaryMetadata(error, {
+        fileBufferBase64: job?.data?.fileBufferBase64,
+        jobDescriptionContext: {
+          hasContext: Boolean(job?.data?.jobDescriptionId),
+        },
+      })
+      const failurePayload = {
+        error: normalizedError.normalizedMessage,
+        providerChain: {
+          attempts: providerChainAttempts,
+          summary: providerChainSummary,
+        },
+      }
+
       if (isTerminalFailure) {
         await pool.query(
           `UPDATE resumes
@@ -595,6 +649,7 @@ parseQueue.process(async (job) => {
         status: isTerminalFailure ? 'failed' : 'retrying',
         progress: isTerminalFailure ? 100 : Number(job.progress() || 0),
         error_message: normalizedError.normalizedMessage,
+        result: JSON.stringify(failurePayload),
         attempts: job.attemptsMade + 1,
       })
 
@@ -602,7 +657,7 @@ parseQueue.process(async (job) => {
         await cacheJobResult(String(job.id), {
           status: 'failed',
           progress: 100,
-          result: null,
+          result: failurePayload,
           error: normalizedError.normalizedMessage,
         })
       }
