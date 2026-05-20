@@ -167,6 +167,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     { maxItems: minimalMode ? 5 : 10, maxItemLength: 80 },
   )
   return {
+    analysis_mode: clampString(candidate?.analysis_mode || '', 40),
     id: clampString(candidate?.id || '', 120),
     name: clampString(candidate?.name || candidate?.full_name || 'Unknown Candidate', 80),
     email: clampString(candidate?.email || '', 120),
@@ -200,7 +201,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     projects: minimalMode ? [] : clampStringArray(candidate?.projects || [], { maxItems: 20, maxItemLength: 200 }),
     achievements: minimalMode ? [] : clampStringArray(candidate?.achievements || [], { maxItems: 20, maxItemLength: 200 }),
     location: clampString(candidate?.location || '', 120),
-    fit_assessment: normalizeCandidateFitAssessment(candidate?.fit_assessment),
+    fit_assessment: minimalMode ? normalizeCandidateFitAssessment(candidate?.fit_assessment) : normalizeCandidateFitAssessment(candidate?.fit_assessment),
     matchScore: normalizeCandidateMatchScore(candidate?.matchScore),
     confidence: normalizeCandidateConfidence(candidate?.confidence),
     confidenceScores: normalizeCandidateConfidence(candidate?.confidenceScores),
@@ -750,8 +751,10 @@ function buildAnalysisModeDirectives(jobDescriptionContext = null) {
   ].join('\n')
 }
 
-function buildCompactOutputInstructions({ compactMode = false, truncationSafeMode = false } = {}) {
-  const modeLabel = truncationSafeMode ? 'COMPACT_TRUNCATION_SAFE' : (compactMode ? 'COMPACT_MINIMAL' : 'COMPACT_STANDARD')
+function buildCompactOutputInstructions({ compactMode = false, truncationSafeMode = false, bareMinimumMode = false } = {}) {
+  const modeLabel = bareMinimumMode
+    ? 'BARE_MINIMUM'
+    : (truncationSafeMode ? 'COMPACT_TRUNCATION_SAFE' : (compactMode ? 'COMPACT_MINIMAL' : 'COMPACT_STANDARD'))
   return [
     `Output Mode: ${modeLabel}`,
     'Return compact JSON only. No markdown. No text before or after JSON.',
@@ -759,7 +762,9 @@ function buildCompactOutputInstructions({ compactMode = false, truncationSafeMod
     'Keep every string concise. If uncertain, return fewer items rather than longer text.',
     'Prefer empty arrays over verbose explanations.',
     'Response must complete valid JSON within the token budget.',
-    truncationSafeMode
+    bareMinimumMode
+      ? 'Return at most 2 candidates. Required per candidate: {name<=60,score,summary<=100,matchedSkills<=4,recommendation<=90,analysis_mode="bare_minimum"}. Optional only: {strengths<=1,concerns<=1,missingSkills<=2}. Omit all other fields.'
+      : truncationSafeMode
       ? 'Return at most 3 candidates. Use minimal schema only: {name,score,summary<=140,strengths<=2,concerns<=2,matchedSkills<=6,missingSkills<=3,recommendation<=120}. Omit all optional fields.'
       : (compactMode
         ? 'Return at most 5 candidates. Minimal schema per candidate: {name,score,summary<=250,strengths<=3,concerns<=3,matchedSkills<=10,missingSkills<=5,recommendation<=160}.'
@@ -881,13 +886,14 @@ export async function analyzeWithAnthropic(
   for (let index = 0; index < tokenLadder.length; index += 1) {
     const maxTokens = tokenLadder[index]
     const truncationSafeMode = index > 0
+    const bareMinimumMode = index > 1
     const outputInstructions = truncationSafeMode
-      ? buildCompactOutputInstructions({ compactMode: true, truncationSafeMode: true })
+      ? buildCompactOutputInstructions({ compactMode: true, truncationSafeMode: true, bareMinimumMode })
       : baseOutputInstructions
     const requestPrompt = `${systemPromptText}
 
 ${outputInstructions}`
-    attemptedTokenBudgets.push({ maxTokens, mode: truncationSafeMode ? 'truncation_safe' : (compactMode ? 'minimal' : 'compact') })
+    attemptedTokenBudgets.push({ maxTokens, mode: bareMinimumMode ? 'bare_minimum' : (truncationSafeMode ? 'truncation_safe' : (compactMode ? 'minimal' : 'compact')) })
 
     response = await client.messages.create({
       model,
@@ -1090,13 +1096,14 @@ export async function analyzeWithOpenAI(
   for (let index = 0; index < tokenLadder.length; index += 1) {
     const maxOutputTokens = tokenLadder[index]
     const retryingAfterTokenCeiling = index > 0
+    const bareMinimumMode = index > 1
     const retryOutputInstructions = retryingAfterTokenCeiling
-      ? buildCompactOutputInstructions({ compactMode: true, truncationSafeMode: true })
+      ? buildCompactOutputInstructions({ compactMode: true, truncationSafeMode: true, bareMinimumMode })
       : baseOutputInstructions
     const requestPrompt = `${systemPromptText}\n\n${retryOutputInstructions}`
 
     attemptedMaxOutputTokens = maxOutputTokens
-    attemptedTokenBudgets.push({ maxTokens: maxOutputTokens, mode: retryingAfterTokenCeiling ? 'truncation_safe' : (compactMode ? 'minimal' : 'compact') })
+    attemptedTokenBudgets.push({ maxTokens: maxOutputTokens, mode: bareMinimumMode ? 'bare_minimum' : (retryingAfterTokenCeiling ? 'truncation_safe' : (compactMode ? 'minimal' : 'compact')) })
     payload = await callOpenAi(maxOutputTokens, requestPrompt)
     responseStatus = String(payload?.status || '').toLowerCase()
     incompleteReason = String(payload?.incomplete_details?.reason || '').trim()

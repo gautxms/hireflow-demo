@@ -36,3 +36,21 @@ test('reason fallback behavior prefers fit_assessment then summary then default'
   const defaulted = normalizeCandidateResultsContract({ score: 45 })
   assert.match(defaulted.matchScore.reason, /Reasoning unavailable/)
 })
+
+test('bare minimum payloads remain renderable with omitted rich fields', () => {
+  const normalized = normalizeCandidateResultsContract({
+    analysis_mode: 'bare_minimum',
+    name: 'Lean Candidate',
+    score: 77,
+    summary: 'Concise summary',
+    matchedSkills: ['Node.js'],
+    fit_assessment: null,
+    top_skills: null,
+  })
+
+  assert.equal(normalized.analysis_mode, 'bare_minimum')
+  assert.deepEqual(normalized.top_skills, [])
+  assert.deepEqual(normalized.fit_assessment.matched, [])
+  assert.deepEqual(normalized.fit_assessment.missing, [])
+  assert.equal(normalized.name, 'Lean Candidate')
+})
