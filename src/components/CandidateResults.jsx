@@ -1327,6 +1327,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   return (
     <CandidateDetailErrorBoundary
+      key={String(candidate._bulkKey || resolveCandidateKey(candidate) || "candidate-detail")}
       analysisId={analysisId}
       candidateCount={candidateCount}
       normalizationStats={normalizationStats}
