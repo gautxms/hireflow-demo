@@ -106,6 +106,46 @@ function normalizeNumberFilter(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
+}
+
+function normalizeSortBy(value) {
+  const normalized = normalizeString(value)
+  return normalized || 'sourceUpdatedAt'
+}
+
+function normalizeSortDirection(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'asc' || normalized === 'desc') return normalized
+  return 'desc'
+}
+
+export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
+  const totalCount = profiles.length
+  const page = parsePositiveInteger(query.page, 1)
+  const pageSize = parsePositiveInteger(query.pageSize, totalCount > 0 ? totalCount : 1)
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const startIndex = (page - 1) * pageSize
+  const paginatedCandidates = profiles.slice(startIndex, startIndex + pageSize)
+  const sortBy = normalizeSortBy(query.sortBy)
+  const sortDirection = normalizeSortDirection(query.sortDirection)
+
+  return {
+    candidates: paginatedCandidates,
+    total: totalCount,
+    totalCount,
+    page,
+    pageSize,
+    totalPages,
+    sortBy,
+    sortDirection,
+    filtersApplied,
+  }
+}
+
 function normalizeCandidateFromAnalysis(candidate, resumeId, fallbackName = 'resume') {
   const skillsStructured = normalizeStructuredSkills(candidate?.skills)
   const skillsFlat = flattenStructuredSkills(skillsStructured)
@@ -425,15 +465,13 @@ router.get('/directory', requireAuth, async (req, res) => {
         return true
       })
 
-    return res.json({
-      candidates: profiles,
-      total: profiles.length,
-      filtersApplied: {
-        ...filters,
-        sourceJobId: filters.sourceJobId || null,
-        sourceAnalysisId: filters.sourceAnalysisId || null,
-      },
-    })
+    const filtersApplied = {
+      ...filters,
+      sourceJobId: filters.sourceJobId || null,
+      sourceAnalysisId: filters.sourceAnalysisId || null,
+    }
+
+    return res.json(buildDirectoryResponse(profiles, filtersApplied, req.query))
   } catch (error) {
     console.error('[Candidates] Failed to fetch candidates directory:', error)
     return res.status(500).json({ error: 'Unable to fetch candidates directory' })
