@@ -60,11 +60,25 @@ function toCandidateResultsPayload(analysis) {
     return normalized
   }
 
+  const resolveCandidateScore = (rawCandidate) => (
+    rawCandidate?.matchScore?.score
+    ?? rawCandidate?.matchScore
+    ?? rawCandidate?.score
+    ?? rawCandidate?.profile_score
+    ?? rawCandidate?.scoreBreakdown?.overall
+    ?? rawCandidate?.overall_score
+    ?? rawCandidate?.overallScore
+    ?? rawCandidate?.total_score
+    ?? rawCandidate?.totalScore
+    ?? 0
+  )
+
   const normalizeCandidateForResults = (raw, index) => {
     if (!raw || typeof raw !== 'object') return null
 
     const id = normalizeString(raw?.id || raw?.resumeId || raw?.resume_id || `candidate-${index}`, `candidate-${index}`)
     const name = normalizeString(raw?.name || raw?.full_name || raw?.candidate_name || 'Candidate', 'Candidate')
+    const normalizedScore = normalizeBoundedScore(resolveCandidateScore(raw))
 
     return {
       ...raw,
@@ -73,8 +87,8 @@ function toCandidateResultsPayload(analysis) {
       title: normalizeString(raw?.title, ''),
       location: normalizeString(raw?.location, ''),
       summary: normalizeString(raw?.summary, ''),
-      matchScore: normalizeBoundedScore(raw?.matchScore ?? raw?.score ?? 0),
-      score: normalizeBoundedScore(raw?.score ?? raw?.matchScore ?? 0),
+      matchScore: normalizedScore,
+      score: normalizedScore,
       resumeId: normalizeString(raw?.resumeId || raw?.resume_id, ''),
       filename: normalizeString(raw?.filename, ''),
       skills: Array.isArray(raw?.skills) || typeof raw?.skills === 'string' ? raw.skills : [],
@@ -94,7 +108,7 @@ function toCandidateResultsPayload(analysis) {
         ...(raw?.assessment && typeof raw.assessment === 'object' ? raw.assessment : {}),
       },
       scoreBreakdown: {
-        overall: normalizeBoundedScore(raw?.scoreBreakdown?.overall ?? raw?.score ?? raw?.matchScore ?? 0),
+        overall: normalizeBoundedScore(raw?.scoreBreakdown?.overall ?? resolveCandidateScore(raw)),
         categories: {},
         ...(raw?.scoreBreakdown && typeof raw.scoreBreakdown === 'object' ? raw.scoreBreakdown : {}),
       },
