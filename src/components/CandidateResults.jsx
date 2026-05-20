@@ -194,6 +194,74 @@ function resolveConfidenceLabel(candidate, hasScore) {
   return hasScore ? '' : 'Low confidence'
 }
 
+function toHumanIssueLabel(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const normalized = raw.toLowerCase()
+  if (normalized.includes('ocr') || normalized.includes('optical character recognition')) return 'OCR could not recover readable resume content.'
+  if (normalized.includes('pdf') && (normalized.includes('unextract') || normalized.includes('extract'))) return 'PDF content was not extractable from this file.'
+  if (normalized.includes('parse')) return 'Resume parsing was incomplete or failed.'
+  if (normalized.includes('unable to score') || normalized.includes('cannot score') || normalized.includes('low confidence')) return 'Candidate could not be scored confidently from available resume content.'
+  if (normalized.includes('corrupt') || normalized.includes('invalid pdf')) return 'Resume file appears corrupted or unreadable.'
+  return raw
+}
+
+function deriveResumeIntegrityChecks(candidate, hasDisplayScore) {
+  const existing = safeArray(candidate?.integrity_checks)
+    .map((check) => {
+      if (typeof check === 'string') {
+        return { status: 'issue', label: toHumanIssueLabel(check) }
+      }
+      const label = toHumanIssueLabel(check?.label || check?.message || check?.issue || check?.detail || '')
+      if (!label) return null
+      return { status: check?.status === 'pass' ? 'pass' : 'issue', label }
+    })
+    .filter(Boolean)
+
+  const issuePool = [
+    candidate?.resume_processing_issue,
+    candidate?.resume_processing_issues,
+    candidate?.processing_issue,
+    candidate?.processing_issues,
+    candidate?.parse_error,
+    candidate?.ocr_error,
+    candidate?.error,
+    candidate?.analysis_error,
+    candidate?.failure_reason,
+  ]
+
+  const normalizedIssues = issuePool.flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .map((entry) => toHumanIssueLabel(entry))
+    .filter(Boolean)
+
+  const checks = [...existing]
+  normalizedIssues.forEach((label) => checks.push({ status: 'issue', label }))
+
+  const asTextBlob = safeSerialize(candidate).toLowerCase()
+  const mentionsUnextractable = asTextBlob.includes('unextractable') || asTextBlob.includes('not extractable')
+  const mentionsOcrOrParseFailure = asTextBlob.includes('ocr') || asTextBlob.includes('parse')
+
+  if (mentionsUnextractable && !checks.some((check) => check.label.toLowerCase().includes('extractable'))) {
+    checks.push({ status: 'issue', label: 'PDF content was not extractable from this file.' })
+  }
+  if (mentionsOcrOrParseFailure && !checks.some((check) => check.label.toLowerCase().includes('pars') || check.label.toLowerCase().includes('ocr'))) {
+    checks.push({ status: 'issue', label: 'Resume parsing was incomplete or failed.' })
+  }
+  if (!hasDisplayScore) {
+    checks.push({ status: 'issue', label: 'Low confidence — candidate could not be scored from available content.' })
+  }
+
+  const deduped = []
+  const seen = new Set()
+  checks.forEach((check) => {
+    const key = `${check.status}:${String(check.label || '').toLowerCase().trim()}`
+    if (!check.label || seen.has(key)) return
+    seen.add(key)
+    deduped.push(check)
+  })
+  return deduped
+}
+
 function resolveAnalysisTitle(parseMeta, candidates) {
   const parseMetaCandidates = [
     parseMeta?.analysisName,
@@ -1139,6 +1207,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           .join('')
           .slice(0, 2)
           .toUpperCase()
+        const integrityChecks = deriveResumeIntegrityChecks(candidate, hasDisplayScore)
 
         return (
           <div id="detail-drawer" className="detail-drawer">
@@ -1293,12 +1362,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   {topSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
                 </div>
 
-                {candidate.skills_structured && Array.isArray(candidate.integrity_checks) && candidate.integrity_checks.length > 0 && (
+                {integrityChecks.length > 0 && (
                   <>
                     <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
                     <div className="dd-analysis-box">
-                      {candidate.integrity_checks.map((check, idx) => (
-                        <div className="dd-list-item" key={`${candidate._bulkKey}-integrity-${idx}`}>
+                      {integrityChecks.map((check, idx) => (
+                        <div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${candidate._bulkKey}-integrity-${idx}`}>
                           {check?.status === 'issue'
                             ? <AlertTriangle size={18} strokeWidth={1.5} />
                             : <CheckCircle size={18} strokeWidth={1.5} />}
