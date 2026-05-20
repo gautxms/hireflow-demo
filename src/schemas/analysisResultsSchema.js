@@ -36,6 +36,22 @@ function normalizeFiniteNumber(value, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback
 }
 
+function resolveCandidateScore(candidate) {
+  if (Number.isFinite(Number(candidate?.score))) {
+    return Number(candidate.score)
+  }
+
+  if (Number.isFinite(Number(candidate?.matchScore?.score))) {
+    return Number(candidate.matchScore.score)
+  }
+
+  if (Number.isFinite(Number(candidate?.matchScore))) {
+    return Number(candidate.matchScore)
+  }
+
+  return 0
+}
+
 function normalizeMatchScore(candidate, score) {
   const reason = String(
     candidate?.matchScore?.reason
@@ -60,7 +76,7 @@ function normalizeCandidate(candidate, index) {
     ? candidate.name
     : (candidate.name == null ? 'Candidate' : String(candidate.name))
 
-  const score = normalizeFiniteNumber(candidate.score, 0)
+  const score = resolveCandidateScore(candidate)
 
   return {
     normalized: {
