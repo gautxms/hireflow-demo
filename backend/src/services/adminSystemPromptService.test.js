@@ -131,3 +131,11 @@ test('resetAdminSystemPromptToDefault persists the known default prompt', async 
   assert.equal(result.systemPrompt, DEFAULT_SYSTEM_PROMPT)
   assert.equal(result.promptVersion, 9)
 })
+
+test('DEFAULT_SYSTEM_PROMPT enforces resume-only skills extraction', () => {
+  assert.match(DEFAULT_SYSTEM_PROMPT, /skills fields must contain ONLY/i)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /Do NOT infer/i)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /job description/i)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /missing_requirements/i)
+  assert.match(DEFAULT_SYSTEM_PROMPT, /risks_or_gaps/i)
+})
