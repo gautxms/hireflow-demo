@@ -62,7 +62,8 @@ function safeArray(value) {
 function formatScore(score) {
   const numeric = Number(score)
   if (!Number.isFinite(numeric) || numeric < 0) return null
-  return Math.max(0, Math.min(10, numeric / 10)).toFixed(1)
+  const normalized = numeric > 10 ? numeric / 10 : numeric
+  return Math.max(0, Math.min(10, normalized)).toFixed(1)
 }
 
 function getScoreTone(score) {
