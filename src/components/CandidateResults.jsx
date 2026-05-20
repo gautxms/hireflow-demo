@@ -1526,17 +1526,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
 
       {isExpandedCandidateMissing && (
-        <div className="candidate-results-page__state-wrap" role="status">
-          <h2 className="candidate-results-page__state-title candidate-results-page__state-title--compact">Candidate details unavailable</h2>
-          <p className="candidate-results-page__state-copy">The selected candidate could not be found in this analysis payload. This can happen after filtering, pagination changes, or older analysis data shapes.</p>
-          <div className="candidate-results-page__state-actions">
-            <button className="touch-target candidate-results-page__back-button" type="button" onClick={onBack}>
-              <ChevronLeft size={14} aria-hidden="true" />
-              Back to Analyses
-            </button>
-            <button className="touch-target page-btn" type="button" onClick={() => setExpandedId(null)}>Back to Results</button>
-          </div>
-        </div>
+        <p className="candidate-results-page__empty-note" role="status">
+          Candidate details are unavailable for this entry. Select another candidate from the list.
+        </p>
       )}
 
       {visibleCandidates.length === 0 && (
