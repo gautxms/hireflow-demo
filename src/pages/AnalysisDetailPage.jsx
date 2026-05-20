@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
-import { logResultsRenderError } from './resultsErrorBoundaryTelemetry'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
 import { validateAnalysisResultsPayload } from '../schemas/analysisResultsSchema.js'
 
@@ -72,57 +71,6 @@ function summarizeCandidateFieldTypes(candidates = [], sampleSize = 5) {
   }))
 }
 
-
-export class ResultsErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = { hasError: false, diagnosticCode: '', diagnosticTimestamp: '' }
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true }
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('[ResultsErrorBoundary] render crash while rendering analysis results.', {
-      analysisId: this.props.analysisId,
-      candidateCount: this.props.candidateCount,
-      normalizationStats: this.props.normalizationStats,
-      candidatePayloadShape: this.props.candidatePayloadShape,
-      candidateFieldTypeSummary: this.props.candidateFieldTypeSummary,
-      renderException: {
-        name: error?.name || 'Error',
-        message: error?.message || String(error),
-        stack: error?.stack || '',
-      },
-      componentStack: errorInfo?.componentStack || '',
-    })
-    const telemetryEvent = logResultsRenderError({
-      analysisId: this.props.analysisId,
-      candidateCount: this.props.candidateCount,
-      normalizationStats: this.props.normalizationStats,
-      candidateFieldTypeSummary: this.props.candidateFieldTypeSummary,
-      error,
-      errorInfo,
-    })
-    this.setState({ diagnosticCode: telemetryEvent.diagnosticCode, diagnosticTimestamp: telemetryEvent.timestamp })
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <section className="route-state-card" role="status" aria-live="polite">
-          <p>Some results could not be rendered exactly as received. Rendering sanitized candidate data.</p>
-          {import.meta.env?.DEV && this.state.diagnosticCode && this.state.diagnosticTimestamp && (
-            <p data-testid="results-error-diagnostic">{this.state.diagnosticCode} · {this.state.diagnosticTimestamp}</p>
-          )}
-        </section>
-      )
-    }
-
-    return this.props.children
-  }
-}
 
 export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = null }) {
   const analysisId = useMemo(() => {
@@ -264,7 +212,11 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
           </section>
         )}
 
-        <ResultsErrorBoundary
+        <CandidateResults
+          candidates={candidateResultsPayload}
+          onBack={() => {
+            window.location.assign('/analyses')
+          }}
           analysisId={analysisId}
           candidateCount={candidateCount}
           normalizationStats={{
@@ -274,14 +226,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
           }}
           candidatePayloadShape={candidatePayloadShape}
           candidateFieldTypeSummary={candidateFieldTypeSummary}
-        >
-          <CandidateResults
-            candidates={candidateResultsPayload}
-            onBack={() => {
-              window.location.assign('/analyses')
-            }}
-          />
-        </ResultsErrorBoundary>
+        />
       </section>
     </main>
   )
