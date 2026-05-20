@@ -111,9 +111,8 @@ export class ResultsErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <section className="route-state-card" role="alert">
-          <p>We could not render these results. Please return to Analyses or retry.</p>
-          <a href="/analyses">← Back to Analyses</a>
+        <section className="route-state-card" role="status" aria-live="polite">
+          <p>Some results could not be rendered exactly as received. Rendering sanitized candidate data.</p>
           {import.meta.env?.DEV && this.state.diagnosticCode && this.state.diagnosticTimestamp && (
             <p data-testid="results-error-diagnostic">{this.state.diagnosticCode} · {this.state.diagnosticTimestamp}</p>
           )}
@@ -246,31 +245,36 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   (displayStatus === 'complete' ||
     displayStatus === 'completed' ||
     displayStatus === 'partial' ||
-    displayStatus === 'failed') &&
-  candidateResultsPayload.candidates.length > 0
+    displayStatus === 'failed')
 ) {
   return (
     <main className="analyses-layout">
       <section className="analyses-layout__content">
+        {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
+          <section className="route-state-card" role="status" aria-live="polite">
+            <p>
+              Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
+              Inspect logs for analysisId {analysisId || '—'}.
+            </p>
+          </section>
+        )}
+        {candidateResultsPayload.droppedCount > 0 && (
+          <section className="route-state-card" role="status" aria-live="polite">
+            <p>Some candidate details were sanitized for compatibility.</p>
+          </section>
+        )}
+
         <ResultsErrorBoundary
           analysisId={analysisId}
           candidateCount={candidateCount}
           normalizationStats={{
-            inputCount: itemCount,
-            droppedCount: Math.max(itemCount - candidateCount, 0),
+            droppedCount: candidateResultsPayload.droppedCount,
+            inputCount: candidateResultsPayload.inputCount,
+            validCount: candidateResultsPayload.validCount,
           }}
           candidatePayloadShape={candidatePayloadShape}
           candidateFieldTypeSummary={candidateFieldTypeSummary}
         >
-          {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
-            <section className="route-state-card" role="status" aria-live="polite">
-              <p>
-                Dev warning: dropped {candidateResultsPayload.droppedCount} of {candidateResultsPayload.inputCount} incoming candidates during normalization.
-                Inspect logs for analysisId {analysisId || '—'}.
-              </p>
-            </section>
-          )}
-
           <CandidateResults
             candidates={candidateResultsPayload}
             onBack={() => {
