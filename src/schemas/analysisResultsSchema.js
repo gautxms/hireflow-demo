@@ -21,7 +21,7 @@ const isNonProductionBuild = (() => {
  *
  * Normalized CandidateResults contract (output):
  * {
- *   candidates: Array<Record<string, unknown> & { id: string, name: string, score: number, matchScore: number }>
+ *   candidates: Array<Record<string, unknown> & { id: string, name: string, score: number, matchScore: { score: number, reason: string } }>
  *   droppedCount: number
  *   inputCount: number
  *   outputCount: number
@@ -36,6 +36,36 @@ function normalizeFiniteNumber(value, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback
 }
 
+function resolveCandidateScore(candidate) {
+  if (Number.isFinite(Number(candidate?.score))) {
+    return Number(candidate.score)
+  }
+
+  if (Number.isFinite(Number(candidate?.matchScore?.score))) {
+    return Number(candidate.matchScore.score)
+  }
+
+  if (Number.isFinite(Number(candidate?.matchScore))) {
+    return Number(candidate.matchScore)
+  }
+
+  return 0
+}
+
+function normalizeMatchScore(candidate, score) {
+  const reason = String(
+    candidate?.matchScore?.reason
+    || candidate?.fit_assessment?.reason
+    || candidate?.summary
+    || 'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
+  ).trim()
+
+  return {
+    score,
+    reason: reason || 'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
+  }
+}
+
 function normalizeCandidate(candidate, index) {
   if (!candidate || typeof candidate !== 'object') {
     return { normalized: null, issue: { code: 'candidate.invalid_type', path: ['candidates', index], expected: 'object', received: typeof candidate } }
@@ -46,13 +76,15 @@ function normalizeCandidate(candidate, index) {
     ? candidate.name
     : (candidate.name == null ? 'Candidate' : String(candidate.name))
 
+  const score = resolveCandidateScore(candidate)
+
   return {
     normalized: {
       ...candidate,
       id,
       name,
-      score: normalizeFiniteNumber(candidate.score, 0),
-      matchScore: normalizeFiniteNumber(candidate.matchScore, normalizeFiniteNumber(candidate.score, 0)),
+      score,
+      matchScore: normalizeMatchScore(candidate, score),
     },
     issue: null,
   }

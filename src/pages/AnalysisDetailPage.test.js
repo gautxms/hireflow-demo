@@ -38,10 +38,10 @@ test('toCandidateResultsPayload keeps valid candidates and drops malformed entri
     assert.equal(payload.droppedCount, 3)
 
     assert.equal(payload.candidates[0].id, 'valid-1')
-    assert.equal(payload.candidates[1].matchScore, 91.2)
+    assert.equal(payload.candidates[1].matchScore.score, 91.2)
     assert.equal(payload.candidates[2].name, '42')
     assert.equal(payload.candidates[2].scoreBreakdown.overall, 0)
-    assert.equal(payload.candidates[3].matchScore, 0)
+    assert.equal(payload.candidates[3].matchScore.score, 0)
     assert.equal(payload.candidates[3].score, 0)
 
     assert.equal(warnCalls.length, 1)
@@ -114,8 +114,21 @@ test('toCandidateResultsPayload derives score from profile_score when score is a
 
   assert.equal(payload.candidates.length, 1)
   assert.equal(payload.candidates[0].score, 52)
-  assert.equal(payload.candidates[0].matchScore, 52)
+  assert.equal(payload.candidates[0].matchScore.score, 52)
+  assert.equal(typeof payload.candidates[0].matchScore.reason, 'string')
   assert.equal(payload.candidates[0].scoreBreakdown.overall, 52)
+})
+
+test('toCandidateResultsPayload normalizes legacy numeric matchScore and missing optionals without dropping candidate', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-regression-legacy-score',
+    candidates: [{ id: 'legacy-1', name: 'Legacy User', matchScore: 67 }],
+  })
+
+  assert.equal(payload.hasInvalidPayload, false)
+  assert.equal(payload.candidates.length, 1)
+  assert.equal(payload.candidates[0].matchScore.score, 67)
+  assert.equal(typeof payload.candidates[0].matchScore.reason, 'string')
 })
 
 test('e2e: analysis detail terminal response with one malformed candidate still renders results and non-prod debug banner', () => {

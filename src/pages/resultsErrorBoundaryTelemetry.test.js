@@ -41,6 +41,7 @@ test('logResultsRenderError emits structured telemetry when child throws', () =>
     analysisId: 'analysis-123',
     candidateCount: 4,
     normalizationStats: { inputCount: 5, droppedCount: 1 },
+    candidateFieldTypeSummary: [{ index: 0, id: 'c-1', matchScoreType: 'number', matchScoreScoreType: 'undefined', matchScoreReasonType: 'undefined', experienceType: 'string' }],
     error: renderError,
     errorInfo: { componentStack: '\n at ThrowingChild' },
   })
@@ -50,6 +51,8 @@ test('logResultsRenderError emits structured telemetry when child throws', () =>
   assert.equal(telemetryEvents[0].analysisId, 'analysis-123')
   assert.equal(telemetryEvents[0].candidateCount, 4)
   assert.deepEqual(telemetryEvents[0].normalizationStats, { inputCount: 5, droppedCount: 1 })
+  assert.equal(telemetryEvents[0].candidateFieldTypeSummary[0].id, 'c-1')
+  assert.equal(telemetryEvents[0].candidateFieldTypeSummary[0].matchScoreType, 'number')
   assert.equal(telemetryEvents[0].errorMessage, 'Child render explosion')
   assert.equal(telemetryEvents[0].componentStack, '\n at ThrowingChild')
   assert.equal(
