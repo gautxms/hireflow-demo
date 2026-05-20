@@ -39,6 +39,9 @@ test('logResultsRenderError emits structured telemetry when child throws', () =>
   const renderError = new Error('Child render explosion')
   logResultsRenderError({
     analysisId: 'analysis-123',
+    selectedCandidateKey: 'candidate-key-1',
+    selectedCandidateId: 'candidate-id-1',
+    selectedCandidate: { matchScore: { score: { nested: true }, reason: 'ok' }, experience: '5 years' },
     candidateCount: 4,
     normalizationStats: { inputCount: 5, droppedCount: 1 },
     candidateFieldTypeSummary: [{ index: 0, id: 'c-1', matchScoreType: 'number', matchScoreScoreType: 'undefined', matchScoreReasonType: 'undefined', experienceType: 'string' }],
@@ -49,17 +52,32 @@ test('logResultsRenderError emits structured telemetry when child throws', () =>
   assert.equal(telemetryEvents.length, 1)
   assert.equal(telemetryEvents[0].route, 'AnalysisDetail')
   assert.equal(telemetryEvents[0].analysisId, 'analysis-123')
+  assert.equal(telemetryEvents[0].selectedCandidateKey, 'candidate-key-1')
+  assert.equal(telemetryEvents[0].selectedCandidateId, 'candidate-id-1')
   assert.equal(telemetryEvents[0].candidateCount, 4)
   assert.deepEqual(telemetryEvents[0].normalizationStats, { inputCount: 5, droppedCount: 1 })
   assert.equal(telemetryEvents[0].candidateFieldTypeSummary[0].id, 'c-1')
   assert.equal(telemetryEvents[0].candidateFieldTypeSummary[0].matchScoreType, 'number')
   assert.equal(telemetryEvents[0].errorMessage, 'Child render explosion')
   assert.equal(telemetryEvents[0].componentStack, '\n at ThrowingChild')
+  assert.deepEqual(telemetryEvents[0].failingField, {
+    path: 'matchScore.score',
+    expectedTypes: ['number', 'string'],
+    actualType: 'object',
+  })
   assert.equal(
     telemetryEvents[0].normalizedErrorFingerprint,
     'error|child render explosion|at throwingchild',
   )
   assert.ok(loggedContext)
+
+  const duplicateEvent = logResultsRenderError({
+    analysisId: 'analysis-123',
+    selectedCandidateKey: 'candidate-key-1',
+    error: renderError,
+    errorInfo: { componentStack: '\n at ThrowingChild' },
+  })
+  assert.equal(duplicateEvent, null)
 
   mockWindow.dispatchEvent = originalDispatch
   console.error = originalConsoleError

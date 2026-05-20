@@ -13,13 +13,57 @@ export function normalizeErrorFingerprint({ error = null, errorInfo = null } = {
   return `${name}|${message}|${stack}`
 }
 
-export function buildResultsRenderErrorEvent({ analysisId = '', candidateCount = 0, normalizationStats = null, candidateFieldTypeSummary = null, error = null, errorInfo = null, timestamp = new Date().toISOString() }) {
+const FAILURE_EVENT_RATE_LIMIT_MS = 30_000
+const lastFailureEventByKey = new Map()
+
+function resolveFieldType(value) {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return 'array'
+  return typeof value
+}
+
+function findFirstFailingField(candidate = null) {
+  if (!candidate || typeof candidate !== 'object') return null
+  const checks = [
+    { path: 'matchScore', expected: ['object'] },
+    { path: 'matchScore.score', expected: ['number', 'string'] },
+    { path: 'matchScore.reason', expected: ['string'] },
+    { path: 'experience', expected: ['array', 'string'] },
+  ]
+
+  for (const check of checks) {
+    const segments = check.path.split('.')
+    let current = candidate
+    for (const segment of segments) {
+      if (current == null || (typeof current !== 'object' && !Array.isArray(current))) {
+        current = undefined
+        break
+      }
+      current = current[segment]
+    }
+
+    const actualType = resolveFieldType(current)
+    if (!check.expected.includes(actualType)) {
+      return {
+        path: check.path,
+        expectedTypes: check.expected,
+        actualType,
+      }
+    }
+  }
+
+  return null
+}
+
+export function buildResultsRenderErrorEvent({ analysisId = '', candidateCount = 0, normalizationStats = null, candidateFieldTypeSummary = null, selectedCandidateKey = '', selectedCandidateId = '', selectedCandidate = null, error = null, errorInfo = null, timestamp = new Date().toISOString() }) {
   const normalizedErrorFingerprint = normalizeErrorFingerprint({ error, errorInfo })
 
   return {
     eventType: 'analysis_detail_results_render_error',
     route: 'AnalysisDetail',
     analysisId: String(analysisId || ''),
+    selectedCandidateKey: String(selectedCandidateKey || ''),
+    selectedCandidateId: String(selectedCandidateId || ''),
     candidateCount: Number(candidateCount || 0),
     normalizationStats: normalizationStats && typeof normalizationStats === 'object'
       ? {
@@ -41,6 +85,7 @@ export function buildResultsRenderErrorEvent({ analysisId = '', candidateCount =
     errorMessage: error?.message || 'Unknown render error',
     componentStack: errorInfo?.componentStack || '',
     normalizedErrorFingerprint,
+    failingField: findFirstFailingField(selectedCandidate),
     diagnosticCode: 'RRB_RENDER_FAILURE',
     timestamp,
   }
@@ -48,6 +93,17 @@ export function buildResultsRenderErrorEvent({ analysisId = '', candidateCount =
 
 export function logResultsRenderError(context) {
   const event = buildResultsRenderErrorEvent(context)
+  const rateLimitKey = [
+    event.analysisId,
+    event.selectedCandidateKey || event.selectedCandidateId,
+    event.normalizedErrorFingerprint,
+  ].join('|')
+  const now = Date.now()
+  const lastEmittedAt = lastFailureEventByKey.get(rateLimitKey) || 0
+  if (now - lastEmittedAt < FAILURE_EVENT_RATE_LIMIT_MS) {
+    return null
+  }
+  lastFailureEventByKey.set(rateLimitKey, now)
   window.dispatchEvent(new CustomEvent('hireflow:telemetry', { detail: event }))
   console.error('[HireFlow] AnalysisDetail results render error', event)
   return event
