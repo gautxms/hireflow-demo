@@ -1569,26 +1569,26 @@
   font-weight: 600;
   font-family: var(--font-body, 'DM Sans', sans-serif);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--hf-text-4);
-  margin-bottom: 10px;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
 }
 .section-heading {
-  font-family: var(--font-sans);
+  font-family: var(--font-body, 'DM Sans', sans-serif);
   font-size: 11px;
-  font-weight: 500;
-  color: var(--hf-text-3, var(--color-text-secondary));
+  font-weight: 600;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 .dd-col-label--mt-16 { margin-top: 16px; }
 .dd-col-label--mt-14 { margin-top: 14px; }
 
 .dd-summary {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--color-text-secondary);
-  line-height: 1.7;
+  line-height: 1.5;
   overflow-wrap: anywhere;
   font-family: var(--font-body, 'DM Sans', sans-serif);
 }
@@ -1605,7 +1605,7 @@
   padding: 10px 12px;
   color: var(--color-text-secondary);
 }
-.dd-list-item { display: flex; gap: 8px; align-items: flex-start; color: var(--color-text-secondary); padding: 6px 0; }
+.dd-list-item { display: flex; gap: 8px; align-items: flex-start; color: var(--color-text-secondary); font-size: 13px; line-height: 1.45; padding: 4px 0; }
 .dd-list-item svg { color: var(--hf-lime); flex: 0 0 auto; margin-top: 2px; }
 .dd-list-item--warn svg { color: var(--hf-warning); }
 .dd-list { display: flex; flex-direction: column; }
@@ -1621,16 +1621,19 @@
   align-items: baseline;
 }
 .dd-fact-k {
-  font-size: 12px;
-  color: #444444;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .dd-fact-v {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-secondary);
   font-weight: 500;
+  line-height: 1.4;
 }
 .dd-fact-link {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-muted);
   text-decoration: none;
 }
@@ -1660,10 +1663,10 @@
 .dd-analysis-box--amber { border-top-color: rgba(255, 165, 0, 0.2); }
 
 .dd-analysis-item {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-secondary);
-  line-height: 1.6;
-  padding: 7px 0;
+  line-height: 1.45;
+  padding: 5px 0;
   border-bottom: 1px solid #141414;
   overflow-wrap: anywhere;
 }
