@@ -92,6 +92,39 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
+function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
+  if (!Array.isArray(analysisResult?.candidates)) return []
+
+  return analysisResult.candidates.map((candidate, index) => {
+    const skillsStructured = normalizeStructuredSkills(candidate?.skills)
+    const fallbackSkills = normalizeSkills(candidate?.skills)
+    const flattenedSkills = flattenStructuredSkills(skillsStructured)
+    const resolvedSkillsFlat = flattenedSkills.length > 0 ? flattenedSkills : fallbackSkills
+    const identity = resolveCanonicalCandidateIdentity(
+      candidate,
+      `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
+    )
+    return {
+      id: identity.id,
+      candidateId: identity.candidateId,
+      resumeId: identity.resumeId || String(resumeId || ''),
+      ...candidate,
+      summary: clampString(candidate?.summary, 400),
+      years_experience: normalizeNullableNumber(candidate?.years_experience),
+      profile_score: normalizeNullableNumber(candidate?.profile_score),
+      strengths: clampStringArray(candidate?.strengths, 5, 160),
+      considerations: clampStringArray(candidate?.considerations, 5, 160),
+      seniority_level: normalizeString(candidate?.seniority_level),
+      tags: normalizeStringArray(candidate?.tags),
+      top_skills: normalizeStringArray(candidate?.top_skills).slice(0, 15),
+      skills_structured: skillsStructured,
+      skills: skillsStructured,
+      skills_flat: normalizeStringArray(resolvedSkillsFlat).slice(0, 25),
+      confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
+    }
+  })
+}
+
 function getPreferredJobDescriptionText(row = {}) {
   const candidates = [
     row.file_text,
@@ -437,36 +470,7 @@ async function runParse(job) {
     throw aiError
   }
 
-  const candidates = Array.isArray(analysisResult?.candidates)
-    ? analysisResult.candidates.map((candidate, index) => {
-        const skillsStructured = normalizeStructuredSkills(candidate?.skills)
-        const fallbackSkills = normalizeSkills(candidate?.skills)
-        const flattenedSkills = flattenStructuredSkills(skillsStructured)
-        const resolvedSkillsFlat = flattenedSkills.length > 0 ? flattenedSkills : fallbackSkills
-        const identity = resolveCanonicalCandidateIdentity(
-          candidate,
-          `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
-        )
-        return {
-          id: identity.id,
-          candidateId: identity.candidateId,
-          resumeId: identity.resumeId || String(resumeId || ''),
-          ...candidate,
-          summary: clampString(candidate?.summary, 400),
-          years_experience: normalizeNullableNumber(candidate?.years_experience),
-          profile_score: normalizeNullableNumber(candidate?.profile_score),
-          strengths: clampStringArray(candidate?.strengths, 5, 160),
-          considerations: clampStringArray(candidate?.considerations, 5, 160),
-          seniority_level: normalizeString(candidate?.seniority_level),
-          tags: normalizeStringArray(candidate?.tags),
-          top_skills: normalizeStringArray(candidate?.top_skills).slice(0, 15),
-          skills_structured: skillsStructured,
-          skills: skillsStructured,
-          skills_flat: normalizeStringArray(resolvedSkillsFlat).slice(0, 25),
-          confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
-        }
-      })
-    : []
+  const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename })
   const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
 
   const parseResult = {
@@ -570,7 +574,7 @@ async function runParse(job) {
 }
 
 export function registerParseResumeJobProcessor() {
-  parseQueue.process(async (job) => {
+parseQueue.process(async (job) => {
     try {
       return await runParse(job)
     } catch (error) {
@@ -608,4 +612,9 @@ export function registerParseResumeJobProcessor() {
   })
 
   console.log('[Queue] Parse resume worker registered')
+}
+
+export const __testables = {
+  normalizeStructuredSkills,
+  buildNormalizedCandidates,
 }
