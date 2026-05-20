@@ -1,3 +1,5 @@
+import { normalizeCandidateResultsContract, resolveCandidateScore } from '../utils/normalizeCandidateResultsContract.js'
+
 const isNonProductionBuild = (() => {
   if (typeof process !== 'undefined' && process?.env?.NODE_ENV) return process.env.NODE_ENV !== 'production'
   return true
@@ -42,21 +44,6 @@ function toCandidateResultsPayload(analysis) {
     return Math.max(0, Math.min(100, numeric))
   }
 
-  const normalizeMatchScore = (rawCandidate, normalizedScore) => {
-    const reason = normalizeString(
-      rawCandidate?.matchScore?.reason
-      || rawCandidate?.fit_assessment?.reason
-      || rawCandidate?.assessment?.summary
-      || rawCandidate?.summary
-      || 'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
-      'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
-    ).trim()
-
-    return {
-      score: normalizedScore,
-      reason: reason || 'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
-    }
-  }
 
   const normalizeSkillsStructured = (input) => {
     const source = input && typeof input === 'object' ? input : {}
@@ -76,43 +63,22 @@ function toCandidateResultsPayload(analysis) {
     return normalized
   }
 
-  const resolveCandidateScore = (rawCandidate) => (
-    rawCandidate?.matchScore?.score
-    ?? rawCandidate?.matchScore
-    ?? rawCandidate?.score
-    ?? rawCandidate?.profile_score
-    ?? rawCandidate?.scoreBreakdown?.overall
-    ?? rawCandidate?.overall_score
-    ?? rawCandidate?.overallScore
-    ?? rawCandidate?.total_score
-    ?? rawCandidate?.totalScore
-    ?? 0
-  )
 
   const normalizeCandidateForResults = (raw, index) => {
     if (!raw || typeof raw !== 'object') return null
 
-    const id = normalizeString(raw?.id || raw?.resumeId || raw?.resume_id || `candidate-${index}`, `candidate-${index}`)
-    const name = normalizeString(raw?.name || raw?.full_name || raw?.candidate_name || 'Candidate', 'Candidate')
-    const normalizedScore = normalizeBoundedScore(resolveCandidateScore(raw))
+    const normalized = normalizeCandidateResultsContract(raw, { index })
 
     return {
       ...raw,
-      id,
-      name,
+      ...normalized,
       title: normalizeString(raw?.title, ''),
       location: normalizeString(raw?.location, ''),
-      summary: normalizeString(raw?.summary, ''),
-      matchScore: normalizeMatchScore(raw, normalizedScore),
-      score: normalizedScore,
       resumeId: normalizeString(raw?.resumeId || raw?.resume_id, ''),
       filename: normalizeString(raw?.filename, ''),
-      skills: Array.isArray(raw?.skills) || typeof raw?.skills === 'string' ? raw.skills : [],
       experience: Array.isArray(raw?.experience)
         ? normalizeObjectArray(raw?.experience)
         : normalizeString(raw?.experience, ''),
-      strengths: normalizeStringArray(raw?.strengths),
-      considerations: normalizeStringArray(raw?.considerations),
       mustHaveSkills: normalizeStringArray(raw?.mustHaveSkills),
       niceToHaveSkills: normalizeStringArray(raw?.niceToHaveSkills),
       missingSkills: normalizeStringArray(raw?.missingSkills),
