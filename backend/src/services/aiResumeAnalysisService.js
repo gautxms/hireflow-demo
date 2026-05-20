@@ -16,6 +16,33 @@ const OPENAI_MODEL_CAPABILITIES = {
   },
 }
 const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
+const TOKEN_BUDGET_CONFIG = {
+  anthropic: {
+    primary: { standard: [2200, 3200, 4096], compact: [1400, 2200, 3200] },
+    escalation: { standard: [3200, 4096, 6400], compact: [2200, 3200, 4096] },
+    providerMaxOutputTokens: 6400,
+  },
+  openai: {
+    fallback: { standard: OPENAI_OUTPUT_TOKEN_LADDER, compact: [1200, 2000, 3000] },
+    providerMaxOutputTokens: 8000,
+  },
+}
+function clampTokenBudget(value, maxSupported) {
+  const numeric = Number.parseInt(String(value || 0), 10)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  return Math.min(numeric, Math.max(1, Number.parseInt(String(maxSupported || 0), 10) || numeric))
+}
+
+function buildTokenBudgetLadder(baseLadder = [], maxSupported = null) {
+  const deduped = []
+  for (const candidate of Array.isArray(baseLadder) ? baseLadder : []) {
+    const clamped = clampTokenBudget(candidate, maxSupported)
+    if (!clamped || deduped.includes(clamped)) continue
+    deduped.push(clamped)
+  }
+  return deduped.length ? deduped : [clampTokenBudget(1024, maxSupported) || 1024]
+}
+
 function isFallbackDisabledOnTruncation() {
   return String(process.env.AI_DISABLE_FALLBACK_ON_TRUNCATION || '').toLowerCase() === 'true'
 }
@@ -568,6 +595,7 @@ function createAttemptRecord({
   jdCharCount = null,
   failureCategory = null,
   failureReason = null,
+  tokenBudgetAttempts = [],
 }) {
   return {
     success: Boolean(success),
@@ -586,6 +614,7 @@ function createAttemptRecord({
     jdCharCount,
     failureCategory,
     failureReason,
+    tokenBudgetAttempts: Array.isArray(tokenBudgetAttempts) ? tokenBudgetAttempts : [],
   }
 }
 
@@ -810,99 +839,102 @@ export async function analyzeWithAnthropic(
     prompt.includes('Job Description Context:\nAVAILABLE') ? 'YES' : 'NO — JD missing from prompt',
   )
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: compactMode ? 1400 : 2200,
-    temperature: 0,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: fileBufferBase64,
-            },
-          },
-          {
-            type: 'text',
-            text: prompt,
-          },
-        ],
-      },
-    ],
-  })
-
-
-  const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
-  if (tokenUsage.usageAvailable) {
-    await trackTokens(response.usage, filename)
-  }
-
-  const textContent = (response.content || []).find((item) => item.type === 'text')
-  if (!textContent || textContent.type !== 'text') {
-    throw createProviderResponseFormatError({
-      provider: 'anthropic',
-      model,
-      technicalDetails: `Unexpected Anthropic response format (${buildPayloadKeySummary(response)})`,
-    })
-  }
-
+  const tokenConfig = TOKEN_BUDGET_CONFIG.anthropic
+  const ladderProfile = keyLabel === 'primary' ? 'primary' : 'escalation'
+  const ladderMode = compactMode ? 'compact' : 'standard'
+  const tokenLadder = buildTokenBudgetLadder(tokenConfig?.[ladderProfile]?.[ladderMode], tokenConfig?.providerMaxOutputTokens)
+  let attemptedTokenBudgets = []
+  let response = null
   let result = null
-  try {
-    console.log('[AI][Anthropic] Raw response before parsing:', textContent.text)
-    result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model })
-  } catch (error) {
-    const parseFailed = String(error?.message || '').includes('response_format_error::')
-    if (!parseFailed) {
-      throw error
-    }
 
-    if (isLikelyTruncatedResponse(textContent.text, { stopReason: response?.stop_reason })) {
-      throw createProviderResponseFormatError({
-        category: 'response_truncated_error',
-        provider: 'anthropic',
-        model,
-        technicalDetails: `Provider output was truncated before valid JSON completion (stop_reason=${sanitizeSnippet(response?.stop_reason || 'unknown')}).`,
-      })
-    }
+  for (let index = 0; index < tokenLadder.length; index += 1) {
+    const maxTokens = tokenLadder[index]
+    const truncationSafeMode = index > 0
+    const outputInstructions = truncationSafeMode
+      ? buildCompactOutputInstructions({ compactMode: true, truncationSafeMode: true })
+      : baseOutputInstructions
+    const requestPrompt = `${systemPromptText}
 
-    const repaired = await client.messages.create({
+${outputInstructions}`
+    attemptedTokenBudgets.push({ maxTokens, mode: truncationSafeMode ? 'truncation_safe' : (compactMode ? 'minimal' : 'compact') })
+
+    response = await client.messages.create({
       model,
-      max_tokens: 1400,
+      max_tokens: maxTokens,
+      temperature: 0,
       messages: [
         {
           role: 'user',
           content: [
             {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: fileBufferBase64,
+              },
+            },
+            {
               type: 'text',
-              text: [
-                'The previous response was not valid JSON.',
-                'Return the same content as strict valid JSON only, no markdown.',
-                'Do not include any explanation text.',
-                'Previous response:',
-                textContent.text,
-              ].join('\n'),
+              text: requestPrompt,
             },
           ],
         },
       ],
     })
-    const repairedText = (repaired.content || []).find((item) => item.type === 'text')?.text || ''
-    try {
-      console.log('[AI][Anthropic] Raw repaired response before parsing:', repairedText)
-      result = extractJsonWithContext(repairedText, { provider: 'anthropic', model })
-    } catch {
+
+    const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
+    if (tokenUsage.usageAvailable) {
+      await trackTokens(response.usage, filename)
+    }
+
+    const textContent = (response.content || []).find((item) => item.type === 'text')
+    if (!textContent || textContent.type !== 'text') {
       throw createProviderResponseFormatError({
         provider: 'anthropic',
         model,
-        technicalDetails: 'Unable to parse provider JSON after repair retry.',
+        technicalDetails: `Unexpected Anthropic response format (${buildPayloadKeySummary(response)})`,
       })
+    }
+
+    try {
+      console.log('[AI][Anthropic] Raw response before parsing:', textContent.text)
+      result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model })
+      break
+    } catch (error) {
+      const parseFailed = String(error?.message || '').includes('response_format_error::')
+      if (!parseFailed) throw error
+      const truncated = isLikelyTruncatedResponse(textContent.text, { stopReason: response?.stop_reason })
+      if (truncated && index < tokenLadder.length - 1) {
+        continue
+      }
+      if (truncated) {
+        const truncationError = createProviderResponseFormatError({
+          category: 'response_truncated_error',
+          provider: 'anthropic',
+          model,
+          technicalDetails: `Provider output was truncated before valid JSON completion after retries (stop_reason=${sanitizeSnippet(response?.stop_reason || 'unknown')}, max_tokens_attempted=${tokenLadder.join('->')}).`,
+        })
+        truncationError.tokenBudgetAttempts = attemptedTokenBudgets
+        throw truncationError
+      }
+      error.tokenBudgetAttempts = attemptedTokenBudgets
+      throw error
     }
   }
 
+  if (!result) {
+    const truncationError = createProviderResponseFormatError({
+      category: 'response_truncated_error',
+      provider: 'anthropic',
+      model,
+      technicalDetails: `Provider output was truncated before valid JSON completion after retries (max_tokens_attempted=${tokenLadder.join('->')}).`,
+    })
+    truncationError.tokenBudgetAttempts = attemptedTokenBudgets
+    throw truncationError
+  }
+
+  const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
   result = normalizeCompactAnalysis(result, { minimalMode: compactMode })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('Anthropic response is missing candidates array')
@@ -919,7 +951,8 @@ export async function analyzeWithAnthropic(
     promptIsDefaultFallback,
     mode: compactMode ? 'minimal' : 'compact',
     schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
-    maxOutputTokens: compactMode ? 1400 : 2200,
+    maxOutputTokens: attemptedTokenBudgets[attemptedTokenBudgets.length - 1]?.maxTokens || null,
+    tokenBudgetAttempts: attemptedTokenBudgets,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
     jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
@@ -1019,8 +1052,10 @@ export async function analyzeWithOpenAI(
   let payload = null
   let responseStatus = ''
   let incompleteReason = ''
-  const tokenLadder = compactMode ? [1200, 2000, 3000] : OPENAI_OUTPUT_TOKEN_LADDER
+  const tokenConfig = TOKEN_BUDGET_CONFIG.openai
+  const tokenLadder = buildTokenBudgetLadder(tokenConfig?.fallback?.[compactMode ? 'compact' : 'standard'], tokenConfig?.providerMaxOutputTokens)
   let attemptedMaxOutputTokens = tokenLadder[0]
+  const attemptedTokenBudgets = []
   for (let index = 0; index < tokenLadder.length; index += 1) {
     const maxOutputTokens = tokenLadder[index]
     const retryingAfterTokenCeiling = index > 0
@@ -1030,6 +1065,7 @@ export async function analyzeWithOpenAI(
     const requestPrompt = `${systemPromptText}\n\n${retryOutputInstructions}`
 
     attemptedMaxOutputTokens = maxOutputTokens
+    attemptedTokenBudgets.push({ maxTokens: maxOutputTokens, mode: retryingAfterTokenCeiling ? 'truncation_safe' : (compactMode ? 'minimal' : 'compact') })
     payload = await callOpenAi(maxOutputTokens, requestPrompt)
     responseStatus = String(payload?.status || '').toLowerCase()
     incompleteReason = String(payload?.incomplete_details?.reason || '').trim()
@@ -1044,12 +1080,14 @@ export async function analyzeWithOpenAI(
 
   if (responseStatus && responseStatus !== 'completed') {
     if (incompleteReason.toLowerCase() === 'max_output_tokens') {
-      throw createProviderResponseFormatError({
+      const truncationError = createProviderResponseFormatError({
         category: 'response_truncated_error',
         provider: 'openai',
         model,
         technicalDetails: `Provider output was truncated before valid JSON completion after retries (status=${sanitizeSnippet(responseStatus)}, reason=${sanitizeSnippet(incompleteReason)}, max_output_tokens_attempted=${tokenLadder.join('->')}).`,
       })
+      truncationError.tokenBudgetAttempts = attemptedTokenBudgets
+      throw truncationError
     }
 
     throw new Error(`OpenAI response status was ${responseStatus}${incompleteReason ? ` (${incompleteReason})` : ''}`)
@@ -1082,6 +1120,7 @@ export async function analyzeWithOpenAI(
     mode: compactMode ? 'minimal' : 'compact',
     schemaVersion: CANDIDATE_COMPACT_SCHEMA_VERSION,
     maxOutputTokens: attemptedMaxOutputTokens,
+    tokenBudgetAttempts: attemptedTokenBudgets,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
     jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
@@ -1157,6 +1196,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             promptVersion: response.promptVersion,
             promptIsDefaultFallback: response.promptIsDefaultFallback,
             tokenUsage: response.tokenUsage,
+            tokenBudgetAttempts: response.tokenBudgetAttempts,
           }),
         ],
       }
@@ -1179,7 +1219,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             attempts: [
               ...attemptHistory,
               createAttemptRecord({ success: false, provider: entry.provider, keyLabel: entry.keyLabel, model: entry.model, providerSource: entry.source, promptVersion: systemPromptConfig?.promptVersion || 1, promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback), tokenUsage: { usageAvailable: false, unavailableReason: 'provider_request_failed:response_truncated_error:first_pass' }, failureCategory: 'response_truncated_error', failureReason: 'first attempt truncated; compact retry succeeded' }),
-              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage }),
+              createAttemptRecord({ success: true, provider: entry.provider, keyLabel: entry.keyLabel, model: response.model, providerSource: entry.source, promptVersion: response.promptVersion, promptIsDefaultFallback: response.promptIsDefaultFallback, tokenUsage: response.tokenUsage, tokenBudgetAttempts: response.tokenBudgetAttempts }),
             ],
           }
         } catch (compactRetryError) {
@@ -1203,6 +1243,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
           unavailableReason: `provider_request_failed:${failureCategory}:${failureReason}`,
         },
         mode: compactMode ? 'minimal' : 'compact',
+        tokenBudgetAttempts: Array.isArray(error?.tokenBudgetAttempts) ? error.tokenBudgetAttempts : [],
         failureCategory,
         failureReason,
       }))
