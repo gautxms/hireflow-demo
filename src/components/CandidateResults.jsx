@@ -1653,8 +1653,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-resume-file">
             <FileText size={18} strokeWidth={1.5} />
             <div>
-              <div>{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
-              <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View resume</button>
+              <div className="dd-resume-filename">{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
+              <div className="dd-resume-meta">
+                <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View resume</button>
+              </div>
             </div>
           </div>
         </div>
