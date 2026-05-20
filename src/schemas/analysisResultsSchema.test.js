@@ -61,3 +61,40 @@ test('rejects malformed shape and downgrades to safe defaults without throwing',
     assert.equal(errorCalls[0][0], '[AnalysisResultsSchema] Validation issues detected.')
   })
 })
+
+test('strict mode reports invalid matchScore shape with structured candidate path metadata', () => {
+  withErrorSpy((errorCalls) => {
+    const { payload, isValid, issues } = validateAnalysisResultsPayload({
+      candidates: [{ id: 'bad-shape', name: 'Bad Shape', matchScore: { reason: 'missing score' } }],
+    }, { strict: true })
+
+    assert.equal(payload.candidates.length, 1)
+    assert.equal(payload.candidates[0].score, 0)
+    assert.equal(isValid, false)
+    assert.equal(issues[0].code, 'candidate.match_score.invalid_shape')
+    assert.equal(issues[0].candidateIndex, 0)
+    assert.equal(issues[0].pathString, '$.candidates[0].matchScore')
+    assert.equal(errorCalls.length, 1)
+  })
+})
+
+test('strict mode reports unresolved profile_score source when score collapses to 0', () => {
+  const { issues, isValid } = validateAnalysisResultsPayload({
+    candidates: [{ id: 'profile-bad', name: 'Profile Bad', profile_score: 'unknown' }],
+  }, { strict: true })
+
+  assert.equal(isValid, false)
+  assert.equal(issues[0].code, 'candidate.profile_score.unresolved')
+  assert.equal(issues[0].pathString, '$.candidates[0].profile_score')
+})
+
+test('tolerant mode keeps legacy payload and does not fail validation for strict-only shape issues', () => {
+  const { payload, issues, isValid } = validateAnalysisResultsPayload({
+    candidates: [{ id: 'legacy-tolerant', name: 'Legacy', matchScore: { reason: 'legacy missing score' } }],
+  }, { strict: false })
+
+  assert.equal(payload.candidates.length, 1)
+  assert.equal(payload.candidates[0].score, 0)
+  assert.equal(issues.length, 0)
+  assert.equal(isValid, true)
+})

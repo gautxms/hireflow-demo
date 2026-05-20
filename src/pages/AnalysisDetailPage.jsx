@@ -187,7 +187,14 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   const displayStatus = deriveDisplayStatus(analysis)
   const candidateResultsPayload = useMemo(() => {
     const rawPayload = toCandidateResultsPayload(analysis)
-    const { payload } = validateAnalysisResultsPayload(rawPayload)
+    const { payload, issues } = validateAnalysisResultsPayload(rawPayload)
+    if (issues.length > 0 && isNonProductionBuild) {
+      console.error('[AnalysisDetailPage] Candidate payload validation issues.', {
+        analysisId: analysis?.id || '',
+        issueCount: issues.length,
+        issues,
+      })
+    }
     return payload
   }, [analysis])
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0

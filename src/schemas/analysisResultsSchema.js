@@ -52,6 +52,26 @@ function resolveCandidateScore(candidate) {
   return 0
 }
 
+function toIssuePath(pathSegments = []) {
+  if (!Array.isArray(pathSegments) || pathSegments.length === 0) return '$'
+  return pathSegments.reduce((acc, segment) => {
+    if (typeof segment === 'number') return `${acc}[${segment}]`
+    return acc === '$' ? `$.${segment}` : `${acc}.${segment}`
+  }, '$')
+}
+
+function createIssue({ code, path = [], candidateIndex = null, expected, received, message }) {
+  return {
+    code,
+    path,
+    pathString: toIssuePath(path),
+    candidateIndex,
+    expected,
+    received,
+    message,
+  }
+}
+
 function normalizeMatchScore(candidate, score) {
   const reason = String(
     candidate?.matchScore?.reason
@@ -68,7 +88,7 @@ function normalizeMatchScore(candidate, score) {
 
 function normalizeCandidate(candidate, index) {
   if (!candidate || typeof candidate !== 'object') {
-    return { normalized: null, issue: { code: 'candidate.invalid_type', path: ['candidates', index], expected: 'object', received: typeof candidate } }
+    return { normalized: null, issues: [createIssue({ code: 'candidate.invalid_type', path: ['candidates', index], expected: 'object', received: typeof candidate, candidateIndex: index })] }
   }
 
   const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : `candidate-${index}`
@@ -78,6 +98,32 @@ function normalizeCandidate(candidate, index) {
 
   const score = resolveCandidateScore(candidate)
 
+  const candidateIssues = []
+  if (candidate.matchScore !== undefined && candidate.matchScore !== null) {
+    const isValidMatchScoreObject = typeof candidate.matchScore === 'object' && Number.isFinite(Number(candidate?.matchScore?.score))
+    const isValidMatchScoreNumber = Number.isFinite(Number(candidate.matchScore))
+    if (!isValidMatchScoreObject && !isValidMatchScoreNumber) {
+      candidateIssues.push(createIssue({
+        code: 'candidate.match_score.invalid_shape',
+        path: ['candidates', index, 'matchScore'],
+        expected: 'number | { score: number, reason?: string }',
+        received: candidate.matchScore === null ? 'null' : typeof candidate.matchScore,
+        candidateIndex: index,
+      }))
+    }
+  }
+
+  if (candidate.profile_score !== undefined && score === 0 && !Number.isFinite(Number(candidate?.score))) {
+    candidateIssues.push(createIssue({
+      code: 'candidate.profile_score.unresolved',
+      path: ['candidates', index, 'profile_score'],
+      expected: 'finite numeric source to resolve score',
+      received: candidate.profile_score,
+      candidateIndex: index,
+      message: 'profile_score was provided but score resolved to 0; score sources may be malformed.',
+    }))
+  }
+
   return {
     normalized: {
       ...candidate,
@@ -86,28 +132,31 @@ function normalizeCandidate(candidate, index) {
       score,
       matchScore: normalizeMatchScore(candidate, score),
     },
-    issue: null,
+    issues: candidateIssues,
   }
 }
 
-export function validateAnalysisResultsPayload(rawPayload, { logger = console } = {}) {
+export function validateAnalysisResultsPayload(rawPayload, { logger = console, strict = isNonProductionBuild } = {}) {
   const issues = []
 
   if (!rawPayload || typeof rawPayload !== 'object') {
-    issues.push({ code: 'payload.invalid_type', path: [], expected: 'object', received: typeof rawPayload })
+    issues.push(createIssue({ code: 'payload.invalid_type', path: [], expected: 'object', received: typeof rawPayload }))
   }
 
   const sourceCandidates = Array.isArray(rawPayload?.candidates) ? rawPayload.candidates : []
   if (!Array.isArray(rawPayload?.candidates)) {
-    issues.push({ code: 'payload.candidates.invalid_type', path: ['candidates'], expected: 'array', received: typeof rawPayload?.candidates })
+    issues.push(createIssue({ code: 'payload.candidates.invalid_type', path: ['candidates'], expected: 'array', received: typeof rawPayload?.candidates }))
   }
 
   const normalizedCandidates = []
   sourceCandidates.forEach((candidate, index) => {
-    const { normalized, issue } = normalizeCandidate(candidate, index)
-    if (issue) {
-      issues.push(issue)
+    const { normalized, issues: candidateIssues } = normalizeCandidate(candidate, index)
+    if (!normalized) {
+      issues.push(...candidateIssues)
       return
+    }
+    if (strict && candidateIssues.length > 0) {
+      issues.push(...candidateIssues)
     }
     normalizedCandidates.push(normalized)
   })
@@ -127,9 +176,11 @@ export function validateAnalysisResultsPayload(rawPayload, { logger = console } 
   }
 
   if (issues.length > 0) {
-    logger.error('[AnalysisResultsSchema] Validation issues detected.', {
+    const logLevel = strict ? 'error' : 'warn'
+    logger[logLevel]('[AnalysisResultsSchema] Validation issues detected.', {
       issueCount: issues.length,
       issues,
+      strict,
       fallbackApplied: true,
       candidateInputCount: sourceCandidates.length,
       candidateOutputCount: outputCount,

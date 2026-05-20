@@ -152,6 +152,8 @@ test('e2e: analysis detail terminal response with one malformed candidate still 
 
   assert.match(analysisDetailSource, /CandidateResults/)
   assert.match(analysisDetailSource, /candidateResultsPayload\.candidates\.length > 0/)
+  assert.match(analysisDetailSource, /Candidate payload validation issues\./)
+  assert.match(analysisDetailSource, /issueCount: issues\.length/)
   assert.doesNotMatch(analysisDetailSource, /<ResultsErrorBoundary[^]*We could not render these results/s)
   assert.match(analysisDetailSource, /isNonProductionBuild && candidateResultsPayload\.droppedCount > 0/)
 })
