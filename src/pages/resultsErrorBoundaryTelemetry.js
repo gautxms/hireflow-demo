@@ -13,7 +13,7 @@ export function normalizeErrorFingerprint({ error = null, errorInfo = null } = {
   return `${name}|${message}|${stack}`
 }
 
-export function buildResultsRenderErrorEvent({ analysisId = '', candidateCount = 0, normalizationStats = null, error = null, errorInfo = null, timestamp = new Date().toISOString() }) {
+export function buildResultsRenderErrorEvent({ analysisId = '', candidateCount = 0, normalizationStats = null, candidateFieldTypeSummary = null, error = null, errorInfo = null, timestamp = new Date().toISOString() }) {
   const normalizedErrorFingerprint = normalizeErrorFingerprint({ error, errorInfo })
 
   return {
@@ -27,6 +27,16 @@ export function buildResultsRenderErrorEvent({ analysisId = '', candidateCount =
         droppedCount: Number(normalizationStats.droppedCount || 0),
       }
       : null,
+    candidateFieldTypeSummary: Array.isArray(candidateFieldTypeSummary)
+      ? candidateFieldTypeSummary.map((entry, index) => ({
+        index: Number(entry?.index ?? index),
+        id: String(entry?.id || ''),
+        matchScoreType: String(entry?.matchScoreType || ''),
+        matchScoreScoreType: String(entry?.matchScoreScoreType || ''),
+        matchScoreReasonType: String(entry?.matchScoreReasonType || ''),
+        experienceType: String(entry?.experienceType || ''),
+      }))
+      : [],
     errorName: error?.name || 'Error',
     errorMessage: error?.message || 'Unknown render error',
     componentStack: errorInfo?.componentStack || '',

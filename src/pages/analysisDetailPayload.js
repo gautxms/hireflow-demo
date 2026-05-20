@@ -42,6 +42,22 @@ function toCandidateResultsPayload(analysis) {
     return Math.max(0, Math.min(100, numeric))
   }
 
+  const normalizeMatchScore = (rawCandidate, normalizedScore) => {
+    const reason = normalizeString(
+      rawCandidate?.matchScore?.reason
+      || rawCandidate?.fit_assessment?.reason
+      || rawCandidate?.assessment?.summary
+      || rawCandidate?.summary
+      || 'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
+      'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
+    ).trim()
+
+    return {
+      score: normalizedScore,
+      reason: reason || 'Reasoning unavailable for this legacy analysis; score is derived from available profile signals.',
+    }
+  }
+
   const normalizeSkillsStructured = (input) => {
     const source = input && typeof input === 'object' ? input : {}
     const fields = ['tools_and_platforms', 'methodologies', 'domain_expertise', 'soft_skills']
@@ -87,7 +103,7 @@ function toCandidateResultsPayload(analysis) {
       title: normalizeString(raw?.title, ''),
       location: normalizeString(raw?.location, ''),
       summary: normalizeString(raw?.summary, ''),
-      matchScore: normalizedScore,
+      matchScore: normalizeMatchScore(raw, normalizedScore),
       score: normalizedScore,
       resumeId: normalizeString(raw?.resumeId || raw?.resume_id, ''),
       filename: normalizeString(raw?.filename, ''),

@@ -188,9 +188,13 @@ function parseUploadDate(candidate) {
 }
 
 function deriveCompactRationale(candidate) {
-  const reason = String(candidate?.matchScore?.reason || '').trim()
+  const reason = resolveMatchScoreReason(candidate)
   if (reason) return reason
   return 'General profile score based on experience depth, skill breadth, and career progression.'
+}
+
+function resolveMatchScoreReason(candidate) {
+  return String(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason || '').trim()
 }
 
 function activeScore(candidate) {
@@ -1229,7 +1233,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       ? normalizeTextList(candidate.achievements).slice(0, 3)
       : []
   const candidateConsiderations = normalizeTextList(candidate.considerations)
-  const reasoningText = safeText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
+  const reasoningText = safeText(resolveMatchScoreReason(candidate), 'Reasoning unavailable for this profile.')
   const experienceEntries = deriveExperienceEntries(candidate)
   const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
   const scoreBreakdown = candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object'

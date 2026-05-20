@@ -60,6 +60,18 @@ function deriveAnalysisPageTitle(analysis, analysisId) {
   return preferred.map((value) => String(value || '').trim()).find(Boolean) || 'Analysis'
 }
 
+function summarizeCandidateFieldTypes(candidates = [], sampleSize = 5) {
+  if (!Array.isArray(candidates)) return []
+  return candidates.slice(0, sampleSize).map((candidate, index) => ({
+    index,
+    id: String(candidate?.id || candidate?.resumeId || `candidate-${index}`),
+    matchScoreType: candidate?.matchScore === null ? 'null' : typeof candidate?.matchScore,
+    matchScoreScoreType: candidate?.matchScore?.score === null ? 'null' : typeof candidate?.matchScore?.score,
+    matchScoreReasonType: candidate?.matchScore?.reason === null ? 'null' : typeof candidate?.matchScore?.reason,
+    experienceType: candidate?.experience === null ? 'null' : Array.isArray(candidate?.experience) ? 'array' : typeof candidate?.experience,
+  }))
+}
+
 
 export class ResultsErrorBoundary extends React.Component {
   constructor(props) {
@@ -77,6 +89,7 @@ export class ResultsErrorBoundary extends React.Component {
       candidateCount: this.props.candidateCount,
       normalizationStats: this.props.normalizationStats,
       candidatePayloadShape: this.props.candidatePayloadShape,
+      candidateFieldTypeSummary: this.props.candidateFieldTypeSummary,
       renderException: {
         name: error?.name || 'Error',
         message: error?.message || String(error),
@@ -88,6 +101,7 @@ export class ResultsErrorBoundary extends React.Component {
       analysisId: this.props.analysisId,
       candidateCount: this.props.candidateCount,
       normalizationStats: this.props.normalizationStats,
+      candidateFieldTypeSummary: this.props.candidateFieldTypeSummary,
       error,
       errorInfo,
     })
@@ -197,6 +211,10 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
       ? Object.keys(candidateResultsPayload.candidates[0]).slice(0, 20)
       : [],
   }), [analysis, candidateCount, candidateResultsPayload, itemCount])
+  const candidateFieldTypeSummary = useMemo(
+    () => summarizeCandidateFieldTypes(candidateResultsPayload?.candidates),
+    [candidateResultsPayload],
+  )
 
   useEffect(() => {
     if (isNonProductionBuild && (displayStatus === 'complete' || displayStatus === 'partial' || displayStatus === 'failed')) {
@@ -235,6 +253,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
             droppedCount: Math.max(itemCount - candidateCount, 0),
           }}
           candidatePayloadShape={candidatePayloadShape}
+          candidateFieldTypeSummary={candidateFieldTypeSummary}
         >
           {isNonProductionBuild && candidateResultsPayload.droppedCount > 0 && (
             <section className="route-state-card" role="status" aria-live="polite">
