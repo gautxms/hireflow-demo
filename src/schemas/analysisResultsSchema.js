@@ -49,6 +49,10 @@ function resolveCandidateScore(candidate) {
     return Number(candidate.matchScore)
   }
 
+  if (Number.isFinite(Number(candidate?.profile_score))) {
+    return Number(candidate.profile_score)
+  }
+
   return 0
 }
 

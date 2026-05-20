@@ -78,6 +78,19 @@ test('strict mode reports invalid matchScore shape with structured candidate pat
   })
 })
 
+
+
+test('strict mode accepts numeric profile_score as a valid score source', () => {
+  const { payload, issues, isValid } = validateAnalysisResultsPayload({
+    candidates: [{ id: 'profile-good', name: 'Profile Good', profile_score: 52 }],
+  }, { strict: true })
+
+  assert.equal(isValid, true)
+  assert.equal(issues.length, 0)
+  assert.equal(payload.candidates[0].score, 52)
+  assert.equal(payload.candidates[0].matchScore.score, 52)
+})
+
 test('strict mode reports unresolved profile_score source when score collapses to 0', () => {
   const { issues, isValid } = validateAnalysisResultsPayload({
     candidates: [{ id: 'profile-bad', name: 'Profile Bad', profile_score: 'unknown' }],
