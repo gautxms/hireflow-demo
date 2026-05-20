@@ -359,7 +359,7 @@ function parseBreakdownPercent(value) {
   return match ? Number.parseInt(match[1], 10) : null
 }
 
-function resolveBreakdownMetric(matchBreakdown, keys = [], fallback = 0) {
+function resolveBreakdownMetric(matchBreakdown, keys = [], fallback = null) {
   if (!matchBreakdown || typeof matchBreakdown !== 'object') return fallback
 
   for (const key of keys) {
@@ -1438,6 +1438,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       ]),
     },
   ] : []
+  const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
+  const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
   const mergedSkillGaps = [...new Set([
     ...safeArray(candidate?.mustHaveSkills),
     ...safeArray(candidate?.missingSkills),
@@ -1557,9 +1559,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
         <div className="dd-col">
           <div className="dd-col-label section-heading">Score breakdown</div>
-          {matchBreakdown ? (
+          {matchBreakdown && hasResolvableBreakdownMetrics ? (
             <div className="dd-analysis-box dd-breakdown">
-              {scoreBreakdownRows.map((row) => (
+              {resolvableScoreBreakdownRows.map((row) => (
                 <div className="dd-breakdown-row" key={`${candidate._bulkKey}-breakdown-${row.label}`}>
                   <span>{row.label}</span>
                   <span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span>
