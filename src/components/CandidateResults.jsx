@@ -339,10 +339,19 @@ function resolveConfidenceLabel(candidate, hasScore) {
 }
 
 function formatEducation(education) {
+  if (typeof education === 'string') return education.trim() || 'Unavailable'
+  if (education && typeof education === 'object' && !Array.isArray(education)) {
+    const formattedObject = [education?.degree, education?.school].filter(Boolean).join(', ')
+    return formattedObject || safeText(education?.label || education?.name, 'Unavailable')
+  }
   if (!Array.isArray(education) || education.length === 0) return 'Unavailable'
   const latest = education[0]
-  if (typeof latest === 'string') return latest
-  return [latest?.degree, latest?.school].filter(Boolean).join(', ') || 'Unavailable'
+  if (typeof latest === 'string') return latest.trim() || 'Unavailable'
+  if (latest && typeof latest === 'object') {
+    return [latest?.degree, latest?.school].filter(Boolean).join(', ')
+      || safeText(latest?.label || latest?.name, 'Unavailable')
+  }
+  return 'Unavailable'
 }
 
 function parseBreakdownPercent(value) {
@@ -1352,7 +1361,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const candidateConsiderations = normalizeTextList(candidate.considerations)
   const reasoningText = safeText(resolveMatchScoreReason(candidate), 'Reasoning unavailable for this profile.')
   const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
-  const matchBreakdown = candidate?.matchScore?.breakdown
+  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
   const scoreBreakdownRows = matchBreakdown ? [
     { label: 'Skills match', value: parseBreakdownPercent(matchBreakdown.technical_skills) },
     { label: 'Experience', value: parseBreakdownPercent(matchBreakdown.experience_years) },
