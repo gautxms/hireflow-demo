@@ -48,6 +48,7 @@ class CandidateDetailErrorBoundary extends React.Component {
       analysisId: this.props.analysisId,
       candidateCount: this.props.candidateCount,
       selectedCandidateKey: this.props.selectedCandidateKey,
+      selectedCandidateId: this.props.selectedCandidateId,
       renderException: {
         name: error?.name || 'Error',
         message: error?.message || String(error),
@@ -62,6 +63,9 @@ class CandidateDetailErrorBoundary extends React.Component {
       normalizationStats: this.props.normalizationStats,
       candidatePayloadShape: this.props.candidatePayloadShape,
       candidateFieldTypeSummary: this.props.candidateFieldTypeSummary,
+      selectedCandidateKey: this.props.selectedCandidateKey,
+      selectedCandidateId: this.props.selectedCandidateId,
+      selectedCandidate: this.props.selectedCandidate,
       error,
       errorInfo,
     })
@@ -1338,6 +1342,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       candidatePayloadShape={candidatePayloadShape}
       candidateFieldTypeSummary={candidateFieldTypeSummary}
       selectedCandidateKey={candidate._bulkKey}
+      selectedCandidateId={candidate.id}
+      selectedCandidate={candidate}
       onBackToResults={() => setExpandedId(null)}
     >
       <div id="detail-drawer" className="detail-drawer">
