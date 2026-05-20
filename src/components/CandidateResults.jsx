@@ -774,13 +774,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
 
     try {
-      const response = await fetch(`${API_BASE}/resumes/${encodeURIComponent(resumeId)}/resume`, {
+      const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(resumeId)}/resume`, {
         method: 'GET',
         headers: authHeaders(),
       })
 
       if (!response.ok) {
-        throw new Error('Unable to open candidate resume')
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'Unable to open candidate resume')
       }
 
       const fileBlob = await response.blob()
