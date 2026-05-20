@@ -1432,7 +1432,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-secondary);
 }
 
@@ -1472,21 +1472,26 @@
 
 .dd-btn-primary,
 .dd-btn-ghost {
-  font-size: 13px;
+  font-size: 14px;
+  min-height: 42px;
+  padding-top: 10px;
+  padding-bottom: 10px;
   white-space: nowrap;
 }
 
 .dd-close {
-  background: transparent;
-  border: none;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
   color: var(--hf-surface-muted);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px 8px;
-  transition: color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 
-.dd-close:hover { color: var(--color-text-primary); }
+.dd-close:hover {
+  color: var(--color-text-primary);
+  border-color: #444444;
+  background: #0d0d0d;
+}
 
 .dd-fact-link,
 .dd-fact-link:visited {
@@ -1542,7 +1547,7 @@
 .dd-col-label--mt-14 { margin-top: 14px; }
 
 .dd-summary {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-secondary);
   line-height: 1.7;
   overflow-wrap: anywhere;
