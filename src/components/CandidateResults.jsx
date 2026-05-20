@@ -91,6 +91,23 @@ class CandidateDetailErrorBoundary extends React.Component {
   }
 }
 
+function ExpandableText({ text }) {
+  const [expanded, setExpanded] = useState(false)
+  const content = String(text || '').trim()
+  const needsTruncation = content.length > 120
+  const display = expanded || !needsTruncation ? content : `${content.slice(0, 120).trimEnd()}…`
+  return (
+    <span>
+      {display}
+      {needsTruncation && (
+        <button type="button" className="dd-read-more" onClick={() => setExpanded((value) => !value)}>
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </span>
+  )
+}
+
 
 function safeSerialize(value) {
   try {
@@ -131,8 +148,9 @@ function formatScore(score) {
 function getScoreTone(score) {
   const numeric = Number(score)
   if (!Number.isFinite(numeric) || numeric < 0) return 'unscored'
-  if (numeric >= 80) return 'strong'
-  if (numeric >= 60) return 'possible'
+  const normalized = numeric > 10 ? numeric / 10 : numeric
+  if (normalized >= 8) return 'strong'
+  if (normalized >= 6) return 'possible'
   return 'low'
 }
 
@@ -308,10 +326,37 @@ function resolveVerdictLabel(candidate, tier, hasScore) {
 
 function resolveConfidenceLabel(candidate, hasScore) {
   const explicitConfidence = [candidate?.fit_assessment?.confidence, candidate?.confidence, candidate?.match_confidence]
-    .map((value) => String(value || '').trim())
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
     .find(Boolean)
   if (explicitConfidence) return explicitConfidence
+  const numericConfidence = Number(candidate?.confidenceScores?.fit_assessment)
+  if (Number.isFinite(numericConfidence)) {
+    if (numericConfidence >= 0.85) return 'High confidence'
+    if (numericConfidence >= 0.65) return 'Moderate confidence'
+    return 'Low confidence'
+  }
   return hasScore ? '' : 'Low confidence'
+}
+
+function formatEducation(education) {
+  if (typeof education === 'string') return education.trim() || 'Unavailable'
+  if (education && typeof education === 'object' && !Array.isArray(education)) {
+    const formattedObject = [education?.degree, education?.school].filter(Boolean).join(', ')
+    return formattedObject || safeText(education?.label || education?.name, 'Unavailable')
+  }
+  if (!Array.isArray(education) || education.length === 0) return 'Unavailable'
+  const latest = education[0]
+  if (typeof latest === 'string') return latest.trim() || 'Unavailable'
+  if (latest && typeof latest === 'object') {
+    return [latest?.degree, latest?.school].filter(Boolean).join(', ')
+      || safeText(latest?.label || latest?.name, 'Unavailable')
+  }
+  return 'Unavailable'
+}
+
+function parseBreakdownPercent(value) {
+  const match = String(value || '').match(/\((\d+)%/)
+  return match ? Number.parseInt(match[1], 10) : null
 }
 
 function toHumanIssueLabel(value) {
@@ -1303,10 +1348,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const hasDisplayScore = displayScore != null && Number.isFinite(Number(displayScore))
   const verdictLabel = resolveVerdictLabel(candidate, tier, hasDisplayScore)
   const confidenceLabel = resolveConfidenceLabel(candidate, hasDisplayScore)
-  const candidateTitle = safeText(candidate.current_title, 'Unavailable')
-  const experienceLabel = hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : 'Unavailable'
-  const locationLabel = safeText(candidate.location, 'Unavailable')
-  const seniorityLabel = safeText(candidate.seniority_level, 'Unavailable')
+  const candidateTitle = safeText(candidate?.experience?.[0]?.title || candidate.current_title, '')
+  const experienceLabel = hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : '0 yrs exp'
+  const locationLabel = safeText(candidate.location, 'Location unavailable')
+  const seniorityLabel = safeText(candidate.seniority_level, '')
   const normalizeTextList = (list) => safeArray(list).map((entry) => safeText(entry, '')).filter(Boolean)
   const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
     ? normalizeTextList(candidate.strengths)
@@ -1315,16 +1360,24 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       : []
   const candidateConsiderations = normalizeTextList(candidate.considerations)
   const reasoningText = safeText(resolveMatchScoreReason(candidate), 'Reasoning unavailable for this profile.')
-  const experienceEntries = deriveExperienceEntries(candidate)
   const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
-  const scoreBreakdown = candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object'
-    ? Object.entries(candidate.scoreBreakdown).filter(([key, value]) => key !== 'overall' && Number.isFinite(Number(value)))
-    : []
+  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
+  const scoreBreakdownRows = matchBreakdown ? [
+    { label: 'Skills match', value: parseBreakdownPercent(matchBreakdown.technical_skills) },
+    { label: 'Experience', value: parseBreakdownPercent(matchBreakdown.experience_years) },
+    { label: 'Role alignment', value: parseBreakdownPercent(matchBreakdown.methodologies) },
+    { label: 'Domain', value: parseBreakdownPercent(matchBreakdown.domain_expertise) },
+    { label: 'Location', value: parseBreakdownPercent(matchBreakdown.location) },
+  ].filter((row) => row.value != null) : []
   const mergedSkillGaps = [...new Set([
     ...safeArray(candidate?.mustHaveSkills),
     ...safeArray(candidate?.missingSkills),
     ...safeArray(candidate?.fit_assessment?.missing),
   ].map((entry) => safeText(entry, '')).filter(Boolean))]
+  const matchedSkills = safeArray(candidate?.matchedSkills).map((entry) => safeText(entry, '')).filter(Boolean)
+  const missingSkills = mergedSkillGaps
+  const totalSkills = matchedSkills.length + missingSkills.length
+  const recommendationText = safeText(candidate?.recommendation || candidate?.fit_assessment?.rationale, '')
   const initials = String(candidate?.name || '')
     .split(' ')
     .map((part) => part[0] || '')
@@ -1371,7 +1424,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <button className="hf-btn hf-btn--primary dd-btn-primary" type="button">Schedule interview</button>
           <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to shortlist</button>
           <button
-            className="hf-btn dd-btn-ghost"
+            className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost"
             type="button"
             onClick={(event) => {
               event.stopPropagation()
@@ -1383,24 +1436,24 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               window.location.href = `/candidates/${candidateProfileId}`
             }}
           >
-            View full profile →
+            <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
-        <button className="dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
+        <button className="hf-btn hf-btn--ghost hf-btn--icon dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
       </div>
 
       <div className="dd-body">
         <div className="dd-col">
-          <div className="dd-col-label">Summary</div>
+          <div className="dd-col-label section-heading">Summary</div>
           <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
-          <div className="dd-col-label dd-col-label--mt-16">AI reasoning</div>
+          <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
           <p className="dd-summary">{reasoningText}</p>
 
-          <div className="dd-col-label dd-col-label--mt-16">Key facts</div>
+          <div className="dd-col-label section-heading dd-col-label--mt-16">Key facts</div>
           <div className="dd-facts">
             <div className="dd-fact">
               <span className="dd-fact-k">Experience</span>
-              <span className="dd-fact-v">{hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} years` : 'Unavailable'}</span>
+              <span className="dd-fact-v">{hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} years` : '0 years'}</span>
             </div>
             <div className="dd-fact">
               <span className="dd-fact-k">Seniority</span>
@@ -1408,7 +1461,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             </div>
             <div className="dd-fact">
               <span className="dd-fact-k">Education</span>
-              <span className="dd-fact-v">{safeText(candidate.education, 'Unavailable')}</span>
+              <span className="dd-fact-v">{formatEducation(candidate.education)}</span>
             </div>
             <div className="dd-fact">
               <span className="dd-fact-k">Location</span>
@@ -1422,38 +1475,42 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             )}
           </div>
 
-          <div className="dd-col-label dd-col-label--mt-16">Recent experience</div>
-          {experienceEntries.length === 0 && <p className="dd-summary">Unavailable</p>}
-          {experienceEntries.map((job, idx) => (
-            <div className="dd-job" key={`${candidate._bulkKey}-job-${idx}`}>
-              <div className="dd-job-title">{toDisplayText(job.title, 'Role not provided')}</div>
-              <div className="dd-job-meta">
-                {toDisplayText(job.company, 'N/A')} · {toDisplayText(job.durationText, [job.startDate, job.endDate].filter(Boolean).join(' – ') || 'N/A')}
+          {recommendationText && (
+            <>
+              <div className="dd-col-label section-heading dd-col-label--mt-16">Recommended action</div>
+              <div className="dd-recommended-action">{recommendationText}</div>
+            </>
+          )}
+          {candidateConsiderations.length > 0 && (
+            <>
+              <div className="dd-col-label section-heading dd-col-label--mt-16">Interview probes</div>
+              <div className="dd-list">
+                {candidateConsiderations.map((probe, idx) => <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-probe-${idx}`}><span className="dd-probe-icon">?</span><ExpandableText text={probe} /></div>)}
               </div>
-            </div>
-          ))}
+            </>
+          )}
         </div>
 
         <div className="dd-col">
-          <div className="dd-col-label">Strengths</div>
+          <div className="dd-col-label section-heading">Strengths</div>
           <div className="dd-analysis-box dd-analysis-box--green">
             {candidateStrengths.length > 0
               ? candidateStrengths.map((strength, idx) => (
                 <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}>
                   <CheckCircle size={18} strokeWidth={1.5} />
-                  <span>{strength}</span>
+                  <ExpandableText text={strength} />
                 </div>
               ))
               : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
           </div>
 
-          <div className="dd-col-label dd-col-label--mt-14">Considerations</div>
+          <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
           <div className="dd-analysis-box dd-analysis-box--amber">
             {candidateConsiderations.length > 0
               ? candidateConsiderations.map((consideration, idx) => (
                 <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}>
                   <AlertTriangle size={18} strokeWidth={1.5} />
-                  <span>{consideration}</span>
+                  <ExpandableText text={consideration} />
                 </div>
               ))
               : (
@@ -1469,12 +1526,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         </div>
 
         <div className="dd-col">
-          <div className="dd-col-label">Score breakdown</div>
-          {scoreBreakdown.length > 0 ? (
-            <div className="dd-analysis-box">
-              {scoreBreakdown.map(([key, value]) => (
-                <div className="dd-analysis-item" key={`${candidate._bulkKey}-breakdown-${key}`}>
-                  {safeText(key)}: {Math.max(0, Math.min(100, Number(value)))}%
+          <div className="dd-col-label section-heading">Score breakdown</div>
+          {matchBreakdown ? (
+            <div className="dd-analysis-box dd-breakdown">
+              {scoreBreakdownRows.map((row) => (
+                <div className="dd-breakdown-row" key={`${candidate._bulkKey}-breakdown-${row.label}`}>
+                  <span>{row.label}</span>
+                  <span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span>
+                  <span>{row.value}%</span>
                 </div>
               ))}
             </div>
@@ -1482,10 +1541,15 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <p className="dd-summary">Score breakdown unavailable</p>
           )}
 
-          <div className="dd-col-label dd-col-label--mt-14">Skill gaps</div>
-          {mergedSkillGaps.length > 0 ? (
+          <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {matchedSkills.length} of {totalSkills} required</span></div>
+          <div className="dd-top-skills">
+            {matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${candidate._bulkKey}-matched-${skill}`}>{skill}</span>))}
+          </div>
+
+          <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps <span className="dd-count-badge dd-count-badge--amber">⚠ {missingSkills.length} missing</span></div>
+          {missingSkills.length > 0 ? (
             <div className="dd-top-skills">
-              {mergedSkillGaps.map((gap) => (
+              {missingSkills.map((gap) => (
                 <span className="dd-top-skill dd-top-skill--gap" key={`${candidate._bulkKey}-gap-${gap}`}>{gap}</span>
               ))}
             </div>
@@ -1493,7 +1557,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <p className="dd-summary">No explicit skill gaps identified</p>
           )}
 
-          <div className="dd-col-label">Top skills</div>
+          <div className="dd-col-label section-heading">All skills</div>
           <div className="dd-top-skills">
             {topSkills.map((skill) => (
               <span className="dd-top-skill" key={`${candidate._bulkKey}-top-${String(formatSkillLabel(skill))}`}>
@@ -1505,7 +1569,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
           {integrityChecks.length > 0 && (
             <>
-              <div className="dd-col-label dd-col-label--mt-14">Resume integrity checks</div>
+              <div className="dd-col-label section-heading dd-col-label--mt-14">Resume integrity checks</div>
               <div className="dd-analysis-box">
                 {integrityChecks.map((check, idx) => (
                   <div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${candidate._bulkKey}-integrity-${idx}`}>
@@ -1519,7 +1583,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             </>
           )}
 
-          <div className="dd-col-label dd-col-label--mt-14">Resume file</div>
+          <div className="dd-col-label section-heading dd-col-label--mt-14">Resume file</div>
           <div className="dd-resume-file">
             <FileText size={18} strokeWidth={1.5} />
             <div>
