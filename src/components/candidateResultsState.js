@@ -111,18 +111,22 @@ export function normalizeCandidateForResults(candidate, index = 0) {
 }
 
 export function resolveCandidateKey(candidate = {}, index = 0) {
-  const fields = [
+  const canonicalFields = [
     candidate?.candidateKey,
     candidate?.resumeId,
     candidate?.resume_id,
     candidate?.id,
     candidate?.email,
-    candidate?.name ? `${candidate.name}-${index}` : null,
   ]
 
-  for (const value of fields) {
+  for (const value of canonicalFields) {
     const normalized = String(value || '').trim()
     if (normalized) return normalized
+  }
+
+  const normalizedName = String(candidate?.name || '').trim()
+  if (normalizedName) {
+    return `${normalizedName}-${index}`
   }
 
   return `candidate-${index}`

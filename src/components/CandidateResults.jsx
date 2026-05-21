@@ -1358,7 +1358,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
           return (
             <div
-              key={candidate._bulkKey}
+              key={candidateKey}
               className={`result-card result-card--${tier}${isExpanded ? ' result-card--open' : ''}`}
               onClick={() => handleCardClick(candidateKey)}
             >
@@ -1395,7 +1395,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
               <div className="rc-skills">
                 {topSkills.slice(0, 3).map((skill) => (
-                  <span className="rc-skill" key={`${candidate._bulkKey}-${String(formatSkillLabel(skill))}`}>
+                  <span className="rc-skill" key={`${candidateKey}-${String(formatSkillLabel(skill))}`}>
                     {formatSkillLabel(skill)}
                   </span>
                 ))}
@@ -1441,6 +1441,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
             {expandedCandidate && (() => {
   const candidate = sanitizeExpandedCandidate(expandedCandidate)
+  const expandedCandidateKey = resolveCandidateKey(candidate)
   const score = activeScore(candidate)
   const tier = getScoreTone(score)
   const displayScore = formatScore(score)
@@ -1521,13 +1522,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   return (
     <CandidateDetailErrorBoundary
-      key={String(candidate._bulkKey || resolveCandidateKey(candidate) || "candidate-detail")}
+      key={String(expandedCandidateKey || resolveCandidateKey(candidate) || "candidate-detail")}
       analysisId={analysisId}
       candidateCount={candidateCount}
       normalizationStats={normalizationStats}
       candidatePayloadShape={candidatePayloadShape}
       candidateFieldTypeSummary={candidateFieldTypeSummary}
-      selectedCandidateKey={candidate._bulkKey}
+      selectedCandidateKey={expandedCandidateKey}
       selectedCandidateId={candidate.id}
       selectedCandidate={candidate}
       onBackToResults={() => setExpandedId(null)}
@@ -1613,7 +1614,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <>
               <div className="dd-col-label section-heading dd-col-label--mt-16">Interview probes</div>
               <div className="dd-list">
-                {candidateConsiderations.map((probe, idx) => <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-probe-${idx}`}><span className="dd-probe-icon">?</span><ExpandableText text={probe} /></div>)}
+                {candidateConsiderations.map((probe, idx) => <div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-probe-${idx}`}><span className="dd-probe-icon">?</span><ExpandableText text={probe} /></div>)}
               </div>
             </>
           )}
@@ -1624,7 +1625,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           {matchBreakdown && hasResolvableBreakdownMetrics ? (
             <div className="dd-analysis-box dd-breakdown">
               {resolvableScoreBreakdownRows.map((row) => (
-                <div className="dd-breakdown-row" key={`${candidate._bulkKey}-breakdown-${row.label}`}>
+                <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
                   <span>{row.label}</span>
                   <span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span>
                   <span>{row.value}%</span>
@@ -1637,14 +1638,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
           <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {matchedSkills.length} of {totalSkills} required</span></div>
           <div className="dd-top-skills">
-            {matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${candidate._bulkKey}-matched-${skill}`}>{skill}</span>))}
+            {matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}
           </div>
 
           <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps <span className="dd-count-badge dd-count-badge--amber">⚠ {missingSkills.length} missing</span></div>
           {missingSkills.length > 0 ? (
             <div className="dd-top-skills">
               {missingSkills.map((gap) => (
-                <span className="dd-top-skill dd-top-skill--gap" key={`${candidate._bulkKey}-gap-${gap}`}>{gap}</span>
+                <span className="dd-top-skill dd-top-skill--gap" key={`${expandedCandidateKey}-gap-${gap}`}>{gap}</span>
               ))}
             </div>
           ) : (
@@ -1654,7 +1655,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-col-label section-heading dd-col-label--mt-14">All skills</div>
           <div className="dd-top-skills dd-top-skills--all">
             {allSkills.map((skill) => (
-              <span className="dd-top-skill dd-top-skill--all" key={`${candidate._bulkKey}-all-${String(formatSkillLabel(skill))}`}>
+              <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-all-${String(formatSkillLabel(skill))}`}>
                 {formatSkillLabel(skill)}
               </span>
             ))}
@@ -1666,7 +1667,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="dd-col-label section-heading dd-col-label--mt-14">Resume integrity checks</div>
               <div className="dd-analysis-box">
                 {integrityChecks.map((check, idx) => (
-                  <div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${candidate._bulkKey}-integrity-${idx}`}>
+                  <div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>
                     {check?.status === 'issue'
                       ? <AlertTriangle size={18} strokeWidth={1.5} />
                       : <CheckCircle size={18} strokeWidth={1.5} />}
@@ -1683,7 +1684,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-analysis-box dd-analysis-box--green">
             {candidateStrengths.length > 0
               ? candidateStrengths.map((strength, idx) => (
-                <div className="dd-list-item" key={`${candidate._bulkKey}-strength-${idx}`}>
+                <div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}>
                   <CheckCircle size={18} strokeWidth={1.5} />
                   <ExpandableText text={strength} />
                 </div>
@@ -1695,7 +1696,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-analysis-box dd-analysis-box--amber">
             {candidateConsiderations.length > 0
               ? candidateConsiderations.map((consideration, idx) => (
-                <div className="dd-list-item dd-list-item--warn" key={`${candidate._bulkKey}-consideration-${idx}`}>
+                <div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}>
                   <AlertTriangle size={18} strokeWidth={1.5} />
                   <ExpandableText text={consideration} />
                 </div>
