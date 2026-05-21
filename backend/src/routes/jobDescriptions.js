@@ -333,7 +333,7 @@ router.post('/', (req, res, next) => {
          file_url,
          status,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
+       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW())
        RETURNING *`,
       [
         req.userId,
