@@ -1,4 +1,3 @@
-cat > backend/src/routes/uploads.js <<'EOF'
 import multer from 'multer'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
@@ -258,4 +257,3 @@ router.post(
 )
 
 export default router
-EOF
