@@ -11,7 +11,10 @@ import {
   trackUploadUsage,
 } from '../middleware/subscriptionCheck.js'
 import { generalApiLimiterAuth, uploadLimiter } from '../middleware/rateLimiter.js'
-import * as fileMime from '../utils/fileMime.js'
+import {
+  isAcceptedResumeUpload as isAcceptedResumeFile,
+  resolveEffectiveMimeType as resolveMimeFromUpload,
+} from '../utils/fileMime.js'
 
 const router = Router()
 
@@ -23,12 +26,12 @@ const upload = multer({
     files: 20,
   },
   fileFilter: (_req, file, cb) => {
-    if (!fileMime.isAcceptedResumeUpload(file.mimetype, file.originalname)) {
+    if (!isAcceptedResumeFile(file.mimetype, file.originalname)) {
       return cb(new Error('Only PDF, DOCX, and TXT files are allowed'))
     }
 
     file.safeName = sanitizeFilename(file.originalname)
-    file.mimetype = fileMime.resolveEffectiveMimeType(file.mimetype, file.originalname) || file.mimetype
+    file.mimetype = resolveMimeFromUpload(file.mimetype, file.originalname) || file.mimetype
     return cb(null, true)
   },
 })
