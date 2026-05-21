@@ -100,7 +100,7 @@ export default function CandidatesPage() {
 
   const queryString = useMemo(() => {
     return buildCandidateDirectoryQueryParams({
-      search: [searchTerm, filters.skills, filters.tags].filter(Boolean).join(' ').trim() || null,
+      search: searchTerm.trim() || null,
       job: filters.sourceJobId,
       skills: filters.skills,
       tags: filters.tags,
@@ -141,7 +141,7 @@ export default function CandidatesPage() {
 
         const nextCandidates = Array.isArray(payload.candidates) ? payload.candidates : []
         setCandidates(nextCandidates)
-        const payloadPagination = payload?.pagination || {}
+        const payloadPagination = payload?.pagination || payload || {}
         const totalCount = Number(payloadPagination.totalCount)
         const totalPages = Number(payloadPagination.totalPages)
         const nextPage = Number(payloadPagination.page)
