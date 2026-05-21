@@ -1,18 +1,7 @@
-import { useState } from 'react'
-import { Briefcase, Brain, Palette, Cog } from 'lucide-react'
 import { Icon } from './Icon'
 import PublicPageLayout from './public/PublicPageLayout'
 
 export default function AboutPage({ onBack }) {
-  const [selectedTeamMember, setSelectedTeamMember] = useState(null)
-
-  const teamMembers = [
-    { id: 1, name: 'Gautam', title: 'Founder & CEO', bio: 'Former Head of Recruiting at Stripe. Passionate about building tools that make hiring human-centric.', expertise: ['Recruiting', 'Product', 'Operations'], avatarIcon: Briefcase },
-    { id: 2, name: 'Sarah Chen', title: 'Head of AI/ML', bio: 'PhD in Computer Science from MIT. Built ML systems at OpenAI. Leading our AI scoring engine.', expertise: ['Machine Learning', 'NLP', 'AI Ethics'], avatarIcon: Brain },
-    { id: 3, name: 'Marcus Rodriguez', title: 'VP Product', bio: 'Ex-Google, ex-Figma. Obsessed with user experience and building products people love.', expertise: ['Product Design', 'UX', 'Strategy'], avatarIcon: Palette },
-    { id: 4, name: 'Priya Sharma', title: 'VP Engineering', bio: 'Led infrastructure at Databricks. Building HireFlow to scale to millions of candidates.', expertise: ['Backend', 'Infrastructure', 'Scalability'], avatarIcon: Cog }
-  ]
-
   const stats = [
     { number: 'Feb 2026', label: 'Started building HireFlow' },
     { number: '100+', label: 'Resumes tested during product development' },
@@ -39,6 +28,12 @@ export default function AboutPage({ onBack }) {
     { year: '2025', event: 'Enterprise Launch', desc: 'API + custom integrations available.' },
     { year: '2025 Q2', event: 'IPO Goals', desc: 'Become the standard for AI hiring.' }
   ]
+  const focusAreas = [
+    { title: 'Recruiters', description: 'Quickly review candidate strengths, experience signals, and fit indicators without manual spreadsheet triage.' },
+    { title: 'Founders & small teams', description: 'Run a consistent hiring workflow even when hiring is shared across a lean team with limited recruiting bandwidth.' },
+    { title: 'Hiring managers', description: 'Get structured candidate context tied directly to role needs so interview planning and decisions are clearer.' },
+    { title: 'Early-stage teams', description: 'Set up practical screening processes early and keep quality high as hiring volume increases.' }
+  ]
 
   return (
     <PublicPageLayout header={<div className="public-page-header"><button type="button" onClick={onBack} className="public-page-back-button public-nav-text" aria-label="Back to home">← Back to Home</button></div>}>
@@ -54,9 +49,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-section public-page-main"><h2 className="public-section-title center">Our Values</h2><div className="public-feature-grid">{values.map((value) => <article key={value.title} className="public-card"><Icon name={value.icon} size="xl" tone="accent" className="contact-icon" /><h3 className="public-card-title">{value.title}</h3><p className="public-card-copy">{value.description}</p></article>)}</div></section>
 
-      <section className="public-section public-section-alt"><div className="public-page-main"><h2 className="public-section-title center">Meet the Team</h2><div className="public-feature-grid">{teamMembers.map((member) => { const isExpanded = selectedTeamMember?.id === member.id
-      const detailsId = `about-team-details-${member.id}`
-      return <article key={member.id} className={`public-card about-team-card ${isExpanded ? 'active' : ''}`}><button type="button" className="about-team-trigger" aria-expanded={isExpanded} aria-controls={detailsId} onClick={() => setSelectedTeamMember(member)}><div className="about-team-avatar">{member.avatarIcon ? <member.avatarIcon size={24} strokeWidth={1.5} aria-hidden="true" /> : null}</div><h3 className="public-card-title">{member.name}</h3><p className="public-card-copy contact-accent-title">{member.title}</p></button>{isExpanded && <div id={detailsId} className="about-team-meta"><p className="public-card-copy">{member.bio}</p><div className="about-pill-list">{member.expertise.map((skill) => <span key={skill} className="public-pill">{skill}</span>)}</div></div>}</article>})}</div><p className="public-copy center">Click a team member to learn more</p></div></section>
+      <section className="public-section public-section-alt"><div className="public-page-main"><h2 className="public-section-title center">Built for focused hiring teams</h2><div className="public-feature-grid">{focusAreas.map((area) => <article key={area.title} className="public-card"><h3 className="public-card-title">{area.title}</h3><p className="public-card-copy">{area.description}</p></article>)}</div></div></section>
 
       <section className="public-section public-page-main"><h2 className="public-section-title center">What Customers Say</h2><div className="public-feature-grid">{testimonials.map((testimonial) => <article key={testimonial.author} className="public-card"><p className="public-copy">"{testimonial.quote}"</p><div className="about-team-meta"><div className="public-card-title">{testimonial.author}</div><div className="public-card-copy contact-accent-title">{testimonial.role}</div><div className="public-card-copy">{testimonial.company}</div></div></article>)}</div></section>
 
