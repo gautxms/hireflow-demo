@@ -232,7 +232,7 @@ export default function NewDashboard() {
               <div className="new-dashboard__y-axis" aria-hidden="true">
                 {analysesTicks.map((tick) => <span key={`analyses-tick-${tick}`}>{tick}</span>)}
               </div>
-              <div className="new-dashboard__chart" role="img" aria-label="Analyses trend bar chart with count axis and date ticks">
+              <div className="new-dashboard__chart" aria-label="Analyses trend bar chart with count axis and date ticks">
               {analysesBars.map((bar) => (
                 <button key={bar.id} type="button" className="new-dashboard__bar-column" aria-label={`${bar.label}: ${bar.value} analyses`} title={`${bar.label}: ${bar.value} analyses`}>
                   <div className="new-dashboard__bar new-dashboard__bar--primary" style={{ height: `${bar.height}%` }} />
@@ -257,7 +257,7 @@ export default function NewDashboard() {
               <div className="new-dashboard__y-axis" aria-hidden="true">
                 {scoreTicks.map((tick) => <span key={`score-tick-${tick}`}>{formatScore(tick)}</span>)}
               </div>
-              <div className="new-dashboard__chart new-dashboard__chart--line" role="img" aria-label="Average score trend line chart with score axis and date ticks">
+              <div className="new-dashboard__chart new-dashboard__chart--line" aria-label="Average score trend line chart with score axis and date ticks">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="new-dashboard__line-svg" aria-hidden="true">
                   <polyline
                     fill="none"
