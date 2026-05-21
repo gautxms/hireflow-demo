@@ -1,4 +1,18 @@
-import mammoth from 'mammoth'
+let mammothClient = null
+
+async function getMammothClient() {
+  if (mammothClient) {
+    return mammothClient
+  }
+
+  try {
+    const mammothModule = await import('mammoth')
+    mammothClient = mammothModule?.default || mammothModule
+    return mammothClient
+  } catch (error) {
+    throw new Error('docx_dependency_missing::DOCX parsing dependency is unavailable. Please reinstall dependencies.')
+  }
+}
 
 function decodeBase64ToBuffer(fileBufferBase64) {
   return Buffer.from(String(fileBufferBase64 || ''), 'base64')
@@ -6,6 +20,7 @@ function decodeBase64ToBuffer(fileBufferBase64) {
 
 export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.docx') {
   try {
+    const mammoth = await getMammothClient()
     const { value } = await mammoth.extractRawText({ buffer: fileBuffer })
     const extractedText = String(value || '').trim()
     if (!extractedText) {
@@ -14,6 +29,9 @@ export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.d
     return extractedText
   } catch (error) {
     if (String(error?.message || '').startsWith('docx_empty_extraction::')) {
+      throw error
+    }
+    if (String(error?.message || '').startsWith('docx_dependency_missing::')) {
       throw error
     }
     throw new Error(`docx_empty_extraction::Unable to extract text content from DOCX file ${filename}.`)
