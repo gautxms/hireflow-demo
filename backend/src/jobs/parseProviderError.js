@@ -237,6 +237,15 @@ export function detectProviderErrorCategory(errorLike) {
     return { category: 'not_found_error', extractedDetails: '' }
   }
 
+  if (
+    lower.includes('unsupported model')
+    || lower.includes('model is not supported')
+    || lower.includes('model not supported')
+    || lower.includes('unknown model')
+  ) {
+    return { category: 'not_found_error', extractedDetails: '' }
+  }
+
   if (lower.includes('invalid_request_error') || lower.includes('invalid request') || lower.includes('bad request')) {
     return { category: 'invalid_request_error', extractedDetails: '' }
   }
