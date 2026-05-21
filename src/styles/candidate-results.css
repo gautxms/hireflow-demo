@@ -1809,9 +1809,14 @@
   z-index: 20;
   margin-bottom: 14px;
   padding-top: 2px;
+  overflow: visible;
 }
 
 .filter-bar {
+  --filter-select-bg: var(--color-bg-surface);
+  --filter-select-text: var(--color-text-primary);
+  --filter-select-border: var(--border);
+  --filter-select-focus: var(--color-accent-green);
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(140px, 200px) auto auto;
   gap: 10px;
@@ -1827,7 +1832,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--filter-select-border);
   border-radius: 8px;
   padding: 0 10px;
   background: #0d0d0d;
@@ -1862,10 +1867,10 @@
 .fp-show-more,
 .fp-clear,
 .fp-apply {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--filter-select-border);
   border-radius: 8px;
-  background: #111111;
-  color: var(--color-text-secondary);
+  background: var(--filter-select-bg);
+  color: var(--filter-select-text);
   padding: 0 12px;
   transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
@@ -1889,6 +1894,8 @@
 }
 
 .filter-popover {
+  position: relative;
+  z-index: 30;
   margin-top: 8px;
   background: #111111;
   border: 1px solid #1e1e1e;
@@ -1907,6 +1914,11 @@
 .fp-footer { display: flex; justify-content: flex-end; gap: 8px; }
 .fp-apply { background: #c8ff00; border-color: #c8ff00; color: #000; font-weight: 700; }
 
+.filter-sort-select option {
+  color: var(--filter-select-text);
+  background: var(--filter-select-bg);
+}
+
 .filter-search-input:focus-visible,
 .filter-sort-select:focus-visible,
 .filter-filters-btn:focus-visible,
@@ -1916,7 +1928,7 @@
 .fp-show-more:focus-visible,
 .fp-clear:focus-visible,
 .fp-apply:focus-visible {
-  outline: 2px solid #c8ff00;
+  outline: 2px solid var(--filter-select-focus);
   outline-offset: 2px;
 }
 
