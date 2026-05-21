@@ -16,6 +16,29 @@ import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileM
 const router = Router()
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+
+function resolveEffectiveMimeType(mimetype, filename) {
+  const name = String(filename || '').toLowerCase()
+
+  if (name.endsWith('.pdf')) {
+    return 'application/pdf'
+  }
+
+  if (name.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+
+  return mimetype
+}
+
+function isAcceptedResumeUpload(mimetype, filename) {
+  return ALLOWED_MIME_TYPES.has(resolveEffectiveMimeType(mimetype, filename))
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -24,7 +47,7 @@ const upload = multer({
   },
   fileFilter: (_req, file, cb) => {
     if (!isAcceptedResumeUpload(file.mimetype, file.originalname)) {
-      return cb(new Error('Only PDF, DOCX, and TXT files are allowed'))
+      return cb(new Error('Only PDF and DOCX files are allowed'))
     }
 
     file.safeName = sanitizeFilename(file.originalname)
@@ -167,6 +190,8 @@ router.post(
         const fileBufferBase64 = file.buffer.toString('base64')
         const scanResultJson = JSON.stringify(scanResult)
 
+        const effectiveMimeType = resolveEffectiveMimeType(file.mimetype, file.originalname)
+
         const insertResult = await pool.query(
           `INSERT INTO resumes (
              user_id,
@@ -187,7 +212,7 @@ router.post(
             req.userId,
             file.safeName,
             file.size,
-            file.mimetype,
+            effectiveMimeType,
             scanResult.status || 'clean',
             scanResultJson,
             fileBufferBase64,
@@ -201,7 +226,7 @@ router.post(
           resumeId,
           userId: req.userId,
           filename: file.safeName,
-          mimeType: file.mimetype,
+          mimeType: effectiveMimeType,
           fileSize: file.size,
           fileBufferBase64,
           jobDescriptionId: selectedJobDescriptionId,
@@ -211,7 +236,7 @@ router.post(
           jobId: String(job.id),
           resumeId,
           filename: file.safeName,
-          type: file.mimetype,
+          type: effectiveMimeType,
           size: file.size,
         })
 
