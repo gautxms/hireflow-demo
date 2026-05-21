@@ -3,6 +3,7 @@ import { logTelemetryToDatabase } from '../db/client.js'
 import { getActiveAiProviderCredentials } from './aiProviderConfigService.js'
 import { AI_MODEL_CONFIG } from '../config/aiModels.js'
 import { getRuntimeSystemPromptConfig } from './adminSystemPromptService.js'
+import { prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
@@ -1275,12 +1276,14 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     if (!configuredModels.length) return false
     return configuredModels.includes(String(entry?.model || '').trim())
   }
-  const isTextPayload = String(mimeType || '').toLowerCase() === 'text/plain'
-  const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
-  const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : fileBufferBase64
+  const preparedPayload = await prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename })
+  const preparedMimeType = preparedPayload.mimeType
+  const isTextPayload = String(preparedMimeType || '').toLowerCase() === 'text/plain'
+  const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(preparedPayload.fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
+  const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : preparedPayload.fileBufferBase64
   const jdCharCount = String(options?.jobDescriptionContext?.description || '').length + String(options?.jobDescriptionContext?.requirements || '').length
   const complexityEstimator = estimateAnalysisComplexity({
-    mimeType,
+    mimeType: preparedMimeType,
     cleanedResumeCharCount: cleanedPayload?.metrics?.cleanedCharCount || cleanedPayload?.cleanedText?.length || 0,
     jdCharCount,
     inputMode: cleanedPayload ? 'text' : 'binary',
@@ -1289,8 +1292,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 
   const selectableAttempts = []
   for (const entry of attemptPlan) {
-    if (!providerSupportsMimeType(entry.provider, mimeType)) {
-      console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${mimeType}.`)
+    if (!providerSupportsMimeType(entry.provider, preparedMimeType)) {
+      console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${preparedMimeType}.`)
       continue
     }
     selectableAttempts.push(entry)
@@ -1332,7 +1335,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       : compactByDefaultForEntry(entry)
     try {
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
-      const response = await adapter(cleanedBase64, mimeType, filename, {
+      const response = await adapter(cleanedBase64, preparedMimeType, filename, {
         apiKey: entry.apiKey,
         model: entry.model,
         keyLabel: entry.keyLabel,
