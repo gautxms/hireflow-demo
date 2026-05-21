@@ -1,6 +1,7 @@
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
+import { prepareResumePayloadForAnalysis } from '../services/resumeDocumentExtractionService.js'
 import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
@@ -399,6 +400,7 @@ async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
+  const preparedPayload = await prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename })
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
@@ -406,7 +408,7 @@ async function runParse(job) {
 
   try {
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    const aiResponse = await analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, {
+    const aiResponse = await analyzeResumeWithConfiguredFallback(preparedPayload.fileBufferBase64, preparedPayload.mimeType, filename, {
       jobDescriptionContext,
     })
     const aiResult = aiResponse?.result || {}
