@@ -27,3 +27,23 @@ For rate metrics (`completionRate`, `shortlistedRate`):
 - Numerator is capped to denominator to prevent values above `100`.
 
 These rules apply consistently to top-level KPIs and chart buckets.
+
+## Chart bucket semantics (null vs `0`)
+
+- Chart entries with `value: null` represent **missing/unavailable data** for that period (not a measured zero).
+- Chart entries with `value: 0` represent a **true measured zero**.
+- Frontend rendering must visually differentiate these states:
+  - true zero renders on the chart baseline as a normal value point/bar;
+  - missing data renders as a non-value cue (e.g., dashed/hatched marker) and must not connect line segments across missing periods.
+
+## QA sparse-range examples
+
+- Example A (missing middle period):
+  - Input buckets: `[4, null, 6]`
+  - Expected: two disjoint trend segments (`4` and `6`) with a “no data” cue for the middle bucket.
+- Example B (true zero in middle period):
+  - Input buckets: `[4, 0, 6]`
+  - Expected: a continuous trend with middle point on the zero baseline.
+- Example C (all missing):
+  - Input buckets: `[null, null, null]`
+  - Expected: chart communicates “no data” state; no misleading trend line should be drawn.

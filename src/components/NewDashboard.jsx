@@ -43,15 +43,40 @@ function getIntermediateDateTicks(series, tickCount = 4) {
 
 function buildChartBars(series, key) {
   if (!series.length) return []
-  const values = series.map((item) => Number(item[key] || 0))
-  const max = Math.max(...values, 1)
+  const normalized = series.map((item) => {
+    const rawValue = item?.[key]
+    const hasData = rawValue !== null && rawValue !== undefined
+    const value = hasData ? Number(rawValue) : 0
+    return { hasData, value: Number.isFinite(value) ? value : 0 }
+  })
+  const valuesWithData = normalized.filter((item) => item.hasData).map((item) => item.value)
+  const max = Math.max(...valuesWithData, 1)
 
-  return values.map((value, index) => ({
+  return normalized.map((item, index) => ({
     id: `${key}-${series[index]?.periodStart ?? index}`,
-    height: Math.max((value / max) * 100, 8),
-    value,
+    height: item.hasData ? Math.max((item.value / max) * 100, 8) : 12,
+    value: item.value,
+    hasData: item.hasData,
     label: formatDateLabel(series[index]?.periodStart),
   }))
+}
+
+function buildLineSegments(series) {
+  const segments = []
+  let current = []
+  const denominator = Math.max(series.length - 1, 1)
+
+  series.forEach((point, index) => {
+    if (!point.hasData) {
+      if (current.length > 1) segments.push(current)
+      current = []
+      return
+    }
+    current.push(`${(index / denominator) * 100},${100 - point.height}`)
+  })
+
+  if (current.length > 1) segments.push(current)
+  return segments
 }
 
 export default function NewDashboard() {
@@ -234,8 +259,8 @@ export default function NewDashboard() {
               </div>
               <div className="new-dashboard__chart" aria-label="Analyses trend bar chart with count axis and date ticks">
               {analysesBars.map((bar) => (
-                <button key={bar.id} type="button" className="new-dashboard__bar-column" aria-label={`${bar.label}: ${bar.value} analyses`} title={`${bar.label}: ${bar.value} analyses`}>
-                  <div className="new-dashboard__bar new-dashboard__bar--primary" style={{ height: `${bar.height}%` }} />
+                <button key={bar.id} type="button" className="new-dashboard__bar-column" aria-label={bar.hasData ? `${bar.label}: ${bar.value} analyses` : `${bar.label}: no data for this period`} data-tooltip={bar.hasData ? `${bar.label}: ${bar.value} analyses` : `${bar.label}: No data`} data-state={bar.hasData ? 'value' : 'missing'}>
+                  <div className={`new-dashboard__bar ${bar.hasData ? 'new-dashboard__bar--primary' : 'new-dashboard__bar--missing'}`} style={{ height: `${bar.height}%` }} />
                 </button>
               ))}
               </div>
@@ -259,12 +284,15 @@ export default function NewDashboard() {
               </div>
               <div className="new-dashboard__chart new-dashboard__chart--line" aria-label="Average score trend line chart with score axis and date ticks">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="new-dashboard__line-svg" aria-hidden="true">
-                  <polyline
-                    fill="none"
-                    stroke="var(--color-accent-green-hover)"
-                    strokeWidth="2.5"
-                    points={averageScoreBars.map((bar, index) => `${(index / Math.max(averageScoreBars.length - 1, 1)) * 100},${100 - bar.height}`).join(' ')}
-                  />
+                  {buildLineSegments(averageScoreBars).map((segment) => (
+                    <polyline
+                      key={segment.join('-')}
+                      fill="none"
+                      stroke="var(--color-accent-green-hover)"
+                      strokeWidth="2.5"
+                      points={segment.join(' ')}
+                    />
+                  ))}
                 </svg>
                 {averageScoreBars.map((bar, index) => (
                   <button
@@ -272,8 +300,9 @@ export default function NewDashboard() {
                     type="button"
                     className="new-dashboard__point"
                     style={{ left: `${(index / Math.max(averageScoreBars.length - 1, 1)) * 100}%`, bottom: `${bar.height}%` }}
-                    aria-label={`${bar.label}: ${formatScore(bar.value)} score`}
-                    title={`${bar.label}: ${formatScore(bar.value)} score`}
+                    aria-label={bar.hasData ? `${bar.label}: ${formatScore(bar.value)} score` : `${bar.label}: no score data for this period`}
+                    data-tooltip={bar.hasData ? `${bar.label}: ${formatScore(bar.value)} score` : `${bar.label}: No score data`}
+                    data-state={bar.hasData ? 'value' : 'missing'}
                   />
                 ))}
               </div>
