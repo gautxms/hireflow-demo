@@ -1296,21 +1296,28 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     selectableAttempts.push(entry)
   }
 
+  const maxAttemptsPerFile = getMaxProviderAttemptsPerFile()
   const primaryEntry = selectableAttempts[0] || null
-  const fallbackEntry = selectableAttempts[1] || null
+  const fallbackEntries = selectableAttempts.slice(1)
   const deterministicPlan = [
     primaryEntry,
-    fallbackEntry,
+    ...fallbackEntries,
     primaryEntry,
-  ].filter(Boolean)
+  ].filter(Boolean).slice(0, maxAttemptsPerFile)
+  const finalPrimaryPlanIndex = deterministicPlan.length - 1
 
   for (let planIndex = 0; planIndex < deterministicPlan.length; planIndex += 1) {
     const entry = deterministicPlan[planIndex]
-    const role = planIndex === 1 ? 'fallback' : 'primary'
+    const isFinalPrimaryRetry = planIndex === finalPrimaryPlanIndex
+      && primaryEntry
+      && entry.provider === primaryEntry.provider
+      && entry.keyLabel === primaryEntry.keyLabel
+      && planIndex > 0
+    const role = isFinalPrimaryRetry || planIndex === 0 ? 'primary' : 'fallback'
 
-    if (planIndex === 2) {
+    if (isFinalPrimaryRetry) {
       const firstFailure = attemptHistory[0]
-      const fallbackFailure = attemptHistory[1]
+      const fallbackFailure = attemptHistory[planIndex - 1]
       if (!firstFailure || !fallbackFailure || firstFailure.success !== false || fallbackFailure.success !== false) {
         break
       }
@@ -1513,14 +1520,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} failed:`, error.message)
       }
 
-      if (planIndex === 0 && !fallbackEntry) break
-      if (planIndex === 1) {
-        const primaryFailureReason = attemptHistory[0]?.normalizedReason
-        const fallbackFailureReason = attemptHistory[1]?.normalizedReason
-        if (primaryFailureReason && fallbackFailureReason && primaryFailureReason === fallbackFailureReason) {
-          break
-        }
-      }
+      if (planIndex === 0 && fallbackEntries.length === 0) break
     }
   }
 

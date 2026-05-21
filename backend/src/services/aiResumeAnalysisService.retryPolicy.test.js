@@ -84,3 +84,57 @@ test('different normalized reasons triggers one final primary retry', async () =
 
   assert.equal(primaryCalls, 2)
 })
+
+
+test('AI_MAX_PROVIDER_ATTEMPTS_PER_FILE=1 does not invoke fallback', async () => {
+  const prev = process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+  process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = '1'
+  let primaryCalls = 0
+  let fallbackCalls = 0
+  try {
+    await assert.rejects(async () => analyzeResumeWithConfiguredFallback(FIXTURE_B64, 'application/pdf', 'r.txt', {
+      credentials: buildCredentials(),
+      systemPromptConfig: { promptVersion: 1, isDefaultFallback: false },
+      analyzeWithAnthropic: async () => {
+        primaryCalls += 1
+        throw new Error('timeout_error::primary failed')
+      },
+      analyzeWithOpenAI: async () => {
+        fallbackCalls += 1
+        throw new Error('timeout_error::fallback failed')
+      },
+    }))
+  } finally {
+    if (prev === undefined) delete process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+    else process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = prev
+  }
+
+  assert.equal(primaryCalls, 1)
+  assert.equal(fallbackCalls, 0)
+})
+
+test('secondary provider is attempted before final primary retry', async () => {
+  const credentials = buildCredentials()
+  credentials.providers.openai.fallback = { apiKey: 'k3', model: 'm3', source: 'test' }
+
+  const callOrder = []
+  await assert.rejects(async () => analyzeResumeWithConfiguredFallback(FIXTURE_B64, 'application/pdf', 'r.txt', {
+    credentials,
+    systemPromptConfig: { promptVersion: 1, isDefaultFallback: false },
+    analyzeWithAnthropic: async (_b64, _mime, _name, opts) => {
+      callOrder.push(`${opts.keyLabel}:anthropic`)
+      throw new Error('response_truncated_error::truncated')
+    },
+    analyzeWithOpenAI: async (_b64, _mime, _name, opts) => {
+      callOrder.push(`${opts.keyLabel}:openai`)
+      throw new Error('timeout_error::openai failed')
+    },
+  }))
+
+  assert.deepEqual(callOrder, [
+    'primary:anthropic',
+    'primary:openai',
+    'fallback:openai',
+    'primary:anthropic',
+  ])
+})
