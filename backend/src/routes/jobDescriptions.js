@@ -186,14 +186,31 @@ function mapRecord(row, options = {}) {
   return mapped
 }
 
-router.get('/files/:filename', async (req, res) => {
+router.get('/:id/attachment', async (req, res) => {
   try {
     await ensureSchema()
-    const target = path.basename(req.params.filename)
-    const filePath = path.join(uploadDirectory, target)
+    const result = await pool.query(
+      `SELECT file_url FROM job_descriptions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [req.params.id, req.userId],
+    )
+
+    const row = result.rows[0]
+    if (!row) {
+      return res.status(404).json({ error: 'Job description not found' })
+    }
+
+    const storedFileUrl = String(row.file_url || '').trim()
+    const filename = path.basename(storedFileUrl)
+
+    if (!filename) {
+      return res.status(404).json({ error: 'No attachment found for this job description' })
+    }
+
+    const filePath = path.join(uploadDirectory, filename)
     return res.sendFile(filePath)
-  } catch {
-    return res.status(404).json({ error: 'File not found' })
+  } catch (error) {
+    console.error('[JobDescriptions] attachment fetch failed:', error)
+    return res.status(404).json({ error: 'Attachment not found' })
   }
 })
 
