@@ -16,10 +16,10 @@ export default function AboutPage({ onBack }) {
     { icon: 'shield', title: 'Trustworthy', description: 'Enterprise-grade security and compliance. Your data is safe with us.' },
     { icon: 'sprout', title: 'Bias-Aware', description: 'Built to reduce bias and promote diversity in hiring.' }
   ]
-  const testimonials = [
-    { quote: 'HireFlow cut our screening time by 60%. We now focus on the best candidates instead of manual review.', author: 'Jane Smith', company: 'TechCorp', role: 'Head of Recruiting' },
-    { quote: 'The accuracy is incredible. Our hiring decisions are now data-driven, not gut-based.', author: 'David Kim', company: 'StartupXYZ', role: 'Founder & CEO' },
-    { quote: 'Best recruiting tool we\'ve invested in. ROI was immediate. Highly recommend.', author: 'Rachel Goldman', company: 'Fortune 500 Tech', role: 'CHRO' }
+  const improvements = [
+    { title: 'Faster first-pass screening', description: 'Speed up initial resume review by surfacing key signals and fit indicators sooner.' },
+    { title: 'Clearer candidate comparison', description: 'Evaluate applicants side by side with structured summaries aligned to role needs.' },
+    { title: 'More transparent AI output', description: 'Understand how recommendations are produced so teams can review and trust each decision.' }
   ]
   const timeline = [
     { year: '2024', event: 'HireFlow Founded', desc: 'Gautam left Stripe to fix recruiting.' },
@@ -51,7 +51,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-section public-section-alt"><div className="public-page-main"><h2 className="public-section-title center">Built for focused hiring teams</h2><div className="public-feature-grid">{focusAreas.map((area) => <article key={area.title} className="public-card"><h3 className="public-card-title">{area.title}</h3><p className="public-card-copy">{area.description}</p></article>)}</div></div></section>
 
-      <section className="public-section public-page-main"><h2 className="public-section-title center">What Customers Say</h2><div className="public-feature-grid">{testimonials.map((testimonial) => <article key={testimonial.author} className="public-card"><p className="public-copy">"{testimonial.quote}"</p><div className="about-team-meta"><div className="public-card-title">{testimonial.author}</div><div className="public-card-copy contact-accent-title">{testimonial.role}</div><div className="public-card-copy">{testimonial.company}</div></div></article>)}</div></section>
+      <section className="public-section public-page-main"><h2 className="public-section-title center">What HireFlow is designed to improve</h2><div className="public-feature-grid">{improvements.map((item) => <article key={item.title} className="public-card"><h3 className="public-card-title">{item.title}</h3><p className="public-card-copy">{item.description}</p></article>)}</div></section>
 
       <section className="public-section public-section-alt"><div className="about-timeline"><h2 className="public-section-title center">Our Journey</h2>{timeline.map((item) => <article key={item.year} className="public-card about-timeline-item"><h3 className="public-card-title contact-accent-title">{item.year}</h3><p className="public-card-title">{item.event}</p><p className="public-card-copy">{item.desc}</p></article>)}</div></section>
 
