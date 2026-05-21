@@ -33,7 +33,10 @@
     "@anthropic-ai/sdk": "^0.67.1",
     "@aws-sdk/client-s3": "^3.888.0",
     "@tailwindcss/postcss": "^4.2.0",
+<<<<<<< Updated upstream
     "bull": "^4.16.5",
+=======
+>>>>>>> Stashed changes
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dompurify": "^3.2.6",
@@ -44,12 +47,19 @@
     "isemail": "^3.2.0",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
+<<<<<<< Updated upstream
     "multer": "^1.4.5-lts.2",
     "nodemailer": "^6.10.1",
     "pg": "^8.16.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "lucide-react": "^0.542.0"
+=======
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "stripe": "^20.3.1"
+>>>>>>> Stashed changes
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

@@ -5,10 +5,28 @@ export default function AboutPage({ onBack }) {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null)
 
   const teamMembers = [
+<<<<<<< Updated upstream
     { id: 1, name: 'Gautam', title: 'Founder & CEO', bio: 'Former Head of Recruiting at Stripe. Passionate about building tools that make hiring human-centric.', expertise: ['Recruiting', 'Product', 'Operations'], image: '👔' },
     { id: 2, name: 'Sarah Chen', title: 'Head of AI/ML', bio: 'PhD in Computer Science from MIT. Built ML systems at OpenAI. Leading our AI scoring engine.', expertise: ['Machine Learning', 'NLP', 'AI Ethics'], image: '🧠' },
     { id: 3, name: 'Marcus Rodriguez', title: 'VP Product', bio: 'Ex-Google, ex-Figma. Obsessed with user experience and building products people love.', expertise: ['Product Design', 'UX', 'Strategy'], image: '🎨' },
     { id: 4, name: 'Priya Sharma', title: 'VP Engineering', bio: 'Led infrastructure at Databricks. Building HireFlow to scale to millions of candidates.', expertise: ['Backend', 'Infrastructure', 'Scalability'], image: '⚙️' }
+=======
+    {
+      id: 1,
+      name: 'Gautam',
+      title: 'Founder & CEO',
+      bio: 'Building HireFlow to solve the hiring problem. Passionate about making recruiting human-centric and data-driven.',
+      expertise: ['Recruiting', 'Product', 'Operations'],
+      image: '👔'
+    }
+  ]
+
+  const stats = [
+    { number: '10K+', label: 'Resumes Analyzed' },
+    { number: '94%', label: 'Accuracy Rate' },
+    { number: '45%', label: 'Time Saved for Recruiters' },
+    { number: '500+', label: 'Companies Using HireFlow' }
+>>>>>>> Stashed changes
   ]
 
   const stats = [{ number: '10K+', label: 'Resumes Analyzed' }, { number: '94%', label: 'Accuracy Rate' }, { number: '45%', label: 'Time Saved for Recruiters' }, { number: '500+', label: 'Companies Using HireFlow' }]
@@ -20,11 +38,17 @@ export default function AboutPage({ onBack }) {
     { icon: 'shield', title: 'Trustworthy', description: 'Enterprise-grade security and compliance. Your data is safe with us.' },
     { icon: 'sprout', title: 'Bias-Aware', description: 'Built to reduce bias and promote diversity in hiring.' }
   ]
+<<<<<<< Updated upstream
   const testimonials = [
     { quote: 'HireFlow cut our screening time by 60%. We now focus on the best candidates instead of manual review.', author: 'Jane Smith', company: 'TechCorp', role: 'Head of Recruiting' },
     { quote: 'The accuracy is incredible. Our hiring decisions are now data-driven, not gut-based.', author: 'David Kim', company: 'StartupXYZ', role: 'Founder & CEO' },
     { quote: 'Best recruiting tool we\'ve invested in. ROI was immediate. Highly recommend.', author: 'Rachel Goldman', company: 'Fortune 500 Tech', role: 'CHRO' }
   ]
+=======
+
+  const testimonials = []
+
+>>>>>>> Stashed changes
   const timeline = [
     { year: '2024', event: 'HireFlow Founded', desc: 'Gautam left Stripe to fix recruiting.' },
     { year: '2024 Q2', event: 'Alpha Launch', desc: '50 beta customers onboarded.' },
