@@ -20,6 +20,24 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ])
 
+function resolveEffectiveMimeType(mimetype, filename) {
+  const name = String(filename || '').toLowerCase()
+
+  if (name.endsWith('.pdf')) {
+    return 'application/pdf'
+  }
+
+  if (name.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+
+  return mimetype
+}
+
+function isAcceptedResumeUpload(mimetype, filename) {
+  return ALLOWED_MIME_TYPES.has(resolveEffectiveMimeType(mimetype, filename))
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -27,7 +45,7 @@ const upload = multer({
     files: 20,
   },
   fileFilter: (_req, file, cb) => {
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    if (!isAcceptedResumeUpload(file.mimetype, file.originalname)) {
       return cb(new Error('Only PDF and DOCX files are allowed'))
     }
 
@@ -170,6 +188,11 @@ router.post(
         const fileBufferBase64 = file.buffer.toString('base64')
         const scanResultJson = JSON.stringify(scanResult)
 
+        const effectiveMimeType = resolveEffectiveMimeType(
+          file.mimetype,
+          file.safeName || file.originalname,
+        )
+
         const insertResult = await pool.query(
           `INSERT INTO resumes (
              user_id,
@@ -190,7 +213,7 @@ router.post(
             req.userId,
             file.safeName,
             file.size,
-            file.mimetype,
+            effectiveMimeType,
             scanResult.status || 'clean',
             scanResultJson,
             fileBufferBase64,
@@ -204,7 +227,7 @@ router.post(
           resumeId,
           userId: req.userId,
           filename: file.safeName,
-          mimeType: file.mimetype,
+          mimeType: effectiveMimeType,
           fileSize: file.size,
           fileBufferBase64,
           jobDescriptionId: selectedJobDescriptionId,
@@ -214,7 +237,7 @@ router.post(
           jobId: String(job.id),
           resumeId,
           filename: file.safeName,
-          type: file.mimetype,
+          type: effectiveMimeType,
           size: file.size,
         })
 
