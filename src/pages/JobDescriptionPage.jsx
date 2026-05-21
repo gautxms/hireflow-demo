@@ -82,15 +82,16 @@ export default function JobDescriptionPage({ onRequireAuth }) {
 
     try {
       const isEdit = modalMode === 'edit' && activeItem?.id
+      const isMultipart = nextValues instanceof FormData
       const response = await fetch(
         isEdit ? `${API_BASE}/job-descriptions/${activeItem.id}` : `${API_BASE}/job-descriptions`,
         {
           method: isEdit ? 'PUT' : 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            ...(isMultipart ? {} : { 'Content-Type': 'application/json' }),
           },
-          body: JSON.stringify(nextValues),
+          body: isMultipart ? nextValues : JSON.stringify(nextValues),
         },
       )
 

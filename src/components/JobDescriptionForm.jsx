@@ -1,6 +1,7 @@
 import { Upload, X } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
-import { serializeJobDescriptionForm, validateJobDescriptionForm } from './jobDescriptionFormState'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import API_BASE from '../config/api'
+import { SUPPORTED_SALARY_CURRENCIES, serializeJobDescriptionForm, validateJobDescriptionForm } from './jobDescriptionFormState'
 
 const blankState = {
   title: '',
@@ -44,16 +45,22 @@ function mapInitialValue(initialValue) {
   }
 }
 
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+
 export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting }) {
   const [formState, setFormState] = useState(blankState)
   const [jdFile, setJdFile] = useState(null)
   const [errors, setErrors] = useState({})
+  const [attachmentError, setAttachmentError] = useState('')
   const fileInputId = useId()
   const fileInputRef = useRef(null)
+
+  const hasExistingAttachment = Boolean(initialValue?.fileUrl)
 
   useEffect(() => {
     setFormState(mapInitialValue(initialValue))
     setErrors({})
+    setAttachmentError('')
     setJdFile(null)
   }, [initialValue, resetToken])
 
@@ -67,6 +74,39 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
     })
   }
 
+
+  const openAttachmentInNewTab = useCallback(async () => {
+    if (!initialValue?.id || !hasExistingAttachment) {
+      setAttachmentError('No attachment is available for this job description yet.')
+      return
+    }
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY) || ''
+    if (!token) {
+      setAttachmentError('Please login to view JD attachments.')
+      return
+    }
+
+    setAttachmentError('')
+
+    try {
+      const response = await fetch(`${API_BASE}/job-descriptions/${encodeURIComponent(initialValue.id)}/attachment`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'Unable to open job description attachment')
+      }
+
+      const fileBlob = await response.blob()
+      const objectUrl = window.URL.createObjectURL(fileBlob)
+      window.open(objectUrl, '_blank', 'noopener,noreferrer')
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (error) {
+      setAttachmentError(error.message || 'Unable to open job description attachment')
+    }
+  }, [hasExistingAttachment, initialValue?.id])
   const handleSubmit = async (event) => {
     event.preventDefault()
     const nextErrors = validateJobDescriptionForm(formState)
@@ -75,11 +115,19 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
       return
     }
 
-    await onSubmit({
-      ...serializeJobDescriptionForm(formState),
-      skills: formState.skills,
-      jdFile,
+    const serialized = serializeJobDescriptionForm(formState)
+    const payload = new FormData()
+
+    Object.entries({ ...serialized, skills: formState.skills }).forEach(([key, value]) => {
+      if (value === undefined || value === null) return
+      payload.append(key, String(value))
     })
+
+    if (jdFile) {
+      payload.append('jdFile', jdFile)
+    }
+
+    await onSubmit(payload)
   }
 
   return (
@@ -114,10 +162,21 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
           <input ref={fileInputRef} id={fileInputId} className="job-form__file-input" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setJdFile(event.target.files?.[0] || null)} />
           <div className="job-form__file-row">
             <button type="button" className="hf-btn hf-btn--secondary" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}><Upload size={16} strokeWidth={1.5} aria-hidden="true" /> Upload PDF/DOCX</button>
-            <span className="job-form__file-name">{jdFile ? jdFile.name : 'No file selected'}</span>
+            <span className="job-form__file-name">{jdFile ? jdFile.name : (hasExistingAttachment ? 'Current attachment available' : 'No file selected')}</span>
+            <button
+              type="button"
+              className="hf-btn hf-btn--secondary"
+              onClick={openAttachmentInNewTab}
+              disabled={isSubmitting || !hasExistingAttachment}
+              aria-disabled={isSubmitting || !hasExistingAttachment}
+              title={hasExistingAttachment ? 'Open current JD attachment in a new tab' : 'No attachment available yet'}
+            >
+              View attachment
+            </button>
             {jdFile ? <button type="button" className="job-form__file-clear" aria-label="Clear selected JD file" onClick={() => setJdFile(null)}><X size={14} strokeWidth={1.5} aria-hidden="true" /></button> : null}
           </div>
           <p className="job-form__help">Accepted formats: PDF or DOCX.</p>
+          {attachmentError ? <p className="job-form__error" role="alert">{attachmentError}</p> : null}
         </section>
       </div>
 
