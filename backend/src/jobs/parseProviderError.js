@@ -4,7 +4,7 @@ const ADMIN_SECURITY_PATH = '/admin/security'
 const CATEGORY_MESSAGES = {
   response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
   response_truncated_error: 'AI output exceeded response size; retry with compact analysis or reduce schema detail.',
-  invalid_request_error: 'AI model configuration issue in Admin Security.',
+  invalid_request_error: 'Request validation failed before provider execution.',
   not_found_error: 'AI model configuration issue in Admin Security.',
   auth_error: 'AI key invalid or expired.',
   billing_quota_error: 'AI provider billing/quota issue; update credits or switch provider.',
@@ -121,7 +121,7 @@ function buildHints(category, { provider, model } = {}) {
     ? `Verify ${contextLabel} is configured as an active provider/model pair.`
     : 'Verify the configured provider/model pair in Admin Security.'
 
-  if (category === 'not_found_error' || category === 'invalid_request_error') {
+  if (category === 'not_found_error') {
     return {
       action: 'review_model_configuration',
       adminPath: ADMIN_SECURITY_PATH,
@@ -129,6 +129,17 @@ function buildHints(category, { provider, model } = {}) {
         modelStep,
         'Replace retired or unsupported models with an allowed model.',
         'Save changes and retry the resume analysis.',
+      ],
+    }
+  }
+  if (category === 'invalid_request_error') {
+    return {
+      action: 'review_request_validation',
+      adminPath: ADMIN_SECURITY_PATH,
+      remediationSteps: [
+        'Review numeric and required fields in the request payload.',
+        'Fix invalid field values (for example, whole-number-only settings) and retry.',
+        'If this came from AI-derived profile data, verify the destination field type supports decimals.',
       ],
     }
   }
@@ -227,6 +238,13 @@ export function detectProviderErrorCategory(errorLike) {
   }
 
   if (lower.includes('invalid_request_error') || lower.includes('invalid request') || lower.includes('bad request')) {
+    return { category: 'invalid_request_error', extractedDetails: '' }
+  }
+  if (
+    lower.includes('invalid input syntax for type integer')
+    || lower.includes('invalid input syntax for integer')
+    || lower.includes('invalid input syntax for type bigint')
+  ) {
     return { category: 'invalid_request_error', extractedDetails: '' }
   }
 

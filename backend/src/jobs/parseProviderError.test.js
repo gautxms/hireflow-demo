@@ -6,10 +6,16 @@ test('normalizeProviderError maps invalid request errors', () => {
   const result = normalizeProviderError('invalid_request_error: unsupported model')
 
   assert.equal(result.category, 'invalid_request_error')
-  assert.equal(result.userMessage, 'AI model configuration issue in Admin Security.')
-  assert.equal(result.action, 'review_model_configuration')
+  assert.equal(result.userMessage, 'Request validation failed before provider execution.')
+  assert.equal(result.action, 'review_request_validation')
   assert.equal(result.adminPath, '/admin/security')
   assert.match(result.normalizedMessage, /^invalid_request_error::\{/)
+})
+
+test('normalizeProviderError maps integer casting validation failures to invalid_request_error', () => {
+  const result = normalizeProviderError('invalid input syntax for type integer: "3.5"')
+  assert.equal(result.category, 'invalid_request_error')
+  assert.equal(result.action, 'review_request_validation')
 })
 
 test('normalizeProviderError maps invalid API key auth failures', () => {
