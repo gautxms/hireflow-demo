@@ -7,7 +7,7 @@ export const candidateDirectoryQuerySchema = {
     sortBy: 'sourceUpdatedAt',
     sortDirection: 'desc',
     page: 1,
-    pageSize: 25,
+    pageSize: 15,
   },
   limits: {
     minPage: 1,
@@ -91,4 +91,3 @@ export function buildCandidateDirectoryQueryParams(rawQuery = {}) {
 
   return params.toString()
 }
-

@@ -147,6 +147,48 @@
   line-height: 1;
 }
 
+.candidates-directory__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.candidates-directory__pagination-button {
+  width: auto;
+  min-height: 2rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-secondary), #000 18%);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-ui);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.candidates-directory__pagination-button:hover:not(:disabled) {
+  border-color: var(--color-text-muted);
+  color: var(--color-text-primary);
+}
+
+.candidates-directory__pagination-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.candidates-directory__pagination-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.candidates-directory__pagination-info {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
 @media (max-width: 900px) {
   .candidates-directory__hero { align-items: start; flex-direction: column; }
   .candidates-directory__toolbar,

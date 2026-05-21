@@ -22,6 +22,13 @@ const sortOptions = [
   { value: 'experience_desc', label: 'Most experience' },
   { value: 'name_asc', label: 'Name (A-Z)' },
 ]
+const PAGE_SIZE = 15
+const sortQueryMap = {
+  updated_desc: { sortBy: 'sourceUpdatedAt', sortDirection: 'desc' },
+  score_desc: { sortBy: 'profileScore', sortDirection: 'desc' },
+  experience_desc: { sortBy: 'yearsExperience', sortDirection: 'desc' },
+  name_asc: { sortBy: 'name', sortDirection: 'asc' },
+}
 
 function resolveCandidateJob(candidate) {
   const jobId = String(
@@ -75,6 +82,7 @@ export default function CandidatesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState('updated_desc')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [candidates, setCandidates] = useState([])
@@ -86,10 +94,13 @@ export default function CandidatesPage() {
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
   const [reloadNonce, setReloadNonce] = useState(0)
   const [availableJobs, setAvailableJobs] = useState([])
+  const [pagination, setPagination] = useState({ page: 1, pageSize: PAGE_SIZE, totalPages: 1, totalCount: 0 })
+
+  const querySort = sortQueryMap[sortBy] || sortQueryMap.updated_desc
 
   const queryString = useMemo(() => {
     return buildCandidateDirectoryQueryParams({
-      search: [filters.skills, filters.tags].filter(Boolean).join(' ').trim() || null,
+      search: [searchTerm, filters.skills, filters.tags].filter(Boolean).join(' ').trim() || null,
       job: filters.sourceJobId,
       skills: filters.skills,
       tags: filters.tags,
@@ -99,12 +110,12 @@ export default function CandidatesPage() {
       scoreMax: filters.scoreMax,
       sourceJobId: filters.sourceJobId,
       sourceAnalysisId: filters.sourceAnalysisId,
-      sortBy: 'sourceUpdatedAt',
-      sortDirection: 'desc',
-      page: 1,
-      pageSize: 25,
+      sortBy: querySort.sortBy,
+      sortDirection: querySort.sortDirection,
+      page: currentPage,
+      pageSize: PAGE_SIZE,
     })
-  }, [filters])
+  }, [currentPage, filters, querySort.sortBy, querySort.sortDirection, searchTerm])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -130,6 +141,17 @@ export default function CandidatesPage() {
 
         const nextCandidates = Array.isArray(payload.candidates) ? payload.candidates : []
         setCandidates(nextCandidates)
+        const payloadPagination = payload?.pagination || {}
+        const totalCount = Number(payloadPagination.totalCount)
+        const totalPages = Number(payloadPagination.totalPages)
+        const nextPage = Number(payloadPagination.page)
+        const nextPageSize = Number(payloadPagination.pageSize)
+        setPagination({
+          page: Number.isFinite(nextPage) && nextPage > 0 ? nextPage : currentPage,
+          pageSize: Number.isFinite(nextPageSize) && nextPageSize > 0 ? nextPageSize : PAGE_SIZE,
+          totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
+          totalCount: Number.isFinite(totalCount) && totalCount >= 0 ? totalCount : nextCandidates.length,
+        })
         setAvailableJobs((current) => {
           const merged = new Map(current.map((job) => [job.id, job]))
           nextCandidates
@@ -156,7 +178,7 @@ export default function CandidatesPage() {
 
     loadCandidates()
     return () => controller.abort()
-  }, [queryString, reloadNonce])
+  }, [currentPage, queryString, reloadNonce])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -191,24 +213,8 @@ export default function CandidatesPage() {
     return () => controller.abort()
   }, [selectedShortlistId])
 
-  const visibleCandidates = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase()
-    const filtered = candidates.filter((candidate) => {
-      if (!normalizedSearch) return true
-      const haystack = [candidate.name, candidate.associatedJob?.title, ...(candidate.skills || []), ...(candidate.tags || [])]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(normalizedSearch)
-    })
-
-    return [...filtered].sort((a, b) => {
-      if (sortBy === 'score_desc') return (b.profileScore ?? -1) - (a.profileScore ?? -1)
-      if (sortBy === 'experience_desc') return (b.yearsExperience ?? -1) - (a.yearsExperience ?? -1)
-      if (sortBy === 'name_asc') return (a.name || '').localeCompare(b.name || '')
-      return new Date(b.sourceUpdatedAt).getTime() - new Date(a.sourceUpdatedAt).getTime()
-    })
-  }, [candidates, searchTerm, sortBy])
+  const visibleCandidates = candidates
+  const shouldRenderPaginationControls = pagination.totalCount > PAGE_SIZE && pagination.totalPages > 1
 
 
   const viewState = useMemo(() => {
@@ -226,7 +232,12 @@ export default function CandidatesPage() {
   const clearFilters = () => {
     setFilters(emptyFilters)
     setSearchTerm('')
+    setCurrentPage(1)
   }
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters, searchTerm, sortBy])
 
   const toggleSelectedCandidate = (resumeId) => {
     setSelectedResumeIds((current) => (
@@ -294,7 +305,7 @@ export default function CandidatesPage() {
           <p>Fast pipeline triage with structured scoring, skills intelligence, and shortlist actions.</p>
         </div>
         <div className="candidates-directory__summary-chips" aria-label="Directory summary">
-          <span className="summary-chip">Total: {viewState === 'api-error' ? '—' : candidates.length}</span>
+          <span className="summary-chip">Total: {viewState === 'api-error' ? '—' : pagination.totalCount}</span>
           <span className="summary-chip">Visible: {viewState === 'api-error' ? '—' : visibleCandidates.length}</span>
           <span className="summary-chip">Selected: {viewState === 'api-error' ? '—' : selectedResumeIds.length}</span>
         </div>
@@ -405,7 +416,29 @@ export default function CandidatesPage() {
               </article>
             ))}
           </section>
-
+          {shouldRenderPaginationControls && (
+            <nav className="candidates-directory__pagination" aria-label="Candidates pagination">
+              <button
+                type="button"
+                className="candidates-directory__pagination-button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={pagination.page <= 1}
+                aria-label="Previous candidates page"
+              >
+                Previous
+              </button>
+              <span className="candidates-directory__pagination-info" aria-live="polite">Page {pagination.page} of {pagination.totalPages}</span>
+              <button
+                type="button"
+                className="candidates-directory__pagination-button"
+                onClick={() => setCurrentPage((page) => Math.min(pagination.totalPages, page + 1))}
+                disabled={pagination.page >= pagination.totalPages}
+                aria-label="Next candidates page"
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </>
       )}
     </main>
