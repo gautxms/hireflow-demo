@@ -937,6 +937,8 @@ export async function analyzeWithAnthropic(
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
+  const isPlainTextInput = mimeType === 'text/plain'
+  const resumeText = isPlainTextInput ? Buffer.from(fileBufferBase64, 'base64').toString('utf8') : null
   const client = anthropicClientFactory
     ? anthropicClientFactory({ apiKey })
     : new Anthropic({ apiKey })
@@ -946,7 +948,14 @@ export async function analyzeWithAnthropic(
   const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
-  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  const promptMetrics = buildPromptMetrics({
+    prompt,
+    systemPrompt: systemPromptText,
+    outputInstruction: baseOutputInstructions,
+    jobDescriptionContext,
+    resumeCharCount: isPlainTextInput ? String(resumeText || '').length : null,
+    inputMode: isPlainTextInput ? 'text_content' : 'document_file',
+  })
   console.log('[AI Parse] Prompt metrics:', { provider: 'anthropic', model, ...promptMetrics })
   console.log(
     '[HireFlow] JD in AI user message:',
@@ -980,20 +989,29 @@ ${outputInstructions}`
       messages: [
         {
           role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: fileBufferBase64,
-              },
-            },
-            {
-              type: 'text',
-              text: requestPrompt,
-            },
-          ],
+          content: isPlainTextInput
+            ? [
+                {
+                  type: 'text',
+                  text: `${resumeText}
+
+${requestPrompt}`,
+                },
+              ]
+            : [
+                {
+                  type: 'document',
+                  source: {
+                    type: 'base64',
+                    media_type: mediaType,
+                    data: fileBufferBase64,
+                  },
+                },
+                {
+                  type: 'text',
+                  text: requestPrompt,
+                },
+              ],
         },
       ],
     })
@@ -1096,12 +1114,21 @@ export async function analyzeWithOpenAI(
   }
 
   const mediaType = MIME_TYPE_MAP[mimeType] || 'application/octet-stream'
+  const isPlainTextInput = mimeType === 'text/plain'
+  const resumeText = isPlainTextInput ? Buffer.from(fileBufferBase64, 'base64').toString('utf8') : null
   const baseOutputInstructions = buildCompactOutputInstructions({ compactMode })
   const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
-  const promptMetrics = buildPromptMetrics({ prompt, systemPrompt: systemPromptText, outputInstruction: baseOutputInstructions, jobDescriptionContext, inputMode: 'document_file' })
+  const promptMetrics = buildPromptMetrics({
+    prompt,
+    systemPrompt: systemPromptText,
+    outputInstruction: baseOutputInstructions,
+    jobDescriptionContext,
+    resumeCharCount: isPlainTextInput ? String(resumeText || '').length : null,
+    inputMode: isPlainTextInput ? 'text_content' : 'document_file',
+  })
   console.log('[AI Parse] Prompt metrics:', { provider: 'openai', model, ...promptMetrics })
   console.log(
     '[HireFlow] JD in AI user message:',
@@ -1119,17 +1146,26 @@ export async function analyzeWithOpenAI(
       input: [
         {
           role: 'user',
-          content: [
-            {
-              type: 'input_file',
-              filename: 'resume',
-              file_data: `data:${mediaType};base64,${fileBufferBase64}`,
-            },
-            {
-              type: 'input_text',
-              text: promptText,
-            },
-          ],
+          content: isPlainTextInput
+            ? [
+                {
+                  type: 'input_text',
+                  text: `${resumeText}
+
+${promptText}`,
+                },
+              ]
+            : [
+                {
+                  type: 'input_file',
+                  filename: 'resume',
+                  file_data: `data:${mediaType};base64,${fileBufferBase64}`,
+                },
+                {
+                  type: 'input_text',
+                  text: promptText,
+                },
+              ],
         },
       ],
     }
