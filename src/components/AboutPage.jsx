@@ -13,7 +13,7 @@ export default function AboutPage({ onBack }) {
     { icon: 'microscope', title: 'AI-Powered', description: 'Advanced machine learning that learns and improves with every hire.' },
     { icon: 'chart', title: 'Transparent', description: 'You always know how we scored candidates and can customize the rules.' },
     { icon: 'rocket', title: 'Fast', description: 'From resume to ranked candidates in minutes, not days.' },
-    { icon: 'shield', title: 'Trustworthy', description: 'Enterprise-grade security and compliance. Your data is safe with us.' },
+    { icon: 'shield', title: 'Trustworthy', description: 'We handle candidate data with care, provide clear scoring reasoning, and design workflows for responsible hiring decisions.' },
     { icon: 'sprout', title: 'Bias-Aware', description: 'Built to reduce bias and promote diversity in hiring.' }
   ]
   const improvements = [
@@ -40,7 +40,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-page-hero">
         <h1 className="public-page-title">About HireFlow</h1>
-        <p className="public-page-subtitle">We're on a mission to revolutionize hiring by building AI tools that help companies find their best talent. Fast, fair, and human-centric.</p>
+        <p className="public-page-subtitle">We’re building practical AI screening support for recruiters, founders, and small teams preparing to hire with more speed, structure, and confidence.</p>
       </section>
 
       <section className="public-section"><div className="about-story"><h2 className="public-section-title">Our Story</h2><p className="public-copy">HireFlow started in February 2026 with a clear goal: make early-stage hiring faster, more consistent, and easier to manage.</p><p className="public-copy">We built HireFlow for recruiters, founders, and small teams who need a practical way to screen candidates without adding complicated tools to their process.</p><p className="public-copy">Our AI is designed as decision support, not recruiter replacement—helping teams reason through profiles, surface strengths and gaps, map skills, and evaluate job-description fit with clearer context.</p><p className="public-copy">Today, we are preparing for launch with a focused workflow: create a job description, upload resumes, run analysis, review ranked candidates, and shortlist the best matches.</p></div></section>
@@ -55,7 +55,7 @@ export default function AboutPage({ onBack }) {
 
       <section className="public-section public-section-alt"><div className="about-timeline"><h2 className="public-section-title center">Our Journey</h2>{timeline.map((item) => <article key={item.year} className="public-card about-timeline-item"><h3 className="public-card-title contact-accent-title">{item.year}</h3><p className="public-card-title">{item.event}</p><p className="public-card-copy">{item.desc}</p></article>)}</div></section>
 
-      <footer className="public-cta-footer"><h2 className="public-section-title">Join us on the mission</h2><p className="public-copy center">Start using HireFlow today and transform your hiring process</p><div className="public-button-row center"><a className="public-btn-primary" href="/contact">Contact Support</a><a className="public-btn-secondary" href="/demo">Schedule Demo</a></div></footer>
+      <footer className="public-cta-footer"><h2 className="public-section-title">Join us on the mission</h2><p className="public-copy center">Get launch-ready with HireFlow—prepare your team, workflow, and candidate review process ahead of rollout</p><div className="public-button-row center"><a className="public-btn-primary" href="/contact">Contact Support</a><a className="public-btn-secondary" href="/demo">Schedule Demo</a></div></footer>
     </PublicPageLayout>
   )
 }
