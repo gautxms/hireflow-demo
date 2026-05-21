@@ -13,7 +13,12 @@ export default function AboutPage({ onBack }) {
     { id: 4, name: 'Priya Sharma', title: 'VP Engineering', bio: 'Led infrastructure at Databricks. Building HireFlow to scale to millions of candidates.', expertise: ['Backend', 'Infrastructure', 'Scalability'], avatarIcon: Cog }
   ]
 
-  const stats = [{ number: '10K+', label: 'Resumes Analyzed' }, { number: '94%', label: 'Accuracy Rate' }, { number: '45%', label: 'Time Saved for Recruiters' }, { number: '500+', label: 'Companies Using HireFlow' }]
+  const stats = [
+    { number: 'Feb 2026', label: 'Started building HireFlow' },
+    { number: '100+', label: 'Resumes tested during product development' },
+    { number: '1,000+', label: 'Candidate signals evaluated across skills, experience, gaps, and JD matches' },
+    { number: 'Launch-ready', label: 'Core screening workflows preparing for release' }
+  ]
   const values = [
     { icon: 'target', title: 'User-Centric', description: 'Everything we build starts with understanding real recruiting pain points.' },
     { icon: 'microscope', title: 'AI-Powered', description: 'Advanced machine learning that learns and improves with every hire.' },
