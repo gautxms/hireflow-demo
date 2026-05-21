@@ -262,7 +262,7 @@ router.get('/database', async (_req, res) => {
          FROM events
          WHERE event_type = 'api.response'
            AND timestamp >= NOW() - interval '15 minutes'
-           AND (metadata ->> 'responseMs') ~ '^[0-9]+(\.[0-9]+)?$'`,
+           AND (metadata ->> 'responseMs') ~ '^[0-9]+([.][0-9]+)?$'`,
       ),
     ])
 

@@ -9,13 +9,13 @@ test('job title trigger uses analyses link styling and opens edit modal', () => 
   assert.match(source, /onClick=\{\(event\) => onEdit\?\.\(item, event\.currentTarget\)\}/)
 })
 
-test('jobs table keeps only delete action and removes edit\/archive actions', () => {
+test('jobs table keeps only delete action and removes edit/archive actions', () => {
   assert.match(source, /Trash2 size=\{16\}/)
   assert.doesNotMatch(source, />Edit</)
   assert.doesNotMatch(source, />Archive</)
 })
 
-test('jobs table has skills popover and experience\/created columns', () => {
+test('jobs table has skills popover and experience/created columns', () => {
   assert.match(source, />Experience</)
   assert.match(source, />Skills</)
   assert.match(source, />Created</)
