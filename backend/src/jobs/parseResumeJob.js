@@ -175,6 +175,56 @@ function getPreferredJobDescriptionText(row = {}) {
   return candidates.map((value) => normalizeString(value)).find(Boolean) || null
 }
 
+function isLegacyWordDocument({ filename, mimeType }) {
+  const normalizedMime = String(mimeType || '').trim().toLowerCase()
+  const normalizedName = String(filename || '').trim().toLowerCase()
+  return normalizedMime === 'application/msword' || normalizedName.endsWith('.doc')
+}
+
+async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename, fileSize }) {
+  if (!fileBufferBase64) {
+    throw new Error('Resume payload is empty')
+  }
+
+  if (isLegacyWordDocument({ filename, mimeType })) {
+    throw new Error('resume_unsupported_legacy_doc::Legacy .doc files are not supported')
+  }
+
+  const normalizedMime = String(mimeType || '').trim().toLowerCase()
+  const output = {
+    fileBufferBase64,
+    mimeType,
+    filename,
+    fileSize,
+    resumeInputMode: 'document_file',
+    extractedText: null,
+    originalMimeType: null,
+  }
+
+  if (normalizedMime === 'text/plain') {
+    try {
+      const decodedText = Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8')
+      const extractedText = String(decodedText || '').trim()
+      if (!extractedText) {
+        throw new Error('extraction_empty::No parseable resume content extracted from text payload')
+      }
+
+      output.fileBufferBase64 = Buffer.from(extractedText, 'utf8').toString('base64')
+      output.mimeType = 'text/plain'
+      output.resumeInputMode = 'extracted_text'
+      output.extractedText = extractedText
+      output.originalMimeType = mimeType
+    } catch (error) {
+      if (String(error?.message || '').includes('extraction_empty')) {
+        throw error
+      }
+      throw new Error('extraction_failed::Unable to extract parseable text payload')
+    }
+  }
+
+  return output
+}
+
 export function buildJobDescriptionContext(row) {
   if (!row) {
     return {
@@ -385,9 +435,12 @@ async function runParse(job) {
 
   await job.progress(10)
 
-  if (!fileBufferBase64) {
-    throw new Error('Resume payload is empty')
-  }
+  const preparedResumePayload = await prepareResumePayloadForAnalysis({
+    fileBufferBase64,
+    mimeType,
+    filename,
+    fileSize,
+  })
 
   await new Promise((resolve) => setTimeout(resolve, 400))
   await setJobState(job.id, { progress: 45 })
@@ -406,9 +459,15 @@ async function runParse(job) {
 
   try {
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    const aiResponse = await analyzeResumeWithConfiguredFallback(fileBufferBase64, mimeType, filename, {
+    const aiResponse = await analyzeResumeWithConfiguredFallback(
+      preparedResumePayload.fileBufferBase64,
+      preparedResumePayload.mimeType,
+      preparedResumePayload.filename,
+      {
       jobDescriptionContext,
-    })
+        resumeInputMode: preparedResumePayload.resumeInputMode,
+      },
+    )
     const aiResult = aiResponse?.result || {}
     const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
       ? aiResponse.attempts
@@ -514,8 +573,9 @@ async function runParse(job) {
 
   const parseResult = {
     filename,
-    mimeType,
-    fileSize,
+    mimeType: preparedResumePayload.mimeType,
+    originalMimeType: preparedResumePayload.originalMimeType || undefined,
+    fileSize: preparedResumePayload.fileSize,
     parserVersion: 'ai-only',
     analyzerUsed: 'AI',
     methodUsed: analysisResult?.methodUsed || parseMethod,
@@ -548,7 +608,10 @@ async function runParse(job) {
          parse_error = NULL,
          parse_duration_ms = $12,
          updated_at = NOW(),
-         raw_text = COALESCE(raw_text, '')
+         raw_text = CASE
+           WHEN COALESCE($13, '') <> '' THEN $13
+           ELSE COALESCE(raw_text, '')
+         END
      WHERE id = $1`,
     [
       resumeId,
@@ -568,6 +631,7 @@ async function runParse(job) {
       }),
       JSON.stringify(primaryCandidate?.skills_flat || []),
       parseDurationMs,
+      preparedResumePayload.extractedText,
     ],
   )
 
