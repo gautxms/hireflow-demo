@@ -575,6 +575,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [showAllDrawerSkills, setShowAllDrawerSkills] = useState(false)
   const [shortlistOpen, setShortlistOpen] = useState(false)
 
+
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [shortlistDetails, setShortlistDetails] = useState(null)
@@ -605,7 +606,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [candidatePayload, hasInvalidPayload])
 
-  const displayCandidates = liveCandidates.length > 0 ? liveCandidates : null
+  const displayCandidates = Array.isArray(liveCandidates) ? liveCandidates : []
   const analysisTitle = useMemo(() => resolveAnalysisTitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
   const jobDescriptionSubtitle = useMemo(() => resolveJobDescriptionSubtitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
 
@@ -851,11 +852,24 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       return []
     }
 
-    return displayCandidates
-      .map((candidate, index) => normalizeCandidateForResults(candidate, index))
-      .filter((candidate) => candidate._isRenderable)
-      .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
-  }, [deletedIds, displayCandidates])
+    try {
+      return displayCandidates
+        .map((candidate, index) => normalizeCandidateForResults(candidate, index))
+        .filter((candidate) => candidate && candidate._isRenderable)
+        .filter((candidate) => !deletedIds.includes(candidate._bulkKey))
+    } catch (error) {
+      logResultsRenderError({
+        analysisId,
+        candidateCount,
+        normalizationStats,
+        candidatePayloadShape,
+        candidateFieldTypeSummary,
+        error,
+        errorInfo: { componentStack: 'CandidateResults:list-render' },
+      })
+      return []
+    }
+  }, [analysisId, candidateCount, candidateFieldTypeSummary, candidatePayloadShape, deletedIds, displayCandidates, normalizationStats])
 
   const hasCandidatesToRender = hasRenderableCandidates(candidateRows)
 
@@ -1703,7 +1717,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <div>
               <div className="dd-resume-filename">{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
               <div className="dd-resume-meta">
-                <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View resume</button>
+                <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View full profile</button>
               </div>
             </div>
           </div>
@@ -1716,17 +1730,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
 
       {isExpandedCandidateMissing && (
-        <div className="candidate-results-page__state-wrap" role="status">
-          <h2 className="candidate-results-page__state-title candidate-results-page__state-title--compact">Candidate details unavailable</h2>
-          <p className="candidate-results-page__state-copy">This candidate details payload is incompatible. Try another candidate.</p>
-          <div className="candidate-results-page__state-actions">
-            <button className="touch-target candidate-results-page__back-button" type="button" onClick={onBack}>
-              <ChevronLeft size={14} aria-hidden="true" />
-              Back to Analyses
-            </button>
-            <button className="touch-target page-btn" type="button" onClick={() => setExpandedId(null)}>Back to Results</button>
-          </div>
-        </div>
+        <p className="candidate-results-page__empty-note" role="status">
+          Candidate details are unavailable for this entry. Select another candidate from the list.
+        </p>
       )}
 
       {visibleCandidates.length === 0 && (

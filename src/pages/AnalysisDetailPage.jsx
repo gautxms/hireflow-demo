@@ -4,6 +4,7 @@ import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
 import { validateAnalysisResultsPayload } from '../schemas/analysisResultsSchema.js'
+import { logResultsPayloadCompatibilityIssues } from './resultsErrorBoundaryTelemetry.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
@@ -140,7 +141,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
 
   const summary = analysis?.summary || {}
   const displayStatus = deriveDisplayStatus(analysis)
-  const candidateResultsPayload = useMemo(() => {
+  const candidateResultsValidation = useMemo(() => {
     const rawPayload = toCandidateResultsPayload(analysis)
     const { payload, issues } = validateAnalysisResultsPayload(rawPayload)
     if (issues.length > 0 && isNonProductionBuild) {
@@ -150,10 +151,24 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
         issues,
       })
     }
-    return payload
+    return { payload, issues }
   }, [analysis])
+  const candidateResultsPayload = candidateResultsValidation.payload
+
+  useEffect(() => {
+    const issues = candidateResultsValidation?.issues || []
+    if (issues.length === 0) return
+    logResultsPayloadCompatibilityIssues({
+      analysisId: analysis?.id || analysisId,
+      issues,
+      droppedCount: candidateResultsPayload?.droppedCount,
+      inputCount: candidateResultsPayload?.inputCount,
+      outputCount: candidateResultsPayload?.outputCount,
+    })
+  }, [analysis?.id, analysisId, candidateResultsPayload?.droppedCount, candidateResultsPayload?.inputCount, candidateResultsPayload?.outputCount, candidateResultsValidation])
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
   const candidateCount = candidateResultsPayload.candidates.length
+  const hasCandidateResults = candidateResultsPayload.candidates.length > 0
   const failedCount = Number(summary.failed || 0)
   const pageTitle = useMemo(() => deriveAnalysisPageTitle(analysis, analysisId), [analysis, analysisId])
 
@@ -226,7 +241,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
             window.location.assign('/analyses')
           }}
           analysisId={analysisId}
-          candidateCount={candidateCount}
+          candidateCount={hasCandidateResults ? candidateCount : 0}
           normalizationStats={{
             droppedCount: candidateResultsPayload.droppedCount,
             inputCount: candidateResultsPayload.inputCount,
