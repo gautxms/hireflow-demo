@@ -47,6 +47,11 @@
   cursor: pointer;
 }
 
+.candidates-directory button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
 .candidates-directory__advanced {
   margin-top: .6rem;
   border: 1px solid var(--color-border);
@@ -104,7 +109,43 @@
 .candidates-directory__mobile-list { display: none; margin-top: 1rem; gap: .8rem; }
 .candidate-directory-card { border:1px solid var(--color-border); border-radius:.75rem; padding: .9rem; background: var(--color-bg-elevated); }
 .candidates-directory__status { color: var(--color-text-secondary); }
+.candidates-directory__status--success { color: #2d8a4a; }
+.candidates-directory__status--error { color: #d14343; }
 .candidates-directory__error { color: #d14343; }
+
+.candidates-directory__checkbox {
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.candidates-directory__checkbox input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.candidates-directory__checkbox-indicator {
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: .3rem;
+  background: var(--color-bg-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.candidates-directory__checkbox input:checked + .candidates-directory__checkbox-indicator {
+  border-color: var(--color-accent, #4f8cff);
+  background: var(--color-accent, #4f8cff);
+}
+
+.candidates-directory__checkbox input:checked + .candidates-directory__checkbox-indicator::after {
+  content: '✓';
+  font-size: .75rem;
+  color: #fff;
+  line-height: 1;
+}
 
 @media (max-width: 900px) {
   .candidates-directory__hero { align-items: start; flex-direction: column; }

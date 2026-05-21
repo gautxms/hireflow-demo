@@ -65,6 +65,8 @@ export default function CandidatesPage() {
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [selectedResumeIds, setSelectedResumeIds] = useState([])
   const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkStatusTone, setBulkStatusTone] = useState('info')
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
 
   const queryString = useMemo(() => {
     return buildCandidateDirectoryQueryParams({
@@ -183,11 +185,19 @@ export default function CandidatesPage() {
   }
 
   const runBulkShortlistAction = async (mode) => {
-    if (!selectedShortlistId) return setBulkStatus('Select a shortlist first.')
-    if (selectedResumeIds.length === 0) return setBulkStatus('Select at least one candidate to run a bulk action.')
+    if (!selectedShortlistId) {
+      setBulkStatusTone('error')
+      return setBulkStatus('Choose a shortlist first.')
+    }
+    if (selectedResumeIds.length === 0) {
+      setBulkStatusTone('error')
+      return setBulkStatus('Select at least one candidate.')
+    }
 
     try {
+      setIsBulkSubmitting(true)
       setBulkStatus('')
+      setBulkStatusTone('info')
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
       const endpoint = mode === 'add'
         ? `${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`
@@ -207,12 +217,20 @@ export default function CandidatesPage() {
       if (!response.ok) throw new Error(payload.error || 'Bulk shortlist action failed')
 
       const summary = payload?.summary || {}
-      setBulkStatus(mode === 'add'
-        ? `Bulk add complete: ${summary.added || 0} added, ${summary.updated || 0} updated, ${summary.failed || 0} failed.`
-        : `Bulk remove complete: ${summary.removed || 0} removed, ${summary.notPresent || 0} not present.`)
+      if (mode === 'add') {
+        const failed = summary.failed || 0
+        setBulkStatusTone(failed > 0 ? 'error' : 'success')
+        setBulkStatus(`Added ${summary.added || 0}, updated ${summary.updated || 0}${failed > 0 ? `, failed ${failed}` : ''}.`)
+      } else {
+        setBulkStatusTone('success')
+        setBulkStatus(`Removed ${summary.removed || 0}${(summary.notPresent || 0) > 0 ? `, not present ${summary.notPresent || 0}` : ''}.`)
+      }
       setSelectedResumeIds([])
     } catch (bulkError) {
+      setBulkStatusTone('error')
       setBulkStatus(bulkError.message || 'Bulk shortlist action failed')
+    } finally {
+      setIsBulkSubmitting(false)
     }
   }
 
@@ -251,19 +269,21 @@ export default function CandidatesPage() {
         </div>
       </details>
 
-      <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
-        <label>
-          <span>Shortlist</span>
-          <select value={selectedShortlistId} onChange={(event) => setSelectedShortlistId(event.target.value)}>
-            <option value="">Select shortlist</option>
-            {shortlists.map((shortlist) => <option key={shortlist.id} value={shortlist.id}>{shortlist.name} ({shortlist.candidate_count || 0})</option>)}
-          </select>
-        </label>
-        <button type="button" onClick={() => runBulkShortlistAction('add')}>Add selected</button>
-        <button type="button" onClick={() => runBulkShortlistAction('remove')}>Remove selected</button>
-      </section>
+      {selectedResumeIds.length > 0 && (
+        <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
+          <label>
+            <span>Shortlist</span>
+            <select value={selectedShortlistId} onChange={(event) => setSelectedShortlistId(event.target.value)}>
+              <option value="">Select shortlist</option>
+              {shortlists.map((shortlist) => <option key={shortlist.id} value={shortlist.id}>{shortlist.name} ({shortlist.candidate_count || 0})</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={!selectedShortlistId || isBulkSubmitting} onClick={() => runBulkShortlistAction('add')}>Add selected</button>
+          <button type="button" disabled={!selectedShortlistId || isBulkSubmitting} onClick={() => runBulkShortlistAction('remove')}>Remove selected</button>
+        </section>
+      )}
 
-      {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
+      {bulkStatus && <p className={`candidates-directory__status candidates-directory__status--${bulkStatusTone}`}>{bulkStatus}</p>}
       {error && <p className="candidates-directory__error">{error}</p>}
       {isLoading && <p className="candidates-directory__status">Loading candidates…</p>}
 
@@ -277,7 +297,12 @@ export default function CandidatesPage() {
               <tbody>
                 {visibleCandidates.map((candidate) => (
                   <tr key={candidate.resumeId}>
-                    <td><input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></td>
+                    <td>
+                      <label className="candidates-directory__checkbox" aria-label={`Select ${candidate.name || 'candidate'}`}>
+                        <input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} />
+                        <span aria-hidden="true" className="candidates-directory__checkbox-indicator" />
+                      </label>
+                    </td>
                     <td><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></td>
                     <td>{getScoreLabel(candidate)}</td>
                     <td>{getExperienceLabel(candidate)}</td>
@@ -294,7 +319,10 @@ export default function CandidatesPage() {
           <section className="candidates-directory__mobile-list">
             {visibleCandidates.map((candidate) => (
               <article key={candidate.resumeId} className="candidate-directory-card">
-                <label><input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} />Select</label>
+                <label className="candidates-directory__checkbox" aria-label={`Select ${candidate.name || 'candidate'}`}>
+                  <input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} />
+                  <span aria-hidden="true" className="candidates-directory__checkbox-indicator" />
+                </label>
                 <h2><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></h2>
                 <p><strong>Score:</strong> {getScoreLabel(candidate)}</p>
                 <p><strong>Experience:</strong> {getExperienceLabel(candidate)}</p>
