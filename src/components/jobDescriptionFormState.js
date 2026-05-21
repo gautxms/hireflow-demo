@@ -70,7 +70,7 @@ export function serializeJobDescriptionForm(formValues) {
     ...formValues,
     salaryCurrency: normalizeSalaryCurrency(formValues.salaryCurrency),
     department: toOptionalTrimmed(formValues.department),
-    employmentType: toOptionalTrimmed(formValues.employmentType),
+    employmentType: toOptionalTrimmed(formValues.workMode ?? formValues.employmentType),
     priority: toOptionalInt(formValues.priority),
     archivedReason: toOptionalTrimmed(formValues.archivedReason),
     sourceType: toOptionalTrimmed(formValues.sourceType),
