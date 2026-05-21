@@ -198,7 +198,7 @@ router.get('/dashboard/kpis', async (req, res) => {
            WHERE a.user_id = $1
              AND a.created_at >= $2::timestamptz
              AND a.created_at < $3::timestamptz
-             AND ($4::text IS NULL OR a.job_description_id::text = $4::text)
+             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
          ),
          filtered_resumes AS (
            SELECT DISTINCT resume_id
