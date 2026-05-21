@@ -22,11 +22,11 @@ export default function AboutPage({ onBack }) {
     { title: 'More transparent AI output', description: 'Understand how recommendations are produced so teams can review and trust each decision.' }
   ]
   const timeline = [
-    { year: '2024', event: 'HireFlow Founded', desc: 'Gautam left Stripe to fix recruiting.' },
-    { year: '2024 Q2', event: 'Alpha Launch', desc: '50 beta customers onboarded.' },
-    { year: '2024 Q3', event: 'Series A Seed', desc: '$2M funding to scale.' },
-    { year: '2025', event: 'Enterprise Launch', desc: 'API + custom integrations available.' },
-    { year: '2025 Q2', event: 'IPO Goals', desc: 'Become the standard for AI hiring.' }
+    { year: 'Feb 2026', event: 'HireFlow Started', desc: 'began building structured resume screening' },
+    { year: 'Mar 2026', event: 'Core Workflows Built', desc: 'JD creation, upload, analysis, scoring, ranking' },
+    { year: 'Apr 2026', event: 'Screening Experience Improved', desc: 'result pages, strengths/gaps, skills, history, shortlist' },
+    { year: 'May 2026', event: 'Launch Preparation', desc: 'reliability, async analysis, rendering, polish, readiness' },
+    { year: 'Next', event: 'Public Launch', desc: 'preparing for users and feedback' }
   ]
   const focusAreas = [
     { title: 'Recruiters', description: 'Quickly review candidate strengths, experience signals, and fit indicators without manual spreadsheet triage.' },
