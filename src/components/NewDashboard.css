@@ -74,7 +74,14 @@
 
 .new-dashboard__panel,
 .new-dashboard__kpi-card,
-.new-dashboard__trend-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02); }
+.new-dashboard__trend-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  padding: var(--spacing-base);
+  box-shadow: var(--shadow-surface);
+  transition: border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
+}
 
 .new-dashboard__panel,
 .new-dashboard__kpis { margin-bottom: 0.75rem; }
@@ -93,11 +100,12 @@
   --dashboard-select-focus: var(--color-accent-green);
 }
 
-.new-dashboard__filters { display: grid; gap: 0.6rem; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: end; overflow: visible; }
-.new-dashboard__field { grid-column: span 3; display: grid; gap: 0.25rem; }
-.new-dashboard__field--wide { grid-column: span 5; }
+.new-dashboard__filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: var(--spacing-lg); row-gap: var(--spacing-sm); overflow: visible; }
+.new-dashboard__control-group { display: grid; grid-template-columns: minmax(170px, 220px) minmax(230px, 1fr); gap: var(--spacing-sm); align-items: end; }
+.new-dashboard__field { display: grid; gap: var(--spacing-xs); }
+.new-dashboard__field--wide { min-width: 0; }
 .new-dashboard__field-label { font-family: var(--font-family-base); font-size: var(--type-small-size); line-height: var(--type-small-line-height); letter-spacing: var(--type-small-tracking); color: var(--color-text-muted); font-weight: var(--font-weight-semibold); }
-.new-dashboard__actions { grid-column: span 4; display: flex; justify-content: flex-end; gap: 0.5rem; }
+.new-dashboard__actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--spacing-sm); padding-left: var(--spacing-base); border-left: 1px solid var(--border); }
 
 .new-dashboard__select {
   display: block;
@@ -152,7 +160,9 @@
 .new-dashboard__kpi-value { margin: 0.4rem 0 0; }
 
 .new-dashboard__trends { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.new-dashboard__trend-card { transition: border-color 0.15s ease; min-height: 252px; display: flex; flex-direction: column; gap: 0.65rem; }
+.new-dashboard__trend-card { min-height: 252px; display: flex; flex-direction: column; gap: 0.65rem; }
+.new-dashboard__kpi-card:hover,
+.new-dashboard__trend-card:hover { border-color: var(--hf-border-muted); }
 .new-dashboard__trend-title { margin: 0; font-family: var(--font-family-display); font-size: var(--type-h2-size); font-weight: var(--type-h2-weight); line-height: var(--type-h2-line-height); letter-spacing: var(--type-h2-tracking); display: inline-flex; align-items: center; gap: 0.5rem; }
 .new-dashboard__trend-title-icon { margin-right: 8px; vertical-align: text-bottom; transform: translateY(-1px); }
 .new-dashboard__muted,.new-dashboard__trend-range { color: var(--color-text-secondary); }
@@ -181,9 +191,9 @@
 .new-dashboard__x-axis { margin-top: auto; display: flex; justify-content: space-between; gap: 0.35rem; color: var(--color-text-secondary); font-family: var(--font-family-base); font-size: var(--type-small-size); line-height: var(--type-small-line-height); flex-wrap: wrap; }
 
 @media (max-width: 1024px) {
-  .new-dashboard__filters { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-  .new-dashboard__field,.new-dashboard__field--wide,.new-dashboard__actions { grid-column: span 1; }
-  .new-dashboard__actions { justify-content: flex-start; }
+  .new-dashboard__filters { grid-template-columns: 1fr; }
+  .new-dashboard__control-group { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .new-dashboard__actions { justify-content: flex-start; border-left: 0; padding-left: 0; }
   .new-dashboard__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -204,7 +214,9 @@
 
   .new-dashboard__panel,
   .new-dashboard__kpi-card,
-  .new-dashboard__trend-card { padding: 14px 16px; }
+  .new-dashboard__trend-card { padding: var(--spacing-base); }
+
+  .new-dashboard__control-group { grid-template-columns: 1fr; }
 
   .new-dashboard__actions {
     flex-wrap: wrap;

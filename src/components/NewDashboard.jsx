@@ -174,15 +174,16 @@ export default function NewDashboard() {
 
       <section className="new-dashboard__panel">
         <div className="new-dashboard__filters">
-          <label className="new-dashboard__field">
+          <div className="new-dashboard__control-group" role="group" aria-label="Dashboard filters">
+            <label className="new-dashboard__field">
             <span className="new-dashboard__field-label">Date range</span>
             <select value={rangeDays} onChange={(event) => setRangeDays(event.target.value)} className="new-dashboard__select">
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>
-          </label>
-          <label className="new-dashboard__field new-dashboard__field--wide">
+            </label>
+            <label className="new-dashboard__field new-dashboard__field--wide">
             <span className="new-dashboard__field-label">Job</span>
             <select value={jobDescriptionId} onChange={(event) => setJobDescriptionId(event.target.value)} className="new-dashboard__select">
               <option value="">All jobs</option>
@@ -190,8 +191,9 @@ export default function NewDashboard() {
                 <option key={job.id} value={job.id}>{job.title}</option>
               ))}
             </select>
-          </label>
-          <div className="new-dashboard__actions">
+            </label>
+          </div>
+          <div className="new-dashboard__actions" role="group" aria-label="Dashboard actions">
             <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button hf-btn hf-btn--primary new-dashboard__button--primary">{loading ? 'Refreshing…' : 'Apply filters'}</button>
             <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button hf-btn hf-btn--secondary new-dashboard__button--secondary">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
           </div>
