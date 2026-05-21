@@ -581,6 +581,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [shortlistSort, setShortlistSort] = useState('rating_desc')
   const [shortlistLoading, setShortlistLoading] = useState(false)
   const [shortlistError, setShortlistError] = useState('')
+  const [shortlistNotice, setShortlistNotice] = useState('')
   const [tagDraft, setTagDraft] = useState('')
   const [candidateTags, setCandidateTags] = useState({})
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
@@ -882,11 +883,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }, [expandedId])
 
   useEffect(() => {
-    setSelectedIds((current) => pruneSelection(current, filtered))
-  }, [filtered])
+    setSelectedIds((current) => pruneSelection(current, filtered, resolveSelectionResumeId))
+  }, [filtered, resolveSelectionResumeId])
 
-  const selectedCandidates = getSelectedCandidates(filtered, selectedIds)
-  const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds)
+  const selectedCandidates = getSelectedCandidates(filtered, selectedIds, resolveSelectionResumeId)
+  const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds, resolveSelectionResumeId)
 
   const avgScore = filtered.length
     ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
@@ -898,12 +899,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     })
   ), [visibleCandidates])
 
-  const toggleCandidateSelection = (candidateKey) => {
-    setSelectedIds((currentSelected) => toggleSelection(currentSelected, candidateKey))
+  const toggleCandidateSelection = (candidate) => {
+    const resumeId = resolveSelectionResumeId(candidate)
+    if (!resumeId) return
+    setSelectedIds((currentSelected) => toggleSelection(currentSelected, resumeId))
   }
 
   const toggleSelectAllFiltered = () => {
-    setSelectedIds((currentSelected) => toggleSelectAllVisible(currentSelected, visibleCandidates))
+    setSelectedIds((currentSelected) => toggleSelectAllVisible(currentSelected, visibleCandidates, resolveSelectionResumeId))
   }
 
   const handleCardClick = (id) => {
@@ -994,6 +997,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       const failed = Number(payload?.summary?.failed || 0)
       const added = Number(payload?.summary?.added || 0)
       const updated = Number(payload?.summary?.updated || 0)
+      const requested = Number(payload?.summary?.requested || selected.length)
 
       if (succeeded > 0) {
         await Promise.all([
@@ -1003,12 +1007,27 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       }
 
       if (failed > 0) {
-        setShortlistError(`Added/updated ${succeeded} candidate(s); ${failed} failed. Check shortlist diagnostics for details.`)
+        setShortlistError('')
+        setShortlistNotice(`Shortlist updated: ${succeeded}/${requested} processed (${failed} failed).`)
+      } else {
+        setShortlistNotice(`Shortlist updated: ${succeeded}/${requested} processed.`)
       }
-
-      alert(`Shortlist sync complete: ${added} added, ${updated} updated, ${failed} failed.`)
+      if (succeeded > 0) {
+        const succeededResumeIds = new Set(
+          Array.isArray(payload?.outcomes)
+            ? payload.outcomes.filter((item) => item?.ok).map((item) => String(item.resumeId || '').trim()).filter(Boolean)
+            : [],
+        )
+        if (succeededResumeIds.size > 0) {
+          setSelectedIds((current) => current.filter((id) => !succeededResumeIds.has(id)))
+        } else if (failed === 0) {
+          setSelectedIds([])
+        }
+      }
+      alert(`Shortlist sync: ${added} added, ${updated} updated, ${failed} failed.`)
     } catch (error) {
       setShortlistError(error.message || 'Unable to add candidates to shortlist')
+      setShortlistNotice('')
       let fallbackSuccessCount = 0
       for (const candidate of selected) {
         // Legacy endpoint fallback if the API has not rolled out batch yet.
@@ -1254,6 +1273,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               loading={shortlistLoading}
               error={shortlistError}
             />
+            {shortlistNotice ? <p className="shortlist-manager__muted-text">{shortlistNotice}</p> : null}
           </div>
         </>
       )}
@@ -1262,7 +1282,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         <BulkActions selectedCount={selectedCandidates.length}>
           <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button"><Upload size={18} strokeWidth={1.5} aria-hidden="true" />Export CSV</button>
           <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
-          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button"><Star size={18} strokeWidth={1.5} aria-hidden="true" />Add to Shortlist</button>
+          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button" disabled={shortlistV2Enabled && !selectedShortlistId}><Star size={18} strokeWidth={1.5} aria-hidden="true" />{shortlistV2Enabled && !selectedShortlistId ? 'Select shortlist first' : 'Add to shortlist'}</button>
           <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
           <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
           <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button"><Trash2 size={18} strokeWidth={1.5} aria-hidden="true" />Delete</button>
@@ -1319,7 +1339,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             .toUpperCase()
           const topSkills = deriveTopSkills(candidate)
           const compactRationale = deriveCompactRationale(candidate)
-          const selected = selectedIds.includes(candidate._bulkKey)
+          const selectionResumeId = resolveSelectionResumeId(candidate)
+          const selected = Boolean(selectionResumeId) && selectedIds.includes(selectionResumeId)
 
           return (
             <div
@@ -1391,12 +1412,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   checked={selected}
                   onChange={(event) => {
                     event.stopPropagation()
-                    toggleCandidateSelection(candidate._bulkKey)
+                    toggleCandidateSelection(candidate)
                   }}
                   onClick={(event) => event.stopPropagation()}
                   aria-label={`Select ${toDisplayText(candidate.name, 'candidate')}`}
+                  disabled={!selectionResumeId}
                 />
-                <span className="rc-checkbox-label">Select</span>
+                <span className="rc-checkbox-label">{selectionResumeId ? 'Select' : 'Missing resume ID'}</span>
               </label>
             </div>
           )
@@ -1726,3 +1748,4 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     </div>
   )
 }
+  const resolveSelectionResumeId = useCallback((candidate) => resolveCandidateResumeUuid(candidate), [])
