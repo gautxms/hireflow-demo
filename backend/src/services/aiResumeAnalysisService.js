@@ -600,6 +600,9 @@ function createAttemptRecord({
   statusCode = null,
   tokenBudgetAttempts = [],
   complexityEstimator = null,
+  role = null,
+  attemptNumber = null,
+  normalizedReason = null,
 }) {
   return {
     success: Boolean(success),
@@ -623,6 +626,9 @@ function createAttemptRecord({
     statusCode,
     tokenBudgetAttempts: Array.isArray(tokenBudgetAttempts) ? tokenBudgetAttempts : [],
     complexityEstimator: complexityEstimator && typeof complexityEstimator === 'object' ? complexityEstimator : null,
+    role,
+    attemptNumber: Number.isFinite(Number(attemptNumber)) ? Number(attemptNumber) : null,
+    normalizedReason,
   }
 }
 
@@ -667,6 +673,49 @@ function getFailureCategory(message = '') {
   const normalized = String(message || '').trim()
   const match = normalized.match(/^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::|$)/i)
   return match?.[1] ? String(match[1]).toLowerCase() : 'unknown_error'
+}
+
+function normalizeFailureReasonForRetry(errorLike) {
+  const visited = new Set()
+  const queue = [errorLike]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current || visited.has(current)) continue
+    visited.add(current)
+
+    const message = String(current?.message || current || '').trim()
+    const lower = message.toLowerCase()
+    if (
+      lower.includes('response_truncated_error')
+      || lower.includes('max_output_tokens')
+      || lower.includes('max_tokens')
+      || lower.includes('stop_reason=max_tokens')
+      || lower.includes('incomplete_details')
+    ) return 'response_truncated_error'
+    if (lower.includes('response_format_error')) return 'response_format_error'
+    if (lower.includes('invalid_json') || lower.includes('not valid json') || lower.includes('unexpected token')) return 'invalid_json'
+    if (lower.includes('extraction_empty') || lower.includes('no parseable resume content')) return 'extraction_empty'
+    if (lower.includes('auth_error')) return 'provider_auth_error'
+    if (lower.includes('rate_limit_error')) return 'provider_rate_limit'
+    if (lower.includes('timeout_error') || lower.includes('network_error')) return 'provider_timeout'
+
+    const match = message.match(/^[a-z_]+::\s*(\{.*\})$/s)
+    if (match?.[1]) {
+      try {
+        const parsed = JSON.parse(match[1])
+        if (parsed?.technicalDetails) queue.push({ message: String(parsed.technicalDetails) })
+      } catch {}
+    }
+    if (current?.cause) queue.push(current.cause)
+  }
+
+  const normalized = normalizeProviderError(errorLike)
+  const category = getFailureCategory(normalized)
+  if (category === 'auth_error') return 'provider_auth_error'
+  if (category === 'rate_limit_error') return 'provider_rate_limit'
+  if (category === 'timeout_error' || category === 'network_error') return 'provider_timeout'
+  return category || 'unknown_error'
 }
 
 
@@ -1238,14 +1287,38 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   })
   console.log('[AI Parse] Complexity estimator output:', complexityEstimator)
 
-  let executedProviderAttempts = 0
+  const selectableAttempts = []
   for (const entry of attemptPlan) {
     if (!providerSupportsMimeType(entry.provider, mimeType)) {
       console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${mimeType}.`)
       continue
     }
-    if (executedProviderAttempts >= getMaxProviderAttemptsPerFile()) break
-    executedProviderAttempts += 1
+    selectableAttempts.push(entry)
+  }
+
+  const primaryEntry = selectableAttempts[0] || null
+  const fallbackEntry = selectableAttempts[1] || null
+  const deterministicPlan = [
+    primaryEntry,
+    fallbackEntry,
+    primaryEntry,
+  ].filter(Boolean)
+
+  for (let planIndex = 0; planIndex < deterministicPlan.length; planIndex += 1) {
+    const entry = deterministicPlan[planIndex]
+    const role = planIndex === 1 ? 'fallback' : 'primary'
+
+    if (planIndex === 2) {
+      const firstFailure = attemptHistory[0]
+      const fallbackFailure = attemptHistory[1]
+      if (!firstFailure || !fallbackFailure || firstFailure.success !== false || fallbackFailure.success !== false) {
+        break
+      }
+      if ((firstFailure.normalizedReason || '') === (fallbackFailure.normalizedReason || '')) {
+        console.warn('[AI Parse] Skipping final primary retry because fallback failed with same normalized reason.')
+        break
+      }
+    }
 
     let compactMode = complexityEstimator.recommendedMode === 'COMPACT_MINIMAL'
       ? true
@@ -1279,6 +1352,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             provider: entry.provider,
             keyLabel: entry.keyLabel,
             model: response.model,
+            role,
+            attemptNumber: planIndex + 1,
             providerSource: entry.source,
             promptVersion: response.promptVersion,
             promptIsDefaultFallback: response.promptIsDefaultFallback,
@@ -1295,7 +1370,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       const retryBackoffMs = [1000, 2000]
       const overloadFailure = isOverloadFailure({ failureCategory, normalizedMessage, statusCode })
 
-      if (overloadFailure) {
+      if (false && overloadFailure) {
         let retryError = error
         let overloadRecovered = false
         for (let retryIndex = 0; retryIndex < retryBackoffMs.length; retryIndex += 1) {
@@ -1347,7 +1422,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       }
 
       const firstFailureCategory = failureCategory
-      if (firstFailureCategory === 'response_truncated_error' && compactMode === true) {
+      if (false && firstFailureCategory === 'response_truncated_error' && compactMode === true) {
         try {
           const adapter = adapters[entry.provider] || analyzeWithAnthropic
           const response = await adapter(cleanedBase64, mimeType, filename, {
@@ -1374,7 +1449,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
           statusCode = extractStatusCodeFromError(error)
         }
       }
-      if (entry.provider === 'anthropic' && firstFailureCategory === 'response_truncated_error' && compactMode === false) {
+      if (false && entry.provider === 'anthropic' && firstFailureCategory === 'response_truncated_error' && compactMode === false) {
         try {
           const adapter = adapters[entry.provider] || analyzeWithAnthropic
           const response = await adapter(cleanedBase64, mimeType, filename, {
@@ -1400,11 +1475,15 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       }
       lastError = error
       const failureReason = sanitizeSnippet(String(error?.message || 'unknown_error'), 220)
+      const normalizedReason = normalizeFailureReasonForRetry(error)
       attemptHistory.push(createAttemptRecord({
         success: false,
         provider: entry.provider,
         keyLabel: entry.keyLabel,
         model: entry.model,
+        role,
+        attemptNumber: planIndex + 1,
+        normalizedReason,
         providerSource: entry.source,
         promptVersion: systemPromptConfig?.promptVersion || 1,
         promptIsDefaultFallback: Boolean(systemPromptConfig?.isDefaultFallback),
@@ -1424,7 +1503,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       if (failureCategory === 'response_truncated_error' && isFallbackDisabledOnTruncation()) {
         throw createTerminalProviderError(error, attemptHistory)
       }
-      if (overloadFailure) {
+      if (false && overloadFailure) {
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} overloaded/capacity (${statusCode || 'unknown'}); retries exhausted, failing over.`, error.message)
       } else if (failureCategory === 'billing_quota_error') {
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} quota/billing failed; immediate failover.`, error.message)
@@ -1432,6 +1511,15 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} response format failed after repair retry; failing over.`, error.message)
       } else {
         console.warn(`[AI Parse] ${entry.provider}:${entry.keyLabel} failed:`, error.message)
+      }
+
+      if (planIndex === 0 && !fallbackEntry) break
+      if (planIndex === 1) {
+        const primaryFailureReason = attemptHistory[0]?.normalizedReason
+        const fallbackFailureReason = attemptHistory[1]?.normalizedReason
+        if (primaryFailureReason && fallbackFailureReason && primaryFailureReason === fallbackFailureReason) {
+          break
+        }
       }
     }
   }
