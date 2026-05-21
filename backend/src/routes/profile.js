@@ -150,7 +150,7 @@ router.get('/dashboard/kpis', async (req, res) => {
            WHERE a.user_id = $1
              AND a.created_at >= $2::timestamptz
              AND a.created_at < $3::timestamptz
-             AND ($5::text IS NULL OR a.job_description_id::text = $5::text)
+             AND ($4::text IS NULL OR a.job_description_id::text = $4::text)
          ),
          resume_window AS (
            SELECT r.id, r.profile_score
@@ -180,7 +180,7 @@ router.get('/dashboard/kpis', async (req, res) => {
            (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM resume_window WHERE profile_score IS NOT NULL) AS avg_score,
            (SELECT COUNT(*)::int FROM resume_window) AS resumes_count,
            (SELECT COUNT(*)::int FROM shortlist_window) AS shortlisted_count`,
-        [filters.userId, filters.startDate, filters.endDateExclusive, filters.bucketTrunc, filters.jobDescriptionId],
+        [filters.userId, filters.startDate, filters.endDateExclusive, filters.jobDescriptionId],
       ),
       runSegmentQuery(
         'timeseries',
