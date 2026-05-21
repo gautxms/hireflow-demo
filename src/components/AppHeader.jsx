@@ -41,7 +41,7 @@ export default function AppHeader({ user, isSubscribed, pageTitle }) {
 
         {/* Bell */}
         <button className="app-header-icon-btn" title="Notifications">
-          <Bell size={15} strokeWidth={1.5}/>
+          <Bell size={18} strokeWidth={1.5} />
         </button>
 
         {/* Avatar */}

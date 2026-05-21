@@ -47,6 +47,6 @@ test('UserAppShell assigns distinct canonical icons for Shortlists and Reports',
   const reportsItem = navItems.find((item) => item.key === '/reports')
 
   assert.equal(readIconName(shortlistsItem), 'ClipboardCheck')
-  assert.equal(readIconName(reportsItem), 'BarChart2')
+  assert.equal(readIconName(reportsItem), 'BarChart3')
   assert.notEqual(shortlistsItem.props.Icon, reportsItem.props.Icon)
 })
