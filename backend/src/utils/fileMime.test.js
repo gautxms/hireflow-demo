@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import {
+  getFileExtension,
+  isAcceptedResumeUpload,
+  resolveEffectiveMimeType,
+} from './fileMime.js'
+
+test('getFileExtension returns lowercase extension', () => {
+  assert.equal(getFileExtension('Resume.DOCX'), 'docx')
+  assert.equal(getFileExtension('resume'), '')
+})
+
+test('resolveEffectiveMimeType falls back from octet-stream for known extensions', () => {
+  assert.equal(
+    resolveEffectiveMimeType('application/octet-stream', 'resume.docx'),
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+  assert.equal(resolveEffectiveMimeType('', 'resume.pdf'), 'application/pdf')
+  assert.equal(resolveEffectiveMimeType('', 'resume.txt'), 'text/plain')
+})
+
+test('resolveEffectiveMimeType does not broadly infer unknown octet-stream files', () => {
+  assert.equal(resolveEffectiveMimeType('application/octet-stream', 'resume.exe'), 'application/octet-stream')
+  assert.equal(isAcceptedResumeUpload('application/octet-stream', 'resume.exe'), false)
+})
+
+test('accepted upload supports pdf/docx/txt', () => {
+  assert.equal(isAcceptedResumeUpload('application/pdf', 'resume.pdf'), true)
+  assert.equal(isAcceptedResumeUpload('application/octet-stream', 'resume.docx'), true)
+  assert.equal(isAcceptedResumeUpload('', 'resume.txt'), true)
+})
