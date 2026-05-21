@@ -15,69 +15,17 @@ const emptyFilters = {
   sourceAnalysisId: '',
 }
 
-const candidateFilterFieldConfig = {
-  skills: {
-    label: 'Skills',
-    placeholder: 'e.g. React, SQL',
-  },
-  experienceMin: {
-    label: 'Min experience',
-    placeholder: 'e.g. 3',
-    type: 'number',
-    inputMode: 'decimal',
-    min: '0',
-    step: '0.5',
-  },
-  experienceMax: {
-    label: 'Max experience',
-    placeholder: 'e.g. 12',
-    type: 'number',
-    inputMode: 'decimal',
-    min: '0',
-    step: '0.5',
-  },
-  scoreMin: {
-    label: 'Min score (/10)',
-    placeholder: 'e.g. 7',
-    type: 'number',
-    inputMode: 'decimal',
-    min: '0',
-    max: '10',
-    step: '0.1',
-  },
-  scoreMax: {
-    label: 'Max score (/10)',
-    placeholder: 'e.g. 9.5',
-    type: 'number',
-    inputMode: 'decimal',
-    min: '0',
-    max: '10',
-    step: '0.1',
-  },
-  tags: {
-    label: 'Tags',
-    placeholder: 'e.g. frontend, leadership',
-  },
-  sourceJobId: {
-    label: 'Source job ID',
-    placeholder: 'e.g. job_123',
-  },
-  sourceAnalysisId: {
-    label: 'Source analysis ID',
-    placeholder: 'e.g. parse_456',
-  },
-}
-
+const sortOptions = [
+  { value: 'updated_desc', label: 'Newest analysis' },
+  { value: 'score_desc', label: 'Highest score' },
+  { value: 'experience_desc', label: 'Most experience' },
+  { value: 'name_asc', label: 'Name (A-Z)' },
+]
 
 function getScoreLabel(candidate) {
   if (candidate.profileScore !== null && candidate.profileScore !== undefined) {
     return String(candidate.profileScore)
   }
-
-  if (candidate.normalized?.profileScore === null || candidate.parseHints?.scoreNullable) {
-    return 'Score pending'
-  }
-
   return 'Score pending'
 }
 
@@ -85,11 +33,6 @@ function getExperienceLabel(candidate) {
   if (candidate.yearsExperience !== null && candidate.yearsExperience !== undefined) {
     return `${candidate.yearsExperience} years`
   }
-
-  if (candidate.normalized?.yearsExperience === null || candidate.parseHints?.experienceNullable) {
-    return 'Experience unavailable'
-  }
-
   return 'Experience unavailable'
 }
 
@@ -98,11 +41,6 @@ function getSkillsLabel(candidate) {
   if (listedSkills.length > 0) {
     return listedSkills.join(', ')
   }
-
-  if (candidate.normalized?.skills === null || candidate.parseHints?.skillsNullable) {
-    return 'Not extracted'
-  }
-
   return 'Not extracted'
 }
 
@@ -111,12 +49,14 @@ function formatDate(value) {
   if (Number.isNaN(date.getTime())) {
     return 'Unknown'
   }
-
   return date.toLocaleString()
 }
 
 export default function CandidatesPage() {
   const [filters, setFilters] = useState(emptyFilters)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState('updated_desc')
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [candidates, setCandidates] = useState([])
@@ -206,6 +146,25 @@ export default function CandidatesPage() {
     return () => controller.abort()
   }, [selectedShortlistId])
 
+  const visibleCandidates = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+    const filtered = candidates.filter((candidate) => {
+      if (!normalizedSearch) return true
+      const haystack = [candidate.name, candidate.associatedJob?.title, ...(candidate.skills || []), ...(candidate.tags || [])]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(normalizedSearch)
+    })
+
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'score_desc') return (b.profileScore ?? -1) - (a.profileScore ?? -1)
+      if (sortBy === 'experience_desc') return (b.yearsExperience ?? -1) - (a.yearsExperience ?? -1)
+      if (sortBy === 'name_asc') return (a.name || '').localeCompare(b.name || '')
+      return new Date(b.sourceUpdatedAt).getTime() - new Date(a.sourceUpdatedAt).getTime()
+    })
+  }, [candidates, searchTerm, sortBy])
+
   const toggleSelectedCandidate = (resumeId) => {
     setSelectedResumeIds((current) => (
       current.includes(resumeId)
@@ -214,18 +173,9 @@ export default function CandidatesPage() {
     ))
   }
 
-
-
-
   const runBulkShortlistAction = async (mode) => {
-    if (!selectedShortlistId) {
-      setBulkStatus('Select a shortlist first.')
-      return
-    }
-    if (selectedResumeIds.length === 0) {
-      setBulkStatus('Select at least one candidate to run a bulk action.')
-      return
-    }
+    if (!selectedShortlistId) return setBulkStatus('Select a shortlist first.')
+    if (selectedResumeIds.length === 0) return setBulkStatus('Select at least one candidate to run a bulk action.')
 
     try {
       setBulkStatus('')
@@ -245,16 +195,12 @@ export default function CandidatesPage() {
         }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(payload.error || 'Bulk shortlist action failed')
-      }
+      if (!response.ok) throw new Error(payload.error || 'Bulk shortlist action failed')
 
       const summary = payload?.summary || {}
-      if (mode === 'add') {
-        setBulkStatus(`Bulk add complete: ${summary.added || 0} added, ${summary.updated || 0} updated, ${summary.failed || 0} failed.`)
-      } else {
-        setBulkStatus(`Bulk remove complete: ${summary.removed || 0} removed, ${summary.notPresent || 0} not present.`)
-      }
+      setBulkStatus(mode === 'add'
+        ? `Bulk add complete: ${summary.added || 0} added, ${summary.updated || 0} updated, ${summary.failed || 0} failed.`
+        : `Bulk remove complete: ${summary.removed || 0} removed, ${summary.notPresent || 0} not present.`)
       setSelectedResumeIds([])
     } catch (bulkError) {
       setBulkStatus(bulkError.message || 'Bulk shortlist action failed')
@@ -263,80 +209,96 @@ export default function CandidatesPage() {
 
   return (
     <main className="candidates-directory">
-      <header className="candidates-directory__header">
-        <h1>Candidates</h1>
-        <p>Filter across skills, experience, score, tags, and source provenance.</p>
+      <header className="candidates-directory__hero">
+        <div>
+          <h1>Candidates Directory</h1>
+          <p>Fast pipeline triage with structured scoring, skills intelligence, and shortlist actions.</p>
+        </div>
+        <div className="candidates-directory__summary-chips" aria-label="Directory summary">
+          <span className="summary-chip">Total: {candidates.length}</span>
+          <span className="summary-chip">Visible: {visibleCandidates.length}</span>
+          <span className="summary-chip">Selected: {selectedResumeIds.length}</span>
+        </div>
       </header>
 
-      <section className="candidates-directory__filters" aria-label="Candidate filters">
-        {Object.entries(emptyFilters).map(([key]) => (
-          <label key={key} className="candidates-directory__filter-field">
-            <span>{candidateFilterFieldConfig[key]?.label || key}</span>
-            <input
-              type={candidateFilterFieldConfig[key]?.type || 'text'}
-              inputMode={candidateFilterFieldConfig[key]?.inputMode}
-              min={candidateFilterFieldConfig[key]?.min}
-              max={candidateFilterFieldConfig[key]?.max}
-              step={candidateFilterFieldConfig[key]?.step}
-              value={filters[key]}
-              onChange={(event) => setFilters((prev) => ({ ...prev, [key]: event.target.value }))}
-              placeholder={candidateFilterFieldConfig[key]?.placeholder || `Filter by ${key}`}
-            />
-          </label>
-        ))}
+      <section className="candidates-directory__toolbar" aria-label="Candidate search and quick filters">
+        <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, tags, role, skills" />
+        <input value={filters.sourceJobId} onChange={(e) => setFilters((p) => ({ ...p, sourceJobId: e.target.value }))} placeholder="Job ID" />
+        <input value={filters.skills} onChange={(e) => setFilters((p) => ({ ...p, skills: e.target.value }))} placeholder="Skill" />
+        <input type="number" min="0" max="10" step="0.1" value={filters.scoreMin} onChange={(e) => setFilters((p) => ({ ...p, scoreMin: e.target.value }))} placeholder="Min score" />
+        <input type="number" min="0" step="0.5" value={filters.experienceMin} onChange={(e) => setFilters((p) => ({ ...p, experienceMin: e.target.value }))} placeholder="Min exp" />
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
       </section>
 
-      <section className="candidates-directory__filters" aria-label="Bulk shortlist actions">
-        <label className="candidates-directory__filter-field">
+      <details className="candidates-directory__advanced" open={showAdvancedFilters} onToggle={(event) => setShowAdvancedFilters(event.currentTarget.open)}>
+        <summary>Advanced technical filters</summary>
+        <div className="candidates-directory__advanced-grid">
+          <label><span>Max experience</span><input type="number" min="0" step="0.5" value={filters.experienceMax} onChange={(e) => setFilters((p) => ({ ...p, experienceMax: e.target.value }))} /></label>
+          <label><span>Max score</span><input type="number" min="0" max="10" step="0.1" value={filters.scoreMax} onChange={(e) => setFilters((p) => ({ ...p, scoreMax: e.target.value }))} /></label>
+          <label><span>Tags</span><input value={filters.tags} onChange={(e) => setFilters((p) => ({ ...p, tags: e.target.value }))} placeholder="frontend, leadership" /></label>
+          <label><span>Analysis ID</span><input value={filters.sourceAnalysisId} onChange={(e) => setFilters((p) => ({ ...p, sourceAnalysisId: e.target.value }))} placeholder="parse_123" /></label>
+        </div>
+      </details>
+
+      <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
+        <label>
           <span>Shortlist</span>
-          <select
-            value={selectedShortlistId}
-            onChange={(event) => setSelectedShortlistId(event.target.value)}
-          >
+          <select value={selectedShortlistId} onChange={(event) => setSelectedShortlistId(event.target.value)}>
             <option value="">Select shortlist</option>
-            {shortlists.map((shortlist) => (
-              <option key={shortlist.id} value={shortlist.id}>
-                {shortlist.name} ({shortlist.candidate_count || 0})
-              </option>
-            ))}
+            {shortlists.map((shortlist) => <option key={shortlist.id} value={shortlist.id}>{shortlist.name} ({shortlist.candidate_count || 0})</option>)}
           </select>
         </label>
-        <button type="button" onClick={() => runBulkShortlistAction('add')}>
-          Add selected to shortlist
-        </button>
-        <button type="button" onClick={() => runBulkShortlistAction('remove')}>
-          Remove selected from shortlist
-        </button>
+        <button type="button" onClick={() => runBulkShortlistAction('add')}>Add selected</button>
+        <button type="button" onClick={() => runBulkShortlistAction('remove')}>Remove selected</button>
       </section>
 
       {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
-
       {error && <p className="candidates-directory__error">{error}</p>}
       {isLoading && <p className="candidates-directory__status">Loading candidates…</p>}
-      {!isLoading && !error && candidates.length === 0 && <p className="candidates-directory__status">No candidates matched the current filters.</p>}
 
-      <section className="candidates-directory__grid" aria-live="polite">
-        {candidates.map((candidate) => (
-          <article key={candidate.resumeId} className="candidate-directory-card">
-            <label>
-              <input
-                type="checkbox"
-                checked={selectedResumeIds.includes(candidate.resumeId)}
-                onChange={() => toggleSelectedCandidate(candidate.resumeId)}
-              />
-              Select
-            </label>
-            <h2>{candidate.name || 'Candidate'}</h2>
-            <p><strong>Score:</strong> {getScoreLabel(candidate)}</p>
-            <p><strong>Experience:</strong> {getExperienceLabel(candidate)}</p>
-            <p><strong>Skills:</strong> {getSkillsLabel(candidate)}</p>
-            <p><strong>Tags:</strong> {(candidate.tags || []).join(', ') || 'No tags'}</p>
-            <p><strong>Analysis:</strong> {formatDate(candidate.sourceUpdatedAt)}</p>
-            <p><strong>Job:</strong> {candidate.associatedJob?.title || 'No linked job description'}</p>
-            <a href={`/candidates/${candidate.resumeId}`}>View profile</a>
-          </article>
-        ))}
-      </section>
+      {!isLoading && !error && (
+        <>
+          <section className="candidates-directory__table-wrap" aria-live="polite">
+            <table className="candidates-directory__table">
+              <thead>
+                <tr><th></th><th>Name</th><th>Score</th><th>Experience</th><th>Skills</th><th>Tags</th><th>Job</th><th>Updated</th></tr>
+              </thead>
+              <tbody>
+                {visibleCandidates.map((candidate) => (
+                  <tr key={candidate.resumeId}>
+                    <td><input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} /></td>
+                    <td><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></td>
+                    <td>{getScoreLabel(candidate)}</td>
+                    <td>{getExperienceLabel(candidate)}</td>
+                    <td>{getSkillsLabel(candidate)}</td>
+                    <td>{(candidate.tags || []).join(', ') || 'No tags'}</td>
+                    <td>{candidate.associatedJob?.title || 'No linked job description'}</td>
+                    <td>{formatDate(candidate.sourceUpdatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="candidates-directory__mobile-list">
+            {visibleCandidates.map((candidate) => (
+              <article key={candidate.resumeId} className="candidate-directory-card">
+                <label><input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} />Select</label>
+                <h2><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></h2>
+                <p><strong>Score:</strong> {getScoreLabel(candidate)}</p>
+                <p><strong>Experience:</strong> {getExperienceLabel(candidate)}</p>
+                <p><strong>Skills:</strong> {getSkillsLabel(candidate)}</p>
+                <p><strong>Tags:</strong> {(candidate.tags || []).join(', ') || 'No tags'}</p>
+                <p><strong>Job:</strong> {candidate.associatedJob?.title || 'No linked job description'}</p>
+              </article>
+            ))}
+          </section>
+
+          {visibleCandidates.length === 0 && <p className="candidates-directory__status">No candidates matched the current filters.</p>}
+        </>
+      )}
     </main>
   )
 }

@@ -1,41 +1,115 @@
-.candidates-directory { padding: 1.5rem; color: var(--color-text-primary); }
-.candidates-directory__header p { color: var(--color-text-secondary); }
-.candidates-directory__filters { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: .75rem; margin: 1rem 0; }
-.candidates-directory__filter-field { display:flex; flex-direction:column; gap:.3rem; font-size:.85rem; }
-.candidates-directory__filter-field span {
+.candidates-directory {
+  padding: 1.5rem;
+  color: var(--color-text-primary);
+}
+
+.candidates-directory__hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.candidates-directory__hero h1 { margin: 0; }
+.candidates-directory__hero p { color: var(--color-text-secondary); margin: .35rem 0 0; }
+
+.candidates-directory__summary-chips { display: flex; gap: .5rem; flex-wrap: wrap; }
+.summary-chip {
+  padding: .4rem .7rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-accent-alpha-15);
+  background: var(--color-bg-elevated);
   color: var(--color-text-secondary);
   font-size: var(--type-nav-size);
 }
 
-.candidates-directory__filter-field :is(input, select) {
+.candidates-directory__toolbar,
+.candidates-directory__bulk {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: .65rem;
+  margin: .8rem 0;
+}
+
+.candidates-directory :is(input, select, button) {
   width: 100%;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-interactive);
   color: var(--color-text-primary);
   padding: 0.6rem 0.75rem;
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line-height);
-  transition: var(--motion-transition-color);
 }
 
-.candidates-directory__filter-field :is(input, select)::placeholder {
-  color: var(--color-text-muted);
-}
-
-.candidates-directory__filter-field :is(input, select):hover {
+.candidates-directory button {
+  background: linear-gradient(135deg, var(--color-bg-elevated), var(--color-bg-secondary));
   border-color: var(--color-accent-alpha-15);
+  cursor: pointer;
+}
+
+.candidates-directory__advanced {
+  margin-top: .6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-elevated);
+  padding: .7rem;
+}
+
+.candidates-directory__advanced summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.candidates-directory__advanced-grid {
+  margin-top: .7rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .65rem;
+}
+
+.candidates-directory__advanced-grid label,
+.candidates-directory__bulk label {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+
+.candidates-directory__table-wrap {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: auto;
   background: var(--color-bg-elevated);
 }
 
-.candidates-directory__filter-field :is(input, select):focus-visible {
-  border-color: var(--color-focus-ring);
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px var(--color-focus-ring-inner);
+.candidates-directory__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 960px;
 }
 
-.candidates-directory__grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: .9rem; }
+.candidates-directory__table th,
+.candidates-directory__table td {
+  padding: .6rem;
+  border-bottom: 1px solid var(--color-border-muted, var(--color-border));
+  text-align: left;
+  vertical-align: top;
+}
+
+.candidates-directory__table th {
+  color: var(--color-text-secondary);
+  font-size: var(--type-nav-size);
+}
+
+.candidates-directory__mobile-list { display: none; margin-top: 1rem; gap: .8rem; }
 .candidate-directory-card { border:1px solid var(--color-border); border-radius:.75rem; padding: .9rem; background: var(--color-bg-elevated); }
 .candidates-directory__status { color: var(--color-text-secondary); }
 .candidates-directory__error { color: #d14343; }
+
+@media (max-width: 900px) {
+  .candidates-directory__hero { align-items: start; flex-direction: column; }
+  .candidates-directory__toolbar,
+  .candidates-directory__bulk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .candidates-directory__table-wrap { display: none; }
+  .candidates-directory__mobile-list { display: grid; }
+}
