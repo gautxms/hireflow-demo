@@ -67,6 +67,7 @@ export default function CandidatesPage() {
   const [bulkStatus, setBulkStatus] = useState('')
   const [bulkStatusTone, setBulkStatusTone] = useState('info')
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   const queryString = useMemo(() => {
     return buildCandidateDirectoryQueryParams({
@@ -122,7 +123,7 @@ export default function CandidatesPage() {
 
     loadCandidates()
     return () => controller.abort()
-  }, [queryString])
+  }, [queryString, reloadNonce])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -175,6 +176,19 @@ export default function CandidatesPage() {
       return new Date(b.sourceUpdatedAt).getTime() - new Date(a.sourceUpdatedAt).getTime()
     })
   }, [candidates, searchTerm, sortBy])
+
+
+  const viewState = useMemo(() => {
+    if (isLoading) return 'loading'
+    if (error) return 'api-error'
+    if (candidates.length === 0) return 'no-candidates'
+    if (visibleCandidates.length === 0) return 'no-filter-results'
+    return 'loaded'
+  }, [isLoading, error, candidates.length, visibleCandidates.length])
+
+  const retryLoadCandidates = () => {
+    setReloadNonce((current) => current + 1)
+  }
 
   const toggleSelectedCandidate = (resumeId) => {
     setSelectedResumeIds((current) => (
@@ -242,9 +256,9 @@ export default function CandidatesPage() {
           <p>Fast pipeline triage with structured scoring, skills intelligence, and shortlist actions.</p>
         </div>
         <div className="candidates-directory__summary-chips" aria-label="Directory summary">
-          <span className="summary-chip">Total: {candidates.length}</span>
-          <span className="summary-chip">Visible: {visibleCandidates.length}</span>
-          <span className="summary-chip">Selected: {selectedResumeIds.length}</span>
+          <span className="summary-chip">Total: {viewState === 'api-error' ? '—' : candidates.length}</span>
+          <span className="summary-chip">Visible: {viewState === 'api-error' ? '—' : visibleCandidates.length}</span>
+          <span className="summary-chip">Selected: {viewState === 'api-error' ? '—' : selectedResumeIds.length}</span>
         </div>
       </header>
 
@@ -283,11 +297,19 @@ export default function CandidatesPage() {
         </section>
       )}
 
-      {bulkStatus && <p className={`candidates-directory__status candidates-directory__status--${bulkStatusTone}`}>{bulkStatus}</p>}
-      {error && <p className="candidates-directory__error">{error}</p>}
-      {isLoading && <p className="candidates-directory__status">Loading candidates…</p>}
+      {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
 
-      {!isLoading && !error && (
+      {viewState === 'loading' && <p className="candidates-directory__status">Loading candidates…</p>}
+      {viewState === 'api-error' && (
+        <div className="candidates-directory__error" role="alert">
+          <p>{error}</p>
+          <button type="button" onClick={retryLoadCandidates}>Retry</button>
+        </div>
+      )}
+      {viewState === 'no-candidates' && <p className="candidates-directory__status">No candidates available yet.</p>}
+      {viewState === 'no-filter-results' && <p className="candidates-directory__status">No candidates matched the current filters.</p>}
+
+      {(viewState === 'loaded' || viewState === 'no-filter-results') && (
         <>
           <section className="candidates-directory__table-wrap" aria-live="polite">
             <table className="candidates-directory__table">
@@ -333,7 +355,6 @@ export default function CandidatesPage() {
             ))}
           </section>
 
-          {visibleCandidates.length === 0 && <p className="candidates-directory__status">No candidates matched the current filters.</p>}
         </>
       )}
     </main>
