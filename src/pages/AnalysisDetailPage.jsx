@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import API_BASE from '../config/api'
 import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
@@ -154,10 +154,28 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
     return { payload, issues }
   }, [analysis])
   const candidateResultsPayload = candidateResultsValidation.payload
+  const lastPayloadIssueFingerprintRef = useRef('')
 
   useEffect(() => {
     const issues = candidateResultsValidation?.issues || []
-    if (issues.length === 0) return
+    if (issues.length === 0) {
+      lastPayloadIssueFingerprintRef.current = ''
+      return
+    }
+
+    const issueFingerprint = JSON.stringify({
+      analysisId: analysis?.id || analysisId,
+      droppedCount: candidateResultsPayload?.droppedCount || 0,
+      inputCount: candidateResultsPayload?.inputCount || 0,
+      outputCount: candidateResultsPayload?.outputCount || 0,
+      issues,
+    })
+
+    if (lastPayloadIssueFingerprintRef.current === issueFingerprint) {
+      return
+    }
+
+    lastPayloadIssueFingerprintRef.current = issueFingerprint
     logResultsPayloadCompatibilityIssues({
       analysisId: analysis?.id || analysisId,
       issues,
@@ -165,7 +183,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
       inputCount: candidateResultsPayload?.inputCount,
       outputCount: candidateResultsPayload?.outputCount,
     })
-  }, [analysis?.id, analysisId, candidateResultsPayload?.droppedCount, candidateResultsPayload?.inputCount, candidateResultsPayload?.outputCount, candidateResultsValidation])
+  }, [analysis?.id, analysisId, candidateResultsPayload?.droppedCount, candidateResultsPayload?.inputCount, candidateResultsPayload?.outputCount, candidateResultsValidation?.issues])
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
   const candidateCount = candidateResultsPayload.candidates.length
   const hasCandidateResults = candidateResultsPayload.candidates.length > 0
