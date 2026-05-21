@@ -400,9 +400,15 @@ router.get('/directory', requireAuth, async (req, res) => {
     const profiles = result.rows
       .map((row) => {
         const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
-        const skills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
-        const profileScore = normalizeNullableNumber(profile.profile_score) ?? normalizeNullableNumber(row.profile_score)
-        const yearsExperience = normalizeNullableNumber(profile.years_experience) ?? normalizeNullableNumber(row.years_experience)
+        const persistedProfileScore = normalizeNullableNumber(profile.profile_score)
+        const persistedYearsExperience = normalizeNullableNumber(profile.years_experience)
+        const fallbackProfileScore = normalizeNullableNumber(row.profile_score)
+        const fallbackYearsExperience = normalizeNullableNumber(row.years_experience)
+        const profileScore = persistedProfileScore ?? fallbackProfileScore
+        const yearsExperience = persistedYearsExperience ?? fallbackYearsExperience
+        const normalizedSkills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
+        const skills = normalizedSkills
+        const nullableSkills = normalizedSkills.length > 0 ? normalizedSkills : null
         const tags = normalizeStringArray(row.tags)
 
         return {
@@ -412,6 +418,24 @@ router.get('/directory', requireAuth, async (req, res) => {
           skills,
           profileScore,
           yearsExperience,
+          normalized: {
+            profileScore,
+            yearsExperience,
+            skills: nullableSkills,
+          },
+          parseHints: {
+            scoreSource: persistedProfileScore !== null ? 'candidate_profile' : (fallbackProfileScore !== null ? 'resume_fallback' : 'missing'),
+            experienceSource: persistedYearsExperience !== null ? 'candidate_profile' : (fallbackYearsExperience !== null ? 'resume_fallback' : 'missing'),
+            skillsSource: nullableSkills ? 'candidate_profile' : 'missing',
+            scoreNullable: profileScore === null,
+            experienceNullable: yearsExperience === null,
+            skillsNullable: nullableSkills === null,
+          },
+          provenanceHints: {
+            sourceAnalysisId: row.source_parse_job_id || null,
+            sourceUpdatedAt: row.source_updated_at,
+            sourceJobId: row.job_description_id ? String(row.job_description_id) : null,
+          },
           tags,
           sourceParseJobId: row.source_parse_job_id || null,
           sourceUpdatedAt: row.source_updated_at,
