@@ -11,7 +11,7 @@ import {
   trackUploadUsage,
 } from '../middleware/subscriptionCheck.js'
 import { generalApiLimiterAuth, uploadLimiter } from '../middleware/rateLimiter.js'
-import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileMime.js'
+import { isAcceptedResumeUpload } from '../utils/fileMime.js'
 
 const router = Router()
 
