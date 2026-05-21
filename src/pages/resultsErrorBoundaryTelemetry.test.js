@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { logResultsRenderError, normalizeErrorFingerprint } from './resultsErrorBoundaryTelemetry.js'
+import { logResultsPayloadCompatibilityIssues, logResultsRenderError, normalizeErrorFingerprint } from './resultsErrorBoundaryTelemetry.js'
 
 test('normalizeErrorFingerprint normalizes whitespace and casing', () => {
   const fingerprint = normalizeErrorFingerprint({
@@ -81,6 +81,37 @@ test('logResultsRenderError emits structured telemetry when child throws', () =>
 
   mockWindow.dispatchEvent = originalDispatch
   console.error = originalConsoleError
+  globalThis.CustomEvent = originalCustomEvent
+  if (!originalWindow) delete globalThis.window
+  else globalThis.window = originalWindow
+})
+
+
+test('logResultsPayloadCompatibilityIssues emits structured dropped-field telemetry', () => {
+  const telemetryEvents = []
+  const originalWindow = globalThis.window
+  const mockWindow = originalWindow || {}
+  const originalDispatch = mockWindow.dispatchEvent
+  mockWindow.dispatchEvent = (event) => { telemetryEvents.push(event.detail); return true }
+  globalThis.window = mockWindow
+
+  const originalCustomEvent = globalThis.CustomEvent
+  globalThis.CustomEvent = class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail } }
+
+  const event = logResultsPayloadCompatibilityIssues({
+    analysisId: 'analysis-payload-1',
+    droppedCount: 2,
+    inputCount: 4,
+    outputCount: 2,
+    issues: [{ code: 'candidate.match_score.invalid_shape', pathString: '$.candidates[0].matchScore', candidateIndex: 0 }],
+  })
+
+  assert.equal(event.eventType, 'analysis_detail_results_payload_compatibility')
+  assert.equal(event.issueCount, 1)
+  assert.equal(event.issues[0].code, 'candidate.match_score.invalid_shape')
+  assert.equal(telemetryEvents.length, 1)
+
+  mockWindow.dispatchEvent = originalDispatch
   globalThis.CustomEvent = originalCustomEvent
   if (!originalWindow) delete globalThis.window
   else globalThis.window = originalWindow

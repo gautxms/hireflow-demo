@@ -108,3 +108,32 @@ export function logResultsRenderError(context) {
   console.error('[HireFlow] AnalysisDetail results render error', event)
   return event
 }
+
+
+export function logResultsPayloadCompatibilityIssues({ analysisId = '', issues = [], droppedCount = 0, inputCount = 0, outputCount = 0, timestamp = new Date().toISOString() } = {}) {
+  const normalizedIssues = Array.isArray(issues) ? issues.slice(0, 25).map((issue, index) => ({
+    index,
+    code: String(issue?.code || ''),
+    path: String(issue?.pathString || ''),
+    candidateIndex: Number.isFinite(Number(issue?.candidateIndex)) ? Number(issue.candidateIndex) : null,
+    expected: issue?.expected ?? null,
+    received: issue?.received ?? null,
+  })) : []
+
+  const event = {
+    eventType: 'analysis_detail_results_payload_compatibility',
+    route: 'AnalysisDetail',
+    diagnosticCode: 'RRB_PAYLOAD_COMPAT_ISSUES',
+    analysisId: String(analysisId || ''),
+    issueCount: normalizedIssues.length,
+    issues: normalizedIssues,
+    droppedCount: Number(droppedCount || 0),
+    inputCount: Number(inputCount || 0),
+    outputCount: Number(outputCount || 0),
+    timestamp,
+  }
+
+  window.dispatchEvent(new CustomEvent('hireflow:telemetry', { detail: event }))
+  console.warn('[HireFlow] AnalysisDetail payload compatibility issues', event)
+  return event
+}
