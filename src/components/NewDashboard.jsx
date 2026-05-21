@@ -18,6 +18,29 @@ function formatDateLabel(value) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+function formatScore(value) {
+  return Number(value || 0).toFixed(2)
+}
+
+function buildAxisTicks(min, max, count = 4) {
+  const safeMin = Number.isFinite(min) ? min : 0
+  const safeMax = Number.isFinite(max) ? max : 0
+  const hasRange = safeMax > safeMin
+  const step = hasRange ? (safeMax - safeMin) / count : 1
+  return Array.from({ length: count + 1 }, (_, index) => {
+    const raw = hasRange ? safeMin + step * (count - index) : count - index
+    return Number(raw)
+  })
+}
+
+function getIntermediateDateTicks(series, tickCount = 4) {
+  if (series.length <= 2) return series.map((item) => formatDateLabel(item.periodStart))
+  const indices = new Set([0, series.length - 1])
+  const step = (series.length - 1) / tickCount
+  for (let i = 1; i < tickCount; i += 1) indices.add(Math.round(i * step))
+  return [...indices].sort((a, b) => a - b).map((index) => formatDateLabel(series[index]?.periodStart))
+}
+
 function buildChartBars(series, key) {
   if (!series.length) return []
   const values = series.map((item) => Number(item[key] || 0))
@@ -130,6 +153,14 @@ export default function NewDashboard() {
   const isScoreEmpty = fetchState === 'success' && averageScoreTrend.length === 0
   const analysesBars = useMemo(() => buildChartBars(analysesTrend, 'value'), [analysesTrend])
   const averageScoreBars = useMemo(() => buildChartBars(averageScoreTrend, 'value'), [averageScoreTrend])
+  const analysesMax = useMemo(() => Math.max(...analysesTrend.map((item) => Number(item.value || 0)), 1), [analysesTrend])
+  const analysesTicks = useMemo(() => buildAxisTicks(0, analysesMax, 4).map((value) => Math.round(value)), [analysesMax])
+  const analysesDateTicks = useMemo(() => getIntermediateDateTicks(analysesTrend), [analysesTrend])
+  const scoreValues = useMemo(() => averageScoreTrend.map((item) => Number(item.value || 0)), [averageScoreTrend])
+  const scoreMin = useMemo(() => Math.min(...scoreValues, 0), [scoreValues])
+  const scoreMax = useMemo(() => Math.max(...scoreValues, 1), [scoreValues])
+  const scoreTicks = useMemo(() => buildAxisTicks(scoreMin, scoreMax, 4).map((value) => Number(value.toFixed(2))), [scoreMin, scoreMax])
+  const scoreDateTicks = useMemo(() => getIntermediateDateTicks(averageScoreTrend), [averageScoreTrend])
 
   return (
     <div className="new-dashboard">
@@ -197,17 +228,21 @@ export default function NewDashboard() {
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
           {isAnalysesEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {analysesTrend.length > 0 && (
-            <div className="new-dashboard__chart" role="img" tabIndex={0} aria-label="Analyses trend chart">
+            <div className="new-dashboard__chart-shell">
+              <div className="new-dashboard__y-axis" aria-hidden="true">
+                {analysesTicks.map((tick) => <span key={`analyses-tick-${tick}`}>{tick}</span>)}
+              </div>
+              <div className="new-dashboard__chart" aria-label="Analyses trend bar chart with count axis and date ticks">
               {analysesBars.map((bar) => (
-                <div key={bar.id} className="new-dashboard__bar-column">
-                  <div className="new-dashboard__bar new-dashboard__bar--primary" style={{ height: `${bar.height}%` }} aria-label={`${bar.label}: ${bar.value}`} title={`${bar.label}: ${bar.value}`} />
-                </div>
+                <button key={bar.id} type="button" className="new-dashboard__bar-column" aria-label={`${bar.label}: ${bar.value} analyses`} title={`${bar.label}: ${bar.value} analyses`}>
+                  <div className="new-dashboard__bar new-dashboard__bar--primary" style={{ height: `${bar.height}%` }} />
+                </button>
               ))}
+              </div>
             </div>
           )}
-          <div className="new-dashboard__trend-range">
-            <span>{analysesTrend[0] ? formatDateLabel(analysesTrend[0].periodStart) : '-'}</span>
-            <span>{analysesTrend.at(-1) ? formatDateLabel(analysesTrend.at(-1).periodStart) : '-'}</span>
+          <div className="new-dashboard__x-axis" aria-hidden="true">
+            {analysesDateTicks.map((label) => <span key={`analyses-date-${label}`}>{label}</span>)}
           </div>
         </article>
 
@@ -218,17 +253,34 @@ export default function NewDashboard() {
           {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No score data available for selected filters.</p> : null}
           {isScoreEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
           {averageScoreTrend.length > 0 && hasScoreData && (
-            <div className="new-dashboard__chart" role="img" tabIndex={0} aria-label="Average score trend chart">
-              {averageScoreBars.map((bar) => (
-                <div key={bar.id} className="new-dashboard__bar-column">
-                  <div className="new-dashboard__bar new-dashboard__bar--secondary" style={{ height: `${bar.height}%` }} aria-label={`${bar.label}: ${bar.value.toFixed(2)}`} title={`${bar.label}: ${bar.value.toFixed(2)}`} />
-                </div>
-              ))}
+            <div className="new-dashboard__chart-shell">
+              <div className="new-dashboard__y-axis" aria-hidden="true">
+                {scoreTicks.map((tick) => <span key={`score-tick-${tick}`}>{formatScore(tick)}</span>)}
+              </div>
+              <div className="new-dashboard__chart new-dashboard__chart--line" aria-label="Average score trend line chart with score axis and date ticks">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="new-dashboard__line-svg" aria-hidden="true">
+                  <polyline
+                    fill="none"
+                    stroke="var(--color-accent-green-hover)"
+                    strokeWidth="2.5"
+                    points={averageScoreBars.map((bar, index) => `${(index / Math.max(averageScoreBars.length - 1, 1)) * 100},${100 - bar.height}`).join(' ')}
+                  />
+                </svg>
+                {averageScoreBars.map((bar, index) => (
+                  <button
+                    key={bar.id}
+                    type="button"
+                    className="new-dashboard__point"
+                    style={{ left: `${(index / Math.max(averageScoreBars.length - 1, 1)) * 100}%`, bottom: `${bar.height}%` }}
+                    aria-label={`${bar.label}: ${formatScore(bar.value)} score`}
+                    title={`${bar.label}: ${formatScore(bar.value)} score`}
+                  />
+                ))}
+              </div>
             </div>
           )}
-          <div className="new-dashboard__trend-range">
-            <span>{averageScoreTrend[0] ? formatDateLabel(averageScoreTrend[0].periodStart) : '-'}</span>
-            <span>{averageScoreTrend.at(-1) ? formatDateLabel(averageScoreTrend.at(-1).periodStart) : '-'}</span>
+          <div className="new-dashboard__x-axis" aria-hidden="true">
+            {scoreDateTicks.map((label) => <span key={`score-date-${label}`}>{label}</span>)}
           </div>
         </article>
       </section>
