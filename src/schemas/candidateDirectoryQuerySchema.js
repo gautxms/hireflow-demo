@@ -28,6 +28,13 @@ function parseIntegerInRange(value, { fallback, min, max }) {
   return Math.min(max, Math.max(min, parsed))
 }
 
+
+function normalizeNumberFilter(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function normalizeSortBy(value) {
   const normalized = normalizeString(value)
   if (!normalized || !SORTABLE_FIELDS.has(normalized)) return candidateDirectoryQuerySchema.defaults.sortBy
@@ -49,6 +56,14 @@ export function normalizeCandidateDirectoryQuery(rawQuery = {}) {
     search: normalizeString(rawQuery.search),
     job: normalizeString(rawQuery.job),
     parseStatus: normalizeParseStatus(rawQuery.parseStatus),
+    skills: normalizeString(rawQuery.skills),
+    tags: normalizeString(rawQuery.tags),
+    experienceMin: normalizeNumberFilter(rawQuery.experienceMin),
+    experienceMax: normalizeNumberFilter(rawQuery.experienceMax),
+    scoreMin: normalizeNumberFilter(rawQuery.scoreMin),
+    scoreMax: normalizeNumberFilter(rawQuery.scoreMax),
+    sourceJobId: normalizeString(rawQuery.sourceJobId),
+    sourceAnalysisId: normalizeString(rawQuery.sourceAnalysisId),
     sortBy: normalizeSortBy(rawQuery.sortBy),
     sortDirection: normalizeSortDirection(rawQuery.sortDirection),
     page: parseIntegerInRange(rawQuery.page, {
