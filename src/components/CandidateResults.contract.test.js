@@ -66,6 +66,14 @@ test('click-path regression: legacy matchScore numeric and object payload varian
   assert.match(candidateResultsSource, /candidate\?\.matchScore\s*\?\?/)
 })
 
+test('list/detail identity regression: candidate render keys derive from resolveCandidateKey instead of payload _bulkKey', () => {
+  assert.match(candidateResultsSource, /const candidateKey = resolveCandidateKey\(candidate, index\)/)
+  assert.match(candidateResultsSource, /<div\s+key=\{candidateKey\}/)
+  assert.match(candidateResultsSource, /const expandedCandidateKey = resolveCandidateKey\(candidate\)/)
+  assert.match(candidateResultsSource, /selectedCandidateKey=\{expandedCandidateKey\}/)
+  assert.doesNotMatch(candidateResultsSource, /key=\{candidate\._bulkKey\}/)
+})
+
 test('click-path regression: crash panel copy is never used for candidate click interactions', () => {
   assert.doesNotMatch(candidateResultsSource, /We could not render these results\./)
   assert.doesNotMatch(candidateResultsSource, /Please return to Analyses or retry\./)

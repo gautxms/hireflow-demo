@@ -117,7 +117,7 @@ export function resolveCandidateKey(candidate = {}, index = 0) {
     candidate?.resume_id,
     candidate?.id,
     candidate?.email,
-    candidate?.name ? `${candidate.name}-${index}` : null,
+    candidate?.name,
   ]
 
   for (const value of fields) {

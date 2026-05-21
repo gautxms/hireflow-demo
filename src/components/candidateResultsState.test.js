@@ -64,7 +64,13 @@ test('resolveCandidateKey prefers stable candidate identity fields', () => {
   assert.equal(resolveCandidateKey({ resumeId: 'resume-2', id: 'id-2' }, 0), 'resume-2')
   assert.equal(resolveCandidateKey({ id: 'id-3' }, 0), 'id-3')
   assert.equal(resolveCandidateKey({ email: 'a@b.com' }, 0), 'a@b.com')
-  assert.equal(resolveCandidateKey({ name: 'Alex' }, 4), 'Alex-4')
+  assert.equal(resolveCandidateKey({ name: 'Alex' }, 4), 'Alex')
+})
+
+test('resolveCandidateKey uses index only as final fallback for mixed/partial payloads', () => {
+  assert.equal(resolveCandidateKey({ id: '', resumeId: null, resume_id: undefined, email: '', name: 'Taylor' }, 2), 'Taylor')
+  assert.equal(resolveCandidateKey({ id: '', resumeId: null, resume_id: undefined, email: '', name: '' }, 7), 'candidate-7')
+  assert.equal(resolveCandidateKey({}, 9), 'candidate-9')
 })
 
 test('toDisplayText normalizes object/array candidate fields into safe renderable text', () => {
