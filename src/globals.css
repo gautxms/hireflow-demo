@@ -754,11 +754,11 @@ h6 {
 .app-sb-logo .brand-logo {
   font-family: 'DM Sans', var(--hf-font-ui), sans-serif;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--hf-text-primary);
 }
 
 .app-sb-logo .brand-logo span {
-  color: #c8ff00;
+  color: var(--hf-accent-primary);
 }
 
 .app-sb-nav {
@@ -789,16 +789,16 @@ h6 {
 }
 
 .app-sb-item--active {
-  border-left: 2px solid #c8ff00;
-  background: color-mix(in srgb, #c8ff00 16%, transparent);
+  border-left: 2px solid var(--hf-accent-primary);
+  background: color-mix(in srgb, var(--hf-accent-primary) 16%, transparent);
 }
 
 .app-sb-item--active .app-sb-icon {
-  color: #c8ff00;
+  color: var(--hf-accent-primary);
 }
 
 .app-sb-item--active .app-sb-label {
-  color: #ffffff;
+  color: var(--hf-text-primary);
 }
 
 .app-sb--closed .app-sb-item {
@@ -813,8 +813,8 @@ h6 {
 
 .app-sb--closed .app-sb-item--active {
   border-radius: 8px;
-  border-left: 2px solid #c8ff00;
-  background: color-mix(in srgb, #c8ff00 16%, transparent);
+  border-left: 2px solid var(--hf-accent-primary);
+  background: color-mix(in srgb, var(--hf-accent-primary) 16%, transparent);
   padding-inline: 0.35rem;
 }
 
