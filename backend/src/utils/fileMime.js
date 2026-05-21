@@ -30,5 +30,9 @@ export function resolveEffectiveMimeType(reportedMimeType, filename) {
 
 export function isAcceptedResumeUpload(reportedMimeType, filename) {
   const effectiveMimeType = resolveEffectiveMimeType(reportedMimeType, filename)
+  if (effectiveMimeType === EXTENSION_MIME_MAP.txt) {
+    return getFileExtension(filename) === 'txt'
+  }
+
   return ACCEPTED_RESUME_MIME_TYPES.has(effectiveMimeType)
 }

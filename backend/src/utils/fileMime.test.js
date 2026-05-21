@@ -29,4 +29,10 @@ test('accepted upload supports pdf/docx/txt', () => {
   assert.equal(isAcceptedResumeUpload('application/pdf', 'resume.pdf'), true)
   assert.equal(isAcceptedResumeUpload('application/octet-stream', 'resume.docx'), true)
   assert.equal(isAcceptedResumeUpload('', 'resume.txt'), true)
+  assert.equal(isAcceptedResumeUpload('text/plain', 'resume.txt'), true)
+})
+
+test('accepted upload rejects text/plain without .txt extension', () => {
+  assert.equal(isAcceptedResumeUpload('text/plain', 'resume.exe'), false)
+  assert.equal(isAcceptedResumeUpload('text/plain', 'resume'), false)
 })
