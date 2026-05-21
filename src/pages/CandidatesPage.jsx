@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import { buildCandidateDirectoryQueryParams } from '../schemas/candidateDirectoryQuerySchema'
 import '../styles/candidates-directory.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -88,14 +89,14 @@ export default function CandidatesPage() {
   const [bulkStatus, setBulkStatus] = useState('')
 
   const queryString = useMemo(() => {
-    const params = new URLSearchParams()
-    Object.entries(filters).forEach(([key, value]) => {
-      if (String(value || '').trim()) {
-        params.set(key, String(value).trim())
-      }
+    return buildCandidateDirectoryQueryParams({
+      search: [filters.skills, filters.tags].filter(Boolean).join(' ').trim() || null,
+      job: filters.sourceJobId,
+      sortBy: 'sourceUpdatedAt',
+      sortDirection: 'desc',
+      page: 1,
+      pageSize: 25,
     })
-
-    return params.toString()
   }, [filters])
 
   useEffect(() => {
