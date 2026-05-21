@@ -562,6 +562,7 @@ function filterAndSortCandidates(candidates, filters) {
 
 
 export default function CandidateResults({ candidates: candidatePayload, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null, analysisId = '', candidateCount = 0, normalizationStats = null, candidatePayloadShape = null, candidateFieldTypeSummary = [] }) {
+  const resolveSelectionResumeId = useCallback((candidate) => resolveCandidateResumeUuid(candidate), [])
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
@@ -1748,4 +1749,3 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     </div>
   )
 }
-  const resolveSelectionResumeId = useCallback((candidate) => resolveCandidateResumeUuid(candidate), [])
