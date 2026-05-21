@@ -66,6 +66,12 @@
 .new-dashboard__panel,
 .new-dashboard__kpis { margin-bottom: 1rem; }
 
+.new-dashboard__panel {
+  position: relative;
+  overflow: visible;
+  isolation: isolate;
+}
+
 
 :root {
   --dashboard-select-bg: var(--color-bg-surface);
@@ -74,7 +80,7 @@
   --dashboard-select-focus: var(--color-accent-green);
 }
 
-.new-dashboard__filters { display: grid; gap: 0.75rem; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: end; overflow: visible; }
+.new-dashboard__filters { display: grid; gap: 0.75rem; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: end; overflow: visible; position: relative; z-index: 2; }
 .new-dashboard__field { grid-column: span 3; display: grid; gap: 0.35rem; }
 .new-dashboard__field--wide { grid-column: span 5; }
 .new-dashboard__field-label { font-size: 12px; color: var(--color-text-muted); font-weight: 600; }
@@ -83,18 +89,23 @@
 .new-dashboard__select {
   display: block;
   width: 100%;
-  background: var(--dashboard-select-bg);
+  background-color: var(--dashboard-select-bg);
   border: 1px solid var(--dashboard-select-border);
   color: var(--dashboard-select-text);
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
+  line-height: 1.2;
   padding: 9px 32px 9px 14px;
   border-radius: 8px;
   appearance: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  color-scheme: dark;
+  -webkit-text-fill-color: var(--dashboard-select-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .new-dashboard__select:hover {
   border-color: var(--border-strong);
+  background-color: color-mix(in srgb, var(--dashboard-select-bg) 88%, var(--color-text-primary));
 }
 
 .new-dashboard__select:focus-visible {
@@ -105,7 +116,14 @@
 
 .new-dashboard__select option {
   color: var(--dashboard-select-text);
-  background: var(--dashboard-select-bg);
+  background-color: var(--dashboard-select-bg);
+}
+
+.new-dashboard__select option:checked,
+.new-dashboard__select option:hover,
+.new-dashboard__select option:focus {
+  color: var(--dashboard-select-text);
+  background-color: color-mix(in srgb, var(--dashboard-select-bg) 82%, var(--color-accent-green));
 }
 
 .new-dashboard__meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin-top: 0.75rem; }
