@@ -31,7 +31,8 @@
     "qa:brand-logo-consistency": "node scripts/check-brand-logo-consistency.mjs",
     "qa:landing-visual-baseline": "node scripts/verify-landing-visual-baseline.mjs",
     "qa:dashboard-visual-baseline": "node scripts/verify-dashboard-visual-baseline.mjs",
-    "check:dashboard-token-hygiene": "node scripts/check-dashboard-token-hygiene.mjs"
+    "check:dashboard-token-hygiene": "node scripts/check-dashboard-token-hygiene.mjs",
+    "qa:dashboard-a11y-smoke": "node scripts/dashboard-a11y-smoke-checks.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",

@@ -172,7 +172,7 @@ export default function UserAppShell({ children, pathname, onNavigate, pageTitle
               <span>{pinned ? 'Pinned' : 'Pin sidebar'}</span>
             </button>
           )}
-          <button type="button" className="app-sb-chevron" onClick={expanded ? collapse : expand} title={expanded ? 'Collapse' : 'Expand'}>
+          <button type="button" className="app-sb-chevron" onClick={expanded ? collapse : expand} title={expanded ? 'Collapse' : 'Expand'} aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}>
             {expanded ? <ChevronLeft size={18} strokeWidth={1.5} /> : <ChevronRight size={18} strokeWidth={1.5} />}
           </button>
         </div>
