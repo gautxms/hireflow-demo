@@ -643,3 +643,20 @@ Do/Don't:
 - Do keep modal body readable with solid contrast.
 - Don’t rely on browser-default file inputs; use styled trigger + selected filename.
 - Don’t place critical actions only at scroll end.
+
+### 9.10 Pagination parity rule for table pages (Jobs, Analyses, Candidates)
+
+This is now an explicit cross-page requirement for data tables in the app shell.
+
+Rules:
+- Default page size for dense table pages is **15 records per page** unless a page-specific approved exception exists.
+- Show pagination controls only when total filtered records exceed page size.
+- Previous/Next must be real `<button>` elements with disabled states on first/last page.
+- Page indicator must use `aria-live="polite"` and include absolute page numbers (`Page X of Y`).
+- Pagination controls, labels, and metadata must use DM Sans/UI font tokens.
+- Reuse existing pagination architecture already used on Jobs/Analyses style tables rather than inventing a new pattern.
+
+Candidates-specific enforcement:
+- `/candidates` must follow the same baseline as Jobs/Analyses: default **15 rows**, then pagination when `totalCount > 15`.
+- If server-side pagination metadata is returned (`page`, `pageSize`, `totalPages`, `totalCount`), UI must treat backend as source of truth.
+- If client-side fallback is required, it must still preserve the same 15-row default behavior and control semantics.
