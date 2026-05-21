@@ -50,6 +50,13 @@ export function serializeJobDescriptionForm(formValues) {
     return normalized ? normalized : undefined
   }
 
+
+  const toOptionalSelect = (value, allowedValues) => {
+    const normalized = toOptionalTrimmed(value)
+    if (!normalized) return undefined
+    return allowedValues.includes(normalized) ? normalized : undefined
+  }
+
   const toOptionalInt = (value) => {
     if (value === undefined || value === null || value === '') {
       return undefined
@@ -71,5 +78,10 @@ export function serializeJobDescriptionForm(formValues) {
     experienceMin: toOptionalInt(formValues.experienceMin),
     experienceMax: toOptionalInt(formValues.experienceMax),
     experienceYears: toOptionalInt(formValues.experienceMin) ?? toOptionalInt(formValues.experienceMax),
+    requirements: toOptionalTrimmed(formValues.requirements),
+    qualifications: toOptionalTrimmed(formValues.qualifications),
+    keyResponsibilities: toOptionalTrimmed(formValues.keyResponsibilities),
+    workMode: toOptionalSelect(formValues.workMode, ['Remote', 'Hybrid', 'On-site']),
+    additionalInfo: toOptionalTrimmed(formValues.additionalInfo),
   }
 }
