@@ -11,14 +11,12 @@ import { pool } from '../db/client.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 import { enqueueParseJob } from './jobQueue.js'
 import { isScanResultSafe, scanFileBuffer } from './virusScanService.js'
+import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileMime.js'
 
 export const CHUNK_SIZE_BYTES = 5 * 1024 * 1024
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 let uploadTablesReady = false
-const PDF_EXTENSION_PATTERN = /\.pdf$/i
-const DOCX_EXTENSION_PATTERN = /\.docx$/i
-
 const s3Bucket = process.env.AWS_S3_BUCKET
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
@@ -52,25 +50,11 @@ function ensureS3Configured() {
 
 function normalizeMimeType(filename, mimeType) {
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
-  if (normalizedMimeType === 'application/pdf') {
-    return 'application/pdf'
-  }
-  if (
-    normalizedMimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    || normalizedMimeType === 'application/msword'
-  ) {
+  if (normalizedMimeType === 'application/msword') {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   }
 
-  const safeFilename = String(filename || '').trim()
-  if (PDF_EXTENSION_PATTERN.test(safeFilename)) {
-    return 'application/pdf'
-  }
-  if (DOCX_EXTENSION_PATTERN.test(safeFilename)) {
-    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  }
-
-  return normalizedMimeType || null
+  return resolveEffectiveMimeType(normalizedMimeType, filename)
 }
 
 async function ensureUploadChunkTables() {
@@ -195,6 +179,10 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   const originalFilename = String(filename || '').trim()
   const safeFilename = sanitizeFilename(originalFilename)
   const normalizedMimeType = normalizeMimeType(originalFilename, mimeType)
+
+  if (!isAcceptedResumeUpload(normalizedMimeType, originalFilename)) {
+    throw new Error('Only PDF, DOCX, and TXT files are allowed')
+  }
 
   if (jobDescriptionId) {
     const jdResult = await pool.query(
