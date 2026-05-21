@@ -11,6 +11,7 @@ import {
   trackUploadUsage,
 } from '../middleware/subscriptionCheck.js'
 import { generalApiLimiterAuth, uploadLimiter } from '../middleware/rateLimiter.js'
+import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileMime.js'
 
 const router = Router()
 
@@ -50,6 +51,7 @@ const upload = multer({
     }
 
     file.safeName = sanitizeFilename(file.originalname)
+    file.mimetype = resolveEffectiveMimeType(file.mimetype, file.originalname) || file.mimetype
     return cb(null, true)
   },
 })
