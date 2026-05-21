@@ -188,10 +188,7 @@ router.post(
         const fileBufferBase64 = file.buffer.toString('base64')
         const scanResultJson = JSON.stringify(scanResult)
 
-        const effectiveMimeType = resolveEffectiveMimeType(
-          file.mimetype,
-          file.safeName || file.originalname,
-        )
+        const effectiveMimeType = resolveEffectiveMimeType(file.mimetype, file.originalname)
 
         const insertResult = await pool.query(
           `INSERT INTO resumes (
