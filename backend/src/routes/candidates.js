@@ -9,6 +9,7 @@ import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysi
 import { applyJobDescriptionScoringMode } from '../jobs/parseResumeJob.js'
 import { syncCandidateProfilesForUser } from '../services/candidateProfilesService.js'
 import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { normalizeCandidateDirectoryQuery } from '../../../src/schemas/candidateDirectoryQuerySchema.js'
 
 const router = Router()
 
@@ -106,38 +107,37 @@ function normalizeNumberFilter(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function parsePositiveInteger(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? ''), 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
-  return parsed
-}
-
-function normalizeSortBy(value) {
-  const normalized = normalizeString(value)
-  return normalized || 'sourceUpdatedAt'
-}
-
-function normalizeSortDirection(value) {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'asc' || normalized === 'desc') return normalized
-  return 'desc'
+const sortComparators = {
+  name: (entry) => String(entry.name || '').toLowerCase(),
+  profileScore: (entry) => entry.profileScore ?? Number.NEGATIVE_INFINITY,
+  yearsExperience: (entry) => entry.yearsExperience ?? Number.NEGATIVE_INFINITY,
+  sourceUpdatedAt: (entry) => new Date(entry.sourceUpdatedAt || 0).getTime(),
 }
 
 export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
+  const normalizedQuery = normalizeCandidateDirectoryQuery(query)
   const totalCount = profiles.length
-  const page = parsePositiveInteger(query.page, 1)
-  const pageSize = parsePositiveInteger(query.pageSize, totalCount > 0 ? totalCount : 1)
+  const page = normalizedQuery.page
+  const pageSize = normalizedQuery.pageSize
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-  const startIndex = (page - 1) * pageSize
-  const paginatedCandidates = profiles.slice(startIndex, startIndex + pageSize)
-  const sortBy = normalizeSortBy(query.sortBy)
-  const sortDirection = normalizeSortDirection(query.sortDirection)
+  const clampedPage = Math.min(page, totalPages)
+  const sortBy = normalizedQuery.sortBy
+  const sortDirection = normalizedQuery.sortDirection
+  const sortedProfiles = [...profiles].sort((a, b) => {
+    const aValue = sortComparators[sortBy](a)
+    const bValue = sortComparators[sortBy](b)
+    if (aValue === bValue) return 0
+    const cmp = aValue > bValue ? 1 : -1
+    return sortDirection === 'asc' ? cmp : -cmp
+  })
+  const startIndex = (clampedPage - 1) * pageSize
+  const paginatedCandidates = sortedProfiles.slice(startIndex, startIndex + pageSize)
 
   return {
     candidates: paginatedCandidates,
     total: totalCount,
     totalCount,
-    page,
+    page: clampedPage,
     pageSize,
     totalPages,
     sortBy,
@@ -360,6 +360,7 @@ router.get('/directory', requireAuth, async (req, res) => {
   try {
     await syncCandidateProfilesForUser(req.userId)
 
+    const normalizedQuery = normalizeCandidateDirectoryQuery(req.query)
     const filters = {
       skills: parseStringList(req.query.skills).map((skill) => skill.toLowerCase()),
       tags: parseStringList(req.query.tags).map((tag) => tag.toLowerCase()),
@@ -369,6 +370,9 @@ router.get('/directory', requireAuth, async (req, res) => {
       scoreMax: normalizeNumberFilter(req.query.scoreMax),
       sourceJobId: normalizeString(req.query.sourceJobId),
       sourceAnalysisId: normalizeString(req.query.sourceAnalysisId),
+      search: normalizedQuery.search,
+      job: normalizedQuery.job,
+      parseStatus: normalizedQuery.parseStatus,
     }
 
     const result = await pool.query(
@@ -380,6 +384,7 @@ router.get('/directory', requireAuth, async (req, res) => {
               r.filename,
               r.profile_score,
               r.years_experience,
+              COALESCE(r.parse_status, 'complete') AS parse_status,
               r.job_description_id,
               jd.title AS job_title,
               COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
@@ -445,9 +450,31 @@ router.get('/directory', requireAuth, async (req, res) => {
                 title: normalizeString(row.job_title) || 'Untitled job',
               }
             : null,
+          parseStatus: normalizeString(row.parse_status) || 'complete',
         }
       })
       .filter((entry) => {
+        if (filters.search) {
+          const search = filters.search.toLowerCase()
+          const inName = entry.name.toLowerCase().includes(search)
+          const inSkills = entry.skills.some((skill) => skill.toLowerCase().includes(search))
+          const inTags = entry.tags.some((tag) => tag.toLowerCase().includes(search))
+          if (!inName && !inSkills && !inTags) {
+            return false
+          }
+        }
+
+        if (filters.job) {
+          const jobText = `${entry.associatedJob?.id || ''} ${entry.associatedJob?.title || ''}`.toLowerCase()
+          if (!jobText.includes(filters.job.toLowerCase())) {
+            return false
+          }
+        }
+
+        if (filters.parseStatus && entry.parseStatus.toLowerCase() !== filters.parseStatus) {
+          return false
+        }
+
         if (filters.skills.length > 0) {
           const candidateSkills = entry.skills.map((skill) => skill.toLowerCase())
           if (!filters.skills.some((skill) => candidateSkills.includes(skill))) {
