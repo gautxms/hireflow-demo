@@ -789,9 +789,16 @@ h6 {
 }
 
 .app-sb-item--active {
-  color: var(--color-text-primary);
-  border-color: color-mix(in srgb, var(--color-accent, var(--hf-lime)) 28%, transparent);
-  background: color-mix(in srgb, var(--color-accent, var(--hf-lime)) 18%, transparent);
+  border-left: 2px solid #c8ff00;
+  background: color-mix(in srgb, #c8ff00 16%, transparent);
+}
+
+.app-sb-item--active .app-sb-icon {
+  color: #c8ff00;
+}
+
+.app-sb-item--active .app-sb-label {
+  color: #ffffff;
 }
 
 .app-sb--closed .app-sb-item {
@@ -806,8 +813,8 @@ h6 {
 
 .app-sb--closed .app-sb-item--active {
   border-radius: 8px;
-  border-color: color-mix(in srgb, var(--color-accent, var(--hf-lime)) 18%, transparent);
-  background: color-mix(in srgb, var(--color-accent, var(--hf-lime)) 12%, transparent);
+  border-left: 2px solid #c8ff00;
+  background: color-mix(in srgb, #c8ff00 16%, transparent);
   padding-inline: 0.35rem;
 }
 
