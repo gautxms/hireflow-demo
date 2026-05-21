@@ -192,8 +192,8 @@ export default function NewDashboard() {
             </select>
           </label>
           <div className="new-dashboard__actions">
-            <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button new-dashboard__button--primary">{loading ? 'Refreshing…' : 'Apply filters'}</button>
-            <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button new-dashboard__button--secondary">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
+            <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button hf-btn hf-btn--primary new-dashboard__button--primary">{loading ? 'Refreshing…' : 'Apply filters'}</button>
+            <button type="button" onClick={exportCsv} disabled={exportLoading || loading} className="new-dashboard__button hf-btn hf-btn--secondary new-dashboard__button--secondary">{exportLoading ? 'Exporting…' : 'Export CSV'}</button>
           </div>
         </div>
         <div className="new-dashboard__meta-row">
