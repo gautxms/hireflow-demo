@@ -7,7 +7,7 @@ import {
   ScanSearch,
   Users,
   ClipboardCheck,
-  BarChart2,
+  BarChart3,
   Settings2,
   Pin,
   ChevronLeft,
@@ -24,13 +24,13 @@ const ICONS_BY_KEY = {
   analyses: ScanSearch,
   candidates: Users,
   shortlists: ClipboardCheck,
-  reports: BarChart2,
+  reports: BarChart3,
   settings: Settings2,
   home: Home,
   file: FileText,
   target: Target,
   users: Users,
-  chart: BarChart2,
+  chart: BarChart3,
 }
 
 const DEFAULT_NAV = [
@@ -39,7 +39,7 @@ const DEFAULT_NAV = [
   { label: 'Analyses', path: '/analyses', Icon: ScanSearch },
   { label: 'Candidates', path: '/candidates', Icon: Users },
   { label: 'Shortlists', path: '/shortlists', Icon: ClipboardCheck },
-  { label: 'Reports', path: '/reports', Icon: BarChart2, badge: 'New', proOnly: true },
+  { label: 'Reports', path: '/reports', Icon: BarChart3, badge: 'New', proOnly: true },
   { label: 'Settings', path: '/settings', Icon: Settings2 },
 ]
 
@@ -168,12 +168,12 @@ export default function UserAppShell({ children, pathname, onNavigate, pageTitle
         <div className="app-sb-footer">
           {expanded && (
             <button type="button" className={`app-sb-pin${pinned ? ' app-sb-pin--active' : ''}`} onClick={pin}>
-              <Pin size={12} strokeWidth={1.5} />
+              <Pin size={18} strokeWidth={1.5} />
               <span>{pinned ? 'Pinned' : 'Pin sidebar'}</span>
             </button>
           )}
           <button type="button" className="app-sb-chevron" onClick={expanded ? collapse : expand} title={expanded ? 'Collapse' : 'Expand'}>
-            {expanded ? <ChevronLeft size={14} strokeWidth={1.5} /> : <ChevronRight size={14} strokeWidth={1.5} />}
+            {expanded ? <ChevronLeft size={18} strokeWidth={1.5} /> : <ChevronRight size={18} strokeWidth={1.5} />}
           </button>
         </div>
       </aside>
