@@ -41,3 +41,21 @@ test('serializeJobDescriptionForm appends optional metadata fields when provided
   assert.equal(result.sourceType, 'import')
   assert.equal(result.version, 2)
 })
+
+
+test('serializeJobDescriptionForm persists new job content fields and normalizes work mode', () => {
+  const result = serializeJobDescriptionForm({
+    title: 'Eng',
+    requirements: ' Legacy req ',
+    qualifications: ' CS degree ',
+    keyResponsibilities: ' Build APIs ',
+    workMode: 'Hybrid',
+    additionalInfo: ' Sponsor available ',
+  })
+
+  assert.equal(result.requirements, 'Legacy req')
+  assert.equal(result.qualifications, 'CS degree')
+  assert.equal(result.keyResponsibilities, 'Build APIs')
+  assert.equal(result.workMode, 'Hybrid')
+  assert.equal(result.additionalInfo, 'Sponsor available')
+})

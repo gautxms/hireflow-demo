@@ -6,6 +6,8 @@ const blankState = {
   title: '',
   description: '',
   requirements: '',
+  qualifications: '',
+  keyResponsibilities: '',
   skills: '',
   experienceMin: '',
   experienceMax: '',
@@ -13,6 +15,8 @@ const blankState = {
   salaryMin: '',
   salaryMax: '',
   salaryCurrency: 'USD',
+  workMode: '',
+  additionalInfo: '',
   status: 'draft',
 }
 
@@ -23,6 +27,8 @@ function mapInitialValue(initialValue) {
     title: initialValue.title || '',
     description: initialValue.description || '',
     requirements: initialValue.requirements || '',
+    qualifications: initialValue.qualifications || initialValue.requirements || '',
+    keyResponsibilities: initialValue.keyResponsibilities || '',
     skills: Array.isArray(initialValue.skills) ? initialValue.skills.join(', ') : '',
     experienceMin: initialValue.experienceMin ?? fallbackExperience,
     experienceMax: initialValue.experienceMax ?? fallbackExperience,
@@ -30,6 +36,8 @@ function mapInitialValue(initialValue) {
     salaryMin: initialValue.salaryMin ?? '',
     salaryMax: initialValue.salaryMax ?? '',
     salaryCurrency: initialValue.salaryCurrency || 'USD',
+    workMode: initialValue.workMode || '',
+    additionalInfo: initialValue.additionalInfo || '',
     status: initialValue.status || 'draft',
   }
 }
@@ -87,7 +95,9 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
         <section className="job-form__section">
           <h3>Role content</h3>
           <label className="job-form__field" htmlFor="job-description"><span>Full job description</span><textarea id="job-description" className="job-form__control job-form__control--textarea" placeholder="Describe responsibilities, goals, and outcomes for this role." rows={6} value={formState.description} onChange={handleChange('description')} /></label>
-          <label className="job-form__field" htmlFor="job-requirements"><span>Requirements</span><textarea id="job-requirements" className="job-form__control job-form__control--textarea" placeholder="Required qualifications and domain experience." rows={4} value={formState.requirements} onChange={handleChange('requirements')} /></label>
+          <label className="job-form__field" htmlFor="job-key-responsibilities"><span>Key responsibilities</span><textarea id="job-key-responsibilities" className="job-form__control job-form__control--textarea" placeholder="Outline the primary responsibilities for this role." rows={4} value={formState.keyResponsibilities} onChange={handleChange('keyResponsibilities')} /></label>
+          <label className="job-form__field" htmlFor="job-qualifications"><span>Qualifications</span><textarea id="job-qualifications" className="job-form__control job-form__control--textarea" placeholder="Required qualifications and domain experience." rows={4} value={formState.qualifications} onChange={handleChange('qualifications')} /></label>
+          <label className="job-form__field" htmlFor="job-requirements"><span>Legacy requirements</span><textarea id="job-requirements" className="job-form__control job-form__control--textarea" placeholder="Legacy requirements field for backward compatibility." rows={3} value={formState.requirements} onChange={handleChange('requirements')} /></label>
           <label className="job-form__field" htmlFor="job-skills"><span>Skills</span><input id="job-skills" className="job-form__control" placeholder="Node.js, PostgreSQL, AWS" value={formState.skills} onChange={handleChange('skills')} /></label>
         </section>
 
@@ -99,6 +109,8 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
           </div>
           {(errors.experienceMin || errors.experienceMax) && <p className="job-form__error" role="alert">{errors.experienceMin || errors.experienceMax}</p>}
           <label className="job-form__field" htmlFor="job-location"><span>Location</span><input id="job-location" className="job-form__control" placeholder="San Francisco, CA" value={formState.location} onChange={handleChange('location')} /></label>
+          <label className="job-form__field" htmlFor="job-work-mode"><span>Work mode</span><select id="job-work-mode" className="job-form__control" value={formState.workMode} onChange={handleChange('workMode')}><option value="">Select work mode</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option><option value="On-site">On-site</option></select></label>
+          <label className="job-form__field" htmlFor="job-additional-info"><span>Additional info</span><textarea id="job-additional-info" className="job-form__control job-form__control--textarea" placeholder="Any extra details for recruiters and candidates." rows={3} value={formState.additionalInfo} onChange={handleChange('additionalInfo')} /></label>
         </section>
 
         <section className="job-form__section">
