@@ -1,3 +1,4 @@
+cat > backend/src/routes/uploads.js <<'EOF'
 import multer from 'multer'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
@@ -125,132 +126,136 @@ router.post(
     try {
       await ensureResumeParseColumns()
       await ensureAnalysisTables()
-      const selectedJobDescriptionId = req.body.jobDescriptionId || null
-      console.log(
-        '[HireFlow] JD received at endpoint:',
-        selectedJobDescriptionId ? `${String(selectedJobDescriptionId).slice(0, 80)}...` : 'NONE',
-      )
 
-      if (selectedJobDescriptionId) {
-        const jdResult = await pool.query(
+      const userId = req.user.id
+      const requestedJobDescriptionId = req.body?.jobDescriptionId ? String(req.body.jobDescriptionId) : null
+
+      if (requestedJobDescriptionId) {
+        const ownershipCheck = await pool.query(
           `SELECT id
            FROM job_descriptions
-           WHERE id = $1
-             AND user_id = $2
-             AND status <> 'archived'
-           LIMIT 1`,
-          [selectedJobDescriptionId, req.userId],
+           WHERE id = $1 AND user_id = $2`,
+          [requestedJobDescriptionId, userId],
         )
 
-        if (!jdResult.rows[0]) {
-          return res.status(400).json({ error: 'Selected job description is invalid or archived' })
+        if (ownershipCheck.rowCount === 0) {
+          return res.status(404).json({ error: 'Job description not found' })
         }
       }
 
-      const jobs = []
-      const analysisResult = await pool.query(
+      const analysisInsert = await pool.query(
         `INSERT INTO analyses (user_id, job_description_id, status)
-         VALUES ($1, $2, 'pending')
+         VALUES ($1, $2, 'processing')
          RETURNING id`,
-        [req.userId, selectedJobDescriptionId],
+        [userId, requestedJobDescriptionId],
       )
-      analysisId = analysisResult.rows[0].id
+      analysisId = analysisInsert.rows[0].id
+
+      const uploadResults = []
 
       for (const file of req.files) {
-        const scanResult = await scanFileBuffer(file.buffer, file.safeName)
+        const safeName = file.safeName || sanitizeFilename(file.originalname)
+        const effectiveMimeType = resolveMimeFromUpload(file.mimetype, file.originalname) || file.mimetype
 
-        if (scanResult.malicious) {
-          return res.status(400).json({
-            error: `Upload rejected for ${file.safeName}: malware detected`,
-            scan: scanResult,
+        const scanResult = await scanFileBuffer(file.buffer, {
+          filename: safeName,
+          mimetype: effectiveMimeType,
+          userId,
+          analysisId,
+        })
+
+        if (!scanResult.ok) {
+          uploadResults.push({
+            filename: safeName,
+            status: 'failed',
+            reason: scanResult.reason || 'Scan failed',
           })
+          continue
         }
 
-        // Convert buffer once so binary bytes are UTF-8 safe for SQL parameters.
-        const fileBufferBase64 = file.buffer.toString('base64')
-        const scanResultJson = JSON.stringify(scanResult)
-
-        const insertResult = await pool.query(
-          `INSERT INTO resumes (
-             user_id,
-             filename,
-             raw_text,
-             file_size,
-             file_type,
-             parse_status,
-             scan_status,
-             scan_result,
-             file_sha256,
-             job_description_id,
-             updated_at
-           )
-           VALUES ($1, $2, '', $3, $4, 'pending', $5, $6::jsonb, encode(digest(decode($7, 'base64'), 'sha256'), 'hex'), $8, NOW())
+        const resumeInsert = await pool.query(
+          `INSERT INTO resumes
+            (user_id, file_name, file_size, file_type, parse_status, scan_status, scan_result, file_sha256, uploaded_at)
+           VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, NOW())
            RETURNING id`,
           [
-            req.userId,
-            file.safeName,
-            file.size,
-            file.mimetype,
+            userId,
+            safeName,
+            Number(file.size || 0),
+            effectiveMimeType,
             scanResult.status || 'clean',
-            scanResultJson,
-            fileBufferBase64,
-            selectedJobDescriptionId,
+            scanResult.details ? JSON.stringify(scanResult.details) : null,
+            scanResult.sha256 || null,
           ],
         )
 
-        const resumeId = insertResult.rows[0].id
-
-        const job = await enqueueParseJob({
+        const resumeId = resumeInsert.rows[0].id
+        const parseJob = await enqueueParseJob({
           resumeId,
-          userId: req.userId,
-          filename: file.safeName,
-          mimeType: file.mimetype,
-          fileSize: file.size,
-          fileBufferBase64,
-          jobDescriptionId: selectedJobDescriptionId,
-        })
-
-        jobs.push({
-          jobId: String(job.id),
-          resumeId,
-          filename: file.safeName,
-          type: file.mimetype,
-          size: file.size,
+          userId,
+          filename: safeName,
+          mimetype: effectiveMimeType,
+          fileBuffer: file.buffer,
+          analysisId,
+          jobDescriptionId: requestedJobDescriptionId,
         })
 
         await pool.query(
           `INSERT INTO analysis_items (analysis_id, resume_id, parse_job_id)
            VALUES ($1, $2, $3)
-           ON CONFLICT (analysis_id, resume_id)
-           DO UPDATE SET parse_job_id = EXCLUDED.parse_job_id`,
-          [analysisId, resumeId, String(job.id)],
+           ON CONFLICT (analysis_id, resume_id) DO NOTHING`,
+          [analysisId, resumeId, parseJob.jobId],
+        )
+
+        uploadResults.push({
+          filename: safeName,
+          status: 'queued',
+          resumeId,
+          parseJobId: parseJob.jobId,
+        })
+      }
+
+      const failedCount = uploadResults.filter((result) => result.status === 'failed').length
+      const queuedCount = uploadResults.filter((result) => result.status === 'queued').length
+
+      if (analysisId) {
+        const nextStatus = queuedCount > 0 ? 'processing' : 'failed'
+        const errorSummary = failedCount > 0 && queuedCount === 0
+          ? 'All uploads failed validation or scanning.'
+          : null
+
+        await pool.query(
+          `UPDATE analyses
+           SET status = $2,
+               error_summary = $3
+           WHERE id = $1`,
+          [analysisId, nextStatus, errorSummary],
         )
       }
 
       return res.status(202).json({
-        ok: true,
-        message: 'Resume parsing queued',
         analysisId,
-        jobId: jobs[0].jobId,
-        jobs,
+        queued: queuedCount,
+        failed: failedCount,
+        results: uploadResults,
       })
     } catch (error) {
-      console.error('[Uploads] Error queuing upload:', error)
+      console.error('[Uploads] Failed to enqueue upload batch', error)
 
       if (analysisId) {
         await pool.query(
           `UPDATE analyses
            SET status = 'failed',
-               completed_at = NOW(),
                error_summary = $2
            WHERE id = $1`,
-          [analysisId, error.message?.slice(0, 500) || 'Unable to queue upload request'],
+          [analysisId, error.message || 'Upload processing failed'],
         )
       }
 
-      return res.status(500).json({ error: 'Unable to queue upload request' })
+      return res.status(500).json({ error: 'Failed to process upload batch' })
     }
   },
 )
 
 export default router
+EOF
