@@ -23,6 +23,23 @@ const sortOptions = [
   { value: 'name_asc', label: 'Name (A-Z)' },
 ]
 
+function resolveCandidateJob(candidate) {
+  const jobId = String(
+    candidate?.associatedJob?.id
+    || candidate?.provenanceHints?.sourceJobId
+    || candidate?.sourceJobId
+    || '',
+  ).trim()
+  const jobTitle = String(candidate?.associatedJob?.title || '').trim()
+
+  if (!jobId) return null
+
+  return {
+    id: jobId,
+    title: jobTitle || `Job ${jobId}`,
+  }
+}
+
 function getScoreLabel(candidate) {
   if (candidate.profileScore !== null && candidate.profileScore !== undefined) {
     return String(candidate.profileScore)
@@ -68,6 +85,7 @@ export default function CandidatesPage() {
   const [bulkStatusTone, setBulkStatusTone] = useState('info')
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
   const [reloadNonce, setReloadNonce] = useState(0)
+  const [availableJobs, setAvailableJobs] = useState([])
 
   const queryString = useMemo(() => {
     return buildCandidateDirectoryQueryParams({
@@ -110,7 +128,22 @@ export default function CandidatesPage() {
           throw new Error(payload.error || 'Unable to load candidates')
         }
 
-        setCandidates(Array.isArray(payload.candidates) ? payload.candidates : [])
+        const nextCandidates = Array.isArray(payload.candidates) ? payload.candidates : []
+        setCandidates(nextCandidates)
+        setAvailableJobs((current) => {
+          const merged = new Map(current.map((job) => [job.id, job]))
+          nextCandidates
+            .map(resolveCandidateJob)
+            .filter(Boolean)
+            .forEach((job) => {
+              const existing = merged.get(job.id)
+              if (!existing || (existing.title || '').startsWith('Job ')) {
+                merged.set(job.id, job)
+              }
+            })
+
+          return Array.from(merged.values()).sort((a, b) => a.title.localeCompare(b.title))
+        })
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
           setError(loadError.message || 'Unable to load candidates')
@@ -190,6 +223,11 @@ export default function CandidatesPage() {
     setReloadNonce((current) => current + 1)
   }
 
+  const clearFilters = () => {
+    setFilters(emptyFilters)
+    setSearchTerm('')
+  }
+
   const toggleSelectedCandidate = (resumeId) => {
     setSelectedResumeIds((current) => (
       current.includes(resumeId)
@@ -264,14 +302,27 @@ export default function CandidatesPage() {
 
       <section className="candidates-directory__toolbar" aria-label="Candidate search and quick filters">
         <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, tags, role, skills" />
-        <input value={filters.sourceJobId} onChange={(e) => setFilters((p) => ({ ...p, sourceJobId: e.target.value }))} placeholder="Job ID" />
+        <select
+          value={filters.sourceJobId}
+          onChange={(e) => setFilters((p) => ({ ...p, sourceJobId: e.target.value }))}
+          disabled={availableJobs.length === 0}
+          aria-label="Filter by job"
+          title={availableJobs.length === 0 ? 'Jobs will appear after candidate records include linked jobs.' : undefined}
+        >
+          <option value="">All jobs</option>
+          {availableJobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}
+        </select>
         <input value={filters.skills} onChange={(e) => setFilters((p) => ({ ...p, skills: e.target.value }))} placeholder="Skill" />
         <input type="number" min="0" max="10" step="0.1" value={filters.scoreMin} onChange={(e) => setFilters((p) => ({ ...p, scoreMin: e.target.value }))} placeholder="Min score" />
         <input type="number" min="0" step="0.5" value={filters.experienceMin} onChange={(e) => setFilters((p) => ({ ...p, experienceMin: e.target.value }))} placeholder="Min exp" />
         <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
           {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
+        <button type="button" onClick={clearFilters}>Clear filters</button>
       </section>
+      {availableJobs.length === 0 && (
+        <p className="candidates-directory__status">No jobs loaded yet. Job filtering is unavailable until candidates are linked to jobs.</p>
+      )}
 
       <details className="candidates-directory__advanced" open={showAdvancedFilters} onToggle={(event) => setShowAdvancedFilters(event.currentTarget.open)}>
         <summary>Advanced technical filters</summary>
@@ -297,7 +348,7 @@ export default function CandidatesPage() {
         </section>
       )}
 
-      {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
+      {bulkStatus && <p className={`candidates-directory__status candidates-directory__status--${bulkStatusTone}`}>{bulkStatus}</p>}
 
       {viewState === 'loading' && <p className="candidates-directory__status">Loading candidates…</p>}
       {viewState === 'api-error' && (
