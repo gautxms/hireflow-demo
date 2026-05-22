@@ -1444,6 +1444,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const detailVm = buildExpandedCandidateDrawerViewModel(expandedCandidate)
   const candidate = detailVm.candidate
   const expandedCandidateKey = detailVm.candidateKey
+  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
+  const scoreBreakdownRows = matchBreakdown ? [
+    { label: 'Skills match', value: resolveBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills']) },
+    { label: 'Experience', value: resolveBreakdownMetric(matchBreakdown, ['experience_years', 'experience', 'years_experience', 'experienceYears']) },
+    { label: 'Role alignment', value: resolveBreakdownMetric(matchBreakdown, ['methodologies', 'role_alignment', 'role_fit', 'roleAlignment']) },
+    { label: 'Education', value: resolveBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch']) },
+  ] : []
+  const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
+  const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
+  const integrityChecks = deriveResumeIntegrityChecks(candidate, detailVm.hasDisplayScore)
 
   return (
     <CandidateDetailErrorBoundary
@@ -1458,9 +1468,75 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       selectedCandidate={candidate}
       onBackToResults={() => setExpandedId(null)}
     >
-      <div id="detail-drawer" className="detail-drawer"><div className="dd-body"><div className="dd-col">
-        {detailVm.isUnavailable ? <p className="dd-summary">Candidate details unavailable</p> : <p className="dd-summary">{detailVm.summaryText}</p>}
-      </div></div></div>
+      <div id="detail-drawer" className="detail-drawer">
+        <div className="dd-header">
+          <div className="dd-header-left">
+            <div className="dd-avatar">{detailVm.initials || 'NA'}</div>
+            <div className="dd-header-info">
+              <div className="dd-name">{detailVm.candidateName}</div>
+              <div className="dd-subtitle">{detailVm.candidateTitle}</div>
+              <div className="dd-meta-facts">
+                <span className="dd-meta-item"><BriefcaseBusiness size={18} strokeWidth={1.5} aria-hidden="true" />{detailVm.experienceLabel}</span>
+                <span className="dd-meta-item"><MapPin size={18} strokeWidth={1.5} aria-hidden="true" />{detailVm.locationLabel}</span>
+                <span className="dd-meta-item"><TrendingUp size={18} strokeWidth={1.5} aria-hidden="true" />{detailVm.seniorityLabel}</span>
+              </div>
+            </div>
+          </div>
+          <div className={`dd-score-panel dd-score-panel--${detailVm.scoreTier}`}>
+            <div className="dd-score">
+              {detailVm.hasDisplayScore ? detailVm.displayScore : '—'}<span>{detailVm.hasDisplayScore ? '/10' : ''}</span>
+            </div>
+            <div className={`dd-fit-label dd-fit--${detailVm.scoreTier}`}>{detailVm.verdictLabel}</div>
+            {detailVm.confidenceLabel && <div className="dd-confidence">{detailVm.confidenceLabel}</div>}
+          </div>
+          <div className="dd-header-actions">
+            <button className="hf-btn hf-btn--primary dd-btn-primary" type="button">Schedule interview</button>
+            <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to shortlist</button>
+            <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }}>
+              <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
+            </button>
+          </div>
+          <button className="hf-btn hf-btn--ghost hf-btn--icon dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
+        </div>
+
+        <div className="dd-body">
+          <div className="dd-col">
+            <div className="dd-col-label section-heading">Summary</div>
+            <p className="dd-summary">{detailVm.summaryText}</p>
+            <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
+            <p className="dd-summary">{detailVm.reasoningText}</p>
+          </div>
+          <div className="dd-col">
+            <div className="dd-col-label section-heading">Score breakdown</div>
+            {matchBreakdown && hasResolvableBreakdownMetrics ? (
+              <div className="dd-analysis-box dd-breakdown">
+                {resolvableScoreBreakdownRows.map((row) => (
+                  <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
+                    <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="dd-summary">Score breakdown unavailable</p>}
+            <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span></div>
+            <div className="dd-top-skills">{detailVm.matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}</div>
+          </div>
+          <div className="dd-col">
+            <div className="dd-col-label section-heading">Strengths</div>
+            <div className="dd-analysis-box dd-analysis-box--green">
+              {detailVm.candidateStrengths.length > 0
+                ? detailVm.candidateStrengths.map((strength, idx) => (<div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><ExpandableText text={strength} /></div>))
+                : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+            </div>
+            <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
+            <div className="dd-analysis-box dd-analysis-box--amber">
+              {detailVm.candidateConsiderations.length > 0
+                ? detailVm.candidateConsiderations.map((consideration, idx) => (<div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><ExpandableText text={consideration} /></div>))
+                : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
+            </div>
+            {integrityChecks.length > 0 && <div className="dd-analysis-box">{integrityChecks.map((check, idx) => (<div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>{check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}<span>{toDisplayText(check?.label || check, 'Unavailable')}</span></div>))}</div>}
+          </div>
+        </div>
+      </div>
     </CandidateDetailErrorBoundary>
   )
 })()}
