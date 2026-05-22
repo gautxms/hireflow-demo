@@ -84,6 +84,18 @@ test('normalizeProviderError maps truncated provider outputs', () => {
   assert.equal(result.action, 'retry_compact_or_adjust_output_schema')
 })
 
+test('normalizeProviderError categorizes DOCX extraction failures before provider calls', () => {
+  const result = normalizeProviderError('docx_empty_extraction::Unable to extract text content from DOCX file resume.docx.')
+  assert.equal(result.category, 'extraction_failed')
+  assert.equal(result.action, 'reupload_as_pdf')
+})
+
+test('normalizeProviderError categorizes legacy DOC as unsupported format before provider calls', () => {
+  const result = normalizeProviderError('legacy_word_format::Legacy .doc files are not supported')
+  assert.equal(result.category, 'unsupported_format')
+  assert.equal(result.action, 'reupload_as_docx_or_pdf')
+})
+
 
 test('normalizeProviderError includes provider chain details for primary failure followed by fallback failure', () => {
   const providerFailure = new Error('response_truncated_error::{"technicalDetails":"Provider output was truncated"}')
