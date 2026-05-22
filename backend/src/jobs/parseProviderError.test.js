@@ -13,12 +13,19 @@ test('normalizeProviderError maps invalid request errors', () => {
 })
 
 test('normalizeProviderError maps years_experience persistence schema failures to non-retriable schema error', () => {
-  const result = normalizeProviderError('invalid input syntax for type integer: "3.5"')
+  const result = normalizeProviderError('invalid input syntax for type integer: "3.5" in column "years_experience"')
   assert.equal(result.category, 'persistence_schema_error')
   assert.equal(result.action, 'apply_required_migrations')
   assert.equal(result.isRetriable, false)
 })
 
+
+
+test('normalizeProviderError does not map unrelated integer cast failures as schema migration issues', () => {
+  const result = normalizeProviderError('invalid input syntax for type integer: "abc" in column "profile_score"')
+
+  assert.notEqual(result.category, 'persistence_schema_error')
+})
 test('normalizeProviderError maps invalid API key auth failures', () => {
   const result = normalizeProviderError(new Error('Unauthorized: invalid API key'))
 

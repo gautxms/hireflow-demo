@@ -299,12 +299,14 @@ export function detectProviderErrorCategory(errorLike) {
   if (lower.includes('invalid_request_error') || lower.includes('invalid request') || lower.includes('bad request')) {
     return { category: 'invalid_request_error', extractedDetails: '' }
   }
-  if (
+  const hasIntegerCastFailure = (
     lower.includes('invalid input syntax for type integer')
     || lower.includes('invalid input syntax for integer')
     || lower.includes('invalid input syntax for type bigint')
-    || lower.includes('column "years_experience"')
-  ) {
+  )
+  const isYearsExperienceColumnFailure = lower.includes('column "years_experience"')
+
+  if (hasIntegerCastFailure && isYearsExperienceColumnFailure) {
     return { category: 'persistence_schema_error', extractedDetails: '' }
   }
 
