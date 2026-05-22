@@ -16,6 +16,7 @@ import {
   sanitizeExpandedCandidate,
   buildExpandedCandidateViewModel,
   toDisplayText,
+  buildExpandedCandidateDrawerViewModel,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -1441,80 +1442,23 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       </div>
 
             {expandedCandidate && (() => {
-  const viewModel = buildExpandedCandidateViewModel(expandedCandidate)
-  const candidate = viewModel.candidate
-  const expandedCandidateKey = viewModel.candidateKey
-  const score = activeScore(candidate)
-  const tier = getScoreTone(score)
-  const displayScore = formatScore(score)
-  const hasDisplayScore = displayScore != null && Number.isFinite(Number(displayScore))
-  const verdictLabel = resolveVerdictLabel(candidate, tier, hasDisplayScore)
-  const confidenceLabel = resolveConfidenceLabel(candidate, hasDisplayScore)
-  const candidateTitle = viewModel.candidateTitle
-  const experienceLabel = viewModel.experienceLabel
-  const locationLabel = viewModel.locationLabel
-  const seniorityLabel = viewModel.seniorityLabel
-  const normalizeTextList = (list) => safeArray(list).map((entry) => safeText(entry, '')).filter(Boolean)
-  const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
-    ? normalizeTextList(candidate.strengths)
-    : Array.isArray(candidate.achievements)
-      ? normalizeTextList(candidate.achievements).slice(0, 3)
-      : []
-  const candidateConsiderations = viewModel.considerations
-  const reasoningText = viewModel.reasoningText || 'Reasoning unavailable for this profile.'
-  const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
-  const allSkills = deriveAllSkills(candidate)
-  const matchBreakdown = viewModel.rawMatchBreakdown
+  const detailVm = buildExpandedCandidateDrawerViewModel(expandedCandidate)
+  const candidate = detailVm.candidate
+  const expandedCandidateKey = detailVm.candidateKey
+  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
   const scoreBreakdownRows = matchBreakdown ? [
-    {
-      label: 'Skills match',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'technical_skills',
-        'skills_match',
-        'skills',
-        'technicalSkills',
-      ]),
-    },
-    {
-      label: 'Experience',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'experience_years',
-        'experience',
-        'years_experience',
-        'experienceYears',
-      ]),
-    },
-    {
-      label: 'Role alignment',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'methodologies',
-        'role_alignment',
-        'role_fit',
-        'roleAlignment',
-      ]),
-    },
-    {
-      label: 'Education',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'education',
-        'education_match',
-        'academic_background',
-        'educationMatch',
-      ]),
-    },
+    { label: 'Skills match', value: resolveBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills']) },
+    { label: 'Experience', value: resolveBreakdownMetric(matchBreakdown, ['experience_years', 'experience', 'years_experience', 'experienceYears']) },
+    { label: 'Role alignment', value: resolveBreakdownMetric(matchBreakdown, ['methodologies', 'role_alignment', 'role_fit', 'roleAlignment']) },
+    { label: 'Education', value: resolveBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch']) },
   ] : []
   const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
   const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
-  const matchedSkills = viewModel.matchedSkills
-  const missingSkills = viewModel.missingSkills
-  const totalSkills = matchedSkills.length + missingSkills.length
-  const recommendationText = viewModel.recommendationText
-  const initials = viewModel.initials
-  const integrityChecks = deriveResumeIntegrityChecks(candidate, hasDisplayScore)
+  const integrityChecks = deriveResumeIntegrityChecks(candidate, detailVm.hasDisplayScore)
 
   return (
     <CandidateDetailErrorBoundary
-      key={String(expandedCandidateKey || resolveCandidateKey(candidate) || "candidate-detail")}
+      key={String(expandedCandidateKey || "candidate-detail")}
       analysisId={analysisId}
       candidateCount={candidateCount}
       normalizationStats={normalizationStats}
@@ -1526,199 +1470,73 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       onBackToResults={() => setExpandedId(null)}
     >
       <div id="detail-drawer" className="detail-drawer">
-      <div className="dd-header">
-        <div className="dd-header-left">
-          <div className="dd-avatar">{initials || 'NA'}</div>
-          <div className="dd-header-info">
-            <div className="dd-name">{viewModel.candidateName}</div>
-            <div className="dd-subtitle">{candidateTitle}</div>
-            <div className="dd-meta-facts">
-              <span className="dd-meta-item"><BriefcaseBusiness size={18} strokeWidth={1.5} aria-hidden="true" />{experienceLabel}</span>
-              <span className="dd-meta-item"><MapPin size={18} strokeWidth={1.5} aria-hidden="true" />{locationLabel}</span>
-              <span className="dd-meta-item"><TrendingUp size={18} strokeWidth={1.5} aria-hidden="true" />{seniorityLabel}</span>
-            </div>
-          </div>
-        </div>
-        <div className={`dd-score-panel dd-score-panel--${tier}`}>
-          <div className="dd-score">
-            {hasDisplayScore ? displayScore : '—'}<span>{hasDisplayScore ? '/10' : ''}</span>
-          </div>
-          <div className={`dd-fit-label dd-fit--${tier}`}>{verdictLabel}</div>
-          {confidenceLabel && <div className="dd-confidence">{confidenceLabel}</div>}
-        </div>
-        <div className="dd-header-actions">
-          <button className="hf-btn hf-btn--primary dd-btn-primary" type="button">Schedule interview</button>
-          <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to shortlist</button>
-          <button
-            className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              openCandidateResumeInNewTab(candidate)
-            }}
-          >
-            <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
-          </button>
-        </div>
-        <button className="hf-btn hf-btn--ghost hf-btn--icon dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
-      </div>
-
-      <div className="dd-body">
-        {!viewModel.isAvailable && (
-          <p className="dd-summary">{viewModel.fallbackMessage}</p>
-        )}
-        <div className="dd-col">
-          <div className="dd-col-label section-heading">Summary</div>
-          <p className="dd-summary">{viewModel.summaryText}</p>
-          <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
-          <p className="dd-summary">{reasoningText}</p>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-16">Key facts</div>
-          <div className="dd-facts">
-            <div className="dd-fact">
-              <span className="dd-fact-k">Experience</span>
-              <span className="dd-fact-v">{viewModel.experienceYearsLabel}</span>
-            </div>
-            <div className="dd-fact">
-              <span className="dd-fact-k">Seniority</span>
-              <span className="dd-fact-v">{viewModel.seniorityLabel}</span>
-            </div>
-            <div className="dd-fact">
-              <span className="dd-fact-k">Education</span>
-              <span className="dd-fact-v">{viewModel.educationLabel}</span>
-            </div>
-            <div className="dd-fact">
-              <span className="dd-fact-k">Location</span>
-              <span className="dd-fact-v">{viewModel.locationLabel}</span>
-            </div>
-            {viewModel.emailLabel && (
-              <div className="dd-fact">
-                <span className="dd-fact-k">Email</span>
-                <a href={`mailto:${viewModel.emailLabel}`} className="dd-fact-link">{viewModel.emailLabel}</a>
+        <div className="dd-header">
+          <div className="dd-header-left">
+            <div className="dd-avatar">{detailVm.initials || 'NA'}</div>
+            <div className="dd-header-info">
+              <div className="dd-name">{detailVm.candidateName}</div>
+              <div className="dd-subtitle">{detailVm.candidateTitle}</div>
+              <div className="dd-meta-facts">
+                <span className="dd-meta-item"><BriefcaseBusiness size={18} strokeWidth={1.5} aria-hidden="true" />{detailVm.experienceLabel}</span>
+                <span className="dd-meta-item"><MapPin size={18} strokeWidth={1.5} aria-hidden="true" />{detailVm.locationLabel}</span>
+                <span className="dd-meta-item"><TrendingUp size={18} strokeWidth={1.5} aria-hidden="true" />{detailVm.seniorityLabel}</span>
               </div>
-            )}
+            </div>
           </div>
-
-          {recommendationText && (
-            <>
-              <div className="dd-col-label section-heading dd-col-label--mt-16">Recommended action</div>
-              <div className="dd-recommended-action">{recommendationText}</div>
-            </>
-          )}
-          {candidateConsiderations.length > 0 && (
-            <>
-              <div className="dd-col-label section-heading dd-col-label--mt-16">Interview probes</div>
-              <div className="dd-list">
-                {candidateConsiderations.map((probe, idx) => <div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-probe-${idx}`}><span className="dd-probe-icon">?</span><ExpandableText text={probe} /></div>)}
-              </div>
-            </>
-          )}
+          <div className={`dd-score-panel dd-score-panel--${detailVm.scoreTier}`}>
+            <div className="dd-score">
+              {detailVm.hasDisplayScore ? detailVm.displayScore : '—'}<span>{detailVm.hasDisplayScore ? '/10' : ''}</span>
+            </div>
+            <div className={`dd-fit-label dd-fit--${detailVm.scoreTier}`}>{detailVm.verdictLabel}</div>
+            {detailVm.confidenceLabel && <div className="dd-confidence">{detailVm.confidenceLabel}</div>}
+          </div>
+          <div className="dd-header-actions">
+            <button className="hf-btn hf-btn--primary dd-btn-primary" type="button">Schedule interview</button>
+            <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to shortlist</button>
+            <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }}>
+              <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
+            </button>
+          </div>
+          <button className="hf-btn hf-btn--ghost hf-btn--icon dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
         </div>
 
-        <div className="dd-col">
-          <div className="dd-col-label section-heading">Score breakdown</div>
-          {matchBreakdown && hasResolvableBreakdownMetrics ? (
-            <div className="dd-analysis-box dd-breakdown">
-              {resolvableScoreBreakdownRows.map((row) => (
-                <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
-                  <span>{row.label}</span>
-                  <span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span>
-                  <span>{row.value}%</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="dd-summary">Score breakdown unavailable</p>
-          )}
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {matchedSkills.length} of {totalSkills} required</span></div>
-          <div className="dd-top-skills">
-            {matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}
+        <div className="dd-body">
+          <div className="dd-col">
+            <div className="dd-col-label section-heading">Summary</div>
+            <p className="dd-summary">{detailVm.summaryText}</p>
+            <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
+            <p className="dd-summary">{detailVm.reasoningText}</p>
           </div>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps <span className="dd-count-badge dd-count-badge--amber">⚠ {missingSkills.length} missing</span></div>
-          {missingSkills.length > 0 ? (
-            <div className="dd-top-skills">
-              {missingSkills.map((gap) => (
-                <span className="dd-top-skill dd-top-skill--gap" key={`${expandedCandidateKey}-gap-${gap}`}>{gap}</span>
-              ))}
-            </div>
-          ) : (
-            <p className="dd-summary">No explicit skill gaps identified</p>
-          )}
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">All skills</div>
-          <div className="dd-top-skills dd-top-skills--all">
-            {allSkills.map((skill) => (
-              <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-all-${String(formatSkillLabel(skill))}`}>
-                {formatSkillLabel(skill)}
-              </span>
-            ))}
-            {allSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
-          </div>
-
-          {integrityChecks.length > 0 && (
-            <>
-              <div className="dd-col-label section-heading dd-col-label--mt-14">Resume integrity checks</div>
-              <div className="dd-analysis-box">
-                {integrityChecks.map((check, idx) => (
-                  <div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>
-                    {check?.status === 'issue'
-                      ? <AlertTriangle size={18} strokeWidth={1.5} />
-                      : <CheckCircle size={18} strokeWidth={1.5} />}
-                    <span>{toDisplayText(check?.label || check, 'Unavailable')}</span>
+          <div className="dd-col">
+            <div className="dd-col-label section-heading">Score breakdown</div>
+            {matchBreakdown && hasResolvableBreakdownMetrics ? (
+              <div className="dd-analysis-box dd-breakdown">
+                {resolvableScoreBreakdownRows.map((row) => (
+                  <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
+                    <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
                   </div>
                 ))}
               </div>
-            </>
-          )}
-        </div>
-
-        <div className="dd-col">
-          <div className="dd-col-label section-heading">Strengths</div>
-          <div className="dd-analysis-box dd-analysis-box--green">
-            {candidateStrengths.length > 0
-              ? candidateStrengths.map((strength, idx) => (
-                <div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}>
-                  <CheckCircle size={18} strokeWidth={1.5} />
-                  <ExpandableText text={strength} />
-                </div>
-              ))
-              : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+            ) : <p className="dd-summary">Score breakdown unavailable</p>}
+            <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span></div>
+            <div className="dd-top-skills">{detailVm.matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}</div>
           </div>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
-          <div className="dd-analysis-box dd-analysis-box--amber">
-            {candidateConsiderations.length > 0
-              ? candidateConsiderations.map((consideration, idx) => (
-                <div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}>
-                  <AlertTriangle size={18} strokeWidth={1.5} />
-                  <ExpandableText text={consideration} />
-                </div>
-              ))
-              : (
-                <div className="dd-analysis-item">
-                  {candidate.years_experience == null
-                    ? 'Experience duration could not be determined — verify dates in resume'
-                    : candidate.years_experience < 3
-                      ? 'Early-career candidate — assess growth trajectory in interview'
-                      : 'Run re-analysis to generate detailed AI considerations'}
-                </div>
-              )}
-          </div>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Resume file</div>
-          <div className="dd-resume-file">
-            <FileText size={18} strokeWidth={1.5} />
-            <div>
-              <div className="dd-resume-filename">{viewModel.resumeFilenameLabel}</div>
-              <div className="dd-resume-meta">
-                <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View full profile</button>
-              </div>
+          <div className="dd-col">
+            <div className="dd-col-label section-heading">Strengths</div>
+            <div className="dd-analysis-box dd-analysis-box--green">
+              {detailVm.candidateStrengths.length > 0
+                ? detailVm.candidateStrengths.map((strength, idx) => (<div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><ExpandableText text={strength} /></div>))
+                : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
             </div>
+            <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
+            <div className="dd-analysis-box dd-analysis-box--amber">
+              {detailVm.candidateConsiderations.length > 0
+                ? detailVm.candidateConsiderations.map((consideration, idx) => (<div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><ExpandableText text={consideration} /></div>))
+                : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
+            </div>
+            {integrityChecks.length > 0 && <div className="dd-analysis-box">{integrityChecks.map((check, idx) => (<div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>{check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}<span>{toDisplayText(check?.label || check, 'Unavailable')}</span></div>))}</div>}
           </div>
         </div>
-      </div>
       </div>
     </CandidateDetailErrorBoundary>
   )

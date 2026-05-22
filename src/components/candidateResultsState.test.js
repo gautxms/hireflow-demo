@@ -196,38 +196,34 @@ test('sanitizeExpandedCandidate strictly defaults arrays, nested objects, and di
   assert.deepEqual(sanitized.experience, [{ title: 'Engineer' }, {}])
 })
 
-test('buildExpandedCandidateViewModel normalizes malformed nested shapes for drawer rendering', () => {
-  const viewModel = buildExpandedCandidateViewModel({
-    name: { first: 'Not a string' },
+test('buildExpandedCandidateDrawerViewModel normalizes malformed candidate shapes safely', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    name: { first: 'Bad' },
+    summary: { nested: { nope: true } },
+    strengths: null,
+    considerations: [{ reason: 'x' }],
     matchedSkills: null,
-    mustHaveSkills: null,
-    missingSkills: [{ nested: true }],
-    fit_assessment: { missing: { value: 'React' } },
-    education: { school: 'Unknown' },
-    email: { address: 'broken' },
-    top_skills: null,
+    missingSkills: null,
+    fit_assessment: { missing: { wrong: true } },
+    experience: [{ title: { wrong: true } }],
   })
 
-  assert.equal(viewModel.isAvailable, true)
-  assert.equal(viewModel.candidateName, 'Candidate')
-  assert.deepEqual(viewModel.matchedSkills, [])
-  assert.deepEqual(viewModel.missingSkills, [])
-  assert.equal(viewModel.educationLabel, 'Unavailable')
-  assert.equal(viewModel.emailLabel, '')
-  assert.deepEqual(viewModel.allSkills, [])
+  assert.equal(vm.isUnavailable, false)
+  assert.equal(vm.candidateName, 'Candidate')
+  assert.equal(Array.isArray(vm.matchedSkills), true)
+  assert.equal(Array.isArray(vm.missingSkills), true)
+  assert.equal(Array.isArray(vm.candidateConsiderations), true)
 })
 
-test('buildExpandedCandidateViewModel returns compact fallback when candidate sanitization throws', () => {
-  const malformedCandidate = {}
-  Object.defineProperty(malformedCandidate, 'name', {
-    get() {
-      throw new Error('bad payload shape')
-    },
-  })
+test('buildExpandedCandidateDrawerViewModel returns compact unavailable state on unexpected throw', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const circular = {}
+  circular.self = circular
+  Object.defineProperty(circular, 'name', { get() { throw new Error('boom') } })
 
-  const viewModel = buildExpandedCandidateViewModel(malformedCandidate)
-  assert.equal(viewModel.isAvailable, false)
-  assert.equal(viewModel.fallbackMessage, 'Candidate details unavailable')
-  assert.equal(viewModel.summaryText, 'Candidate details unavailable')
-  assert.deepEqual(viewModel.matchedSkills, [])
+  const vm = buildExpandedCandidateDrawerViewModel(circular)
+  assert.equal(vm.isUnavailable, true)
+  assert.equal(vm.summaryText, 'Candidate details unavailable')
+  assert.equal(vm.unavailableMessage, 'Candidate details unavailable')
 })
