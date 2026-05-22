@@ -5,6 +5,8 @@ const CATEGORY_MESSAGES = {
   response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
   response_truncated_error: 'AI output exceeded response size; retry with compact analysis or reduce schema detail.',
   invalid_request_error: 'Request validation failed before provider execution.',
+  extraction_failed: 'Unable to extract readable text from the uploaded file.',
+  unsupported_format: 'Unsupported document format; please upload DOCX or PDF.',
   not_found_error: 'AI model configuration issue in Admin Security.',
   auth_error: 'AI key invalid or expired.',
   billing_quota_error: 'AI provider billing/quota issue; update credits or switch provider.',
@@ -14,7 +16,7 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|extraction_failed|unsupported_format|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|unknown_error)(::\s*(.*))?$/i
 
 function toMessage(value) {
   if (value instanceof Error) {
@@ -120,6 +122,27 @@ function buildHints(category, { provider, model } = {}) {
   const modelStep = contextLabel
     ? `Verify ${contextLabel} is configured as an active provider/model pair.`
     : 'Verify the configured provider/model pair in Admin Security.'
+
+
+  if (category === 'extraction_failed') {
+    return {
+      action: 'reupload_as_pdf',
+      remediationSteps: [
+        'The uploaded file did not contain readable text for extraction.',
+        'Re-upload as a text-based PDF and retry the resume analysis.',
+      ],
+    }
+  }
+
+  if (category === 'unsupported_format') {
+    return {
+      action: 'reupload_as_docx_or_pdf',
+      remediationSteps: [
+        'Legacy .doc files are not supported for parsing.',
+        'Re-save the document as DOCX or export to PDF, then retry.',
+      ],
+    }
+  }
 
   if (category === 'not_found_error') {
     return {
@@ -231,6 +254,21 @@ export function detectProviderErrorCategory(errorLike) {
     || lower.includes('unable to parse provider json')
   ) {
     return { category: 'response_format_error', extractedDetails: '' }
+  }
+
+
+  if (
+    lower.includes('docx_empty_extraction')
+    || lower.includes('no readable text')
+  ) {
+    return { category: 'extraction_failed', extractedDetails: '' }
+  }
+
+  if (
+    lower.includes('legacy_word_format')
+    || lower.includes('legacy .doc')
+  ) {
+    return { category: 'unsupported_format', extractedDetails: '' }
   }
 
   if (lower.includes('not_found_error') || lower.includes('model not found') || lower.includes('resource not found')) {
