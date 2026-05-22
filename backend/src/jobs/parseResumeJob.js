@@ -217,11 +217,7 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, fil
       output.originalMimeType = mimeType
     } catch (error) {
       if (String(error?.message || '').includes('extraction_empty')) {
-        if (!retryability.retryable && typeof job.discard === 'function') {
-        job.discard()
-      }
-
-      throw error
+        throw error
       }
       throw new Error('extraction_failed::Unable to extract parseable text payload')
     }
