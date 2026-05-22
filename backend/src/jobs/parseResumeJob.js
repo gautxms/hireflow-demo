@@ -5,6 +5,7 @@ import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -216,7 +217,11 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, fil
       output.originalMimeType = mimeType
     } catch (error) {
       if (String(error?.message || '').includes('extraction_empty')) {
-        throw error
+        if (!retryability.retryable && typeof job.discard === 'function') {
+        job.discard()
+      }
+
+      throw error
       }
       throw new Error('extraction_failed::Unable to extract parseable text payload')
     }
@@ -682,7 +687,8 @@ parseQueue.process(async (job) => {
       return await runParse(job)
     } catch (error) {
       const normalizedError = normalizeProviderError(error)
-      const isTerminalFailure = isTerminalJobFailure(job)
+      const retryability = classifyParseJobRetryability(error)
+      const isTerminalFailure = !retryability.retryable || isTerminalJobFailure(job)
       const providerChainAttempts = buildFailureAttemptMetadata(error)
       const providerChainSummary = buildFailureSummaryMetadata(error, {
         fileBufferBase64: job?.data?.fileBufferBase64,
@@ -692,10 +698,14 @@ parseQueue.process(async (job) => {
       })
       const failurePayload = {
         error: normalizedError.normalizedMessage,
-        providerChain: {
-          attempts: providerChainAttempts,
-          summary: providerChainSummary,
-        },
+        providerChain: providerChainAttempts.length > 0
+          ? {
+              attempts: providerChainAttempts,
+              summary: providerChainSummary,
+            }
+          : null,
+        retryable: retryability.retryable,
+        retryClassification: retryability.reason,
       }
 
       if (isTerminalFailure) {
@@ -724,6 +734,10 @@ parseQueue.process(async (job) => {
           result: failurePayload,
           error: normalizedError.normalizedMessage,
         })
+      }
+
+      if (!retryability.retryable && typeof job.discard === 'function') {
+        job.discard()
       }
 
       throw error
