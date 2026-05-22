@@ -684,7 +684,9 @@ parseQueue.process(async (job) => {
     } catch (error) {
       const normalizedError = normalizeProviderError(error)
       const retryability = classifyParseJobRetryability(error)
-      const isTerminalFailure = !retryability.retryable || isTerminalJobFailure(job)
+      const isNonRetriableFailure =
+        retryability.retryable === false || normalizedError?.isRetriable === false
+      const isTerminalFailure = isTerminalJobFailure(job) || isNonRetriableFailure
       const providerChainAttempts = buildFailureAttemptMetadata(error)
       const providerChainSummary = buildFailureSummaryMetadata(error, {
         fileBufferBase64: job?.data?.fileBufferBase64,
@@ -732,7 +734,7 @@ parseQueue.process(async (job) => {
         })
       }
 
-      if (!retryability.retryable && typeof job.discard === 'function') {
+      if (isNonRetriableFailure) {
         job.discard()
       }
 
