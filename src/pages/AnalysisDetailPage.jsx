@@ -91,6 +91,11 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   const fallbackTelemetryFingerprintRef = useRef('')
 
   useEffect(() => {
+    lastKnownGoodCandidatesPayloadRef.current = null
+    fallbackTelemetryFingerprintRef.current = ''
+  }, [analysisId])
+
+  useEffect(() => {
     console.info(
       `[BuildCorrelation] AnalysisDetailPage mounted | build_id=${FRONTEND_BUILD_ID} | commit=${FRONTEND_COMMIT_HASH} | analysis_id=${analysisId || 'unknown'}`,
     )
