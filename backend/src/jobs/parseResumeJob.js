@@ -216,7 +216,11 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, fil
       output.originalMimeType = mimeType
     } catch (error) {
       if (String(error?.message || '').includes('extraction_empty')) {
-        throw error
+        if (isNonRetriableFailure) {
+        job.discard()
+      }
+
+      throw error
       }
       throw new Error('extraction_failed::Unable to extract parseable text payload')
     }
@@ -682,7 +686,8 @@ parseQueue.process(async (job) => {
       return await runParse(job)
     } catch (error) {
       const normalizedError = normalizeProviderError(error)
-      const isTerminalFailure = isTerminalJobFailure(job)
+      const isNonRetriableFailure = normalizedError?.isRetriable === false
+      const isTerminalFailure = isTerminalJobFailure(job) || isNonRetriableFailure
       const providerChainAttempts = buildFailureAttemptMetadata(error)
       const providerChainSummary = buildFailureSummaryMetadata(error, {
         fileBufferBase64: job?.data?.fileBufferBase64,
@@ -724,6 +729,10 @@ parseQueue.process(async (job) => {
           result: failurePayload,
           error: normalizedError.normalizedMessage,
         })
+      }
+
+      if (isNonRetriableFailure) {
+        job.discard()
       }
 
       throw error

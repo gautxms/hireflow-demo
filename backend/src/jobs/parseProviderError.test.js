@@ -12,10 +12,11 @@ test('normalizeProviderError maps invalid request errors', () => {
   assert.match(result.normalizedMessage, /^not_found_error::\{/)
 })
 
-test('normalizeProviderError maps integer casting validation failures to invalid_request_error', () => {
+test('normalizeProviderError maps years_experience persistence schema failures to non-retriable schema error', () => {
   const result = normalizeProviderError('invalid input syntax for type integer: "3.5"')
-  assert.equal(result.category, 'invalid_request_error')
-  assert.equal(result.action, 'review_request_validation')
+  assert.equal(result.category, 'persistence_schema_error')
+  assert.equal(result.action, 'apply_required_migrations')
+  assert.equal(result.isRetriable, false)
 })
 
 test('normalizeProviderError maps invalid API key auth failures', () => {

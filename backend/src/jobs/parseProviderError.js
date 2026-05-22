@@ -5,6 +5,7 @@ const CATEGORY_MESSAGES = {
   response_format_error: 'AI response format issue; retry or adjust provider/model settings.',
   response_truncated_error: 'AI output exceeded response size; retry with compact analysis or reduce schema detail.',
   invalid_request_error: 'Request validation failed before provider execution.',
+  persistence_schema_error: 'Database schema mismatch blocked saving AI analysis results.',
   extraction_failed: 'Unable to extract readable text from the uploaded file.',
   unsupported_format: 'Unsupported document format; please upload DOCX or PDF.',
   not_found_error: 'AI model configuration issue in Admin Security.',
@@ -155,6 +156,17 @@ function buildHints(category, { provider, model } = {}) {
       ],
     }
   }
+  if (category === 'persistence_schema_error') {
+    return {
+      action: 'apply_required_migrations',
+      remediationSteps: [
+        'Database schema rejected years_experience during persistence.',
+        'Run backend migrations and confirm resumes.years_experience is NUMERIC(5,2).',
+        'Retry the parse job only after schema validation passes.',
+      ],
+    }
+  }
+
   if (category === 'invalid_request_error') {
     return {
       action: 'review_request_validation',
@@ -291,8 +303,9 @@ export function detectProviderErrorCategory(errorLike) {
     lower.includes('invalid input syntax for type integer')
     || lower.includes('invalid input syntax for integer')
     || lower.includes('invalid input syntax for type bigint')
+    || lower.includes('column "years_experience"')
   ) {
-    return { category: 'invalid_request_error', extractedDetails: '' }
+    return { category: 'persistence_schema_error', extractedDetails: '' }
   }
 
   if (
@@ -362,6 +375,8 @@ export function normalizeProviderError(errorLike) {
     ...hints,
   })
 
+  const nonRetriableCategories = new Set(['persistence_schema_error'])
+
   return {
     category,
     userMessage: CATEGORY_MESSAGES[category] || CATEGORY_MESSAGES.unknown_error,
@@ -371,5 +386,6 @@ export function normalizeProviderError(errorLike) {
     providerChain,
     ...hints,
     normalizedMessage: `${category}::${serializedDetails}`,
+    isRetriable: !nonRetriableCategories.has(category),
   }
 }

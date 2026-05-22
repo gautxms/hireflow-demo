@@ -40,6 +40,7 @@ import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/admin
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
 import { pool } from './db/client.js'
+import { verifyYearsExperienceDecimalSchema } from './db/schemaPrerequisites.js'
 
 const app = express()
 
@@ -115,6 +116,16 @@ app.get('/health', async (_req, res) => {
         table: 'resumes',
         column: 'profile_score',
         message: 'Dashboard KPI queries require resumes.profile_score. Run migrations before serving traffic.',
+      })
+    }
+
+    const yearsExperienceSchema = await verifyYearsExperienceDecimalSchema()
+    if (!yearsExperienceSchema.ok) {
+      schemaWarnings.push({
+        type: 'invalid_years_experience_schema',
+        table: 'resumes',
+        column: 'years_experience',
+        message: `Expected NUMERIC(5,2), found ${JSON.stringify(yearsExperienceSchema.actual || {})}`,
       })
     }
   } catch (error) {
