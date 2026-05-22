@@ -2,6 +2,8 @@ const CATEGORY_MESSAGES = {
   response_format_error: 'We could not read the AI analysis response. Please retry.',
   response_truncated_error: 'The AI response was cut off before it finished. Please retry.',
   invalid_request_error: 'This analysis request could not be completed right now. Please retry.',
+  extraction_failed: 'We could not extract readable text from this file. Please upload a text-based PDF and retry.',
+  unsupported_format: 'This file format is not supported. Please upload a DOCX or PDF file.',
   auth_error: 'The AI service is temporarily unavailable. Please retry.',
   billing_quota_error: 'The AI service is temporarily unavailable. Please retry.',
   rate_limit_error: 'The AI service is busy right now. Please retry shortly.',
@@ -12,7 +14,7 @@ const CATEGORY_MESSAGES = {
   unknown_error: 'AI service temporarily unavailable; please retry.',
 }
 
-const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
+const NORMALIZED_PREFIX_PATTERN = /^(response_format_error|response_truncated_error|not_found_error|invalid_request_error|extraction_failed|unsupported_format|auth_error|billing_quota_error|rate_limit_error|timeout_error|network_error|ai_disabled_error|unknown_error)(::\s*(.*))?$/i
 const DEFAULT_ADMIN_PATH = '/admin/security'
 
 function sanitizeRawMessage(rawMessage) {
@@ -200,6 +202,16 @@ export function mapProviderError(rawMessage) {
   const action = parsedContext?.action || 'review_provider_settings'
   const remediationSteps = Array.isArray(parsedContext?.remediationSteps) && parsedContext.remediationSteps.length > 0
     ? parsedContext.remediationSteps
+    : category === 'extraction_failed'
+      ? [
+          'Use a text-based PDF that contains selectable text (not image-only scans).',
+          'Re-upload the file and retry resume analysis.',
+        ]
+      : category === 'unsupported_format'
+        ? [
+            'Save the document as DOCX or export it as PDF.',
+            'Re-upload the converted file and retry resume analysis.',
+          ]
     : category === 'auth_error'
       ? [
           'Open Admin Security and update your provider API key.',
