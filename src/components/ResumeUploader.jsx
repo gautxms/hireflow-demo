@@ -35,10 +35,14 @@ const BASE_QUEUE_RETRY_DELAY_MS = 5000
 const ANALYSIS_LEVEL_POLLING_ENABLED = import.meta.env.VITE_ENABLE_ANALYSIS_LEVEL_POLLING === 'true'
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
+  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
 ])
+const DOC_EXTENSION_PATTERN = /\.doc$/i
 const DOCX_EXTENSION_PATTERN = /\.docx$/i
 const PDF_EXTENSION_PATTERN = /\.pdf$/i
+const TXT_EXTENSION_PATTERN = /\.txt$/i
 
 function sanitizeForDisplay(message) {
   return DOMPurify.sanitize(message ?? '', { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
@@ -66,7 +70,7 @@ function formatUploadError(message) {
 }
 
 function formatParseError(reason = 'File format not recognized') {
-  return `Parse failed: ${reason}. Please upload a PDF or DOCX file and retry.`
+  return `Parse failed: ${reason}. Recommended format: PDF or DOCX. If you uploaded a .doc file, convert it to .docx and retry.`
 }
 
 function inferResumeMimeType(fileLike = {}) {
@@ -76,11 +80,17 @@ function inferResumeMimeType(fileLike = {}) {
   }
 
   const fileName = String(fileLike?.name || '').trim()
+  if (DOC_EXTENSION_PATTERN.test(fileName)) {
+    return 'application/msword'
+  }
   if (DOCX_EXTENSION_PATTERN.test(fileName)) {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   }
   if (PDF_EXTENSION_PATTERN.test(fileName)) {
     return 'application/pdf'
+  }
+  if (TXT_EXTENSION_PATTERN.test(fileName)) {
+    return 'text/plain'
   }
 
   return explicitType
@@ -93,7 +103,7 @@ function toUserFriendlyJobError(rawError) {
   }
 
   if (message.toLowerCase().includes('file format')) {
-    return 'Unsupported or unreadable file format. Upload a valid PDF or DOCX and retry.'
+    return 'Unsupported or unreadable file format. Recommended: PDF or DOCX. If this is a .doc file, convert it to .docx and retry.'
   }
 
   const normalized = mapProviderError(message)
@@ -268,7 +278,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       const isAllowedSize = file.size <= MAX_FILE_SIZE
 
       if (!isAllowedType) {
-        rejected.push(`${file.name}: only PDF or DOCX files are allowed.`)
+        rejected.push(`${file.name}: file type not supported. Recommended: PDF or DOCX.`)
         return
       }
 
@@ -1011,13 +1021,13 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             Drop resumes here
           </h3>
           <p className="resume-drop-zone-subtitle">
-            or click to select files (PDF or DOCX, up to 100MB each)
+            or click to select files (recommended: PDF or DOCX; .doc/.txt supported, up to 100MB each)
           </p>
           <input
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".pdf,.docx,.doc,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             className="resume-file-input"
             onChange={addFiles}
           />
