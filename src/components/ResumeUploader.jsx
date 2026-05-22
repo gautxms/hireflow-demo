@@ -35,11 +35,9 @@ const BASE_QUEUE_RETRY_DELAY_MS = 5000
 const ANALYSIS_LEVEL_POLLING_ENABLED = import.meta.env.VITE_ENABLE_ANALYSIS_LEVEL_POLLING === 'true'
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
-  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain',
 ])
-const DOC_EXTENSION_PATTERN = /\.doc$/i
 const DOCX_EXTENSION_PATTERN = /\.docx$/i
 const PDF_EXTENSION_PATTERN = /\.pdf$/i
 const TXT_EXTENSION_PATTERN = /\.txt$/i
@@ -80,9 +78,6 @@ function inferResumeMimeType(fileLike = {}) {
   }
 
   const fileName = String(fileLike?.name || '').trim()
-  if (DOC_EXTENSION_PATTERN.test(fileName)) {
-    return 'application/msword'
-  }
   if (DOCX_EXTENSION_PATTERN.test(fileName)) {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   }
@@ -1021,13 +1016,13 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             Drop resumes here
           </h3>
           <p className="resume-drop-zone-subtitle">
-            or click to select files (recommended: PDF or DOCX; .doc/.txt supported, up to 100MB each)
+            or click to select files (recommended: PDF or DOCX; .txt supported, up to 100MB each)
           </p>
           <input
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.docx,.doc,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             className="resume-file-input"
             onChange={addFiles}
           />
