@@ -428,3 +428,99 @@ export function sanitizeExpandedCandidate(candidate = {}) {
       },
   }
 }
+
+
+export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
+  try {
+    const candidate = sanitizeExpandedCandidate(rawCandidate)
+    const score = resolveActiveCandidateScore(candidate)
+    const normalized = Number(score)
+    const tenPoint = Number.isFinite(normalized) && normalized >= 0 ? Math.max(0, Math.min(10, (normalized > 10 ? normalized / 10 : normalized))) : null
+    const tier = tenPoint == null ? 'unscored' : tenPoint >= 8 ? 'strong' : tenPoint >= 6 ? 'possible' : 'low'
+    const displayScore = tenPoint == null ? null : tenPoint.toFixed(1)
+    const hasDisplayScore = displayScore != null
+
+    const candidateTitle = toDisplayText(candidate?.experience?.[0]?.title || candidate.current_title, '')
+    const yearsRaw = Number(candidate.years_experience)
+    const yearsNumber = Number.isFinite(yearsRaw) ? yearsRaw : null
+    const experienceLabel = yearsNumber != null ? `${yearsNumber} yrs exp` : '0 yrs exp'
+    const experienceYearsLabel = yearsNumber != null ? `${yearsNumber} years` : '0 years'
+    const locationLabel = toDisplayText(candidate.location, 'Location unavailable')
+    const seniorityLabel = toDisplayText(candidate.seniority_level, '')
+    const summaryText = toDisplayText(candidate.summary, 'No summary available')
+    const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
+    const recommendationText = toDisplayText(candidate?.recommendation || candidate?.fit_assessment?.rationale, '')
+
+    const strengths = (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || []).map((e)=>toDisplayText(e,'')).filter(Boolean).slice(0,3)
+    const considerations = (Array.isArray(candidate.considerations) ? candidate.considerations : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
+
+    const matchedSkills = (Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
+    const missingSkills = [...new Set([...(Array.isArray(candidate?.mustHaveSkills)?candidate.mustHaveSkills:[]), ...(Array.isArray(candidate?.missingSkills)?candidate.missingSkills:[]), ...(Array.isArray(candidate?.fit_assessment?.missing)?candidate.fit_assessment.missing:[])].map((e)=>toDisplayText(e,'')).filter(Boolean))]
+    const allSkills = (Array.isArray(candidate.top_skills) ? candidate.top_skills : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
+
+    const initials = toDisplayText(candidate.name, 'NA').split(' ').map((p)=>p[0]||'').join('').slice(0,2).toUpperCase() || 'NA'
+    return {
+      isUnavailable: false,
+      unavailableMessage: '',
+      candidate,
+      candidateKey: resolveCandidateKey(candidate),
+      candidateName: toDisplayText(candidate.name, 'Candidate'),
+      candidateTitle,
+      locationLabel,
+      seniorityLabel,
+      experienceLabel,
+      experienceYearsLabel,
+      yearsExperienceNumber: yearsNumber,
+      initials,
+      scoreTier: tier,
+      displayScore,
+      hasDisplayScore,
+      verdictLabel: hasDisplayScore ? (tier==='strong'?'Strong match':tier==='possible'?'Possible match':'Low match') : 'Unable to score',
+      confidenceLabel: hasDisplayScore ? toDisplayText(candidate?.fit_assessment?.confidence, 'AI confidence available') : '',
+      summaryText,
+      reasoningText,
+      recommendationText,
+      candidateStrengths: strengths,
+      candidateConsiderations: considerations,
+      matchedSkills,
+      missingSkills,
+      allSkills,
+      totalSkills: matchedSkills.length + missingSkills.length,
+      resumeFileLabel: toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable'),
+      email: toDisplayText(candidate.email, ''),
+      educationLabel: toDisplayText(candidate.education, 'Education details unavailable'),
+    }
+  } catch {
+    return {
+      isUnavailable: true,
+      unavailableMessage: 'Candidate details unavailable',
+      candidate: sanitizeExpandedCandidate({}),
+      candidateKey: 'candidate-detail-unavailable',
+      candidateName: 'Candidate',
+      candidateTitle: '',
+      locationLabel: 'Location unavailable',
+      seniorityLabel: '',
+      experienceLabel: '0 yrs exp',
+      experienceYearsLabel: '0 years',
+      yearsExperienceNumber: null,
+      initials: 'NA',
+      scoreTier: 'unscored',
+      displayScore: null,
+      hasDisplayScore: false,
+      verdictLabel: 'Unable to score',
+      confidenceLabel: '',
+      summaryText: 'Candidate details unavailable',
+      reasoningText: 'Candidate details unavailable',
+      recommendationText: '',
+      candidateStrengths: [],
+      candidateConsiderations: [],
+      matchedSkills: [],
+      missingSkills: [],
+      allSkills: [],
+      totalSkills: 0,
+      resumeFileLabel: 'Resume unavailable',
+      email: '',
+      educationLabel: 'Education details unavailable',
+    }
+  }
+}

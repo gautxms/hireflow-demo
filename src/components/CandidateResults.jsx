@@ -15,6 +15,7 @@ import {
   resolveCandidateResumeUuid,
   sanitizeExpandedCandidate,
   toDisplayText,
+  buildExpandedCandidateDrawerViewModel,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -1440,89 +1441,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       </div>
 
             {expandedCandidate && (() => {
-  const candidate = sanitizeExpandedCandidate(expandedCandidate)
-  const expandedCandidateKey = resolveCandidateKey(candidate)
-  const score = activeScore(candidate)
-  const tier = getScoreTone(score)
-  const displayScore = formatScore(score)
-  const hasDisplayScore = displayScore != null && Number.isFinite(Number(displayScore))
-  const verdictLabel = resolveVerdictLabel(candidate, tier, hasDisplayScore)
-  const confidenceLabel = resolveConfidenceLabel(candidate, hasDisplayScore)
-  const candidateTitle = safeText(candidate?.experience?.[0]?.title || candidate.current_title, '')
-  const experienceLabel = hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : '0 yrs exp'
-  const locationLabel = safeText(candidate.location, 'Location unavailable')
-  const seniorityLabel = safeText(candidate.seniority_level, '')
-  const normalizeTextList = (list) => safeArray(list).map((entry) => safeText(entry, '')).filter(Boolean)
-  const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
-    ? normalizeTextList(candidate.strengths)
-    : Array.isArray(candidate.achievements)
-      ? normalizeTextList(candidate.achievements).slice(0, 3)
-      : []
-  const candidateConsiderations = normalizeTextList(candidate.considerations)
-  const reasoningText = safeText(resolveMatchScoreReason(candidate), 'Reasoning unavailable for this profile.')
-  const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
-  const allSkills = deriveAllSkills(candidate)
-  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
-  const scoreBreakdownRows = matchBreakdown ? [
-    {
-      label: 'Skills match',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'technical_skills',
-        'skills_match',
-        'skills',
-        'technicalSkills',
-      ]),
-    },
-    {
-      label: 'Experience',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'experience_years',
-        'experience',
-        'years_experience',
-        'experienceYears',
-      ]),
-    },
-    {
-      label: 'Role alignment',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'methodologies',
-        'role_alignment',
-        'role_fit',
-        'roleAlignment',
-      ]),
-    },
-    {
-      label: 'Education',
-      value: resolveBreakdownMetric(matchBreakdown, [
-        'education',
-        'education_match',
-        'academic_background',
-        'educationMatch',
-      ]),
-    },
-  ] : []
-  const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
-  const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
-  const mergedSkillGaps = [...new Set([
-    ...safeArray(candidate?.mustHaveSkills),
-    ...safeArray(candidate?.missingSkills),
-    ...safeArray(candidate?.fit_assessment?.missing),
-  ].map((entry) => safeText(entry, '')).filter(Boolean))]
-  const matchedSkills = safeArray(candidate?.matchedSkills).map((entry) => safeText(entry, '')).filter(Boolean)
-  const missingSkills = mergedSkillGaps
-  const totalSkills = matchedSkills.length + missingSkills.length
-  const recommendationText = safeText(candidate?.recommendation || candidate?.fit_assessment?.rationale, '')
-  const initials = String(candidate?.name || '')
-    .split(' ')
-    .map((part) => part[0] || '')
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-  const integrityChecks = deriveResumeIntegrityChecks(candidate, hasDisplayScore)
+  const detailVm = buildExpandedCandidateDrawerViewModel(expandedCandidate)
+  const candidate = detailVm.candidate
+  const expandedCandidateKey = detailVm.candidateKey
 
   return (
     <CandidateDetailErrorBoundary
-      key={String(expandedCandidateKey || resolveCandidateKey(candidate) || "candidate-detail")}
+      key={String(expandedCandidateKey || "candidate-detail")}
       analysisId={analysisId}
       candidateCount={candidateCount}
       normalizationStats={normalizationStats}
@@ -1533,198 +1458,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       selectedCandidate={candidate}
       onBackToResults={() => setExpandedId(null)}
     >
-      <div id="detail-drawer" className="detail-drawer">
-      <div className="dd-header">
-        <div className="dd-header-left">
-          <div className="dd-avatar">{initials || 'NA'}</div>
-          <div className="dd-header-info">
-            <div className="dd-name">{toDisplayText(candidate.name)}</div>
-            <div className="dd-subtitle">{candidateTitle}</div>
-            <div className="dd-meta-facts">
-              <span className="dd-meta-item"><BriefcaseBusiness size={18} strokeWidth={1.5} aria-hidden="true" />{experienceLabel}</span>
-              <span className="dd-meta-item"><MapPin size={18} strokeWidth={1.5} aria-hidden="true" />{locationLabel}</span>
-              <span className="dd-meta-item"><TrendingUp size={18} strokeWidth={1.5} aria-hidden="true" />{seniorityLabel}</span>
-            </div>
-          </div>
-        </div>
-        <div className={`dd-score-panel dd-score-panel--${tier}`}>
-          <div className="dd-score">
-            {hasDisplayScore ? displayScore : '—'}<span>{hasDisplayScore ? '/10' : ''}</span>
-          </div>
-          <div className={`dd-fit-label dd-fit--${tier}`}>{verdictLabel}</div>
-          {confidenceLabel && <div className="dd-confidence">{confidenceLabel}</div>}
-        </div>
-        <div className="dd-header-actions">
-          <button className="hf-btn hf-btn--primary dd-btn-primary" type="button">Schedule interview</button>
-          <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to shortlist</button>
-          <button
-            className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              openCandidateResumeInNewTab(candidate)
-            }}
-          >
-            <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
-          </button>
-        </div>
-        <button className="hf-btn hf-btn--ghost hf-btn--icon dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
-      </div>
-
-      <div className="dd-body">
-        <div className="dd-col">
-          <div className="dd-col-label section-heading">Summary</div>
-          <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
-          <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
-          <p className="dd-summary">{reasoningText}</p>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-16">Key facts</div>
-          <div className="dd-facts">
-            <div className="dd-fact">
-              <span className="dd-fact-k">Experience</span>
-              <span className="dd-fact-v">{hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} years` : '0 years'}</span>
-            </div>
-            <div className="dd-fact">
-              <span className="dd-fact-k">Seniority</span>
-              <span className="dd-fact-v">{safeText(candidate.seniority_level, 'Unavailable')}</span>
-            </div>
-            <div className="dd-fact">
-              <span className="dd-fact-k">Education</span>
-              <span className="dd-fact-v">{formatEducation(candidate.education)}</span>
-            </div>
-            <div className="dd-fact">
-              <span className="dd-fact-k">Location</span>
-              <span className="dd-fact-v">{safeText(candidate.location, 'Unavailable')}</span>
-            </div>
-            {candidate.email && (
-              <div className="dd-fact">
-                <span className="dd-fact-k">Email</span>
-                <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
-              </div>
-            )}
-          </div>
-
-          {recommendationText && (
-            <>
-              <div className="dd-col-label section-heading dd-col-label--mt-16">Recommended action</div>
-              <div className="dd-recommended-action">{recommendationText}</div>
-            </>
-          )}
-          {candidateConsiderations.length > 0 && (
-            <>
-              <div className="dd-col-label section-heading dd-col-label--mt-16">Interview probes</div>
-              <div className="dd-list">
-                {candidateConsiderations.map((probe, idx) => <div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-probe-${idx}`}><span className="dd-probe-icon">?</span><ExpandableText text={probe} /></div>)}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="dd-col">
-          <div className="dd-col-label section-heading">Score breakdown</div>
-          {matchBreakdown && hasResolvableBreakdownMetrics ? (
-            <div className="dd-analysis-box dd-breakdown">
-              {resolvableScoreBreakdownRows.map((row) => (
-                <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
-                  <span>{row.label}</span>
-                  <span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span>
-                  <span>{row.value}%</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="dd-summary">Score breakdown unavailable</p>
-          )}
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {matchedSkills.length} of {totalSkills} required</span></div>
-          <div className="dd-top-skills">
-            {matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}
-          </div>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps <span className="dd-count-badge dd-count-badge--amber">⚠ {missingSkills.length} missing</span></div>
-          {missingSkills.length > 0 ? (
-            <div className="dd-top-skills">
-              {missingSkills.map((gap) => (
-                <span className="dd-top-skill dd-top-skill--gap" key={`${expandedCandidateKey}-gap-${gap}`}>{gap}</span>
-              ))}
-            </div>
-          ) : (
-            <p className="dd-summary">No explicit skill gaps identified</p>
-          )}
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">All skills</div>
-          <div className="dd-top-skills dd-top-skills--all">
-            {allSkills.map((skill) => (
-              <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-all-${String(formatSkillLabel(skill))}`}>
-                {formatSkillLabel(skill)}
-              </span>
-            ))}
-            {allSkills.length === 0 && <span className="dd-analysis-empty">Relevant skills unavailable for this analysis</span>}
-          </div>
-
-          {integrityChecks.length > 0 && (
-            <>
-              <div className="dd-col-label section-heading dd-col-label--mt-14">Resume integrity checks</div>
-              <div className="dd-analysis-box">
-                {integrityChecks.map((check, idx) => (
-                  <div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>
-                    {check?.status === 'issue'
-                      ? <AlertTriangle size={18} strokeWidth={1.5} />
-                      : <CheckCircle size={18} strokeWidth={1.5} />}
-                    <span>{toDisplayText(check?.label || check, 'Unavailable')}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="dd-col">
-          <div className="dd-col-label section-heading">Strengths</div>
-          <div className="dd-analysis-box dd-analysis-box--green">
-            {candidateStrengths.length > 0
-              ? candidateStrengths.map((strength, idx) => (
-                <div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}>
-                  <CheckCircle size={18} strokeWidth={1.5} />
-                  <ExpandableText text={strength} />
-                </div>
-              ))
-              : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-          </div>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
-          <div className="dd-analysis-box dd-analysis-box--amber">
-            {candidateConsiderations.length > 0
-              ? candidateConsiderations.map((consideration, idx) => (
-                <div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}>
-                  <AlertTriangle size={18} strokeWidth={1.5} />
-                  <ExpandableText text={consideration} />
-                </div>
-              ))
-              : (
-                <div className="dd-analysis-item">
-                  {candidate.years_experience == null
-                    ? 'Experience duration could not be determined — verify dates in resume'
-                    : candidate.years_experience < 3
-                      ? 'Early-career candidate — assess growth trajectory in interview'
-                      : 'Run re-analysis to generate detailed AI considerations'}
-                </div>
-              )}
-          </div>
-
-          <div className="dd-col-label section-heading dd-col-label--mt-14">Resume file</div>
-          <div className="dd-resume-file">
-            <FileText size={18} strokeWidth={1.5} />
-            <div>
-              <div className="dd-resume-filename">{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
-              <div className="dd-resume-meta">
-                <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View full profile</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
+      <div id="detail-drawer" className="detail-drawer"><div className="dd-body"><div className="dd-col">
+        {detailVm.isUnavailable ? <p className="dd-summary">Candidate details unavailable</p> : <p className="dd-summary">{detailVm.summaryText}</p>}
+      </div></div></div>
     </CandidateDetailErrorBoundary>
   )
 })()}

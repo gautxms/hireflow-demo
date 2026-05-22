@@ -194,3 +194,35 @@ test('sanitizeExpandedCandidate strictly defaults arrays, nested objects, and di
   assert.deepEqual(sanitized.scoreBreakdown, {})
   assert.deepEqual(sanitized.experience, [{ title: 'Engineer' }, {}])
 })
+
+test('buildExpandedCandidateDrawerViewModel normalizes malformed candidate shapes safely', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    name: { first: 'Bad' },
+    summary: { nested: { nope: true } },
+    strengths: null,
+    considerations: [{ reason: 'x' }],
+    matchedSkills: null,
+    missingSkills: null,
+    fit_assessment: { missing: { wrong: true } },
+    experience: [{ title: { wrong: true } }],
+  })
+
+  assert.equal(vm.isUnavailable, false)
+  assert.equal(vm.candidateName, 'Candidate')
+  assert.equal(Array.isArray(vm.matchedSkills), true)
+  assert.equal(Array.isArray(vm.missingSkills), true)
+  assert.equal(Array.isArray(vm.candidateConsiderations), true)
+})
+
+test('buildExpandedCandidateDrawerViewModel returns compact unavailable state on unexpected throw', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const circular = {}
+  circular.self = circular
+  Object.defineProperty(circular, 'name', { get() { throw new Error('boom') } })
+
+  const vm = buildExpandedCandidateDrawerViewModel(circular)
+  assert.equal(vm.isUnavailable, true)
+  assert.equal(vm.summaryText, 'Candidate details unavailable')
+  assert.equal(vm.unavailableMessage, 'Candidate details unavailable')
+})
