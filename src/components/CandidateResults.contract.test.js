@@ -53,6 +53,14 @@ test('CandidateResults title contract: analysis title does not fall back to job 
 })
 
 
+
+test('CandidateResults does not invoke React hooks at module scope for selection helpers', () => {
+  assert.doesNotMatch(
+    candidateResultsSource,
+    /\n}\s*const\s+resolveSelectionResumeId\s*=\s*useCallback\s*\(/,
+  )
+})
+
 test('click-path regression: malformed expanded candidate only shows inline fallback note and keeps list rendering', () => {
   assert.match(
     candidateResultsSource,

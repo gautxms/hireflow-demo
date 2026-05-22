@@ -900,7 +900,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   useEffect(() => {
     setSelectedIds((current) => pruneSelection(current, filtered, resolveSelectionResumeId))
-  }, [filtered, resolveSelectionResumeId])
+  }, [filtered])
 
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds, resolveSelectionResumeId)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds, resolveSelectionResumeId)
@@ -1568,4 +1568,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     </div>
   )
 }
-  const resolveSelectionResumeId = useCallback((candidate) => resolveCandidateResumeUuid(candidate), [])
+
+function resolveSelectionResumeId(candidate) {
+  return resolveCandidateResumeUuid(candidate)
+}
