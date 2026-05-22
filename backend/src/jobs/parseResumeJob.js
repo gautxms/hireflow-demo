@@ -5,6 +5,7 @@ import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -682,7 +683,9 @@ parseQueue.process(async (job) => {
       return await runParse(job)
     } catch (error) {
       const normalizedError = normalizeProviderError(error)
-      const isNonRetriableFailure = normalizedError?.isRetriable === false
+      const retryability = classifyParseJobRetryability(error)
+      const isNonRetriableFailure =
+        retryability.retryable === false || normalizedError?.isRetriable === false
       const isTerminalFailure = isTerminalJobFailure(job) || isNonRetriableFailure
       const providerChainAttempts = buildFailureAttemptMetadata(error)
       const providerChainSummary = buildFailureSummaryMetadata(error, {
@@ -693,10 +696,14 @@ parseQueue.process(async (job) => {
       })
       const failurePayload = {
         error: normalizedError.normalizedMessage,
-        providerChain: {
-          attempts: providerChainAttempts,
-          summary: providerChainSummary,
-        },
+        providerChain: providerChainAttempts.length > 0
+          ? {
+              attempts: providerChainAttempts,
+              summary: providerChainSummary,
+            }
+          : null,
+        retryable: retryability.retryable,
+        retryClassification: retryability.reason,
       }
 
       if (isTerminalFailure) {
