@@ -428,3 +428,90 @@ export function sanitizeExpandedCandidate(candidate = {}) {
       },
   }
 }
+
+export function buildExpandedCandidateViewModel(rawCandidate, options = {}) {
+  const fallbackMessage = options.fallbackMessage || 'Candidate details unavailable'
+
+  try {
+    const candidate = sanitizeExpandedCandidate(rawCandidate)
+    const safeArray = (value) => (Array.isArray(value) ? value : [])
+    const safeString = (value, fallback = '') => toDisplayText(value, fallback)
+    const numericScore = resolveActiveCandidateScore(candidate)
+    const scoreOutOfTen = numericScore == null ? null : Math.max(0, Math.min(10, (numericScore > 10 ? numericScore / 10 : numericScore)))
+    const scoreTone = scoreOutOfTen == null ? 'unscored' : scoreOutOfTen >= 8 ? 'strong' : scoreOutOfTen >= 6 ? 'possible' : 'low'
+    const skillGaps = [...new Set([
+      ...safeArray(candidate.mustHaveSkills),
+      ...safeArray(candidate.missingSkills),
+      ...safeArray(candidate.fit_assessment?.missing),
+    ].map((entry) => safeString(entry, '')).filter(Boolean))]
+    const experienceYears = Number(candidate.years_experience)
+    const initials = safeString(candidate.name, 'NA')
+      .split(' ')
+      .map((part) => part[0] || '')
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'NA'
+
+    return {
+      isAvailable: true,
+      error: null,
+      fallbackMessage: '',
+      candidate,
+      candidateKey: resolveCandidateKey(candidate),
+      candidateName: safeString(candidate.name, 'Candidate'),
+      candidateTitle: safeString(candidate?.experience?.[0]?.title || candidate.current_title, ''),
+      experienceLabel: candidate.years_experience ? `${candidate.years_experience} yrs exp` : '0 yrs exp',
+      experienceYearsLabel: candidate.years_experience ? `${candidate.years_experience} years` : '0 years',
+      experienceYearsValue: Number.isFinite(experienceYears) ? experienceYears : null,
+      locationLabel: safeString(candidate.location, 'Location unavailable'),
+      seniorityLabel: safeString(candidate.seniority_level, 'Unavailable'),
+      educationLabel: safeString(candidate.education, 'Unavailable'),
+      emailLabel: safeString(candidate.email, ''),
+      summaryText: safeString(candidate.summary, 'No summary available'),
+      scoreTone,
+      scoreDisplay: scoreOutOfTen == null ? null : scoreOutOfTen.toFixed(1),
+      matchedSkills: safeArray(candidate.matchedSkills).map((entry) => safeString(entry, '')).filter(Boolean),
+      missingSkills: skillGaps,
+      allSkills: safeArray(candidate.top_skills),
+      resumeFilenameLabel: safeString(candidate.filename || candidate.resume_filename, 'Resume unavailable'),
+      recommendationText: safeString(candidate?.recommendation || candidate?.fit_assessment?.rationale, ''),
+      reasoningText: safeString(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, ''),
+      strengths: safeArray(candidate.strengths).map((entry) => safeString(entry, '')).filter(Boolean),
+      considerations: safeArray(candidate.considerations).map((entry) => safeString(entry, '')).filter(Boolean),
+      integrityChecks: safeArray(candidate.integrity_checks),
+      rawMatchBreakdown: candidate?.matchScore?.breakdown || candidate?.scoreBreakdown || null,
+      initials,
+    }
+  } catch (error) {
+    return {
+      isAvailable: false,
+      error: error instanceof Error ? error.message : String(error),
+      fallbackMessage,
+      candidate: sanitizeExpandedCandidate({}),
+      candidateKey: 'candidate-detail',
+      candidateName: 'Candidate',
+      candidateTitle: '',
+      experienceLabel: '0 yrs exp',
+      experienceYearsLabel: '0 years',
+      experienceYearsValue: null,
+      locationLabel: 'Location unavailable',
+      seniorityLabel: 'Unavailable',
+      educationLabel: 'Unavailable',
+      emailLabel: '',
+      summaryText: fallbackMessage,
+      scoreTone: 'unscored',
+      scoreDisplay: null,
+      matchedSkills: [],
+      missingSkills: [],
+      allSkills: [],
+      resumeFilenameLabel: 'Resume unavailable',
+      recommendationText: '',
+      reasoningText: fallbackMessage,
+      strengths: [],
+      considerations: [],
+      integrityChecks: [],
+      rawMatchBreakdown: null,
+      initials: 'NA',
+    }
+  }
+}

@@ -13,6 +13,7 @@ import {
   resolveCandidateKey,
   resolveActiveCandidateScore,
   sanitizeExpandedCandidate,
+  buildExpandedCandidateViewModel,
   toDisplayText,
   toSafeScore,
 } from './candidateResultsState.js'
@@ -193,4 +194,40 @@ test('sanitizeExpandedCandidate strictly defaults arrays, nested objects, and di
   assert.equal(sanitized.fit_assessment.reason, 'good')
   assert.deepEqual(sanitized.scoreBreakdown, {})
   assert.deepEqual(sanitized.experience, [{ title: 'Engineer' }, {}])
+})
+
+test('buildExpandedCandidateViewModel normalizes malformed nested shapes for drawer rendering', () => {
+  const viewModel = buildExpandedCandidateViewModel({
+    name: { first: 'Not a string' },
+    matchedSkills: null,
+    mustHaveSkills: null,
+    missingSkills: [{ nested: true }],
+    fit_assessment: { missing: { value: 'React' } },
+    education: { school: 'Unknown' },
+    email: { address: 'broken' },
+    top_skills: null,
+  })
+
+  assert.equal(viewModel.isAvailable, true)
+  assert.equal(viewModel.candidateName, 'Candidate')
+  assert.deepEqual(viewModel.matchedSkills, [])
+  assert.deepEqual(viewModel.missingSkills, [])
+  assert.equal(viewModel.educationLabel, 'Unavailable')
+  assert.equal(viewModel.emailLabel, '')
+  assert.deepEqual(viewModel.allSkills, [])
+})
+
+test('buildExpandedCandidateViewModel returns compact fallback when candidate sanitization throws', () => {
+  const malformedCandidate = {}
+  Object.defineProperty(malformedCandidate, 'name', {
+    get() {
+      throw new Error('bad payload shape')
+    },
+  })
+
+  const viewModel = buildExpandedCandidateViewModel(malformedCandidate)
+  assert.equal(viewModel.isAvailable, false)
+  assert.equal(viewModel.fallbackMessage, 'Candidate details unavailable')
+  assert.equal(viewModel.summaryText, 'Candidate details unavailable')
+  assert.deepEqual(viewModel.matchedSkills, [])
 })

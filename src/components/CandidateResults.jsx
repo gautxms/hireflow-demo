@@ -14,6 +14,7 @@ import {
   resolveCandidateKey,
   resolveCandidateResumeUuid,
   sanitizeExpandedCandidate,
+  buildExpandedCandidateViewModel,
   toDisplayText,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
@@ -1440,29 +1441,30 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       </div>
 
             {expandedCandidate && (() => {
-  const candidate = sanitizeExpandedCandidate(expandedCandidate)
-  const expandedCandidateKey = resolveCandidateKey(candidate)
+  const viewModel = buildExpandedCandidateViewModel(expandedCandidate)
+  const candidate = viewModel.candidate
+  const expandedCandidateKey = viewModel.candidateKey
   const score = activeScore(candidate)
   const tier = getScoreTone(score)
   const displayScore = formatScore(score)
   const hasDisplayScore = displayScore != null && Number.isFinite(Number(displayScore))
   const verdictLabel = resolveVerdictLabel(candidate, tier, hasDisplayScore)
   const confidenceLabel = resolveConfidenceLabel(candidate, hasDisplayScore)
-  const candidateTitle = safeText(candidate?.experience?.[0]?.title || candidate.current_title, '')
-  const experienceLabel = hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : '0 yrs exp'
-  const locationLabel = safeText(candidate.location, 'Location unavailable')
-  const seniorityLabel = safeText(candidate.seniority_level, '')
+  const candidateTitle = viewModel.candidateTitle
+  const experienceLabel = viewModel.experienceLabel
+  const locationLabel = viewModel.locationLabel
+  const seniorityLabel = viewModel.seniorityLabel
   const normalizeTextList = (list) => safeArray(list).map((entry) => safeText(entry, '')).filter(Boolean)
   const candidateStrengths = Array.isArray(candidate.strengths) && candidate.strengths.length > 0
     ? normalizeTextList(candidate.strengths)
     : Array.isArray(candidate.achievements)
       ? normalizeTextList(candidate.achievements).slice(0, 3)
       : []
-  const candidateConsiderations = normalizeTextList(candidate.considerations)
-  const reasoningText = safeText(resolveMatchScoreReason(candidate), 'Reasoning unavailable for this profile.')
+  const candidateConsiderations = viewModel.considerations
+  const reasoningText = viewModel.reasoningText || 'Reasoning unavailable for this profile.'
   const topSkills = safeArray(deriveTopSkills(candidate)).slice(0, 6)
   const allSkills = deriveAllSkills(candidate)
-  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
+  const matchBreakdown = viewModel.rawMatchBreakdown
   const scoreBreakdownRows = matchBreakdown ? [
     {
       label: 'Skills match',
@@ -1503,21 +1505,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   ] : []
   const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
   const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
-  const mergedSkillGaps = [...new Set([
-    ...safeArray(candidate?.mustHaveSkills),
-    ...safeArray(candidate?.missingSkills),
-    ...safeArray(candidate?.fit_assessment?.missing),
-  ].map((entry) => safeText(entry, '')).filter(Boolean))]
-  const matchedSkills = safeArray(candidate?.matchedSkills).map((entry) => safeText(entry, '')).filter(Boolean)
-  const missingSkills = mergedSkillGaps
+  const matchedSkills = viewModel.matchedSkills
+  const missingSkills = viewModel.missingSkills
   const totalSkills = matchedSkills.length + missingSkills.length
-  const recommendationText = safeText(candidate?.recommendation || candidate?.fit_assessment?.rationale, '')
-  const initials = String(candidate?.name || '')
-    .split(' ')
-    .map((part) => part[0] || '')
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+  const recommendationText = viewModel.recommendationText
+  const initials = viewModel.initials
   const integrityChecks = deriveResumeIntegrityChecks(candidate, hasDisplayScore)
 
   return (
@@ -1538,7 +1530,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         <div className="dd-header-left">
           <div className="dd-avatar">{initials || 'NA'}</div>
           <div className="dd-header-info">
-            <div className="dd-name">{toDisplayText(candidate.name)}</div>
+            <div className="dd-name">{viewModel.candidateName}</div>
             <div className="dd-subtitle">{candidateTitle}</div>
             <div className="dd-meta-facts">
               <span className="dd-meta-item"><BriefcaseBusiness size={18} strokeWidth={1.5} aria-hidden="true" />{experienceLabel}</span>
@@ -1572,9 +1564,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       </div>
 
       <div className="dd-body">
+        {!viewModel.isAvailable && (
+          <p className="dd-summary">{viewModel.fallbackMessage}</p>
+        )}
         <div className="dd-col">
           <div className="dd-col-label section-heading">Summary</div>
-          <p className="dd-summary">{toDisplayText(candidate.summary, 'No summary available')}</p>
+          <p className="dd-summary">{viewModel.summaryText}</p>
           <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
           <p className="dd-summary">{reasoningText}</p>
 
@@ -1582,24 +1577,24 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-facts">
             <div className="dd-fact">
               <span className="dd-fact-k">Experience</span>
-              <span className="dd-fact-v">{hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} years` : '0 years'}</span>
+              <span className="dd-fact-v">{viewModel.experienceYearsLabel}</span>
             </div>
             <div className="dd-fact">
               <span className="dd-fact-k">Seniority</span>
-              <span className="dd-fact-v">{safeText(candidate.seniority_level, 'Unavailable')}</span>
+              <span className="dd-fact-v">{viewModel.seniorityLabel}</span>
             </div>
             <div className="dd-fact">
               <span className="dd-fact-k">Education</span>
-              <span className="dd-fact-v">{formatEducation(candidate.education)}</span>
+              <span className="dd-fact-v">{viewModel.educationLabel}</span>
             </div>
             <div className="dd-fact">
               <span className="dd-fact-k">Location</span>
-              <span className="dd-fact-v">{safeText(candidate.location, 'Unavailable')}</span>
+              <span className="dd-fact-v">{viewModel.locationLabel}</span>
             </div>
-            {candidate.email && (
+            {viewModel.emailLabel && (
               <div className="dd-fact">
                 <span className="dd-fact-k">Email</span>
-                <a href={`mailto:${candidate.email}`} className="dd-fact-link">{candidate.email}</a>
+                <a href={`mailto:${viewModel.emailLabel}`} className="dd-fact-link">{viewModel.emailLabel}</a>
               </div>
             )}
           </div>
@@ -1716,7 +1711,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-resume-file">
             <FileText size={18} strokeWidth={1.5} />
             <div>
-              <div className="dd-resume-filename">{toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable')}</div>
+              <div className="dd-resume-filename">{viewModel.resumeFilenameLabel}</div>
               <div className="dd-resume-meta">
                 <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openCandidateResumeInNewTab(candidate)}>View full profile</button>
               </div>
