@@ -77,9 +77,6 @@ class CandidateDetailErrorBoundary extends React.Component {
       return (
         <div id="detail-drawer" className="detail-drawer" role="status" aria-live="polite">
           <div className="dd-body">
-        {!viewModel.isAvailable && (
-          <p className="dd-summary">{viewModel.fallbackMessage}</p>
-        )}
             <div className="dd-col">
               <p className="dd-summary">This candidate details payload is incompatible. Try another candidate.</p>
               <div className="candidate-results-page__state-actions">
