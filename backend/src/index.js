@@ -12,6 +12,7 @@ import { ensureWebhookTables } from './services/webhookService.js'
 import { ensureNotificationTables } from './services/notificationService.js'
 import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
 import { alignAdminAiUserReferenceColumns, verifyAdminAiUserReferenceCompatibility } from './services/adminAiSchemaCompatibility.js'
+import { verifyYearsExperienceDecimalSchema } from './db/schemaPrerequisites.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -70,6 +71,14 @@ async function start() {
       throw new Error('[Startup] Missing migration prerequisite: resumes.profile_score column is required for dashboard KPIs')
     }
     console.log('[Startup] Migration prerequisite confirmed: resumes.profile_score')
+
+    const yearsExperienceSchema = await verifyYearsExperienceDecimalSchema()
+    if (!yearsExperienceSchema.ok) {
+      throw new Error(
+        `[Startup] Missing migration prerequisite: resumes.years_experience must be NUMERIC(5,2). Actual=${JSON.stringify(yearsExperienceSchema.actual || {})}`,
+      )
+    }
+    console.log('[Startup] Migration prerequisite confirmed: resumes.years_experience NUMERIC(5,2)')
     await initializeJobQueue()
 
     logEmailConfigStatus()

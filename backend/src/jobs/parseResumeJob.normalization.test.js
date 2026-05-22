@@ -5,6 +5,17 @@ import { __testables } from './parseResumeJob.js'
 
 const { buildNormalizedCandidates } = __testables
 
+
+test('buildNormalizedCandidates preserves fractional/integer/null years_experience values', () => {
+  const [fractional] = buildNormalizedCandidates({ candidates: [{ years_experience: 3.5 }] }, { resumeId: 'r1', filename: 'a.pdf' })
+  const [integer] = buildNormalizedCandidates({ candidates: [{ years_experience: 3 }] }, { resumeId: 'r2', filename: 'b.pdf' })
+  const [missing] = buildNormalizedCandidates({ candidates: [{ years_experience: null }] }, { resumeId: 'r3', filename: 'c.pdf' })
+
+  assert.equal(fractional.years_experience, 3.5)
+  assert.equal(integer.years_experience, 3)
+  assert.equal(missing.years_experience, null)
+})
+
 test('buildNormalizedCandidates preserves structured candidate contract fields', () => {
   const fixtureCandidate = {
     name: 'Rahul B. Yadav',
