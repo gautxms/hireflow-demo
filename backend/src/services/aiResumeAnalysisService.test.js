@@ -562,6 +562,47 @@ test('analyzeResumeWithConfiguredFallback skips anthropic for docx mime types an
   assert.equal(response.attempts[0].provider, 'openai-primary')
 })
 
+test('analyzeResumeWithConfiguredFallback sends DOCX-derived text/plain payload to OpenAI', async () => {
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+      openai: {
+        primary: { apiKey: 'oa-key', model: 'gpt-4.1-mini', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+
+  let capturedMime = null
+  const response = await analyzeResumeWithConfiguredFallback(
+    Buffer.from('Experienced backend engineer', 'utf8').toString('base64'),
+    'text/plain',
+    'resume.docx',
+    {
+      credentials,
+      analyzeWithAnthropic: async () => {
+        throw new Error('Anthropic should be skipped for text/plain resume parsing')
+      },
+      analyzeWithOpenAI: async (_fileB64, mimeType) => {
+        capturedMime = mimeType
+        return {
+          result: { candidates: [{ id: 'cand-openai-text' }] },
+          provider: 'openai-primary',
+          model: 'gpt-4.1-mini',
+          tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+        }
+      },
+    },
+  )
+
+  assert.equal(capturedMime, 'text/plain')
+  assert.equal(response.result.candidates[0].id, 'cand-openai-text')
+  assert.equal(response.attempts[0].provider, 'openai-primary')
+})
+
 
 test('analyzeWithOpenAI preserves considerations when compact-normalizing', async () => {
   const fetchImpl = async () => ({
