@@ -47,19 +47,37 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     throw new Error(`legacy_word_format::Legacy .doc files are not supported for ${normalizedFilename || 'uploaded file'}. Please upload .docx or PDF.`)
   }
 
+  const buildBase = () => ({
+    originalFilename: normalizedFilename || null,
+    originalMimeType: normalizedMimeType || null,
+    extractionWarnings: [],
+  })
+
   if (normalizedMimeType === 'text/plain') {
     return {
+      ...buildBase(),
       fileBufferBase64,
       mimeType: 'text/plain',
-      inputMode: 'text/plain',
+      preparedMimeType: 'text/plain',
+      sourceFormat: lowerFilename.endsWith('.txt') ? 'txt' : 'unknown',
+      inputKind: 'extracted_text',
+      inputMode: 'extracted_text',
+      extractedText: Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8').trim(),
+      base64File: null,
     }
   }
 
   if (normalizedMimeType === 'application/pdf') {
     return {
+      ...buildBase(),
       fileBufferBase64,
       mimeType,
+      preparedMimeType: normalizedMimeType,
+      sourceFormat: 'pdf',
+      inputKind: 'pdf_binary',
       inputMode: 'binary',
+      extractedText: null,
+      base64File: fileBufferBase64,
     }
   }
 
@@ -67,15 +85,27 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     const fileBuffer = decodeBase64ToBuffer(fileBufferBase64)
     const extractedText = await extractTextFromDocxBuffer(fileBuffer, normalizedFilename || 'resume.docx')
     return {
+      ...buildBase(),
       fileBufferBase64: Buffer.from(extractedText, 'utf8').toString('base64'),
       mimeType: 'text/plain',
+      preparedMimeType: 'text/plain',
+      sourceFormat: lowerFilename.endsWith('.docx') ? 'docx' : 'unknown',
+      inputKind: 'extracted_text',
       inputMode: 'extracted_text',
+      extractedText,
+      base64File: null,
     }
   }
 
   return {
+    ...buildBase(),
     fileBufferBase64,
     mimeType,
+    preparedMimeType: normalizedMimeType || mimeType,
+    sourceFormat: 'unknown',
+    inputKind: 'binary_unknown',
     inputMode: 'binary',
+    extractedText: null,
+    base64File: fileBufferBase64,
   }
 }

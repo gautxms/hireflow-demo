@@ -138,3 +138,30 @@ test('secondary provider is attempted before final primary retry', async () => {
     'primary:anthropic',
   ])
 })
+
+test('extracted_text can fall back to anthropic (text path) after openai primary failure', async () => {
+  const credentials = {
+    activeProvider: 'openai',
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+    providers: {
+      openai: { primary: { apiKey: 'k2', model: 'm2', source: 'test' } },
+      anthropic: { primary: { apiKey: 'k1', model: 'm1', source: 'test' } },
+    },
+  }
+  let anthropicCalls = 0
+  const result = await analyzeResumeWithConfiguredFallback(FIXTURE_B64, 'text/plain', 'resume.docx', {
+    credentials,
+    systemPromptConfig: { promptVersion: 1, isDefaultFallback: false },
+    analyzeWithOpenAI: async () => {
+      throw new Error('response_truncated_error::openai output truncated')
+    },
+    analyzeWithAnthropic: async () => {
+      anthropicCalls += 1
+      return ok('anthropic-primary', 'm1')
+    },
+  })
+
+  assert.equal(anthropicCalls, 1)
+  assert.equal(result.attempts[0].success, false)
+  assert.equal(result.attempts[1].success, true)
+})
