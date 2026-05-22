@@ -14,6 +14,7 @@ import {
   resolveCandidateKey,
   resolveCandidateResumeUuid,
   sanitizeExpandedCandidate,
+  buildExpandedCandidateViewModel,
   toDisplayText,
   buildExpandedCandidateDrawerViewModel,
 } from './candidateResultsState'

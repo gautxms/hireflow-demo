@@ -13,6 +13,7 @@ import {
   resolveCandidateKey,
   resolveActiveCandidateScore,
   sanitizeExpandedCandidate,
+  buildExpandedCandidateViewModel,
   toDisplayText,
   toSafeScore,
 } from './candidateResultsState.js'
