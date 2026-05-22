@@ -137,3 +137,20 @@ export function logResultsPayloadCompatibilityIssues({ analysisId = '', issues =
   console.warn('[HireFlow] AnalysisDetail payload compatibility issues', event)
   return event
 }
+
+export function logResultsFallbackToLastKnownGood({ analysisId = '', fallbackReason = 'unknown', previousOutputCount = 0, currentIssueCount = 0, timestamp = new Date().toISOString() } = {}) {
+  const event = {
+    eventType: 'analysis_detail_results_payload_fallback_last_known_good',
+    route: 'AnalysisDetail',
+    diagnosticCode: 'RRB_PAYLOAD_FALLBACK_LKG',
+    analysisId: String(analysisId || ''),
+    fallbackReason: String(fallbackReason || 'unknown'),
+    previousOutputCount: Number(previousOutputCount || 0),
+    currentIssueCount: Number(currentIssueCount || 0),
+    timestamp,
+  }
+
+  window.dispatchEvent(new CustomEvent('hireflow:telemetry', { detail: event }))
+  console.warn('[HireFlow] AnalysisDetail payload fallback to last known good', event)
+  return event
+}

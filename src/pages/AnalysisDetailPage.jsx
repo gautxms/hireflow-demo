@@ -4,7 +4,10 @@ import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
 import { validateAnalysisResultsPayload } from '../schemas/analysisResultsSchema.js'
-import { logResultsPayloadCompatibilityIssues } from './resultsErrorBoundaryTelemetry.js'
+import {
+  logResultsFallbackToLastKnownGood,
+  logResultsPayloadCompatibilityIssues,
+} from './resultsErrorBoundaryTelemetry.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const POLL_MS = 2500
@@ -84,6 +87,8 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [analysis, setAnalysis] = useState(null)
+  const lastKnownGoodCandidatesPayloadRef = useRef(null)
+  const fallbackTelemetryFingerprintRef = useRef('')
 
   useEffect(() => {
     console.info(
@@ -114,7 +119,51 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
           throw new Error(payload.error || 'Unable to load analysis details')
         }
 
-        setAnalysis(payload)
+        const normalizedCandidatePayload = toCandidateResultsPayload(payload)
+        const { payload: validatedCandidatePayload, issues } = validateAnalysisResultsPayload(normalizedCandidatePayload)
+        const hasValidationIssues = issues.length > 0
+        const hasPreviousKnownGood = Boolean(lastKnownGoodCandidatesPayloadRef.current)
+        const shouldFallbackToLastKnownGood = hasValidationIssues && hasPreviousKnownGood
+        const safeCandidatesPayload = shouldFallbackToLastKnownGood
+          ? lastKnownGoodCandidatesPayloadRef.current
+          : validatedCandidatePayload
+
+        if (!hasValidationIssues) {
+          lastKnownGoodCandidatesPayloadRef.current = validatedCandidatePayload
+        }
+
+        if (shouldFallbackToLastKnownGood) {
+          const fallbackFingerprint = JSON.stringify({
+            analysisId: payload?.id || analysisId,
+            issueCount: issues.length,
+            previousOutputCount: lastKnownGoodCandidatesPayloadRef.current?.outputCount || 0,
+          })
+          if (fallbackTelemetryFingerprintRef.current !== fallbackFingerprint) {
+            fallbackTelemetryFingerprintRef.current = fallbackFingerprint
+            logResultsFallbackToLastKnownGood({
+              analysisId: payload?.id || analysisId,
+              fallbackReason: 'candidate_payload_validation_issues',
+              previousOutputCount: lastKnownGoodCandidatesPayloadRef.current?.outputCount || 0,
+              currentIssueCount: issues.length,
+            })
+          }
+        } else {
+          fallbackTelemetryFingerprintRef.current = ''
+        }
+
+        const analysisViewModel = {
+          id: payload?.id,
+          name: payload?.name,
+          batchName: payload?.batchName,
+          batch: payload?.batch,
+          status: payload?.status,
+          liveStatus: payload?.liveStatus,
+          summary: payload?.summary && typeof payload.summary === 'object' ? payload.summary : {},
+          candidatesPayload: safeCandidatesPayload,
+          candidatesPayloadIssues: issues,
+        }
+
+        setAnalysis(analysisViewModel)
         setError('')
       } catch (loadError) {
         if (loadError.name === 'AbortError') {
@@ -141,23 +190,25 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
 
   const summary = analysis?.summary || {}
   const displayStatus = deriveDisplayStatus(analysis)
-  const candidateResultsValidation = useMemo(() => {
-    const rawPayload = toCandidateResultsPayload(analysis)
-    const { payload, issues } = validateAnalysisResultsPayload(rawPayload)
-    if (issues.length > 0 && isNonProductionBuild) {
-      console.error('[AnalysisDetailPage] Candidate payload validation issues.', {
-        analysisId: analysis?.id || '',
-        issueCount: issues.length,
-        issues,
-      })
-    }
-    return { payload, issues }
-  }, [analysis])
-  const candidateResultsPayload = candidateResultsValidation.payload
+  const candidateResultsPayload = analysis?.candidatesPayload || toCandidateResultsPayload(null)
+  const candidateResultsIssues = useMemo(
+    () => (Array.isArray(analysis?.candidatesPayloadIssues) ? analysis.candidatesPayloadIssues : []),
+    [analysis?.candidatesPayloadIssues],
+  )
   const lastPayloadIssueFingerprintRef = useRef('')
 
   useEffect(() => {
-    const issues = candidateResultsValidation?.issues || []
+    if (candidateResultsIssues.length > 0 && isNonProductionBuild) {
+      console.error('[AnalysisDetailPage] Candidate payload validation issues.', {
+        analysisId: analysis?.id || '',
+        issueCount: candidateResultsIssues.length,
+        issues: candidateResultsIssues,
+      })
+    }
+  }, [analysis?.id, candidateResultsIssues])
+
+  useEffect(() => {
+    const issues = candidateResultsIssues
     if (issues.length === 0) {
       lastPayloadIssueFingerprintRef.current = ''
       return
@@ -183,7 +234,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
       inputCount: candidateResultsPayload?.inputCount,
       outputCount: candidateResultsPayload?.outputCount,
     })
-  }, [analysis?.id, analysisId, candidateResultsPayload?.droppedCount, candidateResultsPayload?.inputCount, candidateResultsPayload?.outputCount, candidateResultsValidation?.issues])
+  }, [analysis?.id, analysisId, candidateResultsIssues, candidateResultsPayload?.droppedCount, candidateResultsPayload?.inputCount, candidateResultsPayload?.outputCount])
   const itemCount = Array.isArray(analysis?.items) ? analysis.items.length : 0
   const candidateCount = candidateResultsPayload.candidates.length
   const hasCandidateResults = candidateResultsPayload.candidates.length > 0
