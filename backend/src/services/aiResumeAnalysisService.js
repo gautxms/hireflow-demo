@@ -24,7 +24,7 @@ const TOKEN_BUDGET_CONFIG = {
     providerMaxOutputTokens: 6400,
   },
   openai: {
-    fallback: { standard: OPENAI_OUTPUT_TOKEN_LADDER, compact: [1200, 2000, 3000] },
+    fallback: { standard: OPENAI_OUTPUT_TOKEN_LADDER, compact: OPENAI_OUTPUT_TOKEN_LADDER },
     providerMaxOutputTokens: 8000,
   },
 }
@@ -744,10 +744,17 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function providerSupportsMimeType(provider, mimeType) {
+function providerSupportsMimeType(provider, mimeType, inputKind = null, extractedText = null) {
   const normalizedProvider = String(provider || '').trim().toLowerCase()
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
+  const normalizedInputKind = String(inputKind || '').trim().toLowerCase()
   if (normalizedProvider === 'anthropic') {
+    if (normalizedInputKind === 'extracted_text') {
+      return String(extractedText || '').trim().length > 0
+    }
+    if (normalizedInputKind === 'pdf_binary') {
+      return normalizedMimeType === 'application/pdf'
+    }
     return ['application/pdf'].includes(normalizedMimeType)
   }
   return true
@@ -1313,9 +1320,11 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     return configuredModels.includes(String(entry?.model || '').trim())
   }
   const preparedPayload = await prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename })
-  const preparedMimeType = preparedPayload.mimeType
+  const preparedMimeType = preparedPayload.preparedMimeType || preparedPayload.mimeType
+  const inputKind = preparedPayload.inputKind || (String(preparedMimeType).toLowerCase() === 'text/plain' ? 'extracted_text' : 'pdf_binary')
   const isTextPayload = String(preparedMimeType || '').toLowerCase() === 'text/plain'
-  const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(Buffer.from(String(preparedPayload.fileBufferBase64 || ''), 'base64').toString('utf8'), { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
+  const rawExtractedText = preparedPayload.extractedText || (isTextPayload ? Buffer.from(String(preparedPayload.fileBufferBase64 || ''), 'base64').toString('utf8') : '')
+  const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(rawExtractedText, { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : preparedPayload.fileBufferBase64
   const jdCharCount = String(options?.jobDescriptionContext?.description || '').length + String(options?.jobDescriptionContext?.requirements || '').length
   const complexityEstimator = estimateAnalysisComplexity({
@@ -1325,11 +1334,23 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     inputMode: cleanedPayload ? 'text' : 'binary',
   })
   console.log('[AI Parse] Complexity estimator output:', complexityEstimator)
+  console.log('[AI Parse] Prepared resume input:', {
+    originalMimeType: preparedPayload.originalMimeType || mimeType,
+    preparedMimeType,
+    sourceFormat: preparedPayload.sourceFormat || 'unknown',
+    inputKind,
+  })
 
   const selectableAttempts = []
   for (const entry of attemptPlan) {
-    if (!providerSupportsMimeType(entry.provider, preparedMimeType)) {
-      console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel} for mime type ${preparedMimeType}.`)
+    if (!providerSupportsMimeType(entry.provider, preparedMimeType, inputKind, cleanedPayload?.cleanedText || rawExtractedText)) {
+      console.log(`[AI Parse] Skipping ${entry.provider}:${entry.keyLabel}.`, {
+        reason: 'provider_input_incompatible',
+        provider: entry.provider,
+        keyLabel: entry.keyLabel,
+        preparedMimeType,
+        inputKind,
+      })
       continue
     }
     selectableAttempts.push(entry)

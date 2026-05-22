@@ -13,6 +13,8 @@ test('prepareResumePayloadForAnalysis keeps PDF payload unchanged', async () => 
 
   assert.equal(result.fileBufferBase64, payload)
   assert.equal(result.mimeType, 'application/pdf')
+  assert.equal(result.preparedMimeType, 'application/pdf')
+  assert.equal(result.inputKind, 'pdf_binary')
   assert.equal(result.inputMode, 'binary')
 })
 
@@ -49,4 +51,18 @@ test('prepareResumePayloadForAnalysis fails legacy .doc as unsupported before pr
     }),
     /legacy_word_format::/,
   )
+})
+
+test('prepareResumePayloadForAnalysis normalizes text/plain into extracted_text with original mime preserved', async () => {
+  const text = 'Jane Doe\nSenior Engineer'
+  const result = await prepareResumePayloadForAnalysis({
+    fileBufferBase64: Buffer.from(text, 'utf8').toString('base64'),
+    mimeType: 'text/plain',
+    filename: 'resume.docx',
+  })
+
+  assert.equal(result.originalMimeType, 'text/plain')
+  assert.equal(result.preparedMimeType, 'text/plain')
+  assert.equal(result.inputKind, 'extracted_text')
+  assert.equal(result.extractedText, text)
 })
