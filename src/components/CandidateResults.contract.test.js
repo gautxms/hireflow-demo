@@ -94,4 +94,9 @@ test('candidate drawer includes labelled View resume section that uses existing 
   assert.match(candidateResultsSource, /\{detailVm\.resumeFileLabel\}/)
   assert.match(candidateResultsSource, /onClick=\{\(\) => openCandidateResumeInNewTab\(candidate\)\}/)
   assert.match(candidateResultsSource, /disabled=\{!hasResumeForOpen\}/)
+test('expanded drawer renders restored legacy sections for facts, recommendation, skill gaps, and all skills', () => {
+  assert.match(candidateResultsSource, />Key facts</)
+  assert.match(candidateResultsSource, />Recommended action</)
+  assert.match(candidateResultsSource, />Skill gaps</)
+  assert.match(candidateResultsSource, />All skills</)
 })

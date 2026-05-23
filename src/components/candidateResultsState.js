@@ -535,7 +535,12 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
 
     const matchedSkills = (Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
     const missingSkills = [...new Set([...(Array.isArray(candidate?.mustHaveSkills)?candidate.mustHaveSkills:[]), ...(Array.isArray(candidate?.missingSkills)?candidate.missingSkills:[]), ...(Array.isArray(candidate?.fit_assessment?.missing)?candidate.fit_assessment.missing:[])].map((e)=>toDisplayText(e,'')).filter(Boolean))]
-    const allSkills = (Array.isArray(candidate.top_skills) ? candidate.top_skills : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
+    const allSkills = [...new Set([
+      ...(Array.isArray(candidate?.top_skills) ? candidate.top_skills : []),
+      ...(Array.isArray(candidate?.skills) ? candidate.skills : []),
+      ...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []),
+      ...(Array.isArray(candidate?.mustHaveSkills) ? candidate.mustHaveSkills : []),
+    ].map((e)=>toDisplayText(e,'')).filter(Boolean))]
 
     const initials = toDisplayText(candidate.name, 'NA').split(' ').map((p)=>p[0]||'').join('').slice(0,2).toUpperCase() || 'NA'
     return {
