@@ -365,6 +365,40 @@ export function toSafeScore(value, fallback = 0) {
   return Math.max(0, Math.min(100, parsed))
 }
 
+export function parseScorePercentage(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (value >= 0 && value <= 1) return Math.round(value * 100)
+    if (value >= 0 && value <= 100) return Math.round(value)
+    return null
+  }
+
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const percentMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*%/)
+  if (percentMatch) {
+    const numeric = Number(percentMatch[1])
+    return Number.isFinite(numeric) && numeric >= 0 && numeric <= 100 ? Math.round(numeric) : null
+  }
+
+  const numeric = Number(trimmed)
+  if (!Number.isFinite(numeric)) return null
+  if (numeric >= 0 && numeric <= 1) return Math.round(numeric * 100)
+  if (numeric >= 0 && numeric <= 100) return Math.round(numeric)
+  return null
+}
+
+export function resolveScoreBreakdownMetric(matchBreakdown, keys = [], fallback = null) {
+  if (!matchBreakdown || typeof matchBreakdown !== 'object') return fallback
+  for (const key of keys) {
+    if (!key || !(key in matchBreakdown)) continue
+    const parsed = parseScorePercentage(matchBreakdown[key])
+    if (parsed != null) return parsed
+  }
+  return fallback
+}
+
 function toStringArray(value) {
   if (!Array.isArray(value)) return []
   return value.map((entry) => toDisplayText(entry, '')).filter(Boolean)

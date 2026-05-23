@@ -17,6 +17,7 @@ import {
   buildExpandedCandidateViewModel,
   toDisplayText,
   buildExpandedCandidateDrawerViewModel,
+  resolveScoreBreakdownMetric,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -379,23 +380,6 @@ function formatEducation(education) {
       || safeText(latest?.label || latest?.name, 'Unavailable')
   }
   return 'Unavailable'
-}
-
-function parseBreakdownPercent(value) {
-  const match = String(value || '').match(/\((\d+)%/)
-  return match ? Number.parseInt(match[1], 10) : null
-}
-
-function resolveBreakdownMetric(matchBreakdown, keys = [], fallback = null) {
-  if (!matchBreakdown || typeof matchBreakdown !== 'object') return fallback
-
-  for (const key of keys) {
-    if (!key || !(key in matchBreakdown)) continue
-    const parsed = parseBreakdownPercent(matchBreakdown[key])
-    if (parsed != null) return parsed
-  }
-
-  return fallback
 }
 
 function toHumanIssueLabel(value) {
@@ -1446,12 +1430,32 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const candidate = detailVm.candidate
   const expandedCandidateKey = detailVm.candidateKey
   const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
-  const scoreBreakdownRows = matchBreakdown ? [
-    { label: 'Skills match', value: resolveBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills']) },
-    { label: 'Experience', value: resolveBreakdownMetric(matchBreakdown, ['experience_years', 'experience', 'years_experience', 'experienceYears']) },
-    { label: 'Role alignment', value: resolveBreakdownMetric(matchBreakdown, ['methodologies', 'role_alignment', 'role_fit', 'roleAlignment']) },
-    { label: 'Education', value: resolveBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch']) },
-  ] : []
+  const scoreBreakdownRows = [
+    {
+      label: 'Overall fit',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['overall_fit_score', 'overall', 'total', 'overall_score', 'overallScore'], candidate?.fit_assessment?.overall_fit_score ?? null),
+    },
+    {
+      label: 'Skills match',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills', 'skill_match_score'], candidate?.fit_assessment?.skill_match_score ?? null),
+    },
+    {
+      label: 'Experience',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['experience_years', 'experience', 'years_experience', 'experienceYears', 'experience_match_score'], candidate?.fit_assessment?.experience_match_score ?? null),
+    },
+    {
+      label: 'Education',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch', 'education_match_score'], candidate?.fit_assessment?.education_match_score ?? null),
+    },
+    {
+      label: 'Location',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['location', 'location_match', 'locationMatch', 'location_match_score'], candidate?.fit_assessment?.location_match_score ?? null),
+    },
+    {
+      label: 'Role alignment',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['methodologies', 'role_alignment', 'role_fit', 'roleAlignment']),
+    },
+  ]
   const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
   const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
   const integrityChecks = deriveResumeIntegrityChecks(candidate, detailVm.hasDisplayScore)
@@ -1509,7 +1513,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           </div>
           <div className="dd-col">
             <div className="dd-col-label section-heading">Score breakdown</div>
-            {matchBreakdown && hasResolvableBreakdownMetrics ? (
+            {hasResolvableBreakdownMetrics ? (
               <div className="dd-analysis-box dd-breakdown">
                 {resolvableScoreBreakdownRows.map((row) => (
                   <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>

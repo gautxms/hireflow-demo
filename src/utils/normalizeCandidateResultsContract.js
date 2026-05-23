@@ -56,13 +56,20 @@ export function normalizeCandidateResultsContract(rawCandidate = {}, options = {
     id: toString(rawCandidate?.id || rawCandidate?.resumeId || rawCandidate?.resume_id || `candidate-${index}`, `candidate-${index}`),
     name: toString(rawCandidate?.name || rawCandidate?.full_name || rawCandidate?.candidate_name || 'Candidate', 'Candidate'),
     score,
-    matchScore: { score, reason },
+    matchScore: {
+      ...((rawCandidate?.matchScore && typeof rawCandidate.matchScore === 'object' && !Array.isArray(rawCandidate.matchScore))
+        ? rawCandidate.matchScore
+        : {}),
+      score,
+      reason,
+    },
     summary,
     strengths: strengths.length > 0 ? strengths : [reason],
     considerations: considerations.length > 0 ? considerations : [toString(rawCandidate?.fit_assessment?.risk || 'Review role-specific fit in interview.').trim()],
     top_skills: toStringArray(rawCandidate?.top_skills),
     skills: Array.isArray(rawCandidate?.skills) || typeof rawCandidate?.skills === 'string' ? rawCandidate.skills : [],
     fit_assessment: {
+      ...fitAssessmentInput,
       matched: toStringArray(fitAssessmentInput.matched || fitAssessmentInput.matched_requirements),
       missing: toStringArray(fitAssessmentInput.missing || fitAssessmentInput.missing_requirements),
       risk: toString(fitAssessmentInput.risk, '').trim(),

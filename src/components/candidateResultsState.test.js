@@ -16,6 +16,8 @@ import {
   buildExpandedCandidateViewModel,
   toDisplayText,
   toSafeScore,
+  parseScorePercentage,
+  resolveScoreBreakdownMetric,
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
@@ -92,6 +94,26 @@ test('toSafeScore constrains malformed or out-of-range values for chart renderin
   assert.equal(toSafeScore('95'), 95)
   assert.equal(toSafeScore(999), 100)
   assert.equal(toSafeScore(-12), 0)
+})
+
+test('parseScorePercentage supports numeric, decimal, percent string, and legacy wrapped formats', () => {
+  assert.equal(parseScorePercentage(86), 86)
+  assert.equal(parseScorePercentage(0.86), 86)
+  assert.equal(parseScorePercentage('86%'), 86)
+  assert.equal(parseScorePercentage('(86%)'), 86)
+})
+
+test('resolveScoreBreakdownMetric reads modern and legacy score fields safely', () => {
+  const breakdown = {
+    skill_match_score: 0.9,
+    experience_match_score: '84%',
+    education_match_score: '(80%)',
+  }
+
+  assert.equal(resolveScoreBreakdownMetric(breakdown, ['skill_match_score']), 90)
+  assert.equal(resolveScoreBreakdownMetric(breakdown, ['experience_match_score']), 84)
+  assert.equal(resolveScoreBreakdownMetric(breakdown, ['education_match_score']), 80)
+  assert.equal(resolveScoreBreakdownMetric(breakdown, ['location_match_score']), null)
 })
 
 test('hasRenderableCandidates allows mixed-validity arrays when at least one candidate is valid', () => {
