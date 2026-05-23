@@ -270,6 +270,22 @@ test('buildExpandedCandidateDrawerViewModel preserves historical explicit textua
   assert.equal(vm.confidenceLabel, 'Moderate confidence')
 })
 
+
+test('buildExpandedCandidateDrawerViewModel ignores null/blank numeric confidence placeholders', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+
+  const withNull = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    confidenceScores: { fit_assessment: null },
+  })
+  assert.equal(withNull.confidenceLabel, '')
+
+  const withBlankString = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    confidenceScores: { fit_assessment: '' },
+  })
+  assert.equal(withBlankString.confidenceLabel, '')
+})
 test('buildExpandedCandidateDrawerViewModel safely handles missing confidence payloads', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({

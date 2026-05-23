@@ -440,6 +440,9 @@ function resolveNumericConfidence(candidate) {
   ]
 
   for (const value of possibleValues) {
+    if (value == null) continue
+    if (typeof value === 'string' && value.trim() === '') continue
+
     const numeric = Number(value)
     if (Number.isFinite(numeric)) {
       return Math.max(0, Math.min(1, numeric))
