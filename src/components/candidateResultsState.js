@@ -391,6 +391,11 @@ function educationRank(record) {
   return 0
 }
 
+function resolveGraduationYearWeight(record) {
+  const yearMatch = String(record?.graduationYear || '').match(/\b(19|20)\d{2}\b/)
+  return yearMatch ? Number(yearMatch[0]) : -1
+}
+
 export function resolveEducationLabel(education, fallback = 'Education details unavailable') {
   const records = (Array.isArray(education) ? education : [education])
     .map((entry) => normalizeEducationRecord(entry))
@@ -399,17 +404,21 @@ export function resolveEducationLabel(education, fallback = 'Education details u
   if (!records.length) return fallback
 
   const [best] = records
-    .map((record, index) => ({ record, index, rank: educationRank(record) }))
-    .sort((a, b) => b.rank - a.rank || a.index - b.index)
+    .map((record, index) => ({
+      record,
+      index,
+      rank: educationRank(record),
+      graduationYearWeight: resolveGraduationYearWeight(record),
+    }))
+    .sort((a, b) => b.rank - a.rank || b.graduationYearWeight - a.graduationYearWeight || a.index - b.index)
 
   const selected = best.record
   const degree = selected.degree
   const school = selected.school
-  const yearMatch = String(selected.graduationYear || '').match(/\b(19|20)\d{2}\b/)
-  const year = yearMatch ? yearMatch[0] : ''
+  const year = resolveGraduationYearWeight(selected) > 0 ? String(resolveGraduationYearWeight(selected)) : ''
 
   let label = ''
-  if (degree && school) label = `${degree}, ${school}`
+  if (degree && school) label = `${degree} — ${school}`
   else if (degree) label = degree
   else if (school) label = school
   else label = selected.text
@@ -452,13 +461,43 @@ export function parseScorePercentage(value) {
 }
 
 export function resolveScoreBreakdownMetric(matchBreakdown, keys = [], fallback = null) {
-  if (!matchBreakdown || typeof matchBreakdown !== 'object') return fallback
+  if (!matchBreakdown || typeof matchBreakdown !== 'object') return parseScorePercentage(fallback)
   for (const key of keys) {
     if (!key || !(key in matchBreakdown)) continue
     const parsed = parseScorePercentage(matchBreakdown[key])
     if (parsed != null) return parsed
   }
-  return fallback
+  return parseScorePercentage(fallback)
+}
+
+export function buildScoreBreakdownRows(candidate = {}) {
+  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
+  const roleAlignmentValue = resolveScoreBreakdownMetric(
+    matchBreakdown,
+    ['role_alignment', 'roleAlignment', 'role_fit', 'roleFit', 'job_alignment'],
+    candidate?.fit_assessment?.role_alignment
+      ?? candidate?.fit_assessment?.roleAlignment
+      ?? candidate?.fit_assessment?.role_fit
+      ?? candidate?.fit_assessment?.roleFit
+      ?? candidate?.fit_assessment?.job_alignment
+      ?? null,
+  )
+
+  return [
+    {
+      label: 'Skill Match',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills', 'skill_match_score'], candidate?.fit_assessment?.skill_match_score ?? null),
+    },
+    {
+      label: 'Experience',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['experience_years', 'experience', 'years_experience', 'experienceYears', 'experience_match_score'], candidate?.fit_assessment?.experience_match_score ?? null),
+    },
+    {
+      label: 'Education',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch', 'education_match_score'], candidate?.fit_assessment?.education_match_score ?? null),
+    },
+    ...(Number.isFinite(roleAlignmentValue) ? [{ label: 'Role Alignment', value: roleAlignmentValue }] : []),
+  ].filter((row) => Number.isFinite(row.value))
 }
 
 function toStringArray(value) {

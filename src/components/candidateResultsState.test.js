@@ -18,6 +18,7 @@ import {
   toSafeScore,
   parseScorePercentage,
   resolveScoreBreakdownMetric,
+  buildScoreBreakdownRows,
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
@@ -97,7 +98,7 @@ test('resolveEducationLabel supports legacy string and malformed payloads safely
 })
 
 test('resolveEducationLabel formats structured objects and falls back on partial values', () => {
-  assert.equal(resolveEducationLabel({ degree: 'MBA', school: 'IIM Bangalore', graduation_year: 2021 }), 'MBA, IIM Bangalore (2021)')
+  assert.equal(resolveEducationLabel({ degree: 'MBA', school: 'IIM Bangalore', graduation_year: 2021 }), 'MBA — IIM Bangalore (2021)')
   assert.equal(resolveEducationLabel({ degree: 'M.Tech' }), 'M.Tech')
   assert.equal(resolveEducationLabel({ school: 'Stanford University' }), 'Stanford University')
 })
@@ -109,7 +110,16 @@ test('resolveEducationLabel picks highest ranked degree from multiple records', 
     { degree: 'MBA', school: 'IIM Ahmedabad', graduation_year: '2022' },
   ]
 
-  assert.equal(resolveEducationLabel(education), 'MBA, IIM Ahmedabad (2022)')
+  assert.equal(resolveEducationLabel(education), 'MBA — IIM Ahmedabad (2022)')
+})
+
+test('resolveEducationLabel prefers more recent graduation year when degree rank ties', () => {
+  const education = [
+    { degree: 'MBA', school: 'School A', graduation_year: '2017' },
+    { degree: 'MBA', school: 'School B', graduation_year: '2021' },
+  ]
+
+  assert.equal(resolveEducationLabel(education), 'MBA — School B (2021)')
 })
 
 test('toSafeScore constrains malformed or out-of-range values for chart rendering', () => {
@@ -137,6 +147,35 @@ test('resolveScoreBreakdownMetric reads modern and legacy score fields safely', 
   assert.equal(resolveScoreBreakdownMetric(breakdown, ['experience_match_score']), 84)
   assert.equal(resolveScoreBreakdownMetric(breakdown, ['education_match_score']), 80)
   assert.equal(resolveScoreBreakdownMetric(breakdown, ['location_match_score']), null)
+})
+
+test('buildScoreBreakdownRows includes rows when any valid scores exist and parses legacy formats', () => {
+  const rows = buildScoreBreakdownRows({
+    scoreBreakdown: {
+      skills_match: '86%',
+      experience: 0.73,
+      education: '(65%)',
+    },
+  })
+
+  assert.deepEqual(rows, [
+    { label: 'Skill Match', value: 86 },
+    { label: 'Experience', value: 73 },
+    { label: 'Education', value: 65 },
+  ])
+})
+
+test('buildScoreBreakdownRows only includes Role Alignment when real numeric field exists', () => {
+  const withoutRoleAlignment = buildScoreBreakdownRows({
+    fit_assessment: { skill_match_score: 81 },
+    scoreBreakdown: { methodologies: 92 },
+  })
+  assert.deepEqual(withoutRoleAlignment, [{ label: 'Skill Match', value: 81 }])
+
+  const withRoleAlignment = buildScoreBreakdownRows({
+    fit_assessment: { role_alignment: '77%' },
+  })
+  assert.deepEqual(withRoleAlignment, [{ label: 'Role Alignment', value: 77 }])
 })
 
 test('hasRenderableCandidates allows mixed-validity arrays when at least one candidate is valid', () => {
