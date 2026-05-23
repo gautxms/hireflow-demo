@@ -115,6 +115,20 @@ test('expanded drawer applies warning skill class to skill gap pills', () => {
   assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--warn"/)
 })
 
+
+test('expanded drawer first-column section order keeps recommendation before key facts for recruiter scanning', () => {
+  const summaryIndex = candidateResultsSource.indexOf('>Summary<')
+  const recommendationIndex = candidateResultsSource.indexOf('>Recommended action<')
+  const keyFactsIndex = candidateResultsSource.indexOf('>Key facts<')
+  const reasoningIndex = candidateResultsSource.indexOf('>AI reasoning<')
+
+  assert.ok(summaryIndex !== -1)
+  assert.ok(recommendationIndex !== -1)
+  assert.ok(keyFactsIndex !== -1)
+  assert.ok(reasoningIndex !== -1)
+  assert.ok(summaryIndex < recommendationIndex)
+  assert.ok(recommendationIndex < keyFactsIndex)
+  assert.ok(keyFactsIndex < reasoningIndex)
 test('score breakdown rows include Skill Match, Experience, Education, and conditional Role Alignment', () => {
   assert.match(candidateResultsSource, /label: 'Skill Match'/)
   assert.match(candidateResultsSource, /label: 'Experience'/)
