@@ -117,10 +117,10 @@ test('expanded drawer applies warning skill class to skill gap pills', () => {
 
 
 test('expanded drawer first-column section order keeps recommendation before key facts for recruiter scanning', () => {
-  const summaryIndex = candidateResultsSource.indexOf('>Summary<')
-  const recommendationIndex = candidateResultsSource.indexOf('>Recommended action<')
-  const keyFactsIndex = candidateResultsSource.indexOf('>Key facts<')
-  const reasoningIndex = candidateResultsSource.indexOf('>AI reasoning<')
+  const summaryIndex = candidateResultsSource.indexOf('title="Summary"')
+  const recommendationIndex = candidateResultsSource.indexOf('title="Recommended action"')
+  const keyFactsIndex = candidateResultsSource.indexOf('title="Key facts"')
+  const reasoningIndex = candidateResultsSource.indexOf('title="AI reasoning"')
 
   assert.ok(summaryIndex !== -1)
   assert.ok(recommendationIndex !== -1)
@@ -129,6 +129,8 @@ test('expanded drawer first-column section order keeps recommendation before key
   assert.ok(summaryIndex < recommendationIndex)
   assert.ok(recommendationIndex < keyFactsIndex)
   assert.ok(keyFactsIndex < reasoningIndex)
+})
+
 test('score breakdown rows include Skill Match, Experience, Education, and conditional Role Alignment', () => {
   assert.match(candidateResultsSource, /label: 'Skill Match'/)
   assert.match(candidateResultsSource, /label: 'Experience'/)
@@ -139,8 +141,8 @@ test('score breakdown rows include Skill Match, Experience, Education, and condi
 
 test('drawer uses reusable expansion helpers with preview budgets and show more labels', () => {
   assert.match(candidateResultsSource, /function ExpandableList\(/)
-  assert.match(candidateResultsSource, /previewCount=\{8\}/)
   assert.match(candidateResultsSource, /previewCount=\{6\}/)
+  assert.match(candidateResultsSource, /previewCount=\{4\}/)
   assert.match(candidateResultsSource, /previewCount=\{3\}/)
   assert.match(candidateResultsSource, /buttonLabel="Show more"/)
   assert.match(candidateResultsSource, /collapseLabel="Show less"/)
