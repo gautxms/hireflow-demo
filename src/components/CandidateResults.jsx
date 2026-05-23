@@ -16,7 +16,7 @@ import {
   sanitizeExpandedCandidate,
   toDisplayText,
   buildExpandedCandidateDrawerViewModel,
-  resolveScoreBreakdownMetric,
+  buildScoreBreakdownRows,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import API_BASE from '../config/api'
@@ -1470,26 +1470,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const detailVm = buildExpandedCandidateDrawerViewModel(expandedCandidate)
   const candidate = detailVm.candidate
   const expandedCandidateKey = detailVm.candidateKey
-  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
-  const scoreBreakdownRows = [
-    {
-      label: 'Skill Match',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills', 'skill_match_score'], candidate?.fit_assessment?.skill_match_score ?? null),
-    },
-    {
-      label: 'Experience',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['experience_years', 'experience', 'years_experience', 'experienceYears', 'experience_match_score'], candidate?.fit_assessment?.experience_match_score ?? null),
-    },
-    {
-      label: 'Education',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch', 'education_match_score'], candidate?.fit_assessment?.education_match_score ?? null),
-    },
-    {
-      label: 'Role Alignment',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['role_alignment', 'roleAlignment', 'role_fit', 'roleFit', 'job_alignment', 'methodologies'], candidate?.fit_assessment?.role_alignment ?? candidate?.fit_assessment?.roleAlignment ?? candidate?.fit_assessment?.role_fit ?? candidate?.fit_assessment?.roleFit ?? candidate?.fit_assessment?.job_alignment ?? null),
-    },
-  ]
-  const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
+  const resolvableScoreBreakdownRows = buildScoreBreakdownRows(candidate)
   const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
   const integrityChecks = deriveResumeIntegrityChecks(candidate, detailVm.hasDisplayScore)
   const hasResumeForOpen = Boolean(resolveCandidateResumeUuid(candidate))
