@@ -1480,7 +1480,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     { label: 'Seniority', value: detailVm.seniorityLabel },
     { label: 'Education', value: detailVm.educationLabel },
   ].filter((fact) => hasRenderableContent(fact.value) && !String(fact.value).toLowerCase().includes('unavailable'))
-  const allSkillsVisible = showAllDrawerSkills ? detailVm.allSkills : detailVm.allSkills.slice(0, 16)
+  const allSkillsVisible = showAllDrawerSkills ? detailVm.allSkills : detailVm.allSkills.slice(0, 12)
   const hasCollapsedSkills = detailVm.allSkills.length > allSkillsVisible.length
 
   return (
@@ -1587,11 +1587,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             ) : <p className="dd-summary">Score breakdown unavailable</p>}
             </DrawerSection>
             <DrawerSection title="Matched skills" className="dd-section-card--compact" badge={<span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span>}>
-              <ExpandableList items={detailVm.matchedSkills} previewCount={6} resetKey={expandedCandidateKey} controlsId={`matched-skills-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>)} />
+              <ExpandableList items={detailVm.matchedSkills} previewCount={5} resetKey={expandedCandidateKey} controlsId={`matched-skills-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>)} />
             </DrawerSection>
             <DrawerSection title="Skill gaps" className="dd-section-card--compact" badge={detailVm.missingSkills.length > 0 ? <span className="dd-count-badge dd-count-badge--amber">{detailVm.missingSkills.length} gaps identified</span> : null}>
               {detailVm.missingSkills.length > 0 ? (
-                <ExpandableList items={detailVm.missingSkills} previewCount={4} resetKey={expandedCandidateKey} controlsId={`skill-gaps-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (
+                <ExpandableList items={detailVm.missingSkills} previewCount={3} resetKey={expandedCandidateKey} controlsId={`skill-gaps-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (
                   <span className="dd-top-skill dd-top-skill--warn" key={`${expandedCandidateKey}-gap-${skill}`}>{skill}</span>
                 )} />
               ) : <p className="dd-summary">No explicit skill gaps identified.</p>}
