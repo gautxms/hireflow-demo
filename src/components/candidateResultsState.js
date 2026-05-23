@@ -430,6 +430,48 @@ export function sanitizeExpandedCandidate(candidate = {}) {
 }
 
 
+
+function resolveNumericConfidence(candidate) {
+  const possibleValues = [
+    candidate?.confidenceScores?.fit_assessment,
+    candidate?.confidence?.fit_assessment,
+    candidate?.fit_assessment?.confidence_score,
+    candidate?.fit_assessment?.confidenceScore,
+  ]
+
+  for (const value of possibleValues) {
+    const numeric = Number(value)
+    if (Number.isFinite(numeric)) {
+      return Math.max(0, Math.min(1, numeric))
+    }
+  }
+
+  return null
+}
+
+function resolveDrawerConfidenceLabel(candidate, hasScore) {
+  const explicitConfidence = [
+    candidate?.fit_assessment?.confidence,
+    candidate?.confidence,
+    candidate?.match_confidence,
+  ]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .find(Boolean)
+
+  if (explicitConfidence) {
+    return explicitConfidence
+  }
+
+  const numericConfidence = resolveNumericConfidence(candidate)
+  if (numericConfidence != null) {
+    if (numericConfidence >= 0.85) return 'High confidence'
+    if (numericConfidence >= 0.65) return 'Moderate confidence'
+    return 'Low confidence'
+  }
+
+  return hasScore ? '' : 'Low confidence'
+}
+
 export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
   try {
     const candidate = sanitizeExpandedCandidate(rawCandidate)
@@ -476,7 +518,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       displayScore,
       hasDisplayScore,
       verdictLabel: hasDisplayScore ? (tier==='strong'?'Strong match':tier==='possible'?'Possible match':'Low match') : 'Unable to score',
-      confidenceLabel: hasDisplayScore ? toDisplayText(candidate?.fit_assessment?.confidence, 'AI confidence available') : '',
+      confidenceLabel: resolveDrawerConfidenceLabel(candidate, hasDisplayScore),
       summaryText,
       reasoningText,
       recommendationText,
