@@ -77,7 +77,7 @@ test('click-path regression: legacy matchScore numeric and object payload varian
 test('list/detail identity regression: candidate render keys derive from resolveCandidateKey instead of payload _bulkKey', () => {
   assert.match(candidateResultsSource, /const candidateKey = resolveCandidateKey\(candidate, index\)/)
   assert.match(candidateResultsSource, /<div\s+key=\{candidateKey\}/)
-  assert.match(candidateResultsSource, /const expandedCandidateKey = resolveCandidateKey\(candidate\)/)
+  assert.match(candidateResultsSource, /const expandedCandidateKey = detailVm\.candidateKey/)
   assert.match(candidateResultsSource, /selectedCandidateKey=\{expandedCandidateKey\}/)
   assert.doesNotMatch(candidateResultsSource, /key=\{candidate\._bulkKey\}/)
 })
@@ -85,4 +85,13 @@ test('list/detail identity regression: candidate render keys derive from resolve
 test('click-path regression: crash panel copy is never used for candidate click interactions', () => {
   assert.doesNotMatch(candidateResultsSource, /We could not render these results\./)
   assert.doesNotMatch(candidateResultsSource, /Please return to Analyses or retry\./)
+})
+
+
+test('candidate drawer includes labelled View resume section that uses existing open handler', () => {
+  assert.match(candidateResultsSource, /<div className="dd-col-label section-heading dd-col-label--mt-16">View resume<\/div>/)
+  assert.match(candidateResultsSource, /className="dd-resume-file"/)
+  assert.match(candidateResultsSource, /\{detailVm\.resumeFileLabel\}/)
+  assert.match(candidateResultsSource, /onClick=\{\(\) => openCandidateResumeInNewTab\(candidate\)\}/)
+  assert.match(candidateResultsSource, /disabled=\{!hasResumeForOpen\}/)
 })
