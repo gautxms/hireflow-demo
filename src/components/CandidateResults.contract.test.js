@@ -89,7 +89,7 @@ test('click-path regression: crash panel copy is never used for candidate click 
 
 
 test('candidate drawer includes labelled View resume section that uses existing open handler', () => {
-  assert.match(candidateResultsSource, /<div className="dd-col-label section-heading dd-col-label--mt-16">View resume<\/div>/)
+  assert.match(candidateResultsSource, /title="View resume"/)
   assert.match(candidateResultsSource, /className="dd-resume-file"/)
   assert.match(candidateResultsSource, /\{detailVm\.resumeFileLabel\}/)
   assert.match(candidateResultsSource, /onClick=\{\(\) => openCandidateResumeInNewTab\(candidate\)\}/)
@@ -97,17 +97,17 @@ test('candidate drawer includes labelled View resume section that uses existing 
 })
 
 test('expanded drawer renders restored legacy sections for facts, recommendation, skill gaps, and all skills', () => {
-  assert.match(candidateResultsSource, />Key facts</)
-  assert.match(candidateResultsSource, />Recommended action</)
-  assert.match(candidateResultsSource, />Skill gaps(?:\{|<)/)
-  assert.match(candidateResultsSource, />All skills</)
+  assert.match(candidateResultsSource, /title="Key facts"/)
+  assert.match(candidateResultsSource, /title="Recommended action"/)
+  assert.match(candidateResultsSource, /title="Skill gaps"/)
+  assert.match(candidateResultsSource, /title="All skills"/)
 })
 
 
 test('expanded drawer skill gaps heading includes amber count badge when gaps exist', () => {
   assert.match(
     candidateResultsSource,
-    /Skill gaps\{detailVm\.missingSkills\.length > 0 \? <span className="dd-count-badge dd-count-badge--amber">\{detailVm\.missingSkills\.length\} gaps identified<\/span> : null\}/,
+    /title="Skill gaps"[\s\S]*dd-count-badge dd-count-badge--amber">\{detailVm\.missingSkills\.length\} gaps identified/,
   )
 })
 
@@ -135,4 +135,13 @@ test('score breakdown rows include Skill Match, Experience, Education, and condi
   assert.match(candidateResultsSource, /label: 'Education'/)
   assert.match(candidateResultsSource, /label: 'Role Alignment'/)
   assert.doesNotMatch(candidateResultsSource, /label: 'Overall fit'/)
+})
+
+test('drawer uses reusable expansion helpers with preview budgets and show more labels', () => {
+  assert.match(candidateResultsSource, /function ExpandableList\(/)
+  assert.match(candidateResultsSource, /previewCount=\{8\}/)
+  assert.match(candidateResultsSource, /previewCount=\{6\}/)
+  assert.match(candidateResultsSource, /previewCount=\{3\}/)
+  assert.match(candidateResultsSource, /buttonLabel="Show more"/)
+  assert.match(candidateResultsSource, /collapseLabel="Show less"/)
 })
