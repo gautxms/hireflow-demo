@@ -22,6 +22,34 @@ test('matchScore normalizes to object shape for legacy numeric values', () => {
   assert.equal(typeof normalized.matchScore.reason, 'string')
 })
 
+test('normalization preserves score breakdown and modern fit assessment score fields', () => {
+  const normalized = normalizeCandidateResultsContract({
+    scoreBreakdown: { overall: 86, skills_match: 84 },
+    matchScore: {
+      score: 86,
+      reason: 'Good fit',
+      breakdown: {
+        technical_skills: 90,
+      },
+    },
+    fit_assessment: {
+      overall_fit_score: 86,
+      skill_match_score: 90,
+      experience_match_score: 84,
+      education_match_score: 80,
+      location_match_score: 70,
+    },
+  })
+
+  assert.equal(normalized.matchScore.breakdown.technical_skills, 90)
+  assert.equal(normalized.scoreBreakdown.overall, 86)
+  assert.equal(normalized.fit_assessment.overall_fit_score, 86)
+  assert.equal(normalized.fit_assessment.skill_match_score, 90)
+  assert.equal(normalized.fit_assessment.experience_match_score, 84)
+  assert.equal(normalized.fit_assessment.education_match_score, 80)
+  assert.equal(normalized.fit_assessment.location_match_score, 70)
+})
+
 test('reason fallback behavior prefers fit_assessment then summary then default', () => {
   const fromFit = normalizeCandidateResultsContract({
     score: 45,
