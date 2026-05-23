@@ -1,6 +1,7 @@
 export const RESULTS_SORT_OPTIONS = new Set(['match_score', 'name', 'experience', 'upload_date'])
 
 export function normalizeSortBy(sortBy) {
+  if (sortBy === 'score') return 'match_score'
   return RESULTS_SORT_OPTIONS.has(sortBy) ? sortBy : 'match_score'
 }
 
@@ -245,28 +246,103 @@ export function resolveTierState(tier, score) {
 
 
 
+
+function toSkillLabel(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+  if (typeof value === 'object') {
+    if (typeof value.name === 'string' && value.name.trim()) return value.name.trim()
+    if (typeof value.label === 'string' && value.label.trim()) return value.label.trim()
+  }
+  return ''
+}
+
+function collectSkillsFromValue(value, collector) {
+  if (!value) return
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectSkillsFromValue(entry, collector))
+    return
+  }
+
+  if (typeof value === 'string') {
+    value.split(',').forEach((entry) => {
+      const label = entry.trim()
+      if (label) collector(label)
+    })
+    return
+  }
+
+  if (typeof value === 'object') {
+    const label = toSkillLabel(value)
+    if (label) {
+      collector(label)
+      return
+    }
+
+    Object.values(value).forEach((entry) => collectSkillsFromValue(entry, collector))
+    return
+  }
+
+  const label = toSkillLabel(value)
+  if (label) collector(label)
+}
+
+export function resolveFilterableSkills(candidate = {}) {
+  const deduped = new Map()
+  const addSkill = (skill) => {
+    const label = String(skill || '').trim()
+    if (!label) return
+    const key = label.toLowerCase()
+    if (!deduped.has(key)) {
+      deduped.set(key, label)
+    }
+  }
+
+  collectSkillsFromValue(candidate?.top_skills, addSkill)
+  collectSkillsFromValue(candidate?.skills_flat, addSkill)
+  collectSkillsFromValue(candidate?.skills, addSkill)
+  collectSkillsFromValue(candidate?.skills_structured, addSkill)
+
+  return Array.from(deduped.values())
+}
+
+export function resolveCandidateYears(candidate = {}) {
+  const candidates = [
+    candidate?.years_experience,
+    candidate?.yearsExperience,
+    candidate?.experience_years,
+    candidate?.experience,
+  ]
+
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (!trimmed) continue
+
+      if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+        return Number(trimmed)
+      }
+
+      const match = trimmed.match(/(\d+(?:\.\d+)?)/)
+      if (match) {
+        const numeric = Number(match[1])
+        if (Number.isFinite(numeric)) {
+          return numeric
+        }
+      }
+    }
+  }
+
+  return 0
+}
+
 function parseSkillList(skills) {
-  if (skills && typeof skills === 'object' && !Array.isArray(skills)) {
-    return [
-      ...(Array.isArray(skills.tools_and_platforms) ? skills.tools_and_platforms : []),
-      ...(Array.isArray(skills.methodologies) ? skills.methodologies : []),
-      ...(Array.isArray(skills.domain_expertise) ? skills.domain_expertise : []),
-      ...(Array.isArray(skills.soft_skills) ? skills.soft_skills : []),
-    ]
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean)
-  }
-
-  if (Array.isArray(skills)) {
-    return skills
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean)
-  }
-
-  return String(skills || '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
+  return resolveFilterableSkills({ skills })
 }
 
 export function resolveActiveCandidateScore(candidate = {}) {

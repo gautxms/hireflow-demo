@@ -1,5 +1,6 @@
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { normalizeSortBy, resolveFilterableSkills } from './candidateResultsState'
 
 const FOCUSABLE_SELECTOR = [
   'a[href]',
@@ -9,22 +10,6 @@ const FOCUSABLE_SELECTOR = [
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ')
-
-function parseSkills(rawSkills) {
-  if (Array.isArray(rawSkills)) {
-    return rawSkills
-      .map((skill) => (typeof skill === 'object' && skill !== null
-        ? skill.name || skill.label || JSON.stringify(skill)
-        : skill))
-      .map((skill) => String(skill || '').trim())
-      .filter(Boolean)
-  }
-
-  return String(rawSkills || '')
-    .split(',')
-    .map((skill) => skill.trim())
-    .filter(Boolean)
-}
 
 function normalizeSkillKey(skill) {
   return String(skill || '')
@@ -38,7 +23,7 @@ export default function CandidateFilters({
   searchText = '',
   selectedSkills = [],
   expRange = { min: '0', max: '50' },
-  sortBy = 'score',
+  sortBy = 'match_score',
   onSearch,
   onSkillsFilter,
   onExperienceFilter,
@@ -58,7 +43,7 @@ export default function CandidateFilters({
     const skills = new Set()
 
     candidates.forEach((candidate) => {
-      parseSkills(candidate?.skills).forEach((skill) => skills.add(skill))
+      resolveFilterableSkills(candidate).forEach((skill) => skills.add(skill))
     })
 
     return [...skills]
@@ -169,9 +154,9 @@ export default function CandidateFilters({
           className="touch-target filter-sort-select"
           aria-label="Sort candidates"
           value={sortBy}
-          onChange={(event) => onSort?.(event.target.value)}
+          onChange={(event) => onSort?.(normalizeSortBy(event.target.value))}
         >
-          <option value="score">Best match</option>
+          <option value="match_score">Best match</option>
           <option value="name">Name A–Z</option>
           <option value="experience">Most experienced</option>
           <option value="upload_date">Recently added</option>

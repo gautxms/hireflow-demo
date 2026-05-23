@@ -13,6 +13,8 @@ import {
   resolveActiveCandidateScore,
   resolveCandidateKey,
   resolveCandidateResumeUuid,
+  resolveCandidateYears,
+  resolveFilterableSkills,
   sanitizeExpandedCandidate,
   toDisplayText,
   buildExpandedCandidateDrawerViewModel,
@@ -209,21 +211,7 @@ function getMatchLabel(score, explicitLabel = '') {
 }
 
 
-function parseSkills(skills) {
-  if (Array.isArray(skills)) {
-    return skills
-      .map((skill) => (typeof skill === 'object' && skill !== null
-        ? skill.name || skill.label || safeSerialize(skill)
-        : skill))
-      .map((skill) => String(skill || '').trim())
-      .filter(Boolean)
-  }
 
-  return String(skills || '')
-    .split(',')
-    .map((skill) => skill.trim())
-    .filter(Boolean)
-}
 
 function normalizeSkillKey(skill) {
   return String(skill || '')
@@ -293,14 +281,7 @@ function buildSkillGapItems(candidate) {
 
   return Array.from(merged.values())
 }
-function parseYears(experience) {
-  if (typeof experience === 'number' && Number.isFinite(experience)) {
-    return experience
-  }
 
-  const match = String(experience || '').match(/(\d+(?:\.\d+)?)/)
-  return match ? Number(match[1]) : 0
-}
 
 
 function deriveTopSkills(candidate) {
@@ -321,13 +302,13 @@ function deriveTopSkills(candidate) {
     }
   }
 
-  return parseSkills(candidate?.skills)
+  return resolveFilterableSkills(candidate)
 }
 
 function deriveAllSkills(candidate) {
   const deduped = new Map()
   const addSkills = (skills) => {
-    parseSkills(skills).forEach((skill) => {
+    resolveFilterableSkills({ skills }).forEach((skill) => {
       const label = safeText(formatSkillLabel(skill), '').trim()
       if (!label) return
       const key = normalizeSkillKey(label)
@@ -535,7 +516,7 @@ function filterAndSortCandidates(candidates, filters) {
     searchText = '',
     selectedSkills = [],
     expRange = { min: '', max: '' },
-    sortBy = 'score',
+    sortBy = 'match_score',
   } = filters || {}
 
   const query = searchText.trim().toLowerCase()
@@ -550,7 +531,7 @@ function filterAndSortCandidates(candidates, filters) {
       }
     }
 
-    const candidateSkills = new Set(parseSkills(candidate?.skills).map(normalizeSkillKey))
+    const candidateSkills = new Set(resolveFilterableSkills(candidate).map(normalizeSkillKey))
     if (selectedSkills.length > 0) {
       const hasAtLeastOneSkill = selectedSkills.some((skill) => candidateSkills.has(normalizeSkillKey(skill)))
       if (!hasAtLeastOneSkill) {
@@ -558,7 +539,7 @@ function filterAndSortCandidates(candidates, filters) {
       }
     }
 
-    const years = parseYears(candidate?.experience_years ?? candidate?.experience)
+    const years = resolveCandidateYears(candidate)
     if (expMin !== null && years < expMin) {
       return false
     }
@@ -576,14 +557,14 @@ function filterAndSortCandidates(candidates, filters) {
     }
 
     if (sortBy === 'experience') {
-      return parseYears(b?.experience_years ?? b?.experience) - parseYears(a?.experience_years ?? a?.experience)
+      return resolveCandidateYears(b) - resolveCandidateYears(a)
     }
 
     if (sortBy === 'upload_date') {
       return parseUploadDate(b) - parseUploadDate(a)
     }
 
-    return Number(b?.score || 0) - Number(a?.score || 0)
+    return Number(activeScore(b) || 0) - Number(activeScore(a) || 0)
   })
 }
 
@@ -592,7 +573,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
-  const [sortBy, setSortBy] = useState('score')
+  const [sortBy, setSortBy] = useState('match_score')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [resultsError, setResultsError] = useState('')
@@ -934,11 +915,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
     : 0
   const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
-  const sortedCandidates = useMemo(() => (
-    [...visibleCandidates].sort((a, b) => {
-      return (activeScore(b) ?? -1) - (activeScore(a) ?? -1)
-    })
-  ), [visibleCandidates])
+  const sortedCandidates = visibleCandidates
 
   const toggleCandidateSelection = (candidate) => {
     const resumeId = resolveSelectionResumeId(candidate)
@@ -1437,7 +1414,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               <div className="rc-footer">
                 <span className="rc-footer-meta">
                   {[
-                    hasRenderableContent(candidate.years_experience) ? `${candidate.years_experience} yrs exp` : 'Experience unavailable',
+                    resolveCandidateYears(candidate) > 0 ? `${resolveCandidateYears(candidate)} yrs exp` : 'Experience unavailable',
                     safeText(candidate.seniority_level, 'Seniority unavailable'),
                   ].filter(Boolean).join(' · ')}
                 </span>

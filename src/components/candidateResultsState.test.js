@@ -19,6 +19,8 @@ import {
   parseScorePercentage,
   resolveScoreBreakdownMetric,
   buildScoreBreakdownRows,
+  resolveCandidateYears,
+  resolveFilterableSkills,
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
@@ -396,4 +398,35 @@ test('buildExpandedCandidateDrawerViewModel safely handles missing confidence pa
   })
 
   assert.equal(vm.confidenceLabel, '')
+})
+
+
+test('resolveCandidateYears supports legacy and modern field variants', () => {
+  assert.equal(resolveCandidateYears({ years_experience: 6 }), 6)
+  assert.equal(resolveCandidateYears({ yearsExperience: 7 }), 7)
+  assert.equal(resolveCandidateYears({ experience_years: 5 }), 5)
+  assert.equal(resolveCandidateYears({ experience: '3.5 years' }), 3.5)
+})
+
+test('resolveFilterableSkills supports all supported candidate skill shapes', () => {
+  assert.deepEqual(resolveFilterableSkills({ top_skills: ['React', ' Node.js '] }), ['React', 'Node.js'])
+  assert.deepEqual(resolveFilterableSkills({ skills_flat: ['SQL', 'Python'] }), ['SQL', 'Python'])
+  assert.deepEqual(resolveFilterableSkills({ skills: ['AWS', 'Docker'] }), ['AWS', 'Docker'])
+  assert.deepEqual(resolveFilterableSkills({ skills: 'Go, Rust' }), ['Go', 'Rust'])
+
+  const structured = resolveFilterableSkills({
+    skills_structured: {
+      tools_and_platforms: ['Tableau'],
+      methodologies: ['Agile'],
+      domain_expertise: ['FinTech'],
+      soft_skills: ['Communication'],
+      frameworks: ['React'],
+    },
+  })
+  assert.deepEqual(structured, ['Tableau', 'Agile', 'FinTech', 'Communication', 'React'])
+})
+
+test('normalizeSortBy canonicalizes to match_score', () => {
+  assert.equal(normalizeSortBy('match_score'), 'match_score')
+  assert.equal(normalizeSortBy('score'), 'match_score')
 })
