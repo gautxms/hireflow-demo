@@ -1431,11 +1431,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
   const scoreBreakdownRows = [
     {
-      label: 'Overall fit',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['overall_fit_score', 'overall', 'total', 'overall_score', 'overallScore'], candidate?.fit_assessment?.overall_fit_score ?? null),
-    },
-    {
-      label: 'Skills match',
+      label: 'Skill Match',
       value: resolveScoreBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills', 'skill_match_score'], candidate?.fit_assessment?.skill_match_score ?? null),
     },
     {
@@ -1447,12 +1443,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       value: resolveScoreBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch', 'education_match_score'], candidate?.fit_assessment?.education_match_score ?? null),
     },
     {
-      label: 'Location',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['location', 'location_match', 'locationMatch', 'location_match_score'], candidate?.fit_assessment?.location_match_score ?? null),
-    },
-    {
-      label: 'Role alignment',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['methodologies', 'role_alignment', 'role_fit', 'roleAlignment']),
+      label: 'Role Alignment',
+      value: resolveScoreBreakdownMetric(matchBreakdown, ['role_alignment', 'roleAlignment', 'role_fit', 'roleFit', 'job_alignment', 'methodologies'], candidate?.fit_assessment?.role_alignment ?? candidate?.fit_assessment?.roleAlignment ?? candidate?.fit_assessment?.role_fit ?? candidate?.fit_assessment?.roleFit ?? candidate?.fit_assessment?.job_alignment ?? null),
     },
   ]
   const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))

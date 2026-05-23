@@ -201,6 +201,7 @@ export function normalizeCandidate(candidate = {}) {
     education: educationValue || '',
     fit: candidate.fit || '',
     fit_assessment: {
+      ...fitAssessment,
       matched: Array.isArray(fitAssessment.matched) ? fitAssessment.matched : Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : [],
       missing: Array.isArray(fitAssessment.missing) ? fitAssessment.missing : Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : [],
       risk: normalizeText(fitAssessment.risk || fitAssessment.risks || ''),
@@ -215,6 +216,10 @@ export function normalizeCandidate(candidate = {}) {
     linkedinProfile: candidate.linkedinProfile || '',
     achievements: Array.isArray(candidate.achievements) ? candidate.achievements : [],
     confidenceScores: candidate.confidenceScores && typeof candidate.confidenceScores === 'object' ? candidate.confidenceScores : {},
+
+    scoreBreakdown: candidate?.scoreBreakdown && typeof candidate.scoreBreakdown === 'object' && !Array.isArray(candidate.scoreBreakdown)
+      ? { ...candidate.scoreBreakdown }
+      : {},
   }
 }
 

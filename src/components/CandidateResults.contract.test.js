@@ -129,4 +129,10 @@ test('expanded drawer first-column section order keeps recommendation before key
   assert.ok(summaryIndex < recommendationIndex)
   assert.ok(recommendationIndex < keyFactsIndex)
   assert.ok(keyFactsIndex < reasoningIndex)
+test('score breakdown rows include Skill Match, Experience, Education, and conditional Role Alignment', () => {
+  assert.match(candidateResultsSource, /label: 'Skill Match'/)
+  assert.match(candidateResultsSource, /label: 'Experience'/)
+  assert.match(candidateResultsSource, /label: 'Education'/)
+  assert.match(candidateResultsSource, /label: 'Role Alignment'/)
+  assert.doesNotMatch(candidateResultsSource, /label: 'Overall fit'/)
 })
