@@ -116,7 +116,7 @@ test('expanded drawer applies warning skill class to skill gap pills', () => {
 })
 
 
-test('expanded drawer first-column section order keeps key facts before recommendation and reasoning', () => {
+test('expanded drawer first-column section order keeps recommendation before key facts for recruiter scanning', () => {
   const summaryIndex = candidateResultsSource.indexOf('title="Summary"')
   const recommendationIndex = candidateResultsSource.indexOf('title="Recommended action"')
   const keyFactsIndex = candidateResultsSource.indexOf('title="Key facts"')
@@ -127,8 +127,8 @@ test('expanded drawer first-column section order keeps key facts before recommen
   assert.ok(keyFactsIndex !== -1)
   assert.ok(reasoningIndex !== -1)
   assert.ok(summaryIndex < recommendationIndex)
-  assert.ok(keyFactsIndex < recommendationIndex)
-  assert.ok(recommendationIndex < reasoningIndex)
+  assert.ok(recommendationIndex < keyFactsIndex)
+  assert.ok(keyFactsIndex < reasoningIndex)
 })
 
 test('score breakdown rows include Skill Match, Experience, Education, and conditional Role Alignment', () => {
@@ -138,8 +138,8 @@ test('score breakdown rows include Skill Match, Experience, Education, and condi
 
 test('drawer uses reusable expansion helpers with preview budgets and show more labels', () => {
   assert.match(candidateResultsSource, /function ExpandableList\(/)
-  assert.match(candidateResultsSource, /previewCount=\{8\}/)
   assert.match(candidateResultsSource, /previewCount=\{6\}/)
+  assert.match(candidateResultsSource, /previewCount=\{4\}/)
   assert.match(candidateResultsSource, /previewCount=\{3\}/)
   assert.match(candidateResultsSource, /buttonLabel="Show more"/)
   assert.match(candidateResultsSource, /collapseLabel="Show less"/)

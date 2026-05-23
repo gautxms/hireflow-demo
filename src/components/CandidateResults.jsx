@@ -93,15 +93,27 @@ class CandidateDetailErrorBoundary extends React.Component {
   }
 }
 
-function ExpandableText({ text, className = 'dd-summary', clampClassName = 'dd-summary--clamp', buttonLabel = 'Read more', collapseLabel = 'Show less' }) {
+function shouldTruncateTextByLineBudget(text, lineLimit, approxCharsPerLine = 95) {
+  const content = String(text || '').trim()
+  if (!content) return false
+  const estimatedLines = content
+    .split('\n')
+    .reduce((total, line) => total + Math.max(1, Math.ceil(line.trim().length / approxCharsPerLine)), 0)
+  return estimatedLines > lineLimit
+}
+
+function ExpandableText({ text, className = 'dd-summary', clampClassName = 'dd-summary--clamp', buttonLabel = 'Read more', collapseLabel = 'Show less', lineLimit = 5, resetKey = '', controlsId = '' }) {
   const [expanded, setExpanded] = useState(false)
   const content = String(text || '').trim()
-  const needsTruncation = content.length > 120
+  const needsTruncation = shouldTruncateTextByLineBudget(content, lineLimit)
+  useEffect(() => {
+    setExpanded(false)
+  }, [resetKey])
   return (
     <>
-      <p className={`${className}${!expanded && needsTruncation ? ` ${clampClassName}` : ''}`}>{content}</p>
+      <p id={controlsId || undefined} className={`${className}${!expanded && needsTruncation ? ` ${clampClassName}` : ''}`}>{content}</p>
       {needsTruncation && (
-        <button type="button" className="hf-btn hf-btn--secondary dd-toggle-skills" onClick={() => setExpanded((value) => !value)}>
+        <button type="button" className="dd-inline-disclosure" aria-expanded={expanded} aria-controls={controlsId || undefined} onClick={() => setExpanded((value) => !value)}>
           {expanded ? collapseLabel : buttonLabel}
         </button>
       )}
@@ -118,18 +130,21 @@ function DrawerSection({ title, badge = null, className = '', children }) {
   )
 }
 
-function ExpandableList({ items, previewCount, renderItem, emptyState = null, listClassName = '' }) {
+function ExpandableList({ items, previewCount, renderItem, emptyState = null, listClassName = '', resetKey = '', controlsId = '' }) {
   const [expanded, setExpanded] = useState(false)
   const visibleItems = expanded ? items : items.slice(0, previewCount)
   const hasMore = items.length > previewCount
+  useEffect(() => {
+    setExpanded(false)
+  }, [resetKey])
 
   return (
     <>
-      <div className={listClassName}>
+      <div id={controlsId || undefined} className={listClassName}>
         {items.length > 0 ? visibleItems.map(renderItem) : emptyState}
       </div>
       {hasMore && (
-        <button className="hf-btn hf-btn--secondary dd-toggle-skills" type="button" onClick={() => setExpanded((value) => !value)}>
+        <button className="dd-inline-disclosure" type="button" aria-expanded={expanded} aria-controls={controlsId || undefined} onClick={() => setExpanded((value) => !value)}>
           {expanded ? 'Show less' : 'Show more'}
         </button>
       )}
@@ -1515,8 +1530,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         <div className="dd-body">
           <div className="dd-col">
             <DrawerSection title="Summary">
-              <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" />
+              <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`summary-${expandedCandidateKey}`} />
             </DrawerSection>
+            {detailVm.recommendationText && (
+              <DrawerSection title="Recommended action" className="dd-section-card--compact">
+                <ExpandableText text={detailVm.recommendationText} className="dd-recommended-action" clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`recommendation-${expandedCandidateKey}`} />
+              </DrawerSection>
+            )}
             {keyFacts.length > 0 && (
               <DrawerSection title="Key facts" className="dd-section-card--compact">
                 <div className="dd-facts-grid">
@@ -1529,13 +1549,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
               </DrawerSection>
             )}
-            {detailVm.recommendationText && (
-              <DrawerSection title="Recommended action" className="dd-section-card--compact">
-                <ExpandableText text={detailVm.recommendationText} className="dd-recommended-action" clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" />
-              </DrawerSection>
-            )}
             <DrawerSection title="AI reasoning" className="dd-section-card--compact">
-              <ExpandableText text={detailVm.reasoningText} clampClassName="dd-summary--clamp-6" buttonLabel="Show more" collapseLabel="Show less" />
+              <ExpandableText text={detailVm.reasoningText} clampClassName="dd-summary--clamp-6" buttonLabel="Show more" collapseLabel="Show less" lineLimit={7} resetKey={expandedCandidateKey} controlsId={`reasoning-${expandedCandidateKey}`} />
             </DrawerSection>
             <DrawerSection title="View resume" className="dd-section-card--compact">
             <div className="dd-resume-file">
@@ -1572,25 +1587,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             ) : <p className="dd-summary">Score breakdown unavailable</p>}
             </DrawerSection>
             <DrawerSection title="Matched skills" className="dd-section-card--compact" badge={<span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span>}>
-              <ExpandableList items={detailVm.matchedSkills} previewCount={8} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>)} />
+              <ExpandableList items={detailVm.matchedSkills} previewCount={6} resetKey={expandedCandidateKey} controlsId={`matched-skills-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>)} />
             </DrawerSection>
             <DrawerSection title="Skill gaps" className="dd-section-card--compact" badge={detailVm.missingSkills.length > 0 ? <span className="dd-count-badge dd-count-badge--amber">{detailVm.missingSkills.length} gaps identified</span> : null}>
               {detailVm.missingSkills.length > 0 ? (
-                <ExpandableList items={detailVm.missingSkills} previewCount={6} listClassName="dd-top-skills" renderItem={(skill) => (
+                <ExpandableList items={detailVm.missingSkills} previewCount={4} resetKey={expandedCandidateKey} controlsId={`skill-gaps-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (
                   <span className="dd-top-skill dd-top-skill--warn" key={`${expandedCandidateKey}-gap-${skill}`}>{skill}</span>
                 )} />
               ) : <p className="dd-summary">No explicit skill gaps identified.</p>}
             </DrawerSection>
             {detailVm.allSkills.length > 0 && (
               <DrawerSection title="All skills" className="dd-section-card--compact">
-                <div className="dd-top-skills dd-top-skills--all">
+                <div id={`all-skills-${expandedCandidateKey}`} className="dd-top-skills dd-top-skills--all">
                   {allSkillsVisible.map((skill) => (
                     <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-all-skill-${skill}`}>{skill}</span>
                   ))}
                 </div>
                 {hasCollapsedSkills && (
-                  <button className="hf-btn hf-btn--secondary dd-toggle-skills" type="button" onClick={() => setShowAllDrawerSkills((current) => !current)}>
-                    {showAllDrawerSkills ? 'Show less' : `Show all skills (${detailVm.allSkills.length})`}
+                  <button className="dd-inline-disclosure" type="button" aria-expanded={showAllDrawerSkills} aria-controls={`all-skills-${expandedCandidateKey}`} onClick={() => setShowAllDrawerSkills((current) => !current)}>
+                    {showAllDrawerSkills ? 'Show less' : 'Show more'}
                   </button>
                 )}
               </DrawerSection>
@@ -1604,6 +1619,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     <ExpandableList
                       items={detailVm.candidateStrengths}
                       previewCount={3}
+                      resetKey={expandedCandidateKey}
+                      controlsId={`strengths-${expandedCandidateKey}`}
                       listClassName="dd-list"
                       renderItem={(strength, idx) => (<div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><span>{strength}</span></div>)}
                     />
@@ -1618,6 +1635,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     <ExpandableList
                       items={detailVm.candidateConsiderations}
                       previewCount={3}
+                      resetKey={expandedCandidateKey}
+                      controlsId={`considerations-${expandedCandidateKey}`}
                       listClassName="dd-list"
                       renderItem={(consideration, idx) => (<div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><span>{consideration}</span></div>)}
                     />

@@ -1610,6 +1610,12 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.dd-summary--clamp-5,
+.dd-summary--clamp-6 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .dd-summary--clamp-5 { -webkit-line-clamp: 5; }
 .dd-summary--clamp-6 { -webkit-line-clamp: 6; }
 .dd-recommended-action {
@@ -1778,8 +1784,25 @@
 .dd-count-badge--amber { color: var(--hf-warning); }
 .dd-probe-icon { color: var(--hf-warning); font-weight: 600; margin-top: 1px; }
 .dd-read-more { margin-left: 8px; background: transparent; border: none; color: var(--hf-lime); cursor: pointer; font-size: 12px; }
-.dd-toggle-skills { margin-top: 8px; }
-.dd-toggle-skills:focus-visible {
+.dd-inline-disclosure {
+  margin-top: 6px;
+  padding: 2px 8px;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 1px solid #2a2a2a;
+  background: transparent;
+  color: var(--hf-lime);
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.dd-inline-disclosure:hover {
+  border-color: rgba(200, 255, 0, 0.4);
+  background: rgba(200, 255, 0, 0.08);
+}
+.dd-inline-disclosure:focus-visible {
   outline: 2px solid var(--hf-lime);
   outline-offset: 2px;
 }
