@@ -1537,27 +1537,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <DrawerSection title="AI reasoning" className="dd-section-card--compact">
               <ExpandableText text={detailVm.reasoningText} clampClassName="dd-summary--clamp-6" buttonLabel="Show more" collapseLabel="Show less" />
             </DrawerSection>
-            <DrawerSection title="View resume" className="dd-section-card--compact">
-            <div className="dd-resume-file">
-              <FileText size={16} strokeWidth={1.6} aria-hidden="true" />
-              <div>
-                <div className="dd-resume-filename">{detailVm.resumeFileLabel}</div>
-                <div className="dd-resume-meta">
-                  {hasResumeForOpen ? 'Open the uploaded resume in a new tab.' : 'Resume file is unavailable for this candidate.'}
-                </div>
-                <button
-                  className="hf-btn hf-btn--secondary dd-btn-ghost dd-toggle-skills"
-                  type="button"
-                  onClick={() => openCandidateResumeInNewTab(candidate)}
-                  disabled={!hasResumeForOpen}
-                  aria-label={hasResumeForOpen ? `View resume for ${detailVm.candidateName}` : 'Resume unavailable'}
-                >
-                  <ExternalLink size={16} strokeWidth={1.5} aria-hidden="true" />
-                  <span>View resume</span>
-                </button>
-              </div>
-            </div>
-            </DrawerSection>
           </div>
           <div className="dd-col">
             <DrawerSection title="Score breakdown">
@@ -1623,6 +1602,27 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     />
                   )
                   : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
+              </div>
+            </DrawerSection>
+            <DrawerSection title="View resume" className="dd-section-card--compact">
+              <div className="dd-resume-file">
+                <FileText size={16} strokeWidth={1.6} aria-hidden="true" />
+                <div>
+                  <div className="dd-resume-filename">{detailVm.resumeFileLabel}</div>
+                  <div className="dd-resume-meta">
+                    {hasResumeForOpen ? 'Open the uploaded resume in a new tab.' : 'Resume file is unavailable for this candidate.'}
+                  </div>
+                  <button
+                    className="hf-btn hf-btn--secondary dd-btn-ghost dd-toggle-skills"
+                    type="button"
+                    onClick={() => openCandidateResumeInNewTab(candidate)}
+                    disabled={!hasResumeForOpen}
+                    aria-label={hasResumeForOpen ? `View resume for ${detailVm.candidateName}` : 'Resume unavailable'}
+                  >
+                    <ExternalLink size={16} strokeWidth={1.5} aria-hidden="true" />
+                    <span>View resume</span>
+                  </button>
+                </div>
               </div>
             </DrawerSection>
             {integrityChecks.length > 0 && <div className="dd-analysis-box">{integrityChecks.map((check, idx) => (<div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>{check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}<span>{toDisplayText(check?.label || check, 'Unavailable')}</span></div>))}</div>}

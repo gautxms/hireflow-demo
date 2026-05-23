@@ -96,6 +96,22 @@ test('candidate drawer includes labelled View resume section that uses existing 
   assert.match(candidateResultsSource, /disabled=\{!hasResumeForOpen\}/)
 })
 
+
+test('expanded drawer third-column order keeps view resume after considerations and before integrity checks', () => {
+  const strengthsIndex = candidateResultsSource.indexOf('title="Strengths"')
+  const considerationsIndex = candidateResultsSource.indexOf('title="Considerations"')
+  const viewResumeIndex = candidateResultsSource.indexOf('title="View resume"')
+  const integrityIndex = candidateResultsSource.indexOf('integrityChecks.length > 0')
+
+  assert.ok(strengthsIndex !== -1)
+  assert.ok(considerationsIndex !== -1)
+  assert.ok(viewResumeIndex !== -1)
+  assert.ok(integrityIndex !== -1)
+  assert.ok(strengthsIndex < considerationsIndex)
+  assert.ok(considerationsIndex < viewResumeIndex)
+  assert.ok(viewResumeIndex < integrityIndex)
+})
+
 test('expanded drawer renders restored legacy sections for facts, recommendation, skill gaps, and all skills', () => {
   assert.match(candidateResultsSource, /title="Key facts"/)
   assert.match(candidateResultsSource, /title="Recommended action"/)
