@@ -94,6 +94,8 @@ test('candidate drawer includes labelled View resume section that uses existing 
   assert.match(candidateResultsSource, /\{detailVm\.resumeFileLabel\}/)
   assert.match(candidateResultsSource, /onClick=\{\(\) => openCandidateResumeInNewTab\(candidate\)\}/)
   assert.match(candidateResultsSource, /disabled=\{!hasResumeForOpen\}/)
+})
+
 test('expanded drawer renders restored legacy sections for facts, recommendation, skill gaps, and all skills', () => {
   assert.match(candidateResultsSource, />Key facts</)
   assert.match(candidateResultsSource, />Recommended action</)
@@ -111,4 +113,20 @@ test('expanded drawer skill gaps heading includes amber count badge when gaps ex
 
 test('expanded drawer applies warning skill class to skill gap pills', () => {
   assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--warn"/)
+})
+
+
+test('expanded drawer first-column section order keeps recommendation before key facts for recruiter scanning', () => {
+  const summaryIndex = candidateResultsSource.indexOf('>Summary<')
+  const recommendationIndex = candidateResultsSource.indexOf('>Recommended action<')
+  const keyFactsIndex = candidateResultsSource.indexOf('>Key facts<')
+  const reasoningIndex = candidateResultsSource.indexOf('>AI reasoning<')
+
+  assert.ok(summaryIndex !== -1)
+  assert.ok(recommendationIndex !== -1)
+  assert.ok(keyFactsIndex !== -1)
+  assert.ok(reasoningIndex !== -1)
+  assert.ok(summaryIndex < recommendationIndex)
+  assert.ok(recommendationIndex < keyFactsIndex)
+  assert.ok(keyFactsIndex < reasoningIndex)
 })
