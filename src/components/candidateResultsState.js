@@ -356,6 +356,68 @@ export function toDisplayText(value, fallback = 'N/A') {
   return fallback
 }
 
+
+function normalizeEducationRecord(record) {
+  if (record == null) return null
+
+  if (typeof record === 'string') {
+    const text = record.trim()
+    return text ? { degree: text, school: '', graduationYear: '', text } : null
+  }
+
+  if (typeof record !== 'object' || Array.isArray(record)) return null
+
+  const degree = toDisplayText(record.degree || record.qualification || record.program || record.course, '').trim()
+  const school = toDisplayText(record.school || record.institution || record.university || record.college, '').trim()
+  const graduationYear = toDisplayText(record.graduation_year || record.graduationYear || record.year, '').trim()
+  const fallbackText = toDisplayText(record.text || record.label || record.value || record.name, '').trim()
+
+  if (!degree && !school && !fallbackText) return null
+
+  return {
+    degree,
+    school,
+    graduationYear,
+    text: fallbackText,
+  }
+}
+
+function educationRank(record) {
+  const text = `${record?.degree || ''} ${record?.text || ''}`.toLowerCase()
+  if (/\b(ph\.?d|doctorate|doctoral|md)\b/.test(text)) return 4
+  if (/\b(master|mba|mtech|m\.tech|ms\b|m\.s\b|msc|m\.sc|ma\b|m\.a\b)\b/.test(text)) return 3
+  if (/\b(bachelor|btech|b\.tech|be\b|b\.e\b|bs\b|b\.s\b|ba\b|b\.a\b|bsc|b\.sc)\b/.test(text)) return 2
+  if (/\b(diploma|certificate|certification)\b/.test(text)) return 1
+  return 0
+}
+
+export function resolveEducationLabel(education, fallback = 'Education details unavailable') {
+  const records = (Array.isArray(education) ? education : [education])
+    .map((entry) => normalizeEducationRecord(entry))
+    .filter(Boolean)
+
+  if (!records.length) return fallback
+
+  const [best] = records
+    .map((record, index) => ({ record, index, rank: educationRank(record) }))
+    .sort((a, b) => b.rank - a.rank || a.index - b.index)
+
+  const selected = best.record
+  const degree = selected.degree
+  const school = selected.school
+  const yearMatch = String(selected.graduationYear || '').match(/\b(19|20)\d{2}\b/)
+  const year = yearMatch ? yearMatch[0] : ''
+
+  let label = ''
+  if (degree && school) label = `${degree}, ${school}`
+  else if (degree) label = degree
+  else if (school) label = school
+  else label = selected.text
+
+  if (!label) return fallback
+  return year ? `${label} (${year})` : label
+}
+
 export function toSafeScore(value, fallback = 0) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) {
@@ -425,7 +487,8 @@ export function sanitizeExpandedCandidate(candidate = {}) {
     current_title: toDisplayText(source.current_title, ''),
     location: toDisplayText(source.location, ''),
     seniority_level: toDisplayText(source.seniority_level, ''),
-    education: toDisplayText(source.education, ''),
+    education: source.education,
+    education_label: resolveEducationLabel(source.education, ''),
     email: toDisplayText(source.email, ''),
     years_experience: toDisplayText(source.years_experience, ''),
     skills: Array.isArray(source.skills) ? source.skills : (typeof source.skills === 'string' ? source.skills : []),
@@ -572,7 +635,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       totalSkills: matchedSkills.length + missingSkills.length,
       resumeFileLabel: toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable'),
       email: toDisplayText(candidate.email, ''),
-      educationLabel: toDisplayText(candidate.education, 'Education details unavailable'),
+      educationLabel: resolveEducationLabel(candidate.education, 'Education details unavailable'),
     }
   } catch {
     return {

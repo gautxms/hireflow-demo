@@ -14,6 +14,7 @@ import {
   resolveActiveCandidateScore,
   sanitizeExpandedCandidate,
   toDisplayText,
+  resolveEducationLabel,
   toSafeScore,
   parseScorePercentage,
   resolveScoreBreakdownMetric,
@@ -86,6 +87,29 @@ test('toDisplayText normalizes object/array candidate fields into safe renderabl
   assert.equal(toDisplayText({ value: 'Remote' }), 'Remote')
   assert.equal(toDisplayText({ nested: true }, 'No summary available'), 'No summary available')
   assert.equal(toDisplayText(['React', { text: 'Node.js' }, 7]), 'React, Node.js, 7')
+})
+
+
+test('resolveEducationLabel supports legacy string and malformed payloads safely', () => {
+  assert.equal(resolveEducationLabel('B.Tech, IIT Delhi'), 'B.Tech, IIT Delhi')
+  assert.equal(resolveEducationLabel(null), 'Education details unavailable')
+  assert.equal(resolveEducationLabel([{ unknown: true }]), 'Education details unavailable')
+})
+
+test('resolveEducationLabel formats structured objects and falls back on partial values', () => {
+  assert.equal(resolveEducationLabel({ degree: 'MBA', school: 'IIM Bangalore', graduation_year: 2021 }), 'MBA, IIM Bangalore (2021)')
+  assert.equal(resolveEducationLabel({ degree: 'M.Tech' }), 'M.Tech')
+  assert.equal(resolveEducationLabel({ school: 'Stanford University' }), 'Stanford University')
+})
+
+test('resolveEducationLabel picks highest ranked degree from multiple records', () => {
+  const education = [
+    { degree: 'Diploma in IT', school: 'Polytechnic' },
+    { degree: 'B.Tech', school: 'NIT Trichy', graduation_year: '2018' },
+    { degree: 'MBA', school: 'IIM Ahmedabad', graduation_year: '2022' },
+  ]
+
+  assert.equal(resolveEducationLabel(education), 'MBA, IIM Ahmedabad (2022)')
 })
 
 test('toSafeScore constrains malformed or out-of-range values for chart rendering', () => {
@@ -228,10 +252,12 @@ test('buildExpandedCandidateDrawerViewModel normalizes malformed candidate shape
     missingSkills: null,
     fit_assessment: { missing: { wrong: true } },
     experience: [{ title: { wrong: true } }],
+    education: [{ degree: 'M.Tech' }, { school: 'Unknown Institute' }],
   })
 
   assert.equal(vm.isUnavailable, false)
   assert.equal(vm.candidateName, 'Candidate')
+  assert.equal(vm.educationLabel, 'M.Tech')
   assert.equal(Array.isArray(vm.matchedSkills), true)
   assert.equal(Array.isArray(vm.missingSkills), true)
   assert.equal(Array.isArray(vm.candidateConsiderations), true)
