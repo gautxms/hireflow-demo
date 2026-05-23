@@ -1458,6 +1458,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
   const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
   const integrityChecks = deriveResumeIntegrityChecks(candidate, detailVm.hasDisplayScore)
+  const hasResumeForOpen = Boolean(resolveCandidateResumeUuid(candidate))
   const keyFacts = [
     { label: 'Experience', value: detailVm.experienceYearsLabel },
     { label: 'Location', value: detailVm.locationLabel },
@@ -1536,6 +1537,26 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             )}
             <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
             <p className="dd-summary">{detailVm.reasoningText}</p>
+            <div className="dd-col-label section-heading dd-col-label--mt-16">View resume</div>
+            <div className="dd-resume-file">
+              <FileText size={16} strokeWidth={1.6} aria-hidden="true" />
+              <div>
+                <div className="dd-resume-filename">{detailVm.resumeFileLabel}</div>
+                <div className="dd-resume-meta">
+                  {hasResumeForOpen ? 'Open the uploaded resume in a new tab.' : 'Resume file is unavailable for this candidate.'}
+                </div>
+                <button
+                  className="hf-btn hf-btn--secondary dd-btn-ghost dd-toggle-skills"
+                  type="button"
+                  onClick={() => openCandidateResumeInNewTab(candidate)}
+                  disabled={!hasResumeForOpen}
+                  aria-label={hasResumeForOpen ? `View resume for ${detailVm.candidateName}` : 'Resume unavailable'}
+                >
+                  <ExternalLink size={16} strokeWidth={1.5} aria-hidden="true" />
+                  <span>View resume</span>
+                </button>
+              </div>
+            </div>
           </div>
           <div className="dd-col">
             <div className="dd-col-label section-heading">Score breakdown</div>
