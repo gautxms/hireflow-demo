@@ -13,7 +13,6 @@ import {
   resolveCandidateKey,
   resolveActiveCandidateScore,
   sanitizeExpandedCandidate,
-  buildExpandedCandidateViewModel,
   toDisplayText,
   toSafeScore,
 } from './candidateResultsState.js'
@@ -257,6 +256,23 @@ test('buildExpandedCandidateDrawerViewModel derives low confidence from numeric 
   })
 
   assert.equal(vm.confidenceLabel, 'Low confidence')
+})
+
+test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, and all skills from existing candidate data', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendation: 'Proceed to interview panel.',
+    top_skills: ['React'],
+    skills: ['Node.js'],
+    matchedSkills: ['TypeScript'],
+    mustHaveSkills: ['System Design'],
+    missingSkills: ['GraphQL'],
+    fit_assessment: { missing: ['Leadership communication'] },
+  })
+
+  assert.equal(vm.recommendationText, 'Proceed to interview panel.')
+  assert.deepEqual(vm.missingSkills, ['System Design', 'GraphQL', 'Leadership communication'])
+  assert.deepEqual(vm.allSkills, ['React', 'Node.js', 'TypeScript', 'System Design'])
 })
 
 test('buildExpandedCandidateDrawerViewModel preserves historical explicit textual confidence label', async () => {

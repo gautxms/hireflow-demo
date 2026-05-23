@@ -14,7 +14,6 @@ import {
   resolveCandidateKey,
   resolveCandidateResumeUuid,
   sanitizeExpandedCandidate,
-  buildExpandedCandidateViewModel,
   toDisplayText,
   buildExpandedCandidateDrawerViewModel,
 } from './candidateResultsState'
@@ -1455,6 +1454,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const resolvableScoreBreakdownRows = scoreBreakdownRows.filter((row) => Number.isFinite(row.value))
   const hasResolvableBreakdownMetrics = resolvableScoreBreakdownRows.length > 0
   const integrityChecks = deriveResumeIntegrityChecks(candidate, detailVm.hasDisplayScore)
+  const keyFacts = [
+    { label: 'Experience', value: detailVm.experienceYearsLabel },
+    { label: 'Location', value: detailVm.locationLabel },
+    { label: 'Seniority', value: detailVm.seniorityLabel },
+    { label: 'Education', value: detailVm.educationLabel },
+  ].filter((fact) => hasRenderableContent(fact.value) && !String(fact.value).toLowerCase().includes('unavailable'))
+  const allSkillsVisible = showAllDrawerSkills ? detailVm.allSkills : detailVm.allSkills.slice(0, 16)
+  const hasCollapsedSkills = detailVm.allSkills.length > allSkillsVisible.length
 
   return (
     <CandidateDetailErrorBoundary
@@ -1504,6 +1511,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-col">
             <div className="dd-col-label section-heading">Summary</div>
             <p className="dd-summary">{detailVm.summaryText}</p>
+            {keyFacts.length > 0 && (
+              <>
+                <div className="dd-col-label section-heading dd-col-label--mt-16">Key facts</div>
+                <div className="dd-facts-grid">
+                  {keyFacts.map((fact) => (
+                    <div className="dd-fact-card" key={`${expandedCandidateKey}-fact-${fact.label}`}>
+                      <span className="dd-fact-k">{fact.label}</span>
+                      <span className="dd-fact-v">{fact.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {detailVm.recommendationText && (
+              <>
+                <div className="dd-col-label section-heading dd-col-label--mt-16">Recommended action</div>
+                <p className="dd-recommended-action">{detailVm.recommendationText}</p>
+              </>
+            )}
             <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
             <p className="dd-summary">{detailVm.reasoningText}</p>
           </div>
@@ -1520,6 +1546,29 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             ) : <p className="dd-summary">Score breakdown unavailable</p>}
             <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span></div>
             <div className="dd-top-skills">{detailVm.matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}</div>
+            <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps</div>
+            {detailVm.missingSkills.length > 0 ? (
+              <div className="dd-top-skills">
+                {detailVm.missingSkills.map((skill) => (
+                  <span className="dd-top-skill dd-top-skill--warn" key={`${expandedCandidateKey}-gap-${skill}`}>{skill}</span>
+                ))}
+              </div>
+            ) : <p className="dd-summary">No explicit skill gaps identified.</p>}
+            {detailVm.allSkills.length > 0 && (
+              <>
+                <div className="dd-col-label section-heading dd-col-label--mt-14">All skills</div>
+                <div className="dd-top-skills dd-top-skills--all">
+                  {allSkillsVisible.map((skill) => (
+                    <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-all-skill-${skill}`}>{skill}</span>
+                  ))}
+                </div>
+                {hasCollapsedSkills && (
+                  <button className="hf-btn hf-btn--secondary dd-toggle-skills" type="button" onClick={() => setShowAllDrawerSkills((current) => !current)}>
+                    {showAllDrawerSkills ? 'Show fewer skills' : `Show all skills (${detailVm.allSkills.length})`}
+                  </button>
+                )}
+              </>
+            )}
           </div>
           <div className="dd-col">
             <div className="dd-col-label section-heading">Strengths</div>
