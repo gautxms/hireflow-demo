@@ -97,6 +97,18 @@ test('candidate drawer includes labelled View resume section that uses existing 
 test('expanded drawer renders restored legacy sections for facts, recommendation, skill gaps, and all skills', () => {
   assert.match(candidateResultsSource, />Key facts</)
   assert.match(candidateResultsSource, />Recommended action</)
-  assert.match(candidateResultsSource, />Skill gaps</)
+  assert.match(candidateResultsSource, />Skill gaps(?:\{|<)/)
   assert.match(candidateResultsSource, />All skills</)
+})
+
+
+test('expanded drawer skill gaps heading includes amber count badge when gaps exist', () => {
+  assert.match(
+    candidateResultsSource,
+    /Skill gaps\{detailVm\.missingSkills\.length > 0 \? <span className="dd-count-badge dd-count-badge--amber">\{detailVm\.missingSkills\.length\} gaps identified<\/span> : null\}/,
+  )
+})
+
+test('expanded drawer applies warning skill class to skill gap pills', () => {
+  assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--warn"/)
 })

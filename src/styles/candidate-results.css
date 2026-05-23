@@ -1735,6 +1735,12 @@
   background: rgba(255, 165, 0, 0.1);
   border-color: rgba(255, 165, 0, 0.25);
 }
+
+.dd-top-skills .dd-top-skill.dd-top-skill--warn {
+  color: var(--hf-score-possible);
+  border-color: color-mix(in srgb, var(--hf-score-possible) 40%, transparent);
+  background: color-mix(in srgb, var(--hf-score-possible) 12%, transparent);
+}
 .dd-top-skill--warn-soft {
   color: var(--hf-warning-text);
   background: rgba(255, 165, 0, 0.06);

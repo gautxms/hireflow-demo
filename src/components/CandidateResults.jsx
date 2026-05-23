@@ -1571,7 +1571,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             ) : <p className="dd-summary">Score breakdown unavailable</p>}
             <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span></div>
             <div className="dd-top-skills">{detailVm.matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}</div>
-            <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps</div>
+            <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps{detailVm.missingSkills.length > 0 ? <span className="dd-count-badge dd-count-badge--amber">{detailVm.missingSkills.length} gaps identified</span> : null}</div>
             {detailVm.missingSkills.length > 0 ? (
               <div className="dd-top-skills">
                 {detailVm.missingSkills.map((skill) => (
