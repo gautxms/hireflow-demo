@@ -227,3 +227,70 @@ test('buildExpandedCandidateDrawerViewModel returns compact unavailable state on
   assert.equal(vm.summaryText, 'Candidate details unavailable')
   assert.equal(vm.unavailableMessage, 'Candidate details unavailable')
 })
+
+
+test('buildExpandedCandidateDrawerViewModel derives high confidence from numeric confidenceScores.fit_assessment', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    confidenceScores: { fit_assessment: 0.9 },
+  })
+
+  assert.equal(vm.confidenceLabel, 'High confidence')
+})
+
+test('buildExpandedCandidateDrawerViewModel derives moderate confidence from numeric confidence.fit_assessment', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    confidence: { fit_assessment: 0.75 },
+  })
+
+  assert.equal(vm.confidenceLabel, 'Moderate confidence')
+})
+
+test('buildExpandedCandidateDrawerViewModel derives low confidence from numeric confidenceScores.fit_assessment', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    confidenceScores: { fit_assessment: 0.45 },
+  })
+
+  assert.equal(vm.confidenceLabel, 'Low confidence')
+})
+
+test('buildExpandedCandidateDrawerViewModel preserves historical explicit textual confidence label', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    fit_assessment: { confidence: 'Moderate confidence' },
+    confidenceScores: { fit_assessment: 0.9 },
+  })
+
+  assert.equal(vm.confidenceLabel, 'Moderate confidence')
+})
+
+
+test('buildExpandedCandidateDrawerViewModel ignores null/blank numeric confidence placeholders', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+
+  const withNull = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    confidenceScores: { fit_assessment: null },
+  })
+  assert.equal(withNull.confidenceLabel, '')
+
+  const withBlankString = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+    confidenceScores: { fit_assessment: '' },
+  })
+  assert.equal(withBlankString.confidenceLabel, '')
+})
+test('buildExpandedCandidateDrawerViewModel safely handles missing confidence payloads', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    score: 82,
+  })
+
+  assert.equal(vm.confidenceLabel, '')
+})
