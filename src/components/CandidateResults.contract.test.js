@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload.js'
 
 const candidateResultsSource = readFileSync(new URL('./CandidateResults.jsx', import.meta.url), 'utf8')
+const candidateResultsStyles = readFileSync(new URL('../styles/candidate-results.css', import.meta.url), 'utf8')
 
 test('normalizeCandidateResultsPayload handles empty payload', () => {
   assert.deepEqual(normalizeCandidateResultsPayload(null), {
@@ -131,6 +132,13 @@ test('expanded drawer applies warning skill class to skill gap pills', () => {
   assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--warn"/)
 })
 
+test('skill gap and matched skill pills use distinct classes and warning style contract', () => {
+  assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--matched"/)
+  assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--warn"/)
+  assert.match(candidateResultsStyles, /\.dd-top-skill--warn[\s\S]*var\(--hf-warning\)/)
+  assert.doesNotMatch(candidateResultsStyles, /\.dd-top-skill--warn[\s\S]*color:\s*#ffffff/)
+})
+
 
 test('expanded drawer first-column section order keeps recommendation before key facts for recruiter scanning', () => {
   const summaryIndex = candidateResultsSource.indexOf('title="Summary"')
@@ -154,9 +162,9 @@ test('score breakdown rows include Skill Match, Experience, Education, and condi
 
 test('drawer uses reusable expansion helpers with preview budgets and show more labels', () => {
   assert.match(candidateResultsSource, /function ExpandableList\(/)
-  assert.match(candidateResultsSource, /previewCount=\{6\}/)
-  assert.match(candidateResultsSource, /previewCount=\{4\}/)
+  assert.match(candidateResultsSource, /previewCount=\{5\}/)
   assert.match(candidateResultsSource, /previewCount=\{3\}/)
+  assert.match(candidateResultsSource, /slice\(0, 12\)/)
   assert.match(candidateResultsSource, /buttonLabel="Show more"/)
   assert.match(candidateResultsSource, /collapseLabel="Show less"/)
 })
