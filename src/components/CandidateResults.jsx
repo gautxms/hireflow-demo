@@ -1508,6 +1508,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-col">
             <div className="dd-col-label section-heading">Summary</div>
             <p className="dd-summary">{detailVm.summaryText}</p>
+            {detailVm.recommendationText && (
+              <>
+                <div className="dd-col-label section-heading dd-col-label--mt-16">Recommended action</div>
+                <p className="dd-recommended-action">{detailVm.recommendationText}</p>
+              </>
+            )}
             {keyFacts.length > 0 && (
               <>
                 <div className="dd-col-label section-heading dd-col-label--mt-16">Key facts</div>
@@ -1519,12 +1525,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     </div>
                   ))}
                 </div>
-              </>
-            )}
-            {detailVm.recommendationText && (
-              <>
-                <div className="dd-col-label section-heading dd-col-label--mt-16">Recommended action</div>
-                <p className="dd-recommended-action">{detailVm.recommendationText}</p>
               </>
             )}
             <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
