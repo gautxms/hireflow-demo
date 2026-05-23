@@ -1567,6 +1567,14 @@
 @media (max-width: 900px) { .dd-body { grid-template-columns: 1fr; } }
 
 .dd-col { min-width: 0; }
+.dd-section-card {
+  background: #0d0d0d;
+  border: 1px solid #1e1e1e;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.dd-section-card--compact { padding: 10px 12px; }
 
 .dd-col-label {
   font-size: 11px;
@@ -1602,6 +1610,8 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.dd-summary--clamp-5 { -webkit-line-clamp: 5; }
+.dd-summary--clamp-6 { -webkit-line-clamp: 6; }
 .dd-recommended-action {
   border-left: 2px solid var(--hf-lime);
   background: rgba(200, 255, 0, 0.05);
@@ -1769,6 +1779,10 @@
 .dd-probe-icon { color: var(--hf-warning); font-weight: 600; margin-top: 1px; }
 .dd-read-more { margin-left: 8px; background: transparent; border: none; color: var(--hf-lime); cursor: pointer; font-size: 12px; }
 .dd-toggle-skills { margin-top: 8px; }
+.dd-toggle-skills:focus-visible {
+  outline: 2px solid var(--hf-lime);
+  outline-offset: 2px;
+}
 .dd-resume-file { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border: 1px solid #2a2a2a; border-radius: 10px; background: #0d0d0d; color: var(--color-text-secondary); }
 .dd-resume-filename {
   font-family: var(--font-body, 'DM Sans', sans-serif);

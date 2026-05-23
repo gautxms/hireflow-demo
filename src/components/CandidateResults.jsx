@@ -93,20 +93,47 @@ class CandidateDetailErrorBoundary extends React.Component {
   }
 }
 
-function ExpandableText({ text }) {
+function ExpandableText({ text, className = 'dd-summary', clampClassName = 'dd-summary--clamp', buttonLabel = 'Read more', collapseLabel = 'Show less' }) {
   const [expanded, setExpanded] = useState(false)
   const content = String(text || '').trim()
   const needsTruncation = content.length > 120
-  const display = expanded || !needsTruncation ? content : `${content.slice(0, 120).trimEnd()}…`
   return (
-    <span>
-      {display}
+    <>
+      <p className={`${className}${!expanded && needsTruncation ? ` ${clampClassName}` : ''}`}>{content}</p>
       {needsTruncation && (
-        <button type="button" className="dd-read-more" onClick={() => setExpanded((value) => !value)}>
-          {expanded ? 'Show less' : 'Read more'}
+        <button type="button" className="hf-btn hf-btn--secondary dd-toggle-skills" onClick={() => setExpanded((value) => !value)}>
+          {expanded ? collapseLabel : buttonLabel}
         </button>
       )}
-    </span>
+    </>
+  )
+}
+
+function DrawerSection({ title, badge = null, className = '', children }) {
+  return (
+    <section className={`dd-section-card${className ? ` ${className}` : ''}`}>
+      <div className="dd-col-label section-heading">{title}{badge}</div>
+      {children}
+    </section>
+  )
+}
+
+function ExpandableList({ items, previewCount, renderItem, emptyState = null, listClassName = '' }) {
+  const [expanded, setExpanded] = useState(false)
+  const visibleItems = expanded ? items : items.slice(0, previewCount)
+  const hasMore = items.length > previewCount
+
+  return (
+    <>
+      <div className={listClassName}>
+        {items.length > 0 ? visibleItems.map(renderItem) : emptyState}
+      </div>
+      {hasMore && (
+        <button className="hf-btn hf-btn--secondary dd-toggle-skills" type="button" onClick={() => setExpanded((value) => !value)}>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </>
   )
 }
 
@@ -1506,11 +1533,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
         <div className="dd-body">
           <div className="dd-col">
-            <div className="dd-col-label section-heading">Summary</div>
-            <p className="dd-summary">{detailVm.summaryText}</p>
+            <DrawerSection title="Summary">
+              <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" />
+            </DrawerSection>
             {keyFacts.length > 0 && (
-              <>
-                <div className="dd-col-label section-heading dd-col-label--mt-16">Key facts</div>
+              <DrawerSection title="Key facts" className="dd-section-card--compact">
                 <div className="dd-facts-grid">
                   {keyFacts.map((fact) => (
                     <div className="dd-fact-card" key={`${expandedCandidateKey}-fact-${fact.label}`}>
@@ -1519,17 +1546,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     </div>
                   ))}
                 </div>
-              </>
+              </DrawerSection>
             )}
             {detailVm.recommendationText && (
-              <>
-                <div className="dd-col-label section-heading dd-col-label--mt-16">Recommended action</div>
-                <p className="dd-recommended-action">{detailVm.recommendationText}</p>
-              </>
+              <DrawerSection title="Recommended action" className="dd-section-card--compact">
+                <ExpandableText text={detailVm.recommendationText} className="dd-recommended-action" clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" />
+              </DrawerSection>
             )}
-            <div className="dd-col-label section-heading dd-col-label--mt-16">AI reasoning</div>
-            <p className="dd-summary">{detailVm.reasoningText}</p>
-            <div className="dd-col-label section-heading dd-col-label--mt-16">View resume</div>
+            <DrawerSection title="AI reasoning" className="dd-section-card--compact">
+              <ExpandableText text={detailVm.reasoningText} clampClassName="dd-summary--clamp-6" buttonLabel="Show more" collapseLabel="Show less" />
+            </DrawerSection>
+            <DrawerSection title="View resume" className="dd-section-card--compact">
             <div className="dd-resume-file">
               <FileText size={16} strokeWidth={1.6} aria-hidden="true" />
               <div>
@@ -1549,9 +1576,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </button>
               </div>
             </div>
+            </DrawerSection>
           </div>
           <div className="dd-col">
-            <div className="dd-col-label section-heading">Score breakdown</div>
+            <DrawerSection title="Score breakdown">
             {hasResolvableBreakdownMetrics ? (
               <div className="dd-analysis-box dd-breakdown">
                 {resolvableScoreBreakdownRows.map((row) => (
@@ -1561,19 +1589,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 ))}
               </div>
             ) : <p className="dd-summary">Score breakdown unavailable</p>}
-            <div className="dd-col-label section-heading dd-col-label--mt-14">Matched skills <span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span></div>
-            <div className="dd-top-skills">{detailVm.matchedSkills.map((skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>))}</div>
-            <div className="dd-col-label section-heading dd-col-label--mt-14">Skill gaps{detailVm.missingSkills.length > 0 ? <span className="dd-count-badge dd-count-badge--amber">{detailVm.missingSkills.length} gaps identified</span> : null}</div>
-            {detailVm.missingSkills.length > 0 ? (
-              <div className="dd-top-skills">
-                {detailVm.missingSkills.map((skill) => (
+            </DrawerSection>
+            <DrawerSection title="Matched skills" className="dd-section-card--compact" badge={<span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span>}>
+              <ExpandableList items={detailVm.matchedSkills} previewCount={8} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>)} />
+            </DrawerSection>
+            <DrawerSection title="Skill gaps" className="dd-section-card--compact" badge={detailVm.missingSkills.length > 0 ? <span className="dd-count-badge dd-count-badge--amber">{detailVm.missingSkills.length} gaps identified</span> : null}>
+              {detailVm.missingSkills.length > 0 ? (
+                <ExpandableList items={detailVm.missingSkills} previewCount={6} listClassName="dd-top-skills" renderItem={(skill) => (
                   <span className="dd-top-skill dd-top-skill--warn" key={`${expandedCandidateKey}-gap-${skill}`}>{skill}</span>
-                ))}
-              </div>
-            ) : <p className="dd-summary">No explicit skill gaps identified.</p>}
+                )} />
+              ) : <p className="dd-summary">No explicit skill gaps identified.</p>}
+            </DrawerSection>
             {detailVm.allSkills.length > 0 && (
-              <>
-                <div className="dd-col-label section-heading dd-col-label--mt-14">All skills</div>
+              <DrawerSection title="All skills" className="dd-section-card--compact">
                 <div className="dd-top-skills dd-top-skills--all">
                   {allSkillsVisible.map((skill) => (
                     <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-all-skill-${skill}`}>{skill}</span>
@@ -1581,25 +1609,41 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
                 {hasCollapsedSkills && (
                   <button className="hf-btn hf-btn--secondary dd-toggle-skills" type="button" onClick={() => setShowAllDrawerSkills((current) => !current)}>
-                    {showAllDrawerSkills ? 'Show fewer skills' : `Show all skills (${detailVm.allSkills.length})`}
+                    {showAllDrawerSkills ? 'Show less' : `Show all skills (${detailVm.allSkills.length})`}
                   </button>
                 )}
-              </>
+              </DrawerSection>
             )}
           </div>
           <div className="dd-col">
-            <div className="dd-col-label section-heading">Strengths</div>
-            <div className="dd-analysis-box dd-analysis-box--green">
-              {detailVm.candidateStrengths.length > 0
-                ? detailVm.candidateStrengths.map((strength, idx) => (<div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><ExpandableText text={strength} /></div>))
-                : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
-            </div>
-            <div className="dd-col-label section-heading dd-col-label--mt-14">Considerations</div>
-            <div className="dd-analysis-box dd-analysis-box--amber">
-              {detailVm.candidateConsiderations.length > 0
-                ? detailVm.candidateConsiderations.map((consideration, idx) => (<div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><ExpandableText text={consideration} /></div>))
-                : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
-            </div>
+            <DrawerSection title="Strengths">
+              <div className="dd-analysis-box dd-analysis-box--green">
+                {detailVm.candidateStrengths.length > 0
+                  ? (
+                    <ExpandableList
+                      items={detailVm.candidateStrengths}
+                      previewCount={3}
+                      listClassName="dd-list"
+                      renderItem={(strength, idx) => (<div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><span>{strength}</span></div>)}
+                    />
+                  )
+                  : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
+              </div>
+            </DrawerSection>
+            <DrawerSection title="Considerations" className="dd-section-card--compact">
+              <div className="dd-analysis-box dd-analysis-box--amber">
+                {detailVm.candidateConsiderations.length > 0
+                  ? (
+                    <ExpandableList
+                      items={detailVm.candidateConsiderations}
+                      previewCount={3}
+                      listClassName="dd-list"
+                      renderItem={(consideration, idx) => (<div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><span>{consideration}</span></div>)}
+                    />
+                  )
+                  : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
+              </div>
+            </DrawerSection>
             {integrityChecks.length > 0 && <div className="dd-analysis-box">{integrityChecks.map((check, idx) => (<div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>{check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}<span>{toDisplayText(check?.label || check, 'Unavailable')}</span></div>))}</div>}
           </div>
         </div>
