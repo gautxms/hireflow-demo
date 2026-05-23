@@ -94,6 +94,8 @@ test('candidate drawer includes labelled View resume section that uses existing 
   assert.match(candidateResultsSource, /\{detailVm\.resumeFileLabel\}/)
   assert.match(candidateResultsSource, /onClick=\{\(\) => openCandidateResumeInNewTab\(candidate\)\}/)
   assert.match(candidateResultsSource, /disabled=\{!hasResumeForOpen\}/)
+})
+
 test('expanded drawer renders restored legacy sections for facts, recommendation, skill gaps, and all skills', () => {
   assert.match(candidateResultsSource, />Key facts</)
   assert.match(candidateResultsSource, />Recommended action</)
@@ -111,4 +113,12 @@ test('expanded drawer skill gaps heading includes amber count badge when gaps ex
 
 test('expanded drawer applies warning skill class to skill gap pills', () => {
   assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--warn"/)
+})
+
+test('score breakdown rows include Skill Match, Experience, Education, and conditional Role Alignment', () => {
+  assert.match(candidateResultsSource, /label: 'Skill Match'/)
+  assert.match(candidateResultsSource, /label: 'Experience'/)
+  assert.match(candidateResultsSource, /label: 'Education'/)
+  assert.match(candidateResultsSource, /label: 'Role Alignment'/)
+  assert.doesNotMatch(candidateResultsSource, /label: 'Overall fit'/)
 })
