@@ -115,7 +115,7 @@ function ExpandableText({ text, className = 'dd-summary', clampClassName = 'dd-s
   }, [resetKey])
   return (
     <>
-      <p id={controlsId || undefined} className={`${className}${!expanded && needsTruncation ? ` ${clampClassName}` : ''}`} title={!expanded && needsTruncation && hoverText ? hoverText : undefined}>{content}</p>
+      <p id={controlsId || undefined} className={`${className}${!expanded && needsTruncation ? ` ${clampClassName}` : ''}`} title={!expanded && hoverText ? hoverText : undefined}>{content}</p>
       {needsTruncation && (
         <button type="button" className="dd-inline-disclosure" aria-expanded={expanded} aria-controls={controlsId || undefined} onClick={() => setExpanded((value) => !value)}>
           {expanded ? collapseLabel : buttonLabel}
