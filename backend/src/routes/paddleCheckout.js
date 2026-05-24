@@ -3,17 +3,10 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
+import { resolvePaddleConfig } from '../config/paddle.js'
 
 const router = Router()
 
-const PADDLE_API_BASE_URL = process.env.PADDLE_API_BASE_URL || 'https://api.paddle.com'
-const PADDLE_CLIENT_TOKEN = process.env.PADDLE_CLIENT_TOKEN
-const PADDLE_ENVIRONMENT = process.env.PADDLE_ENVIRONMENT || 'production'
-
-const PRICE_IDS_BY_PLAN = {
-  monthly: process.env.PADDLE_MONTHLY_PRICE_ID,
-  annual: process.env.PADDLE_ANNUAL_PRICE_ID,
-}
 
 function getAppOrigin(req) {
   return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
@@ -26,15 +19,17 @@ function getAppOrigin(req) {
 router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
   const { plan } = req.body || {}
 
-  if (!process.env.PADDLE_API_KEY) {
+  const paddle = resolvePaddleConfig()
+
+  if (!paddle.apiKey) {
     return res.status(500).json({ error: 'PADDLE_API_KEY is not configured' })
   }
 
-  if (!PADDLE_CLIENT_TOKEN) {
+  if (!paddle.clientToken) {
     return res.status(500).json({ error: 'PADDLE_CLIENT_TOKEN is not configured' })
   }
 
-  const priceId = PRICE_IDS_BY_PLAN[plan]
+  const priceId = paddle.priceIdsByPlan[plan]
 
   if (!priceId) {
     return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
@@ -54,10 +49,10 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
     const cancelUrl = `${appOrigin}/billing/cancel`
 
     // Call Paddle API to create transaction
-    const paddleResponse = await fetch(`${PADDLE_API_BASE_URL}/transactions`, {
+    const paddleResponse = await fetch(`${paddle.apiBaseUrl}/transactions`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+        Authorization: `Bearer ${paddle.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -98,8 +93,8 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
     const resp1 = {
       checkoutUrl,
       userEmail: user.email,
-      clientToken: PADDLE_CLIENT_TOKEN,
-      paddleEnvironment: PADDLE_ENVIRONMENT,
+      clientToken: paddle.clientToken,
+      paddleEnvironment: paddle.environment,
       _version: 'WITH_USER_EMAIL_2026_03_26', // Marker to verify code is deployed
     }
     return res.json(resp1)
@@ -118,15 +113,17 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
 router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(schemas.paddleCheckout), async (req, res) => {
   const { plan } = req.body || {}
 
-  if (!process.env.PADDLE_API_KEY) {
+  const paddle = resolvePaddleConfig()
+
+  if (!paddle.apiKey) {
     return res.status(500).json({ error: 'PADDLE_API_KEY is not configured' })
   }
 
-  if (!PADDLE_CLIENT_TOKEN) {
+  if (!paddle.clientToken) {
     return res.status(500).json({ error: 'PADDLE_CLIENT_TOKEN is not configured' })
   }
 
-  const priceId = PRICE_IDS_BY_PLAN[plan]
+  const priceId = paddle.priceIdsByPlan[plan]
 
   if (!priceId) {
     return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
@@ -146,10 +143,10 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
     const cancelUrl = `${appOrigin}/billing/cancel`
 
     // Call Paddle API to create transaction
-    const paddleResponse = await fetch(`${PADDLE_API_BASE_URL}/transactions`, {
+    const paddleResponse = await fetch(`${paddle.apiBaseUrl}/transactions`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+        Authorization: `Bearer ${paddle.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -190,8 +187,8 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
     const resp2 = {
       checkoutUrl,
       userEmail: user.email,
-      clientToken: PADDLE_CLIENT_TOKEN,
-      paddleEnvironment: PADDLE_ENVIRONMENT,
+      clientToken: paddle.clientToken,
+      paddleEnvironment: paddle.environment,
       _version: 'WITH_USER_EMAIL_2026_03_26', // Marker to verify code is deployed
     }
     return res.json(resp2)

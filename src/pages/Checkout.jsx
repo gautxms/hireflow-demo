@@ -5,7 +5,7 @@ import API_BASE from '../config/api'
 
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
-const clientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
+const fallbackClientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
 const PADDLE_LAST_TRANSACTION_STORAGE_KEY = 'paddle_last_transaction'
 const PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY = 'paddle_checkout_active'
@@ -347,16 +347,21 @@ export default function Checkout({ onAuthSuccess }) {
         const Paddle = await waitForPaddle()
         paddleRef = Paddle
 
+        if (paddleEnvironment === 'sandbox') {
+          Paddle.Environment.set('sandbox')
+        }
+
         // Step 4: Initialize Paddle with client token and user email
         console.log('[Checkout] Initializing Paddle with pwCustomer...')
-        if (clientToken && userEmail) {
+        const effectiveClientToken = checkoutClientToken || fallbackClientToken
+        if (effectiveClientToken && userEmail) {
           if (!Paddle.isInitialized && !Paddle.isInitializing) {
             console.log('[Checkout] Calling Paddle.Initialize with client token and pwCustomer:', {
-              tokenExists: !!clientToken,
+              tokenExists: !!effectiveClientToken,
               userEmail,
             })
             Paddle.Initialize({
-              token: clientToken,
+              token: effectiveClientToken,
               pwCustomer: {
                 email: userEmail,
               },
@@ -364,7 +369,7 @@ export default function Checkout({ onAuthSuccess }) {
           }
         } else {
           console.error('[Checkout] Missing required Paddle initialization data:', {
-            hasClientToken: !!clientToken,
+            hasClientToken: !!effectiveClientToken,
             hasUserEmail: !!userEmail,
           })
           throw new Error('Missing Paddle initialization data (token or email)')
@@ -455,7 +460,7 @@ export default function Checkout({ onAuthSuccess }) {
 
           Paddle.Checkout.open({
             transactionId: initialTransactionId,
-            client: checkoutClientToken || clientToken,
+            client: effectiveClientToken,
             environment: paddleEnvironment,
             settings: {
               allowLogout: false,

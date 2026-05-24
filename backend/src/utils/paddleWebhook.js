@@ -145,3 +145,7 @@ export function mapToSubscriptionStatus(eventType, payload) {
 
   return null
 }
+
+export function getTransactionSubscriptionId(payload) {
+  return payload?.data?.subscription_id || payload?.data?.subscription?.id || payload?.subscription_id || payload?.subscription?.id || null
+}

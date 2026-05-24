@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { resolvePaddleConfig } from '../config/paddle.js'
 
 const router = Router()
 
@@ -9,8 +10,6 @@ const PLAN_CONFIG = {
   annual: { label: 'Annual', amountCents: 99900, interval: 'year' },
 }
 
-const PADDLE_API_BASE_URL = process.env.PADDLE_API_BASE_URL || 'https://api.paddle.com'
-const PADDLE_API_VERSION = process.env.PADDLE_API_VERSION || '1'
 
 export function money(cents, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
@@ -26,16 +25,17 @@ export function isoOrNull(value) {
 }
 
 async function paddleRequest(path, options = {}) {
-  if (!process.env.PADDLE_API_KEY) {
+  const paddle = resolvePaddleConfig()
+  if (!paddle.apiKey) {
     return { skipped: true, reason: 'PADDLE_API_KEY missing' }
   }
 
-  const response = await fetch(`${PADDLE_API_BASE_URL}${path}`, {
+  const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+      Authorization: `Bearer ${paddle.apiKey}`,
       'Content-Type': 'application/json',
-      'Paddle-Version': PADDLE_API_VERSION,
+      'Paddle-Version': paddle.apiVersion,
       ...(options.headers || {}),
     },
   })
@@ -174,7 +174,8 @@ router.post('/change-plan', requireAuth, async (req, res) => {
     const proratedCreditCents = isUpgrade ? 1500 : 0
 
     if (user.paddle_subscription_id) {
-      const targetPriceId = targetPlan === 'annual' ? process.env.PADDLE_ANNUAL_PRICE_ID : process.env.PADDLE_MONTHLY_PRICE_ID
+      const paddle = resolvePaddleConfig()
+      const targetPriceId = targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
 
       if (targetPriceId) {
         await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
