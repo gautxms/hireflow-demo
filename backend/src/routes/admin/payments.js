@@ -97,7 +97,7 @@ router.get('/', async (_req, res) => {
     const summaryResult = await pool.query(
       `SELECT
           COALESCE(SUM(CASE WHEN subscription_status IN ('active', 'trialing') AND subscription_plan = 'monthly' THEN 99 ELSE 0 END), 0) AS mrr,
-          COALESCE(SUM(CASE WHEN subscription_status IN ('active', 'trialing') AND subscription_plan = 'annual' THEN 999 ELSE 0 END), 0) AS annualized_monthly,
+          COALESCE(SUM(CASE WHEN subscription_status IN ('active', 'trialing') AND subscription_plan = 'annual' THEN 999.0 / 12 ELSE 0 END), 0) AS annualized_monthly,
           COUNT(*) FILTER (WHERE subscription_status = 'cancelled')::int AS cancelled_count,
           COUNT(*) FILTER (WHERE subscription_status IN ('active', 'trialing'))::int AS active_count
        FROM users`,
