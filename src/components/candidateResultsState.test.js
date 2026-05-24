@@ -385,7 +385,7 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
 })
 
 
-test('buildExpandedCandidateDrawerViewModel keeps short complete trailing tokens when normalizing narratives', async () => {
+test('buildExpandedCandidateDrawerViewModel preserves narrative text without appending synthetic ellipses', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
     recommendation: 'Strong fit for SQL',
@@ -393,9 +393,9 @@ test('buildExpandedCandidateDrawerViewModel keeps short complete trailing tokens
     considerations: ['Can relocate to NY'],
   })
 
-  assert.equal(vm.recommendationText, 'Strong fit for SQL...')
-  assert.deepEqual(vm.candidateStrengths, ['Hands-on AWS...'])
-  assert.deepEqual(vm.candidateConsiderations, ['Can relocate to NY...'])
+  assert.equal(vm.recommendationText, 'Strong fit for SQL')
+  assert.deepEqual(vm.candidateStrengths, ['Hands-on AWS'])
+  assert.deepEqual(vm.candidateConsiderations, ['Can relocate to NY'])
 })
 
 test('buildExpandedCandidateDrawerViewModel preserves historical explicit textual confidence label', async () => {

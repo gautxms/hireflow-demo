@@ -469,12 +469,7 @@ export function toDisplayText(value, fallback = 'N/A') {
 
 function normalizeDisplayNarrative(value, fallback = '') {
   const text = toDisplayText(value, fallback).trim()
-  if (!text) return fallback
-
-  const terminalPattern = /[.!?…'"”)]$/
-  if (terminalPattern.test(text)) return text
-
-  return `${text}...`
+  return text || fallback
 }
 
 function normalizeEducationRecord(record) {
