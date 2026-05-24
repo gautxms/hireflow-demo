@@ -206,43 +206,45 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       const transactionSubscriptionId = getTransactionSubscriptionId(payload)
       const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
 
-      if (userId && !hasEnvironmentMismatch) {
-        await pool.query(
-          `UPDATE users
-           SET subscription_status = 'active',
-               subscription_started_at = COALESCE(subscription_started_at, NOW()),
-               paddle_subscription_id = COALESCE($2, paddle_subscription_id),
-               paddle_customer_id = COALESCE($3, paddle_customer_id),
-               subscription_plan = COALESCE($4, subscription_plan),
-               current_period_end = COALESCE($5, current_period_end),
-               next_billing_date = COALESCE($6, next_billing_date),
-               paddle_environment = $7,
-               updated_at = NOW()
-           WHERE id = $1`,
-          [userId, transactionSubscriptionId, getPaddleCustomerId(payload), payload?.data?.custom_data?.plan || null, payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
-        )
+      if (!hasEnvironmentMismatch) {
+        if (userId) {
+          await pool.query(
+            `UPDATE users
+             SET subscription_status = 'active',
+                 subscription_started_at = COALESCE(subscription_started_at, NOW()),
+                 paddle_subscription_id = COALESCE($2, paddle_subscription_id),
+                 paddle_customer_id = COALESCE($3, paddle_customer_id),
+                 subscription_plan = COALESCE($4, subscription_plan),
+                 current_period_end = COALESCE($5, current_period_end),
+                 next_billing_date = COALESCE($6, next_billing_date),
+                 paddle_environment = $7,
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [userId, transactionSubscriptionId, getPaddleCustomerId(payload), payload?.data?.custom_data?.plan || null, payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
+          )
+        }
+
+        await markPaymentAttemptSucceeded(payload)
+
+        await trackEvent({
+          userId,
+          eventType: 'payment_success',
+          metadata: {
+            source: 'paddle.webhook',
+            transaction_id: payload?.data?.id || null,
+            plan: payload?.data?.custom_data?.plan || null,
+            amount: getPaymentAmount(payload),
+            currency: payload?.data?.currency_code || payload?.data?.currency || null,
+          },
+        })
+
+        await triggerWebhook('subscription.activated', {
+          userId,
+          subscriptionId: transactionSubscriptionId,
+          transactionId,
+          status: 'active',
+        })
       }
-
-      await markPaymentAttemptSucceeded(payload)
-
-      await trackEvent({
-        userId,
-        eventType: 'payment_success',
-        metadata: {
-          source: 'paddle.webhook',
-          transaction_id: payload?.data?.id || null,
-          plan: payload?.data?.custom_data?.plan || null,
-          amount: getPaymentAmount(payload),
-          currency: payload?.data?.currency_code || payload?.data?.currency || null,
-        },
-      })
-
-      await triggerWebhook('subscription.activated', {
-        userId,
-        subscriptionId: transactionSubscriptionId,
-        transactionId,
-        status: 'active',
-      })
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
