@@ -4,14 +4,17 @@ import { pool, logErrorToDatabase } from '../db/client.js'
 import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
 import { trackEvent } from '../services/analytics.js'
 import { triggerWebhook } from '../services/webhookService.js'
+import { resolvePaddleConfig } from '../config/paddle.js'
 import {
   getWebhookEventType,
   mapToSubscriptionStatus,
   verifyPaddleSignature,
   getEventDeduplicationId,
+  getTransactionSubscriptionId,
 } from '../utils/paddleWebhook.js'
 
 const router = express.Router()
+const paddle = resolvePaddleConfig()
 
 function getPaddleCustomerId(payload) {
   return (
@@ -116,7 +119,7 @@ async function ensureWebhookEventsTable() {
 
 router.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
   const rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : ''
-  const secret = process.env.PADDLE_WEBHOOK_SECRET || ''
+  const secret = paddle.webhookSecret || ''
   const incomingSignature = req.headers['paddle-signature']
   const signatureHeader = typeof incomingSignature === 'string' ? incomingSignature : req.get('Paddle-Signature')
 
@@ -165,22 +168,23 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
 
     if (nextStatus && subscriptionId) {
       await pool.query(
-        `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload)
-         VALUES ($1, $2, $3, $4, $5::jsonb)
+        `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6)
          ON CONFLICT (paddle_subscription_id)
          DO UPDATE SET
            user_id = COALESCE(EXCLUDED.user_id, subscriptions.user_id),
            status = EXCLUDED.status,
            latest_event_type = EXCLUDED.latest_event_type,
            latest_event_payload = EXCLUDED.latest_event_payload,
-           updated_at = NOW()`,
-        [subscriptionId, user?.id || null, nextStatus, eventType, JSON.stringify(payload)],
+           updated_at = NOW(),
+           paddle_environment = EXCLUDED.paddle_environment`,
+        [subscriptionId, user?.id || null, nextStatus, eventType, JSON.stringify(payload), paddle.environment],
       )
     }
 
     if (eventType === 'transaction.completed') {
       const userId = user?.id || null
-      const transactionSubscriptionId = getSubscriptionId(payload)
+      const transactionSubscriptionId = getTransactionSubscriptionId(payload)
       const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
 
       if (userId) {
@@ -189,9 +193,14 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
            SET subscription_status = 'active',
                subscription_started_at = COALESCE(subscription_started_at, NOW()),
                paddle_subscription_id = COALESCE($2, paddle_subscription_id),
+               paddle_customer_id = COALESCE($3, paddle_customer_id),
+               subscription_plan = COALESCE($4, subscription_plan),
+               current_period_end = COALESCE($5, current_period_end),
+               next_billing_date = COALESCE($6, next_billing_date),
+               paddle_environment = $7,
                updated_at = NOW()
            WHERE id = $1`,
-          [userId, transactionSubscriptionId],
+          [userId, transactionSubscriptionId, getPaddleCustomerId(payload), payload?.data?.custom_data?.plan || null, payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
         )
       }
 
@@ -242,10 +251,15 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
           `UPDATE users
            SET paddle_subscription_id = COALESCE($2, paddle_subscription_id),
                subscription_status = $3,
+               paddle_customer_id = COALESCE($4, paddle_customer_id),
+               subscription_plan = COALESCE($5, subscription_plan),
+               current_period_end = COALESCE($6, current_period_end),
+               next_billing_date = COALESCE($7, next_billing_date),
+               paddle_environment = $8,
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
                updated_at = NOW()
            WHERE id = $1`,
-          [user.id, subscriptionFromEvent, updatedStatus],
+          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), payload?.data?.custom_data?.plan || null, payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment],
         )
       }
     }
@@ -258,9 +272,13 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
           `UPDATE users
            SET subscription_status = 'cancelled',
                paddle_subscription_id = COALESCE($2, paddle_subscription_id),
+               paddle_customer_id = COALESCE($3, paddle_customer_id),
+               current_period_end = COALESCE($4, current_period_end),
+               next_billing_date = COALESCE($5, next_billing_date),
+               paddle_environment = $6,
                updated_at = NOW()
            WHERE id = $1`,
-          [user.id, canceledSubscriptionId],
+          [user.id, canceledSubscriptionId, getPaddleCustomerId(payload), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.scheduled_change?.effective_at || null, paddle.environment],
         )
       }
 

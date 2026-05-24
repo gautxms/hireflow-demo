@@ -5,6 +5,7 @@ import {
   getEventDeduplicationId,
   mapToSubscriptionStatus,
   verifyPaddleSignature,
+  getTransactionSubscriptionId,
 } from './paddleWebhook.js'
 
 test('verifyPaddleSignature accepts valid HMAC-SHA256 signatures', () => {
@@ -67,4 +68,11 @@ test('mapToSubscriptionStatus maps lifecycle events', () => {
   assert.equal(mapToSubscriptionStatus('transaction.completed', {}), 'active')
   assert.equal(mapToSubscriptionStatus('subscription.cancelled', {}), 'cancelled')
   assert.equal(mapToSubscriptionStatus('customer.updated', {}), null)
+})
+
+
+test('getTransactionSubscriptionId prefers subscription_id and never transaction id', () => {
+  const payload = { data: { id: 'txn_123', subscription_id: 'sub_456' } }
+  assert.equal(getTransactionSubscriptionId(payload), 'sub_456')
+  assert.notEqual(getTransactionSubscriptionId(payload), 'txn_123')
 })
