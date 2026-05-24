@@ -15,6 +15,7 @@ import {
   resolveCandidateResumeUuid,
   resolveCandidateYears,
   resolveFilterableSkills,
+  sortCandidatesForResults,
   sanitizeExpandedCandidate,
   toDisplayText,
   buildExpandedCandidateDrawerViewModel,
@@ -551,21 +552,7 @@ function filterAndSortCandidates(candidates, filters) {
     return true
   })
 
-  return [...filtered].sort((a, b) => {
-    if (sortBy === 'name') {
-      return String(a?.name || '').localeCompare(String(b?.name || ''))
-    }
-
-    if (sortBy === 'experience') {
-      return resolveCandidateYears(b) - resolveCandidateYears(a)
-    }
-
-    if (sortBy === 'upload_date') {
-      return parseUploadDate(b) - parseUploadDate(a)
-    }
-
-    return Number(activeScore(b) || 0) - Number(activeScore(a) || 0)
-  })
+  return sortCandidatesForResults(filtered, sortBy, parseUploadDate)
 }
 
 
