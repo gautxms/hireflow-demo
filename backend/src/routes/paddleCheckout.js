@@ -20,6 +20,14 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
   const { plan } = req.body || {}
 
   const paddle = resolvePaddleConfig()
+  console.info('[Paddle checkout] resolved configuration', {
+    environment: paddle.environment,
+    apiBaseUrl: paddle.apiBaseUrl,
+    hasApiKey: Boolean(paddle.apiKey),
+    hasClientToken: Boolean(paddle.clientToken),
+    hasMonthlyPriceId: Boolean(paddle.priceIdsByPlan.monthly),
+    hasAnnualPriceId: Boolean(paddle.priceIdsByPlan.annual),
+  })
 
   if (!paddle.apiKey) {
     return res.status(500).json({ error: 'PADDLE_API_KEY is not configured' })
@@ -67,6 +75,7 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
           userId: user.id,
           email: user.email,
           plan,
+          paddleEnvironment: paddle.environment,
         },
         return_url: successUrl,
       }),
@@ -75,7 +84,14 @@ router.post('/checkout', requireAuth, generalApiLimiterAuth, validateBody(schema
     const paddlePayload = await paddleResponse.json()
 
     if (!paddleResponse.ok) {
-      return res.status(502).json({ error: 'Failed to create Paddle transaction', details: paddlePayload })
+      return res.status(502).json({
+        error: 'Failed to create Paddle transaction',
+        details: {
+          status: paddleResponse.status,
+          paddle: paddlePayload,
+          environment: paddle.environment,
+        },
+      })
     }
 
     const transactionId = paddlePayload?.data?.id
@@ -114,6 +130,14 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
   const { plan } = req.body || {}
 
   const paddle = resolvePaddleConfig()
+  console.info('[Paddle checkout-url] resolved configuration', {
+    environment: paddle.environment,
+    apiBaseUrl: paddle.apiBaseUrl,
+    hasApiKey: Boolean(paddle.apiKey),
+    hasClientToken: Boolean(paddle.clientToken),
+    hasMonthlyPriceId: Boolean(paddle.priceIdsByPlan.monthly),
+    hasAnnualPriceId: Boolean(paddle.priceIdsByPlan.annual),
+  })
 
   if (!paddle.apiKey) {
     return res.status(500).json({ error: 'PADDLE_API_KEY is not configured' })
@@ -161,6 +185,7 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
           userId: user.id,
           email: user.email,
           plan,
+          paddleEnvironment: paddle.environment,
         },
         return_url: successUrl,
       }),
@@ -169,7 +194,14 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
     const paddlePayload = await paddleResponse.json()
 
     if (!paddleResponse.ok) {
-      return res.status(502).json({ error: 'Failed to create Paddle transaction', details: paddlePayload })
+      return res.status(502).json({
+        error: 'Failed to create Paddle transaction',
+        details: {
+          status: paddleResponse.status,
+          paddle: paddlePayload,
+          environment: paddle.environment,
+        },
+      })
     }
 
     const transactionId = paddlePayload?.data?.id

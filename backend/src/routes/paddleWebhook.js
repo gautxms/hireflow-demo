@@ -26,7 +26,11 @@ function getPaddleCustomerId(payload) {
   )
 }
 
-function getSubscriptionId(payload) {
+function getSubscriptionId(payload, eventType = null) {
+  const normalizedEvent = String(eventType || '').toLowerCase()
+  if (normalizedEvent === 'transaction.completed') {
+    return getTransactionSubscriptionId(payload)
+  }
   return payload?.data?.id || payload?.subscription_id || payload?.subscription?.id || null
 }
 
@@ -133,6 +137,11 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
 
   const eventType = getWebhookEventType(payload)
   const signatureCheck = verifyPaddleSignature(rawBody, signatureHeader, secret)
+  console.info('[Paddle webhook] received event', {
+    environment: paddle.environment,
+    eventType,
+    hasWebhookSecret: Boolean(secret),
+  })
 
   try {
     await logWebhookAudit(eventType, payload, signatureCheck.isValid, signatureCheck.reason)
@@ -163,10 +172,20 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     }
 
     const nextStatus = mapToSubscriptionStatus(eventType, payload)
-    const subscriptionId = getSubscriptionId(payload)
+    const subscriptionId = getSubscriptionId(payload, eventType)
+    const payloadEnvironment = payload?.data?.custom_data?.paddleEnvironment || payload?.custom_data?.paddleEnvironment || null
+    const hasEnvironmentMismatch = payloadEnvironment && payloadEnvironment !== paddle.environment
+
+    if (hasEnvironmentMismatch) {
+      console.warn('[Paddle webhook] skipping event due to environment mismatch', {
+        configuredEnvironment: paddle.environment,
+        payloadEnvironment,
+        eventType,
+      })
+    }
     const user = await resolveUserFromPayload(payload)
 
-    if (nextStatus && subscriptionId) {
+    if (!hasEnvironmentMismatch && nextStatus && subscriptionId) {
       await pool.query(
         `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6)
@@ -187,7 +206,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       const transactionSubscriptionId = getTransactionSubscriptionId(payload)
       const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
 
-      if (userId) {
+      if (userId && !hasEnvironmentMismatch) {
         await pool.query(
           `UPDATE users
            SET subscription_status = 'active',
@@ -242,7 +261,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       })
     }
 
-    if (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing') {
+    if (!hasEnvironmentMismatch && (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing')) {
       const updatedStatus = getSubscriptionStatus(payload) || mapToSubscriptionStatus(eventType, payload)
       const subscriptionFromEvent = getSubscriptionId(payload)
 
@@ -264,8 +283,8 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       }
     }
 
-    if (eventType === 'subscription.canceled' || eventType === 'subscription.cancelled') {
-      const canceledSubscriptionId = getSubscriptionId(payload)
+    if (!hasEnvironmentMismatch && (eventType === 'subscription.canceled' || eventType === 'subscription.cancelled')) {
+      const canceledSubscriptionId = getSubscriptionId(payload, eventType)
 
       if (user?.id) {
         await pool.query(
