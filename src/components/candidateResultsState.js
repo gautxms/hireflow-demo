@@ -600,7 +600,10 @@ export function resolveScoreBreakdownMetric(matchBreakdown, keys = [], fallback 
 }
 
 export function buildScoreBreakdownRows(candidate = {}) {
-  const matchBreakdown = candidate?.matchScore?.breakdown || candidate?.scoreBreakdown
+  const matchBreakdown = candidate?.matchScore?.breakdown
+    || candidate?.match_score?.breakdown
+    || candidate?.scoreBreakdown
+    || candidate?.score_breakdown
   const roleAlignmentValue = resolveScoreBreakdownMetric(
     matchBreakdown,
     ['role_alignment', 'roleAlignment', 'role_fit', 'roleFit', 'job_alignment'],

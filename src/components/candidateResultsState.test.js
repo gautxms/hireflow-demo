@@ -168,6 +168,25 @@ test('buildScoreBreakdownRows includes rows when any valid scores exist and pars
   ])
 })
 
+
+test('buildScoreBreakdownRows supports snake_case breakdown payload fields', () => {
+  const rows = buildScoreBreakdownRows({
+    match_score: {
+      breakdown: {
+        skills_match: 88,
+        experience: '74%',
+        education: 0.61,
+      },
+    },
+  })
+
+  assert.deepEqual(rows, [
+    { label: 'Skill Match', value: 88 },
+    { label: 'Experience', value: 74 },
+    { label: 'Education', value: 61 },
+  ])
+})
+
 test('buildScoreBreakdownRows only includes Role Alignment when real numeric field exists', () => {
   const withoutRoleAlignment = buildScoreBreakdownRows({
     fit_assessment: { skill_match_score: 81 },
