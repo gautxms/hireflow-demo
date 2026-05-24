@@ -147,7 +147,7 @@ const withSeo = (html, routeConfig) => {
 }
 
 const withBody = (html, body) =>
-  html.replace('<div id="root"></div>', `<div id="root"><noscript>${body}</noscript></div>`)
+  html.replace('<div id="root"></div>', `<div id="root">${body}</div>`)
 
 const routeToDir = (route) => (route === '/' ? DIST_DIR : resolve(DIST_DIR, route.slice(1)))
 
