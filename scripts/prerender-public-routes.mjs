@@ -146,7 +146,8 @@ const withSeo = (html, routeConfig) => {
   return html.replace(/<!-- SEO_DEFAULT_START -->[\s\S]*?<!-- SEO_DEFAULT_END -->/i, headMarkup)
 }
 
-const withBody = (html, body) => html.replace('<div id="root"></div>', `<div id="root">${body}</div>`)
+const withBody = (html, body) =>
+  html.replace('<div id="root"></div>', `<div id="root">${body}</div>`)
 
 const routeToDir = (route) => (route === '/' ? DIST_DIR : resolve(DIST_DIR, route.slice(1)))
 
