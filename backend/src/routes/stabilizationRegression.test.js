@@ -86,7 +86,7 @@ test('auth middleware accepts cookie token when bearer is absent', () => {
 
 test('billing helpers normalize dates and money formatting', () => {
   assert.equal(money(9900), '$99.00')
-  assert.equal(money('94800', 'USD'), '$948.00')
+  assert.equal(money('99900', 'USD'), '$999.00')
   assert.equal(isoOrNull(null), null)
   assert.equal(isoOrNull('2026-01-15T12:00:00Z'), '2026-01-15T12:00:00.000Z')
 })
