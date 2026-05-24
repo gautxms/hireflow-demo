@@ -478,7 +478,7 @@ function normalizeDisplayNarrative(value, fallback = '') {
   if (lastSpace <= 0) return `${text}...`
 
   const tail = text.slice(lastSpace + 1)
-  const looksTruncatedTail = tail.length <= 4 || /^[a-z]{1,4}$/i.test(tail)
+  const looksTruncatedTail = /^[a-z]{1,4}$/.test(tail)
   if (looksTruncatedTail) {
     return `${text.slice(0, lastSpace).trim()}...`
   }
