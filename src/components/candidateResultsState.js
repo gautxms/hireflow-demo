@@ -474,15 +474,6 @@ function normalizeDisplayNarrative(value, fallback = '') {
   const terminalPattern = /[.!?…'"”)]$/
   if (terminalPattern.test(text)) return text
 
-  const lastSpace = text.lastIndexOf(' ')
-  if (lastSpace <= 0) return `${text}...`
-
-  const tail = text.slice(lastSpace + 1)
-  const looksTruncatedTail = /^[a-z]{1,4}$/.test(tail)
-  if (looksTruncatedTail) {
-    return `${text.slice(0, lastSpace).trim()}...`
-  }
-
   return `${text}...`
 }
 

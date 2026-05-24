@@ -105,16 +105,17 @@ function shouldTruncateTextByLineBudget(text, lineLimit, approxCharsPerLine = 95
   return estimatedLines > lineLimit
 }
 
-function ExpandableText({ text, className = 'dd-summary', clampClassName = 'dd-summary--clamp', buttonLabel = 'Read more', collapseLabel = 'Show less', lineLimit = 5, resetKey = '', controlsId = '' }) {
+function ExpandableText({ text, className = 'dd-summary', clampClassName = 'dd-summary--clamp', buttonLabel = 'Read more', collapseLabel = 'Show less', lineLimit = 5, resetKey = '', controlsId = '', tooltipText = '' }) {
   const [expanded, setExpanded] = useState(false)
   const content = String(text || '').trim()
+  const hoverText = String(tooltipText || content).trim()
   const needsTruncation = shouldTruncateTextByLineBudget(content, lineLimit)
   useEffect(() => {
     setExpanded(false)
   }, [resetKey])
   return (
     <>
-      <p id={controlsId || undefined} className={`${className}${!expanded && needsTruncation ? ` ${clampClassName}` : ''}`}>{content}</p>
+      <p id={controlsId || undefined} className={`${className}${!expanded && needsTruncation ? ` ${clampClassName}` : ''}`} title={!expanded && needsTruncation && hoverText ? hoverText : undefined}>{content}</p>
       {needsTruncation && (
         <button type="button" className="dd-inline-disclosure" aria-expanded={expanded} aria-controls={controlsId || undefined} onClick={() => setExpanded((value) => !value)}>
           {expanded ? collapseLabel : buttonLabel}
@@ -1565,7 +1566,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                       resetKey={expandedCandidateKey}
                       controlsId={`strengths-${expandedCandidateKey}`}
                       listClassName="dd-list"
-                      renderItem={(strength, idx) => (<div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><span>{strength}</span></div>)}
+                      renderItem={(strength, idx) => (<div className="dd-list-item" key={`${expandedCandidateKey}-strength-${idx}`}><CheckCircle size={18} strokeWidth={1.5} /><span title={strength}>{strength}</span></div>)}
                     />
                   )
                   : <div className="dd-analysis-empty">Re-analyse to generate AI strengths</div>}
@@ -1581,7 +1582,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                       resetKey={expandedCandidateKey}
                       controlsId={`considerations-${expandedCandidateKey}`}
                       listClassName="dd-list"
-                      renderItem={(consideration, idx) => (<div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><span>{consideration}</span></div>)}
+                      renderItem={(consideration, idx) => (<div className="dd-list-item dd-list-item--warn" key={`${expandedCandidateKey}-consideration-${idx}`}><AlertTriangle size={18} strokeWidth={1.5} /><span title={consideration}>{consideration}</span></div>)}
                     />
                   )
                   : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
