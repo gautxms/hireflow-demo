@@ -168,6 +168,25 @@ test('buildScoreBreakdownRows includes rows when any valid scores exist and pars
   ])
 })
 
+
+test('buildScoreBreakdownRows supports snake_case breakdown payload fields', () => {
+  const rows = buildScoreBreakdownRows({
+    match_score: {
+      breakdown: {
+        skills_match: 88,
+        experience: '74%',
+        education: 0.61,
+      },
+    },
+  })
+
+  assert.deepEqual(rows, [
+    { label: 'Skill Match', value: 88 },
+    { label: 'Experience', value: 74 },
+    { label: 'Education', value: 61 },
+  ])
+})
+
 test('buildScoreBreakdownRows only includes Role Alignment when real numeric field exists', () => {
   const withoutRoleAlignment = buildScoreBreakdownRows({
     fit_assessment: { skill_match_score: 81 },
@@ -363,6 +382,20 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
   assert.equal(vm.recommendationText, 'Proceed to interview panel.')
   assert.deepEqual(vm.missingSkills, ['System Design', 'GraphQL', 'Leadership communication'])
   assert.deepEqual(vm.allSkills, ['React', 'Node.js', 'TypeScript', 'System Design'])
+})
+
+
+test('buildExpandedCandidateDrawerViewModel keeps short complete trailing tokens when normalizing narratives', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendation: 'Strong fit for SQL',
+    strengths: ['Hands-on AWS'],
+    considerations: ['Can relocate to NY'],
+  })
+
+  assert.equal(vm.recommendationText, 'Strong fit for SQL...')
+  assert.deepEqual(vm.candidateStrengths, ['Hands-on AWS...'])
+  assert.deepEqual(vm.candidateConsiderations, ['Can relocate to NY...'])
 })
 
 test('buildExpandedCandidateDrawerViewModel preserves historical explicit textual confidence label', async () => {

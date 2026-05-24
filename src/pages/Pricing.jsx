@@ -15,10 +15,10 @@ const PRICING = {
     id: 'annual',
     name: 'Annual Plan',
     badge: 'Best Value',
-    price: '$79',
+    price: '$83.25',
     period: '/month',
-    billing: 'Billed annually at $948/year',
-    savings: 'Save $240 per year compared to monthly',
+    billing: 'Billed annually at $999/year',
+    savings: 'Save $189 per year compared to monthly',
     trial: '7-day free trial, cancel anytime',
     cta: 'Start Annual',
   },
@@ -55,7 +55,7 @@ const PRICING_FAQ = [
   },
   {
     question: 'How does billing work?',
-    answer: 'Hireflow offers two billing schedules: monthly billing at $99 per month, or annual billing at an effective $79 per month billed as $948 per year. The annual option is discounted compared with paying month-to-month for a full year. Your selected billing cadence is shown clearly during checkout so your finance or operations team can review totals before purchase.',
+    answer: 'Hireflow offers two billing schedules: monthly billing at $99 per month, or annual billing at an effective $83.25 per month billed as $999 per year. The annual option is discounted compared with paying month-to-month for a full year. Your selected billing cadence is shown clearly during checkout so your finance or operations team can review totals before purchase.',
   },
   {
     question: 'What happens when I reach my resume limit?',
@@ -63,7 +63,7 @@ const PRICING_FAQ = [
   },
   {
     question: 'Do you offer discounts for annual plans?',
-    answer: 'Yes. Annual billing is discounted and saves $240 per year versus paying monthly for 12 months. Teams that know they will be hiring regularly often choose annual billing for the lower effective monthly cost and simpler budget planning. If you prefer more flexibility in the short term, monthly billing remains available and you can switch later.',
+    answer: 'Yes. Annual billing is discounted and saves $189 per year versus paying monthly for 12 months. Teams that know they will be hiring regularly often choose annual billing for the lower effective monthly cost and simpler budget planning. If you prefer more flexibility in the short term, monthly billing remains available and you can switch later.',
   },
 ]
 
@@ -169,7 +169,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
         </div>
 
         <p className="pricing-page__price-note">
-          {selectedBilling === 'annual' ? '$79/month (billed annually at $948/year)' : '$99/month billed monthly'}
+          {selectedBilling === 'annual' ? '$83.25/month (billed annually at $999/year)' : '$99/month billed monthly'}
         </p>
 
         <div className="pricing-page__grid">

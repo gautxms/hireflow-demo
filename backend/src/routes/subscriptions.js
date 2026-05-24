@@ -6,7 +6,7 @@ const router = Router()
 
 const PLAN_CONFIG = {
   monthly: { label: 'Monthly', amountCents: 9900, interval: 'month' },
-  annual: { label: 'Annual', amountCents: 94800, interval: 'year' },
+  annual: { label: 'Annual', amountCents: 99900, interval: 'year' },
 }
 
 const PADDLE_API_BASE_URL = process.env.PADDLE_API_BASE_URL || 'https://api.paddle.com'
