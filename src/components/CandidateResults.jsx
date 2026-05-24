@@ -286,7 +286,7 @@ function buildSkillGapItems(candidate) {
 
 function deriveTopSkills(candidate) {
   if (Array.isArray(candidate?.top_skills) && candidate.top_skills.length > 0) {
-    return parseSkills(candidate.top_skills)
+    return resolveFilterableSkills({ skills: candidate.top_skills })
   }
 
   if (candidate?.skills_structured) {
@@ -298,7 +298,7 @@ function deriveTopSkills(candidate) {
       ...(Array.isArray(structured.soft_skills) ? structured.soft_skills : []),
     ]
     if (aggregated.length > 0) {
-      return parseSkills(aggregated)
+      return resolveFilterableSkills({ skills: aggregated })
     }
   }
 
