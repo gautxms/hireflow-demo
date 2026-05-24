@@ -13,9 +13,10 @@ function firstDefined(...values) {
 export function resolvePaddleConfig(env = process.env) {
   const environment = normalizeEnvironment(env.PADDLE_ENVIRONMENT)
   const isSandbox = environment === 'sandbox'
+  const isProduction = environment === 'production'
 
   const apiBaseUrl = firstDefined(
-    isSandbox ? env.PADDLE_SANDBOX_API_BASE_URL : undefined,
+    isSandbox ? env.PADDLE_SANDBOX_API_BASE_URL : env.PADDLE_PRODUCTION_API_BASE_URL,
     env.PADDLE_API_BASE_URL,
     DEFAULT_PADDLE_API_BASE_URL,
   )
@@ -24,12 +25,27 @@ export function resolvePaddleConfig(env = process.env) {
     environment,
     apiBaseUrl,
     apiVersion: env.PADDLE_API_VERSION || '1',
-    apiKey: firstDefined(isSandbox ? env.PADDLE_SANDBOX_API_KEY : undefined, env.PADDLE_API_KEY),
-    clientToken: firstDefined(isSandbox ? env.PADDLE_SANDBOX_CLIENT_TOKEN : undefined, env.PADDLE_CLIENT_TOKEN),
-    webhookSecret: firstDefined(isSandbox ? env.PADDLE_SANDBOX_WEBHOOK_SECRET : undefined, env.PADDLE_WEBHOOK_SECRET),
+    apiKey: firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_API_KEY : env.PADDLE_PRODUCTION_API_KEY,
+      isProduction ? env.PADDLE_API_KEY : undefined,
+    ),
+    clientToken: firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_CLIENT_TOKEN : env.PADDLE_PRODUCTION_CLIENT_TOKEN,
+      isProduction ? env.PADDLE_CLIENT_TOKEN : undefined,
+    ),
+    webhookSecret: firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_WEBHOOK_SECRET : env.PADDLE_PRODUCTION_WEBHOOK_SECRET,
+      isProduction ? env.PADDLE_WEBHOOK_SECRET : undefined,
+    ),
     priceIdsByPlan: {
-      monthly: firstDefined(isSandbox ? env.PADDLE_SANDBOX_MONTHLY_PRICE_ID : undefined, env.PADDLE_MONTHLY_PRICE_ID),
-      annual: firstDefined(isSandbox ? env.PADDLE_SANDBOX_ANNUAL_PRICE_ID : undefined, env.PADDLE_ANNUAL_PRICE_ID),
+      monthly: firstDefined(
+        isSandbox ? env.PADDLE_SANDBOX_MONTHLY_PRICE_ID : env.PADDLE_PRODUCTION_MONTHLY_PRICE_ID,
+        isProduction ? env.PADDLE_MONTHLY_PRICE_ID : undefined,
+      ),
+      annual: firstDefined(
+        isSandbox ? env.PADDLE_SANDBOX_ANNUAL_PRICE_ID : env.PADDLE_PRODUCTION_ANNUAL_PRICE_ID,
+        isProduction ? env.PADDLE_ANNUAL_PRICE_ID : undefined,
+      ),
     },
   }
 }
