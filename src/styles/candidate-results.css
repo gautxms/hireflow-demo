@@ -1630,6 +1630,7 @@
   overflow-wrap: anywhere;
 }
 .dd-list-item { display: flex; gap: 8px; align-items: flex-start; color: var(--color-text-secondary); font-size: 13px; line-height: 1.45; padding: 4px 0; }
+.dd-list-item span { min-width: 0; overflow-wrap: anywhere; }
 .dd-list-item svg { color: var(--hf-lime); flex: 0 0 auto; margin-top: 2px; }
 .dd-list-item--warn svg { color: var(--hf-warning); }
 .dd-list { display: flex; flex-direction: column; }

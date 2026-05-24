@@ -365,6 +365,20 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
   assert.deepEqual(vm.allSkills, ['React', 'Node.js', 'TypeScript', 'System Design'])
 })
 
+
+test('buildExpandedCandidateDrawerViewModel keeps short complete trailing tokens when normalizing narratives', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendation: 'Strong fit for SQL',
+    strengths: ['Hands-on AWS'],
+    considerations: ['Can relocate to NY'],
+  })
+
+  assert.equal(vm.recommendationText, 'Strong fit for SQL...')
+  assert.deepEqual(vm.candidateStrengths, ['Hands-on AWS...'])
+  assert.deepEqual(vm.candidateConsiderations, ['Can relocate to NY...'])
+})
+
 test('buildExpandedCandidateDrawerViewModel preserves historical explicit textual confidence label', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
