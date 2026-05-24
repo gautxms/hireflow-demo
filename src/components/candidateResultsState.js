@@ -466,6 +466,26 @@ export function toDisplayText(value, fallback = 'N/A') {
 }
 
 
+
+function normalizeDisplayNarrative(value, fallback = '') {
+  const text = toDisplayText(value, fallback).trim()
+  if (!text) return fallback
+
+  const terminalPattern = /[.!?…'"”)]$/
+  if (terminalPattern.test(text)) return text
+
+  const lastSpace = text.lastIndexOf(' ')
+  if (lastSpace <= 0) return `${text}...`
+
+  const tail = text.slice(lastSpace + 1)
+  const looksTruncatedTail = tail.length <= 4 || /^[a-z]{1,4}$/i.test(tail)
+  if (looksTruncatedTail) {
+    return `${text.slice(0, lastSpace).trim()}...`
+  }
+
+  return `${text}...`
+}
+
 function normalizeEducationRecord(record) {
   if (record == null) return null
 
@@ -737,12 +757,12 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
     const experienceYearsLabel = yearsNumber != null ? `${yearsNumber} years` : '0 years'
     const locationLabel = toDisplayText(candidate.location, 'Location unavailable')
     const seniorityLabel = toDisplayText(candidate.seniority_level, '')
-    const summaryText = toDisplayText(candidate.summary, 'No summary available')
-    const reasoningText = toDisplayText(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
-    const recommendationText = toDisplayText(candidate?.recommendation || candidate?.fit_assessment?.rationale, '')
+    const summaryText = normalizeDisplayNarrative(candidate.summary, 'No summary available.')
+    const reasoningText = normalizeDisplayNarrative(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
+    const recommendationText = normalizeDisplayNarrative(candidate?.recommendation || candidate?.fit_assessment?.rationale, '')
 
-    const strengths = (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || []).map((e)=>toDisplayText(e,'')).filter(Boolean).slice(0,3)
-    const considerations = (Array.isArray(candidate.considerations) ? candidate.considerations : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
+    const strengths = (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || []).map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean).slice(0,3)
+    const considerations = (Array.isArray(candidate.considerations) ? candidate.considerations : []).map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
 
     const matchedSkills = (Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
     const missingSkills = [...new Set([...(Array.isArray(candidate?.mustHaveSkills)?candidate.mustHaveSkills:[]), ...(Array.isArray(candidate?.missingSkills)?candidate.missingSkills:[]), ...(Array.isArray(candidate?.fit_assessment?.missing)?candidate.fit_assessment.missing:[])].map((e)=>toDisplayText(e,'')).filter(Boolean))]
