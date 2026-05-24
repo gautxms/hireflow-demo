@@ -288,6 +288,20 @@ function collectSkillsFromValue(value, collector) {
   if (label) collector(label)
 }
 
+const ROOT_SKILL_BUCKET_FIELDS = [
+  'technical_skills',
+  'soft_skills',
+  'tools_and_platforms',
+  'methodologies',
+  'domain_expertise',
+  'languages',
+  'frameworks',
+  'databases',
+  'cloud',
+  'cloud_platforms',
+  'bi_tools',
+]
+
 export function resolveFilterableSkills(candidate = {}) {
   const deduped = new Map()
   const addSkill = (skill) => {
@@ -303,6 +317,9 @@ export function resolveFilterableSkills(candidate = {}) {
   collectSkillsFromValue(candidate?.skills_flat, addSkill)
   collectSkillsFromValue(candidate?.skills, addSkill)
   collectSkillsFromValue(candidate?.skills_structured, addSkill)
+  ROOT_SKILL_BUCKET_FIELDS.forEach((field) => {
+    collectSkillsFromValue(candidate?.[field], addSkill)
+  })
 
   return Array.from(deduped.values())
 }
@@ -339,6 +356,22 @@ export function resolveCandidateYears(candidate = {}) {
   }
 
   return 0
+}
+
+export function sortCandidatesForResults(candidates = [], sortBy = 'match_score', getUploadDate = () => 0) {
+  const normalizedSort = normalizeSortBy(sortBy)
+  return [...candidates].sort((a, b) => {
+    if (normalizedSort === 'name') {
+      return String(a?.name || '').localeCompare(String(b?.name || ''))
+    }
+    if (normalizedSort === 'experience') {
+      return resolveCandidateYears(b) - resolveCandidateYears(a)
+    }
+    if (normalizedSort === 'upload_date') {
+      return Number(getUploadDate(b) || 0) - Number(getUploadDate(a) || 0)
+    }
+    return Number(resolveActiveCandidateScore(b) || 0) - Number(resolveActiveCandidateScore(a) || 0)
+  })
 }
 
 function parseSkillList(skills) {

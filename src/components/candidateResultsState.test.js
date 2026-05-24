@@ -21,6 +21,7 @@ import {
   buildScoreBreakdownRows,
   resolveCandidateYears,
   resolveFilterableSkills,
+  sortCandidatesForResults,
 } from './candidateResultsState.js'
 
 test('normalizeSortBy whitelists supported values', () => {
@@ -424,9 +425,28 @@ test('resolveFilterableSkills supports all supported candidate skill shapes', ()
     },
   })
   assert.deepEqual(structured, ['Tableau', 'Agile', 'FinTech', 'Communication', 'React'])
+
+  const rootBuckets = resolveFilterableSkills({
+    technical_skills: ['Python', ' python '],
+    frameworks: ['Vue'],
+    bi_tools: 'Power BI, Tableau',
+  })
+  assert.deepEqual(rootBuckets, ['Python', 'Vue', 'Power BI', 'Tableau'])
 })
 
 test('normalizeSortBy canonicalizes to match_score', () => {
   assert.equal(normalizeSortBy('match_score'), 'match_score')
   assert.equal(normalizeSortBy('score'), 'match_score')
+})
+
+test('sortCandidatesForResults preserves selected sort order (name, experience, best match)', () => {
+  const rows = [
+    { name: 'Zed', years_experience: 2, matchScore: { score: 99 } },
+    { name: 'Amy', years_experience: 8, matchScore: { score: 80 } },
+    { name: 'Bob', years_experience: 5, matchScore: { score: 92 } },
+  ]
+
+  assert.deepEqual(sortCandidatesForResults(rows, 'name').map((c) => c.name), ['Amy', 'Bob', 'Zed'])
+  assert.deepEqual(sortCandidatesForResults(rows, 'experience').map((c) => c.name), ['Amy', 'Bob', 'Zed'])
+  assert.deepEqual(sortCandidatesForResults(rows, 'match_score').map((c) => c.name), ['Zed', 'Bob', 'Amy'])
 })
