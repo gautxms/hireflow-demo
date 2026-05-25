@@ -182,7 +182,7 @@ export function getDemoRequestRecipient() {
   return process.env.DEMO_REQUEST_TO_EMAIL || process.env.SUPPORT_EMAIL || 'gautam@hireflow.dev'
 }
 
-async function sendViaSes({ to, subject, text, html }) {
+async function sendViaSes({ to, subject, text, html, templateName }) {
   const sesConfig = getSesConfig()
   if (!sesConfig) {
     logEmailEvent('warn', 'SES config missing', { provider: 'ses', status: 'config_missing' })
@@ -208,6 +208,7 @@ async function sendViaSes({ to, subject, text, html }) {
     const response = await client.send(command)
     logEmailEvent('info', 'Email sent', {
       provider: 'ses',
+      templateName,
       recipientDomain: getRecipientDomain(to),
       messageId: response?.MessageId,
       status: 'success',
@@ -216,15 +217,17 @@ async function sendViaSes({ to, subject, text, html }) {
   } catch (error) {
     logEmailEvent('warn', 'Email send failed', {
       provider: 'ses',
+      templateName,
       recipientDomain: getRecipientDomain(to),
       status: 'failed',
-      code: error?.name || 'SES_SEND_FAILED',
+      errorName: error?.name || 'SES_SEND_FAILED',
+      errorMessage: error?.message || 'Unknown SES send error',
     })
     return false
   }
 }
 
-async function sendViaSendGridAPI({ to, subject, text, html }) {
+async function sendViaSendGridAPI({ to, subject, text, html, templateName }) {
   const sendGridConfig = getSendGridConfig()
   if (!sendGridConfig) {
     logEmailEvent('warn', 'SendGrid config missing', { provider: 'sendgrid', status: 'config_missing' })
@@ -256,14 +259,16 @@ async function sendViaSendGridAPI({ to, subject, text, html }) {
 
     const req = https.request(options, (res) => {
       if (res.statusCode === 202) {
-        logEmailEvent('info', 'Email sent', { provider: 'sendgrid', recipientDomain: getRecipientDomain(to), status: 'success' })
+        logEmailEvent('info', 'Email sent', { provider: 'sendgrid', templateName, recipientDomain: getRecipientDomain(to), status: 'success' })
         resolve(true)
       } else {
         logEmailEvent('warn', 'Email send failed', {
           provider: 'sendgrid',
+          templateName,
           recipientDomain: getRecipientDomain(to),
           status: 'failed',
-          code: `HTTP_${res.statusCode}`,
+          errorName: `HTTP_${res.statusCode}`,
+          errorMessage: `SendGrid response status ${res.statusCode}`,
         })
         resolve(false)
       }
@@ -272,9 +277,11 @@ async function sendViaSendGridAPI({ to, subject, text, html }) {
     req.on('error', (error) => {
       logEmailEvent('warn', 'Email send failed', {
         provider: 'sendgrid',
+        templateName,
         recipientDomain: getRecipientDomain(to),
         status: 'failed',
-        code: error?.code || 'SENDGRID_REQUEST_FAILED',
+        errorName: error?.name || error?.code || 'SENDGRID_REQUEST_FAILED',
+        errorMessage: error?.message || 'Unknown SendGrid request error',
       })
       resolve(false)
     })
@@ -284,7 +291,7 @@ async function sendViaSendGridAPI({ to, subject, text, html }) {
   })
 }
 
-async function sendViaSmtp({ to, subject, text, html }) {
+async function sendViaSmtp({ to, subject, text, html, templateName }) {
   const mailer = getTransporter()
   if (!mailer) {
     logEmailEvent('warn', 'SMTP config missing', { provider: 'smtp', status: 'config_missing' })
@@ -300,14 +307,16 @@ async function sendViaSmtp({ to, subject, text, html }) {
       html,
       replyTo: process.env.REPLY_TO_EMAIL,
     })
-    logEmailEvent('info', 'Email sent', { provider: 'smtp', recipientDomain: getRecipientDomain(to), status: 'success' })
+    logEmailEvent('info', 'Email sent', { provider: 'smtp', templateName, recipientDomain: getRecipientDomain(to), status: 'success' })
     return true
   } catch (error) {
     logEmailEvent('warn', 'Email send failed', {
       provider: 'smtp',
+      templateName,
       recipientDomain: getRecipientDomain(to),
       status: 'failed',
-      code: error?.code || error?.name || 'SMTP_SEND_FAILED',
+      errorName: error?.name || error?.code || 'SMTP_SEND_FAILED',
+      errorMessage: error?.message || 'Unknown SMTP send error',
     })
     return false
   }
@@ -345,9 +354,9 @@ export async function sendTemplateEmail({ to, subject, templateName, text, value
   })
 
   try {
-    if (provider === 'ses') return await sendViaSes({ to, subject, text, html: renderedHtml })
-    if (provider === 'sendgrid') return await sendViaSendGridAPI({ to, subject, text, html: renderedHtml })
-    if (provider === 'smtp') return await sendViaSmtp({ to, subject, text, html: renderedHtml })
+    if (provider === 'ses') return await sendViaSes({ to, subject, text, html: renderedHtml, templateName })
+    if (provider === 'sendgrid') return await sendViaSendGridAPI({ to, subject, text, html: renderedHtml, templateName })
+    if (provider === 'smtp') return await sendViaSmtp({ to, subject, text, html: renderedHtml, templateName })
     if (provider === 'console') return await sendViaConsole({ to, subject, templateName })
 
     if (!missingConfigWarningShown) {
@@ -361,7 +370,8 @@ export async function sendTemplateEmail({ to, subject, templateName, text, value
       templateName,
       recipientDomain: getRecipientDomain(to),
       status: 'failed',
-      code: error?.name || 'UNKNOWN_ERROR',
+      errorName: error?.name || 'UNKNOWN_ERROR',
+      errorMessage: error?.message || 'Unknown email send error',
     })
     return false
   }

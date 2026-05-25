@@ -155,12 +155,24 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
     const verificationUrl = buildVerificationUrl(req, verificationToken)
 
     try {
-      await sendVerificationEmail({
+      const emailSent = await sendVerificationEmail({
         to: user.email,
         verificationUrl,
       })
+
+      if (!emailSent) {
+        console.error('[AUTH] Verification email send failed', {
+          userId: user.id,
+          emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+        })
+      }
     } catch (mailError) {
-      console.error('[AUTH] Failed to send verification email:', mailError)
+      console.error('[AUTH] Verification email send failed', {
+        userId: user.id,
+        emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+        errorName: mailError?.name || 'UNKNOWN_ERROR',
+        errorMessage: mailError?.message || 'Unknown verification email error',
+      })
     }
 
     try {
@@ -309,14 +321,23 @@ router.post('/resend-email-verification', signupLimiter, async (req, res) => {
 
     const verificationUrl = buildVerificationUrl(req, verificationToken)
 
-    await sendVerificationEmail({
+    const emailSent = await sendVerificationEmail({
       to: user.email,
       verificationUrl,
     })
 
+    if (!emailSent) {
+      console.error('[AUTH] Verification email send failed', {
+        userId: user.id,
+        emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+        source: 'auth.resend-email-verification',
+      })
+    }
+
     console.info('[AUTH] Verification email resent', {
       userId: user.id,
-      email: user.email,
+      emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+      emailSent,
     })
 
     return res.json({
