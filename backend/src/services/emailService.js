@@ -37,7 +37,17 @@ function getConfiguredProvider() {
   if (VALID_EMAIL_PROVIDERS.has(rawProvider)) {
     return rawProvider
   }
-  return 'ses'
+
+  const hasProviderEnv = rawProvider.length > 0
+
+  if (!hasProviderEnv) {
+    if (getSendGridConfig()) return 'sendgrid'
+    if (getSmtpConfig()) return 'smtp'
+    if (getSesConfig()) return 'ses'
+    return 'ses'
+  }
+
+  return 'invalid'
 }
 
 function getBrandingValues() {
@@ -389,4 +399,4 @@ export async function sendPasswordResetConfirmationEmail({ to, firstName }) { co
 export async function sendDemoRequestConfirmationEmail({ to, requesterName }) { const values = withDefaults({ to, firstName: requesterName || undefined, dashboardUrl: `${getAppUrl()}/about` }); return sendTemplateEmail({ to, subject: 'We received your demo request', templateName: 'welcome', text: `Hi ${values.firstName}, thanks for requesting a demo. Our team will reach out shortly.`, values }) }
 export async function sendDemoRequestEmail({ requesterName, requesterEmail, company, phone, message, to = getDemoRequestRecipient(), }) { const values = withDefaults({ to, requesterName, requesterEmail, company, phone: phone || 'Not provided', message, }); return sendTemplateEmail({ to, subject: `New demo request from ${requesterName}`, templateName: 'demo-request', text: ['New demo request submitted.', `Name: ${requesterName}`, `Email: ${requesterEmail}`, `Company: ${company}`, `Phone: ${phone || 'Not provided'}`, `Message: ${message}`,].join('\n'), values, }) }
 
-export const __emailServiceTestUtils = { getConfiguredProvider, getRecipientDomain, getSesConfig }
+export const __emailServiceTestUtils = { getConfiguredProvider, getRecipientDomain, getSesConfig, getSendGridConfig, getSmtpConfig }
