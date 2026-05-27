@@ -198,6 +198,7 @@ export default function AccountSettingsPage() {
 
       <section className="account-settings-card">
         <h2 className="type-h2 account-settings-card-title">Profile</h2>
+        <p className="type-body account-settings-card-helper">Update your company and contact details used across your workspace.</p>
         <form onSubmit={handleProfileSave} className="account-settings-form">
           <label className="account-settings-label">
             <span>Company</span>
@@ -248,7 +249,8 @@ export default function AccountSettingsPage() {
       </section>
 
       <section className="account-settings-card">
-        <h2 className="type-h2 account-settings-card-title">Change Password</h2>
+        <h2 className="type-h2 account-settings-card-title">Security</h2>
+        <p className="type-body account-settings-card-helper">Keep your account secure by rotating your password regularly.</p>
         <form onSubmit={handlePasswordChange} className="account-settings-form">
           <input
             className="account-settings-input"
@@ -282,8 +284,20 @@ export default function AccountSettingsPage() {
         </form>
       </section>
 
+
+
+      <section className="account-settings-card">
+        <h2 className="type-h2 account-settings-card-title">Billing</h2>
+        <p className="type-body account-settings-card-helper">Manage plan, invoices, and renewal details from Billing &amp; Plans.</p>
+        <div className="account-settings-actions">
+          <a className="type-button account-settings-button" href="/billing">Open Billing &amp; Plans</a>
+          <a className="type-button account-settings-button" href="/pricing">View plan options</a>
+        </div>
+      </section>
+
       <section className="account-settings-card">
         <h2 className="type-h2 account-settings-card-title">Privacy & Data</h2>
+        <p className="type-body account-settings-card-helper">Control your personal data export and account lifecycle.</p>
         <div className="account-settings-actions">
           <button className="type-button account-settings-button" onClick={handleDownloadData}>
             Download personal data (JSON)
