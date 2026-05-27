@@ -9,7 +9,7 @@ import {
 } from './shortlistState'
 import './ShortlistManager.css'
 
-const PAGE_SIZE = 8
+const PAGE_SIZE = 15
 
 function toCsv(rows) {
   if (!rows.length) return ''
@@ -57,6 +57,11 @@ export default function ShortlistManager(props) {
   const [filters, setFilters] = useState({ decisionStatus: 'all', rating: 'all', analysisSource: 'all' })
   const [query, setQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const resetFilters = () => {
+    setCurrentPage(1)
+    setQuery('')
+    setFilters({ decisionStatus: 'all', rating: 'all', analysisSource: 'all' })
+  }
 
   const selectedShortlist = useMemo(() => shortlists.find((item) => item.id === selectedShortlistId) || null, [shortlists, selectedShortlistId])
   const allCandidates = useMemo(() => shortlistDetails?.candidates || [], [shortlistDetails?.candidates])
@@ -77,6 +82,7 @@ export default function ShortlistManager(props) {
   const paginatedCandidates = filteredCandidates.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const exportRows = useMemo(() => createShortlistExportRows(filteredCandidates), [filteredCandidates])
+  const showPagination = filteredCandidates.length > PAGE_SIZE
 
   const handleCreate = async (event) => {
     event.preventDefault()
@@ -123,8 +129,9 @@ export default function ShortlistManager(props) {
           <label className="shortlist-manager__filter-label">Rating<select className="shortlist-manager__select" value={filters.rating} onChange={(e) => { setCurrentPage(1); setFilters((c) => ({ ...c, rating: e.target.value })) }}><option value="all">All ratings</option><option value="rated">Rated only</option><option value="unrated">Unrated only</option><option value="5">5/5</option><option value="4">4/5</option><option value="3">3/5</option><option value="2">2/5</option><option value="1">1/5</option></select></label>
           <label className="shortlist-manager__filter-label">Analysis source<select className="shortlist-manager__select" value={filters.analysisSource} onChange={(e) => { setCurrentPage(1); setFilters((c) => ({ ...c, analysisSource: e.target.value })) }}><option value="all">All sources</option>{filterOptions.analysisSources.map((source) => <option key={source} value={source}>{source}</option>)}</select></label>
           <div className="shortlist-manager__actions">
-            <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={() => { setCurrentPage(1); setQuery(''); setFilters({ decisionStatus: 'all', rating: 'all', analysisSource: 'all' }) }}>Clear filters</button>
-            <button type="button" disabled={!exportRows.length} onClick={() => triggerDownload(`shortlist-${selectedShortlist?.name || 'export'}-export.csv`, toCsv(exportRows), 'text/csv;charset=utf-8')} className="shortlist-manager__button shortlist-manager__button--neutral">Export CSV</button>
+            <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={resetFilters}>Clear filters</button>
+            <button type="button" disabled={!exportRows.length} onClick={() => triggerDownload(buildShortlistExportFilename(selectedShortlist?.name || 'shortlist', 'csv'), toCsv(exportRows), 'text/csv;charset=utf-8')} className="shortlist-manager__button shortlist-manager__button--neutral">Export CSV</button>
+            <button type="button" disabled={!exportRows.length} onClick={() => triggerDownload(buildShortlistExportFilename(selectedShortlist?.name || 'shortlist', 'json'), JSON.stringify(exportRows, null, 2), 'application/json;charset=utf-8')} className="shortlist-manager__button shortlist-manager__button--neutral">Export JSON</button>
           </div>
         </div> : null}
       </section>
@@ -152,18 +159,23 @@ export default function ShortlistManager(props) {
             const rating = getRatingValue(candidate)
             const decisionStatus = getDecisionStatus(candidate)
             const analysisSource = getAnalysisSource(candidate)
-            return <article key={candidate.id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes available.'}</p><div className="shortlist-manager__chip-list"><span className="shortlist-manager__chip">Decision: {decisionStatus}</span><span className="shortlist-manager__chip">Rating: {rating ? `${rating}/5` : 'Unrated'}</span><span className="shortlist-manager__chip">Source: {analysisSource}</span></div></div><div className="shortlist-manager__candidate-actions"><div className="shortlist-manager__added-at">{candidate.added_at ? new Date(candidate.added_at).toLocaleDateString() : 'Added date unavailable'}</div><button type="button" onClick={() => onRemoveCandidate(candidate.resume_id)} className="shortlist-manager__button shortlist-manager__button--danger">Remove</button></div></article>
+            return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes available.'}</p><div className="shortlist-manager__chip-list"><span className="shortlist-manager__chip">Decision: {decisionStatus}</span><span className="shortlist-manager__chip">Rating: {rating ? `${rating}/5` : 'Unrated'}</span><span className="shortlist-manager__chip">Source: {analysisSource}</span></div></div><div className="shortlist-manager__candidate-actions"><div className="shortlist-manager__added-at">{candidate.added_at ? new Date(candidate.added_at).toLocaleDateString() : 'Added date unavailable'}</div><button type="button" onClick={async () => {
+              const candidateLabel = candidate.filename || candidate.resume_id || "this candidate"
+              const confirmed = window.confirm(`Remove ${candidateLabel} from this shortlist?`)
+              if (!confirmed) return
+              await onRemoveCandidate(candidate.resume_id)
+            }} className="shortlist-manager__button shortlist-manager__button--danger">Remove</button></div></article>
           })}</div>
 
-          <nav className="shortlist-manager__pagination" aria-label="Candidate pagination">
+          {showPagination ? <nav className="shortlist-manager__pagination" aria-label="Candidate pagination">
             <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button>
-            <span>Page {currentPage} of {totalPages}</span>
+            <span aria-live="polite">Page {currentPage} of {totalPages}</span>
             <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
-          </nav>
+          </nav> : null}
         </> : null}
 
         {selectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>This shortlist is empty.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates page.</p></div> : null}
-        {selectedShortlist && !loadingDetails && allCandidates.length > 0 && filteredCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates match your current filters.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={() => setFilters({ decisionStatus: 'all', rating: 'all', analysisSource: 'all' })}>Clear filters</button></div> : null}
+        {selectedShortlist && !loadingDetails && allCandidates.length > 0 && filteredCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates match your current filters.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={resetFilters}>Clear filters</button></div> : null}
       </section>
     </section>
   )
