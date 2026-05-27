@@ -38,6 +38,9 @@ export default function AccountSettingsPage() {
   const [isSigningOutAll, setIsSigningOutAll] = useState(false)
   const [toast, setToast] = useState({ type: 'success', message: '' })
   const [loading, setLoading] = useState(true)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const token = useMemo(() => localStorage.getItem(TOKEN_STORAGE_KEY), [])
 
@@ -205,10 +208,12 @@ export default function AccountSettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
-    const confirmed = window.confirm('Are you sure? Your account will be scheduled for deletion after a 30-day grace period.')
-    if (!confirmed) return
-
+    if (deleteConfirmText.trim() && deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      pushToast('error', 'Typed confirmation must be DELETE (or leave it blank).')
+      return
+    }
     try {
+      setIsDeleting(true)
       const response = await fetch(`${API_BASE}/profile/me`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
@@ -220,9 +225,13 @@ export default function AccountSettingsPage() {
       }
 
       setProfile((current) => ({ ...current, deleted_at: payload.deleted_at, deletion_scheduled_for: payload.deletion_scheduled_for }))
+      setShowDeleteModal(false)
+      setDeleteConfirmText('')
       pushToast('success', 'Account deletion scheduled with a 30-day grace period.')
     } catch (error) {
       pushToast('error', error.message)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -362,13 +371,35 @@ export default function AccountSettingsPage() {
       <section className="account-settings-card">
         <h2 className="type-h2 account-settings-card-title">Privacy & Data</h2>
         <p className="type-body account-settings-card-helper">Control your personal data export and account lifecycle.</p>
-        <div className="account-settings-actions">
-          <button className="type-button account-settings-button" onClick={handleDownloadData}>
-            Download personal data (JSON)
-          </button>
-          <button className="type-button account-settings-button account-settings-button--danger" onClick={handleDeleteAccount}>
-            Delete account
-          </button>
+
+        <div className="account-settings-subsection">
+          <h3 className="type-h3 account-settings-subsection-title">Data export</h3>
+          <p className="type-small account-settings-note">
+            Exports are delivered as a JSON file containing your profile and account metadata.
+          </p>
+          <p className="type-small account-settings-note">
+            Delivery starts immediately in your browser after request completion and can take a few seconds for larger accounts.
+          </p>
+          <div className="account-settings-actions">
+            <button className="type-button account-settings-button" onClick={handleDownloadData}>
+              Download personal data (JSON)
+            </button>
+          </div>
+        </div>
+
+        <div className="account-settings-subsection account-settings-subsection--danger" role="group" aria-labelledby="danger-zone-title">
+          <h3 id="danger-zone-title" className="type-h3 account-settings-subsection-title account-settings-subsection-title--danger">Danger Zone</h3>
+          <p className="type-small account-settings-warning">
+            This action schedules permanent account deletion after a 30-day grace period and may remove access to workspace history.
+          </p>
+          <div className="account-settings-actions">
+            <button
+              className="type-button account-settings-button account-settings-button--destructive-secondary"
+              onClick={() => setShowDeleteModal(true)}
+            >
+              Delete account
+            </button>
+          </div>
         </div>
 
         {profile.deletion_scheduled_for && (
@@ -377,6 +408,46 @@ export default function AccountSettingsPage() {
           </p>
         )}
       </section>
+
+      {showDeleteModal && (
+        <div className="account-settings-modal-backdrop" role="presentation">
+          <div className="account-settings-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-modal-title">
+            <h3 id="delete-account-modal-title" className="type-h3 account-settings-card-title">Confirm account deletion</h3>
+            <p className="type-small account-settings-warning">
+              You are scheduling this account for deletion. After the grace period, your login and retained account data will be permanently removed.
+            </p>
+            <p className="type-small account-settings-note">
+              Optional: type <strong>DELETE</strong> to add an extra confirmation step.
+            </p>
+            <input
+              className="account-settings-input"
+              value={deleteConfirmText}
+              onChange={(event) => setDeleteConfirmText(event.target.value)}
+              placeholder="Type DELETE (optional)"
+            />
+            <div className="account-settings-actions">
+              <button
+                type="button"
+                className="type-button account-settings-button"
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  setDeleteConfirmText('')
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="type-button account-settings-button account-settings-button--destructive-secondary"
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Scheduling deletion…' : 'Confirm deletion'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

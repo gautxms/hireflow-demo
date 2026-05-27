@@ -202,6 +202,59 @@
   color: var(--color-error);
 }
 
+.account-settings-subsection {
+  border: 1px solid var(--hf-border-subtle);
+  border-radius: var(--radius-interactive);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.account-settings-subsection-title {
+  margin: 0;
+}
+
+.account-settings-subsection--danger {
+  border-color: color-mix(in srgb, var(--color-error), #fff 50%);
+  background: color-mix(in srgb, var(--color-error), transparent 92%);
+}
+
+.account-settings-subsection-title--danger {
+  color: var(--color-error);
+}
+
+.account-settings-button--destructive-secondary {
+  border-color: color-mix(in srgb, var(--color-error), #fff 35%) !important;
+  color: var(--color-error) !important;
+  background: transparent !important;
+}
+
+.account-settings-button--destructive-secondary:hover {
+  border-color: var(--color-error) !important;
+  background: color-mix(in srgb, var(--color-error), transparent 92%) !important;
+}
+
+.account-settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 16, 24, 0.56);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 60;
+}
+
+.account-settings-modal {
+  width: min(560px, 100%);
+  background: var(--hf-surface-card);
+  border: 1px solid var(--hf-border-subtle);
+  border-radius: var(--radius-surface);
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
 .account-settings-state {
   padding: 28px 32px;
 }
