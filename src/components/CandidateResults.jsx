@@ -519,6 +519,8 @@ function filterAndSortCandidates(candidates, filters) {
     selectedSkills = [],
     expRange = { min: '', max: '' },
     sortBy = 'match_score',
+    selectedTags = [],
+    tagMap = {},
   } = filters || {}
 
   const query = searchText.trim().toLowerCase()
@@ -548,6 +550,13 @@ function filterAndSortCandidates(candidates, filters) {
 
     if (expMax !== null && years > expMax) {
       return false
+    }
+
+    if (selectedTags.length > 0) {
+      // Tag filter semantic: candidates must include ALL selected tags.
+      const candidateTagSet = new Set((tagMap[candidate?._bulkKey] || []).map((tag) => String(tag || '').toLowerCase()))
+      const hasAllSelectedTags = selectedTags.every((tag) => candidateTagSet.has(String(tag || '').toLowerCase()))
+      if (!hasAllSelectedTags) return false
     }
 
     return true
@@ -581,6 +590,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [shortlistNotice, setShortlistNotice] = useState('')
   const [tagDraft, setTagDraft] = useState('')
   const [candidateTags, setCandidateTags] = useState({})
+  const [selectedTagFilters, setSelectedTagFilters] = useState([])
+  const [tagNotice, setTagNotice] = useState('')
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
@@ -865,6 +876,54 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const hasCandidatesToRender = hasRenderableCandidates(candidateRows)
 
+  useEffect(() => {
+    const resumeIdToKeys = new Map()
+    candidateRows.forEach((candidate) => {
+      const resumeId = resolveCandidateResumeUuid(candidate)
+      if (!resumeId) return
+      const current = resumeIdToKeys.get(resumeId) || []
+      current.push(candidate._bulkKey)
+      resumeIdToKeys.set(resumeId, current)
+    })
+    const resumeIds = [...resumeIdToKeys.keys()]
+    if (resumeIds.length === 0) {
+      setCandidateTags({})
+      return
+    }
+
+    let isCancelled = false
+    const timeoutId = setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_BASE}/candidates/tags/lookup`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ resumeIds }),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload.error || 'Unable to load candidate tags')
+        if (isCancelled) return
+        const next = {}
+        const rows = Array.isArray(payload?.resumeTags) ? payload.resumeTags : []
+        rows.forEach((row) => {
+          const rowResumeId = String(row?.resumeId || '').trim()
+          if (!rowResumeId) return
+          const tags = Array.isArray(row?.tags) ? [...new Set(row.tags.map((tag) => String(tag || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)) : []
+          ;(resumeIdToKeys.get(rowResumeId) || []).forEach((candidateKey) => {
+            next[candidateKey] = tags
+          })
+        })
+        setCandidateTags(next)
+      } catch (error) {
+        if (!isCancelled) setResultsError(error.message || 'Unable to load candidate tags')
+      }
+    }, 200)
+
+    return () => {
+      isCancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [authHeaders, candidateRows])
+
   const filtered = useMemo(() => {
     if (!hasCandidatesToRender) {
       return []
@@ -875,14 +934,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       selectedSkills,
       expRange,
       sortBy: normalizeSortBy(sortBy),
+      selectedTags: selectedTagFilters,
+      tagMap: candidateTags,
     })
-  }, [candidateRows, expRange, hasCandidatesToRender, searchText, selectedSkills, sortBy])
+  }, [candidateRows, candidateTags, expRange, hasCandidatesToRender, searchText, selectedSkills, selectedTagFilters, sortBy])
 
   const { rows: visibleCandidates, pagination } = useMemo(() => paginateCandidates(filtered, page, pageSize), [filtered, page, pageSize])
 
   useEffect(() => {
     setPage(1)
-  }, [searchText, selectedSkills, expRange.min, expRange.max, sortBy])
+  }, [searchText, selectedSkills, selectedTagFilters, expRange.min, expRange.max, sortBy])
 
   useEffect(() => {
     setShowAllDrawerSkills(false)
@@ -1121,6 +1182,18 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       if (!response.ok) {
         throw new Error(payload.error || 'Unable to update candidate tags')
       }
+      const updatedRows = Array.isArray(payload?.resumeTags) ? payload.resumeTags : []
+      const resumeToKeys = new Map(selectedWithResume.map((entry) => [entry.resumeId, entry.key]))
+      setCandidateTags((current) => {
+        const next = { ...current }
+        updatedRows.forEach((row) => {
+          const key = resumeToKeys.get(String(row?.resumeId || ''))
+          if (!key) return
+          next[key] = Array.isArray(row.tags) ? row.tags : []
+        })
+        return next
+      })
+      setTagNotice(`Updated tags for ${payload?.updatedCount || selectedWithResume.length} candidate(s).`)
       setTagDraft('')
     } catch (error) {
       setCandidateTags(rollback)
@@ -1265,6 +1338,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         shortlistOpen={shortlistOpen}
         onToggleShortlist={setShortlistOpen}
       />
+      <div className="candidate-results-page__tag-filter" role="group" aria-label="Filter candidates by tags">
+        <span className="candidate-results-page__tag-filter-label">Filter tags:</span>
+        {Array.from(new Set(Object.values(candidateTags).flat())).sort((a, b) => a.localeCompare(b)).map((tag) => {
+          const isActive = selectedTagFilters.includes(tag)
+          return (
+            <button key={`tag-filter-${tag}`} type="button" className={`candidate-results-page__tag-chip${isActive ? ' candidate-results-page__tag-chip--active' : ''}`} onClick={() => setSelectedTagFilters((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]))} aria-pressed={isActive} aria-label={`Filter by tag ${tag}`}>
+              {tag}
+            </button>
+          )
+        })}
+      </div>
 
       {shortlistOpen && (
         <>
@@ -1311,10 +1395,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             value={tagDraft}
             onChange={(event) => setTagDraft(event.target.value)}
             placeholder="tag1, tag2"
+            aria-label="Tag input for selected candidates"
           />
           <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button"><Tag size={18} strokeWidth={1.5} aria-hidden="true" />Add Tags</button>
           <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button"><Minus size={18} strokeWidth={1.5} aria-hidden="true" />Remove Tags</button>
           {shortlistError ? <p className="shortlist-manager__error" role="status">{shortlistError}</p> : null}
+          {tagNotice ? <p className="shortlist-manager__muted-text" role="status">{tagNotice}</p> : null}
         </BulkActions>
       )}
 
@@ -1362,6 +1448,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           const compactRationale = deriveCompactRationale(candidate)
           const selectionResumeId = resolveSelectionResumeId(candidate)
           const selected = Boolean(selectionResumeId) && selectedIds.includes(selectionResumeId)
+          const cardTags = candidateTags[candidateKey] || []
 
           return (
             <div
@@ -1414,6 +1501,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 )}
               </div>
 
+              {cardTags.length > 0 && (
+                <div className="rc-tags" aria-label={`${toDisplayText(candidate.name, 'Candidate')} tags`}>
+                  {cardTags.map((tag) => <span className="rc-tag-pill" key={`${candidateKey}-tag-${tag}`} tabIndex={0}>{tag}</span>)}
+                </div>
+              )}
+
               <div className="rc-footer">
                 <span className="rc-footer-meta">
                   {[
@@ -1462,6 +1555,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   ].filter((fact) => hasRenderableContent(fact.value) && !String(fact.value).toLowerCase().includes('unavailable'))
   const allSkillsVisible = showAllDrawerSkills ? detailVm.allSkills : detailVm.allSkills.slice(0, 12)
   const hasCollapsedSkills = detailVm.allSkills.length > allSkillsVisible.length
+  const detailTags = candidateTags[expandedCandidateKey] || []
 
   return (
     <CandidateDetailErrorBoundary
@@ -1511,6 +1605,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-col">
             <DrawerSection title="Summary">
               <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`summary-${expandedCandidateKey}`} />
+            </DrawerSection>
+            <DrawerSection title="Tags" className="dd-section-card--compact">
+              {detailTags.length > 0 ? (
+                <div className="dd-top-skills">{detailTags.map((tag) => <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-detail-tag-${tag}`}>{tag}</span>)}</div>
+              ) : <p className="dd-summary">No tags</p>}
             </DrawerSection>
             {detailVm.recommendationText && (
               <DrawerSection title="Recommended action" className="dd-section-card--compact">

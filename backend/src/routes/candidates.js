@@ -114,6 +114,11 @@ const sortComparators = {
   sourceUpdatedAt: (entry) => new Date(entry.sourceUpdatedAt || 0).getTime(),
 }
 
+export function normalizeResumeTagLookupInput(inputResumeIds) {
+  if (!Array.isArray(inputResumeIds)) return null
+  return [...new Set(inputResumeIds.map((value) => resolveCandidateResumeUuid(value)).filter(Boolean))]
+}
+
 export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
   const normalizedQuery = normalizeCandidateDirectoryQuery(query)
   const totalCount = profiles.length
@@ -629,6 +634,44 @@ router.post('/tags/bulk', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('[Candidates] Failed to mutate tags:', error)
     return res.status(500).json({ error: 'Unable to update candidate tags' })
+  }
+})
+
+router.post('/tags/lookup', requireAuth, async (req, res) => {
+  const resumeIds = normalizeResumeTagLookupInput(req.body?.resumeIds)
+  if (!resumeIds) {
+    return res.status(400).json({ error: 'resumeIds must be an array' })
+  }
+  if (resumeIds.length === 0) {
+    return res.json({ resumeTags: [] })
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT r.id AS resume_id,
+              COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
+       FROM resumes r
+       LEFT JOIN LATERAL (
+         SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
+         FROM candidate_tags ct
+         WHERE ct.user_id = r.user_id
+           AND ct.resume_id = r.id
+       ) tag_agg ON TRUE
+       WHERE r.user_id = $1
+         AND r.id = ANY($2::uuid[])
+       ORDER BY r.id ASC`,
+      [req.userId, resumeIds],
+    )
+
+    return res.json({
+      resumeTags: result.rows.map((row) => ({
+        resumeId: String(row.resume_id),
+        tags: normalizeTags(row.tags).sort((a, b) => a.localeCompare(b)),
+      })),
+    })
+  } catch (error) {
+    console.error('[Candidates] Failed to lookup tags:', error)
+    return res.status(500).json({ error: 'Unable to lookup candidate tags' })
   }
 })
 

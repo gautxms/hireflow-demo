@@ -2080,3 +2080,23 @@
   .dd-header-actions .hf-btn { flex: 1 1 180px; }
   .dd-close { margin-left: auto; }
 }
+
+.candidate-results-page__tag-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.candidate-results-page__tag-filter-label { color: #9ca3af; font-size: 12px; }
+.candidate-results-page__tag-chip {
+  border: 1px solid #2a2a2a;
+  background: #111;
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.candidate-results-page__tag-chip--active { border-color: #84cc16; color: #d9f99d; }
+.rc-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.rc-tag-pill { border: 1px solid #2a2a2a; border-radius: 999px; padding: 2px 8px; font-size: 11px; color: #e2e8f0; }
