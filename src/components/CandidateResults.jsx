@@ -829,20 +829,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }, [authHeaders])
 
   useEffect(() => {
-    if (!shortlistV2Enabled) {
-      return
-    }
-
     loadShortlists()
-  }, [loadShortlists, shortlistV2Enabled])
+  }, [loadShortlists])
 
   useEffect(() => {
-    if (!shortlistV2Enabled || !selectedShortlistId) {
+    if (!selectedShortlistId) {
       return
     }
 
     loadShortlistDetails(selectedShortlistId)
-  }, [loadShortlistDetails, selectedShortlistId, shortlistV2Enabled])
+  }, [loadShortlistDetails, selectedShortlistId])
   const candidateRows = useMemo(() => {
     if (!Array.isArray(displayCandidates)) {
       return []
@@ -994,6 +990,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
 
     try {
+      if (!selectedShortlistId) {
+        setShortlistError('Create or select a shortlist first.')
+        setShortlistNotice('')
+        return
+      }
+
       if (!shortlistV2Enabled) {
         let fallbackSuccessCount = 0
         for (const candidate of selected) {
@@ -1264,7 +1266,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         onToggleShortlist={setShortlistOpen}
       />
 
-      {shortlistV2Enabled && shortlistOpen && (
+      {shortlistOpen && (
         <>
           <div className="panel-overlay" onClick={() => setShortlistOpen(false)} aria-hidden="true" />
           <div className="shortlist-panel" role="dialog" aria-modal="true" aria-label="Candidate shortlists">
@@ -1301,7 +1303,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         <BulkActions selectedCount={selectedCandidates.length}>
           <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button"><Upload size={18} strokeWidth={1.5} aria-hidden="true" />Export CSV</button>
           <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
-          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button" disabled={shortlistV2Enabled && !selectedShortlistId}><Star size={18} strokeWidth={1.5} aria-hidden="true" />{shortlistV2Enabled && !selectedShortlistId ? 'Select shortlist first' : 'Add to shortlist'}</button>
+          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button" disabled={!selectedShortlistId}><Star size={18} strokeWidth={1.5} aria-hidden="true" />{!selectedShortlistId ? 'Select shortlist first' : 'Add to shortlist'}</button>
           <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
           <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
           <input
@@ -1312,6 +1314,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           />
           <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button"><Tag size={18} strokeWidth={1.5} aria-hidden="true" />Add Tags</button>
           <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button"><Minus size={18} strokeWidth={1.5} aria-hidden="true" />Remove Tags</button>
+          {shortlistError ? <p className="shortlist-manager__error" role="status">{shortlistError}</p> : null}
         </BulkActions>
       )}
 

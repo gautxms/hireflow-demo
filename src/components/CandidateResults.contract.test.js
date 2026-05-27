@@ -168,3 +168,19 @@ test('drawer uses reusable expansion helpers with preview budgets and show more 
   assert.match(candidateResultsSource, /buttonLabel="Show more"/)
   assert.match(candidateResultsSource, /collapseLabel="Show less"/)
 })
+
+
+test('shortlist add guard applies in legacy mode when shortlist is not selected', () => {
+  assert.match(candidateResultsSource, /if \(!selectedShortlistId\) \{\s*setShortlistError\('Create or select a shortlist first\.'/s)
+  assert.match(candidateResultsSource, /disabled=\{!selectedShortlistId\}/)
+  assert.match(candidateResultsSource, /\{!selectedShortlistId \? 'Select shortlist first' : 'Add to shortlist'\}/)
+})
+
+test('legacy shortlist add path still invokes single-candidate flow when shortlist id exists', () => {
+  assert.match(candidateResultsSource, /if \(!shortlistV2Enabled\) \{\s*let fallbackSuccessCount = 0\s*for \(const candidate of selected\) \{\s*\/\/ Preserve legacy single-candidate shortlist flow when v2 is disabled\.\s*const ok = await addCandidateToShortlist\(candidate\)/s)
+})
+
+test('shortlist selector panel can render regardless of shortlistV2 flag', () => {
+  assert.match(candidateResultsSource, /\{shortlistOpen && \(/)
+  assert.doesNotMatch(candidateResultsSource, /\{shortlistV2Enabled && shortlistOpen && \(/)
+})
