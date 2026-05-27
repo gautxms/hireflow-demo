@@ -199,7 +199,7 @@ export default function AccountSettingsPage() {
       <section className="account-settings-card">
         <h2 className="type-h2 account-settings-card-title">Profile</h2>
         <p className="type-body account-settings-card-helper">Update your company and contact details used across your workspace.</p>
-        <form onSubmit={handleProfileSave} className="account-settings-form">
+        <form onSubmit={handleProfileSave} className="account-settings-form account-settings-profile-form">
           <label className="account-settings-label">
             <span>Company</span>
             <input
@@ -220,13 +220,19 @@ export default function AccountSettingsPage() {
             />
           </label>
 
-          <label className="account-settings-label">
-            <span>Email (read-only)</span>
+          <label className="account-settings-label account-settings-label--readonly">
+            <span className="account-settings-label-heading">
+              Email
+              <span className="account-settings-readonly-badge" aria-label="Read-only field">Read only</span>
+            </span>
             <input className="account-settings-input account-settings-input--readonly" value={profile.email || ''} disabled />
           </label>
 
-          <label className="account-settings-label">
-            <span>Subscription Status (read-only)</span>
+          <label className="account-settings-label account-settings-label--readonly">
+            <span className="account-settings-label-heading">
+              Subscription status
+              <span className="account-settings-readonly-badge" aria-label="Read-only field">Read only</span>
+            </span>
             <input
               className="account-settings-input account-settings-input--readonly"
               value={profile.subscription_status || 'inactive'}
@@ -234,18 +240,19 @@ export default function AccountSettingsPage() {
             />
           </label>
 
-          <div className="type-small account-settings-note">
+          <div className="type-small account-settings-note account-settings-note--readonly">
             To change subscription, visit <a href="/pricing">Billing</a>.
-          </div>
-
-          <div className="type-small account-settings-note">
-            Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
           </div>
 
           <button type="submit" className="type-button account-settings-button account-settings-button--fit">
             Save profile
           </button>
         </form>
+
+        <div className="type-small account-settings-metadata-row">
+          <span className="account-settings-metadata-label">Account created</span>
+          <span>{profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}</span>
+        </div>
       </section>
 
       <section className="account-settings-card">

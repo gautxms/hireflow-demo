@@ -166,6 +166,71 @@
 .account-settings-toast--error { background: var(--color-error); }
 .account-settings-toast--success { background: var(--color-success); }
 
+@media (max-width: 900px) {
+  .account-settings-profile-form {
+    grid-template-columns: 1fr;
+  }
+
+  .account-settings-note--readonly,
+  .account-settings-profile-form .account-settings-button {
+    grid-column: auto;
+  }
+}
+
+
+.account-settings-profile-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-settings-profile-form .account-settings-label,
+.account-settings-profile-form .account-settings-note,
+.account-settings-profile-form .account-settings-button {
+  min-width: 0;
+}
+
+.account-settings-label-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-settings-readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--hf-border-2, var(--hf-border-muted)), #fff 20%);
+  color: var(--hf-text-secondary);
+  background: color-mix(in srgb, var(--hf-surface-card), #fff 5%);
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.account-settings-note--readonly {
+  grid-column: 2;
+}
+
+.account-settings-profile-form .account-settings-button {
+  grid-column: 1;
+}
+
+.account-settings-metadata-row {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hf-border-subtle);
+  color: var(--hf-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.account-settings-metadata-label {
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .account-settings-page,
   .account-settings-state {
