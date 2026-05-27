@@ -1,0 +1,115 @@
+.reports-page {
+  width: 100%;
+  padding: var(--spacing-xl);
+}
+
+.reports-page__card {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  background: var(--hf-surface);
+  border: 1px solid var(--hf-border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: var(--hf-shadow-md);
+}
+
+.reports-page__title {
+  margin: 0 0 8px;
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--hf-text);
+}
+
+.reports-page__description {
+  margin: 0 0 20px;
+  color: var(--hf-text-2);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.reports-page__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.reports-page__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reports-page__label {
+  color: var(--hf-text-3);
+  font: 500 13px 'DM Sans', sans-serif;
+}
+
+.reports-page__input {
+  background: var(--hf-surface);
+  border: 1px solid var(--hf-border-2);
+  color: var(--hf-text);
+  border-radius: 8px;
+  font: 400 14px 'DM Sans', sans-serif;
+  padding: 10px 14px;
+}
+
+.reports-page__input::placeholder { color: var(--hf-text-4); }
+.reports-page__input:focus { outline: none; border-color: var(--hf-lime); box-shadow: 0 0 0 3px var(--hf-lime-dim); }
+
+.reports-page__schedule {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hf-text-2);
+  font: 400 14px 'DM Sans', sans-serif;
+}
+
+.reports-page__actions {
+  grid-column: 1 / -1;
+}
+
+.reports-page__feedback { margin: 0 0 14px; color: var(--hf-text-2); font: 400 14px 'DM Sans', sans-serif; }
+.reports-page__feedback--error { color: var(--hf-error); }
+
+.reports-page__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.reports-page__table th,
+.reports-page__table td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid var(--hf-border);
+  vertical-align: top;
+  color: var(--hf-text-2);
+  font: 400 14px 'DM Sans', sans-serif;
+}
+
+.reports-page__table th {
+  color: var(--hf-text);
+  font-weight: 600;
+}
+
+.reports-page__table-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .reports-page,
+  .reports-page__card {
+    padding: 16px;
+  }
+
+  .reports-page__form {
+    grid-template-columns: 1fr;
+  }
+}
