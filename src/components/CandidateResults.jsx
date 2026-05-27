@@ -1093,7 +1093,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistError('')
       setShortlistNotice(`${selectedShortlist?.name || 'Shortlist'} · ${buildShortlistSummary({ added, updated, failed }, 'add')}`)
       if (Array.isArray(payload?.outcomes)) {
-        const addedResumeIds = payload.outcomes.filter((item) => item?.ok).map((item) => String(item.resumeId || '').trim()).filter(Boolean)
+        const addedResumeIds = payload.outcomes
+          .filter((item) => item?.ok && item?.code === 'added')
+          .map((item) => String(item.resumeId || '').trim())
+          .filter(Boolean)
         setUndoPayload({ resumeIds: addedResumeIds, shortlistId: selectedShortlistId, expiresAt: Date.now() + 15_000 })
       }
       if (succeeded > 0) {
