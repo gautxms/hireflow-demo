@@ -1,0 +1,32 @@
+.settings-page {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  font-family: var(--font-body);
+  padding: 2rem;
+}
+.settings-container { max-width: 1200px; margin: 0 auto; }
+.settings-header { margin-bottom: 2rem; }
+.settings-back-btn, .settings-secondary-btn, .settings-primary-btn, .settings-coming-soon-action, .settings-tab-btn { cursor: pointer; }
+.settings-back-btn {
+  background: transparent; border: 1px solid var(--border); color: var(--color-accent-green);
+  padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem;
+}
+.settings-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; font-family: var(--font-display); }
+.settings-layout { display: grid; grid-template-columns: 250px 1fr; gap: 2rem; }
+.settings-sidebar { border-right: 1px solid var(--border); padding-right: 2rem; }
+.settings-tab-btn { display:block; width:100%; text-align:left; background:transparent; border:1px solid transparent; color:var(--color-text-secondary); padding:0.75rem 1rem; border-radius:6px; margin-bottom:0.5rem; font-size:0.9rem; }
+.settings-tab-btn--active { background: rgba(232,255,90,0.1); border-color: var(--color-accent-green); color: var(--color-accent-green); }
+.settings-tab-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+.settings-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; }
+.settings-card-title { font-weight: 700; margin-bottom: 1rem; }
+.settings-grid { display:grid; gap:0.75rem; }
+.settings-coming-soon-row { display:grid; grid-template-columns:1fr auto; gap:1rem; padding:0.9rem 1rem; border-radius:8px; border:1px dashed var(--border); background:rgba(0,0,0,0.2); opacity:0.75; align-items:center; }
+.settings-coming-soon-heading { font-weight: 600; }
+.settings-coming-soon-copy { color: var(--color-text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }
+.settings-coming-soon-action { background:transparent; border:1px solid var(--border); color: var(--color-text-secondary); padding:0.45rem 0.8rem; border-radius:4px; font-size:0.8rem; text-transform: uppercase; }
+.settings-primary-btn { background: var(--color-accent-green); color: var(--color-bg-primary); border:none; padding:0.75rem 1.25rem; border-radius:6px; font-weight:700; }
+.settings-secondary-btn { background:transparent; border:1px solid var(--border); color: var(--color-text-secondary); padding:0.5rem 1rem; border-radius:4px; }
+.settings-session { margin-bottom: 1rem; }
+.settings-block-spacing { margin-bottom: 0.75rem; }
+.settings-spacer-sm { height: 0.75rem; }
