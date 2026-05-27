@@ -22,7 +22,7 @@ import {
   buildScoreBreakdownRows,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
-import { buildShortlistSummary } from './shortlistState'
+import { buildShortlistSummary, getShortlistBulkErrorMessage } from './shortlistState'
 import API_BASE from '../config/api'
 import { FEATURE_KEYS, isFeatureEnabled } from '../config/featureFlags'
 import {
@@ -783,7 +783,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
-      throw new Error(payload.error || 'Unable to add candidates to shortlist')
+      throw new Error(getShortlistBulkErrorMessage(payload) || 'Unable to add candidates to shortlist')
     }
 
     return payload

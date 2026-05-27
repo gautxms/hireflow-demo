@@ -8,6 +8,8 @@ import {
   getDecisionStatus,
   removeShortlistCandidate,
   buildShortlistExportFilename,
+  buildShortlistSummary,
+  getShortlistBulkErrorMessage,
 } from './shortlistState.js'
 
 test('shortlist create prepends and deduplicates by id', () => {
@@ -66,4 +68,17 @@ test('shortlist export rows include enriched fallback fields', () => {
 test('shortlist export filenames include normalized shortlist name and timestamp', () => {
   const filename = buildShortlistExportFilename('Design Team / East', 'csv')
   assert.match(filename, /^design-team-east-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.csv$/)
+})
+
+
+test('shortlist add summary includes all standardized outcome buckets', () => {
+  const summary = buildShortlistSummary({ added: 2, updated: 1, invalid: 3, failed: 4 }, 'add')
+  assert.equal(summary, 'Added: 2 · Updated/Already present: 1 · Invalid/Missing: 3 · Failed: 4')
+})
+
+test('shortlist bulk error message maps known error taxonomy codes', () => {
+  assert.match(getShortlistBulkErrorMessage({ errorCode: 'permission_error' }), /permission to update this shortlist/i)
+  assert.match(getShortlistBulkErrorMessage({ errorCode: 'missing_shortlist' }), /no longer available/i)
+  assert.match(getShortlistBulkErrorMessage({ errorCode: 'stale_selection' }), /out of date/i)
+  assert.match(getShortlistBulkErrorMessage({ errorCode: 'partial_failure' }), /could not be processed/i)
 })

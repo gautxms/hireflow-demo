@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import { buildCandidateDirectoryQueryParams } from '../schemas/candidateDirectoryQuerySchema'
-import { buildShortlistSummary } from '../components/shortlistState'
+import { buildShortlistSummary, getShortlistBulkErrorMessage } from '../components/shortlistState'
 import '../styles/candidates-directory.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -279,7 +279,7 @@ export default function CandidatesPage() {
         }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload.error || 'Bulk shortlist action failed')
+      if (!response.ok) throw new Error(getShortlistBulkErrorMessage(payload) || 'Bulk shortlist action failed')
 
       const summary = payload?.summary || {}
       setBulkStatusTone((summary.failed || 0) > 0 ? 'error' : 'success')

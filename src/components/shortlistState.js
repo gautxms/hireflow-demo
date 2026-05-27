@@ -76,7 +76,29 @@ export function buildShortlistSummary(summary = {}, mode = 'add') {
   if (mode === 'remove') {
     return `Removed: ${summary.removed || 0} · Already absent: ${summary.notPresent || 0} · Failed: ${summary.failed || 0}`
   }
-  return `Added: ${summary.added || 0} · Already present: ${summary.updated || 0} · Failed: ${summary.failed || 0}`
+  return `Added: ${summary.added || 0} · Updated/Already present: ${summary.updated || 0} · Invalid/Missing: ${summary.invalid || 0} · Failed: ${summary.failed || 0}`
+}
+
+export function getShortlistBulkErrorMessage(errorPayload = {}) {
+  const errorCode = String(errorPayload?.errorCode || '').trim()
+
+  if (errorCode === 'permission_error') {
+    return 'You don’t have permission to update this shortlist. Ask a workspace admin for access, then try again.'
+  }
+
+  if (errorCode === 'missing_shortlist') {
+    return 'This shortlist is no longer available. Select another shortlist or create a new one to continue.'
+  }
+
+  if (errorCode === 'stale_selection') {
+    return 'Your selection is out of date. Refresh the list, review highlighted candidates, and submit again.'
+  }
+
+  if (errorCode === 'partial_failure') {
+    return 'Some candidates could not be processed. Retry failed items.'
+  }
+
+  return String(errorPayload?.error || '').trim()
 }
 
 export function buildShortlistExportFilename(shortlistName, ext) {
