@@ -11,17 +11,20 @@
 }
 
 .hf-btn {
+  min-height: 44px;
   border-radius: var(--radius-md);
   padding: 10px 22px;
-  font: 700 14px 'DM Sans', sans-serif;
+  font: 600 14px/1.2 'DM Sans', sans-serif;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid var(--hf-border-2, var(--hf-border-muted));
   transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .hf-btn--primary {
-  background: var(--color-accent-green);
-  color: #000;
+  background: var(--hf-accent-primary);
+  color: var(--hf-text-inverse);
+  border-color: transparent;
+  font-weight: 700;
 }
 
 .hf-btn--primary:hover {
@@ -34,14 +37,27 @@
 
 .hf-btn--secondary {
   background: transparent;
-  color: var(--color-text-secondary);
-  border-color: var(--color-border);
-  font-weight: var(--font-weight-medium);
+  color: var(--hf-text-secondary);
+  border-color: var(--hf-border-2, var(--hf-border-muted));
+  font-weight: 600;
 }
 
 .hf-btn--secondary:hover {
-  border-color: color-mix(in srgb, var(--color-border), #fff 15%);
-  color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--hf-border-2, var(--hf-border-muted)), #fff 24%);
+  color: var(--hf-text-primary);
+}
+
+.hf-btn:focus-visible {
+  outline: 2px solid var(--hf-accent-primary);
+  outline-offset: 2px;
+}
+
+.hf-btn:disabled,
+.hf-btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: saturate(0.5);
+  transform: none;
 }
 
 .ui-modal {

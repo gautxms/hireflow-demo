@@ -2,7 +2,7 @@
   max-width: 960px;
   margin: 0 auto;
   padding: 28px 32px;
-  color: var(--hf-text);
+  color: var(--hf-text-primary);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -23,8 +23,8 @@
 }
 
 .account-settings-card {
-  background: var(--hf-surface);
-  border: 1px solid var(--hf-border);
+  background: var(--hf-surface-card);
+  border: 1px solid var(--hf-border-subtle);
   border-radius: var(--radius-surface);
   padding: 20px;
   display: flex;
@@ -66,10 +66,37 @@
   width: 100%;
   font-family: var(--hf-font-ui);
   line-height: 1.5;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--radius-interactive);
+  border: 1px solid var(--hf-border-2, var(--hf-border-muted));
+  background: var(--hf-surface-input);
+  color: var(--hf-text-primary);
+  font: 400 14px/1.3 'DM Sans', sans-serif;
 }
 
+.account-settings-input::placeholder {
+  color: var(--hf-text-muted);
+}
+
+.account-settings-input:focus-visible {
+  outline: 2px solid var(--hf-accent-primary);
+  outline-offset: 2px;
+}
+
+.account-settings-input:disabled,
+.account-settings-input[readonly],
 .account-settings-input--readonly {
-  opacity: .75;
+  background: color-mix(in srgb, var(--hf-surface-input), #fff 6%);
+  border-color: color-mix(in srgb, var(--hf-border-2, var(--hf-border-muted)), #fff 16%);
+  color: var(--hf-text-secondary);
+  cursor: not-allowed;
+}
+
+.account-settings-input:disabled::placeholder,
+.account-settings-input[readonly]::placeholder,
+.account-settings-input--readonly::placeholder {
+  color: color-mix(in srgb, var(--hf-text-muted), #fff 12%);
 }
 
 .account-settings-note {
@@ -95,6 +122,48 @@
 .account-settings-button {
   font-family: var(--hf-font-ui);
   line-height: 1.45;
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: var(--radius-interactive);
+  border: 1px solid transparent;
+  background: var(--hf-accent-primary);
+  color: var(--hf-text-inverse);
+  font: 700 14px/1.2 'DM Sans', sans-serif;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--motion-transition-color);
+}
+
+.account-settings-button:hover {
+  background: color-mix(in srgb, var(--hf-accent-primary), #000 10%);
+}
+
+.account-settings-button:focus-visible {
+  outline: 2px solid var(--hf-accent-primary);
+  outline-offset: 2px;
+}
+
+.account-settings-actions .account-settings-button {
+  background: transparent;
+  color: var(--hf-text-secondary);
+  border-color: var(--hf-border-2, var(--hf-border-muted));
+  font-weight: 600;
+}
+
+.account-settings-actions .account-settings-button:hover {
+  color: var(--hf-text-primary);
+  border-color: color-mix(in srgb, var(--hf-border-2, var(--hf-border-muted)), #fff 24%);
+  background: transparent;
+}
+
+.account-settings-button:disabled,
+.account-settings-button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: saturate(0.5);
 }
 
 .account-settings-warning {
