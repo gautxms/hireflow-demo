@@ -967,13 +967,25 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }
 
-  const emailForm = (selected) => {
+  const emailForm = async (selected) => {
     const recipients = selected.map((candidate) => candidate.email).filter(Boolean)
     if (recipients.length === 0) {
       alert('No candidate emails found. Please add emails before exporting to email.')
-      return
+      return { opened: false, recipients: [] }
     }
-    window.location.href = `mailto:${recipients.join(',')}?subject=HireFlow%20Feedback%20Form`
+
+    const mailtoUrl = `mailto:${recipients.join(',')}?subject=${encodeURIComponent('HireFlow Feedback Form')}`
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(recipients.join(', '))
+      }
+    } catch {
+      // Non-blocking: clipboard support can be unavailable in some browser contexts.
+    }
+
+    window.location.href = mailtoUrl
+    return { opened: true, recipients }
   }
 
   const addToShortlist = async (selected) => {
@@ -1053,9 +1065,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }
 
-  const sendFeedbackForm = (selected) => {
-    alert(`Feedback form sent to ${selected.length} candidate(s).`)
-    emailForm(selected)
+  const sendFeedbackForm = async (selected) => {
+    const result = await emailForm(selected)
+    if (!result?.opened) {
+      return
+    }
+
+    alert(
+      `Opening your email app for ${result.recipients.length} candidate(s). ` +
+      'Your browser may show an app picker. If nothing opens, paste from clipboard into To:.',
+    )
   }
 
   const mutateSelectedTags = async (operation) => {
