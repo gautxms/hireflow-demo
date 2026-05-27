@@ -7,6 +7,7 @@ import {
   getAnalysisSource,
   getDecisionStatus,
   removeShortlistCandidate,
+  buildShortlistExportFilename,
 } from './shortlistState.js'
 
 test('shortlist create prepends and deduplicates by id', () => {
@@ -59,4 +60,10 @@ test('shortlist export rows include enriched fallback fields', () => {
     notes: '',
     added_at: '',
   })
+})
+
+
+test('shortlist export filenames include normalized shortlist name and timestamp', () => {
+  const filename = buildShortlistExportFilename('Design Team / East', 'csv')
+  assert.match(filename, /^design-team-east-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.csv$/)
 })
