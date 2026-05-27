@@ -29,6 +29,13 @@ export default function AccountSettingsPage() {
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showOldPassword, setShowOldPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [passwordHint, setPasswordHint] = useState('')
+  const [passwordMismatch, setPasswordMismatch] = useState('')
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isSigningOutAll, setIsSigningOutAll] = useState(false)
   const [toast, setToast] = useState({ type: 'success', message: '' })
   const [loading, setLoading] = useState(true)
 
@@ -105,13 +112,20 @@ export default function AccountSettingsPage() {
 
   const handlePasswordChange = async (event) => {
     event.preventDefault()
+    setPasswordHint('')
+    setPasswordMismatch('')
 
     if (newPassword !== confirmPassword) {
-      pushToast('error', 'New password and confirmation must match.')
+      setPasswordMismatch('Passwords do not match.')
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordHint('New password must be at least 8 characters long.')
       return
     }
 
     try {
+      setIsChangingPassword(true)
       const response = await fetch(`${API_BASE}/profile/change-password`, {
         method: 'POST',
         headers: authHeaders,
@@ -126,9 +140,40 @@ export default function AccountSettingsPage() {
       setOldPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      pushToast('success', 'Password changed successfully.')
+      pushToast('success', 'Password changed successfully. Use your new password the next time you sign in.')
     } catch (error) {
       pushToast('error', error.message)
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
+  const handleSignOutAllSessions = async () => {
+    const confirmed = window.confirm('Sign out of all devices now? You will be signed out on this device immediately.')
+    if (!confirmed) return
+
+    try {
+      setIsSigningOutAll(true)
+      const response = await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok && response.status !== 204) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Could not sign out of all sessions.')
+      }
+
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+      localStorage.removeItem(USER_STORAGE_KEY)
+      pushToast('success', 'Signed out of all sessions. Redirecting to login…')
+      window.setTimeout(() => {
+        window.location.assign('/login')
+      }, 1100)
+    } catch (error) {
+      pushToast('error', error.message)
+    } finally {
+      setIsSigningOutAll(false)
     }
   }
 
@@ -263,36 +308,44 @@ export default function AccountSettingsPage() {
         <h2 className="type-h2 account-settings-card-title">Security</h2>
         <p className="type-body account-settings-card-helper">Keep your account secure by rotating your password regularly.</p>
         <form onSubmit={handlePasswordChange} className="account-settings-form">
-          <input
-            className="account-settings-input"
-            type="password"
-            value={oldPassword}
-            onChange={(event) => setOldPassword(event.target.value)}
-            placeholder="Old password"
-            required
-          />
-          <input
-            className="account-settings-input"
-            type="password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            placeholder="New password"
-            required
-            minLength={8}
-          />
-          <input
-            className="account-settings-input"
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="Confirm new password"
-            required
-            minLength={8}
-          />
-          <button type="submit" className="type-button account-settings-button account-settings-button--fit">
-            Change password
+          <label className="account-settings-label">
+            <span>Current password</span>
+            <div className="account-settings-password-row">
+              <input className="account-settings-input" type={showOldPassword ? 'text' : 'password'} value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} required />
+              <button type="button" className="account-settings-inline-toggle" onClick={() => setShowOldPassword((current) => !current)}>{showOldPassword ? 'Hide' : 'Show'}</button>
+            </div>
+          </label>
+          <label className="account-settings-label">
+            <span>New password</span>
+            <div className="account-settings-password-row">
+              <input className="account-settings-input" type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required minLength={8} />
+              <button type="button" className="account-settings-inline-toggle" onClick={() => setShowNewPassword((current) => !current)}>{showNewPassword ? 'Hide' : 'Show'}</button>
+            </div>
+            <span className="type-small account-settings-inline-hint">Use at least 8 characters with a mix of upper/lowercase letters, numbers, and a symbol.</span>
+            {passwordHint && <span className="type-small account-settings-warning">{passwordHint}</span>}
+          </label>
+          <label className="account-settings-label">
+            <span>Confirm new password</span>
+            <div className="account-settings-password-row">
+              <input className="account-settings-input" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={8} />
+              <button type="button" className="account-settings-inline-toggle" onClick={() => setShowConfirmPassword((current) => !current)}>{showConfirmPassword ? 'Hide' : 'Show'}</button>
+            </div>
+            {passwordMismatch && <span className="type-small account-settings-warning">{passwordMismatch}</span>}
+          </label>
+          <button type="submit" className="type-button account-settings-button account-settings-button--fit" disabled={isChangingPassword}>
+            {isChangingPassword ? 'Changing password…' : 'Change password'}
           </button>
         </form>
+
+        <div className="account-settings-actions">
+          <button className="type-button account-settings-button account-settings-button--danger" onClick={handleSignOutAllSessions} disabled={isSigningOutAll}>
+            {isSigningOutAll ? 'Signing out…' : 'Sign out of all devices'}
+          </button>
+          <button className="type-button account-settings-button" disabled aria-disabled="true" title="Coming soon">
+            Set up 2FA (coming soon)
+          </button>
+        </div>
+        <p className="type-small account-settings-note">Two-factor authentication setup is being rolled out. This control will be enabled soon.</p>
       </section>
 
 

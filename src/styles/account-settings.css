@@ -166,6 +166,37 @@
   filter: saturate(0.5);
 }
 
+.account-settings-button--danger {
+  border-color: color-mix(in srgb, var(--color-error), #fff 20%);
+  color: var(--color-error);
+}
+
+.account-settings-actions .account-settings-button--danger {
+  border-color: color-mix(in srgb, var(--color-error), #fff 20%);
+  color: var(--color-error);
+}
+
+.account-settings-password-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.account-settings-inline-toggle {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-interactive);
+  border: 1px solid var(--hf-border-2, var(--hf-border-muted));
+  background: transparent;
+  color: var(--hf-text-secondary);
+  font: 600 13px/1 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.account-settings-inline-hint {
+  color: var(--hf-text-muted);
+}
+
 .account-settings-warning {
   margin: 0;
   color: var(--color-error);
