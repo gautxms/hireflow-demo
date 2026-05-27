@@ -26,19 +26,22 @@ function normalizeBatchResumeIds(input) {
 }
 
 router.get('/', async (req, res) => {
+  const includeArchived = String(req.query.includeArchived || 'false').toLowerCase() === 'true'
   try {
     const result = await pool.query(
       `SELECT s.id,
               s.name,
               s.description,
+              s.status,
               s.created_at,
               COUNT(sc.id)::int AS candidate_count
        FROM shortlists s
        LEFT JOIN shortlist_candidates sc ON sc.shortlist_id = s.id
        WHERE s.user_id = $1
+         AND ($2::boolean = true OR s.status = 'active')
        GROUP BY s.id
        ORDER BY s.created_at DESC`,
-      [req.userId],
+      [req.userId, includeArchived],
     )
 
     return res.json({ shortlists: result.rows })
@@ -60,7 +63,7 @@ router.post('/', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO shortlists (user_id, name, description)
        VALUES ($1, $2, $3)
-       RETURNING id, user_id, name, description, created_at`,
+       RETURNING id, user_id, name, description, status, created_at`,
       [req.userId, name.slice(0, 120), description ? description.slice(0, 500) : null],
     )
 
@@ -68,6 +71,85 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error('[Shortlists] Failed to create shortlist:', error)
     return res.status(500).json({ error: 'Unable to create shortlist' })
+  }
+})
+
+router.patch('/:id', async (req, res) => {
+  const name = req.body?.name === undefined ? undefined : String(req.body.name || '').trim().slice(0, 120)
+  const description = req.body?.description === undefined ? undefined : (req.body.description ? String(req.body.description).trim().slice(0, 500) : null)
+
+  if (name !== undefined && !name) {
+    return res.status(400).json({ error: 'Shortlist name is required' })
+  }
+
+  try {
+    const currentResult = await pool.query(
+      'SELECT id, name, description FROM shortlists WHERE id = $1 AND user_id = $2 LIMIT 1',
+      [req.params.id, req.userId],
+    )
+    const current = currentResult.rows[0]
+    if (!current) {
+      return res.status(404).json({ error: 'Shortlist not found' })
+    }
+
+    const updated = await pool.query(
+      `UPDATE shortlists
+       SET name = $3,
+           description = $4,
+           updated_at = NOW()
+       WHERE id = $1 AND user_id = $2
+       RETURNING id, name, description, status, created_at, updated_at`,
+      [req.params.id, req.userId, name ?? current.name, description ?? current.description],
+    )
+    return res.json({ shortlist: updated.rows[0] })
+  } catch (error) {
+    console.error('[Shortlists] Failed to rename/update shortlist:', error)
+    return res.status(500).json({ error: 'Unable to update shortlist' })
+  }
+})
+
+router.post('/:id/archive', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE shortlists
+       SET status = 'archived', updated_at = NOW()
+       WHERE id = $1 AND user_id = $2
+       RETURNING id, name, status, updated_at`,
+      [req.params.id, req.userId],
+    )
+    if (!result.rows[0]) return res.status(404).json({ error: 'Shortlist not found' })
+    return res.json({ shortlist: result.rows[0] })
+  } catch (error) {
+    console.error('[Shortlists] Failed to archive shortlist:', error)
+    return res.status(500).json({ error: 'Unable to archive shortlist' })
+  }
+})
+
+router.post('/:id/unarchive', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE shortlists
+       SET status = 'active', updated_at = NOW()
+       WHERE id = $1 AND user_id = $2
+       RETURNING id, name, status, updated_at`,
+      [req.params.id, req.userId],
+    )
+    if (!result.rows[0]) return res.status(404).json({ error: 'Shortlist not found' })
+    return res.json({ shortlist: result.rows[0] })
+  } catch (error) {
+    console.error('[Shortlists] Failed to unarchive shortlist:', error)
+    return res.status(500).json({ error: 'Unable to unarchive shortlist' })
+  }
+})
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM shortlists WHERE id = $1 AND user_id = $2 RETURNING id', [req.params.id, req.userId])
+    if (!result.rows[0]) return res.status(404).json({ error: 'Shortlist not found' })
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[Shortlists] Failed to delete shortlist:', error)
+    return res.status(500).json({ error: 'Unable to delete shortlist' })
   }
 })
 
@@ -84,7 +166,7 @@ router.get('/:id', async (req, res) => {
 
   try {
     const shortlistResult = await pool.query(
-      `SELECT id, user_id, name, description, created_at
+      `SELECT id, user_id, name, description, status, created_at
        FROM shortlists
        WHERE id = $1 AND user_id = $2
        LIMIT 1`,
@@ -152,7 +234,7 @@ router.post('/:id/candidates', async (req, res) => {
          EXISTS(
            SELECT 1
            FROM shortlists
-           WHERE id = $1 AND user_id = $2
+           WHERE id = $1 AND user_id = $2 AND status = 'active'
          ) AS shortlist_exists,
          EXISTS(
            SELECT 1
@@ -164,7 +246,7 @@ router.post('/:id/candidates', async (req, res) => {
     const checks = ownershipAndResumeCheck.rows[0] || {}
 
     if (!checks.shortlist_exists) {
-      return res.status(404).json({ error: 'Shortlist not found' })
+      return res.status(404).json({ error: 'Shortlist not found or archived' })
     }
 
     if (!checks.resume_exists) {
@@ -226,11 +308,11 @@ router.post('/:id/candidates/batch', async (req, res) => {
 
   try {
     const ownerCheck = await pool.query(
-      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 AND status = 'active' LIMIT 1`,
       [req.params.id, req.userId],
     )
     if (!ownerCheck.rows[0]) {
-      return res.status(404).json({ error: 'Shortlist not found' })
+      return res.status(404).json({ error: 'Shortlist not found or archived' })
     }
 
     const visibleResumesResult = await pool.query(

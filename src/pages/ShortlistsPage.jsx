@@ -24,7 +24,7 @@ export default function ShortlistsPage() {
     try {
       setLoading(true)
       setError('')
-      const response = await fetch(`${API_BASE}/shortlists`, {
+      const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
         headers: authHeaders(),
       })
       const payload = await response.json().catch(() => ({}))
@@ -79,7 +79,7 @@ export default function ShortlistsPage() {
     try {
       setLoading(true)
       setError('')
-      const response = await fetch(`${API_BASE}/shortlists`, {
+      const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ name, description }),

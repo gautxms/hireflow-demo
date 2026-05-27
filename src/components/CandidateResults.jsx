@@ -582,7 +582,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
 
   const [shortlists, setShortlists] = useState([])
-  const [selectedShortlistId, setSelectedShortlistId] = useState('')
+  const SHORTLIST_SESSION_KEY = 'hireflow_last_selected_shortlist'
+
+  const [selectedShortlistId, setSelectedShortlistId] = useState(() => sessionStorage.getItem(SHORTLIST_SESSION_KEY) || '')
   const [shortlistDetails, setShortlistDetails] = useState(null)
   const [shortlistSort, setShortlistSort] = useState('rating_desc')
   const [shortlistLoading, setShortlistLoading] = useState(false)
@@ -644,8 +646,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       const nextShortlists = Array.isArray(payload.shortlists) ? payload.shortlists : []
       setShortlists(nextShortlists)
 
-      if (!selectedShortlistId && nextShortlists[0]?.id) {
-        setSelectedShortlistId(nextShortlists[0].id)
+      if (selectedShortlistId && !nextShortlists.some((item) => item.id === selectedShortlistId)) {
+        setSelectedShortlistId('')
+        sessionStorage.removeItem(SHORTLIST_SESSION_KEY)
       }
     } catch (error) {
       setShortlistError(error.message || 'Unable to load shortlists')
@@ -845,11 +848,18 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   useEffect(() => {
     if (!selectedShortlistId) {
+      setShortlistDetails(null)
+      setShortlistNotice('No destination shortlist selected yet.')
       return
     }
 
+    sessionStorage.setItem(SHORTLIST_SESSION_KEY, selectedShortlistId)
+    const selected = shortlists.find((item) => item.id === selectedShortlistId)
+    if (selected?.name) {
+      setShortlistNotice(`Destination shortlist: ${selected.name}`)
+    }
     loadShortlistDetails(selectedShortlistId)
-  }, [loadShortlistDetails, selectedShortlistId])
+  }, [SHORTLIST_SESSION_KEY, loadShortlistDetails, selectedShortlistId, shortlists])
   const candidateRows = useMemo(() => {
     if (!Array.isArray(displayCandidates)) {
       return []
