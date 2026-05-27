@@ -34,7 +34,7 @@ test('navigation aliases for subscribed smoke routes remain canonical and stable
   assert.equal(USER_SECTION_ALIASES['/jobs'], '/job-descriptions')
   assert.equal(USER_SECTION_ALIASES['/analyses'], '/analyses')
   assert.equal(USER_SECTION_ALIASES['/candidates'], '/candidates')
-  assert.equal(USER_SECTION_ALIASES['/shortlists'], '/candidates')
+  assert.equal(USER_SECTION_ALIASES['/shortlists'], '/shortlists')
   assert.equal(USER_SECTION_ALIASES['/reports'], '/reports')
   assert.equal(USER_SECTION_ALIASES['/settings'], '/settings')
 })
