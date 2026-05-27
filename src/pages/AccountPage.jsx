@@ -109,7 +109,7 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
       <div className="account-page__grid">
         <ProfileCard user={userData} token={token} onRefresh={fetchUserData} />
         <SubscriptionCard user={userData} token={token} onRefresh={fetchUserData} subscription={subscriptionData} />
-        <BillingCard user={userData} token={token} />
+        <BillingCard user={userData} subscription={subscriptionData} />
       </div>
 
       <div className="account-page__danger-zone">
