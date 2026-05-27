@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle, ChevronLeft, CircleHelp, ExternalLink, FileText, Mail, Minus, Plus, Share2, Star, Tag, Trash2, TriangleAlert, Upload, BriefcaseBusiness, MapPin, TrendingUp, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ChevronLeft, CircleHelp, ExternalLink, FileText, Mail, Minus, Plus, Share2, Star, Tag, TriangleAlert, Upload, BriefcaseBusiness, MapPin, TrendingUp, X } from 'lucide-react'
 import ShortlistManager from './ShortlistManager'
 import BulkActions from './BulkActions'
 import CandidateFilters from './CandidateFilters'
@@ -1058,12 +1058,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     emailForm(selected)
   }
 
-  const deleteSelected = (selected) => {
-    const deleteKeys = selected.map((candidate) => candidate._bulkKey)
-    setDeletedIds((current) => [...new Set([...current, ...deleteKeys])])
-    setSelectedIds((current) => current.filter((id) => !deleteKeys.includes(id)))
-  }
-
   const mutateSelectedTags = async (operation) => {
     const tags = tagDraft.split(',').map((tag) => tag.trim()).filter(Boolean)
     if (tags.length === 0 || selectedCandidates.length === 0) {
@@ -1291,7 +1285,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button" disabled={shortlistV2Enabled && !selectedShortlistId}><Star size={18} strokeWidth={1.5} aria-hidden="true" />{shortlistV2Enabled && !selectedShortlistId ? 'Select shortlist first' : 'Add to shortlist'}</button>
           <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
           <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
-          <button className="touch-target bulk-btn danger" onClick={() => deleteSelected(selectedCandidates)} type="button"><Trash2 size={18} strokeWidth={1.5} aria-hidden="true" />Delete</button>
           <input
             className="touch-target candidate-results-page__tag-input"
             value={tagDraft}
