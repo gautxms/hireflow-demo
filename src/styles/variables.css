@@ -19,6 +19,7 @@
 
   --hf-border-subtle: #1e1e1e;
   --hf-border-muted: #555555;
+  --hf-border-2: var(--hf-border-muted);
 
   --hf-status-success: #10b981;
   --hf-status-success-text: #86efac;
