@@ -238,7 +238,7 @@ export default function AccountSettingsPage() {
             To change subscription, visit <a href="/pricing">Billing</a>.
           </div>
 
-          <div className="type-small account-settings-note">
+          <div className="type-small account-settings-note account-settings-metadata">
             Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
           </div>
 
