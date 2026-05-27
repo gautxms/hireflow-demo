@@ -138,24 +138,29 @@ export default function ReportsPage() {
   }
 
   return (
-    <main className="route-state">
-      <section className="route-state-card">
-        <h1>Reports</h1>
-        <p>Define reusable report configurations. Background generation is not enabled yet.</p>
+    <main className="reports-page">
+      <section className="reports-page__card">
+        <h1 className="reports-page__title">Reports</h1>
+        <p className="reports-page__description">Define reusable report configurations. Background generation is not enabled yet.</p>
 
         <form onSubmit={createReport} className="reports-page__form">
-          <label htmlFor="report-name">Name</label>
-          <input id="report-name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
+          <div className="reports-page__field">
+            <label className="reports-page__label" htmlFor="report-name">Name</label>
+          <input className="reports-page__input" id="report-name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
+          </div>
 
-          <label htmlFor="report-columns">Columns (comma-separated)</label>
+          <div className="reports-page__field">
+            <label className="reports-page__label" htmlFor="report-columns">Columns (comma-separated)</label>
           <input
+            className="reports-page__input"
             id="report-columns"
             value={form.columnsText}
             onChange={(event) => setForm((prev) => ({ ...prev, columnsText: event.target.value }))}
             placeholder="candidateName, score, status"
           />
+          </div>
 
-          <label htmlFor="report-schedule">
+          <label className="reports-page__schedule" htmlFor="report-schedule">
             <input
               id="report-schedule"
               type="checkbox"
@@ -165,18 +170,20 @@ export default function ReportsPage() {
             Enable schedule (off by default)
           </label>
 
-          <button type="submit" className="hf-btn hf-btn--primary" disabled={saving}>{saving ? 'Creating…' : 'Create report definition'}</button>
+          <div className="reports-page__actions">
+            <button type="submit" className="hf-btn hf-btn--primary" disabled={saving}>{saving ? 'Creating…' : 'Create report definition'}</button>
+          </div>
         </form>
 
-        {loading && <p>Loading report definitions…</p>}
-        {!loading && error && <p role="alert">{error}</p>}
+        {loading && <p className="reports-page__feedback">Loading report definitions…</p>}
+        {!loading && error && <p role="alert" className="reports-page__feedback reports-page__feedback--error">{error}</p>}
 
         {!loading && !error && items.length === 0 && (
-          <p>No report definitions yet.</p>
+          <p className="reports-page__feedback">No report definitions yet.</p>
         )}
 
         {!loading && items.length > 0 && (
-          <table>
+          <table className="reports-page__table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -194,10 +201,12 @@ export default function ReportsPage() {
                   <td>{item.scheduleEnabled ? 'Enabled' : 'Disabled'}</td>
                   <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '—'}</td>
                   <td>
-                    <button type="button" onClick={() => toggleSchedule(item)} className="hf-btn hf-btn--secondary">
+                    <div className="reports-page__table-actions">
+                      <button type="button" onClick={() => toggleSchedule(item)} className="hf-btn hf-btn--secondary">
                       {item.scheduleEnabled ? 'Disable schedule' : 'Enable schedule'}
                     </button>{' '}
                     <button type="button" onClick={() => deleteReport(item.id)} className="hf-btn hf-btn--destructive">Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}

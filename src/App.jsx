@@ -46,6 +46,7 @@ import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
 import { trackIntentLanding } from './seo/organicTracking'
 import './styles/app-route-states.css'
 import './styles/analyses-pages.css'
+import './styles/reports-page.css'
 const AdminLogsPage = lazy(() => import('./admin/pages/AdminLogsPage'))
 const AdminHealthPage = lazy(() => import('./admin/pages/AdminHealthPage'))
 const AdminAnalyticsPage = lazy(() => import('./admin/pages/AdminAnalyticsPage'))
