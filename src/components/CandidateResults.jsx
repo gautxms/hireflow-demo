@@ -22,6 +22,7 @@ import {
   buildScoreBreakdownRows,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
+import { buildShortlistSummary } from './shortlistState'
 import API_BASE from '../config/api'
 import { FEATURE_KEYS, isFeatureEnabled } from '../config/featureFlags'
 import {
@@ -582,7 +583,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
 
   const [shortlists, setShortlists] = useState([])
-  const [selectedShortlistId, setSelectedShortlistId] = useState('')
+  const SHORTLIST_SESSION_KEY = 'hireflow_last_selected_shortlist'
+
+  const [selectedShortlistId, setSelectedShortlistId] = useState(() => sessionStorage.getItem(SHORTLIST_SESSION_KEY) || '')
   const [shortlistDetails, setShortlistDetails] = useState(null)
   const [shortlistSort, setShortlistSort] = useState('rating_desc')
   const [shortlistLoading, setShortlistLoading] = useState(false)
@@ -592,6 +595,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [candidateTags, setCandidateTags] = useState({})
   const [selectedTagFilters, setSelectedTagFilters] = useState([])
   const [tagNotice, setTagNotice] = useState('')
+  const [undoPayload, setUndoPayload] = useState(null)
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
@@ -644,8 +648,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       const nextShortlists = Array.isArray(payload.shortlists) ? payload.shortlists : []
       setShortlists(nextShortlists)
 
-      if (!selectedShortlistId && nextShortlists[0]?.id) {
-        setSelectedShortlistId(nextShortlists[0].id)
+      if (selectedShortlistId && !nextShortlists.some((item) => item.id === selectedShortlistId)) {
+        setSelectedShortlistId('')
+        sessionStorage.removeItem(SHORTLIST_SESSION_KEY)
       }
     } catch (error) {
       setShortlistError(error.message || 'Unable to load shortlists')
@@ -845,11 +850,18 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   useEffect(() => {
     if (!selectedShortlistId) {
+      setShortlistDetails(null)
+      setShortlistNotice('No destination shortlist selected yet.')
       return
     }
 
+    sessionStorage.setItem(SHORTLIST_SESSION_KEY, selectedShortlistId)
+    const selected = shortlists.find((item) => item.id === selectedShortlistId)
+    if (selected?.name) {
+      setShortlistNotice(`Destination shortlist: ${selected.name}`)
+    }
     loadShortlistDetails(selectedShortlistId)
-  }, [loadShortlistDetails, selectedShortlistId])
+  }, [SHORTLIST_SESSION_KEY, loadShortlistDetails, selectedShortlistId, shortlists])
   const candidateRows = useMemo(() => {
     if (!Array.isArray(displayCandidates)) {
       return []
@@ -1087,11 +1099,15 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         ])
       }
 
-      if (failed > 0) {
-        setShortlistError('')
-        setShortlistNotice(`Shortlist updated: ${succeeded}/${requested} processed (${failed} failed).`)
-      } else {
-        setShortlistNotice(`Shortlist updated: ${succeeded}/${requested} processed.`)
+      const selectedShortlist = shortlists.find((item) => item.id === selectedShortlistId)
+      setShortlistError('')
+      setShortlistNotice(`${selectedShortlist?.name || 'Shortlist'} · ${buildShortlistSummary({ added, updated, failed }, 'add')}`)
+      if (Array.isArray(payload?.outcomes)) {
+        const addedResumeIds = payload.outcomes
+          .filter((item) => item?.ok && item?.code === 'added')
+          .map((item) => String(item.resumeId || '').trim())
+          .filter(Boolean)
+        setUndoPayload({ resumeIds: addedResumeIds, shortlistId: selectedShortlistId, expiresAt: Date.now() + 15_000 })
       }
       if (succeeded > 0) {
         const succeededResumeIds = new Set(
@@ -1105,7 +1121,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           setSelectedIds([])
         }
       }
-      alert(`Shortlist sync: ${added} added, ${updated} updated, ${failed} failed.`)
     } catch (error) {
       setShortlistError(error.message || 'Unable to add candidates to shortlist')
       setShortlistNotice('')
@@ -1126,6 +1141,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         alert(`Added ${fallbackSuccessCount} candidate(s) to shortlist.`)
       }
     }
+  }
+  const undoLastShortlistAdd = async () => {
+    if (!undoPayload || Date.now() > undoPayload.expiresAt || undoPayload.resumeIds.length === 0) return
+    const response = await fetch(`${API_BASE}/shortlists/${undoPayload.shortlistId}/candidates/batch-remove`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ resumeIds: undoPayload.resumeIds }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload.error || 'Undo failed')
+    await Promise.all([loadShortlists(), loadShortlistDetails(undoPayload.shortlistId)])
+    setShortlistNotice('Last add action was undone.')
+    setUndoPayload(null)
   }
 
   const sendFeedbackForm = async (selected) => {
@@ -1378,7 +1406,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               loading={shortlistLoading}
               error={shortlistError}
             />
-            {shortlistNotice ? <p className="shortlist-manager__muted-text">{shortlistNotice}</p> : null}
+            {shortlistNotice ? <p className="shortlist-manager__muted-text">{shortlistNotice} <a href="/shortlists">View shortlist</a>{undoPayload && Date.now() < undoPayload.expiresAt ? <button type="button" className="hf-btn hf-btn--secondary dd-btn-ghost" onClick={undoLastShortlistAdd}>Undo</button> : null}</p> : null}
           </div>
         </>
       )}
