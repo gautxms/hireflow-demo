@@ -17,12 +17,13 @@ export default function ShortlistsPage() {
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [shortlistDetails, setShortlistDetails] = useState(null)
   const [shortlistSort, setShortlistSort] = useState('rating_desc')
-  const [loading, setLoading] = useState(false)
+  const [loadingList, setLoadingList] = useState(false)
+  const [loadingDetails, setLoadingDetails] = useState(false)
   const [error, setError] = useState('')
 
   const loadShortlists = useCallback(async () => {
     try {
-      setLoading(true)
+      setLoadingList(true)
       setError('')
       const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
         headers: authHeaders(),
@@ -42,7 +43,7 @@ export default function ShortlistsPage() {
     } catch (loadError) {
       setError(loadError.message || 'Unable to load shortlists')
     } finally {
-      setLoading(false)
+      setLoadingList(false)
     }
   }, [selectedShortlistId])
 
@@ -60,7 +61,7 @@ export default function ShortlistsPage() {
     }
 
     try {
-      setLoading(true)
+      setLoadingDetails(true)
       setError('')
       const response = await fetch(`${API_BASE}/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
         headers: authHeaders(),
@@ -71,13 +72,13 @@ export default function ShortlistsPage() {
     } catch (loadError) {
       setError(loadError.message || 'Unable to load shortlist details')
     } finally {
-      setLoading(false)
+      setLoadingDetails(false)
     }
   }, [shortlistSort])
 
   const createShortlist = useCallback(async ({ name, description }) => {
     try {
-      setLoading(true)
+      setLoadingList(true)
       setError('')
       const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
         method: 'POST',
@@ -95,7 +96,7 @@ export default function ShortlistsPage() {
     } catch (createError) {
       setError(createError.message || 'Unable to create shortlist')
     } finally {
-      setLoading(false)
+      setLoadingList(false)
     }
   }, [loadShortlistDetails, loadShortlists])
 
@@ -103,7 +104,7 @@ export default function ShortlistsPage() {
     if (!selectedShortlistId || !resumeId) return
 
     try {
-      setLoading(true)
+      setLoadingList(true)
       setError('')
       const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`, {
         method: 'POST',
@@ -120,7 +121,7 @@ export default function ShortlistsPage() {
     } catch (removeError) {
       setError(removeError.message || 'Unable to remove candidate from shortlist')
     } finally {
-      setLoading(false)
+      setLoadingList(false)
     }
   }, [loadShortlistDetails, loadShortlists, selectedShortlistId])
 
@@ -156,8 +157,13 @@ export default function ShortlistsPage() {
           await loadShortlists()
           await loadShortlistDetails(selectedShortlistId)
         }}
+        onRetry={async () => {
+          await loadShortlists()
+          await loadShortlistDetails(selectedShortlistId)
+        }}
         onRemoveCandidate={removeCandidateFromShortlist}
-        loading={loading}
+        loadingList={loadingList}
+        loadingDetails={loadingDetails}
         error={error}
       />
     </main>
