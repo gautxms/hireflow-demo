@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import API_BASE from '../config/api'
 
@@ -205,7 +206,15 @@ export default function ReportsPage() {
                       <button type="button" onClick={() => toggleSchedule(item)} className="hf-btn hf-btn--secondary">
                       {item.scheduleEnabled ? 'Disable schedule' : 'Enable schedule'}
                     </button>{' '}
-                    <button type="button" onClick={() => deleteReport(item.id)} className="hf-btn hf-btn--destructive">Delete</button>
+                    <button
+                        type="button"
+                        onClick={() => deleteReport(item.id)}
+                        className="hf-btn reports-page__icon-button"
+                        aria-label={`Delete report definition ${item.name || 'Untitled report'}`}
+                        title="Delete report"
+                      >
+                        <Trash2 size={18} strokeWidth={1.5} aria-hidden="true" />
+                      </button>
                     </div>
                   </td>
                 </tr>
