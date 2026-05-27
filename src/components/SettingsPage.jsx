@@ -1,386 +1,180 @@
 import { useState } from 'react'
 
+const tabs = [
+  { id: 'account', label: 'Account' },
+  { id: 'security', label: 'Security' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'billing', label: 'Billing' },
+  { id: 'privacy', label: 'Privacy & Data' }
+]
+
+const cardStyle = {
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: '12px',
+  padding: '2rem',
+  marginBottom: '1.5rem'
+}
+
+const comingSoonRowStyle = {
+  display: 'grid',
+  gridTemplateColumns: '1fr auto',
+  gap: '1rem',
+  padding: '0.9rem 1rem',
+  borderRadius: '8px',
+  border: '1px dashed var(--border)',
+  background: 'rgba(0,0,0,0.2)',
+  opacity: 0.75,
+  alignItems: 'center'
+}
+
+function ComingSoonRow({ title, description, action = 'Coming soon' }) {
+  return (
+    <div style={comingSoonRowStyle} aria-disabled="true">
+      <div>
+        <div style={{ fontWeight: 600 }}>{title}</div>
+        <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+          {description}
+        </div>
+      </div>
+      <button
+        type="button"
+        disabled
+        style={{
+          background: 'transparent',
+          border: '1px solid var(--border)',
+          color: 'var(--color-text-secondary)',
+          padding: '0.45rem 0.8rem',
+          borderRadius: '4px',
+          fontSize: '0.8rem',
+          textTransform: 'uppercase'
+        }}
+      >
+        {action}
+      </button>
+    </div>
+  )
+}
+
 export default function SettingsPage({ onBack }) {
   const [activeTab, setActiveTab] = useState('account')
-  const [saved, setSaved] = useState(false)
-
-  const tabs = ['account', 'team', 'integrations', 'billing', 'security']
-
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
 
   return (
     <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)', padding: '2rem' }}>
-      {/* Header */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '2rem' }}>
-        <button
-          onClick={onBack}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: 'var(--color-accent-green)',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginBottom: '1rem',
-            fontSize: '0.9rem'
-          }}
-        >
+        <button onClick={onBack} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--color-accent-green)', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', marginBottom: '1rem', fontSize: '0.9rem' }}>
           ← Back
         </button>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>
-          Settings
-        </h1>
+        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem', fontFamily: 'var(--font-display)' }}>Settings</h1>
       </div>
 
-      {/* Layout */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '250px 1fr', gap: '2rem' }}>
-        {/* Sidebar */}
         <div style={{ borderRight: '1px solid var(--border)', paddingRight: '2rem' }}>
-          {tabs.map(tab => (
+          {tabs.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               style={{
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
-                background: activeTab === tab ? 'rgba(232,255,90,0.1)' : 'transparent',
-                border: activeTab === tab ? '1px solid var(--color-accent-green)' : '1px solid transparent',
-                color: activeTab === tab ? 'var(--color-accent-green)' : 'var(--color-text-secondary)',
+                background: activeTab === tab.id ? 'rgba(232,255,90,0.1)' : 'transparent',
+                border: activeTab === tab.id ? '1px solid var(--color-accent-green)' : '1px solid transparent',
+                color: activeTab === tab.id ? 'var(--color-accent-green)' : 'var(--color-text-secondary)',
                 padding: '0.75rem 1rem',
                 borderRadius: '6px',
                 marginBottom: '0.5rem',
                 cursor: 'pointer',
-                fontSize: '0.9rem',
-                transition: 'all var(--motion-duration-base) var(--motion-ease-standard)',
-                textTransform: 'capitalize'
+                fontSize: '0.9rem'
               }}
             >
-              {tab}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Content */}
         <div>
-          {/* Account Tab */}
           {activeTab === 'account' && (
             <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Account Settings</h2>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Profile Information</h3>
-                <div style={{ display: 'grid', gap: '1.5rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      defaultValue="Gautam"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        background: 'rgba(0,0,0,0.3)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        color: 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-body)'
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      defaultValue="gautam@hireflow.dev"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        background: 'rgba(0,0,0,0.3)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        color: 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-body)'
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
-                      Company
-                    </label>
-                    <input
-                      type="text"
-                      defaultValue="HireFlow"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        background: 'rgba(0,0,0,0.3)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        color: 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-body)'
-                      }}
-                    />
-                  </div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Account</h2>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Profile</h3>
+                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  <div>Full name: Gautam</div>
+                  <div>Email: gautam@hireflow.dev</div>
                 </div>
               </div>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Preferences</h3>
-                <div style={{ display: 'grid', gap: '1rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-                    <input type="checkbox" defaultChecked style={{ cursor: 'pointer' }} />
-                    <span>Receive email notifications about new candidates</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-                    <input type="checkbox" defaultChecked style={{ cursor: 'pointer' }} />
-                    <span>Weekly performance report</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-                    <input type="checkbox" style={{ cursor: 'pointer' }} />
-                    <span>Product updates and feature announcements</span>
-                  </label>
-                </div>
-              </div>
-
-              <button
-                onClick={handleSave}
-                style={{
-                  background: 'var(--color-accent-green)',
-                  color: 'var(--color-bg-primary)',
-                  border: 'none',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                {saved ? '✓ Saved' : 'Save changes'}
-              </button>
-            </div>
-          )}
-
-          {/* Team Tab */}
-          {activeTab === 'team' && (
-            <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Team Members</h2>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
-                <div style={{ display: 'grid', gap: '1rem', marginBottom: '2rem' }}>
-                  {[
-                    { name: 'Gautam', email: 'gautam@hireflow.dev', role: 'Owner', status: 'Active' },
-                    { name: 'John Smith', email: 'john@hireflow.dev', role: 'Admin', status: 'Active' },
-                    { name: 'Sarah Davis', email: 'sarah@hireflow.dev', role: 'Member', status: 'Pending' }
-                  ].map((member, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr auto',
-                        gap: '2rem',
-                        padding: '1rem',
-                        background: 'rgba(0,0,0,0.2)',
-                        borderRadius: '8px',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 'bold' }}>{member.name}</div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>{member.email}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem' }}>
-                          {member.role} • {member.status}
-                        </div>
-                      </div>
-                      <button style={{
-                        background: 'transparent',
-                        border: '1px solid var(--border)',
-                        color: 'var(--color-text-secondary)',
-                        padding: '0.5rem 1rem',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
-                      }}>
-                        {member.status === 'Pending' ? 'Resend' : 'Remove'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <button style={{
-                  background: 'var(--color-accent-green)',
-                  color: 'var(--color-bg-primary)',
-                  border: 'none',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}>
-                  Invite Team Member
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Integrations Tab */}
-          {activeTab === 'integrations' && (
-            <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Connected Apps</h2>
-
-              {[
-                { name: 'Slack', status: 'Connected', color: 'var(--color-accent-green-hover)' },
-                { name: 'Gmail', status: 'Connected', color: 'var(--color-accent-green-hover)' },
-                { name: 'Microsoft Teams', status: 'Not Connected', color: 'var(--color-text-secondary)' },
-                { name: 'Greenhouse', status: 'Not Connected', color: 'var(--color-text-secondary)' }
-              ].map((app, i) => (
-                <div
-                  key={i}
-                  style={{
-                    background: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '12px',
-                    padding: '2rem',
-                    marginBottom: '1rem',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto',
-                    alignItems: 'center'
-                  }}
-                >
-                  <div>
-                    <h3 style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{app.name}</h3>
-                    <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-                      {app.status === 'Connected' ? 'Integration is active' : 'Not yet connected'}
-                    </p>
-                  </div>
-                  <button className={`settings-app-status ${app.status === 'Connected' ? 'settings-app-status--connected' : 'settings-app-status--disconnected'}`} style={{
-                    // visual status styles moved to class variants (settings-app-status--*)
-                    // visual status styles moved to class variants (settings-app-status--*)
-                    // visual status styles moved to class variants (settings-app-status--*)
-                    padding: '0.6rem 1.5rem',
-                    borderRadius: '6px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}>
-                    {app.status === 'Connected' ? 'Disconnect' : 'Connect'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Billing Tab */}
-          {activeTab === 'billing' && (
-            <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Billing</h2>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Current Plan</h3>
-                <div style={{ display: 'grid', gap: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto' }}>
-                    <div>
-                      <div style={{ fontWeight: 'bold' }}>Pro Plan</div>
-                      <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>$299/month</div>
-                    </div>
-                    <button style={{
-                      background: 'transparent',
-                      border: '1px solid var(--border)',
-                      color: 'var(--color-text-secondary)',
-                      padding: '0.5rem 1.5rem',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}>
-                      Change Plan
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Payment Method</h3>
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    Visa ending in 4242
-                  </div>
-                  <button style={{
-                    background: 'transparent',
-                    border: '1px solid var(--border)',
-                    color: 'var(--color-text-secondary)',
-                    padding: '0.5rem 1.5rem',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}>
-                    Update Payment Method
-                  </button>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Organization Info</h3>
+                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  <div>Organization: HireFlow</div>
+                  <ComingSoonRow title="Organization roles" description="Granular role and permission controls will appear here." />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Security Tab */}
           {activeTab === 'security' && (
             <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem' }}>Security</h2>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Password</h3>
-                <button style={{
-                  background: 'var(--color-accent-green)',
-                  color: 'var(--color-bg-primary)',
-                  border: 'none',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}>
-                  Change Password
-                </button>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Security</h2>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Password</h3>
+                <button style={{ background: 'var(--color-accent-green)', color: 'var(--color-bg-primary)', border: 'none', padding: '0.75rem 1.25rem', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>Change password</button>
               </div>
-
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem', marginBottom: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Two-Factor Authentication</h3>
-                <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
-                  Protect your account with two-factor authentication
-                </p>
-                <button style={{
-                  background: 'var(--color-accent-green)',
-                  color: 'var(--color-bg-primary)',
-                  border: 'none',
-                  padding: '0.75rem 2rem',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}>
-                  Enable 2FA
-                </button>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Sessions</h3>
+                <div style={{ marginBottom: '1rem' }}>Chrome on Mac • Last active 5 minutes ago</div>
+                <button style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--color-text-secondary)', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>Sign out other sessions</button>
               </div>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Two-Factor Authentication (2FA)</h3>
+                <ComingSoonRow title="Authenticator app setup" description="2FA enrollment and recovery codes are not available yet." action="Coming soon" />
+              </div>
+            </div>
+          )}
 
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '2rem' }}>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '1.5rem' }}>Active Sessions</h3>
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    <div style={{ fontWeight: 'bold' }}>Chrome on Mac</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Last active 5 minutes ago</div>
-                  </div>
-                  <button style={{
-                    background: 'transparent',
-                    border: '1px solid var(--border)',
-                    color: 'var(--color-text-secondary)',
-                    padding: '0.5rem 1.5rem',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem'
-                  }}>
-                    Sign Out Other Sessions
-                  </button>
-                </div>
+          {activeTab === 'notifications' && (
+            <div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Notifications</h2>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Email Preferences</h3>
+                <ComingSoonRow title="Digest frequency" description="Set immediate, daily, or weekly emails when notification controls ship." />
+                <div style={{ height: '0.75rem' }} />
+                <ComingSoonRow title="Product announcements" description="Choose feature, release, and tips updates for your inbox." />
+              </div>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>In-App Preferences</h3>
+                <ComingSoonRow title="Desktop alerts" description="Real-time in-app alerts and delivery timing controls are coming soon." />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'billing' && (
+            <div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Billing</h2>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Plan & Subscription</h3>
+                <div style={{ marginBottom: '0.75rem' }}>Pro Plan • $299/month</div>
+                <button style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--color-text-secondary)', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>Manage subscription</button>
+              </div>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Payment Methods</h3>
+                <div style={{ marginBottom: '0.75rem' }}>Visa ending in 4242</div>
+                <ComingSoonRow title="Billing contacts" description="Invoice recipients and billing contact rules will be available soon." />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'privacy' && (
+            <div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Privacy & Data</h2>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Export Data</h3>
+                <ComingSoonRow title="Account data export" description="Download a copy of your account data when export tooling is ready." />
+              </div>
+              <div style={cardStyle}>
+                <h3 style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Delete Data</h3>
+                <ComingSoonRow title="Account deletion" description="Self-serve permanent account deletion workflow is coming soon." />
               </div>
             </div>
           )}
