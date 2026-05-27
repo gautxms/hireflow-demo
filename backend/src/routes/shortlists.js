@@ -312,7 +312,11 @@ router.post('/:id/candidates/batch', async (req, res) => {
       [req.params.id, req.userId],
     )
     if (!ownerCheck.rows[0]) {
-      return res.status(404).json({ error: 'Shortlist not found or archived' })
+      return res.status(404).json({
+        error: 'This shortlist is no longer available. Select another shortlist or create a new one to continue.',
+        errorCode: 'missing_shortlist',
+        retryGuidance: 'Choose a different shortlist or create a new shortlist, then retry.',
+      })
     }
 
     const visibleResumesResult = await pool.query(
@@ -355,14 +359,14 @@ router.post('/:id/candidates/batch', async (req, res) => {
         return {
           resumeId,
           ok: false,
-          code: 'resume_not_found',
+          code: 'invalid/missing',
           message: 'Resume not found for this user',
         }
       }
       return {
         resumeId,
         ok: true,
-        code: existingIds.has(resumeId) ? 'updated' : 'added',
+        code: existingIds.has(resumeId) ? 'updated/already-present' : 'added',
       }
     })
 
@@ -378,9 +382,11 @@ router.post('/:id/candidates/batch', async (req, res) => {
         succeeded: successCount,
         failed: failureCount,
         added: outcomes.filter((item) => item.code === 'added').length,
-        updated: outcomes.filter((item) => item.code === 'updated').length,
+        updated: outcomes.filter((item) => item.code === 'updated/already-present').length,
         invalid: invalidIds.length,
       },
+      errorCode: failureCount > 0 ? 'partial_failure' : null,
+      retryGuidance: failureCount > 0 ? 'Retry failed or invalid/missing items after refreshing selection.' : null,
       outcomes,
     })
   } catch (error) {
