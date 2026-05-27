@@ -71,3 +71,19 @@ export function createShortlistExportRows(candidates = []) {
     added_at: candidate.added_at || '',
   }))
 }
+
+export function buildShortlistSummary(summary = {}, mode = 'add') {
+  if (mode === 'remove') {
+    return `Removed: ${summary.removed || 0} · Already absent: ${summary.notPresent || 0} · Failed: ${summary.failed || 0}`
+  }
+  return `Added: ${summary.added || 0} · Already present: ${summary.updated || 0} · Failed: ${summary.failed || 0}`
+}
+
+export function buildShortlistExportFilename(shortlistName, ext) {
+  const safeName = String(shortlistName || 'shortlist')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  return `${safeName || 'shortlist'}-${timestamp}.${ext}`
+}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import { buildCandidateDirectoryQueryParams } from '../schemas/candidateDirectoryQuerySchema'
+import { buildShortlistSummary } from '../components/shortlistState'
 import '../styles/candidates-directory.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -92,6 +93,7 @@ export default function CandidatesPage() {
   const [bulkStatus, setBulkStatus] = useState('')
   const [bulkStatusTone, setBulkStatusTone] = useState('info')
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
+  const [newShortlistName, setNewShortlistName] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
   const [availableJobs, setAvailableJobs] = useState([])
   const [pagination, setPagination] = useState({ page: 1, pageSize: PAGE_SIZE, totalPages: 1, totalCount: 0 })
@@ -280,14 +282,8 @@ export default function CandidatesPage() {
       if (!response.ok) throw new Error(payload.error || 'Bulk shortlist action failed')
 
       const summary = payload?.summary || {}
-      if (mode === 'add') {
-        const failed = summary.failed || 0
-        setBulkStatusTone(failed > 0 ? 'error' : 'success')
-        setBulkStatus(`Added ${summary.added || 0}, updated ${summary.updated || 0}${failed > 0 ? `, failed ${failed}` : ''}.`)
-      } else {
-        setBulkStatusTone('success')
-        setBulkStatus(`Removed ${summary.removed || 0}${(summary.notPresent || 0) > 0 ? `, not present ${summary.notPresent || 0}` : ''}.`)
-      }
+      setBulkStatusTone((summary.failed || 0) > 0 ? 'error' : 'success')
+      setBulkStatus(buildShortlistSummary(summary, mode))
       setSelectedResumeIds([])
     } catch (bulkError) {
       setBulkStatusTone('error')
@@ -295,6 +291,27 @@ export default function CandidatesPage() {
     } finally {
       setIsBulkSubmitting(false)
     }
+  }
+
+  const createShortlistInFlow = async () => {
+    const name = newShortlistName.trim()
+    if (!name) {
+      setBulkStatusTone('error')
+      setBulkStatus('Enter shortlist name.')
+      return
+    }
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    const response = await fetch(`${API_BASE}/shortlists`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ name }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload.error || 'Unable to create shortlist')
+    await Promise.resolve()
+    setShortlists((current) => [payload.shortlist, ...current.filter((item) => item.id !== payload.shortlist?.id)])
+    setSelectedShortlistId(payload.shortlist?.id || '')
+    setNewShortlistName('')
   }
 
   return (
@@ -354,6 +371,11 @@ export default function CandidatesPage() {
               {shortlists.map((shortlist) => <option key={shortlist.id} value={shortlist.id}>{shortlist.name} ({shortlist.candidate_count || 0})</option>)}
             </select>
           </label>
+          <label>
+            <span>Create shortlist</span>
+            <input value={newShortlistName} onChange={(event) => setNewShortlistName(event.target.value)} placeholder="e.g., Finalists" />
+          </label>
+          <button type="button" disabled={isBulkSubmitting} onClick={async () => { try { await createShortlistInFlow(); setBulkStatusTone('success'); setBulkStatus('Shortlist created and selected.'); } catch (error) { setBulkStatusTone('error'); setBulkStatus(error.message || 'Unable to create shortlist'); } }}>Create</button>
           <button type="button" disabled={!selectedShortlistId || isBulkSubmitting} onClick={() => runBulkShortlistAction('add')}>Add selected</button>
           <button type="button" disabled={!selectedShortlistId || isBulkSubmitting} onClick={() => runBulkShortlistAction('remove')}>Remove selected</button>
         </section>

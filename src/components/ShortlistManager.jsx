@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   createShortlistExportRows,
+  buildShortlistExportFilename,
   filterShortlistCandidates,
   getAnalysisSource,
   getDecisionStatus,
@@ -61,6 +62,8 @@ export default function ShortlistManager({
     rating: 'all',
     analysisSource: 'all',
   })
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 15
 
   const selectedShortlist = useMemo(
     () => shortlists.find((item) => item.id === selectedShortlistId) || null,
@@ -78,6 +81,8 @@ export default function ShortlistManager({
   const filteredCandidates = useMemo(() => {
     return filterShortlistCandidates(allCandidates, filters)
   }, [allCandidates, filters])
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / pageSize))
+  const visibleCandidates = useMemo(() => filteredCandidates.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filteredCandidates, currentPage])
 
   const handleCreate = async (event) => {
     event.preventDefault()
@@ -213,10 +218,11 @@ export default function ShortlistManager({
               </div>
 
               <div className="shortlist-manager__actions">
+                <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={() => { setFilters({ decisionStatus: 'all', rating: 'all', analysisSource: 'all' }); setCurrentPage(1) }}>Clear filters</button>
                 <button
                   type="button"
                   disabled={!exportRows.length}
-                  onClick={() => triggerDownload(`shortlist-${selectedShortlist.name}-export.csv`, toCsv(exportRows), 'text/csv;charset=utf-8')}
+                  onClick={() => triggerDownload(buildShortlistExportFilename(selectedShortlist.name, 'csv'), toCsv(exportRows), 'text/csv;charset=utf-8')}
                   className="shortlist-manager__button shortlist-manager__button--neutral"
                 >
                   Export CSV
@@ -224,7 +230,7 @@ export default function ShortlistManager({
                 <button
                   type="button"
                   disabled={!exportRows.length}
-                  onClick={() => triggerDownload(`shortlist-${selectedShortlist.name}-export.json`, JSON.stringify(exportRows, null, 2), 'application/json;charset=utf-8')}
+                  onClick={() => triggerDownload(buildShortlistExportFilename(selectedShortlist.name, 'json'), JSON.stringify(exportRows, null, 2), 'application/json;charset=utf-8')}
                   className="shortlist-manager__button shortlist-manager__button--neutral"
                 >
                   Export JSON
@@ -234,7 +240,7 @@ export default function ShortlistManager({
           ) : null}
 
           <div className="shortlist-manager__candidate-list">
-            {filteredCandidates.map((candidate) => {
+            {visibleCandidates.map((candidate) => {
               const rating = getRatingValue(candidate)
               const decisionStatus = getDecisionStatus(candidate)
               const analysisSource = getAnalysisSource(candidate)
@@ -256,7 +262,7 @@ export default function ShortlistManager({
                     </div>
                     <button
                       type="button"
-                      onClick={() => onRemoveCandidate(candidate.resume_id)}
+                      onClick={() => window.confirm('Remove this candidate from the shortlist?') && onRemoveCandidate(candidate.resume_id)}
                       className="shortlist-manager__button shortlist-manager__button--danger"
                     >
                       Remove
@@ -267,6 +273,13 @@ export default function ShortlistManager({
             })}
             {!filteredCandidates.length ? (
               <p className="shortlist-manager__muted-text shortlist-manager__muted-text--flush">No candidates match the current shortlist filters.</p>
+            ) : null}
+            {filteredCandidates.length > pageSize ? (
+              <nav className="candidates-directory__pagination" aria-label="Shortlist pagination">
+                <button type="button" className="candidates-directory__pagination-button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage <= 1}>Previous</button>
+                <span className="candidates-directory__pagination-info" aria-live="polite">Page {currentPage} of {totalPages}</span>
+                <button type="button" className="candidates-directory__pagination-button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage >= totalPages}>Next</button>
+              </nav>
             ) : null}
           </div>
         </div>
