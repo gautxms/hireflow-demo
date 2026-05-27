@@ -10,7 +10,7 @@ export const USER_SECTION_NAVIGATION = [
     key: 'results',
     label: 'Results',
     href: '/results',
-    aliases: ['/shortlists', '/results', '/account/results'],
+    aliases: ['/results', '/account/results'],
     requiresAuth: true,
   },
   {
@@ -24,7 +24,7 @@ export const USER_SECTION_NAVIGATION = [
     key: 'candidates',
     label: 'Candidates',
     href: '/candidates',
-    aliases: ['/candidates', '/account/candidates'],
+    aliases: ['/candidates', '/shortlists', '/account/candidates'],
     requiresAuth: true,
   },
   {
