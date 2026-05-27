@@ -24,7 +24,14 @@ export const USER_SECTION_NAVIGATION = [
     key: 'candidates',
     label: 'Candidates',
     href: '/candidates',
-    aliases: ['/candidates', '/shortlists', '/account/candidates'],
+    aliases: ['/candidates', '/account/candidates'],
+    requiresAuth: true,
+  },
+  {
+    key: 'shortlists',
+    label: 'Shortlists',
+    href: '/shortlists',
+    aliases: ['/shortlists', '/account/shortlists'],
     requiresAuth: true,
   },
   {

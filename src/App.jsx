@@ -32,6 +32,7 @@ const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage'))
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage'))
+const ShortlistsPage = lazy(() => import('./pages/ShortlistsPage'))
 const AnalysesPage = lazy(() => import('./pages/AnalysesPage'))
 const AnalysisDetailPage = lazy(() => import('./pages/AnalysisDetailPage'))
 import PublicFooter from './components/PublicFooter'
@@ -680,6 +681,24 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       }
 
       return <CandidatesPage />
+    }
+
+    if (resolvedPathname === '/shortlists') {
+      if (!candidateModuleEnabled) {
+        navigate('/results')
+        return null
+      }
+
+      const canAccessShortlists = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login to view shortlists.',
+        onRequireAuth,
+      })
+      if (!canAccessShortlists) {
+        return null
+      }
+
+      return <ShortlistsPage />
     }
 
     if (resolvedPathname.startsWith('/candidates/')) {
