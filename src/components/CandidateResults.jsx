@@ -697,7 +697,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [authHeaders, shortlistSort])
 
-  const createShortlist = useCallback(async ({ name, description }) => {
+  const createShortlist = useCallback(async ({ name, description, jobDescriptionId }) => {
     try {
       setShortlistLoading(true)
       setShortlistError('')
@@ -708,7 +708,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         body: JSON.stringify({
           name,
           description,
-          jobDescriptionId: parseMeta?.jobDescriptionId || null,
+          jobDescriptionId: jobDescriptionId || parseMeta?.jobDescriptionId || null,
         }),
       })
 
@@ -730,7 +730,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     } finally {
       setShortlistLoading(false)
     }
-  }, [authHeaders, loadShortlistDetails, loadShortlists])
+  }, [authHeaders, loadShortlistDetails, loadShortlists, parseMeta?.jobDescriptionId])
 
   const addCandidateToShortlist = useCallback(async (candidate, shortlistIdOverride = '') => {
     try {

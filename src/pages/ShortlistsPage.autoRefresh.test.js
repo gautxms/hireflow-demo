@@ -50,3 +50,23 @@ test('shortlist manager exposes retry in error state and removes manual refresh 
   assert.match(shortlistManagerSource, /onRetry/)
   assert.match(shortlistManagerSource, /Retry<\/button>/)
 })
+
+
+test('shortlists page loads jobs and sends selected job when creating shortlist', () => {
+  const createShortlistSource = getFunctionSource('createShortlist')
+  assert.match(shortlistPageSource, /const \[jobDescriptions, setJobDescriptions\] = useState\(\[\]\)/)
+  assert.match(shortlistPageSource, /fetch\(`\$\{API_BASE\}\/job-descriptions`/)
+  assert.match(createShortlistSource, /jobDescriptionId/)
+  assert.match(createShortlistSource, /JSON\.stringify\(\{ name, description, jobDescriptionId \}\)/)
+  assert.match(shortlistPageSource, /jobDescriptions=\{jobDescriptions\}/)
+})
+
+test('shortlist manager create form exposes job dropdown while filters stay shortlist scoped', () => {
+  assert.match(shortlistManagerSource, /jobDescriptions = \[\]/)
+  assert.match(shortlistManagerSource, /const \[createJobDescriptionId, setCreateJobDescriptionId\] = useState\(''\)/)
+  assert.match(shortlistManagerSource, /Job \(optional\)<select value=\{createJobDescriptionId\}/)
+  assert.match(shortlistManagerSource, /onCreateShortlist\(\{ name: name\.trim\(\), description: description\.trim\(\), jobDescriptionId: createJobDescriptionId \|\| null \}\)/)
+  assert.match(shortlistManagerSource, /shortlists\.forEach\(\(list\) => \{/)
+  assert.match(shortlistManagerSource, /const value = String\(list\.job_description_id \|\| label\)\.trim\(\)/)
+  assert.match(shortlistManagerSource, /<option key=\{job\.value\} value=\{job\.value\}>\{job\.label\}<\/option>/)
+})
