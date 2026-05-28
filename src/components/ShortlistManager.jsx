@@ -112,10 +112,11 @@ export default function ShortlistManager(props) {
 
   return (
     <section className="shortlist-manager" aria-label="Shortlists page">
-      <header className="shortlist-manager__header-card" aria-label="Shortlists workspace">
+      <header className="shortlist-manager__header-card" aria-label="Shortlist workspace controls">
         <div>
-          <h2 className="shortlist-manager__title">Shortlist workspace</h2>
-          <p className="shortlist-manager__muted-text">Manage collections and make candidate decisions with context.</p>
+          <p className="shortlist-manager__section-kicker">Workspace</p>
+          <h2 className="shortlist-manager__section-title">Manage collections and decisions</h2>
+          <p className="shortlist-manager__muted-text">Create, filter, and review shortlisted candidates with decision context.</p>
         </div>
         <div className="shortlist-manager__header-actions">
           <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={onRefresh}>Refresh</button>
