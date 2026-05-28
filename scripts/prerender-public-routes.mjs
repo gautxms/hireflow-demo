@@ -11,16 +11,45 @@ const PUBLIC_ROUTES = [
     route: '/',
     currentPage: 'landing',
     body: `
-      <main>
-        <section>
-          <h1>Hire smarter and faster with HireFlow</h1>
-          <p>HireFlow helps recruiting teams screen resumes with AI so they can focus on the strongest candidates first.</p>
-        </section>
-        <section>
-          <h2>Why teams choose HireFlow</h2>
-          <p>Reduce manual resume review, improve consistency, and move qualified candidates to interviews quickly.</p>
-        </section>
-      </main>
+      <div class="public-page-layout">
+        <main class="public-page-main">
+          <section class="hero" aria-labelledby="landing-prerender-heading">
+            <div class="orb-2" aria-hidden="true"></div>
+            <div class="hero-content">
+              <h1 id="landing-prerender-heading" class="hero-headline">
+                <span class="hero-headline-line">Hire</span>
+                <span class="hero-headline-line">Smarter.</span>
+                <span class="hero-headline-line hero-headline-line--accent">Faster.</span>
+              </h1>
+              <p>
+                HireFlow automates candidate screening with AI. Reduce hiring time from weeks to days,
+                eliminate bias, and make data-driven decisions. Finally, a recruiting tool built for modern teams.
+              </p>
+              <div class="hero-cta">
+                <a class="btn-primary" href="/pricing">View pricing</a>
+                <a class="btn-ghost" href="/demo">Watch 2-min Demo</a>
+              </div>
+            </div>
+          </section>
+          <section class="features" id="features" aria-labelledby="landing-prerender-features">
+            <h2 id="landing-prerender-features" class="public-section-title center">Why teams choose HireFlow</h2>
+            <div class="features-grid">
+              <article class="feature-card">
+                <h3>AI Screening</h3>
+                <p>Automatically analyze and score resumes in seconds. Match candidates with roles using 20+ evaluation dimensions.</p>
+              </article>
+              <article class="feature-card">
+                <h3>Bias Removal</h3>
+                <p>Evaluate candidates on merit with a consistent framework designed to reduce manual screening variance.</p>
+              </article>
+              <article class="feature-card">
+                <h3>Smart Analytics</h3>
+                <p>Track hiring metrics, time-to-hire, and candidate quality so teams can make data-driven decisions.</p>
+              </article>
+            </div>
+          </section>
+        </main>
+      </div>
     `,
   },
   {
