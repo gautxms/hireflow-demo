@@ -73,10 +73,15 @@ export function createShortlistExportRows(candidates = []) {
 }
 
 export function buildShortlistSummary(summary = {}, mode = 'add') {
+  const added = Number(summary.added || 0)
+  const updated = Number(summary.updated || 0) + Number(summary.notPresent || 0)
+  const failed = Number(summary.failed || 0) + Number(summary.invalid || 0)
+
   if (mode === 'remove') {
-    return `Removed: ${summary.removed || 0} · Already absent: ${summary.notPresent || 0} · Failed: ${summary.failed || 0}`
+    return `Added: 0 · Updated: ${updated + Number(summary.removed || 0)} · Failed: ${failed}`
   }
-  return `Added: ${summary.added || 0} · Updated/Already present: ${summary.updated || 0} · Invalid/Missing: ${summary.invalid || 0} · Failed: ${summary.failed || 0}`
+
+  return `Added: ${added} · Updated: ${updated} · Failed: ${failed}`
 }
 
 export function getShortlistBulkErrorMessage(errorPayload = {}) {

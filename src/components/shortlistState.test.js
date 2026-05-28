@@ -71,9 +71,14 @@ test('shortlist export filenames include normalized shortlist name and timestamp
 })
 
 
-test('shortlist add summary includes all standardized outcome buckets', () => {
+test('shortlist add summary uses shared Added/Updated/Failed copy with normalized counts', () => {
   const summary = buildShortlistSummary({ added: 2, updated: 1, invalid: 3, failed: 4 }, 'add')
-  assert.equal(summary, 'Added: 2 · Updated/Already present: 1 · Invalid/Missing: 3 · Failed: 4')
+  assert.equal(summary, 'Added: 2 · Updated: 1 · Failed: 7')
+})
+
+test('shortlist remove summary keeps shared Added/Updated/Failed copy with normalized counts', () => {
+  const summary = buildShortlistSummary({ removed: 2, notPresent: 1, failed: 3 }, 'remove')
+  assert.equal(summary, 'Added: 0 · Updated: 3 · Failed: 3')
 })
 
 test('shortlist bulk error message maps known error taxonomy codes', () => {
