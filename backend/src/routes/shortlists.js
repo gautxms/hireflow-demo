@@ -42,7 +42,7 @@ router.get('/', async (req, res) => {
        LEFT JOIN job_descriptions jd ON jd.id = s.job_description_id
        WHERE s.user_id = $1
          AND ($2::boolean = true OR s.status = 'active')
-       GROUP BY s.id
+       GROUP BY s.id, jd.title
        ORDER BY s.created_at DESC`,
       [req.userId, includeArchived],
     )
@@ -174,7 +174,7 @@ router.get('/:id', async (req, res) => {
               COALESCE(NULLIF(TRIM(jd.title), ''), CASE WHEN s.job_description_id IS NOT NULL THEN CONCAT('Job ', s.job_description_id::text) ELSE NULL END) AS job_label
        FROM shortlists s
        LEFT JOIN job_descriptions jd ON jd.id = s.job_description_id
-       WHERE id = $1 AND user_id = $2
+       WHERE s.id = $1 AND s.user_id = $2
        LIMIT 1`,
       [req.params.id, req.userId],
     )

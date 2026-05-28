@@ -33,6 +33,8 @@ const migrationFiles = [
   '028-add-report-definitions',
   '030-add-analysis-name',
   '031-make-years-experience-decimal',
+  '032-shortlist-lifecycle-states',
+  '033-add-shortlist-job-context',
 ]
 
 async function ensureMigrationsTable(client) {
