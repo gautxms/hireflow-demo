@@ -6,6 +6,7 @@ import {
   getAnalysisSource,
   getDecisionStatus,
   getRatingValue,
+  getCandidateJobContext,
 } from './shortlistState'
 import './ShortlistManager.css'
 
@@ -173,7 +174,7 @@ export default function ShortlistManager(props) {
             const rating = getRatingValue(candidate)
             const decisionStatus = getDecisionStatus(candidate)
             const analysisSource = getAnalysisSource(candidate)
-            return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes available.'}</p><div className="shortlist-manager__chip-list"><span className="shortlist-manager__chip">Decision: {decisionStatus}</span><span className="shortlist-manager__chip">Rating: {rating ? `${rating}/5` : 'Unrated'}</span><span className="shortlist-manager__chip">Source: {analysisSource}</span></div></div><div className="shortlist-manager__candidate-actions"><div className="shortlist-manager__added-at">{candidate.added_at ? new Date(candidate.added_at).toLocaleDateString() : 'Added date unavailable'}</div><button type="button" onClick={async () => {
+            return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes available.'}</p><div className="shortlist-manager__chip-list"><span className="shortlist-manager__chip">Decision: {decisionStatus}</span><span className="shortlist-manager__chip">Rating: {rating ? `${rating}/5` : 'Unrated'}</span><span className="shortlist-manager__chip">Source: {analysisSource}</span><span className="shortlist-manager__chip">Job: {getCandidateJobContext(candidate)}</span></div></div><div className="shortlist-manager__candidate-actions"><div className="shortlist-manager__added-at">{candidate.added_at ? new Date(candidate.added_at).toLocaleDateString() : 'Added date unavailable'}</div><button type="button" onClick={async () => {
               const candidateLabel = candidate.filename || candidate.resume_id || "this candidate"
               const confirmed = window.confirm(`Remove ${candidateLabel} from this shortlist?`)
               if (!confirmed) return
