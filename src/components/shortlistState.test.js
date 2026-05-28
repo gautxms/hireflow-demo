@@ -97,7 +97,19 @@ test('shortlist candidate score prefers original analysis score over recruiter r
     candidate_snapshot: { score: 86 },
   })
 
-  assert.equal(display.label, 'AI score: 8.6/10')
+  assert.equal(display.label, 'Score: 8.6/10')
+})
+
+
+
+test('shortlist candidate score normalizes 100-point and 10-point analysis scores', () => {
+  assert.equal(formatShortlistCandidateScore({ candidate_snapshot: { score: 82 } }).label, 'Score: 8.2/10')
+  assert.equal(formatShortlistCandidateScore({ candidate_snapshot: { score: 8.2 } }).label, 'Score: 8.2/10')
+})
+
+test('shortlist candidate score falls back safely for legacy records', () => {
+  assert.equal(formatShortlistCandidateScore({ resume_id: 'old' }).label, 'Score unavailable')
+  assert.equal(formatShortlistCandidateScore({ rating: 4 }).label, 'Score: 4.0/10')
 })
 
 test('shortlist analysis href resolves linked analysis from saved context', () => {

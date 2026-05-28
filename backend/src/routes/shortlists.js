@@ -33,6 +33,20 @@ function normalizeJobDescriptionId(input) {
   return uuidPattern.test(value) ? value.toLowerCase() : null
 }
 
+
+function resolveBatchAnalysisId(resumeId, sourceContextByResumeId = {}, candidateSnapshotByResumeId = {}, sharedSourceContext = null) {
+  const sourceContext = sourceContextByResumeId[resumeId] && typeof sourceContextByResumeId[resumeId] === 'object'
+    ? sourceContextByResumeId[resumeId]
+    : (sharedSourceContext && typeof sharedSourceContext === 'object' ? sharedSourceContext : {})
+  const candidateSnapshot = candidateSnapshotByResumeId[resumeId] && typeof candidateSnapshotByResumeId[resumeId] === 'object' ? candidateSnapshotByResumeId[resumeId] : {}
+  return resolveCandidateResumeUuid(sourceContext.analysisId)
+    || resolveCandidateResumeUuid(sourceContext.analysis_id)
+    || resolveCandidateResumeUuid(candidateSnapshot.sourceAnalysisId)
+    || resolveCandidateResumeUuid(candidateSnapshot.analysisId)
+    || resolveCandidateResumeUuid(candidateSnapshot.analysis_id)
+    || null
+}
+
 router.get('/', async (req, res) => {
   const includeArchived = String(req.query.includeArchived || 'false').toLowerCase() === 'true'
   try {
@@ -391,19 +405,21 @@ router.post('/:id/candidates/batch', async (req, res) => {
 
       const sourceContextRows = [...visibleResumeIds].map((resumeId) => ({
         resume_id: resumeId,
+        analysis_id: resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext),
         source_context: sourceContextByResumeId[resumeId] || sourceContext || null,
         candidate_snapshot: candidateSnapshotByResumeId[resumeId] || null,
       }))
       await pool.query(
-        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, source_context, candidate_snapshot)
-         SELECT $1, x.resume_id::uuid, $3, $4, x.source_context::jsonb, x.candidate_snapshot::jsonb
-         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, source_context jsonb, candidate_snapshot jsonb)
+        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, analysis_id, source_context, candidate_snapshot)
+         SELECT $1, x.resume_id::uuid, $3, $4, x.analysis_id::uuid, x.source_context::jsonb, x.candidate_snapshot::jsonb
+         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, analysis_id text, source_context jsonb, candidate_snapshot jsonb)
          ON CONFLICT (shortlist_id, resume_id)
          DO UPDATE SET notes = EXCLUDED.notes,
                        rating = CASE
                          WHEN $5::boolean THEN EXCLUDED.rating
                          ELSE shortlist_candidates.rating
                        END,
+                       analysis_id = COALESCE(EXCLUDED.analysis_id, shortlist_candidates.analysis_id),
                        source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context),
                        candidate_snapshot = COALESCE(EXCLUDED.candidate_snapshot, shortlist_candidates.candidate_snapshot)`,
         [req.params.id, [...visibleResumeIds], notes, rating, hasRating, JSON.stringify(sourceContextRows)],
