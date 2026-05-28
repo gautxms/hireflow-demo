@@ -70,3 +70,9 @@ test('shortlist manager create form exposes job dropdown while filters stay shor
   assert.match(shortlistManagerSource, /const value = String\(list\.job_description_id \|\| label\)\.trim\(\)/)
   assert.match(shortlistManagerSource, /<option key=\{job\.value\} value=\{job\.value\}>\{job\.label\}<\/option>/)
 })
+
+test('shortlist manager links scored chips back to the producing analysis', () => {
+  assert.match(shortlistManagerSource, /const canLinkScore = analysisHref && scoreDisplay\.tone !== 'muted'/)
+  assert.match(shortlistManagerSource, /<a className=\{scoreClassName\} href=\{analysisHref\}/)
+  assert.match(shortlistManagerSource, /View analysis that produced/)
+})

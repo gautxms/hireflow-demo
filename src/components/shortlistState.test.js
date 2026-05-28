@@ -107,12 +107,15 @@ test('shortlist candidate score normalizes 100-point and 10-point analysis score
   assert.equal(formatShortlistCandidateScore({ candidate_snapshot: { score: 8.2 } }).label, 'Score: 8.2/10')
 })
 
-test('shortlist candidate score falls back safely for legacy records', () => {
+test('shortlist candidate score falls back to enriched AI score fields, not legacy recruiter rating', () => {
   assert.equal(formatShortlistCandidateScore({ resume_id: 'old' }).label, 'Score unavailable')
-  assert.equal(formatShortlistCandidateScore({ rating: 4 }).label, 'Score: 4.0/10')
+  assert.equal(formatShortlistCandidateScore({ rating: 4 }).label, 'Score unavailable')
+  assert.equal(formatShortlistCandidateScore({ score: 74 }).label, 'Score: 7.4/10')
+  assert.equal(formatShortlistCandidateScore({ profileScore: 91 }).label, 'Score: 9.1/10')
 })
 
-test('shortlist analysis href resolves linked analysis from saved context', () => {
+test('shortlist analysis href resolves linked analysis from saved or enriched score context', () => {
+  assert.equal(getShortlistAnalysisHref({ score_analysis_id: 'score-analysis-1' }), '/analyses/score-analysis-1')
   assert.equal(getShortlistAnalysisHref({ source_context: { analysisId: 'analysis 123' } }), '/analyses/analysis%20123')
   assert.equal(getShortlistAnalysisHref({ candidate_snapshot: { sourceAnalysisId: 'abc' } }), '/analyses/abc')
   assert.equal(getShortlistAnalysisHref({ rating: 4 }), '')

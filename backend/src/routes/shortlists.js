@@ -47,6 +47,13 @@ function resolveBatchAnalysisId(resumeId, sourceContextByResumeId = {}, candidat
     || null
 }
 
+function buildNumericJsonExpression(expression) {
+  return `CASE WHEN ${expression} ~ '^-?\\d+(\\.\\d+)?$' THEN (${expression})::numeric ELSE NULL END`
+}
+
+const profileMatchScoreExpression = buildNumericJsonExpression("cp.profile #>> '{matchScore,score}'")
+const profileScoreExpression = buildNumericJsonExpression("cp.profile->>'profile_score'")
+
 router.get('/', async (req, res) => {
   const includeArchived = String(req.query.includeArchived || 'false').toLowerCase() === 'true'
   try {
@@ -247,10 +254,32 @@ router.get('/:id', async (req, res) => {
               sc.created_at,
               sc.updated_at,
               sc.source_context,
+              COALESCE(${profileMatchScoreExpression}, ${profileScoreExpression}, r.profile_score) AS score,
+              COALESCE(sc.analysis_id, score_analysis.analysis_id) AS score_analysis_id,
               r.filename,
               r.created_at AS resume_created_at
        FROM shortlist_candidates sc
        INNER JOIN resumes r ON r.id = sc.resume_id
+       LEFT JOIN shortlists s ON s.id = sc.shortlist_id
+       LEFT JOIN candidate_profiles cp ON cp.resume_id = sc.resume_id AND cp.user_id = s.user_id
+       LEFT JOIN LATERAL (
+         SELECT ai.analysis_id
+         FROM analysis_items ai
+         INNER JOIN analyses a ON a.id = ai.analysis_id AND a.user_id = s.user_id
+         WHERE ai.resume_id = sc.resume_id
+           AND (
+             sc.analysis_id IS NULL
+             OR ai.analysis_id = sc.analysis_id
+             OR (cp.source_parse_job_id IS NOT NULL AND ai.parse_job_id = cp.source_parse_job_id)
+           )
+         ORDER BY CASE
+                    WHEN sc.analysis_id IS NOT NULL AND ai.analysis_id = sc.analysis_id THEN 0
+                    WHEN cp.source_parse_job_id IS NOT NULL AND ai.parse_job_id = cp.source_parse_job_id THEN 1
+                    ELSE 2
+                  END,
+                  ai.created_at DESC
+         LIMIT 1
+       ) score_analysis ON TRUE
        WHERE sc.shortlist_id = $1
        ORDER BY ${orderByClause}`,
       [req.params.id],

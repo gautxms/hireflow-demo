@@ -14,6 +14,7 @@ function resolveCandidateScore(candidate = {}) {
     candidate?.matchScore,
     candidate?.score,
     candidate?.profile_score,
+    candidate?.profileScore,
     candidate?.scoreBreakdown?.overall,
     candidate?.overall_score,
     candidate?.overallScore,

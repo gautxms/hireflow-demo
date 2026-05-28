@@ -68,11 +68,10 @@ export function getShortlistCandidateScore(candidate = {}) {
     sourceContext?.matchScore,
     sourceContext?.overallScore,
     candidate?.score,
+    candidate?.profile_score,
+    candidate?.profileScore,
   ])
   if (analysisScore !== null) return { value: analysisScore, source: 'analysis' }
-
-  const legacyRating = firstValidScore([candidate?.rating])
-  if (legacyRating !== null) return { value: legacyRating, source: 'legacy_rating' }
 
   return null
 }
@@ -91,10 +90,16 @@ function resolveShortlistAnalysisId(candidate = {}) {
   const sourceContext = candidate?.source_context && typeof candidate.source_context === 'object' ? candidate.source_context : {}
   const snapshot = candidate?.candidate_snapshot && typeof candidate.candidate_snapshot === 'object' ? candidate.candidate_snapshot : {}
   const candidates = [
+    candidate?.score_analysis_id,
+    candidate?.scoreAnalysisId,
     candidate?.analysis_id,
     candidate?.analysisId,
+    sourceContext?.scoreAnalysisId,
+    sourceContext?.score_analysis_id,
     sourceContext?.analysisId,
     sourceContext?.analysis_id,
+    snapshot?.scoreAnalysisId,
+    snapshot?.score_analysis_id,
     snapshot?.sourceAnalysisId,
     snapshot?.analysisId,
     snapshot?.analysis_id,
