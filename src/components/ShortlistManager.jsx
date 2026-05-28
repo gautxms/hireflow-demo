@@ -44,7 +44,6 @@ export default function ShortlistManager(props) {
     onSelectShortlist,
     onCreateShortlist,
     onChangeSort,
-    onRefresh,
     onRetry,
     onRemoveCandidate,
     loadingList,
@@ -118,9 +117,7 @@ export default function ShortlistManager(props) {
           <h2 className="shortlist-manager__section-title">Manage collections and decisions</h2>
           <p className="shortlist-manager__muted-text">Create, filter, and review shortlisted candidates with decision context.</p>
         </div>
-        <div className="shortlist-manager__header-actions">
-          <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={onRefresh}>Refresh</button>
-        </div>
+        <div className="shortlist-manager__header-actions" />
       </header>
 
       <section className="shortlist-manager__filters-card" aria-label="Create shortlist">

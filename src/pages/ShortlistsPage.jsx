@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import API_BASE from '../config/api'
 import ShortlistManager from '../components/ShortlistManager'
 
@@ -20,30 +20,41 @@ export default function ShortlistsPage() {
   const [loadingList, setLoadingList] = useState(false)
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [error, setError] = useState('')
+  const listRequestRef = useRef(0)
+  const detailsRequestRef = useRef(0)
+  const refreshInFlightRef = useRef(false)
+  const queuedRefreshRef = useRef(false)
 
   const loadShortlists = useCallback(async () => {
+    const requestId = ++listRequestRef.current
     try {
       setLoadingList(true)
-      setError('')
       const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
         headers: authHeaders(),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Unable to load shortlists')
+      if (requestId !== listRequestRef.current) return null
 
       const nextShortlists = Array.isArray(payload.shortlists) ? payload.shortlists : []
       setShortlists(nextShortlists)
+      let nextSelectedId = selectedShortlistId
 
       if (!selectedShortlistId && nextShortlists[0]?.id) {
-        setSelectedShortlistId(nextShortlists[0].id)
+        nextSelectedId = nextShortlists[0].id
+        setSelectedShortlistId(nextSelectedId)
       }
       if (selectedShortlistId && !nextShortlists.some((item) => item.id === selectedShortlistId)) {
-        setSelectedShortlistId(nextShortlists[0]?.id || '')
+        nextSelectedId = nextShortlists[0]?.id || ''
+        setSelectedShortlistId(nextSelectedId)
       }
+      setError('')
+      return nextSelectedId
     } catch (loadError) {
       setError(loadError.message || 'Unable to load shortlists')
+      return null
     } finally {
-      setLoadingList(false)
+      if (requestId === listRequestRef.current) setLoadingList(false)
     }
   }, [selectedShortlistId])
 
@@ -60,21 +71,41 @@ export default function ShortlistsPage() {
       added_asc: 'sortBy=added_at&sortOrder=asc',
     }
 
+    const requestId = ++detailsRequestRef.current
     try {
       setLoadingDetails(true)
-      setError('')
       const response = await fetch(`${API_BASE}/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
         headers: authHeaders(),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Unable to load shortlist details')
+      if (requestId !== detailsRequestRef.current) return
       setShortlistDetails(payload)
+      setError('')
     } catch (loadError) {
       setError(loadError.message || 'Unable to load shortlist details')
     } finally {
-      setLoadingDetails(false)
+      if (requestId === detailsRequestRef.current) setLoadingDetails(false)
     }
   }, [shortlistSort])
+
+  const refreshShortlists = useCallback(async () => {
+    if (refreshInFlightRef.current) {
+      queuedRefreshRef.current = true
+      return
+    }
+    refreshInFlightRef.current = true
+    try {
+      const nextSelectedId = await loadShortlists()
+      await loadShortlistDetails(nextSelectedId ?? selectedShortlistId)
+    } finally {
+      refreshInFlightRef.current = false
+      if (queuedRefreshRef.current) {
+        queuedRefreshRef.current = false
+        void refreshShortlists()
+      }
+    }
+  }, [loadShortlistDetails, loadShortlists, selectedShortlistId])
 
   const createShortlist = useCallback(async ({ name, description }) => {
     try {
@@ -92,6 +123,8 @@ export default function ShortlistsPage() {
       if (payload?.shortlist?.id) {
         setSelectedShortlistId(payload.shortlist.id)
         await loadShortlistDetails(payload.shortlist.id)
+      } else {
+        await refreshShortlists()
       }
     } catch (createError) {
       const message = createError.message || 'Unable to create shortlist'
@@ -116,24 +149,34 @@ export default function ShortlistsPage() {
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Unable to remove candidate from shortlist')
 
-      await Promise.all([
-        loadShortlists(),
-        loadShortlistDetails(selectedShortlistId),
-      ])
+      await refreshShortlists()
     } catch (removeError) {
       setError(removeError.message || 'Unable to remove candidate from shortlist')
     } finally {
       setLoadingList(false)
     }
-  }, [loadShortlistDetails, loadShortlists, selectedShortlistId])
+  }, [refreshShortlists, selectedShortlistId])
 
   useEffect(() => {
-    loadShortlists()
-  }, [loadShortlists])
+    void refreshShortlists()
+  }, [refreshShortlists])
 
   useEffect(() => {
-    loadShortlistDetails(selectedShortlistId)
+    void loadShortlistDetails(selectedShortlistId)
   }, [loadShortlistDetails, selectedShortlistId])
+
+  useEffect(() => {
+    const handleFocus = () => { void refreshShortlists() }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshShortlists()
+    }
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [refreshShortlists])
 
   return (
     <main className="candidates-directory">
@@ -155,13 +198,8 @@ export default function ShortlistsPage() {
           setShortlistSort(sortOption)
           await loadShortlistDetails(selectedShortlistId, sortOption)
         }}
-        onRefresh={async () => {
-          await loadShortlists()
-          await loadShortlistDetails(selectedShortlistId)
-        }}
         onRetry={async () => {
-          await loadShortlists()
-          await loadShortlistDetails(selectedShortlistId)
+          await refreshShortlists()
         }}
         onRemoveCandidate={removeCandidateFromShortlist}
         loadingList={loadingList}
