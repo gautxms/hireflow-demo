@@ -1,5 +1,5 @@
 .shortlist-manager {
-  max-width: 1200px;
+  max-width: 1240px;
   margin: 0 auto 2rem;
   display: grid;
   gap: 1rem;
@@ -9,119 +9,98 @@
 .shortlist-manager__header-card,
 .shortlist-manager__filters-card,
 .shortlist-manager__list-card,
-.shortlist-manager__stat-card,
-.shortlist-manager__advanced-panel {
-  background: #111111;
-  border: 1px solid #1e1e1e;
-  border-radius: 12px;
+.shortlist-manager__stat-card {
+  background: var(--hf-surface, #111111);
+  border: 1px solid var(--hf-border, #1e1e1e);
+  border-radius: var(--hf-r-xl, 12px);
 }
 
 .shortlist-manager__header-card,
 .shortlist-manager__filters-card,
-.shortlist-manager__list-card,
-.shortlist-manager__advanced-panel {
-  padding: 1rem;
-}
+.shortlist-manager__list-card { padding: 1rem; }
 
-.shortlist-manager__section-kicker {
-  margin: 0 0 0.2rem;
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
+.shortlist-manager__header-card { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.shortlist-manager__page-title { margin: 0 0 0.2rem; font-family: var(--font-heading, 'Syne', sans-serif); }
+.shortlist-manager__context-copy { margin: 0.45rem 0 0; color: var(--hf-text-3, #888888); }
 
-.shortlist-manager__section-title {
-  margin: 0;
-  font-size: 1.1rem;
-  font-family: var(--font-family-ui, 'DM Sans', sans-serif);
-  font-weight: 600;
-}
+.shortlist-manager__create-form,.shortlist-manager__filter-grid,.shortlist-manager__stats { display: grid; gap: 0.75rem; }
+.shortlist-manager__create-form { grid-template-columns: 1fr 1fr auto; align-items: end; }
+.shortlist-manager__filter-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: end; }
+.shortlist-manager__stats { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 
-.shortlist-manager__header-actions,
-.shortlist-manager__actions,
-.shortlist-manager__pills,
-.shortlist-manager__pagination {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
+.shortlist-manager__stat-card { padding: 0.9rem; }
+.shortlist-manager__stat-card h3 { margin: 0 0 0.35rem; font-size: 0.86rem; color: var(--hf-text-3, #888888); font-family: var(--font-family-ui, 'DM Sans', sans-serif); }
+.shortlist-manager__stat-card p { margin: 0; font-size: 1.5rem; font-family: var(--font-heading, 'Syne', sans-serif); }
 
-.shortlist-manager__create-form,
-.shortlist-manager__filter-grid,
-.shortlist-manager__stats {
-  display: grid;
-  gap: 0.75rem;
-}
-.shortlist-manager__create-form { grid-template-columns: 1fr 1fr auto; margin-bottom: 0.75rem; }
-.shortlist-manager__filter-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
-.shortlist-manager__stats { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-
-.shortlist-manager__stat-card { padding: 0.75rem; }
-.shortlist-manager__stat-card h3 { margin: 0 0 0.35rem; font-size: 0.85rem; color: var(--color-text-secondary); }
-.shortlist-manager__stat-card p { margin: 0; font-size: 1.4rem; font-family: var(--font-heading, 'Syne', sans-serif); }
+.shortlist-manager__filter-label { display: grid; gap: 0.35rem; color: var(--hf-text-3, #888888); font-size: 0.88rem; }
+.shortlist-manager__input-wrap { display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--hf-border-2, #2a2a2a); background: var(--hf-surface-2, #0d0d0d); border-radius: 8px; padding: 0 0.55rem; }
 
 .shortlist-manager__input,
 .shortlist-manager__select,
 .shortlist-manager__button,
 .shortlist-manager__create-button,
-.shortlist-manager__pill {
-  min-height: 44px;
-  border-radius: 8px;
-  font-family: var(--font-family-ui, 'DM Sans', sans-serif);
-}
+.shortlist-manager__shortlist-item { min-height: 44px; border-radius: 8px; font-family: var(--font-family-ui, 'DM Sans', sans-serif); }
 
-.shortlist-manager__input,
-.shortlist-manager__select {
-  background: #0d0d0d;
-  border: 1px solid var(--border);
-  color: var(--color-text-primary);
+.shortlist-manager__input, .shortlist-manager__select {
+  background: var(--hf-surface-2, #0d0d0d);
+  border: 1px solid var(--hf-border-2, #2a2a2a);
+  color: var(--hf-text, #fff);
   padding: 0.6rem 0.75rem;
 }
+.shortlist-manager__input--with-icon { border: none; padding-left: 0; background: transparent; width: 100%; }
 
 .shortlist-manager__button,
-.shortlist-manager__pill {
-  border: 1px solid #2a2a2a;
+.shortlist-manager__shortlist-item {
+  border: 1px solid var(--hf-border-2, #2a2a2a);
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--hf-text, #fff);
   padding: 0.5rem 0.85rem;
   cursor: pointer;
 }
+.shortlist-manager__create-button,
+.shortlist-manager__button--accent { background: var(--hf-lime, #c8ff00); color: #000; border: none; font-weight: 700; }
+.shortlist-manager__button--danger { color: #ff8a8a; border-color: rgba(239,68,68,.42); background: rgba(239,68,68,.06); }
 
-.shortlist-manager__button:hover,
-.shortlist-manager__pill:hover { border-color: #444; }
 .shortlist-manager__button:focus-visible,
-.shortlist-manager__pill:focus-visible,
+.shortlist-manager__shortlist-item:focus-visible,
 .shortlist-manager__create-button:focus-visible,
 .shortlist-manager__input:focus-visible,
-.shortlist-manager__select:focus-visible { outline: 2px solid #c8ff00; outline-offset: 2px; }
+.shortlist-manager__select:focus-visible,
+.shortlist-manager__input-wrap:focus-within { outline: 2px solid var(--hf-lime, #c8ff00); outline-offset: 2px; }
 
-.shortlist-manager__button--accent { color: #c8ff00; }
-.shortlist-manager__button--danger { color: #ff6b6b; }
-.shortlist-manager__create-button { background: #c8ff00; color: #000; border: none; font-weight: 700; padding: 0 1rem; cursor: pointer; }
-.shortlist-manager__pill.is-selected { background: rgba(200,255,0,0.12); border-color: rgba(200,255,0,0.35); color: #fff; }
+.shortlist-manager__content-grid { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; margin-top: 0.75rem; }
+.shortlist-manager__shortlist-rail { display: grid; gap: 0.5rem; align-content: start; }
+.shortlist-manager__shortlist-item { text-align: left; display: grid; gap: 0.2rem; }
+.shortlist-manager__shortlist-item.is-selected { border-color: var(--hf-lime-border, rgba(200,255,0,.3)); background: var(--hf-lime-dim, rgba(200,255,0,.08)); }
+.shortlist-manager__shortlist-name { font-weight: 600; }
+.shortlist-manager__shortlist-meta { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--hf-text-3, #888888); font-size: 0.83rem; }
 
-.shortlist-manager__filter-label { display: grid; gap: 0.35rem; color: var(--color-text-secondary); font-size: 0.9rem; }
+.shortlist-manager__panel-header h3 { margin: 0 0 0.2rem; font-family: var(--font-heading, 'Syne', sans-serif); }
+.shortlist-manager__panel-header p { margin: 0 0 0.35rem; color: var(--hf-text-3, #888888); }
+
 .shortlist-manager__candidate-list { margin-top: 0.75rem; display: grid; gap: 0.5rem; }
-.shortlist-manager__candidate-card { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 10px; padding: 0.75rem; }
-.shortlist-manager__candidate-name { margin: 0; font-size: 1rem; font-family: var(--font-family-ui, 'DM Sans', sans-serif); }
-.shortlist-manager__candidate-notes { margin: 0.2rem 0 0; color: var(--color-text-secondary); font-size: 0.88rem; }
+.shortlist-manager__pagination { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; color: var(--hf-text-3, #888888); }
+.shortlist-manager__candidate-card { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; background: var(--hf-surface-2, #0d0d0d); border: 1px solid var(--hf-border, #1e1e1e); border-radius: 10px; padding: 0.75rem; }
+.shortlist-manager__candidate-name { margin: 0; font-size: 1rem; }
+.shortlist-manager__candidate-notes { margin: 0.2rem 0 0; color: var(--hf-text-3, #888888); font-size: 0.88rem; }
 .shortlist-manager__chip-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
-.shortlist-manager__chip { border: 1px solid #2a2a2a; border-radius: 999px; padding: 0.2rem 0.45rem; font-size: 0.75rem; }
-.shortlist-manager__candidate-actions { display: grid; gap: 0.4rem; justify-items: end; }
-.shortlist-manager__added-at { color: #c8ff00; font-size: 0.8rem; }
-.shortlist-manager__alert { display: flex; gap: 0.75rem; align-items: center; border: 1px solid #ff6b6b; background: rgba(255,107,107,0.1); border-radius: 8px; padding: 0.6rem 0.75rem; }
-.shortlist-manager__empty { border: 1px dashed #2a2a2a; border-radius: 10px; padding: 0.8rem; }
-.shortlist-manager__muted-text { margin: 0; color: var(--color-text-secondary); }
+.shortlist-manager__chip { border: 1px solid var(--hf-border-2, #2a2a2a); border-radius: 999px; padding: 0.2rem 0.45rem; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem; }
+
+.shortlist-manager__alert { display: flex; gap: 0.75rem; align-items: center; border: 1px solid rgba(239,68,68,.6); background: rgba(239,68,68,.09); border-radius: 8px; padding: 0.6rem 0.75rem; }
+.shortlist-manager__empty { border: 1px dashed var(--hf-border-2, #2a2a2a); border-radius: 10px; padding: 0.8rem; }
+.shortlist-manager__empty--compact { margin-top: 0.25rem; }
+.shortlist-manager__muted-text { margin: 0; color: var(--hf-text-2, #aaa); }
 .shortlist-manager__inline-error { margin: 0; color: #ffb4b4; font-size: 0.9rem; }
 .shortlist-manager__link-button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; margin-top: 0.6rem; }
+.shortlist-manager__link-button:visited { color: #000; }
 
-.shortlist-manager__button:disabled,
-.shortlist-manager__create-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.shortlist-manager__skeleton-list { display: grid; gap: 0.5rem; margin: 0.5rem 0; }
+.shortlist-manager__skeleton-card { height: 52px; border-radius: 10px; border: 1px solid var(--hf-border, #1e1e1e); background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.09), rgba(255,255,255,0.02)); background-size: 200% 100%; animation: shortlist-pulse 1.2s infinite; }
 
-@media (max-width: 900px) {
+@keyframes shortlist-pulse { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+@media (max-width: 980px) {
   .shortlist-manager__create-form { grid-template-columns: 1fr; }
+  .shortlist-manager__content-grid { grid-template-columns: 1fr; }
   .shortlist-manager__candidate-card { grid-template-columns: 1fr; }
-  .shortlist-manager__candidate-actions { justify-items: start; }
 }
