@@ -104,3 +104,5 @@
   .shortlist-manager__content-grid { grid-template-columns: 1fr; }
   .shortlist-manager__candidate-card { grid-template-columns: 1fr; }
 }
+
+.shortlist-manager__button:disabled, .shortlist-manager__create-button:disabled, .shortlist-manager__select:disabled, .shortlist-manager__input:disabled { opacity:.55; cursor:not-allowed; }

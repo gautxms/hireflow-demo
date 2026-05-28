@@ -12,3 +12,6 @@
 .atsm__error { color: var(--hf-error); }
 .atsm__summary.is-ok { color: var(--hf-success); }
 .atsm__summary.is-warn { color: var(--hf-warning); }
+
+.atsm__sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.hf-btn:disabled, .atsm__input:disabled { opacity:.6; cursor:not-allowed; }

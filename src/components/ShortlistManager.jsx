@@ -172,9 +172,9 @@ export default function ShortlistManager(props) {
       <section className="shortlist-manager__list-card" aria-label="Paginated shortlist list and cards">
         {error ? <div className="shortlist-manager__alert" role="alert"><p>{error}. Please retry. If this continues, contact support.</p><button type="button" onClick={onRetry} className="shortlist-manager__button shortlist-manager__button--accent"><RefreshCw size={18} strokeWidth={1.5} aria-hidden="true" />Retry</button></div> : null}
 
-        {loadingList ? <div className="shortlist-manager__skeleton-list" role="status" aria-label="Loading shortlists"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
+        {loadingList ? <div className="shortlist-manager__skeleton-list" role="status" aria-live="polite" aria-label="Loading shortlists"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
 
-        {!loadingList && !hasShortlists ? <div className="shortlist-manager__empty"><p>No shortlists yet.</p><p className="shortlist-manager__muted-text">Create your first shortlist to start reviewing candidates.</p></div> : null}
+        {!loadingList && !hasShortlists ? <div className="shortlist-manager__empty"><p>No shortlists yet.</p><p className="shortlist-manager__muted-text">Create your first shortlist to start reviewing candidates.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--accent" onClick={() => setShowCreateForm(true)}>Create shortlist</button></div> : null}
 
         {!loadingList && hasShortlists ? <div className="shortlist-manager__content-grid">
           <aside className="shortlist-manager__shortlist-rail" aria-label="Shortlist selector">
@@ -187,7 +187,7 @@ export default function ShortlistManager(props) {
           </aside>
 
           <div>
-            {selectedShortlist && <div className="shortlist-manager__panel-header"><h3>{selectedShortlist.name}</h3><p>{getShortlistJobLabel(selectedShortlist)} · {allCandidates.length} candidate(s)</p>{selectedShortlist.description ? <p className="shortlist-manager__muted-text">{selectedShortlist.description}</p> : null}</div>}
+            {selectedShortlist && <div className="shortlist-manager__panel-header"><h3>{selectedShortlist.name}</h3><p role="status" aria-live="polite">{getShortlistJobLabel(selectedShortlist)} · {allCandidates.length} candidate(s)</p>{selectedShortlist.description ? <p className="shortlist-manager__muted-text">{selectedShortlist.description}</p> : null}</div>}
             {hasSelectedShortlist && loadingDetails ? <div className="shortlist-manager__skeleton-list" role="status" aria-label="Loading shortlist details"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
             {selectedShortlist && !loadingDetails && paginatedCandidates.length > 0 ? <div className="shortlist-manager__candidate-list">{paginatedCandidates.map((candidate) => {
               const rating = getRatingValue(candidate)
