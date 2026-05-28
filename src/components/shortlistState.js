@@ -38,6 +38,75 @@ export function getRatingValue(candidate) {
   return Number.isFinite(value) && value > 0 ? Math.max(1, Math.min(5, Math.round(value))) : null
 }
 
+function normalizeScoreToTenPoint(rawScore) {
+  const numeric = Number(rawScore)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  const normalized = numeric > 10 ? numeric / 10 : numeric
+  return Math.max(0, Math.min(10, normalized))
+}
+
+export function getShortlistCandidateScore(candidate = {}) {
+  const snapshot = candidate?.candidate_snapshot && typeof candidate.candidate_snapshot === 'object' ? candidate.candidate_snapshot : {}
+  const sourceContext = candidate?.source_context && typeof candidate.source_context === 'object' ? candidate.source_context : {}
+
+  const snapshotCandidates = [
+    snapshot?.matchScore?.score,
+    snapshot?.matchScore,
+    snapshot?.score,
+    snapshot?.profile_score,
+    snapshot?.scoreBreakdown?.overall,
+    snapshot?.overall_score,
+    snapshot?.overallScore,
+    snapshot?.total_score,
+    snapshot?.totalScore,
+  ]
+
+  for (const value of snapshotCandidates) {
+    const normalized = normalizeScoreToTenPoint(value)
+    if (normalized !== null) {
+      return { value: normalized, source: 'analysis' }
+    }
+  }
+
+  const contextCandidates = [
+    sourceContext?.matchScore?.score,
+    sourceContext?.matchScore,
+    sourceContext?.score,
+    sourceContext?.profile_score,
+    sourceContext?.overall_score,
+    sourceContext?.overallScore,
+    sourceContext?.total_score,
+    sourceContext?.totalScore,
+  ]
+
+  for (const value of contextCandidates) {
+    const normalized = normalizeScoreToTenPoint(value)
+    if (normalized !== null) {
+      return { value: normalized, source: 'analysis' }
+    }
+  }
+
+  const recruiterRating = getRatingValue(candidate)
+  if (recruiterRating !== null) {
+    return { value: recruiterRating, source: 'recruiter' }
+  }
+
+  return null
+}
+
+export function formatShortlistCandidateScore(candidate = {}) {
+  const resolved = getShortlistCandidateScore(candidate)
+  if (!resolved) {
+    return { label: 'Score unavailable', tone: 'muted' }
+  }
+
+  if (resolved.source === 'recruiter') {
+    return { label: `Recruiter rating: ${resolved.value.toFixed(1)}/5`, tone: 'default' }
+  }
+
+  return { label: `AI score: ${resolved.value.toFixed(1)}/10`, tone: 'default' }
+}
+
 export function filterShortlistCandidates(candidates, filters = {}) {
   const decisionStatus = filters.decisionStatus || 'all'
   const rating = filters.rating || 'all'

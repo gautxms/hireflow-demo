@@ -7,6 +7,42 @@ import '../styles/add-to-shortlist-modal.css'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const SHORTLIST_SESSION_KEY = 'hireflow_last_selected_shortlist'
 
+
+function resolveCandidateScore(candidate = {}) {
+  const possible = [
+    candidate?.matchScore?.score,
+    candidate?.matchScore,
+    candidate?.score,
+    candidate?.profile_score,
+    candidate?.scoreBreakdown?.overall,
+    candidate?.overall_score,
+    candidate?.overallScore,
+    candidate?.total_score,
+    candidate?.totalScore,
+  ]
+  for (const value of possible) {
+    const numeric = Number(value)
+    if (Number.isFinite(numeric) && numeric >= 0) return numeric
+  }
+  return null
+}
+
+function buildCandidateSnapshot(candidate = {}, jobContext = null) {
+  const score = resolveCandidateScore(candidate)
+  return {
+    name: candidate?.name || candidate?.filename || candidate?.resumeName || null,
+    score,
+    matchScore: score == null ? null : { score },
+    recommendation: candidate?.recommendation || candidate?.match_status || null,
+    source: 'analysis_results',
+    sourceAnalysisId: candidate?.analysisId || candidate?.analysis_id || null,
+    associatedJob: {
+      id: jobContext?.jobDescriptionId || null,
+      title: jobContext?.jobTitle || null,
+    },
+  }
+}
+
 export default function AddToShortlistModal({
   isOpen,
   onClose,
@@ -100,8 +136,25 @@ export default function AddToShortlistModal({
         return
       }
 
+      const candidateSnapshotByResumeId = {}
+      const sourceContextByResumeId = {}
+      const resumeIds = candidates.map((c) => String(c.resumeId || c.resume_id || c.id || '')).filter(Boolean)
+      candidates.forEach((candidate) => {
+        const resumeId = String(candidate?.resumeId || candidate?.resume_id || candidate?.id || '').trim()
+        if (!resumeId) return
+        candidateSnapshotByResumeId[resumeId] = buildCandidateSnapshot(candidate, jobContext)
+        sourceContextByResumeId[resumeId] = {
+          source: 'analysis_results',
+          analysisId: candidate?.analysisId || candidate?.analysis_id || null,
+          score: resolveCandidateScore(candidate),
+          matchStatus: candidate?.recommendation || candidate?.match_status || null,
+          jobDescriptionId: jobContext?.jobDescriptionId || null,
+          jobTitle: jobContext?.jobTitle || null,
+        }
+      })
+
       const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`, {
-        method: 'POST', headers: headers(), body: JSON.stringify({ resumeIds: candidates.map((c) => String(c.resumeId || c.resume_id || c.id || '')).filter(Boolean) }),
+        method: 'POST', headers: headers(), body: JSON.stringify({ resumeIds, candidateSnapshotByResumeId, sourceContextByResumeId }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(getShortlistBulkErrorMessage(payload) || 'Unable to add candidates. Please retry.')

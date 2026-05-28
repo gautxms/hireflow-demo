@@ -353,6 +353,7 @@ router.post('/:id/candidates/batch', async (req, res) => {
   const notes = req.body?.notes ? String(req.body.notes).trim().slice(0, 1000) : null
   const sourceContext = req.body?.sourceContext && typeof req.body.sourceContext === 'object' ? req.body.sourceContext : null
   const sourceContextByResumeId = req.body?.sourceContextByResumeId && typeof req.body.sourceContextByResumeId === 'object' ? req.body.sourceContextByResumeId : {}
+  const candidateSnapshotByResumeId = req.body?.candidateSnapshotByResumeId && typeof req.body.candidateSnapshotByResumeId === 'object' ? req.body.candidateSnapshotByResumeId : {}
 
   try {
     const ownerCheck = await pool.query(
@@ -391,18 +392,20 @@ router.post('/:id/candidates/batch', async (req, res) => {
       const sourceContextRows = [...visibleResumeIds].map((resumeId) => ({
         resume_id: resumeId,
         source_context: sourceContextByResumeId[resumeId] || sourceContext || null,
+        candidate_snapshot: candidateSnapshotByResumeId[resumeId] || null,
       }))
       await pool.query(
-        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, source_context)
-         SELECT $1, x.resume_id::uuid, $3, $4, x.source_context::jsonb
-         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, source_context jsonb)
+        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, source_context, candidate_snapshot)
+         SELECT $1, x.resume_id::uuid, $3, $4, x.source_context::jsonb, x.candidate_snapshot::jsonb
+         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, source_context jsonb, candidate_snapshot jsonb)
          ON CONFLICT (shortlist_id, resume_id)
          DO UPDATE SET notes = EXCLUDED.notes,
                        rating = CASE
                          WHEN $5::boolean THEN EXCLUDED.rating
                          ELSE shortlist_candidates.rating
                        END,
-                       source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context)`,
+                       source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context),
+                       candidate_snapshot = COALESCE(EXCLUDED.candidate_snapshot, shortlist_candidates.candidate_snapshot)`,
         [req.params.id, [...visibleResumeIds], notes, rating, hasRating, JSON.stringify(sourceContextRows)],
       )
     }
