@@ -178,7 +178,7 @@ test('shortlist add flow supports create-or-select destination inline', () => {
 })
 
 test('legacy shortlist add path still invokes single-candidate flow when shortlist id exists', () => {
-  assert.match(candidateResultsSource, /if \(!shortlistV2Enabled\) \{\s*let fallbackSuccessCount = 0\s*for \(const candidate of selected\) \{\s*\/\/ Preserve legacy single-candidate shortlist flow when v2 is disabled\.\s*const ok = await addCandidateToShortlist\(candidate\)/s)
+  assert.match(candidateResultsSource, /if \(!shortlistV2Enabled\) \{\s*let fallbackSuccessCount = 0\s*for \(const candidate of selected\) \{\s*\/\/ Preserve legacy single-candidate shortlist flow when v2 is disabled\.\s*const ok = await addCandidateToShortlist\(candidate(?:, destinationShortlistId)?\)/s)
 })
 
 test('shortlist selector panel can render regardless of shortlistV2 flag', () => {

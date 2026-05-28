@@ -728,16 +728,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [authHeaders, loadShortlistDetails, loadShortlists])
 
-  const addCandidateToShortlist = useCallback(async (candidate) => {
+  const addCandidateToShortlist = useCallback(async (candidate, shortlistIdOverride = '') => {
     try {
-      if (!selectedShortlistId) {
+      const destinationShortlistId = shortlistIdOverride || selectedShortlistId
+      if (!destinationShortlistId) {
         throw new Error('Create or select a shortlist first')
       }
 
       const derivedRating = Math.max(1, Math.min(5, Math.round(Number(candidate?.score || 0) / 20)))
 
       const resumeId = candidate?.resumeId || candidate?.resume_id || candidate?.id
-      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates`, {
+      const response = await fetch(`${API_BASE}/shortlists/${destinationShortlistId}/candidates`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -1123,7 +1124,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         let fallbackSuccessCount = 0
         for (const candidate of selected) {
           // Preserve legacy single-candidate shortlist flow when v2 is disabled.
-          const ok = await addCandidateToShortlist(candidate)
+          const ok = await addCandidateToShortlist(candidate, destinationShortlistId)
           if (ok) {
             fallbackSuccessCount += 1
           }
@@ -1175,7 +1176,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       let fallbackSuccessCount = 0
       for (const candidate of selected) {
         // Legacy endpoint fallback if the API has not rolled out batch yet.
-        const ok = await addCandidateToShortlist(candidate)
+        const ok = await addCandidateToShortlist(candidate, destinationShortlistId)
         if (ok) {
           fallbackSuccessCount += 1
         }
