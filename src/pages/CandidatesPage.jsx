@@ -316,7 +316,7 @@ export default function CandidatesPage() {
     const response = await fetch(`${API_BASE}/shortlists`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, jobDescriptionId: filters.sourceJobId || null }),
     })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(payload.error || 'Unable to create shortlist')

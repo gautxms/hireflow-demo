@@ -163,7 +163,15 @@ export default function ShortlistManager(props) {
 
         {!loadingList && !hasShortlists ? <div className="shortlist-manager__empty"><p>No shortlists yet.</p><p className="shortlist-manager__muted-text">Create your first shortlist to start reviewing candidates.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--accent" onClick={() => document.querySelector('.shortlist-manager__create-form input')?.focus()}>Create shortlist</button></div> : null}
 
-        {hasShortlists ? <div className="shortlist-manager__pills">{shortlists.map((list) => <button key={list.id} type="button" onClick={() => onSelectShortlist(list.id)} className={`shortlist-manager__pill ${list.id === selectedShortlistId ? 'is-selected' : ''}`}>{list.name} ({list.candidate_count || 0})</button>)}</div> : null}
+        {hasShortlists ? <div className="shortlist-manager__pills">{shortlists.map((list) => {
+          const jobLabel = String(list?.job_label || '').trim()
+          const contextLabel = jobLabel || 'General shortlist'
+          return (
+            <button key={list.id} type="button" onClick={() => onSelectShortlist(list.id)} className={`shortlist-manager__pill ${list.id === selectedShortlistId ? 'is-selected' : ''}`}>
+              {list.name} ({list.candidate_count || 0}) · {contextLabel}
+            </button>
+          )
+        })}</div> : null}
 
         {selectedShortlist && loadingDetails ? <p className="shortlist-manager__muted-text" role="status">Loading shortlist details…</p> : null}
 
@@ -172,7 +180,7 @@ export default function ShortlistManager(props) {
             const rating = getRatingValue(candidate)
             const decisionStatus = getDecisionStatus(candidate)
             const analysisSource = getAnalysisSource(candidate)
-            return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes available.'}</p><div className="shortlist-manager__chip-list"><span className="shortlist-manager__chip">Decision: {decisionStatus}</span><span className="shortlist-manager__chip">Rating: {rating ? `${rating}/5` : 'Unrated'}</span><span className="shortlist-manager__chip">Source: {analysisSource}</span><span className="shortlist-manager__chip">Job: {getCandidateJobContext(candidate)}</span></div></div><div className="shortlist-manager__candidate-actions"><div className="shortlist-manager__added-at">{candidate.added_at ? new Date(candidate.added_at).toLocaleDateString() : 'Added date unavailable'}</div><button type="button" onClick={async () => {
+            return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes available.'}</p><div className="shortlist-manager__chip-list"><span className="shortlist-manager__chip">Decision: {decisionStatus}</span><span className="shortlist-manager__chip">Rating: {rating ? `${rating}/5` : 'Unrated'}</span><span className="shortlist-manager__chip">Source: {analysisSource}</span>{!selectedShortlist?.job_description_id ? <span className="shortlist-manager__chip">Job: {getCandidateJobContext(candidate)}</span> : null}</div></div><div className="shortlist-manager__candidate-actions"><div className="shortlist-manager__added-at">{candidate.added_at ? new Date(candidate.added_at).toLocaleDateString() : 'Added date unavailable'}</div><button type="button" onClick={async () => {
               const candidateLabel = candidate.filename || candidate.resume_id || "this candidate"
               const confirmed = window.confirm(`Remove ${candidateLabel} from this shortlist?`)
               if (!confirmed) return

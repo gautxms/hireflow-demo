@@ -514,6 +514,27 @@ function resolveJobDescriptionSubtitle(parseMeta, candidates) {
     .find(Boolean)
 }
 
+function resolveJobDescriptionId(parseMeta, candidates) {
+  const parseMetaCandidates = [
+    parseMeta?.jobDescriptionId,
+    parseMeta?.job_description_id,
+    parseMeta?.jobId,
+  ]
+
+  const firstCandidate = Array.isArray(candidates) && candidates.length > 0 ? candidates[0] : null
+  const candidateFields = [
+    firstCandidate?.jobDescriptionId,
+    firstCandidate?.job_description_id,
+    firstCandidate?.jobId,
+    firstCandidate?.sourceJobId,
+    firstCandidate?.associatedJob?.id,
+  ]
+
+  return [...parseMetaCandidates, ...candidateFields]
+    .map((value) => String(value || '').trim())
+    .find(Boolean) || null
+}
+
 function filterAndSortCandidates(candidates, filters) {
   const {
     searchText = '',
@@ -622,6 +643,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const displayCandidates = Array.isArray(liveCandidates) ? liveCandidates : []
   const analysisTitle = useMemo(() => resolveAnalysisTitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
   const jobDescriptionSubtitle = useMemo(() => resolveJobDescriptionSubtitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
+  const analysisJobDescriptionId = useMemo(() => resolveJobDescriptionId(parseMeta, liveCandidates), [liveCandidates, parseMeta])
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -705,7 +727,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       const response = await fetch(`${API_BASE}/shortlists`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ name, description, jobDescriptionId: analysisJobDescriptionId }),
       })
 
       const payload = await response.json().catch(() => ({}))
@@ -745,6 +767,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           resumeId,
           notes: `Added from ranking: ${candidate?.name || 'Unknown candidate'}`,
           rating: derivedRating,
+          sourceContext: {
+            source: 'analysis_results_single',
+            sourceAnalysisId: analysisId || parseMeta?.analysisId || null,
+            sourceJobId: analysisJobDescriptionId,
+            jobDescriptionId: analysisJobDescriptionId,
+            jobTitle: jobDescriptionSubtitle || null,
+          },
         }),
       })
 
@@ -759,7 +788,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistError(error.message || 'Unable to add candidate to shortlist')
       return false
     }
-  }, [authHeaders, selectedShortlistId])
+  }, [analysisId, analysisJobDescriptionId, authHeaders, jobDescriptionSubtitle, parseMeta?.analysisId, selectedShortlistId])
 
   const addCandidatesToShortlistBatch = useCallback(async (selected, shortlistIdOverride) => {
     const destinationShortlistId = shortlistIdOverride || selectedShortlistId
@@ -782,6 +811,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       body: JSON.stringify({
         resumeIds,
         notes: `Added from ranking in bulk (${new Date().toISOString()})`,
+        sourceContext: {
+          source: 'analysis_results_bulk',
+          sourceAnalysisId: analysisId || parseMeta?.analysisId || null,
+          sourceJobId: analysisJobDescriptionId,
+          jobDescriptionId: analysisJobDescriptionId,
+          jobTitle: jobDescriptionSubtitle || null,
+        },
       }),
     })
 
@@ -791,7 +827,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
 
     return payload
-  }, [authHeaders, selectedShortlistId])
+  }, [analysisId, analysisJobDescriptionId, authHeaders, jobDescriptionSubtitle, parseMeta?.analysisId, selectedShortlistId])
 
   const removeCandidateFromShortlist = useCallback(async (resumeId) => {
     try {
@@ -1079,6 +1115,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         body: JSON.stringify({
           name: trimmedName,
           description: 'Created while adding candidates from analysis results.',
+          jobDescriptionId: analysisJobDescriptionId,
         }),
       })
 
@@ -1466,6 +1503,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
           <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button" disabled={isCreatingShortlistInAddFlow}><Star size={18} strokeWidth={1.5} aria-hidden="true" />Add to shortlist</button>
           {selectedShortlistName ? <p className="shortlist-manager__muted-text" role="status">Destination shortlist: {selectedShortlistName}</p> : null}
+          {analysisJobDescriptionId || jobDescriptionSubtitle ? <p className="shortlist-manager__muted-text" role="status">Creating under: {jobDescriptionSubtitle || `Job ${analysisJobDescriptionId}`}</p> : null}
           {!selectedShortlistName ? <><p className="shortlist-manager__muted-text" role="status">No shortlist selected. Create one to continue.</p><input className="touch-target candidate-results-page__tag-input" value={newShortlistName} onChange={(event) => setNewShortlistName(event.target.value)} placeholder="New shortlist name" aria-label="New shortlist name" /><button className="touch-target bulk-btn" type="button" onClick={createShortlistInAddFlow} disabled={isCreatingShortlistInAddFlow}>{isCreatingShortlistInAddFlow ? 'Creating…' : 'Create shortlist'}</button></> : null}
           <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
           <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
