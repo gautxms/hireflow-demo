@@ -170,14 +170,15 @@ test('drawer uses reusable expansion helpers with preview budgets and show more 
 })
 
 
-test('shortlist add guard applies in legacy mode when shortlist is not selected', () => {
-  assert.match(candidateResultsSource, /if \(!selectedShortlistId\) \{\s*setShortlistError\('Create or select a shortlist first\.'/s)
-  assert.match(candidateResultsSource, /disabled=\{!selectedShortlistId\}/)
-  assert.match(candidateResultsSource, /\{!selectedShortlistId \? 'Select shortlist first' : 'Add to shortlist'\}/)
+test('shortlist add flow supports create-or-select destination inline', () => {
+  assert.match(candidateResultsSource, /destinationShortlistId = await createShortlistInAddFlow\(\)/)
+  assert.match(candidateResultsSource, /No shortlist selected\. Create one to continue\./)
+  assert.match(candidateResultsSource, /Destination shortlist: \{selectedShortlistName\}/)
+  assert.match(candidateResultsSource, /isCreatingShortlistInAddFlow/)
 })
 
 test('legacy shortlist add path still invokes single-candidate flow when shortlist id exists', () => {
-  assert.match(candidateResultsSource, /if \(!shortlistV2Enabled\) \{\s*let fallbackSuccessCount = 0\s*for \(const candidate of selected\) \{\s*\/\/ Preserve legacy single-candidate shortlist flow when v2 is disabled\.\s*const ok = await addCandidateToShortlist\(candidate\)/s)
+  assert.match(candidateResultsSource, /if \(!shortlistV2Enabled\) \{\s*let fallbackSuccessCount = 0\s*for \(const candidate of selected\) \{\s*\/\/ Preserve legacy single-candidate shortlist flow when v2 is disabled\.\s*const ok = await addCandidateToShortlist\(candidate(?:, destinationShortlistId)?\)/s)
 })
 
 test('shortlist selector panel can render regardless of shortlistV2 flag', () => {

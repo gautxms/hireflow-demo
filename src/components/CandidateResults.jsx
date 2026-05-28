@@ -591,6 +591,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [shortlistLoading, setShortlistLoading] = useState(false)
   const [shortlistError, setShortlistError] = useState('')
   const [shortlistNotice, setShortlistNotice] = useState('')
+  const [newShortlistName, setNewShortlistName] = useState('')
+  const [isCreatingShortlistInAddFlow, setIsCreatingShortlistInAddFlow] = useState(false)
   const [tagDraft, setTagDraft] = useState('')
   const [candidateTags, setCandidateTags] = useState({})
   const [selectedTagFilters, setSelectedTagFilters] = useState([])
@@ -726,16 +728,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [authHeaders, loadShortlistDetails, loadShortlists])
 
-  const addCandidateToShortlist = useCallback(async (candidate) => {
+  const addCandidateToShortlist = useCallback(async (candidate, shortlistIdOverride = '') => {
     try {
-      if (!selectedShortlistId) {
+      const destinationShortlistId = shortlistIdOverride || selectedShortlistId
+      if (!destinationShortlistId) {
         throw new Error('Create or select a shortlist first')
       }
 
       const derivedRating = Math.max(1, Math.min(5, Math.round(Number(candidate?.score || 0) / 20)))
 
       const resumeId = candidate?.resumeId || candidate?.resume_id || candidate?.id
-      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates`, {
+      const response = await fetch(`${API_BASE}/shortlists/${destinationShortlistId}/candidates`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -758,8 +761,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [authHeaders, selectedShortlistId])
 
-  const addCandidatesToShortlistBatch = useCallback(async (selected) => {
-    if (!selectedShortlistId) {
+  const addCandidatesToShortlistBatch = useCallback(async (selected, shortlistIdOverride) => {
+    const destinationShortlistId = shortlistIdOverride || selectedShortlistId
+    if (!destinationShortlistId) {
       throw new Error('Create or select a shortlist first')
     }
 
@@ -772,7 +776,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       throw new Error('No valid resume IDs found in the selected candidates')
     }
 
-    const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`, {
+    const response = await fetch(`${API_BASE}/shortlists/${destinationShortlistId}/candidates/batch`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -967,6 +971,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds, resolveSelectionResumeId)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds, resolveSelectionResumeId)
+  const selectedShortlistName = shortlists.find((item) => item.id === selectedShortlistId)?.name || ''
 
   const avgScore = filtered.length
     ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
@@ -1057,14 +1062,60 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     return { opened: true, recipients }
   }
 
+
+  const createShortlistInAddFlow = async () => {
+    const trimmedName = newShortlistName.trim()
+    if (!trimmedName) {
+      setShortlistError('Enter a shortlist name to continue.')
+      return ''
+    }
+
+    setIsCreatingShortlistInAddFlow(true)
+    setShortlistError('')
+    try {
+      const response = await fetch(`${API_BASE}/shortlists`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          name: trimmedName,
+          description: 'Created while adding candidates from analysis results.',
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to create shortlist')
+      }
+
+      const createdId = payload?.shortlist?.id
+      if (!createdId) {
+        throw new Error('Unable to create shortlist')
+      }
+
+      await loadShortlists()
+      setSelectedShortlistId(createdId)
+      setNewShortlistName('')
+      setShortlistNotice(`Destination shortlist set to ${payload?.shortlist?.name || 'new shortlist'}.`)
+      return createdId
+    } catch (error) {
+      setShortlistError(error.message || 'Unable to create shortlist')
+      return ''
+    } finally {
+      setIsCreatingShortlistInAddFlow(false)
+    }
+  }
+
   const addToShortlist = async (selected) => {
+    let destinationShortlistId = selectedShortlistId
     if (selected.length === 0) {
       return
     }
 
     try {
-      if (!selectedShortlistId) {
-        setShortlistError('Create or select a shortlist first.')
+      if (!destinationShortlistId) {
+        destinationShortlistId = await createShortlistInAddFlow()
+      }
+      if (!destinationShortlistId) {
         setShortlistNotice('')
         return
       }
@@ -1073,7 +1124,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         let fallbackSuccessCount = 0
         for (const candidate of selected) {
           // Preserve legacy single-candidate shortlist flow when v2 is disabled.
-          const ok = await addCandidateToShortlist(candidate)
+          const ok = await addCandidateToShortlist(candidate, destinationShortlistId)
           if (ok) {
             fallbackSuccessCount += 1
           }
@@ -1085,29 +1136,27 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         return
       }
 
-      const payload = await addCandidatesToShortlistBatch(selected)
+      const payload = await addCandidatesToShortlistBatch(selected, destinationShortlistId)
       const succeeded = Number(payload?.summary?.succeeded || 0)
       const failed = Number(payload?.summary?.failed || 0)
       const added = Number(payload?.summary?.added || 0)
       const updated = Number(payload?.summary?.updated || 0)
-      const requested = Number(payload?.summary?.requested || selected.length)
-
       if (succeeded > 0) {
         await Promise.all([
           loadShortlists(),
-          loadShortlistDetails(selectedShortlistId),
+          loadShortlistDetails(destinationShortlistId),
         ])
       }
 
-      const selectedShortlist = shortlists.find((item) => item.id === selectedShortlistId)
+      const destinationShortlist = shortlists.find((item) => item.id === destinationShortlistId)
       setShortlistError('')
-      setShortlistNotice(`${selectedShortlist?.name || 'Shortlist'} · ${buildShortlistSummary({ added, updated, failed }, 'add')}`)
+      setShortlistNotice(`${destinationShortlist?.name || 'Shortlist'} · ${buildShortlistSummary({ added, updated, failed }, 'add')}`)
       if (Array.isArray(payload?.outcomes)) {
         const addedResumeIds = payload.outcomes
           .filter((item) => item?.ok && item?.code === 'added')
           .map((item) => String(item.resumeId || '').trim())
           .filter(Boolean)
-        setUndoPayload({ resumeIds: addedResumeIds, shortlistId: selectedShortlistId, expiresAt: Date.now() + 15_000 })
+        setUndoPayload({ resumeIds: addedResumeIds, shortlistId: destinationShortlistId, expiresAt: Date.now() + 15_000 })
       }
       if (succeeded > 0) {
         const succeededResumeIds = new Set(
@@ -1127,7 +1176,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       let fallbackSuccessCount = 0
       for (const candidate of selected) {
         // Legacy endpoint fallback if the API has not rolled out batch yet.
-        const ok = await addCandidateToShortlist(candidate)
+        const ok = await addCandidateToShortlist(candidate, destinationShortlistId)
         if (ok) {
           fallbackSuccessCount += 1
         }
@@ -1136,7 +1185,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       if (fallbackSuccessCount > 0) {
         await Promise.all([
           loadShortlists(),
-          loadShortlistDetails(selectedShortlistId),
+          loadShortlistDetails(destinationShortlistId),
         ])
         alert(`Added ${fallbackSuccessCount} candidate(s) to shortlist.`)
       }
@@ -1415,7 +1464,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         <BulkActions selectedCount={selectedCandidates.length}>
           <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button"><Upload size={18} strokeWidth={1.5} aria-hidden="true" />Export CSV</button>
           <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
-          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button" disabled={!selectedShortlistId}><Star size={18} strokeWidth={1.5} aria-hidden="true" />{!selectedShortlistId ? 'Select shortlist first' : 'Add to shortlist'}</button>
+          <button className="touch-target bulk-btn" onClick={() => addToShortlist(selectedCandidates)} type="button" disabled={isCreatingShortlistInAddFlow}><Star size={18} strokeWidth={1.5} aria-hidden="true" />Add to shortlist</button>
+          {selectedShortlistName ? <p className="shortlist-manager__muted-text" role="status">Destination shortlist: {selectedShortlistName}</p> : null}
+          {!selectedShortlistName ? <><p className="shortlist-manager__muted-text" role="status">No shortlist selected. Create one to continue.</p><input className="touch-target candidate-results-page__tag-input" value={newShortlistName} onChange={(event) => setNewShortlistName(event.target.value)} placeholder="New shortlist name" aria-label="New shortlist name" /><button className="touch-target bulk-btn" type="button" onClick={createShortlistInAddFlow} disabled={isCreatingShortlistInAddFlow}>{isCreatingShortlistInAddFlow ? 'Creating…' : 'Create shortlist'}</button></> : null}
           <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
           <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
           <input
