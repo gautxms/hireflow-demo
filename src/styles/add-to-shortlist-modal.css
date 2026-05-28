@@ -1,0 +1,14 @@
+.atsm { background: var(--hf-surface); border: 1px solid var(--hf-border); border-radius: 12px; padding: 20px; color: var(--hf-text); font-family: 'DM Sans', sans-serif; display: grid; gap: 12px; }
+.atsm__header { display:flex; justify-content:space-between; align-items:center; }
+.atsm__header h2 { margin:0; font-family:'Syne',sans-serif; font-size:24px; }
+.atsm__icon { min-width:44px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+.atsm__meta { margin:0; color: var(--hf-text-3); font-size:13px; }
+.atsm__label { display:grid; gap:6px; font-size:13px; color: var(--hf-text-2); }
+.atsm__input { width:100%; background: var(--hf-surface-2); border:1px solid var(--hf-border-2); border-radius:8px; color: var(--hf-text); padding:10px 12px; font:500 14px 'DM Sans',sans-serif; }
+.atsm__input:focus-visible { outline:2px solid var(--hf-lime); outline-offset:2px; }
+.atsm__inline { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; }
+.atsm__actions { display:flex; justify-content:flex-end; gap:8px; }
+.atsm__error,.atsm__summary { margin:0; display:flex; gap:8px; align-items:center; font-size:13px; }
+.atsm__error { color: var(--hf-error); }
+.atsm__summary.is-ok { color: var(--hf-success); }
+.atsm__summary.is-warn { color: var(--hf-warning); }

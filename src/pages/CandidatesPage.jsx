@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+
 import API_BASE from '../config/api'
 import { buildCandidateDirectoryQueryParams } from '../schemas/candidateDirectoryQuerySchema'
-import { buildShortlistSummary, getShortlistBulkErrorMessage } from '../components/shortlistState'
+import AddToShortlistModal from '../components/AddToShortlistModal'
 import '../styles/candidates-directory.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
-
-const buildSourceContext = (candidate) => ({
-  source: 'candidates_directory_bulk',
-  sourceAnalysisId: candidate?.sourceParseJobId || candidate?.provenanceHints?.sourceAnalysisId || null,
-  sourceJobId: candidate?.associatedJob?.id || candidate?.provenanceHints?.sourceJobId || null,
-  jobDescriptionId: candidate?.associatedJob?.id || candidate?.provenanceHints?.sourceJobId || null,
-  jobTitle: candidate?.associatedJob?.title || null,
-})
 
 const emptyFilters = {
   skills: '',
@@ -79,6 +72,14 @@ function getSkillsLabel(candidate) {
   return 'Not extracted'
 }
 
+
+function buildStatus(summary = {}) {
+  const added = Number(summary.added || 0)
+  const alreadyPresent = Number(summary.updated || 0) + Number(summary.notPresent || 0)
+  const failed = Number(summary.failed || 0) + Number(summary.invalid || 0)
+  return `Added: ${added} · Already present: ${alreadyPresent} · Failed: ${failed}`
+}
+
 function formatDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -96,13 +97,9 @@ export default function CandidatesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [candidates, setCandidates] = useState([])
-  const [shortlists, setShortlists] = useState([])
-  const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [selectedResumeIds, setSelectedResumeIds] = useState([])
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [bulkStatus, setBulkStatus] = useState('')
-  const [bulkStatusTone, setBulkStatusTone] = useState('info')
-  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
-  const [newShortlistName, setNewShortlistName] = useState('')
   const [reloadNonce, setReloadNonce] = useState(0)
   const [availableJobs, setAvailableJobs] = useState([])
   const [pagination, setPagination] = useState({ page: 1, pageSize: PAGE_SIZE, totalPages: 1, totalCount: 0 })
@@ -191,39 +188,6 @@ export default function CandidatesPage() {
     return () => controller.abort()
   }, [currentPage, queryString, reloadNonce])
 
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function loadShortlists() {
-      try {
-        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-        const response = await fetch(`${API_BASE}/shortlists`, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          signal: controller.signal,
-        })
-        const payload = await response.json().catch(() => ({}))
-        if (!response.ok) {
-          throw new Error(payload.error || 'Unable to load shortlists')
-        }
-        const next = Array.isArray(payload.shortlists) ? payload.shortlists : []
-        setShortlists(next)
-        if (!selectedShortlistId && next[0]?.id) {
-          setSelectedShortlistId(next[0].id)
-        }
-      } catch (loadError) {
-        if (loadError.name !== 'AbortError') {
-          setBulkStatus(loadError.message || 'Unable to load shortlists')
-        }
-      }
-    }
-
-    loadShortlists()
-    return () => controller.abort()
-  }, [selectedShortlistId])
-
   const visibleCandidates = candidates
   const shouldRenderPaginationControls = pagination.totalCount > PAGE_SIZE && pagination.totalPages > 1
 
@@ -258,73 +222,7 @@ export default function CandidatesPage() {
     ))
   }
 
-  const runBulkShortlistAction = async (mode) => {
-    if (!selectedShortlistId) {
-      setBulkStatusTone('error')
-      return setBulkStatus('Choose a shortlist first.')
-    }
-    if (selectedResumeIds.length === 0) {
-      setBulkStatusTone('error')
-      return setBulkStatus('Select at least one candidate.')
-    }
 
-    try {
-      setIsBulkSubmitting(true)
-      setBulkStatus('')
-      setBulkStatusTone('info')
-      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-      const endpoint = mode === 'add'
-        ? `${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`
-        : `${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`
-      const sourceContextByResumeId = Object.fromEntries(visibleCandidates
-        .filter((candidate) => selectedResumeIds.includes(candidate.resumeId))
-        .map((candidate) => [candidate.resumeId, buildSourceContext(candidate)]))
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          resumeIds: selectedResumeIds,
-          ...(mode === 'add' ? { notes: 'Added from candidates directory bulk action', sourceContext: { source: 'candidates_directory_bulk' }, sourceContextByResumeId } : {}),
-        }),
-      })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(getShortlistBulkErrorMessage(payload) || 'Bulk shortlist action failed')
-
-      const summary = payload?.summary || {}
-      setBulkStatusTone((summary.failed || 0) > 0 ? 'error' : 'success')
-      setBulkStatus(buildShortlistSummary(summary, mode))
-      setSelectedResumeIds([])
-    } catch (bulkError) {
-      setBulkStatusTone('error')
-      setBulkStatus(bulkError.message || 'Bulk shortlist action failed')
-    } finally {
-      setIsBulkSubmitting(false)
-    }
-  }
-
-  const createShortlistInFlow = async () => {
-    const name = newShortlistName.trim()
-    if (!name) {
-      setBulkStatusTone('error')
-      setBulkStatus('Enter shortlist name.')
-      return
-    }
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    const response = await fetch(`${API_BASE}/shortlists`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ name }),
-    })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Unable to create shortlist')
-    await Promise.resolve()
-    setShortlists((current) => [payload.shortlist, ...current.filter((item) => item.id !== payload.shortlist?.id)])
-    setSelectedShortlistId(payload.shortlist?.id || '')
-    setNewShortlistName('')
-  }
 
   return (
     <main className="candidates-directory">
@@ -376,24 +274,11 @@ export default function CandidatesPage() {
 
       {selectedResumeIds.length > 0 && (
         <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
-          <label>
-            <span>Shortlist</span>
-            <select value={selectedShortlistId} onChange={(event) => setSelectedShortlistId(event.target.value)}>
-              <option value="">Select shortlist</option>
-              {shortlists.map((shortlist) => <option key={shortlist.id} value={shortlist.id}>{shortlist.name} ({shortlist.candidate_count || 0})</option>)}
-            </select>
-          </label>
-          <label>
-            <span>Create shortlist</span>
-            <input value={newShortlistName} onChange={(event) => setNewShortlistName(event.target.value)} placeholder="e.g., Finalists" />
-          </label>
-          <button type="button" disabled={isBulkSubmitting} onClick={async () => { try { await createShortlistInFlow(); setBulkStatusTone('success'); setBulkStatus('Shortlist created and selected.'); } catch (error) { setBulkStatusTone('error'); setBulkStatus(error.message || 'Unable to create shortlist'); } }}>Create</button>
-          <button type="button" disabled={!selectedShortlistId || isBulkSubmitting} onClick={() => runBulkShortlistAction('add')}>Add selected</button>
-          <button type="button" disabled={!selectedShortlistId || isBulkSubmitting} onClick={() => runBulkShortlistAction('remove')}>Remove selected</button>
+          <button type="button" className="hf-btn hf-btn--primary" onClick={() => setIsAddModalOpen(true)}>Add selected to shortlist</button>
         </section>
       )}
 
-      {bulkStatus && <p className={`candidates-directory__status candidates-directory__status--${bulkStatusTone}`}>{bulkStatus}</p>}
+      {bulkStatus && <p className="candidates-directory__status">{bulkStatus}</p>}
 
       {viewState === 'loading' && <p className="candidates-directory__status">Loading candidates…</p>}
       {viewState === 'api-error' && (
@@ -475,6 +360,17 @@ export default function CandidatesPage() {
           )}
         </>
       )}
+      <AddToShortlistModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        candidates={visibleCandidates.filter((candidate) => selectedResumeIds.includes(candidate.resumeId))}
+        onCompleted={(payload) => {
+          setBulkStatus(buildStatus(payload?.summary || {}))
+          setSelectedResumeIds([])
+          setIsAddModalOpen(false)
+        }}
+      />
+
     </main>
   )
 }
