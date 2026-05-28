@@ -75,6 +75,7 @@ export default function ShortlistManager(props) {
     loadingList,
     loadingDetails,
     error,
+    jobDescriptions = [],
   } = props
 
   const [name, setName] = useState('')
@@ -85,6 +86,7 @@ export default function ShortlistManager(props) {
   const [currentPage, setCurrentPage] = useState(1)
   const [createError, setCreateError] = useState('')
   const [jobFilter, setJobFilter] = useState('all')
+  const [createJobDescriptionId, setCreateJobDescriptionId] = useState('')
 
   const selectedShortlist = useMemo(() => shortlists.find((item) => item.id === selectedShortlistId) || null, [shortlists, selectedShortlistId])
   const allCandidates = useMemo(() => shortlistDetails?.candidates || [], [shortlistDetails?.candidates])
@@ -102,24 +104,36 @@ export default function ShortlistManager(props) {
     shortlists.forEach((list) => {
       if (hasShortlistLinkedJob(list)) {
         const label = getShortlistJobLabel(list)
-        map.set(label, label)
+        const value = String(list.job_description_id || label).trim()
+        map.set(value, { value, label })
       } else {
         hasGeneralOnly = true
       }
     })
 
-    const options = [...map.values()].sort((a, b) => a.localeCompare(b))
+    const options = [...map.values()].sort((a, b) => a.label.localeCompare(b.label))
     if (hasGeneralOnly) {
-      options.push('General / no linked job')
+      options.push({ value: 'general', label: 'General / no linked job' })
     }
     return options
   }, [shortlists])
+
+  const createJobOptions = useMemo(() => {
+    return (Array.isArray(jobDescriptions) ? jobDescriptions : [])
+      .map((job) => {
+        const id = String(job?.id || '').trim()
+        const label = String(job?.title || job?.name || '').trim() || (id ? `Job ${id}` : '')
+        return id && label ? { id, label } : null
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [jobDescriptions])
 
   const visibleShortlists = useMemo(() => {
     const q = query.trim().toLowerCase()
     return shortlists.filter((list) => {
       const jobLabel = getShortlistJobLabel(list)
-      const jobFilterValue = hasShortlistLinkedJob(list) ? jobLabel : 'General / no linked job'
+      const jobFilterValue = hasShortlistLinkedJob(list) ? String(list.job_description_id || jobLabel).trim() : 'general'
       const shortlistMatch = !q || `${list.name || ''} ${list.description || ''} ${jobLabel}`.toLowerCase().includes(q)
       const jobMatch = jobFilter === 'all' || jobFilterValue === jobFilter
       return shortlistMatch && jobMatch
@@ -155,9 +169,10 @@ export default function ShortlistManager(props) {
     if (!name.trim()) return
     setCreateError('')
     try {
-      await onCreateShortlist({ name: name.trim(), description: description.trim() })
+      await onCreateShortlist({ name: name.trim(), description: description.trim(), jobDescriptionId: createJobDescriptionId || null })
       setName('')
       setDescription('')
+      setCreateJobDescriptionId('')
       setShowCreateForm(false)
     } catch (createActionError) {
       setCreateError(createActionError?.message || 'Unable to create shortlist.')
@@ -179,6 +194,7 @@ export default function ShortlistManager(props) {
         <form onSubmit={handleCreate} className="shortlist-manager__create-form">
           <label className="shortlist-manager__filter-label">Shortlist name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter shortlist name" className="shortlist-manager__input" /></label>
           <label className="shortlist-manager__filter-label">Description (optional)<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Role, stage, or hiring notes" className="shortlist-manager__input" /></label>
+          <label className="shortlist-manager__filter-label">Job (optional)<select value={createJobDescriptionId} onChange={(e) => setCreateJobDescriptionId(e.target.value)} className="shortlist-manager__select"><option value="">General / no linked job</option>{createJobOptions.map((job) => <option key={job.id} value={job.id}>{job.label}</option>)}</select></label>
           <button type="submit" disabled={loadingList || loadingDetails} className="shortlist-manager__button shortlist-manager__button--accent">Save shortlist</button>
         </form>
         {createError ? <p className="shortlist-manager__inline-error" role="alert">Couldn’t create shortlist. {createError} Try again.</p> : null}
@@ -190,7 +206,7 @@ export default function ShortlistManager(props) {
             <div className="shortlist-manager__input-wrap"><Search size={18} strokeWidth={1.5} aria-hidden="true" /><input className="shortlist-manager__input shortlist-manager__input--with-icon" value={query} onChange={(e) => { setCurrentPage(1); setQuery(e.target.value) }} placeholder="Search shortlists or candidates" /></div>
           </label>
           <label className="shortlist-manager__filter-label">Job
-            <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)} className="shortlist-manager__select"><option value="all">All jobs</option>{shortlistJobOptions.map((job) => <option key={job} value={job}>{job}</option>)}</select>
+            <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)} className="shortlist-manager__select"><option value="all">All jobs</option>{shortlistJobOptions.map((job) => <option key={job.value} value={job.value}>{job.label}</option>)}</select>
           </label>
           <label className="shortlist-manager__filter-label">Status
             <select className="shortlist-manager__select" value={filters.decisionStatus} onChange={(e) => { setCurrentPage(1); setFilters((current) => ({ ...current, decisionStatus: e.target.value })) }}><option value="all">All statuses</option>{filterOptions.decisionStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>

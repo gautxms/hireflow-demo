@@ -18,6 +18,7 @@ export default function ShortlistsPage() {
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [shortlistDetails, setShortlistDetails] = useState(null)
   const [shortlistSort, setShortlistSort] = useState('rating_desc')
+  const [jobDescriptions, setJobDescriptions] = useState([])
   const [loadingList, setLoadingList] = useState(false)
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [error, setError] = useState('')
@@ -98,6 +99,19 @@ export default function ShortlistsPage() {
     }
   }, [shortlistSort])
 
+  const loadJobDescriptions = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/job-descriptions`, {
+        headers: authHeaders(),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Unable to load jobs')
+      setJobDescriptions(Array.isArray(payload.items) ? payload.items : [])
+    } catch {
+      setJobDescriptions([])
+    }
+  }, [])
+
   const refreshShortlists = useCallback(async () => {
     if (refreshInFlightRef.current) {
       queuedRefreshRef.current = true
@@ -118,14 +132,14 @@ export default function ShortlistsPage() {
     }
   }, [loadShortlistDetails, loadShortlists])
 
-  const createShortlist = useCallback(async ({ name, description }) => {
+  const createShortlist = useCallback(async ({ name, description, jobDescriptionId }) => {
     try {
       setLoadingList(true)
       setError('')
       const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ name, description, jobDescriptionId }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Unable to create shortlist')
@@ -180,7 +194,8 @@ export default function ShortlistsPage() {
     if (didInitialLoadRef.current) return
     didInitialLoadRef.current = true
     void refreshShortlists()
-  }, [refreshShortlists])
+    void loadJobDescriptions()
+  }, [loadJobDescriptions, refreshShortlists])
 
   useEffect(() => {
     void loadShortlistDetails(selectedShortlistId)
@@ -199,6 +214,7 @@ export default function ShortlistsPage() {
         shortlists={shortlists}
         selectedShortlistId={selectedShortlistId}
         shortlistDetails={shortlistDetails}
+        jobDescriptions={jobDescriptions}
         onSelectShortlist={setSelectedShortlistId}
         onCreateShortlist={createShortlist}
         currentSort={shortlistSort}
