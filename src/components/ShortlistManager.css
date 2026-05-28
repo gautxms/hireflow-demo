@@ -6,7 +6,6 @@
   font-family: var(--hf-font-ui, 'DM Sans', sans-serif);
 }
 
-.shortlist-manager__header-card,
 .shortlist-manager__filters-card,
 .shortlist-manager__list-card,
 .shortlist-manager__stat-card {
@@ -15,22 +14,15 @@
   border-radius: var(--hf-r-xl, 12px);
 }
 
-.shortlist-manager__header-card,
 .shortlist-manager__filters-card,
 .shortlist-manager__list-card {
   padding: 0.9rem 1rem;
 }
 
-.shortlist-manager__header-card {
+.shortlist-manager__header-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 0.9rem;
-  align-items: flex-start;
+  justify-content: flex-end;
 }
-
-.shortlist-manager__header-content { display: grid; gap: 0.35rem; }
-.shortlist-manager__page-title { margin: 0; font-family: var(--hf-font-display, 'Syne', sans-serif); font-size: 1.45rem; }
-.shortlist-manager__context-copy { margin: 0.2rem 0 0; color: var(--hf-text-3, #888888); font-size: 0.94rem; }
 
 .shortlist-manager__create-form,.shortlist-manager__filter-grid,.shortlist-manager__stats { display: grid; gap: 0.6rem; }
 .shortlist-manager__create-form { grid-template-columns: 1fr 1fr auto; align-items: end; }
@@ -129,7 +121,6 @@
   .shortlist-manager__content-grid,
   .shortlist-manager__candidate-card,
   .shortlist-manager__filter-grid { grid-template-columns: 1fr; }
-  .shortlist-manager__header-card { flex-direction: column; align-items: stretch; }
   .shortlist-manager__create-button,
   .shortlist-manager__clear-filters { width: 100%; justify-content: center; }
 }

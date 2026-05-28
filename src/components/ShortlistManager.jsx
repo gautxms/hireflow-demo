@@ -123,12 +123,7 @@ export default function ShortlistManager(props) {
 
   return (
     <section className="shortlist-manager" aria-label="Shortlists page">
-      <header className="shortlist-manager__header-card" aria-label="Shortlists summary">
-        <div className="shortlist-manager__header-content">
-          <h2 className="shortlist-manager__page-title">Manage candidate collections</h2>
-          <p className="shortlist-manager__muted-text">Manage job-aligned candidate collections and hiring decisions.</p>
-          {selectedShortlist ? <p className="shortlist-manager__context-copy">Selected: <strong>{selectedShortlist.name}</strong> · {getShortlistJobLabel(selectedShortlist)}</p> : null}
-        </div>
+      <header className="shortlist-manager__header-actions" aria-label="Shortlist actions">
         <button type="button" className="shortlist-manager__create-button" onClick={() => setShowCreateForm((value) => !value)} aria-expanded={showCreateForm}>
           <Plus size={18} strokeWidth={1.5} aria-hidden="true" />
           Create shortlist
