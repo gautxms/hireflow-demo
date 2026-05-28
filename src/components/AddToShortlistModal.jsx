@@ -27,15 +27,26 @@ function resolveCandidateScore(candidate = {}) {
   return null
 }
 
+function resolveCandidateAnalysisId(candidate = {}, jobContext = null) {
+  return candidate?.analysisId || candidate?.analysis_id || jobContext?.analysisId || jobContext?.analysis_id || null
+}
+
+function resolveCandidateResumeId(candidate = {}) {
+  return String(candidate?.resumeId || candidate?.resume_id || candidate?.id || '').trim()
+}
+
 function buildCandidateSnapshot(candidate = {}, jobContext = null) {
   const score = resolveCandidateScore(candidate)
+  const resumeId = resolveCandidateResumeId(candidate) || null
   return {
     name: candidate?.name || candidate?.filename || candidate?.resumeName || null,
+    resumeId,
     score,
     matchScore: score == null ? null : { score },
+    overallScore: score,
     recommendation: candidate?.recommendation || candidate?.match_status || null,
     source: 'analysis_results',
-    sourceAnalysisId: candidate?.analysisId || candidate?.analysis_id || null,
+    sourceAnalysisId: resolveCandidateAnalysisId(candidate, jobContext),
     associatedJob: {
       id: jobContext?.jobDescriptionId || null,
       title: jobContext?.jobTitle || null,
@@ -141,17 +152,20 @@ export default function AddToShortlistModal({
 
       const candidateSnapshotByResumeId = {}
       const sourceContextByResumeId = {}
-      const resumeIds = candidates.map((c) => String(c.resumeId || c.resume_id || c.id || '')).filter(Boolean)
+      const resumeIds = candidates.map((c) => resolveCandidateResumeId(c)).filter(Boolean)
       candidates.forEach((candidate) => {
-        const resumeId = String(candidate?.resumeId || candidate?.resume_id || candidate?.id || '').trim()
+        const resumeId = resolveCandidateResumeId(candidate)
         if (!resumeId) return
         candidateSnapshotByResumeId[resumeId] = buildCandidateSnapshot(candidate, jobContext)
         sourceContextByResumeId[resumeId] = {
           source: 'analysis_results',
-          analysisId: candidate?.analysisId || candidate?.analysis_id || null,
+          analysisId: resolveCandidateAnalysisId(candidate, jobContext),
+          jobDescriptionId: jobContext?.jobDescriptionId || null,
+          candidateId: resumeId,
+          resumeId,
+          candidateName: candidate?.name || candidate?.filename || candidate?.resumeName || null,
           score: resolveCandidateScore(candidate),
           matchStatus: candidate?.recommendation || candidate?.match_status || null,
-          jobDescriptionId: jobContext?.jobDescriptionId || null,
           jobTitle: jobContext?.jobTitle || null,
         }
       })

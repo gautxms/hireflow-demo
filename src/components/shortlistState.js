@@ -45,51 +45,34 @@ function normalizeScoreToTenPoint(rawScore) {
   return Math.max(0, Math.min(10, normalized))
 }
 
+function firstValidScore(candidates = []) {
+  for (const value of candidates) {
+    const normalized = normalizeScoreToTenPoint(value)
+    if (normalized !== null) return normalized
+  }
+  return null
+}
+
 export function getShortlistCandidateScore(candidate = {}) {
   const snapshot = candidate?.candidate_snapshot && typeof candidate.candidate_snapshot === 'object' ? candidate.candidate_snapshot : {}
   const sourceContext = candidate?.source_context && typeof candidate.source_context === 'object' ? candidate.source_context : {}
 
-  const snapshotCandidates = [
+  const analysisScore = firstValidScore([
+    snapshot?.score,
     snapshot?.matchScore?.score,
     snapshot?.matchScore,
-    snapshot?.score,
-    snapshot?.profile_score,
-    snapshot?.scoreBreakdown?.overall,
-    snapshot?.overall_score,
     snapshot?.overallScore,
-    snapshot?.total_score,
-    snapshot?.totalScore,
-  ]
-
-  for (const value of snapshotCandidates) {
-    const normalized = normalizeScoreToTenPoint(value)
-    if (normalized !== null) {
-      return { value: normalized, source: 'analysis' }
-    }
-  }
-
-  const contextCandidates = [
+    snapshot?.aiScore,
+    sourceContext?.score,
     sourceContext?.matchScore?.score,
     sourceContext?.matchScore,
-    sourceContext?.score,
-    sourceContext?.profile_score,
-    sourceContext?.overall_score,
     sourceContext?.overallScore,
-    sourceContext?.total_score,
-    sourceContext?.totalScore,
-  ]
+    candidate?.score,
+  ])
+  if (analysisScore !== null) return { value: analysisScore, source: 'analysis' }
 
-  for (const value of contextCandidates) {
-    const normalized = normalizeScoreToTenPoint(value)
-    if (normalized !== null) {
-      return { value: normalized, source: 'analysis' }
-    }
-  }
-
-  const recruiterRating = getRatingValue(candidate)
-  if (recruiterRating !== null) {
-    return { value: recruiterRating, source: 'recruiter' }
-  }
+  const legacyRating = firstValidScore([candidate?.rating])
+  if (legacyRating !== null) return { value: legacyRating, source: 'legacy_rating' }
 
   return null
 }
@@ -100,11 +83,7 @@ export function formatShortlistCandidateScore(candidate = {}) {
     return { label: 'Score unavailable', tone: 'muted' }
   }
 
-  if (resolved.source === 'recruiter') {
-    return { label: `Recruiter rating: ${resolved.value.toFixed(1)}/5`, tone: 'default' }
-  }
-
-  return { label: `AI score: ${resolved.value.toFixed(1)}/10`, tone: 'default' }
+  return { label: `Score: ${resolved.value.toFixed(1)}/10`, tone: 'default' }
 }
 
 
