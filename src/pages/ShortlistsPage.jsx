@@ -183,7 +183,7 @@ export default function ShortlistsPage() {
       <header className="candidates-directory__hero">
         <div>
           <h1>Shortlists</h1>
-          <p>Review and manage shortlisted candidates with decision context.</p>
+          <p>Review and manage shortlisted candidates with clear job context.</p>
         </div>
       </header>
 

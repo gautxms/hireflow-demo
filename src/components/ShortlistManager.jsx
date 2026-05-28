@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, RefreshCw, Briefcase, CalendarDays, Trash2 } from 'lucide-react'
+import { Plus, Search, RefreshCw, Briefcase, CalendarDays, Trash2, FileText } from 'lucide-react'
 import {
   filterShortlistCandidates,
   getDecisionStatus,
@@ -17,6 +17,38 @@ function formatDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'Date unavailable'
   return date.toLocaleDateString()
+}
+
+
+function getCandidateSnapshot(candidate) {
+  return candidate?.candidate_snapshot && typeof candidate.candidate_snapshot === 'object' ? candidate.candidate_snapshot : {}
+}
+
+function getCandidateDisplayName(candidate) {
+  const snapshot = getCandidateSnapshot(candidate)
+  return String(snapshot.name || candidate?.name || candidate?.filename || candidate?.resume_id || '').trim() || 'Unnamed candidate'
+}
+
+function getCandidateFileLabel(candidate) {
+  const snapshot = getCandidateSnapshot(candidate)
+  return String(candidate?.filename || snapshot.resumeName || snapshot.filename || candidate?.resume_id || '').trim()
+}
+
+function getRankingNote(candidate, displayName) {
+  const note = String(candidate?.notes || '').trim()
+  if (!note.toLowerCase().startsWith('added from ranking:')) return ''
+
+  const noteName = note.replace(/^added from ranking:\s*/i, '').trim()
+  if (!noteName || noteName.toLowerCase() === 'unknown candidate') return ''
+  if (displayName && noteName.toLowerCase() === displayName.toLowerCase()) return ''
+  return `Added from ranking: ${noteName}`
+}
+
+function getCandidateDescription(candidate, displayName) {
+  const note = String(candidate?.notes || '').trim()
+  if (!note) return ''
+  if (note.toLowerCase().startsWith('added from ranking:')) return getRankingNote(candidate, displayName)
+  return note
 }
 
 function isAddedThisWeek(value) {
@@ -102,7 +134,7 @@ export default function ShortlistManager(props) {
     const byDecision = filterShortlistCandidates(allCandidates, filters)
     const q = query.trim().toLowerCase()
     if (!q) return byDecision
-    return byDecision.filter((candidate) => `${candidate.filename || ''} ${candidate.resume_id || ''} ${candidate.notes || ''}`.toLowerCase().includes(q))
+    return byDecision.filter((candidate) => `${getCandidateDisplayName(candidate)} ${getCandidateFileLabel(candidate)} ${candidate.resume_id || ''} ${candidate.notes || ''}`.toLowerCase().includes(q))
   }, [allCandidates, filters, query])
 
   const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE))
@@ -161,7 +193,7 @@ export default function ShortlistManager(props) {
             <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)} className="shortlist-manager__select"><option value="all">All jobs</option>{shortlistJobOptions.map((job) => <option key={job} value={job}>{job}</option>)}</select>
           </label>
           <label className="shortlist-manager__filter-label">Status
-            <select className="shortlist-manager__select" value={filters.decisionStatus} onChange={(e) => { setCurrentPage(1); setFilters((current) => ({ ...current, decisionStatus: e.target.value })) }}><option value="all">All decision states</option>{filterOptions.decisionStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+            <select className="shortlist-manager__select" value={filters.decisionStatus} onChange={(e) => { setCurrentPage(1); setFilters((current) => ({ ...current, decisionStatus: e.target.value })) }}><option value="all">All statuses</option>{filterOptions.decisionStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
           </label>
           <label className="shortlist-manager__filter-label">Sort
             <select value={currentSort} onChange={(e) => onChangeSort(e.target.value)} className="shortlist-manager__select"><option value="rating_desc">Rating (High to Low)</option><option value="rating_asc">Rating (Low to High)</option><option value="added_desc">Recently Added</option><option value="added_asc">Oldest Added</option></select>
@@ -176,7 +208,7 @@ export default function ShortlistManager(props) {
         <article className="shortlist-manager__stat-card"><h3>Total shortlists</h3><p>{stats.totalShortlists}</p></article>
         <article className="shortlist-manager__stat-card"><h3>Candidates in selected shortlist</h3><p>{stats.selectedCandidates}</p></article>
         <article className="shortlist-manager__stat-card"><h3>Added this week</h3><p>{stats.addedThisWeek}</p></article>
-        <article className="shortlist-manager__stat-card"><h3>Decision-ready / rated</h3><p>{stats.ratedCount}</p></article>
+        <article className="shortlist-manager__stat-card"><h3>Rated candidates</h3><p>{stats.ratedCount}</p></article>
       </section>
 
       <section className="shortlist-manager__list-card" aria-label="Paginated shortlist list and cards">
@@ -197,18 +229,21 @@ export default function ShortlistManager(props) {
           </aside>
 
           <div>
-            {selectedShortlist && <div className="shortlist-manager__panel-header"><h3>{selectedShortlist.name}</h3><p role="status" aria-live="polite">{getShortlistJobLabel(selectedShortlist)} · {allCandidates.length} candidate(s)</p>{selectedShortlist.description ? <p className="shortlist-manager__muted-text">{selectedShortlist.description}</p> : null}</div>}
+            {selectedShortlist && <div className="shortlist-manager__panel-header"><h3>{selectedShortlist.name}</h3><p className="shortlist-manager__panel-job"><Briefcase size={18} strokeWidth={1.5} aria-hidden="true" />{getShortlistJobLabel(selectedShortlist)}</p><p className="shortlist-manager__panel-count" role="status" aria-live="polite">{allCandidates.length} candidate(s)</p>{selectedShortlist.description ? <p className="shortlist-manager__muted-text">{selectedShortlist.description}</p> : null}</div>}
             {hasSelectedShortlist && loadingDetails ? <div className="shortlist-manager__skeleton-list" role="status" aria-label="Loading shortlist details"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
             {selectedShortlist && !loadingDetails && paginatedCandidates.length > 0 ? <div className="shortlist-manager__candidate-list">{paginatedCandidates.map((candidate) => {
               const scoreDisplay = formatShortlistCandidateScore(candidate)
-              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes added.'}</p><div className="shortlist-manager__chip-list"><span className={`shortlist-manager__chip ${scoreDisplay.tone === 'muted' ? 'shortlist-manager__chip--muted' : ''}`}>{scoreDisplay.label}</span><span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div><div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
-                const candidateLabel = candidate.filename || candidate.resume_id || 'this candidate'
-                const confirmed = window.confirm(`Remove ${candidateLabel} from this shortlist?`)
+              const candidateName = getCandidateDisplayName(candidate)
+              const fileLabel = getCandidateFileLabel(candidate)
+              const shouldShowFileLabel = fileLabel && fileLabel.toLowerCase() !== candidateName.toLowerCase()
+              const candidateDescription = getCandidateDescription(candidate, candidateName)
+              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidateName}</h4>{shouldShowFileLabel ? <p className="shortlist-manager__candidate-file"><FileText size={14} strokeWidth={1.5} aria-hidden="true" />{fileLabel}</p> : null}{candidateDescription ? <p className="shortlist-manager__candidate-notes">{candidateDescription}</p> : null}<div className="shortlist-manager__chip-list"><span className={`shortlist-manager__chip shortlist-manager__chip--score ${scoreDisplay.tone === 'muted' ? 'shortlist-manager__chip--muted' : ''}`}>{scoreDisplay.label}</span><span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div><div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
+                const confirmed = window.confirm(`Remove ${candidateName} from this shortlist?`)
                 if (!confirmed) return
                 await onRemoveCandidate(candidate.resume_id)
-              }} className="shortlist-manager__button shortlist-manager__button--danger" aria-label={`Remove ${candidate.filename || candidate.resume_id || 'candidate'} from shortlist`}><Trash2 size={16} strokeWidth={1.5} aria-hidden="true" />Remove</button></div></article>
+              }} className="shortlist-manager__button shortlist-manager__button--danger shortlist-manager__icon-button" aria-label={`Remove ${candidateName} from shortlist`}><Trash2 size={16} strokeWidth={1.5} aria-hidden="true" /></button></div></article>
             })}</div> : null}
-            {selectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates in this shortlist yet.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates directory to begin decisions.</p><a className="shortlist-manager__button shortlist-manager__button--accent shortlist-manager__link-button" href="/candidates">Go to Candidates</a></div> : null}
+            {selectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates in this shortlist yet.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates directory to continue reviewing.</p><a className="shortlist-manager__button shortlist-manager__button--accent shortlist-manager__link-button" href="/candidates">Go to Candidates</a></div> : null}
             {selectedShortlist && !loadingDetails && filteredCandidates.length > PAGE_SIZE ? <nav className="shortlist-manager__pagination" aria-label="Candidate pagination"><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button><span aria-live="polite">Page {currentPage} of {totalPages}</span><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button></nav> : null}
             {showNoMatches ? <div className="shortlist-manager__empty"><p>No candidates match your current filters.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={resetFilters}>Clear filters</button></div> : null}
           </div>
