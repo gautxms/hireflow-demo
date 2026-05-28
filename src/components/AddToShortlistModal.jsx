@@ -7,7 +7,15 @@ import '../styles/add-to-shortlist-modal.css'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const SHORTLIST_SESSION_KEY = 'hireflow_last_selected_shortlist'
 
-export default function AddToShortlistModal({ isOpen, onClose, candidates = [], jobContext = null, onCompleted }) {
+export default function AddToShortlistModal({
+  isOpen,
+  onClose,
+  candidates = [],
+  jobContext = null,
+  onCompleted,
+  shortlistV2Enabled = true,
+  addCandidateToShortlistLegacy = null,
+}) {
   const dialogRef = useRef(null)
   const closeRef = useRef(null)
   const [shortlists, setShortlists] = useState([])
@@ -73,6 +81,25 @@ export default function AddToShortlistModal({ isOpen, onClose, candidates = [], 
     if (!selectedShortlistId) return
     setIsSubmitting(true); setError(''); setSummary(null)
     try {
+      if (!shortlistV2Enabled) {
+        if (typeof addCandidateToShortlistLegacy !== 'function') {
+          throw new Error('Unable to add candidates. Please retry.')
+        }
+        let added = 0
+        let failed = 0
+        for (const candidate of candidates) {
+          // Preserve legacy single-candidate shortlist flow when v2 is disabled.
+          const ok = await addCandidateToShortlistLegacy(candidate, selectedShortlistId)
+          if (ok) added += 1
+          else failed += 1
+        }
+        const legacyPayload = { summary: { added, failed, updated: 0, invalid: 0 } }
+        setSummary({ text: buildShortlistSummary(legacyPayload.summary, 'add'), failed: failed > 0 })
+        sessionStorage.setItem(SHORTLIST_SESSION_KEY, selectedShortlistId)
+        onCompleted?.(legacyPayload, selectedShortlistId)
+        return
+      }
+
       const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`, {
         method: 'POST', headers: headers(), body: JSON.stringify({ resumeIds: candidates.map((c) => String(c.resumeId || c.resume_id || c.id || '')).filter(Boolean) }),
       })

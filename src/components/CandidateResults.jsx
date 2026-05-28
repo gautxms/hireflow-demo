@@ -589,6 +589,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [selectedShortlistId, setSelectedShortlistId] = useState(() => sessionStorage.getItem(SHORTLIST_SESSION_KEY) || '')
   const [shortlistDetails, setShortlistDetails] = useState(null)
   const [shortlistSort, setShortlistSort] = useState('rating_desc')
+  const [isCreatingShortlistInAddFlow, setIsCreatingShortlistInAddFlow] = useState(false)
   const [shortlistLoading, setShortlistLoading] = useState(false)
   const [shortlistError, setShortlistError] = useState('')
   const [shortlistNotice, setShortlistNotice] = useState('')
@@ -761,6 +762,35 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }, [authHeaders, selectedShortlistId])
 
 
+
+
+  const createShortlistInAddFlow = useCallback(async () => {
+    if (selectedShortlistId) return selectedShortlistId
+    setIsCreatingShortlistInAddFlow(true)
+    setShortlistError('No shortlist selected. Create one to continue.')
+    setIsCreatingShortlistInAddFlow(false)
+    return ''
+  }, [selectedShortlistId])
+
+  const addSelectedCandidatesToShortlist = useCallback(async (selected) => {
+    let destinationShortlistId = selectedShortlistId
+    if (!destinationShortlistId) {
+      destinationShortlistId = await createShortlistInAddFlow()
+    }
+    if (!destinationShortlistId) return false
+
+    if (!shortlistV2Enabled) {
+      let fallbackSuccessCount = 0
+      for (const candidate of selected) {
+        // Preserve legacy single-candidate shortlist flow when v2 is disabled.
+        const ok = await addCandidateToShortlist(candidate, destinationShortlistId)
+        if (ok) fallbackSuccessCount += 1
+      }
+      return fallbackSuccessCount > 0
+    }
+
+    return true
+  }, [addCandidateToShortlist, createShortlistInAddFlow, selectedShortlistId, shortlistV2Enabled])
 
   const removeCandidateFromShortlist = useCallback(async (resumeId) => {
     try {
@@ -1315,6 +1345,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         onClose={() => setIsAddModalOpen(false)}
         candidates={selectedCandidates}
         jobContext={{ jobDescriptionId: parseMeta?.jobDescriptionId || null, jobTitle: analysisTitle }}
+        shortlistV2Enabled={shortlistV2Enabled}
+        addCandidateToShortlistLegacy={addCandidateToShortlist}
         onCompleted={async (payload, destinationShortlistId) => {
           const summary = payload?.summary || {}
           const added = Number(summary.added || 0)
