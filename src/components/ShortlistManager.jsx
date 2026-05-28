@@ -7,6 +7,7 @@ import {
   hasShortlistLinkedJob,
   formatShortlistCandidateScore,
   getRatingValue,
+  getShortlistAnalysisHref,
 } from './shortlistState'
 import './ShortlistManager.css'
 
@@ -245,7 +246,7 @@ export default function ShortlistManager(props) {
           </aside>
 
           <div>
-            {selectedShortlist && <div className="shortlist-manager__panel-header"><h3>{selectedShortlist.name}</h3><p className="shortlist-manager__panel-job"><Briefcase size={18} strokeWidth={1.5} aria-hidden="true" />{getShortlistJobLabel(selectedShortlist)}</p><p className="shortlist-manager__panel-count" role="status" aria-live="polite">{allCandidates.length} candidate(s)</p>{selectedShortlist.description ? <p className="shortlist-manager__muted-text">{selectedShortlist.description}</p> : null}</div>}
+            {selectedShortlist && <div className="shortlist-manager__panel-header"><div className="shortlist-manager__panel-title-row"><h3>{selectedShortlist.name}</h3><p className="shortlist-manager__panel-job"><Briefcase size={18} strokeWidth={1.5} aria-hidden="true" />{getShortlistJobLabel(selectedShortlist)}</p><p className="shortlist-manager__panel-count" role="status" aria-live="polite">{allCandidates.length} candidate(s)</p></div>{selectedShortlist.description ? <p className="shortlist-manager__muted-text shortlist-manager__panel-description">{selectedShortlist.description}</p> : null}</div>}
             {hasSelectedShortlist && loadingDetails ? <div className="shortlist-manager__skeleton-list" role="status" aria-label="Loading shortlist details"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
             {selectedShortlist && !loadingDetails && paginatedCandidates.length > 0 ? <div className="shortlist-manager__candidate-list">{paginatedCandidates.map((candidate) => {
               const scoreDisplay = formatShortlistCandidateScore(candidate)
@@ -253,7 +254,9 @@ export default function ShortlistManager(props) {
               const fileLabel = getCandidateFileLabel(candidate)
               const shouldShowFileLabel = fileLabel && fileLabel.toLowerCase() !== candidateName.toLowerCase()
               const candidateDescription = getCandidateDescription(candidate, candidateName)
-              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidateName}</h4>{shouldShowFileLabel ? <p className="shortlist-manager__candidate-file"><FileText size={14} strokeWidth={1.5} aria-hidden="true" />{fileLabel}</p> : null}{candidateDescription ? <p className="shortlist-manager__candidate-notes">{candidateDescription}</p> : null}<div className="shortlist-manager__chip-list"><span className={`shortlist-manager__chip shortlist-manager__chip--score ${scoreDisplay.tone === 'muted' ? 'shortlist-manager__chip--muted' : ''}`}>{scoreDisplay.label}</span><span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div><div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
+              const analysisHref = getShortlistAnalysisHref(candidate)
+              const scoreClassName = `shortlist-manager__chip shortlist-manager__chip--score ${scoreDisplay.tone === 'muted' ? 'shortlist-manager__chip--muted' : ''}`
+              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidateName}</h4>{shouldShowFileLabel ? <p className="shortlist-manager__candidate-file"><FileText size={14} strokeWidth={1.5} aria-hidden="true" />{fileLabel}</p> : null}{candidateDescription ? <p className="shortlist-manager__candidate-notes">{candidateDescription}</p> : null}<div className="shortlist-manager__chip-list">{analysisHref ? <a className={`${scoreClassName} shortlist-manager__chip--link`} href={analysisHref} aria-label={`Open analysis results for ${candidateName}`}>{scoreDisplay.label}</a> : <span className={scoreClassName}>{scoreDisplay.label}</span>}<span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div><div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
                 const confirmed = window.confirm(`Remove ${candidateName} from this shortlist?`)
                 if (!confirmed) return
                 await onRemoveCandidate(candidate.resume_id)

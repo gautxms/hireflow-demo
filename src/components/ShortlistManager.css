@@ -89,11 +89,13 @@
 .shortlist-manager__shortlist-item.is-selected { border-color: var(--hf-lime-border, rgba(200,255,0,.3)); background: var(--hf-lime-dim, rgba(200,255,0,.08)); }
 .shortlist-manager__shortlist-name { font-weight: 600; }
 .shortlist-manager__shortlist-meta { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--hf-text-3, #888888); font-size: 0.83rem; }
-.shortlist-manager__panel-header { display: grid; gap: 0.3rem; }
+.shortlist-manager__panel-header { display: grid; gap: 0.35rem; }
+.shortlist-manager__panel-title-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
 .shortlist-manager__panel-header h3 { margin: 0; font-family: var(--hf-font-display, 'Syne', sans-serif); }
 .shortlist-manager__panel-header p { margin: 0; color: var(--hf-text-3, #888888); }
 .shortlist-manager__panel-job { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--hf-text, #ffffff); font-size: 1rem; font-weight: 700; }
 .shortlist-manager__panel-count { font-size: 0.85rem; }
+.shortlist-manager__panel-description { max-width: 72ch; }
 
 .shortlist-manager__candidate-list { margin-top: 0.75rem; display: grid; gap: 0.5rem; }
 .shortlist-manager__pagination { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; color: var(--hf-text-3, #888888); }
@@ -104,6 +106,8 @@
 .shortlist-manager__chip-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
 .shortlist-manager__chip { border: 1px solid var(--hf-border-2, #2a2a2a); border-radius: 999px; padding: 0.2rem 0.45rem; font-family: var(--hf-font-ui, 'DM Sans', sans-serif); font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem; }
 .shortlist-manager__chip--score { color: var(--hf-score-strong, #c8ff00); border-color: var(--hf-lime-border, rgba(200,255,0,0.20)); background: var(--hf-lime-dim, rgba(200,255,0,0.10)); font-weight: 700; }
+.shortlist-manager__chip--link { text-decoration: none; }
+.shortlist-manager__chip--link:hover { border-color: var(--hf-lime, #c8ff00); background: rgba(200,255,0,0.16); }
 
 .shortlist-manager__alert { display: flex; gap: 0.75rem; align-items: center; border: 1px solid rgba(239,68,68,.6); background: rgba(239,68,68,.09); border-radius: 8px; padding: 0.6rem 0.75rem; }
 .shortlist-manager__empty { border: 1px dashed var(--hf-border-2, #2a2a2a); border-radius: 10px; padding: 0.8rem; }

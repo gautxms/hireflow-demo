@@ -107,6 +107,33 @@ export function formatShortlistCandidateScore(candidate = {}) {
   return { label: `AI score: ${resolved.value.toFixed(1)}/10`, tone: 'default' }
 }
 
+
+function resolveShortlistAnalysisId(candidate = {}) {
+  const sourceContext = candidate?.source_context && typeof candidate.source_context === 'object' ? candidate.source_context : {}
+  const snapshot = candidate?.candidate_snapshot && typeof candidate.candidate_snapshot === 'object' ? candidate.candidate_snapshot : {}
+  const candidates = [
+    candidate?.analysis_id,
+    candidate?.analysisId,
+    sourceContext?.analysisId,
+    sourceContext?.analysis_id,
+    snapshot?.sourceAnalysisId,
+    snapshot?.analysisId,
+    snapshot?.analysis_id,
+  ]
+
+  for (const value of candidates) {
+    const normalized = String(value || '').trim()
+    if (normalized) return normalized
+  }
+
+  return ''
+}
+
+export function getShortlistAnalysisHref(candidate = {}) {
+  const analysisId = resolveShortlistAnalysisId(candidate)
+  return analysisId ? `/analyses/${encodeURIComponent(analysisId)}` : ''
+}
+
 export function filterShortlistCandidates(candidates, filters = {}) {
   const decisionStatus = filters.decisionStatus || 'all'
   const rating = filters.rating || 'all'
