@@ -125,5 +125,5 @@ export function getCandidateJobContext(candidate) {
   if (jobTitle && jobId) return `${jobTitle} (${jobId})`
   if (jobTitle) return jobTitle
   if (jobId) return `Job ${jobId}`
-  return 'Legacy / Unknown job'
+  return 'General shortlist'
 }
