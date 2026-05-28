@@ -23,9 +23,19 @@
   padding: 1rem;
 }
 
-.shortlist-manager__title {
+.shortlist-manager__section-kicker {
+  margin: 0 0 0.2rem;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.shortlist-manager__section-title {
   margin: 0;
-  font-family: var(--font-heading, 'Syne', sans-serif);
+  font-size: 1.1rem;
+  font-family: var(--font-family-ui, 'DM Sans', sans-serif);
+  font-weight: 600;
 }
 
 .shortlist-manager__header-actions,
