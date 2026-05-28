@@ -184,7 +184,11 @@ export default function ShortlistManager(props) {
 
   return (
     <section className="shortlist-manager" aria-label="Shortlists page">
-      <header className="shortlist-manager__header-actions" aria-label="Shortlist actions">
+      <header className="shortlist-manager__page-header">
+        <div className="shortlist-manager__heading-copy">
+          <h1>Shortlists</h1>
+          <p>Review and manage shortlisted candidates with clear job context.</p>
+        </div>
         <button type="button" className="shortlist-manager__create-button" onClick={() => setShowCreateForm((value) => !value)} aria-expanded={showCreateForm}>
           <Plus size={18} strokeWidth={1.5} aria-hidden="true" />
           Create shortlist

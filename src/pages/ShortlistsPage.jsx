@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import API_BASE from '../config/api'
 import ShortlistManager from '../components/ShortlistManager'
 import { removeShortlistCandidate } from '../components/shortlistState'
+import '../styles/shortlists.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -202,34 +203,29 @@ export default function ShortlistsPage() {
   }, [loadShortlistDetails, selectedShortlistId])
 
   return (
-    <main className="candidates-directory">
-      <header className="candidates-directory__hero">
-        <div>
-          <h1>Shortlists</h1>
-          <p>Review and manage shortlisted candidates with clear job context.</p>
-        </div>
-      </header>
-
-      <ShortlistManager
-        shortlists={shortlists}
-        selectedShortlistId={selectedShortlistId}
-        shortlistDetails={shortlistDetails}
-        jobDescriptions={jobDescriptions}
-        onSelectShortlist={setSelectedShortlistId}
-        onCreateShortlist={createShortlist}
-        currentSort={shortlistSort}
-        onChangeSort={async (sortOption) => {
-          setShortlistSort(sortOption)
-          await loadShortlistDetails(selectedShortlistId, sortOption)
-        }}
-        onRetry={async () => {
-          await refreshShortlists()
-        }}
-        onRemoveCandidate={removeCandidateFromShortlist}
-        loadingList={loadingList}
-        loadingDetails={loadingDetails}
-        error={error}
-      />
+    <main className="shortlists-page">
+      <div className="shortlists-page__content">
+        <ShortlistManager
+          shortlists={shortlists}
+          selectedShortlistId={selectedShortlistId}
+          shortlistDetails={shortlistDetails}
+          jobDescriptions={jobDescriptions}
+          onSelectShortlist={setSelectedShortlistId}
+          onCreateShortlist={createShortlist}
+          currentSort={shortlistSort}
+          onChangeSort={async (sortOption) => {
+            setShortlistSort(sortOption)
+            await loadShortlistDetails(selectedShortlistId, sortOption)
+          }}
+          onRetry={async () => {
+            await refreshShortlists()
+          }}
+          onRemoveCandidate={removeCandidateFromShortlist}
+          loadingList={loadingList}
+          loadingDetails={loadingDetails}
+          error={error}
+        />
+      </div>
     </main>
   )
 }
