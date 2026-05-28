@@ -6,6 +6,15 @@ import '../styles/candidates-directory.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
+
+const buildSourceContext = (candidate) => ({
+  source: 'candidates_directory_bulk',
+  sourceAnalysisId: candidate?.sourceParseJobId || candidate?.provenanceHints?.sourceAnalysisId || null,
+  sourceJobId: candidate?.associatedJob?.id || candidate?.provenanceHints?.sourceJobId || null,
+  jobDescriptionId: candidate?.associatedJob?.id || candidate?.provenanceHints?.sourceJobId || null,
+  jobTitle: candidate?.associatedJob?.title || null,
+})
+
 const emptyFilters = {
   skills: '',
   experienceMin: '',
@@ -267,6 +276,9 @@ export default function CandidatesPage() {
       const endpoint = mode === 'add'
         ? `${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`
         : `${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`
+      const sourceContextByResumeId = Object.fromEntries(visibleCandidates
+        .filter((candidate) => selectedResumeIds.includes(candidate.resumeId))
+        .map((candidate) => [candidate.resumeId, buildSourceContext(candidate)]))
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -275,7 +287,7 @@ export default function CandidatesPage() {
         },
         body: JSON.stringify({
           resumeIds: selectedResumeIds,
-          ...(mode === 'add' ? { notes: 'Added from candidates directory bulk action' } : {}),
+          ...(mode === 'add' ? { notes: 'Added from candidates directory bulk action', sourceContext: { source: 'candidates_directory_bulk' }, sourceContextByResumeId } : {}),
         }),
       })
       const payload = await response.json().catch(() => ({}))
