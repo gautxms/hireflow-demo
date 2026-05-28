@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Plus, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { buildShortlistSummary, getShortlistBulkErrorMessage } from './shortlistState'
@@ -61,8 +61,8 @@ export default function AddToShortlistModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
 
-  const selectedShortlist = useMemo(() => shortlists.find((item) => item.id === selectedShortlistId) || null, [shortlists, selectedShortlistId])
   const canConfirm = Boolean(selectedShortlistId) && !isSubmitting && !isLoading
 
   const headers = () => {
@@ -78,7 +78,7 @@ export default function AddToShortlistModal({
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, isSubmitting, onClose])
 
   useEffect(() => {
     if (!isOpen) return
@@ -90,6 +90,8 @@ export default function AddToShortlistModal({
         if (!response.ok) throw new Error(payload.error || 'Unable to load shortlists')
         const active = (Array.isArray(payload.shortlists) ? payload.shortlists : []).filter((item) => item.status !== 'archived')
         setShortlists(active)
+        setIsCreateOpen(false)
+        setNewShortlistName('')
         const remembered = sessionStorage.getItem(SHORTLIST_SESSION_KEY) || ''
         setSelectedShortlistId(active.some((item) => item.id === remembered) ? remembered : '')
       } catch (e) { setError(e.message || 'Unable to load shortlists. Please retry.') } finally { setIsLoading(false) }
@@ -110,6 +112,7 @@ export default function AddToShortlistModal({
       setShortlists((current) => [created, ...current.filter((item) => item.id !== created.id)])
       setSelectedShortlistId(created.id)
       setNewShortlistName('')
+      setIsCreateOpen(false)
     } catch (e) { setError(e.message || 'Unable to create shortlist. Please retry.') } finally { setIsSubmitting(false) }
   }
 
@@ -167,18 +170,35 @@ export default function AddToShortlistModal({
 
   return <div className="ui-modal" role="dialog" aria-modal="true" aria-labelledby="atsm-title" aria-describedby="atsm-selection-status" onMouseDown={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose() }}>
     <div className="ui-modal__dialog atsm" ref={dialogRef}>
-      <header className="atsm__header"><h2 id="atsm-title">Add to shortlist</h2><button ref={closeRef} className="hf-btn hf-btn--secondary atsm__icon" type="button" onClick={onClose} aria-label="Close"><X size={18} strokeWidth={1.5} /></button></header>
-      <p className="atsm__meta" id="atsm-selection-status" role="status" aria-live="polite">{candidates.length} candidate(s) selected</p>
-      {jobContext?.jobTitle ? <p className="atsm__meta">Creating under: {jobContext.jobTitle}</p> : null}
+      <header className="atsm__header">
+        <div className="atsm__title-block">
+          <h2 id="atsm-title">Add to shortlist</h2>
+          <p className="atsm__selection-pill" id="atsm-selection-status" role="status" aria-live="polite">{candidates.length} candidate{candidates.length === 1 ? '' : 's'} selected</p>
+        </div>
+        <button ref={closeRef} className="hf-btn hf-btn--secondary atsm__icon" type="button" onClick={onClose} aria-label="Close"><X size={18} strokeWidth={1.5} /></button>
+      </header>
       {error ? <p className="atsm__error" role="alert"><AlertTriangle size={18} strokeWidth={1.5} aria-hidden="true" />{error}</p> : null}
       {summary ? <p className={`atsm__summary ${summary.failed ? 'is-warn' : 'is-ok'}`} role="status" aria-live="polite"><CheckCircle2 size={18} strokeWidth={1.5} aria-hidden="true" />{summary.text}</p> : null}
-      <label className="atsm__label" htmlFor="atsm-destination">Destination shortlist<select id="atsm-destination" className="atsm__input" value={selectedShortlistId} onChange={(e) => setSelectedShortlistId(e.target.value)}><option value="">Select shortlist</option>{shortlists.map((s) => {
-        const candidateCount = Number(s?.candidate_count || 0)
-        const jobLabel = String(s?.job_label || '').trim() || 'General shortlist'
-        return <option key={s.id} value={s.id}>{`${s.name} · ${candidateCount} candidate${candidateCount === 1 ? '' : 's'} · ${jobLabel}`}</option>
-      })}</select></label>
-      <div className="atsm__inline"><label className="atsm__sr-only" htmlFor="atsm-new-shortlist">New shortlist name</label><input id="atsm-new-shortlist" className="atsm__input" value={newShortlistName} onChange={(e) => setNewShortlistName(e.target.value)} placeholder="Create new shortlist" /><button type="button" className="hf-btn hf-btn--secondary" onClick={createInlineShortlist} disabled={isSubmitting || isLoading || !newShortlistName.trim()}><Plus size={18} strokeWidth={1.5} />Create</button></div>
-      <p className="atsm__meta">Selected destination: {selectedShortlist?.name || 'None'}</p>
+      <div className="atsm__field-group">
+        <label className="atsm__label" htmlFor="atsm-destination">Select shortlist</label>
+        <div className="atsm__select-row">
+          <select id="atsm-destination" className="atsm__input" value={selectedShortlistId} onChange={(e) => setSelectedShortlistId(e.target.value)} disabled={isLoading}>
+            <option value="">{isLoading ? 'Loading shortlists…' : 'Select shortlist'}</option>{shortlists.map((s) => {
+              const candidateCount = Number(s?.candidate_count || 0)
+              const jobLabel = String(s?.job_label || '').trim() || 'General shortlist'
+              return <option key={s.id} value={s.id}>{`${s.name} · ${candidateCount} candidate${candidateCount === 1 ? '' : 's'} · ${jobLabel}`}</option>
+            })}
+          </select>
+          <button type="button" className="hf-btn hf-btn--secondary atsm__add-toggle" onClick={() => setIsCreateOpen((value) => !value)} aria-expanded={isCreateOpen} aria-controls="atsm-create-panel" aria-label="Create a new shortlist" disabled={isSubmitting || isLoading}><Plus size={18} strokeWidth={1.8} aria-hidden="true" /></button>
+        </div>
+      </div>
+      {isCreateOpen ? <div className="atsm__create-panel" id="atsm-create-panel">
+        <label className="atsm__label" htmlFor="atsm-new-shortlist">Create shortlist</label>
+        <div className="atsm__inline">
+          <input id="atsm-new-shortlist" className="atsm__input" value={newShortlistName} onChange={(e) => setNewShortlistName(e.target.value)} placeholder="e.g. Final interview" autoFocus />
+          <button type="button" className="hf-btn hf-btn--primary atsm__create-button" onClick={createInlineShortlist} disabled={isSubmitting || isLoading || !newShortlistName.trim()}>{isSubmitting ? 'Creating…' : 'Create'}</button>
+        </div>
+      </div> : null}
       <footer className="atsm__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="button" className="hf-btn hf-btn--primary" onClick={confirmAdd} disabled={!canConfirm}>{isSubmitting ? 'Adding…' : 'Confirm add'}</button></footer>
     </div>
   </div>
