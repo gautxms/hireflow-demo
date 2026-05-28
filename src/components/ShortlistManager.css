@@ -249,6 +249,9 @@
 .shortlist-manager__chip-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
 .shortlist-manager__chip { border: 1px solid var(--hf-border-2, #2a2a2a); border-radius: 999px; padding: 0.2rem 0.45rem; font-family: var(--hf-font-ui, 'DM Sans', sans-serif); font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem; color: var(--hf-text-2, #aaaaaa); }
 .shortlist-manager__chip--score { color: var(--hf-score-strong, #c8ff00); border-color: var(--hf-lime-border, rgba(200,255,0,0.20)); background: var(--hf-lime-dim, rgba(200,255,0,0.10)); font-weight: 700; }
+.shortlist-manager__chip--link { text-decoration: none; transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease; }
+.shortlist-manager__chip--link:hover { border-color: var(--hf-lime, #c8ff00); background: rgba(200,255,0,0.16); color: var(--hf-lime, #c8ff00); }
+.shortlist-manager__chip--link:focus-visible { outline: 2px solid var(--hf-lime, #c8ff00); outline-offset: 3px; }
 
 .shortlist-manager__alert { display: flex; gap: 0.75rem; align-items: center; border: 1px solid rgba(239,68,68,.6); background: rgba(239,68,68,.09); border-radius: 8px; padding: 0.8rem 0.9rem; flex-wrap: wrap; }
 .shortlist-manager__alert p { margin: 0; }
