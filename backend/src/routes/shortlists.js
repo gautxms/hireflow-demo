@@ -25,6 +25,14 @@ function normalizeBatchResumeIds(input) {
   return [...unique]
 }
 
+function normalizeJobDescriptionId(input) {
+  if (input === null || input === undefined) return null
+  const value = String(input).trim()
+  if (!value) return null
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  return uuidPattern.test(value) ? value.toLowerCase() : null
+}
+
 router.get('/', async (req, res) => {
   const includeArchived = String(req.query.includeArchived || 'false').toLowerCase() === 'true'
   try {
@@ -57,21 +65,48 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const name = String(req.body?.name || '').trim()
   const description = req.body?.description ? String(req.body.description).trim() : null
-  const shortlistJobId = resolveCandidateResumeUuid(req.body?.jobDescriptionId) || null
+  const shortlistJobId = normalizeJobDescriptionId(req.body?.jobDescriptionId)
 
   if (!name) {
     return res.status(400).json({ error: 'Shortlist name is required' })
   }
 
   try {
+    let validatedJobId = null
+    if (shortlistJobId) {
+      const jobResult = await pool.query(
+        'SELECT id, title FROM job_descriptions WHERE id = $1 AND user_id = $2 LIMIT 1',
+        [shortlistJobId, req.userId],
+      )
+      if (!jobResult.rows[0]) {
+        return res.status(400).json({ error: 'Invalid jobDescriptionId' })
+      }
+      validatedJobId = jobResult.rows[0].id
+    }
+
     const result = await pool.query(
       `INSERT INTO shortlists (user_id, name, description, job_description_id)
        VALUES ($1, $2, $3, $4)
        RETURNING id, user_id, name, description, job_description_id, status, created_at`,
-      [req.userId, name.slice(0, 120), description ? description.slice(0, 500) : null, shortlistJobId],
+      [req.userId, name.slice(0, 120), description ? description.slice(0, 500) : null, validatedJobId],
+    )
+    const createdShortlist = result.rows[0]
+    const shortlistWithLabel = await pool.query(
+      `SELECT s.id,
+              s.name,
+              s.description,
+              s.job_description_id,
+              COALESCE(NULLIF(TRIM(jd.title), ''), CASE WHEN s.job_description_id IS NOT NULL THEN CONCAT('Job ', s.job_description_id::text) ELSE NULL END) AS job_label,
+              s.status,
+              s.created_at
+       FROM shortlists s
+       LEFT JOIN job_descriptions jd ON jd.id = s.job_description_id
+       WHERE s.id = $1 AND s.user_id = $2
+       LIMIT 1`,
+      [createdShortlist.id, req.userId],
     )
 
-    return res.status(201).json({ shortlist: result.rows[0] })
+    return res.status(201).json({ shortlist: shortlistWithLabel.rows[0] || createdShortlist })
   } catch (error) {
     console.error('[Shortlists] Failed to create shortlist:', error)
     return res.status(500).json({ error: 'Unable to create shortlist' })

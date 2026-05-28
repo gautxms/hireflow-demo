@@ -135,3 +135,7 @@ export function getShortlistJobLabel(shortlist) {
   if (shortlist?.job_description_id) return `Job ${shortlist.job_description_id}`
   return 'General shortlist'
 }
+
+export function hasShortlistLinkedJob(shortlist) {
+  return Boolean(String(shortlist?.job_label || '').trim() || shortlist?.job_description_id)
+}

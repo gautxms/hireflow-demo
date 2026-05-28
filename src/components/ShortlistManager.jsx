@@ -5,6 +5,7 @@ import {
   getDecisionStatus,
   getRatingValue,
   getShortlistJobLabel,
+  hasShortlistLinkedJob,
 } from './shortlistState'
 import './ShortlistManager.css'
 
@@ -64,19 +65,30 @@ export default function ShortlistManager(props) {
 
   const shortlistJobOptions = useMemo(() => {
     const map = new Map()
+    let hasGeneralOnly = false
     shortlists.forEach((list) => {
-      const label = getShortlistJobLabel(list)
-      map.set(label, label)
+      if (hasShortlistLinkedJob(list)) {
+        const label = getShortlistJobLabel(list)
+        map.set(label, label)
+      } else {
+        hasGeneralOnly = true
+      }
     })
-    return [...map.values()].sort((a, b) => a.localeCompare(b))
+
+    const options = [...map.values()].sort((a, b) => a.localeCompare(b))
+    if (hasGeneralOnly) {
+      options.push('General / no linked job')
+    }
+    return options
   }, [shortlists])
 
   const visibleShortlists = useMemo(() => {
     const q = query.trim().toLowerCase()
     return shortlists.filter((list) => {
       const jobLabel = getShortlistJobLabel(list)
+      const jobFilterValue = hasShortlistLinkedJob(list) ? jobLabel : 'General / no linked job'
       const shortlistMatch = !q || `${list.name || ''} ${list.description || ''} ${jobLabel}`.toLowerCase().includes(q)
-      const jobMatch = jobFilter === 'all' || jobLabel === jobFilter
+      const jobMatch = jobFilter === 'all' || jobFilterValue === jobFilter
       return shortlistMatch && jobMatch
     })
   }, [jobFilter, query, shortlists])
