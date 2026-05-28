@@ -705,7 +705,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       const response = await fetch(`${API_BASE}/shortlists`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({
+          name,
+          description,
+          jobDescriptionId: parseMeta?.jobDescriptionId || null,
+        }),
       })
 
       const payload = await response.json().catch(() => ({}))
