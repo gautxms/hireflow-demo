@@ -125,5 +125,13 @@ export function getCandidateJobContext(candidate) {
   if (jobTitle && jobId) return `${jobTitle} (${jobId})`
   if (jobTitle) return jobTitle
   if (jobId) return `Job ${jobId}`
-  return 'Legacy / Unknown job'
+  return 'General shortlist'
+}
+
+
+export function getShortlistJobLabel(shortlist) {
+  const jobLabel = String(shortlist?.job_label || '').trim()
+  if (jobLabel) return jobLabel
+  if (shortlist?.job_description_id) return `Job ${shortlist.job_description_id}`
+  return 'General shortlist'
 }

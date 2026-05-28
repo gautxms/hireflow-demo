@@ -115,10 +115,15 @@ export default function AddToShortlistModal({
   return <div className="ui-modal" role="dialog" aria-modal="true" aria-labelledby="atsm-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
     <div className="ui-modal__dialog atsm" ref={dialogRef}>
       <header className="atsm__header"><h2 id="atsm-title">Add to shortlist</h2><button ref={closeRef} className="hf-btn hf-btn--secondary atsm__icon" type="button" onClick={onClose} aria-label="Close"><X size={18} strokeWidth={1.5} /></button></header>
-      <p className="atsm__meta">{candidates.length} candidate(s) selected{jobContext?.jobTitle ? ` • Job: ${jobContext.jobTitle}` : ''}</p>
+      <p className="atsm__meta">{candidates.length} candidate(s) selected</p>
+      {jobContext?.jobTitle ? <p className="atsm__meta">Creating under: {jobContext.jobTitle}</p> : null}
       {error ? <p className="atsm__error" role="alert"><AlertTriangle size={18} strokeWidth={1.5} />{error}</p> : null}
       {summary ? <p className={`atsm__summary ${summary.failed ? 'is-warn' : 'is-ok'}`} role="status"><CheckCircle2 size={18} strokeWidth={1.5} />{summary.text}</p> : null}
-      <label className="atsm__label">Destination shortlist<select className="atsm__input" value={selectedShortlistId} onChange={(e) => setSelectedShortlistId(e.target.value)}><option value="">Select shortlist</option>{shortlists.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+      <label className="atsm__label">Destination shortlist<select className="atsm__input" value={selectedShortlistId} onChange={(e) => setSelectedShortlistId(e.target.value)}><option value="">Select shortlist</option>{shortlists.map((s) => {
+        const candidateCount = Number(s?.candidate_count || 0)
+        const jobLabel = String(s?.job_label || '').trim() || 'General shortlist'
+        return <option key={s.id} value={s.id}>{`${s.name} · ${candidateCount} candidate${candidateCount === 1 ? '' : 's'} · ${jobLabel}`}</option>
+      })}</select></label>
       <div className="atsm__inline"><input className="atsm__input" value={newShortlistName} onChange={(e) => setNewShortlistName(e.target.value)} placeholder="Create new shortlist" /><button type="button" className="hf-btn hf-btn--secondary" onClick={createInlineShortlist} disabled={isSubmitting || !newShortlistName.trim()}><Plus size={18} strokeWidth={1.5} />Create</button></div>
       <p className="atsm__meta">Selected destination: {selectedShortlist?.name || 'None'}</p>
       <footer className="atsm__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose}>Cancel</button><button type="button" className="hf-btn hf-btn--primary" onClick={confirmAdd} disabled={!canConfirm || isLoading}>{isSubmitting ? 'Adding…' : 'Confirm add'}</button></footer>
