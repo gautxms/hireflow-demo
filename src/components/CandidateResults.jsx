@@ -365,6 +365,33 @@ function activeScore(candidate) {
   return Number.isFinite(numeric) ? numeric : null
 }
 
+function buildShortlistCandidateSnapshot(candidate = {}, jobContext = null) {
+  const score = resolveActiveCandidateScore(candidate)
+  return {
+    name: candidate?.name || candidate?.filename || candidate?.resumeName || null,
+    score,
+    matchScore: score == null ? null : { score },
+    recommendation: candidate?.recommendation || candidate?.match_status || null,
+    source: 'analysis_results',
+    sourceAnalysisId: candidate?.analysisId || candidate?.analysis_id || jobContext?.analysisId || null,
+    associatedJob: {
+      id: jobContext?.jobDescriptionId || null,
+      title: jobContext?.jobTitle || null,
+    },
+  }
+}
+
+function buildShortlistSourceContext(candidate = {}, jobContext = null) {
+  return {
+    source: 'analysis_results',
+    analysisId: candidate?.analysisId || candidate?.analysis_id || jobContext?.analysisId || null,
+    score: resolveActiveCandidateScore(candidate),
+    matchStatus: candidate?.recommendation || candidate?.match_status || null,
+    jobDescriptionId: jobContext?.jobDescriptionId || null,
+    jobTitle: jobContext?.jobTitle || null,
+  }
+}
+
 
 
 function resolveVerdictLabel(candidate, tier, hasScore) {
@@ -739,7 +766,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         throw new Error('Create or select a shortlist first')
       }
 
-      const derivedRating = Math.max(1, Math.min(5, Math.round(Number(candidate?.score || 0) / 20)))
+      const originalScore = resolveActiveCandidateScore(candidate)
+      const derivedRating = Math.max(1, Math.min(5, Math.round(Number(originalScore || 0) / 20)))
+      const jobContext = {
+        jobDescriptionId: parseMeta?.jobDescriptionId || null,
+        jobTitle: analysisTitle,
+        analysisId,
+      }
 
       const resumeId = candidate?.resumeId || candidate?.resume_id || candidate?.id
       const response = await fetch(`${API_BASE}/shortlists/${destinationShortlistId}/candidates`, {
@@ -749,6 +782,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           resumeId,
           notes: `Added from ranking: ${candidate?.name || 'Unknown candidate'}`,
           rating: derivedRating,
+          analysisId: candidate?.analysisId || candidate?.analysis_id || analysisId || null,
+          candidateSnapshot: buildShortlistCandidateSnapshot(candidate, jobContext),
+          sourceContext: buildShortlistSourceContext(candidate, jobContext),
         }),
       })
 
@@ -763,7 +799,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistError(error.message || 'Unable to add candidate to shortlist')
       return false
     }
-  }, [authHeaders, selectedShortlistId])
+  }, [analysisId, analysisTitle, authHeaders, parseMeta?.jobDescriptionId, selectedShortlistId])
 
 
 
@@ -1348,7 +1384,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         candidates={selectedCandidates}
-        jobContext={{ jobDescriptionId: parseMeta?.jobDescriptionId || null, jobTitle: analysisTitle }}
+        jobContext={{ jobDescriptionId: parseMeta?.jobDescriptionId || null, jobTitle: analysisTitle, analysisId }}
         shortlistV2Enabled={shortlistV2Enabled}
         addCandidateToShortlistLegacy={addCandidateToShortlist}
         onCompleted={async (payload, destinationShortlistId) => {

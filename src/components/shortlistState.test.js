@@ -10,6 +10,8 @@ import {
   buildShortlistExportFilename,
   buildShortlistSummary,
   getShortlistBulkErrorMessage,
+  formatShortlistCandidateScore,
+  getShortlistAnalysisHref,
 } from './shortlistState.js'
 
 test('shortlist create prepends and deduplicates by id', () => {
@@ -86,4 +88,20 @@ test('shortlist bulk error message maps known error taxonomy codes', () => {
   assert.match(getShortlistBulkErrorMessage({ errorCode: 'missing_shortlist' }), /no longer available/i)
   assert.match(getShortlistBulkErrorMessage({ errorCode: 'stale_selection' }), /out of date/i)
   assert.match(getShortlistBulkErrorMessage({ errorCode: 'partial_failure' }), /could not be processed/i)
+})
+
+
+test('shortlist candidate score prefers original analysis score over recruiter rating', () => {
+  const display = formatShortlistCandidateScore({
+    rating: 4,
+    candidate_snapshot: { score: 86 },
+  })
+
+  assert.equal(display.label, 'AI score: 8.6/10')
+})
+
+test('shortlist analysis href resolves linked analysis from saved context', () => {
+  assert.equal(getShortlistAnalysisHref({ source_context: { analysisId: 'analysis 123' } }), '/analyses/analysis%20123')
+  assert.equal(getShortlistAnalysisHref({ candidate_snapshot: { sourceAnalysisId: 'abc' } }), '/analyses/abc')
+  assert.equal(getShortlistAnalysisHref({ rating: 4 }), '')
 })
