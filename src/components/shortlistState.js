@@ -109,3 +109,16 @@ export function buildShortlistExportFilename(shortlistName, ext) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
   return `${safeName || 'shortlist'}-${timestamp}.${ext}`
 }
+
+
+export function getCandidateJobContext(candidate) {
+  const context = candidate?.source_context && typeof candidate.source_context === 'object' ? candidate.source_context : {}
+  const snapshotJob = candidate?.candidate_snapshot?.associatedJob || {}
+  const jobId = String(context.jobDescriptionId || context.sourceJobId || snapshotJob.id || '').trim()
+  const jobTitle = String(context.jobTitle || snapshotJob.title || '').trim()
+
+  if (jobTitle && jobId) return `${jobTitle} (${jobId})`
+  if (jobTitle) return jobTitle
+  if (jobId) return `Job ${jobId}`
+  return 'Legacy / Unknown job'
+}

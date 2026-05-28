@@ -34,9 +34,12 @@ router.get('/', async (req, res) => {
               s.description,
               s.status,
               s.created_at,
+              s.job_description_id,
+              COALESCE(NULLIF(TRIM(jd.title), ''), CASE WHEN s.job_description_id IS NOT NULL THEN CONCAT('Job ', s.job_description_id::text) ELSE NULL END) AS job_label,
               COUNT(sc.id)::int AS candidate_count
        FROM shortlists s
        LEFT JOIN shortlist_candidates sc ON sc.shortlist_id = s.id
+       LEFT JOIN job_descriptions jd ON jd.id = s.job_description_id
        WHERE s.user_id = $1
          AND ($2::boolean = true OR s.status = 'active')
        GROUP BY s.id
@@ -54,6 +57,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const name = String(req.body?.name || '').trim()
   const description = req.body?.description ? String(req.body.description).trim() : null
+  const shortlistJobId = resolveCandidateResumeUuid(req.body?.jobDescriptionId) || null
 
   if (!name) {
     return res.status(400).json({ error: 'Shortlist name is required' })
@@ -61,10 +65,10 @@ router.post('/', async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO shortlists (user_id, name, description)
-       VALUES ($1, $2, $3)
-       RETURNING id, user_id, name, description, status, created_at`,
-      [req.userId, name.slice(0, 120), description ? description.slice(0, 500) : null],
+      `INSERT INTO shortlists (user_id, name, description, job_description_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, user_id, name, description, job_description_id, status, created_at`,
+      [req.userId, name.slice(0, 120), description ? description.slice(0, 500) : null, shortlistJobId],
     )
 
     return res.status(201).json({ shortlist: result.rows[0] })
@@ -166,8 +170,10 @@ router.get('/:id', async (req, res) => {
 
   try {
     const shortlistResult = await pool.query(
-      `SELECT id, user_id, name, description, status, created_at
-       FROM shortlists
+      `SELECT s.id, s.user_id, s.name, s.description, s.job_description_id, s.status, s.created_at,
+              COALESCE(NULLIF(TRIM(jd.title), ''), CASE WHEN s.job_description_id IS NOT NULL THEN CONCAT('Job ', s.job_description_id::text) ELSE NULL END) AS job_label
+       FROM shortlists s
+       LEFT JOIN job_descriptions jd ON jd.id = s.job_description_id
        WHERE id = $1 AND user_id = $2
        LIMIT 1`,
       [req.params.id, req.userId],
@@ -191,6 +197,7 @@ router.get('/:id', async (req, res) => {
               sc.decision_status,
               sc.created_at,
               sc.updated_at,
+              sc.source_context,
               r.filename,
               r.created_at AS resume_created_at
        FROM shortlist_candidates sc
@@ -219,6 +226,7 @@ router.post('/:id/candidates', async (req, res) => {
     ? req.body.candidateSnapshot
     : null
   const decisionStatus = req.body?.decisionStatus ? String(req.body.decisionStatus).trim().slice(0, 64) : null
+  const sourceContext = req.body?.sourceContext && typeof req.body.sourceContext === 'object' ? req.body.sourceContext : null
 
   if (!resumeId) {
     return res.status(400).json({ error: 'resumeId is required' })
@@ -261,17 +269,19 @@ router.post('/:id/candidates', async (req, res) => {
          rating,
          analysis_id,
          candidate_snapshot,
-         decision_status
+         decision_status,
+         source_context
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (shortlist_id, resume_id)
        DO UPDATE SET notes = EXCLUDED.notes,
                      rating = EXCLUDED.rating,
                      analysis_id = COALESCE(EXCLUDED.analysis_id, shortlist_candidates.analysis_id),
                      candidate_snapshot = COALESCE(EXCLUDED.candidate_snapshot, shortlist_candidates.candidate_snapshot),
                      decision_status = COALESCE(EXCLUDED.decision_status, shortlist_candidates.decision_status),
+                     source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context),
                      updated_at = NOW()
-       RETURNING id, shortlist_id, resume_id, notes, rating, added_at, analysis_id, candidate_snapshot, decision_status, created_at, updated_at`,
+       RETURNING id, shortlist_id, resume_id, notes, rating, added_at, analysis_id, candidate_snapshot, decision_status, source_context, created_at, updated_at`,
       [
         req.params.id,
         resumeId,
@@ -280,6 +290,7 @@ router.post('/:id/candidates', async (req, res) => {
         analysisId,
         candidateSnapshot,
         decisionStatus,
+        sourceContext,
       ],
     )
 
@@ -305,6 +316,8 @@ router.post('/:id/candidates/batch', async (req, res) => {
   }
 
   const notes = req.body?.notes ? String(req.body.notes).trim().slice(0, 1000) : null
+  const sourceContext = req.body?.sourceContext && typeof req.body.sourceContext === 'object' ? req.body.sourceContext : null
+  const sourceContextByResumeId = req.body?.sourceContextByResumeId && typeof req.body.sourceContextByResumeId === 'object' ? req.body.sourceContextByResumeId : {}
 
   try {
     const ownerCheck = await pool.query(
@@ -340,17 +353,22 @@ router.post('/:id/candidates/batch', async (req, res) => {
       )
       existingIds = new Set(existingResult.rows.map((row) => row.resume_id))
 
+      const sourceContextRows = [...visibleResumeIds].map((resumeId) => ({
+        resume_id: resumeId,
+        source_context: sourceContextByResumeId[resumeId] || sourceContext || null,
+      }))
       await pool.query(
-        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating)
-         SELECT $1, resume_id, $3, $4
-         FROM unnest($2::uuid[]) AS resume_id
+        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, source_context)
+         SELECT $1, x.resume_id::uuid, $3, $4, x.source_context::jsonb
+         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, source_context jsonb)
          ON CONFLICT (shortlist_id, resume_id)
          DO UPDATE SET notes = EXCLUDED.notes,
                        rating = CASE
                          WHEN $5::boolean THEN EXCLUDED.rating
                          ELSE shortlist_candidates.rating
-                       END`,
-        [req.params.id, [...visibleResumeIds], notes, rating, hasRating],
+                       END,
+                       source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context)`,
+        [req.params.id, [...visibleResumeIds], notes, rating, hasRating, JSON.stringify(sourceContextRows)],
       )
     }
 
