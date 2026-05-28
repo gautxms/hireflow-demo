@@ -124,8 +124,8 @@ export default function ShortlistManager(props) {
   return (
     <section className="shortlist-manager" aria-label="Shortlists page">
       <header className="shortlist-manager__header-card" aria-label="Shortlists summary">
-        <div>
-          <h2 className="shortlist-manager__page-title">Shortlists</h2>
+        <div className="shortlist-manager__header-content">
+          <h2 className="shortlist-manager__page-title">Manage candidate collections</h2>
           <p className="shortlist-manager__muted-text">Manage job-aligned candidate collections and hiring decisions.</p>
           {selectedShortlist ? <p className="shortlist-manager__context-copy">Selected: <strong>{selectedShortlist.name}</strong> · {getShortlistJobLabel(selectedShortlist)}</p> : null}
         </div>
@@ -144,7 +144,7 @@ export default function ShortlistManager(props) {
         {createError ? <p className="shortlist-manager__inline-error" role="alert">Couldn’t create shortlist. {createError} Try again.</p> : null}
       </section> : null}
 
-      <section className="shortlist-manager__filters-card" aria-label="Filters and actions">
+      <section className="shortlist-manager__filters-card shortlist-manager__filters-toolbar" aria-label="Filters and actions">
         <div className="shortlist-manager__filter-grid">
           <label className="shortlist-manager__filter-label">Search
             <div className="shortlist-manager__input-wrap"><Search size={18} strokeWidth={1.5} aria-hidden="true" /><input className="shortlist-manager__input shortlist-manager__input--with-icon" value={query} onChange={(e) => { setCurrentPage(1); setQuery(e.target.value) }} placeholder="Search shortlists or candidates" /></div>
@@ -159,7 +159,9 @@ export default function ShortlistManager(props) {
             <select value={currentSort} onChange={(e) => onChangeSort(e.target.value)} className="shortlist-manager__select"><option value="rating_desc">Rating (High to Low)</option><option value="rating_asc">Rating (Low to High)</option><option value="added_desc">Recently Added</option><option value="added_asc">Oldest Added</option></select>
           </label>
         </div>
-        <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={resetFilters}>Clear filters</button>
+        <div className="shortlist-manager__filter-actions">
+          <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral shortlist-manager__clear-filters" onClick={resetFilters}>Clear filters</button>
+        </div>
       </section>
 
       <section className="shortlist-manager__stats" aria-label="Shortlist stats">
