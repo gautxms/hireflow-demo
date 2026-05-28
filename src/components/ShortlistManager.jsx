@@ -57,6 +57,7 @@ export default function ShortlistManager(props) {
   const [filters, setFilters] = useState({ decisionStatus: 'all', rating: 'all', analysisSource: 'all' })
   const [query, setQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [createError, setCreateError] = useState('')
   const resetFilters = () => {
     setCurrentPage(1)
     setQuery('')
@@ -83,13 +84,22 @@ export default function ShortlistManager(props) {
 
   const exportRows = useMemo(() => createShortlistExportRows(filteredCandidates), [filteredCandidates])
   const showPagination = filteredCandidates.length > PAGE_SIZE
+  const hasShortlists = shortlists.length > 0
+  const hasCandidates = allCandidates.length > 0
+  const hasSelectedShortlist = Boolean(selectedShortlist)
+  const showDataControls = hasSelectedShortlist && hasCandidates
 
   const handleCreate = async (event) => {
     event.preventDefault()
     if (!name.trim()) return
-    await onCreateShortlist({ name: name.trim(), description: description.trim() })
-    setName('')
-    setDescription('')
+    setCreateError('')
+    try {
+      await onCreateShortlist({ name: name.trim(), description: description.trim() })
+      setName('')
+      setDescription('')
+    } catch (createActionError) {
+      setCreateError(createActionError?.message || 'Unable to create shortlist.')
+    }
   }
 
   const stats = {
@@ -101,23 +111,27 @@ export default function ShortlistManager(props) {
 
   return (
     <section className="shortlist-manager" aria-label="Shortlists page">
-      <header className="shortlist-manager__header-card" aria-label="Shortlists summary">
+      <header className="shortlist-manager__header-card" aria-label="Shortlists workspace">
         <div>
-          <h2 className="shortlist-manager__title">Shortlists</h2>
-          <p className="shortlist-manager__muted-text">Manage shortlist collections and candidate decisions.</p>
+          <h2 className="shortlist-manager__title">Shortlist workspace</h2>
+          <p className="shortlist-manager__muted-text">Manage collections and make candidate decisions with context.</p>
         </div>
         <div className="shortlist-manager__header-actions">
           <button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={onRefresh}>Refresh</button>
         </div>
       </header>
 
-      <section className="shortlist-manager__filters-card" aria-label="Filters and actions">
+      <section className="shortlist-manager__filters-card" aria-label="Create shortlist">
         <form onSubmit={handleCreate} className="shortlist-manager__create-form">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New shortlist name" className="shortlist-manager__input" />
           <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" className="shortlist-manager__input" />
           <button type="submit" disabled={loadingList || loadingDetails} className="shortlist-manager__create-button">Create shortlist</button>
         </form>
 
+        {createError ? <p className="shortlist-manager__inline-error" role="alert">Couldn’t create shortlist. {createError} Try again.</p> : null}
+      </section>
+
+      {showDataControls ? <section className="shortlist-manager__filters-card" aria-label="Filter shortlist candidates">
         <div className="shortlist-manager__filter-grid">
           <label className="shortlist-manager__filter-label">Search<input className="shortlist-manager__input" value={query} onChange={(e) => { setCurrentPage(1); setQuery(e.target.value) }} placeholder="Search candidates" /></label>
           <label className="shortlist-manager__filter-label">Sort<select value={currentSort} onChange={(e) => onChangeSort(e.target.value)} className="shortlist-manager__select"><option value="rating_desc">Rating (High to Low)</option><option value="rating_asc">Rating (Low to High)</option><option value="added_desc">Recently Added</option><option value="added_asc">Oldest Added</option></select></label>
@@ -134,7 +148,7 @@ export default function ShortlistManager(props) {
             <button type="button" disabled={!exportRows.length} onClick={() => triggerDownload(buildShortlistExportFilename(selectedShortlist?.name || 'shortlist', 'json'), JSON.stringify(exportRows, null, 2), 'application/json;charset=utf-8')} className="shortlist-manager__button shortlist-manager__button--neutral">Export JSON</button>
           </div>
         </div> : null}
-      </section>
+      </section> : null}
 
       <section className="shortlist-manager__stats" aria-label="Shortlist stats">
         <article className="shortlist-manager__stat-card"><h3>Total shortlists</h3><p>{stats.totalShortlists}</p></article>
@@ -148,9 +162,9 @@ export default function ShortlistManager(props) {
 
         {loadingList ? <p className="shortlist-manager__muted-text" role="status">Loading shortlists…</p> : null}
 
-        {!loadingList && shortlists.length === 0 ? <div className="shortlist-manager__empty"><p>No shortlists yet.</p><p className="shortlist-manager__muted-text">Create your first shortlist to get started.</p></div> : null}
+        {!loadingList && !hasShortlists ? <div className="shortlist-manager__empty"><p>No shortlists yet.</p><p className="shortlist-manager__muted-text">Create your first shortlist to start reviewing candidates.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--accent" onClick={() => document.querySelector('.shortlist-manager__create-form input')?.focus()}>Create shortlist</button></div> : null}
 
-        {shortlists.length > 0 ? <div className="shortlist-manager__pills">{shortlists.map((list) => <button key={list.id} type="button" onClick={() => onSelectShortlist(list.id)} className={`shortlist-manager__pill ${list.id === selectedShortlistId ? 'is-selected' : ''}`}>{list.name} ({list.candidate_count || 0})</button>)}</div> : null}
+        {hasShortlists ? <div className="shortlist-manager__pills">{shortlists.map((list) => <button key={list.id} type="button" onClick={() => onSelectShortlist(list.id)} className={`shortlist-manager__pill ${list.id === selectedShortlistId ? 'is-selected' : ''}`}>{list.name} ({list.candidate_count || 0})</button>)}</div> : null}
 
         {selectedShortlist && loadingDetails ? <p className="shortlist-manager__muted-text" role="status">Loading shortlist details…</p> : null}
 
@@ -174,7 +188,7 @@ export default function ShortlistManager(props) {
           </nav> : null}
         </> : null}
 
-        {selectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>This shortlist is empty.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates page.</p></div> : null}
+        {selectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates in this shortlist yet.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates directory to begin decisions.</p><a className="shortlist-manager__button shortlist-manager__button--accent shortlist-manager__link-button" href="/candidates">Go to Candidates</a></div> : null}
         {selectedShortlist && !loadingDetails && allCandidates.length > 0 && filteredCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates match your current filters.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={resetFilters}>Clear filters</button></div> : null}
       </section>
     </section>

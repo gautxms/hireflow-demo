@@ -94,7 +94,9 @@ export default function ShortlistsPage() {
         await loadShortlistDetails(payload.shortlist.id)
       }
     } catch (createError) {
-      setError(createError.message || 'Unable to create shortlist')
+      const message = createError.message || 'Unable to create shortlist'
+      setError(message)
+      throw new Error(message)
     } finally {
       setLoadingList(false)
     }
