@@ -59,3 +59,9 @@ test('root path is no longer treated as a dashboard alias', () => {
   assert.equal(resolveUserSectionPath('/'), '/')
   assert.ok(!Object.hasOwn(USER_SECTION_ALIASES, '/'))
 })
+
+test('shortlists alias never regresses to candidates mapping', () => {
+  assert.equal(resolveUserSectionPath('/shortlists'), '/shortlists')
+  assert.notEqual(resolveUserSectionPath('/shortlists'), '/candidates')
+  assert.notEqual(USER_SECTION_ALIASES['/shortlists'], '/candidates')
+})

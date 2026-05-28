@@ -81,3 +81,8 @@ test('landing CTA keeps non-subscribed behavior unchanged', () => {
 test('dashboard rendering remains explicit to dashboard pathname', () => {
   assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*<OperationsDashboard/)
 })
+
+test('shortlists route stays canonical and authenticated in app routing', () => {
+  assert.match(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*guardAuthenticatedRoute\([\s\S]*promptMessage: 'Please login to view shortlists\.'[\s\S]*return <ShortlistsPage \/>/)
+  assert.doesNotMatch(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*return <CandidatesPage \/>/)
+})

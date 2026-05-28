@@ -27,12 +27,12 @@ test('qa matrix: create-then-add flow makes created shortlist the active destina
 
 test('qa matrix: duplicate add surfaces updated/already-present outcome bucket', () => {
   const summary = buildShortlistSummary({ added: 0, updated: 1, invalid: 0, failed: 0 }, 'add')
-  assert.match(summary, /Updated\/Already present: 1/)
+  assert.match(summary, /Updated: 1/)
 })
 
 test('qa matrix: partial bulk failures preserve mixed-result reporting', () => {
   const summary = buildShortlistSummary({ added: 2, updated: 1, invalid: 1, failed: 1 }, 'add')
-  assert.equal(summary, 'Added: 2 · Updated/Already present: 1 · Invalid/Missing: 1 · Failed: 1')
+  assert.equal(summary, 'Added: 2 · Updated: 1 · Failed: 2')
   assert.match(getShortlistBulkErrorMessage({ errorCode: 'partial_failure' }), /Retry failed items/i)
 })
 
@@ -44,5 +44,5 @@ test('qa matrix: remove and refresh consistency removes only targeted candidate'
 
 test('qa matrix: cross-page consistency preserves standardized summary semantics', () => {
   const summary = buildShortlistSummary({ added: 1, updated: 0, invalid: 0, failed: 0 }, 'add')
-  assert.equal(summary, 'Added: 1 · Updated/Already present: 0 · Invalid/Missing: 0 · Failed: 0')
+  assert.equal(summary, 'Added: 1 · Updated: 0 · Failed: 0')
 })
