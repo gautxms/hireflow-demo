@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, RefreshCw, Briefcase, CalendarDays, Star, Trash2 } from 'lucide-react'
+import { Plus, Search, RefreshCw, Briefcase, CalendarDays, Trash2 } from 'lucide-react'
 import {
   filterShortlistCandidates,
   getDecisionStatus,
-  getRatingValue,
   getShortlistJobLabel,
   hasShortlistLinkedJob,
+  formatShortlistCandidateScore,
+  getRatingValue,
 } from './shortlistState'
 import './ShortlistManager.css'
 
@@ -199,9 +200,8 @@ export default function ShortlistManager(props) {
             {selectedShortlist && <div className="shortlist-manager__panel-header"><h3>{selectedShortlist.name}</h3><p role="status" aria-live="polite">{getShortlistJobLabel(selectedShortlist)} · {allCandidates.length} candidate(s)</p>{selectedShortlist.description ? <p className="shortlist-manager__muted-text">{selectedShortlist.description}</p> : null}</div>}
             {hasSelectedShortlist && loadingDetails ? <div className="shortlist-manager__skeleton-list" role="status" aria-label="Loading shortlist details"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
             {selectedShortlist && !loadingDetails && paginatedCandidates.length > 0 ? <div className="shortlist-manager__candidate-list">{paginatedCandidates.map((candidate) => {
-              const rating = getRatingValue(candidate)
-              const decisionStatus = getDecisionStatus(candidate)
-              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes added.'}</p><div className="shortlist-manager__chip-list"><span className="shortlist-manager__chip">Decision: {decisionStatus}</span><span className="shortlist-manager__chip"><Star size={14} strokeWidth={1.5} aria-hidden="true" />{rating ? `${rating}/5` : 'Unrated'}</span><span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div><div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
+              const scoreDisplay = formatShortlistCandidateScore(candidate)
+              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{candidate.filename || candidate.resume_id || 'Unnamed candidate'}</h4><p className="shortlist-manager__candidate-notes">{candidate.notes || 'No notes added.'}</p><div className="shortlist-manager__chip-list"><span className={`shortlist-manager__chip ${scoreDisplay.tone === 'muted' ? 'shortlist-manager__chip--muted' : ''}`}>{scoreDisplay.label}</span><span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div><div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
                 const candidateLabel = candidate.filename || candidate.resume_id || 'this candidate'
                 const confirmed = window.confirm(`Remove ${candidateLabel} from this shortlist?`)
                 if (!confirmed) return

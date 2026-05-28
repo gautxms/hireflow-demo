@@ -126,3 +126,5 @@
 }
 
 .shortlist-manager__button:disabled, .shortlist-manager__create-button:disabled, .shortlist-manager__select:disabled, .shortlist-manager__input:disabled { opacity:.55; cursor:not-allowed; }
+
+.shortlist-manager__chip--muted { color: var(--hf-text-4, #666666); border-color: var(--hf-border, #1e1e1e); background: rgba(255,255,255,0.03); }
