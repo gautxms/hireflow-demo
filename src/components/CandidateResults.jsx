@@ -1010,7 +1010,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds, resolveSelectionResumeId)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds, resolveSelectionResumeId)
-  const selectedShortlistName = shortlists.find((item) => item.id === selectedShortlistId)?.name || ''
 
   const avgScore = filtered.length
     ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
@@ -1362,7 +1361,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button"><Upload size={18} strokeWidth={1.5} aria-hidden="true" />Export CSV</button>
           <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
           <button className="touch-target bulk-btn" onClick={() => setIsAddModalOpen(true)} type="button"><Star size={18} strokeWidth={1.5} aria-hidden="true" />Add to shortlist</button>
-          {selectedShortlistName ? <p className="shortlist-manager__muted-text" role="status">Destination shortlist: {selectedShortlistName}</p> : null}
           <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
           <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
           <input
