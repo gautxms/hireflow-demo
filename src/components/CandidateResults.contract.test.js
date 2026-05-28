@@ -173,7 +173,8 @@ test('drawer uses reusable expansion helpers with preview budgets and show more 
 test('shortlist add flow supports create-or-select destination inline', () => {
   assert.match(candidateResultsSource, /destinationShortlistId = await createShortlistInAddFlow\(\)/)
   assert.match(candidateResultsSource, /No shortlist selected\. Create one to continue\./)
-  assert.match(candidateResultsSource, /Destination shortlist: \{selectedShortlistName\}/)
+  assert.match(candidateResultsSource, /<AddToShortlistModal/)
+  assert.doesNotMatch(candidateResultsSource, /Destination shortlist: \{selectedShortlistName\}/)
   assert.match(candidateResultsSource, /isCreatingShortlistInAddFlow/)
 })
 
