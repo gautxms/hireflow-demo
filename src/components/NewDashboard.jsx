@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Check, ChevronDown } from 'lucide-react'
 import API_BASE from '../config/api'
 import { Icon } from './Icon'
 import './NewDashboard.css'
@@ -114,6 +115,167 @@ function summarizeAnalysesTrend(series) {
   const average = values.length ? total / values.length : 0
 
   return { total, peak, average }
+}
+
+
+function DashboardFilterSelect({ label, value, options, onChange, className = '' }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const selectId = useId()
+  const rootRef = useRef(null)
+  const triggerRef = useRef(null)
+  const optionRefs = useRef([])
+  const labelId = `${selectId}-label`
+  const listboxId = `${selectId}-listbox`
+  const safeOptions = useMemo(() => (options.length ? options : [{ value: '', label: 'No options available', disabled: true }]), [options])
+  const selectedIndex = Math.max(0, safeOptions.findIndex((option) => option.value === value))
+  const selectedOption = safeOptions[selectedIndex] || safeOptions[0]
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+
+    const handlePointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    window.requestAnimationFrame(() => optionRefs.current[activeIndex]?.focus())
+  }, [activeIndex, isOpen])
+
+  const openListbox = () => {
+    setActiveIndex(selectedIndex)
+    setIsOpen(true)
+  }
+
+  const closeAndFocusTrigger = () => {
+    setIsOpen(false)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
+  }
+
+  const focusOption = (nextIndex) => {
+    const boundedIndex = (nextIndex + safeOptions.length) % safeOptions.length
+    setActiveIndex(boundedIndex)
+    optionRefs.current[boundedIndex]?.focus()
+  }
+
+  const selectOption = (option) => {
+    if (option.disabled) return
+    onChange(option.value)
+    closeAndFocusTrigger()
+  }
+
+  const handleTriggerKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      if (isOpen) {
+        setIsOpen(false)
+      } else {
+        openListbox()
+      }
+      return
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      openListbox()
+    }
+  }
+
+  const handleOptionKeyDown = (event, index) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      focusOption(index + 1)
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      focusOption(index - 1)
+      return
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault()
+      focusOption(0)
+      return
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault()
+      focusOption(safeOptions.length - 1)
+      return
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      selectOption(safeOptions[index])
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeAndFocusTrigger()
+    }
+  }
+
+  return (
+    <div className={`new-dashboard__field ${className}`.trim()} ref={rootRef}>
+      <span id={labelId} className="new-dashboard__field-label">{label}</span>
+      <div className="new-dashboard__select-shell">
+        <button
+          ref={triggerRef}
+          type="button"
+          className="new-dashboard__select-trigger"
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-labelledby={`${labelId} ${selectId}-value`}
+          aria-controls={listboxId}
+          onClick={() => {
+            if (isOpen) {
+              setIsOpen(false)
+            } else {
+              openListbox()
+            }
+          }}
+          onKeyDown={handleTriggerKeyDown}
+        >
+          <span id={`${selectId}-value`} className="new-dashboard__select-value">{selectedOption.label}</span>
+          <ChevronDown className="new-dashboard__select-chevron" size={18} strokeWidth={1.5} aria-hidden="true" />
+        </button>
+        {isOpen ? (
+          <div id={listboxId} className="new-dashboard__select-menu" role="listbox" aria-labelledby={labelId} tabIndex={-1}>
+            {safeOptions.map((option, index) => {
+              const isSelected = option.value === value
+              return (
+                <button
+                  key={option.value || `option-${index}`}
+                  ref={(node) => { optionRefs.current[index] = node }}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  disabled={option.disabled}
+                  className={`new-dashboard__select-option${isSelected ? ' new-dashboard__select-option--selected' : ''}${index === activeIndex ? ' new-dashboard__select-option--active' : ''}`}
+                  onClick={() => selectOption(option)}
+                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                  onFocus={() => setActiveIndex(index)}
+                >
+                  <span className="new-dashboard__select-option-label">{option.label}</span>
+                  {isSelected ? <Check className="new-dashboard__select-check" size={16} strokeWidth={1.5} aria-hidden="true" /> : null}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 function summarizeScoreTrend(series, fallbackScoredCount = 0, fallbackAverage = null) {
@@ -265,23 +427,26 @@ export default function NewDashboard() {
       <section className="new-dashboard__panel">
         <div className="new-dashboard__filters">
           <div className="new-dashboard__control-group" role="group" aria-label="Dashboard filters">
-            <label className="new-dashboard__field">
-            <span className="new-dashboard__field-label">Date range</span>
-            <select value={rangeDays} onChange={(event) => setRangeDays(event.target.value)} className="new-dashboard__select">
-              <option value="7">Last 7 days</option>
-              <option value="30">Last 30 days</option>
-              <option value="90">Last 90 days</option>
-            </select>
-            </label>
-            <label className="new-dashboard__field new-dashboard__field--wide">
-            <span className="new-dashboard__field-label">Job</span>
-            <select value={jobDescriptionId} onChange={(event) => setJobDescriptionId(event.target.value)} className="new-dashboard__select">
-              <option value="">All jobs</option>
-              {(dashboardData?.jobOptions || []).map((job) => (
-                <option key={job.id} value={job.id}>{job.title}</option>
-              ))}
-            </select>
-            </label>
+            <DashboardFilterSelect
+              label="Date range"
+              value={rangeDays}
+              onChange={setRangeDays}
+              options={[
+                { value: '7', label: 'Last 7 days' },
+                { value: '30', label: 'Last 30 days' },
+                { value: '90', label: 'Last 90 days' },
+              ]}
+            />
+            <DashboardFilterSelect
+              label="Job"
+              value={jobDescriptionId}
+              onChange={setJobDescriptionId}
+              className="new-dashboard__field--wide"
+              options={[
+                { value: '', label: 'All jobs' },
+                ...(dashboardData?.jobOptions || []).map((job) => ({ value: job.id, label: job.title })),
+              ]}
+            />
           </div>
           <div className="new-dashboard__actions" role="group" aria-label="Dashboard actions">
             <button type="button" onClick={loadDashboard} disabled={loading} className="new-dashboard__button hf-btn hf-btn--primary new-dashboard__button--primary">{loading ? 'Refreshing…' : 'Apply filters'}</button>
