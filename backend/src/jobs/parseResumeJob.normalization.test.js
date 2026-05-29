@@ -14,10 +14,16 @@ const { buildNormalizedCandidates, isLegacyWordDocument } = __testables
 
 
 
-test('legacy Word detection trusts .docx filename over misreported application/msword MIME', () => {
-  assert.equal(isLegacyWordDocument({ filename: 'resume.docx', mimeType: 'application/msword' }), false)
+test('legacy Word detection rejects DOC extension, application/msword MIME, and OLE magic', () => {
+  const oleHeader = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00])
+
+  assert.equal(isLegacyWordDocument({ filename: 'resume.docx', mimeType: 'application/msword' }), true)
   assert.equal(isLegacyWordDocument({ filename: 'resume.doc', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), true)
   assert.equal(isLegacyWordDocument({ filename: 'resume', mimeType: 'application/msword' }), true)
+  assert.equal(isLegacyWordDocument({ filename: 'resume.DOC', mimeType: 'application/octet-stream' }), true)
+  assert.equal(isLegacyWordDocument({ filename: 'resume.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), false)
+  assert.equal(isLegacyWordDocument({ filename: 'resume.pdf', mimeType: 'application/pdf' }), false)
+  assert.equal(isLegacyWordDocument({ filename: 'resume.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', fileBuffer: oleHeader }), true)
 })
 
 test('buildNormalizedCandidates preserves fractional/integer/null years_experience values', () => {

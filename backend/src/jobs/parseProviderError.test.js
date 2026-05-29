@@ -99,9 +99,10 @@ test('normalizeProviderError categorizes DOCX extraction failures before provide
 })
 
 test('normalizeProviderError categorizes legacy DOC as unsupported format before provider calls', () => {
-  const result = normalizeProviderError('legacy_word_format::Legacy .doc files are not supported')
+  const result = normalizeProviderError('resume_unsupported_legacy_doc::Legacy Word .doc files are not supported. Please upload this resume as DOCX or text-based PDF.')
   assert.equal(result.category, 'unsupported_format')
   assert.equal(result.action, 'reupload_as_docx_or_pdf')
+  assert.equal(result.userMessage, 'Legacy Word .doc files are not supported. Please upload this resume as DOCX or text-based PDF.')
 })
 
 
