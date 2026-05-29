@@ -190,3 +190,124 @@ test('runParse cancels before AI when parent analysis no longer exists', async (
     true,
   )
 })
+
+test('docx_empty_extraction failure does not create Anthropic token usage telemetry', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+
+  const error = new Error('docx_empty_extraction::Unable to extract readable text from DOCX file resume.docx')
+  error.extractionCategory = 'docx_empty_extraction'
+
+  const result = await __testables.persistAiFailureTokenUsage({
+    error,
+    resumeId: 'resume-docx-empty',
+    parseJobId: 'parse-job-docx-empty',
+    userId: 7,
+    jobDescriptionId: null,
+    filename: 'resume.docx',
+    jobDescriptionContext: { hasContext: false, source: 'none' },
+  })
+
+  assert.deepEqual(result, { persisted: 0, reason: 'pre_provider_local_extraction_failure' })
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO resume_analysis_token_usage')), false)
+  assert.equal(queries.some(({ params }) => params?.includes('anthropic')), false)
+})
+
+test('real Anthropic provider failure still creates Anthropic token usage telemetry', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+
+  const error = new Error('provider_timeout::Anthropic request timed out')
+  error.attempts = [{
+    success: false,
+    provider: 'anthropic-primary',
+    model: 'claude-sonnet-4-5',
+    credentialLabel: 'primary',
+    providerSource: 'admin_settings',
+    failureCategory: 'provider_timeout',
+    failureReason: 'request timed out',
+    tokenUsage: {
+      usageAvailable: false,
+      unavailableReason: 'provider_request_failed:provider_timeout:request timed out',
+    },
+  }]
+
+  const result = await __testables.persistAiFailureTokenUsage({
+    error,
+    resumeId: 'resume-anthropic-failure',
+    parseJobId: 'parse-job-anthropic-failure',
+    userId: 7,
+    jobDescriptionId: null,
+    filename: 'resume.pdf',
+    jobDescriptionContext: { hasContext: false, source: 'none' },
+  })
+
+  const inserts = queries.filter(({ sql }) => sql.includes('INSERT INTO resume_analysis_token_usage'))
+  assert.deepEqual(result, { persisted: 1, reason: 'provider_attempts' })
+  assert.equal(inserts.length, 1)
+  assert.equal(inserts[0].params[4], 'anthropic-primary')
+  assert.equal(inserts[0].params[6], false)
+  assert.equal(inserts[0].params[7], 'provider_request_failed:provider_timeout:request timed out')
+})
+
+test('successful Anthropic and OpenAI usage telemetry persists token counts and costs', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+
+  await __testables.persistAiSuccessTokenUsage({
+    aiResponse: {
+      attempts: [
+        {
+          success: true,
+          provider: 'anthropic-primary',
+          model: 'claude-sonnet-4-5',
+          credentialLabel: 'primary',
+          providerSource: 'admin_settings',
+          tokenUsage: {
+            usageAvailable: true,
+            inputTokens: 1200,
+            outputTokens: 300,
+            totalTokens: 1500,
+            estimatedCostUsd: 0.0045,
+          },
+        },
+        {
+          success: true,
+          provider: 'openai-fallback',
+          model: 'gpt-4.1-mini',
+          credentialLabel: 'fallback',
+          providerSource: 'admin_settings',
+          tokenUsage: {
+            usageAvailable: true,
+            inputTokens: 1000,
+            outputTokens: 250,
+            totalTokens: 1250,
+            estimatedCostUsd: 0.0012,
+          },
+        },
+      ],
+    },
+    resumeId: 'resume-success',
+    parseJobId: 'parse-job-success',
+    userId: 7,
+    jobDescriptionId: null,
+    filename: 'resume.pdf',
+    jobDescriptionContext: { hasContext: true, source: 'manual' },
+  })
+
+  const inserts = queries.filter(({ sql }) => sql.includes('INSERT INTO resume_analysis_token_usage'))
+  assert.equal(inserts.length, 2)
+  assert.deepEqual(inserts.map(({ params }) => params[4]), ['anthropic-primary', 'openai-fallback'])
+  assert.deepEqual(inserts.map(({ params }) => params[6]), [true, true])
+  assert.deepEqual(inserts.map(({ params }) => params[10]), [1500, 1250])
+  assert.deepEqual(inserts.map(({ params }) => params[11]), [0.0045, 0.0012])
+})
