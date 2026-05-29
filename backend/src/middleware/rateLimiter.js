@@ -148,7 +148,7 @@ export const generalApiLimiterAuth = rateLimit({
 })
 
 function resolveUploadDailyLimit(req) {
-  return req.subscriptionStatus === 'active' ? 100 : 10
+  return req.subscriptionStatus === 'active' ? 800 : 10
 }
 
 export const uploadLimiter = rateLimit({

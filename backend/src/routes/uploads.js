@@ -62,6 +62,14 @@ async function ensureResumeParseColumns() {
   `)
 }
 
+function requireResumeFiles(req, res, next) {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: 'At least one resume file is required' })
+  }
+
+  return next()
+}
+
 async function ensureAnalysisTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS analyses (
@@ -97,7 +105,6 @@ router.post(
   requireAuth,
   generalApiLimiterAuth,
   requireActiveSubscription,
-  enforceUploadLimit,
   uploadLimiter,
   (req, res, next) => {
     upload.array('resumes')(req, res, (error) => {
@@ -114,12 +121,10 @@ router.post(
       return res.status(400).json({ error: error.message || 'Invalid file upload request' })
     })
   },
+  requireResumeFiles,
+  enforceUploadLimit,
   trackUploadUsage,
   async (req, res) => {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'At least one resume file is required' })
-    }
-
     let analysisId = null
 
     try {

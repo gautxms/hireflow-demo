@@ -2,6 +2,8 @@ import { pool } from '../db/client.js'
 
 const ACTIVE_STATUSES = new Set(['active', 'trialing'])
 const PAID_STATUSES = new Set(['active'])
+const PAID_MONTHLY_RESUME_ANALYSIS_LIMIT = 800
+const TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT = 10
 
 function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
@@ -19,7 +21,7 @@ async function getUsageOverride(userId, monthStart) {
   return overrideResult.rows[0] || null
 }
 
-async function getUsageCount(userId, ipAddress, monthStart, shouldResetUsage = false) {
+async function getUsageCount(userId, monthStart, shouldResetUsage = false) {
   if (shouldResetUsage) {
     return 0
   }
@@ -28,9 +30,8 @@ async function getUsageCount(userId, ipAddress, monthStart, shouldResetUsage = f
     `SELECT COUNT(*)::INT AS usage_count
      FROM usage_log
      WHERE user_id = $1
-       AND ip_address = $2
-       AND month_start = $3`,
-    [userId, ipAddress, monthStart],
+       AND month_start = $2`,
+    [userId, monthStart],
   )
 
   return usageResult.rows[0]?.usage_count ?? 0
@@ -41,7 +42,9 @@ function resolveUploadLimit(subscriptionStatus, usageOverride) {
     return usageOverride.upload_limit
   }
 
-  return PAID_STATUSES.has(subscriptionStatus) ? 100 : 10
+  return PAID_STATUSES.has(subscriptionStatus)
+    ? PAID_MONTHLY_RESUME_ANALYSIS_LIMIT
+    : TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT
 }
 
 export async function requireActiveSubscription(req, res, next) {
@@ -81,18 +84,23 @@ export async function enforceUploadLimit(req, res, next) {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown'
     const usageOverride = await getUsageOverride(req.userId, monthStart)
     const uploadLimit = resolveUploadLimit(req.subscriptionStatus, usageOverride)
-    const currentUsage = await getUsageCount(req.userId, ipAddress, monthStart, usageOverride?.reset_usage)
+    const currentUsage = await getUsageCount(req.userId, monthStart, usageOverride?.reset_usage)
+    const requestedUploads = Math.max(req.files?.length || 1, 1)
+    const projectedUsage = currentUsage + requestedUploads
+    const remainingUploads = Math.max(uploadLimit - currentUsage, 0)
 
-    if (currentUsage >= uploadLimit) {
+    if (projectedUsage > uploadLimit) {
       return res.status(429).json({
         error: 'Upload limit reached',
-        message: `You have reached your monthly upload limit (${uploadLimit}). Contact support or upgrade your plan to continue.`,
+        message: `This upload would exceed your monthly resume analysis limit (${uploadLimit}). Contact support or upgrade your plan to continue.`,
         limit: uploadLimit,
         used: currentUsage,
+        requested: requestedUploads,
+        remaining: remainingUploads,
       })
     }
 
-    const percentUsed = Math.round((currentUsage / uploadLimit) * 100)
+    const percentUsed = Math.round((projectedUsage / uploadLimit) * 100)
     if (percentUsed >= 80) {
       res.set('X-Usage-Warning', `You have used ${percentUsed}% of your monthly upload quota.`)
     }
@@ -102,6 +110,8 @@ export async function enforceUploadLimit(req, res, next) {
       ipAddress,
       uploadLimit,
       currentUsage,
+      requestedUploads,
+      remainingUploads,
       usageOverride,
     }
 
@@ -118,10 +128,13 @@ export async function trackUploadUsage(req, _res, next) {
   }
 
   try {
+    const uploadCount = Math.max(req.usageContext.requestedUploads || 1, 1)
+
     await pool.query(
       `INSERT INTO usage_log (user_id, ip_address, month_start)
-       VALUES ($1, $2, $3)`,
-      [req.userId, req.usageContext.ipAddress, req.usageContext.monthStart],
+       SELECT $1, $2, $3
+       FROM generate_series(1, $4)`,
+      [req.userId, req.usageContext.ipAddress, req.usageContext.monthStart, uploadCount],
     )
   } catch (error) {
     console.error('[Subscription] Failed to track upload usage:', error)
