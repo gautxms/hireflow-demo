@@ -152,8 +152,18 @@ router.get('/dashboard/kpis', async (req, res) => {
              AND a.created_at < $3::timestamptz
              AND ($4::text IS NULL OR a.job_description_id::text = $4::text)
          ),
+         completed_scored_resume_window AS (
+           SELECT DISTINCT r.id, r.profile_score
+           FROM resumes r
+           INNER JOIN analysis_window aw ON aw.resume_id = r.id
+           WHERE r.user_id = $1
+             AND aw.status = 'complete'
+             AND r.created_at >= $2::timestamptz
+             AND r.created_at < $3::timestamptz
+             AND r.profile_score IS NOT NULL
+         ),
          resume_window AS (
-           SELECT r.id, r.profile_score
+           SELECT DISTINCT r.id, r.profile_score
            FROM resumes r
            WHERE r.user_id = $1
              AND r.created_at >= $2::timestamptz
@@ -177,7 +187,8 @@ router.get('/dashboard/kpis', async (req, res) => {
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window) AS analyses_run_count,
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status = 'complete') AS analyses_completed_count,
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status IN ('failed', 'partial')) AS analyses_failed_count,
-           (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM resume_window WHERE profile_score IS NOT NULL) AS avg_score,
+           (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM completed_scored_resume_window) AS avg_score,
+           (SELECT COUNT(*)::int FROM completed_scored_resume_window) AS scored_count,
            (SELECT COUNT(*)::int FROM resume_window) AS resumes_count,
            (SELECT COUNT(*)::int FROM shortlist_window) AS shortlisted_count`,
         [filters.userId, filters.startDate, filters.endDateExclusive, filters.jobDescriptionId],
@@ -215,15 +226,24 @@ router.get('/dashboard/kpis', async (req, res) => {
            ) analyses_for_counts
            GROUP BY 1
          ),
-         scores_by_day AS (
-           SELECT date_trunc('day', r.created_at)::date AS day,
-                  ROUND(AVG(r.profile_score)::numeric, 2) AS avg_score
-           FROM resumes r
-           INNER JOIN filtered_resumes fr ON fr.resume_id = r.id
+         scored_resumes AS (
+           SELECT DISTINCT
+             fai.resume_id,
+             r.created_at,
+             r.profile_score
+           FROM filtered_analysis_items fai
+           INNER JOIN resumes r ON r.id = fai.resume_id
            WHERE r.user_id = $1
+             AND fai.status = 'complete'
              AND r.created_at >= $2::timestamptz
              AND r.created_at < $3::timestamptz
              AND r.profile_score IS NOT NULL
+         ),
+         scores_by_day AS (
+           SELECT date_trunc('day', created_at)::date AS day,
+                  SUM(profile_score)::numeric AS score_sum,
+                  COUNT(*)::int AS score_count
+           FROM scored_resumes
            GROUP BY 1
          ),
          shortlists_by_day AS (
@@ -252,7 +272,8 @@ router.get('/dashboard/kpis', async (req, res) => {
                   COALESCE(a.analyses_run, 0) AS analyses_run,
                   COALESCE(a.analyses_completed, 0) AS analyses_completed,
                   COALESCE(a.analyses_failed, 0) AS analyses_failed,
-                  sb.avg_score,
+                  sb.score_sum,
+                  COALESCE(sb.score_count, 0) AS score_count,
                   COALESCE(sl.shortlisted_resumes, 0) AS shortlisted_resumes,
                   COALESCE(rb.resumes_uploaded, 0) AS resumes_uploaded
            FROM days d
@@ -266,7 +287,8 @@ router.get('/dashboard/kpis', async (req, res) => {
            SUM(analyses_run)::int AS analyses_run,
            SUM(analyses_completed)::int AS analyses_completed,
            SUM(analyses_failed)::int AS analyses_failed,
-           ROUND(AVG(avg_score)::numeric, 2) AS avg_score,
+           ROUND((SUM(score_sum) / NULLIF(SUM(score_count), 0))::numeric, 2) AS avg_score,
+           SUM(score_count)::int AS score_count,
            SUM(shortlisted_resumes)::int AS shortlisted_resumes,
            SUM(resumes_uploaded)::int AS resumes_uploaded
          FROM base_daily
@@ -310,12 +332,14 @@ router.get('/dashboard/kpis', async (req, res) => {
     const analysesFailedCount = Number(summary.analyses_failed_count || 0)
     const resumesCount = Number(summary.resumes_count || 0)
     const shortlistedCount = Number(summary.shortlisted_count || 0)
+    const scoredCount = Number(summary.scored_count || 0)
 
     const kpis = {
       analysesRunCount,
       completionRate: formatRate(analysesCompletedCount, analysesRunCount),
       analysesFailedCount,
-      avgScore: Number(summary.avg_score || 0),
+      avgScore: summary.avg_score === null || summary.avg_score === undefined ? null : Number(summary.avg_score),
+      scoredCount,
       shortlistedRate: formatRate(shortlistedCount, resumesCount),
     }
 
@@ -325,13 +349,16 @@ router.get('/dashboard/kpis', async (req, res) => {
       const analysesFailed = Number(row.analyses_failed || 0)
       const resumesUploaded = Number(row.resumes_uploaded || 0)
       const shortlistedResumes = Number(row.shortlisted_resumes || 0)
+      const scoreCount = Number(row.score_count || 0)
+      const avgScore = scoreCount > 0 && row.avg_score !== null && row.avg_score !== undefined ? Number(row.avg_score) : null
 
       return {
         periodStart: row.bucket,
         analysesRunCount: analysesRun,
         completionRate: formatRate(analysesCompleted, analysesRun),
         analysesFailedCount: analysesFailed,
-        avgScore: Number(row.avg_score || 0),
+        avgScore: Number.isFinite(avgScore) ? avgScore : null,
+        scoreCount,
         shortlistedRate: formatRate(shortlistedResumes, resumesUploaded),
         resumesUploaded,
       }
@@ -359,6 +386,7 @@ router.get('/dashboard/kpis', async (req, res) => {
     const averageScoreTrend = timeSeries.map((row) => ({
       periodStart: row.periodStart,
       value: row.avgScore,
+      scoredCount: row.scoreCount,
     }))
     const completionRateTrend = timeSeries.map((row) => ({
       periodStart: row.periodStart,
@@ -369,7 +397,7 @@ router.get('/dashboard/kpis', async (req, res) => {
       value: row.shortlistedRate,
     }))
 
-    const hasScoreData = timeSeries.some((row) => Number(row.avgScore || 0) > 0)
+    const hasScoreData = timeSeries.some((row) => row.avgScore !== null && row.avgScore !== undefined && row.scoreCount > 0)
 
     const payload = {
       schemaVersion: KPI_SCHEMA_VERSION,
@@ -413,6 +441,7 @@ router.get('/dashboard/kpis', async (req, res) => {
         ['analyses_run_count', payload.kpis.analysesRunCount],
         ['completion_rate', payload.kpis.completionRate],
         ['avg_score', payload.kpis.avgScore],
+        ['scored_count', payload.kpis.scoredCount],
         ['shortlisted_rate', payload.kpis.shortlistedRate],
       ]
       const trendHeader = ['trend_name', 'period_start', 'value']

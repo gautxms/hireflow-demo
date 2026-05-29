@@ -19,7 +19,19 @@ function formatDateLabel(value) {
 }
 
 function formatScore(value) {
-  return Number(value || 0).toFixed(2)
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '—'
+}
+
+function parseFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') return null
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+function formatCompactNumber(value) {
+  const numericValue = Number(value || 0)
+  return Number.isFinite(numericValue) ? numericValue.toLocaleString() : '0'
 }
 
 function buildAxisTicks(min, max, count = 4) {
@@ -45,9 +57,9 @@ function buildChartBars(series, key) {
   if (!series.length) return []
   const normalized = series.map((item) => {
     const rawValue = item?.[key]
-    const hasData = rawValue !== null && rawValue !== undefined
-    const value = hasData ? Number(rawValue) : 0
-    return { hasData, value: Number.isFinite(value) ? value : 0 }
+    const value = parseFiniteNumber(rawValue)
+    const hasData = value !== null
+    return { hasData, value: hasData ? value : null }
   })
   const valuesWithData = normalized.filter((item) => item.hasData).map((item) => item.value)
   const max = Math.max(...valuesWithData, 1)
@@ -77,6 +89,38 @@ function buildLineSegments(series) {
 
   if (current.length > 1) segments.push(current)
   return segments
+}
+
+function summarizeAnalysesTrend(series) {
+  const values = series.map((item) => ({
+    label: formatDateLabel(item?.periodStart),
+    value: parseFiniteNumber(item?.value) ?? 0,
+  }))
+  const total = values.reduce((sum, item) => sum + item.value, 0)
+  const peak = values.reduce((best, item) => (item.value > best.value ? item : best), { label: '—', value: 0 })
+  const average = values.length ? total / values.length : 0
+
+  return { total, peak, average }
+}
+
+function summarizeScoreTrend(series, fallbackScoredCount = 0, fallbackAverage = null) {
+  const scoredPoints = series
+    .map((item) => ({
+      label: formatDateLabel(item?.periodStart),
+      value: parseFiniteNumber(item?.value),
+      scoredCount: parseFiniteNumber(item?.scoredCount) ?? 0,
+    }))
+    .filter((item) => item.value !== null)
+  const totalScoredCount = scoredPoints.reduce((sum, item) => sum + item.scoredCount, 0) || Number(fallbackScoredCount || 0)
+  const weightedScoreTotal = scoredPoints.reduce((sum, item) => sum + (item.value * item.scoredCount), 0)
+  const weightedAverage = totalScoredCount > 0 && weightedScoreTotal > 0 ? weightedScoreTotal / totalScoredCount : null
+  const fallbackAverageValue = parseFiniteNumber(fallbackAverage)
+  const average = weightedAverage ?? fallbackAverageValue ?? (scoredPoints.length
+    ? scoredPoints.reduce((sum, item) => sum + item.value, 0) / scoredPoints.length
+    : null)
+  const highest = scoredPoints.reduce((best, item) => (best === null || item.value > best.value ? item : best), null)
+
+  return { scoredPoints, average, highest, totalScoredCount }
 }
 
 export default function NewDashboard() {
@@ -167,25 +211,31 @@ export default function NewDashboard() {
   const kpis = dashboardData?.kpis || {
     analysesRunCount: 0,
     completionRate: 0,
-    avgScore: 0,
+    avgScore: null,
+    scoredCount: 0,
     shortlistedRate: 0,
   }
 
   const analysesTrend = useMemo(() => dashboardData?.charts?.analysesTrend || [], [dashboardData])
   const averageScoreTrend = useMemo(() => dashboardData?.charts?.averageScoreTrend || [], [dashboardData])
-  const hasScoreData = Boolean(dashboardData?.flags?.hasScoreData)
-  const isAnalysesEmpty = fetchState === 'success' && analysesTrend.length === 0
+  const analysesSummary = useMemo(() => summarizeAnalysesTrend(analysesTrend), [analysesTrend])
+  const scoreSummary = useMemo(() => summarizeScoreTrend(averageScoreTrend, kpis.scoredCount, kpis.avgScore), [averageScoreTrend, kpis.avgScore, kpis.scoredCount])
+  const hasScoreData = Boolean(dashboardData?.flags?.hasScoreData) || scoreSummary.scoredPoints.length > 0
+  const isAnalysesEmpty = fetchState === 'success' && (analysesTrend.length === 0 || analysesSummary.total <= 0)
   const isScoreEmpty = fetchState === 'success' && averageScoreTrend.length === 0
+  const hasSparseScoreData = fetchState === 'success' && hasScoreData && scoreSummary.scoredPoints.length < 3
   const analysesBars = useMemo(() => buildChartBars(analysesTrend, 'value'), [analysesTrend])
   const averageScoreBars = useMemo(() => buildChartBars(averageScoreTrend, 'value'), [averageScoreTrend])
-  const analysesMax = useMemo(() => Math.max(...analysesTrend.map((item) => Number(item.value || 0)), 1), [analysesTrend])
+  const analysesMax = useMemo(() => Math.max(...analysesTrend.map((item) => parseFiniteNumber(item.value) ?? 0), 1), [analysesTrend])
   const analysesTicks = useMemo(() => buildAxisTicks(0, analysesMax, 4).map((value) => Math.round(value)), [analysesMax])
   const analysesDateTicks = useMemo(() => getIntermediateDateTicks(analysesTrend), [analysesTrend])
-  const scoreValues = useMemo(() => averageScoreTrend.map((item) => Number(item.value || 0)), [averageScoreTrend])
-  const scoreMin = useMemo(() => Math.min(...scoreValues, 0), [scoreValues])
-  const scoreMax = useMemo(() => Math.max(...scoreValues, 1), [scoreValues])
-  const scoreTicks = useMemo(() => buildAxisTicks(scoreMin, scoreMax, 4).map((value) => Number(value.toFixed(2))), [scoreMin, scoreMax])
+  const scoreValues = useMemo(() => averageScoreTrend.map((item) => parseFiniteNumber(item.value)).filter((value) => value !== null), [averageScoreTrend])
+  const scoreMin = useMemo(() => (scoreValues.length ? Math.min(...scoreValues) : 0), [scoreValues])
+  const scoreMax = useMemo(() => (scoreValues.length ? Math.max(...scoreValues) : 10), [scoreValues])
+  const scoreTicks = useMemo(() => buildAxisTicks(Math.max(0, scoreMin - 0.5), Math.min(10, scoreMax + 0.5), 4).map((value) => Number(value.toFixed(2))), [scoreMin, scoreMax])
   const scoreDateTicks = useMemo(() => getIntermediateDateTicks(averageScoreTrend), [averageScoreTrend])
+  const showAnalysesChart = analysesTrend.length > 0 && !isAnalysesEmpty
+  const showScoreChart = averageScoreTrend.length > 0 && hasScoreData && !hasSparseScoreData
 
   return (
     <div className="new-dashboard">
@@ -235,7 +285,7 @@ export default function NewDashboard() {
         {[
           ['Analyses Run', kpis.analysesRunCount, 'file'],
           ['Completion Rate', formatPercent(kpis.completionRate), 'target'],
-          ['Average Score', Number(kpis.avgScore || 0).toFixed(2), 'chart'],
+          ['Average Score', formatScore(kpis.avgScore), 'chart'],
           ['Shortlisted Rate', formatPercent(kpis.shortlistedRate), 'users'],
         ].map(([label, value, iconName]) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
@@ -251,35 +301,51 @@ export default function NewDashboard() {
       <section className="new-dashboard__trends">
         <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-analyses-trend-title">
           <h3 id="dashboard-analyses-trend-title" className="new-dashboard__trend-title"><Icon name="chart" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Analyses trend</h3>
+          <div className="new-dashboard__trend-summary" aria-label="Analyses trend summary">
+            <span><strong>{formatCompactNumber(analysesSummary.total)}</strong>Total analyses</span>
+            <span><strong>{formatCompactNumber(analysesSummary.peak.value)}</strong>Peak · {analysesSummary.peak.label}</span>
+            <span><strong>{analysesSummary.average.toFixed(1)}</strong>Avg/day</span>
+          </div>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
-          {isAnalysesEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
-          {analysesTrend.length > 0 && (
+          {isAnalysesEmpty ? <p className="new-dashboard__empty-state">No analyses yet. Run an analysis to start tracking activity trends.</p> : null}
+          {showAnalysesChart && (
             <div className="new-dashboard__chart-shell">
               <div className="new-dashboard__y-axis" aria-hidden="true">
                 {analysesTicks.map((tick) => <span key={`analyses-tick-${tick}`}>{tick}</span>)}
               </div>
               <div className="new-dashboard__chart" aria-label="Analyses trend bar chart with count axis and date ticks">
-              {analysesBars.map((bar) => (
-                <button key={bar.id} type="button" className="new-dashboard__bar-column" aria-label={bar.hasData ? `${bar.label}: ${bar.value} analyses` : `${bar.label}: no data for this period`} data-tooltip={bar.hasData ? `${bar.label}: ${bar.value} analyses` : `${bar.label}: No data`} data-state={bar.hasData ? 'value' : 'missing'}>
-                  <div className={`new-dashboard__bar ${bar.hasData ? 'new-dashboard__bar--primary' : 'new-dashboard__bar--missing'}`} style={{ height: `${bar.height}%` }} />
-                </button>
-              ))}
+              {analysesBars.map((bar) => {
+                const isPeak = bar.hasData && bar.value === analysesSummary.peak.value && analysesSummary.peak.value > 0
+                return (
+                  <button key={bar.id} type="button" className="new-dashboard__bar-column" aria-label={bar.hasData ? `${bar.label}: ${bar.value} analyses` : `${bar.label}: no data for this period`} data-tooltip={bar.hasData ? `${bar.label}: ${bar.value} analyses` : `${bar.label}: No data`} data-state={bar.hasData ? 'value' : 'missing'}>
+                    <div className={`new-dashboard__bar ${bar.hasData ? 'new-dashboard__bar--primary' : 'new-dashboard__bar--missing'} ${isPeak ? 'new-dashboard__bar--peak' : ''}`} style={{ height: `${bar.height}%` }} />
+                  </button>
+                )
+              })}
               </div>
             </div>
           )}
-          <div className="new-dashboard__x-axis" aria-hidden="true">
-            {analysesDateTicks.map((label) => <span key={`analyses-date-${label}`}>{label}</span>)}
-          </div>
+          {showAnalysesChart ? (
+            <div className="new-dashboard__x-axis" aria-hidden="true">
+              {analysesDateTicks.map((label) => <span key={`analyses-date-${label}`}>{label}</span>)}
+            </div>
+          ) : null}
         </article>
 
         <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-average-score-trend-title">
           <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average score trend</h3>
+          <div className="new-dashboard__trend-summary" aria-label="Average score trend summary">
+            <span><strong>{formatScore(scoreSummary.average)}</strong>Average score</span>
+            <span><strong>{formatScore(scoreSummary.highest?.value)}</strong>High · {scoreSummary.highest?.label || '—'}</span>
+            <span><strong>{formatCompactNumber(scoreSummary.totalScoredCount)}</strong>Scored</span>
+          </div>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
-          {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No score data available for selected filters.</p> : null}
+          {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No completed score data yet. Complete analyses to start score tracking.</p> : null}
           {isScoreEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
-          {averageScoreTrend.length > 0 && hasScoreData && (
+          {hasSparseScoreData ? <p className="new-dashboard__empty-state">Not enough score data yet. Complete more analyses to see score trends.</p> : null}
+          {showScoreChart && (
             <div className="new-dashboard__chart-shell">
               <div className="new-dashboard__y-axis" aria-hidden="true">
                 {scoreTicks.map((tick) => <span key={`score-tick-${tick}`}>{formatScore(tick)}</span>)}
@@ -290,8 +356,8 @@ export default function NewDashboard() {
                     <polyline
                       key={segment.join('-')}
                       fill="none"
-                      stroke="var(--color-accent-green-hover)"
-                      strokeWidth="2.5"
+                      stroke="var(--color-accent-green)"
+                      strokeWidth="2"
                       points={segment.join(' ')}
                     />
                   ))}
@@ -301,7 +367,7 @@ export default function NewDashboard() {
                     key={bar.id}
                     type="button"
                     className="new-dashboard__point"
-                    style={{ left: `${(index / Math.max(averageScoreBars.length - 1, 1)) * 100}%`, bottom: `${bar.height}%` }}
+                    style={{ left: `${(index / Math.max(averageScoreBars.length - 1, 1)) * 100}%`, bottom: `${bar.hasData ? bar.height : 6}%` }}
                     aria-label={bar.hasData ? `${bar.label}: ${formatScore(bar.value)} score` : `${bar.label}: no score data for this period`}
                     data-tooltip={bar.hasData ? `${bar.label}: ${formatScore(bar.value)} score` : `${bar.label}: No score data`}
                     data-state={bar.hasData ? 'value' : 'missing'}
@@ -310,9 +376,11 @@ export default function NewDashboard() {
               </div>
             </div>
           )}
-          <div className="new-dashboard__x-axis" aria-hidden="true">
-            {scoreDateTicks.map((label) => <span key={`score-date-${label}`}>{label}</span>)}
-          </div>
+          {showScoreChart ? (
+            <div className="new-dashboard__x-axis" aria-hidden="true">
+              {scoreDateTicks.map((label) => <span key={`score-date-${label}`}>{label}</span>)}
+            </div>
+          ) : null}
         </article>
       </section>
     </div>
