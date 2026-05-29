@@ -1600,11 +1600,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <DrawerSection title="Summary">
               <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`summary-${expandedCandidateKey}`} />
             </DrawerSection>
-            <DrawerSection title="Tags" className="dd-section-card--compact">
-              {detailTags.length > 0 ? (
-                <div className="dd-top-skills">{detailTags.map((tag) => <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-detail-tag-${tag}`}>{tag}</span>)}</div>
-              ) : <p className="dd-summary">No tags</p>}
-            </DrawerSection>
             {detailVm.recommendationText && (
               <DrawerSection title="Recommended action" className="dd-section-card--compact">
                 <ExpandableText text={detailVm.recommendationText} className="dd-recommended-action" clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`recommendation-${expandedCandidateKey}`} />
@@ -1625,19 +1620,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <DrawerSection title="AI reasoning" className="dd-section-card--compact">
               <ExpandableText text={detailVm.reasoningText} clampClassName="dd-summary--clamp-6" buttonLabel="Show more" collapseLabel="Show less" lineLimit={7} resetKey={expandedCandidateKey} controlsId={`reasoning-${expandedCandidateKey}`} />
             </DrawerSection>
+            <DrawerSection title="Tags" className="dd-section-card--compact">
+              {detailTags.length > 0 ? (
+                <div className="dd-top-skills">{detailTags.map((tag) => <span className="dd-top-skill dd-top-skill--all" key={`${expandedCandidateKey}-detail-tag-${tag}`}>{tag}</span>)}</div>
+              ) : <p className="dd-summary">No tags</p>}
+            </DrawerSection>
           </div>
           <div className="dd-col">
-            <DrawerSection title="Score breakdown">
-            {hasResolvableBreakdownMetrics ? (
-              <div className="dd-analysis-box dd-breakdown">
-                {resolvableScoreBreakdownRows.map((row) => (
-                  <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
-                    <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="dd-summary">Score breakdown unavailable</p>}
-            </DrawerSection>
             <DrawerSection title="Matched skills" className="dd-section-card--compact" badge={<span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span>}>
               <ExpandableList items={detailVm.matchedSkills} previewCount={5} resetKey={expandedCandidateKey} controlsId={`matched-skills-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>)} />
             </DrawerSection>
@@ -1664,6 +1653,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             )}
           </div>
           <div className="dd-col">
+            <DrawerSection title="Score breakdown">
+              {hasResolvableBreakdownMetrics ? (
+                <div className="dd-analysis-box dd-breakdown">
+                  {resolvableScoreBreakdownRows.map((row) => (
+                    <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
+                      <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="dd-summary">Score breakdown unavailable</p>}
+            </DrawerSection>
             <DrawerSection title="Strengths">
               <div className="dd-analysis-box dd-analysis-box--green">
                 {detailVm.candidateStrengths.length > 0
@@ -1696,25 +1696,27 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
               </div>
             </DrawerSection>
-            <DrawerSection title="View resume" className="dd-section-card--compact">
+            <DrawerSection title="Resume" className="dd-section-card--compact dd-section-card--resume">
               <div className="dd-resume-file">
-                <FileText size={16} strokeWidth={1.6} aria-hidden="true" />
-                <div>
+                <div className="dd-resume-icon">
+                  <FileText size={18} strokeWidth={1.5} aria-hidden="true" />
+                </div>
+                <div className="dd-resume-copy">
                   <div className="dd-resume-filename">{detailVm.resumeFileLabel}</div>
                   <div className="dd-resume-meta">
-                    {hasResumeForOpen ? 'Open the uploaded resume in a new tab.' : 'Resume file is unavailable for this candidate.'}
+                    {hasResumeForOpen ? 'Uploaded resume available to open.' : 'Resume file is unavailable for this candidate.'}
                   </div>
-                  <button
-                    className="hf-btn hf-btn--secondary dd-btn-ghost dd-toggle-skills"
-                    type="button"
-                    onClick={() => openCandidateResumeInNewTab(candidate)}
-                    disabled={!hasResumeForOpen}
-                    aria-label={hasResumeForOpen ? `View resume for ${detailVm.candidateName}` : 'Resume unavailable'}
-                  >
-                    <ExternalLink size={16} strokeWidth={1.5} aria-hidden="true" />
-                    <span>View resume</span>
-                  </button>
                 </div>
+                <button
+                  className="dd-resume-action"
+                  type="button"
+                  onClick={() => openCandidateResumeInNewTab(candidate)}
+                  disabled={!hasResumeForOpen}
+                  aria-label={hasResumeForOpen ? `Open resume for ${detailVm.candidateName}` : 'Resume unavailable'}
+                >
+                  <span>Open</span>
+                  <ExternalLink size={16} strokeWidth={1.5} aria-hidden="true" />
+                </button>
               </div>
             </DrawerSection>
             {integrityChecks.length > 0 && <div className="dd-analysis-box">{integrityChecks.map((check, idx) => (<div className={`dd-list-item ${check?.status === 'issue' ? 'dd-list-item--warn' : ''}`} key={`${expandedCandidateKey}-integrity-${idx}`}>{check?.status === 'issue' ? <AlertTriangle size={18} strokeWidth={1.5} /> : <CheckCircle size={18} strokeWidth={1.5} />}<span>{toDisplayText(check?.label || check, 'Unavailable')}</span></div>))}</div>}
