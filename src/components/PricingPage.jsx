@@ -4,9 +4,9 @@ import '../styles/pricing-page-marketing.css'
 
 const FAQ_ITEMS = [
   { q: 'Can I change plans anytime?', a: 'Yes, you can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.' },
-  { q: 'What if I need more resumes?', a: 'Contact our sales team for custom volume packages. We offer discounts for high-volume users.' },
+  { q: 'What if I need more than 800 resumes/month?', a: 'Contact our sales team for custom volume packages. We offer discounts for high-volume users.' },
   { q: 'Is there a free trial?', a: 'Yes! Start with 14 days free on any plan. No credit card required.' },
-  { q: 'Do you offer annual billing?', a: 'Yes, save 20% with annual billing. Available on all plans.' }
+  { q: 'Do you offer annual billing?', a: 'Annual plans include the same monthly fair-use allowance of up to 800 resume analyses/month. Annual billing gives you a discounted yearly price, and your resume allowance resets each billing period.' }
 ]
 
 export default function PricingPage() {
@@ -19,7 +19,7 @@ export default function PricingPage() {
       period: '/month',
       description: 'Perfect for small teams just getting started',
       features: [
-        'Up to 50 resumes/month',
+        'AI resume analysis — up to 800 resumes/month',
         'Basic AI scoring',
         'Email integration',
         'Up to 2 team members',
@@ -35,7 +35,7 @@ export default function PricingPage() {
       period: '/month',
       description: 'For growing teams with high hiring velocity',
       features: [
-        'Up to 500 resumes/month',
+        'AI resume analysis — up to 800 resumes/month',
         'Advanced AI scoring (20+ dimensions)',
         'Email & Slack integration',
         'Up to 10 team members',
@@ -53,7 +53,7 @@ export default function PricingPage() {
       period: 'pricing',
       description: 'For large orgs with custom requirements',
       features: [
-        'Unlimited resumes',
+        'Custom resume analysis allowance',
         'Custom AI models',
         'Full API access',
         'Unlimited team members',

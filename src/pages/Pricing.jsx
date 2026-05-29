@@ -3,7 +3,7 @@ import BackButton from '../components/BackButton'
 import '../styles/pricing.css'
 
 const PLAN_FEATURES = [
-  'Unlimited resume uploads',
+  'AI resume analysis — up to 800 resumes/month',
   'AI-powered candidate screening',
   'Bias-reduced scoring',
   'Secure data handling',
@@ -17,7 +17,7 @@ const PRICING = {
     badge: 'Best Value',
     price: '$83.25',
     period: '/month',
-    billing: 'Billed annually at $999/year',
+    billing: 'Annual billing includes the same 800 resumes/month allowance, billed annually.',
     savings: 'Save $189 per year compared to monthly',
     trial: '7-day free trial, cancel anytime',
     cta: 'Start Annual',
@@ -36,7 +36,7 @@ const PRICING = {
 }
 
 const SHARED_PLAN_FEATURES = [
-  'Unlimited AI resume analysis with no per-resume upload fees on active plans.',
+  'Includes up to 800 resume analyses/month.',
   'AI-powered candidate screening to help surface stronger matches faster.',
   'Bias-reduced scoring signals designed to support more consistent shortlisting decisions.',
   'Bulk resume upload support so teams can process high-volume intake in fewer steps.',
@@ -59,11 +59,11 @@ const PRICING_FAQ = [
   },
   {
     question: 'What happens when I reach my resume limit?',
-    answer: 'For the plans shown on this page, resume uploads are unlimited, so there is no hard per-resume cap to hit during normal usage. That means your team can continue screening candidates without interruption when hiring volume increases. If your organization has unique governance, procurement, or scale requirements, you can still contact the team to discuss a tailored arrangement.',
+    answer: 'Each paid plan includes a monthly fair-use allowance of up to 800 resume analyses/month. That keeps plan terms clear for normal recruiting workflows while still supporting high-volume intake. If your organization has unique governance, procurement, or scale requirements, you can contact the team to discuss a tailored arrangement.',
   },
   {
     question: 'Do you offer discounts for annual plans?',
-    answer: 'Yes. Annual billing is discounted and saves $189 per year versus paying monthly for 12 months. Teams that know they will be hiring regularly often choose annual billing for the lower effective monthly cost and simpler budget planning. If you prefer more flexibility in the short term, monthly billing remains available and you can switch later.',
+    answer: 'Annual plans include the same monthly fair-use allowance of up to 800 resume analyses/month. Annual billing gives you a discounted yearly price, and your resume allowance resets each billing period.',
   },
 ]
 
@@ -138,7 +138,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
           Hireflow gives recruiting teams a straightforward way to evaluate candidates with AI support, without confusing add-ons or hidden pricing mechanics.
           Our pricing is designed to stay simple as you grow, whether you are handling a handful of roles or ongoing, high-volume hiring.
           You get the same core platform experience across plans, with billing options that match how your team prefers to budget.
-          No per-resume upload fees, no surprise platform charges, and clear plan terms from day one.
+          Includes up to 800 resume analyses/month, no surprise platform charges, and clear plan terms from day one.
         </p>
 
         <div className="pricing-page__toggle-wrap">
@@ -214,7 +214,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
           </p>
           <p className="pricing-page__section-copy">
             <strong>Recruitment agencies:</strong> If you support multiple clients and need repeatable quality across different roles, Hireflow can streamline intake and first-pass evaluation.
-            The unlimited upload model is especially helpful for agencies that need flexibility while maintaining delivery speed and consistent screening standards.
+            The fair-use allowance of up to 800 resume analyses/month is especially helpful for agencies that need predictable capacity while maintaining delivery speed and consistent screening standards.
           </p>
         </section>
 
