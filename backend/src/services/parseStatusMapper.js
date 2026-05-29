@@ -12,6 +12,8 @@ const PARSE_JOB_STATE_TO_CANONICAL_STATUS = {
   complete: 'complete',
   completed: 'complete',
   failed: 'failed',
+  cancelled: 'failed',
+  canceled: 'failed',
   processing: 'processing',
   active: 'processing',
   retrying: 'retrying',

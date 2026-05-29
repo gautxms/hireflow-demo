@@ -1,7 +1,14 @@
-import test from 'node:test'
+import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { __testables } from './parseResumeJob.js'
+import { pool } from '../db/client.js'
+import { parseQueue } from '../services/jobQueue.js'
+
+
+after(async () => {
+  await parseQueue.close().catch(() => {})
+})
 
 const { buildNormalizedCandidates } = __testables
 
@@ -105,4 +112,81 @@ test('buildNormalizedCandidates preserves structured candidate contract fields',
   assert.deepEqual(candidate.languages, fixtureCandidate.languages)
   assert.deepEqual(candidate.projects, fixtureCandidate.projects)
   assert.deepEqual(candidate.achievements, fixtureCandidate.achievements)
+})
+
+test('isAnalysisActiveForJob treats missing analysis as inactive', async (t) => {
+  t.mock.method(pool, 'query', async (sql, params) => {
+    assert.match(sql, /FROM analyses/)
+    assert.deepEqual(params, ['analysis-missing', 7])
+    return { rows: [] }
+  })
+
+  const result = await __testables.isAnalysisActiveForJob({ analysisId: 'analysis-missing', userId: 7 })
+
+  assert.deepEqual(result, { active: false, reason: 'analysis_missing' })
+})
+
+test('isAnalysisActiveForJob treats cancelled and canceled analyses as inactive', async (t) => {
+  const statuses = ['cancelled', 'canceled']
+  let callIndex = 0
+  t.mock.method(pool, 'query', async () => ({ rows: [{ id: 'analysis-1', status: statuses[callIndex++] }] }))
+
+  for (const status of statuses) {
+    const result = await __testables.isAnalysisActiveForJob({ analysisId: 'analysis-1', userId: 7 })
+
+    assert.equal(result.active, false)
+    assert.equal(result.reason, `analysis_${status}`)
+  }
+})
+
+test('runParse cancels before AI when parent analysis no longer exists', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+
+    if (sql.includes('FROM analyses')) {
+      return { rows: [] }
+    }
+
+    if (sql.includes('FROM job_descriptions')) {
+      return { rows: [] }
+    }
+
+    return { rows: [], rowCount: 1 }
+  })
+
+  const progressValues = []
+  const job = {
+    id: 'parse-job-cancelled',
+    attemptsMade: 0,
+    opts: { attempts: 3 },
+    data: {
+      resumeId: 'resume-1',
+      userId: 7,
+      analysisId: 'deleted-analysis',
+      filename: 'resume.txt',
+      mimeType: 'text/plain',
+      fileSize: 12,
+      fileBufferBase64: Buffer.from('resume text').toString('base64'),
+      jobDescriptionId: null,
+    },
+    async progress(value) {
+      if (typeof value === 'number') progressValues.push(value)
+      return progressValues.at(-1) || 0
+    },
+  }
+
+  const result = await __testables.runParse(job)
+
+  assert.equal(result.cancelled, true)
+  assert.equal(result.reason, 'analysis_missing:before_ai')
+  assert.equal(progressValues.at(-1), 100)
+  assert.equal(queries.some(({ sql }) => sql.includes('analyzeResumeWithConfiguredFallback')), false)
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO resume_analysis_token_usage')), false)
+  assert.equal(queries.some(({ sql }) => sql.includes('UPDATE resumes')), false)
+  assert.equal(queries.some(({ sql }) => sql.includes("status = 'complete'")), false)
+  assert.equal(
+    queries.some(({ sql, params }) => sql.includes('UPDATE parse_jobs') && params.includes('cancelled')),
+    true,
+  )
 })

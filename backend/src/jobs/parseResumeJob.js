@@ -399,6 +399,74 @@ async function setJobState(jobId, fields) {
   )
 }
 
+const CANCELLED_ANALYSIS_STATUSES = new Set(['cancelled', 'canceled'])
+
+export async function isAnalysisActiveForJob({ analysisId, userId }) {
+  const normalizedAnalysisId = String(analysisId || '').trim()
+  if (!normalizedAnalysisId) {
+    return { active: true, reason: 'no_analysis_id' }
+  }
+
+  if (!userId) {
+    return { active: false, reason: 'missing_user_id' }
+  }
+
+  const result = await pool.query(
+    `SELECT id, status
+     FROM analyses
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [normalizedAnalysisId, userId],
+  )
+
+  const analysis = result.rows[0]
+  if (!analysis) {
+    return { active: false, reason: 'analysis_missing' }
+  }
+
+  const status = String(analysis.status || '').trim().toLowerCase()
+  if (CANCELLED_ANALYSIS_STATUSES.has(status)) {
+    return { active: false, reason: `analysis_${status}` }
+  }
+
+  return { active: true, reason: 'analysis_active' }
+}
+
+async function cancelJobForDeletedAnalysis(job, reason) {
+  const cancellationPayload = {
+    cancelled: true,
+    reason,
+    analysisId: job?.data?.analysisId || null,
+  }
+
+  await setJobState(job.id, {
+    status: 'cancelled',
+    progress: 100,
+    error_message: 'Analysis was deleted or cancelled before parsing completed',
+    result: JSON.stringify(cancellationPayload),
+    attempts: job.attemptsMade + 1,
+  })
+
+  await job.progress(100)
+  return cancellationPayload
+}
+
+async function cancelIfAnalysisInactive(job, checkpoint) {
+  const activeState = await isAnalysisActiveForJob({
+    analysisId: job?.data?.analysisId,
+    userId: job?.data?.userId,
+  })
+
+  if (activeState.active) {
+    return null
+  }
+
+  const reason = `${activeState.reason}:${checkpoint}`
+  console.log(`[Parse] Skipping parse job ${String(job.id)} because parent analysis is inactive (${reason}).`)
+  return cancelJobForDeletedAnalysis(job, reason)
+}
+
 export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionContext = null) {
   if (jobDescriptionContext?.hasContext) {
     return candidates
@@ -424,7 +492,7 @@ export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionCo
   }))
 }
 
-async function runParse(job) {
+export async function runParse(job) {
   const { resumeId, filename, mimeType, fileSize, fileBufferBase64 } = job.data
   const startedAt = Date.now()
 
@@ -457,6 +525,9 @@ async function runParse(job) {
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
+
+  const preAiCancellation = await cancelIfAnalysisInactive(job, 'before_ai')
+  if (preAiCancellation) return preAiCancellation
 
   try {
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
@@ -507,6 +578,9 @@ async function runParse(job) {
         console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
       })
     }
+
+    const postAiCancellation = await cancelIfAnalysisInactive(job, 'after_ai')
+    if (postAiCancellation) return postAiCancellation
 
     console.log('[Parse] AI analysis successful')
     analysisResult = aiResult
@@ -591,6 +665,9 @@ async function runParse(job) {
   }
 
   const parseDurationMs = Date.now() - startedAt
+
+  const prePersistCancellation = await cancelIfAnalysisInactive(job, 'before_persist')
+  if (prePersistCancellation) return prePersistCancellation
 
   const primaryCandidate = normalizedCandidates[0] || null
   await pool.query(
@@ -748,4 +825,6 @@ parseQueue.process(async (job) => {
 export const __testables = {
   normalizeStructuredSkills,
   buildNormalizedCandidates,
+  runParse,
+  isAnalysisActiveForJob,
 }
