@@ -14,7 +14,7 @@ test('dashboard trend sections expose keyboard focus and aria labeling contracts
   assert.match(dashboardSource, /role="region" aria-labelledby="dashboard-average-score-trend-title"/)
   assert.match(dashboardSource, /id="dashboard-average-score-trend-title" className="new-dashboard__trend-title">[\s\S]*Average score trend/)
   assert.match(dashboardSource, /aria-label="Average score trend line chart with score axis and date ticks"/)
-  assert.match(dashboardSource, /`\$\{bar\.label\}: \$\{formatScore\(bar\.value\)\} score`/)
+  assert.match(dashboardSource, /`\$\{point\.label\}: \$\{formatScore\(point\.value\)\} score`/)
 })
 
 test('dashboard styles preserve focus visibility and mobile button ergonomics', () => {
@@ -24,12 +24,12 @@ test('dashboard styles preserve focus visibility and mobile button ergonomics', 
 })
 
 
-test('dashboard trend cards expose summary and sparse score state contracts', () => {
+test('dashboard trend cards expose summary and score empty state contracts', () => {
   assert.match(dashboardSource, /aria-label="Analyses trend summary"/)
   assert.match(dashboardSource, /Total analyses/)
   assert.match(dashboardSource, /Peak · \{analysesSummary\.peak\.label\}/)
   assert.match(dashboardSource, /Avg\/day/)
   assert.match(dashboardSource, /aria-label="Average score trend summary"/)
-  assert.match(dashboardSource, /Not enough score data yet\. Complete more analyses to see score trends\./)
+  assert.match(dashboardSource, /No completed score data is available for the selected filters\./)
   assert.match(dashboardSource, /scoreValues = useMemo\(\(\) => averageScoreTrend\.map\(\(item\) => parseFiniteNumber\(item\.value\)\)\.filter/)
 })
