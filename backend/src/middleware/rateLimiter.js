@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit'
+import { resolveMonthlyResumeAnalysisLimit } from '../config/resumeAnalysisQuota.js'
 
 const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
 const rateLimitEvents = []
@@ -148,7 +149,7 @@ export const generalApiLimiterAuth = rateLimit({
 })
 
 function resolveUploadDailyLimit(req) {
-  return req.subscriptionStatus === 'active' ? 800 : 10
+  return resolveMonthlyResumeAnalysisLimit(req.subscriptionStatus)
 }
 
 export const uploadLimiter = rateLimit({

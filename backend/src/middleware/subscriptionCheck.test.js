@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { PAID_MONTHLY_RESUME_ANALYSIS_LIMIT } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
 import { enforceUploadLimit, requireActiveSubscription, trackUploadUsage } from './subscriptionCheck.js'
 
@@ -64,7 +65,7 @@ test('enforceUploadLimit allows active paid users through the advertised 800-res
   const originalQuery = pool.query
   pool.query = async (sql) => {
     if (sql.includes('FROM usage_overrides')) return { rows: [] }
-    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 799 }] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: PAID_MONTHLY_RESUME_ANALYSIS_LIMIT - 1 }] }
     throw new Error(`Unexpected query: ${sql}`)
   }
 
@@ -84,8 +85,8 @@ test('enforceUploadLimit allows active paid users through the advertised 800-res
     })
 
     assert.equal(nextCalled, true)
-    assert.equal(req.usageContext.uploadLimit, 800)
-    assert.equal(req.usageContext.currentUsage, 799)
+    assert.equal(req.usageContext.uploadLimit, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT)
+    assert.equal(req.usageContext.currentUsage, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT - 1)
     assert.equal(req.usageContext.requestedUploads, 1)
     assert.equal(req.usageContext.remainingUploads, 1)
   } finally {
@@ -97,7 +98,7 @@ test('enforceUploadLimit counts every resume in a batch before accepting the upl
   const originalQuery = pool.query
   pool.query = async (sql) => {
     if (sql.includes('FROM usage_overrides')) return { rows: [] }
-    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 799 }] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: PAID_MONTHLY_RESUME_ANALYSIS_LIMIT - 1 }] }
     throw new Error(`Unexpected query: ${sql}`)
   }
 
@@ -118,8 +119,8 @@ test('enforceUploadLimit counts every resume in a batch before accepting the upl
 
     assert.equal(nextCalled, false)
     assert.equal(res.statusCode, 429)
-    assert.equal(res.body.limit, 800)
-    assert.equal(res.body.used, 799)
+    assert.equal(res.body.limit, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT)
+    assert.equal(res.body.used, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT - 1)
     assert.equal(res.body.requested, 2)
     assert.equal(res.body.remaining, 1)
   } finally {

@@ -1,9 +1,9 @@
+import {
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  RESUME_ANALYSIS_USAGE_WARNING_THRESHOLD_PERCENT,
+  resolveMonthlyResumeAnalysisLimit,
+} from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
-
-const ACTIVE_STATUSES = new Set(['active', 'trialing'])
-const PAID_STATUSES = new Set(['active'])
-const PAID_MONTHLY_RESUME_ANALYSIS_LIMIT = 800
-const TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT = 10
 
 function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
@@ -37,16 +37,6 @@ async function getUsageCount(userId, monthStart, shouldResetUsage = false) {
   return usageResult.rows[0]?.usage_count ?? 0
 }
 
-function resolveUploadLimit(subscriptionStatus, usageOverride) {
-  if (usageOverride?.upload_limit && Number.isInteger(usageOverride.upload_limit)) {
-    return usageOverride.upload_limit
-  }
-
-  return PAID_STATUSES.has(subscriptionStatus)
-    ? PAID_MONTHLY_RESUME_ANALYSIS_LIMIT
-    : TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT
-}
-
 export async function requireActiveSubscription(req, res, next) {
   try {
     const userResult = await pool.query(
@@ -62,7 +52,7 @@ export async function requireActiveSubscription(req, res, next) {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    if (!ACTIVE_STATUSES.has(user.subscription_status)) {
+    if (!ACTIVE_SUBSCRIPTION_STATUSES.has(user.subscription_status)) {
       return res.status(403).json({
         error: 'Subscription inactive',
         message:
@@ -83,7 +73,7 @@ export async function enforceUploadLimit(req, res, next) {
     const monthStart = getMonthStart()
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown'
     const usageOverride = await getUsageOverride(req.userId, monthStart)
-    const uploadLimit = resolveUploadLimit(req.subscriptionStatus, usageOverride)
+    const uploadLimit = resolveMonthlyResumeAnalysisLimit(req.subscriptionStatus, usageOverride)
     const currentUsage = await getUsageCount(req.userId, monthStart, usageOverride?.reset_usage)
     const requestedUploads = Math.max(req.files?.length || 1, 1)
     const projectedUsage = currentUsage + requestedUploads
@@ -101,7 +91,7 @@ export async function enforceUploadLimit(req, res, next) {
     }
 
     const percentUsed = Math.round((projectedUsage / uploadLimit) * 100)
-    if (percentUsed >= 80) {
+    if (percentUsed >= RESUME_ANALYSIS_USAGE_WARNING_THRESHOLD_PERCENT) {
       res.set('X-Usage-Warning', `You have used ${percentUsed}% of your monthly upload quota.`)
     }
 
