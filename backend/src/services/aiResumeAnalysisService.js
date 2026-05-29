@@ -5,6 +5,7 @@ import { AI_MODEL_CONFIG } from '../config/aiModels.js'
 import { getRuntimeSystemPromptConfig } from './adminSystemPromptService.js'
 import { prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
+import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
@@ -93,16 +94,14 @@ function dedupeLinesPreserveOrder(input = '') {
 }
 
 function clampString(value, maxLength) {
-  const normalized = String(value || '').replace(/\s+/g, ' ').trim()
+  if (value === null || value === undefined || typeof value === 'object') return ''
+  const normalized = String(value).replace(/\s+/g, ' ').trim()
+  if (/^\[object\s+object\]$/i.test(normalized)) return ''
   return normalized.slice(0, maxLength)
 }
 
-function clampStringArray(values, { maxItems, maxItemLength }) {
-  if (!Array.isArray(values)) return []
-  return values
-    .map((item) => clampString(item, maxItemLength))
-    .filter(Boolean)
-    .slice(0, maxItems)
+function clampStringArray(values, { maxItems, maxItemLength, fieldName = '' }) {
+  return normalizeCandidateFieldArray(values, { fieldName, maxItems, maxItemLength })
 }
 
 
@@ -196,10 +195,10 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     seniority_level: clampString(candidate?.seniority_level || '', 80),
     experienceHighlights: minimalMode ? [] : clampStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
     education: minimalMode ? [] : normalizeCandidateEducation(candidate?.education, { maxItems: 20, maxItemLength: 200 }),
-    experience: minimalMode ? [] : clampStringArray(candidate?.experience || [], { maxItems: 30, maxItemLength: 220 }),
+    experience: minimalMode ? [] : clampStringArray(candidate?.experience || [], { fieldName: 'experience', maxItems: 30, maxItemLength: 220 }),
     certifications: minimalMode ? [] : clampStringArray(candidate?.certifications || [], { maxItems: 20, maxItemLength: 160 }),
     languages: clampStringArray(candidate?.languages || [], { maxItems: 20, maxItemLength: 80 }),
-    projects: minimalMode ? [] : clampStringArray(candidate?.projects || [], { maxItems: 20, maxItemLength: 200 }),
+    projects: minimalMode ? [] : clampStringArray(candidate?.projects || [], { fieldName: 'projects', maxItems: 20, maxItemLength: 200 }),
     achievements: minimalMode ? [] : clampStringArray(candidate?.achievements || [], { maxItems: 20, maxItemLength: 200 }),
     location: clampString(candidate?.location || '', 120),
     fit_assessment: minimalMode ? normalizeCandidateFitAssessment(candidate?.fit_assessment) : normalizeCandidateFitAssessment(candidate?.fit_assessment),

@@ -106,12 +106,27 @@ test('buildNormalizedCandidates preserves structured candidate contract fields',
   assert.deepEqual(candidate.considerations, fixtureCandidate.considerations)
   assert.deepEqual(candidate.concerns, fixtureCandidate.concerns)
 
-  assert.deepEqual(candidate.education, fixtureCandidate.education)
-  assert.deepEqual(candidate.experience, fixtureCandidate.experience)
+  assert.deepEqual(candidate.education, ['MBA, Example University (2010)'])
+  assert.deepEqual(candidate.experience, ['Senior Business Analyst at Example Corp — 2010-2025'])
   assert.deepEqual(candidate.certifications, fixtureCandidate.certifications)
   assert.deepEqual(candidate.languages, fixtureCandidate.languages)
-  assert.deepEqual(candidate.projects, fixtureCandidate.projects)
+  assert.deepEqual(candidate.projects, ['Trading platform migration — Capital markets migration project'])
   assert.deepEqual(candidate.achievements, fixtureCandidate.achievements)
+})
+
+
+test('buildNormalizedCandidates summarizes object arrays and filters object placeholders', () => {
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      education: [{ degree: 'BSc', institution: 'State University', year: '2018' }, '[object Object]'],
+      experience: [{ title: 'Engineer', company: 'Acme', duration: '2019-2024', highlights: 'Owned platform APIs.' }, '[object Object]'],
+      projects: [{ name: 'Hiring Portal', description: 'Built ranking dashboard', technologies: ['React', 'Postgres'] }, '[object Object]'],
+    }],
+  }, { resumeId: 'resume-structured', filename: 'structured.pdf' })
+
+  assert.deepEqual(candidate.education, ['BSc, State University (2018)'])
+  assert.deepEqual(candidate.experience, ['Engineer at Acme — 2019-2024: Owned platform APIs.'])
+  assert.deepEqual(candidate.projects, ['Hiring Portal — Built ranking dashboard — Technologies: React, Postgres'])
 })
 
 test('isAnalysisActiveForJob treats missing analysis as inactive', async (t) => {

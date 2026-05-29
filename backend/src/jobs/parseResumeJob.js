@@ -8,6 +8,7 @@ import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
+import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -56,7 +57,9 @@ function getProviderFromFailureMetadata(error) {
 }
 
 function normalizeString(value) {
-  const normalized = String(value || '').trim()
+  if (value === null || value === undefined || typeof value === 'object') return null
+  const normalized = String(value).trim()
+  if (/^\[object\s+object\]$/i.test(normalized)) return null
   return normalized || null
 }
 
@@ -84,7 +87,10 @@ function normalizeStringArray(value) {
 }
 
 function clampString(value, maxLength = 300) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+  if (value === null || value === undefined || typeof value === 'object') return ''
+  const normalized = String(value).replace(/\s+/g, ' ').trim()
+  if (/^\[object\s+object\]$/i.test(normalized)) return ''
+  return normalized.slice(0, maxLength)
 }
 
 function clampStringArray(value, maxItems = 5, maxItemLength = 160) {
@@ -155,6 +161,8 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
       strengths: clampStringArray(candidate?.strengths, 5, 160),
       considerations: clampStringArray(candidate?.considerations, 5, 160),
       education: normalizeCandidateEducation(candidate?.education),
+      experience: normalizeCandidateFieldArray(candidate?.experience, { fieldName: 'experience', maxItems: 30, maxItemLength: 220 }),
+      projects: normalizeCandidateFieldArray(candidate?.projects, { fieldName: 'projects', maxItems: 20, maxItemLength: 200 }),
       seniority_level: normalizeString(candidate?.seniority_level),
       tags: normalizeStringArray(candidate?.tags),
       top_skills: normalizeStringArray(candidate?.top_skills).slice(0, 15),
