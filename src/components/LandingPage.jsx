@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Brain, Target, BarChart3, Link2, HandCoins, ShieldCheck } from 'lucide-react'
+import { Brain, Target, Lightbulb, UploadCloud, BarChart3, Users } from 'lucide-react'
 import '../styles/landing.css'
 import PublicPageLayout from './public/PublicPageLayout'
 
@@ -38,8 +38,8 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
             <span className="hero-headline-line hero-headline-line--accent">Faster.</span>
           </h1>
           <p>
-            HireFlow automates candidate screening with AI. Reduce hiring time from weeks to days, 
-            eliminate bias, and make data-driven decisions. Finally, a recruiting tool built for modern teams.
+            Stop losing hours to manual resume review. HireFlow turns unstructured resumes into structured candidate insights
+            so teams can compare applicants, review AI-generated reasoning, and build stronger shortlists with less manual effort.
           </p>
           <div className="hero-cta">
             <button className="btn-primary" onClick={onStartDemo}>
@@ -56,44 +56,44 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
           <div className="feature-card">
             <div className="feature-card-title-row">
               <span className="feature-card-icon" aria-hidden="true"><Brain size={18} strokeWidth={1.5} /></span>
-              <h3>AI Screening</h3>
+              <h3>AI Resume Screening</h3>
             </div>
-            <p>Automatically analyze and score resumes in seconds. Match candidates with roles using 20+ evaluation dimensions.</p>
+            <p>Turn a pile of resumes into ranked, recruiter-ready candidate insights. HireFlow extracts key details, scores role fit, and highlights strengths and gaps so your team can move faster without reading every CV line by line.</p>
           </div>
           <div className="feature-card">
             <div className="feature-card-title-row">
               <span className="feature-card-icon" aria-hidden="true"><Target size={18} strokeWidth={1.5} /></span>
-              <h3>Bias Removal</h3>
+              <h3>Consistent Candidate Evaluation</h3>
             </div>
-            <p>Our AI evaluates candidates on merit, not on demographics. Fair, transparent, and legally defensible.</p>
+            <p>Every applicant is reviewed against the same job requirements, helping teams reduce guesswork and compare candidates with a clearer, more repeatable screening framework.</p>
+          </div>
+          <div className="feature-card">
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><Lightbulb size={18} strokeWidth={1.5} /></span>
+              <h3>Transparent Fit Reasoning</h3>
+            </div>
+            <p>See why a candidate was ranked highly or flagged for review. HireFlow shows summaries, strengths, missing requirements, considerations, skills, and match reasoning so recruiters can make confident shortlist decisions.</p>
+          </div>
+          <div className="feature-card">
+            <div className="feature-card-title-row">
+              <span className="feature-card-icon" aria-hidden="true"><UploadCloud size={18} strokeWidth={1.5} /></span>
+              <h3>Bulk Resume Workflows</h3>
+            </div>
+            <p>Upload multiple resumes for a role and review the results in one organized workspace. Spend less time sorting files and more time engaging the candidates who look like the strongest fit.</p>
           </div>
           <div className="feature-card">
             <div className="feature-card-title-row">
               <span className="feature-card-icon" aria-hidden="true"><BarChart3 size={18} strokeWidth={1.5} /></span>
-              <h3>Smart Analytics</h3>
+              <h3>Recruiting Analytics</h3>
             </div>
-            <p>Track hiring metrics, time-to-hire, and candidate quality. Data-driven insights for continuous improvement.</p>
+            <p>Track screening activity with dashboard KPIs like analyses run, completion rate, average candidate score, shortlist rate, trends, filters, and CSV exports.</p>
           </div>
           <div className="feature-card">
             <div className="feature-card-title-row">
-              <span className="feature-card-icon" aria-hidden="true"><Link2 size={18} strokeWidth={1.5} /></span>
-              <h3>ATS Integration</h3>
+              <span className="feature-card-icon" aria-hidden="true"><Users size={18} strokeWidth={1.5} /></span>
+              <h3>Built for Modern Hiring Teams</h3>
             </div>
-            <p>Works seamlessly with your existing tools. No workflow disruption, just smarter hiring.</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-card-title-row">
-              <span className="feature-card-icon" aria-hidden="true"><HandCoins size={18} strokeWidth={1.5} /></span>
-              <h3>Cost Savings</h3>
-            </div>
-            <p>Reduce time-to-hire by 70%. Save $3-5K per hire by eliminating manual screening.</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-card-title-row">
-              <span className="feature-card-icon" aria-hidden="true"><ShieldCheck size={18} strokeWidth={1.5} /></span>
-              <h3>Privacy First</h3>
-            </div>
-            <p>SOC 2 compliant. Your candidate data is encrypted and never shared. Enterprise-grade security.</p>
+            <p>Designed for recruiters, agencies, and growing teams that need faster first-pass screening, clearer candidate comparisons, and a more professional way to manage hiring decisions.</p>
           </div>
         </div>
       </section>
@@ -167,12 +167,12 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
             each week and focus on interviews, stakeholder alignment, and candidate communication.
           </li>
           <li className="public-card public-card-copy">
-            <strong>Mitigate unconscious bias:</strong> By applying a consistent scoring framework to every applicant, Hireflow helps teams
-            evaluate candidates on role-relevant signals rather than inconsistent first impressions.
+            <strong>Reduce inconsistent first impressions:</strong> By applying a consistent scoring framework to every applicant, Hireflow helps teams
+            evaluate candidates against role-relevant signals instead of scattered notes or reviewer fatigue.
           </li>
           <li className="public-card public-card-copy">
             <strong>Fix inconsistent reviewer scoring:</strong> Shared ranking logic and transparent rationale reduce drift between reviewers,
-            making calibration meetings faster and shortlist decisions more defensible.
+            making calibration meetings faster and shortlist decisions easier to explain.
           </li>
           <li className="public-card public-card-copy">
             <strong>Improve time-to-hire:</strong> Faster triage means qualified applicants move to interviews earlier, helping teams engage
