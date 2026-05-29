@@ -1,6 +1,14 @@
-import test from 'node:test'
+import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildDirectoryResponse, normalizeResumeTagLookupInput } from './candidates.js'
+import { buildDirectoryResponse, closeCandidateRouteResourcesForTests, normalizeResumeTagLookupInput } from './candidates.js'
+import { pool } from '../db/client.js'
+import { parseQueue } from '../services/jobQueue.js'
+
+after(async () => {
+  closeCandidateRouteResourcesForTests()
+  await parseQueue.close().catch(() => {})
+  await pool.end().catch(() => {})
+})
 
 test('buildDirectoryResponse includes both legacy and new contract fields with safe defaults', () => {
   const candidates = [{ resumeId: '1' }, { resumeId: '2' }]

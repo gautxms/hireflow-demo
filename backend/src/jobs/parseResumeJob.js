@@ -227,7 +227,11 @@ function getPreferredJobDescriptionText(row = {}) {
 function isLegacyWordDocument({ filename, mimeType }) {
   const normalizedMime = String(mimeType || '').trim().toLowerCase()
   const normalizedName = String(filename || '').trim().toLowerCase()
-  return normalizedMime === 'application/msword' || normalizedName.endsWith('.doc')
+
+  if (normalizedName.endsWith('.docx')) return false
+  if (normalizedName.endsWith('.doc')) return true
+
+  return normalizedMime === 'application/msword'
 }
 
 async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename, fileSize }) {
@@ -898,6 +902,7 @@ export const __testables = {
   normalizeStructuredSkills,
   buildNormalizedCandidates,
   runParse,
+  isLegacyWordDocument,
   isAnalysisActiveForJob,
   isPreProviderLocalExtractionFailure,
   persistAiFailureTokenUsage,

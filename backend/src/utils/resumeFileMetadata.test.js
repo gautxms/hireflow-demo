@@ -57,7 +57,24 @@ test('resume filename metadata keeps unsafe characters out while retaining file 
 
 test('resume MIME helpers accept PDF, legacy DOC, DOCX, and TXT identities', () => {
   assert.equal(resolveEffectiveMimeType('application/octet-stream', 'resume.doc'), 'application/msword')
+  assert.equal(resolveEffectiveMimeType('application/msword', 'resume.docx'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
   assert.equal(isAcceptedResumeUpload('application/msword', 'resume.doc'), true)
   assert.equal(isAcceptedResumeUpload('application/octet-stream', 'resume.docx'), true)
   assert.equal(isAcceptedResumeUpload('text/plain', 'resume.txt'), true)
+})
+
+test('resume metadata preserves original MIME while normalizing by extension for extractor decisions', () => {
+  const docxMetadata = normalizeResumeFileMetadata({
+    originalFilename: 'resume.docx',
+    reportedMimeType: 'application/msword',
+  })
+  assert.equal(docxMetadata.originalMimeType, 'application/msword')
+  assert.equal(docxMetadata.normalizedMimeType, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+  const docMetadata = normalizeResumeFileMetadata({
+    originalFilename: 'resume.doc',
+    reportedMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+  assert.equal(docMetadata.originalMimeType, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  assert.equal(docMetadata.normalizedMimeType, 'application/msword')
 })

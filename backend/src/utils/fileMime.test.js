@@ -11,13 +11,21 @@ test('getFileExtension returns lowercase extension', () => {
   assert.equal(getFileExtension('resume'), '')
 })
 
-test('resolveEffectiveMimeType falls back from octet-stream for known extensions', () => {
+test('resolveEffectiveMimeType prefers known resume extensions over reported MIME', () => {
   assert.equal(
     resolveEffectiveMimeType('application/octet-stream', 'resume.docx'),
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   )
   assert.equal(resolveEffectiveMimeType('', 'resume.pdf'), 'application/pdf')
   assert.equal(resolveEffectiveMimeType('', 'resume.txt'), 'text/plain')
+  assert.equal(
+    resolveEffectiveMimeType('application/msword', 'resume.docx'),
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+  assert.equal(
+    resolveEffectiveMimeType('application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'resume.doc'),
+    'application/msword',
+  )
 })
 
 test('resolveEffectiveMimeType does not broadly infer unknown octet-stream files', () => {
