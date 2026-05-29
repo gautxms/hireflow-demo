@@ -3,6 +3,7 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { cancelParseJobsByIds, parseQueue } from '../services/jobQueue.js'
 import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
+import { getDisplayFilename } from '../utils/resumeFileMetadata.js'
 
 const router = Router()
 
@@ -135,6 +136,10 @@ async function loadAnalysisStatus(analysisId, userId) {
             ai.parse_job_id,
             ai.created_at,
             r.filename,
+            r.original_filename,
+            r.file_extension,
+            r.original_mime_type,
+            r.file_type,
             r.parse_status AS resume_parse_status,
             r.parse_error,
             pj.status AS parse_job_status,
@@ -181,7 +186,11 @@ async function loadAnalysisStatus(analysisId, userId) {
       failures.push({
         resumeId: String(row.resume_id || ''),
         parseJobId: row.parse_job_id ? String(row.parse_job_id) : null,
-        filename: row.filename || null,
+        filename: getDisplayFilename(row),
+        originalFilename: row.original_filename || row.filename || null,
+        fileExtension: row.file_extension || null,
+        mimeType: row.file_type || null,
+        originalMimeType: row.original_mime_type || null,
         status: canonicalStatus,
         error: row.error_message || row.parse_error || 'Unknown parse failure',
       })
@@ -200,7 +209,11 @@ async function loadAnalysisStatus(analysisId, userId) {
       itemId: String(row.id),
       resumeId: String(row.resume_id || ''),
       parseJobId: row.parse_job_id ? String(row.parse_job_id) : null,
-      filename: row.filename || null,
+      filename: getDisplayFilename(row),
+      originalFilename: row.original_filename || row.filename || null,
+      fileExtension: row.file_extension || null,
+      mimeType: row.file_type || null,
+      originalMimeType: row.original_mime_type || null,
       status: canonicalStatus,
       progress: itemProgress,
       createdAt: row.created_at,
@@ -270,6 +283,10 @@ router.get('/', requireAuth, async (req, res) => {
     const failedItemsResult = await pool.query(
       `SELECT ai.analysis_id,
               r.filename,
+              r.original_filename,
+              r.file_extension,
+              r.original_mime_type,
+              r.file_type,
               COALESCE(pj.status, r.parse_status, 'failed') AS status,
               COALESCE(NULLIF(pj.error_message, ''), NULLIF(r.parse_error, '')) AS error,
               ai.created_at
@@ -290,7 +307,11 @@ router.get('/', requireAuth, async (req, res) => {
       const existingItems = failedItemsByAnalysis.get(analysisId) || []
       if (existingItems.length >= 5) continue
       existingItems.push({
-        filename: row.filename || null,
+        filename: getDisplayFilename(row),
+        originalFilename: row.original_filename || row.filename || null,
+        fileExtension: row.file_extension || null,
+        mimeType: row.file_type || null,
+        originalMimeType: row.original_mime_type || null,
         status: row.status || 'failed',
       })
       failedItemsByAnalysis.set(analysisId, existingItems)
@@ -299,6 +320,10 @@ router.get('/', requireAuth, async (req, res) => {
     const filesByAnalysisResult = await pool.query(
       `SELECT ai.analysis_id,
               r.filename,
+              r.original_filename,
+              r.file_extension,
+              r.original_mime_type,
+              r.file_type,
               COALESCE(pj.status, r.parse_status, 'queued') AS status,
               ai.created_at
        FROM analysis_items ai
@@ -316,7 +341,12 @@ router.get('/', requireAuth, async (req, res) => {
       if (!analysisId) continue
       const existingItems = filesByAnalysis.get(analysisId) || []
       existingItems.push({
-        name: row.filename || 'Unknown file',
+        name: (row.filename || row.original_filename) ? getDisplayFilename(row) : 'Unknown file',
+        filename: (row.filename || row.original_filename) ? getDisplayFilename(row) : null,
+        originalFilename: row.original_filename || row.filename || null,
+        fileExtension: row.file_extension || null,
+        mimeType: row.file_type || null,
+        originalMimeType: row.original_mime_type || null,
         status: row.status || 'queued',
       })
       filesByAnalysis.set(analysisId, existingItems)

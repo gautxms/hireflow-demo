@@ -1,8 +1,13 @@
-import test from 'node:test'
+import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import uploadsRouter from './uploads.js'
 import { pool } from '../../db/client.js'
+import { parseQueue } from '../../services/jobQueue.js'
+
+after(async () => {
+  await parseQueue.close().catch(() => {})
+})
 
 function buildApp() {
   const app = express()

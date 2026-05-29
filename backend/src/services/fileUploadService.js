@@ -8,7 +8,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3'
 import { pool } from '../db/client.js'
-import { sanitizeFilename } from '../utils/sanitize.js'
+import { normalizeResumeFileMetadata } from '../utils/resumeFileMetadata.js'
 import { enqueueParseJob } from './jobQueue.js'
 import { isScanResultSafe, scanFileBuffer } from './virusScanService.js'
 import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileMime.js'
@@ -50,10 +50,6 @@ function ensureS3Configured() {
 
 function normalizeMimeType(filename, mimeType) {
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
-  if (normalizedMimeType === 'application/msword') {
-    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  }
-
   return resolveEffectiveMimeType(normalizedMimeType, filename)
 }
 
@@ -97,7 +93,10 @@ async function ensureUploadChunkTables() {
       ADD COLUMN IF NOT EXISTS scan_status TEXT,
       ADD COLUMN IF NOT EXISTS scan_result JSONB,
       ADD COLUMN IF NOT EXISTS file_sha256 TEXT,
-      ADD COLUMN IF NOT EXISTS job_description_id UUID;
+      ADD COLUMN IF NOT EXISTS job_description_id UUID,
+      ADD COLUMN IF NOT EXISTS original_filename TEXT,
+      ADD COLUMN IF NOT EXISTS file_extension TEXT,
+      ADD COLUMN IF NOT EXISTS original_mime_type TEXT;
 
     ALTER TABLE upload_chunks
       ADD COLUMN IF NOT EXISTS job_description_id UUID,
@@ -176,12 +175,13 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   }
 
   const totalChunks = Math.ceil(fileSize / CHUNK_SIZE_BYTES)
-  const originalFilename = String(filename || '').trim()
-  const safeFilename = sanitizeFilename(originalFilename)
-  const normalizedMimeType = normalizeMimeType(originalFilename, mimeType)
+  const fileMetadata = normalizeResumeFileMetadata({ originalFilename: filename, reportedMimeType: mimeType })
+  const originalFilename = fileMetadata.originalFilename
+  const safeFilename = fileMetadata.storageFilename
+  const normalizedMimeType = normalizeMimeType(originalFilename, fileMetadata.originalMimeType)
 
   if (!isAcceptedResumeUpload(normalizedMimeType, originalFilename)) {
-    throw new Error('Only PDF, DOCX, and TXT files are allowed')
+    throw new Error('Only PDF, DOC, DOCX, and TXT files are allowed')
   }
 
   if (jobDescriptionId) {
@@ -393,9 +393,10 @@ export async function completeChunkUpload({ userId, uploadId }) {
     throw new Error('Upload assembly failed: reconstructed file size mismatch')
   }
 
+  const fileMetadata = normalizeResumeFileMetadata({ originalFilename: row.filename, reportedMimeType: row.mime_type })
   const assembledHash = crypto.createHash('sha256').update(assembledBuffer).digest('hex')
-  const assembledKey = `${buildPrefix(uploadId)}/assembled/${row.filename}`
-  const normalizedMimeType = normalizeMimeType(row.filename, row.mime_type)
+  const assembledKey = `${buildPrefix(uploadId)}/assembled/${fileMetadata.storageFilename}`
+  const normalizedMimeType = normalizeMimeType(fileMetadata.storageFilename, fileMetadata.originalMimeType)
 
   await s3Client.send(new PutObjectCommand({
     Bucket: s3Bucket,
@@ -443,10 +444,19 @@ export async function completeChunkUpload({ userId, uploadId }) {
 
     if (!resumeId) {
       const resumeInsertResult = await client.query(
-        `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, job_description_id, updated_at)
-         VALUES ($1, $2, '', $3, $4, 'pending', $5, NOW())
+        `INSERT INTO resumes (user_id, filename, raw_text, file_size, file_type, parse_status, job_description_id, original_filename, file_extension, original_mime_type, updated_at)
+         VALUES ($1, $2, '', $3, $4, 'pending', $5, $6, $7, $8, NOW())
          RETURNING id`,
-        [userId, row.filename, row.file_size, normalizedMimeType, row.job_description_id],
+        [
+          userId,
+          row.filename,
+          row.file_size,
+          normalizedMimeType,
+          row.job_description_id,
+          row.filename,
+          fileMetadata.fileExtension || null,
+          row.mime_type || null,
+        ],
       )
       resumeId = resumeInsertResult.rows[0].id
     }
@@ -488,6 +498,9 @@ export async function completeChunkUpload({ userId, uploadId }) {
     resumeId: finalizedUpload.resumeId,
     userId,
     filename: row.filename,
+    originalFilename: row.filename,
+    originalMimeType: row.mime_type || null,
+    fileExtension: fileMetadata.fileExtension || null,
     mimeType: normalizedMimeType,
     fileSize: row.file_size,
     fileBufferBase64: assembledBuffer.toString('base64'),
@@ -520,6 +533,11 @@ export async function completeChunkUpload({ userId, uploadId }) {
     uploadId,
     resumeId: finalizedUpload.resumeId,
     jobId: String(parseJob.id),
+    filename: fileMetadata.storageFilename,
+    originalFilename: fileMetadata.originalFilename,
+    fileExtension: fileMetadata.fileExtension || null,
+    mimeType: normalizedMimeType,
+    originalMimeType: fileMetadata.originalMimeType,
     scan: finalizedUpload.scan,
     sha256: finalizedUpload.sha256,
     analysisId: row.analysis_id || null,

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../../db/client.js'
 import { parseQueue } from '../../services/jobQueue.js'
+import { getDisplayFilename } from '../../utils/resumeFileMetadata.js'
 
 const router = Router()
 const DEFAULT_PAGE_SIZE = 20
@@ -21,14 +22,16 @@ function normalizeStatus(row) {
 
 function normalizeFileType(row) {
   if (row.file_type) return row.file_type
-  const fileName = String(row.filename || '').toLowerCase()
+  const fileName = String(getDisplayFilename(row) || '').toLowerCase()
   if (fileName.endsWith('.pdf')) return 'application/pdf'
+  if (fileName.endsWith('.doc')) return 'application/msword'
   if (fileName.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   return 'unknown'
 }
 
 function getFormatLabel(fileType) {
   if (fileType === 'application/pdf') return 'PDF'
+  if (fileType === 'application/msword') return 'DOC'
   if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
   return 'OTHER'
 }
@@ -61,7 +64,10 @@ function mapUploadRow(row) {
 
   return {
     id: row.id,
-    filename: row.filename,
+    filename: getDisplayFilename(row),
+    originalFilename: row.original_filename || row.filename || null,
+    fileExtension: row.file_extension || null,
+    originalMimeType: row.original_mime_type || null,
     userId: row.user_id,
     userEmail: row.user_email || null,
     createdAt: toIso(row.created_at),
@@ -100,7 +106,10 @@ async function ensureUploadMonitoringColumns() {
     ADD COLUMN IF NOT EXISTS parse_error TEXT,
     ADD COLUMN IF NOT EXISTS parse_duration_ms INTEGER,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW(),
-    ADD COLUMN IF NOT EXISTS retried_at TIMESTAMP;
+    ADD COLUMN IF NOT EXISTS retried_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS original_filename TEXT,
+    ADD COLUMN IF NOT EXISTS file_extension TEXT,
+    ADD COLUMN IF NOT EXISTS original_mime_type TEXT;
   `)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS resume_analysis_token_usage (
@@ -181,6 +190,9 @@ router.get('/', async (req, res) => {
               r.user_id,
               u.email AS user_email,
               r.filename,
+              r.original_filename,
+              r.file_extension,
+              r.original_mime_type,
               r.raw_text,
               r.file_size,
               r.file_type,
@@ -469,6 +481,9 @@ router.get('/:uploadId', async (req, res) => {
               r.user_id,
               u.email AS user_email,
               r.filename,
+              r.original_filename,
+              r.file_extension,
+              r.original_mime_type,
               r.raw_text,
               r.file_size,
               r.file_type,

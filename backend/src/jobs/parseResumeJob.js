@@ -630,7 +630,8 @@ export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionCo
 }
 
 export async function runParse(job) {
-  const { resumeId, filename, mimeType, fileSize, fileBufferBase64 } = job.data
+  const { resumeId, filename, originalFilename, originalMimeType, fileExtension, mimeType, fileSize, fileBufferBase64 } = job.data
+  const analysisFilename = originalFilename || filename
   const startedAt = Date.now()
 
   await setJobState(job.id, {
@@ -644,7 +645,7 @@ export async function runParse(job) {
   const preparedResumePayload = await prepareResumePayloadForAnalysis({
     fileBufferBase64,
     mimeType,
-    filename,
+    filename: analysisFilename,
     fileSize,
   })
 
@@ -684,7 +685,7 @@ export async function runParse(job) {
       parseJobId: job.id,
       userId: job.data.userId,
       jobDescriptionId: job.data.jobDescriptionId || null,
-      filename,
+      filename: analysisFilename,
       jobDescriptionContext,
     }).catch((persistError) => {
       console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
@@ -703,7 +704,7 @@ export async function runParse(job) {
       parseJobId: job.id,
       userId: job.data.userId,
       jobDescriptionId: job.data.jobDescriptionId || null,
-      filename,
+      filename: analysisFilename,
       jobDescriptionContext,
     }).catch((persistError) => {
       console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
@@ -712,13 +713,15 @@ export async function runParse(job) {
     throw aiError
   }
 
-  const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename })
+  const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
   const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
 
   const parseResult = {
-    filename,
+    filename: analysisFilename,
+    originalFilename: analysisFilename,
+    fileExtension: fileExtension || preparedResumePayload.sourceFormat || undefined,
     mimeType: preparedResumePayload.mimeType,
-    originalMimeType: preparedResumePayload.originalMimeType || undefined,
+    originalMimeType: originalMimeType || preparedResumePayload.originalMimeType || undefined,
     fileSize: preparedResumePayload.fileSize,
     parserVersion: 'ai-only',
     analyzerUsed: 'AI',

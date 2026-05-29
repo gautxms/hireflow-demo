@@ -1,5 +1,6 @@
 const EXTENSION_MIME_MAP = {
   pdf: 'application/pdf',
+  doc: 'application/msword',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   txt: 'text/plain',
 }
