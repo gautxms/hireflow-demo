@@ -1754,9 +1754,9 @@
 }
 
 .dd-top-skills .dd-top-skill.dd-top-skill--warn {
-  color: var(--hf-score-possible);
-  border-color: color-mix(in srgb, var(--hf-score-possible) 48%, transparent);
-  background: color-mix(in srgb, var(--hf-score-possible) 15%, transparent);
+  color: var(--hf-warning);
+  border-color: color-mix(in srgb, var(--hf-warning) 48%, transparent);
+  background: color-mix(in srgb, var(--hf-warning) 15%, transparent);
 }
 .dd-top-skill--warn-soft {
   color: var(--hf-warning-text);
@@ -2071,7 +2071,7 @@
 .rc-fit--possible, .dd-fit--possible { color: var(--hf-score-possible); }
 .rc-fit--low, .dd-fit--low { color: var(--hf-score-low); }
 
-.dd-top-skill--warn { color: var(--hf-score-possible); border-color: color-mix(in srgb, var(--hf-score-possible) 40%, transparent); background: color-mix(in srgb, var(--hf-score-possible) 12%, transparent); }
+.dd-top-skill--warn { color: var(--hf-warning); border-color: color-mix(in srgb, var(--hf-warning) 40%, transparent); background: color-mix(in srgb, var(--hf-warning) 12%, transparent); }
 .dd-top-skill--warn-soft { color: var(--hf-warning); border-color: color-mix(in srgb, var(--hf-warning) 35%, transparent); background: color-mix(in srgb, var(--hf-warning) 8%, transparent); }
 
 @media (max-width: 900px) {

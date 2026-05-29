@@ -27,6 +27,12 @@
   --hf-status-warning: #fcd34d;
   --hf-status-info: #3b82f6;
 
+  /* Legacy component aliases backed by canonical status tokens */
+  --hf-warning: var(--hf-status-warning);
+  --hf-warning-text: var(--hf-status-warning);
+  --hf-error: var(--hf-status-error);
+  --hf-score-possible: var(--hf-status-warning);
+
   --hf-alpha-white-03: rgba(255, 255, 255, 0.03);
   --hf-alpha-white-04: rgba(255, 255, 255, 0.04);
   --hf-alpha-white-08: rgba(255, 255, 255, 0.08);
