@@ -1627,17 +1627,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             </DrawerSection>
           </div>
           <div className="dd-col">
-            <DrawerSection title="Score breakdown">
-            {hasResolvableBreakdownMetrics ? (
-              <div className="dd-analysis-box dd-breakdown">
-                {resolvableScoreBreakdownRows.map((row) => (
-                  <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
-                    <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="dd-summary">Score breakdown unavailable</p>}
-            </DrawerSection>
             <DrawerSection title="Matched skills" className="dd-section-card--compact" badge={<span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span>}>
               <ExpandableList items={detailVm.matchedSkills} previewCount={5} resetKey={expandedCandidateKey} controlsId={`matched-skills-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`}>{skill}</span>)} />
             </DrawerSection>
@@ -1664,6 +1653,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             )}
           </div>
           <div className="dd-col">
+            <DrawerSection title="Score breakdown">
+              {hasResolvableBreakdownMetrics ? (
+                <div className="dd-analysis-box dd-breakdown">
+                  {resolvableScoreBreakdownRows.map((row) => (
+                    <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
+                      <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="dd-summary">Score breakdown unavailable</p>}
+            </DrawerSection>
             <DrawerSection title="Strengths">
               <div className="dd-analysis-box dd-analysis-box--green">
                 {detailVm.candidateStrengths.length > 0
