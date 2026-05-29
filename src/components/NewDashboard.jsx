@@ -73,22 +73,35 @@ function buildChartBars(series, key) {
   }))
 }
 
-function buildLineSegments(series) {
-  const segments = []
-  let current = []
+function buildScoreChartPoints(series, axisMin, axisMax) {
+  if (!series.length) return []
+  const safeMin = Number.isFinite(axisMin) ? axisMin : 0
+  const safeMax = Number.isFinite(axisMax) && axisMax > safeMin ? axisMax : safeMin + 1
+  const range = safeMax - safeMin
   const denominator = Math.max(series.length - 1, 1)
 
-  series.forEach((point, index) => {
-    if (!point.hasData) {
-      if (current.length > 1) segments.push(current)
-      current = []
-      return
-    }
-    current.push(`${(index / denominator) * 100},${100 - point.height}`)
-  })
+  return series.map((item, index) => {
+    const value = parseFiniteNumber(item?.value)
+    const hasData = value !== null
+    const boundedPercent = hasData ? ((value - safeMin) / range) * 100 : null
+    const height = hasData ? Math.min(Math.max(boundedPercent, 4), 96) : null
 
-  if (current.length > 1) segments.push(current)
-  return segments
+    return {
+      id: `score-${item?.periodStart ?? index}`,
+      x: series.length === 1 ? 50 : (index / denominator) * 100,
+      height,
+      value,
+      hasData,
+      label: formatDateLabel(item?.periodStart),
+    }
+  })
+}
+
+function buildLineSegments(series) {
+  const validPoints = series.filter((point) => point.hasData)
+  return validPoints.length > 1
+    ? [validPoints.map((point) => `${point.x},${100 - point.height}`)]
+    : []
 }
 
 function summarizeAnalysesTrend(series) {
@@ -220,22 +233,24 @@ export default function NewDashboard() {
   const averageScoreTrend = useMemo(() => dashboardData?.charts?.averageScoreTrend || [], [dashboardData])
   const analysesSummary = useMemo(() => summarizeAnalysesTrend(analysesTrend), [analysesTrend])
   const scoreSummary = useMemo(() => summarizeScoreTrend(averageScoreTrend, kpis.scoredCount, kpis.avgScore), [averageScoreTrend, kpis.avgScore, kpis.scoredCount])
-  const hasScoreData = Boolean(dashboardData?.flags?.hasScoreData) || scoreSummary.scoredPoints.length > 0
   const isAnalysesEmpty = fetchState === 'success' && (analysesTrend.length === 0 || analysesSummary.total <= 0)
-  const isScoreEmpty = fetchState === 'success' && averageScoreTrend.length === 0
-  const hasSparseScoreData = fetchState === 'success' && hasScoreData && scoreSummary.scoredPoints.length < 3
+  const validScorePointCount = scoreSummary.scoredPoints.length
+  const isScoreEmpty = fetchState === 'success' && validScorePointCount === 0
   const analysesBars = useMemo(() => buildChartBars(analysesTrend, 'value'), [analysesTrend])
-  const averageScoreBars = useMemo(() => buildChartBars(averageScoreTrend, 'value'), [averageScoreTrend])
+  const isAnalysesChartDense = analysesBars.length > 45
   const analysesMax = useMemo(() => Math.max(...analysesTrend.map((item) => parseFiniteNumber(item.value) ?? 0), 1), [analysesTrend])
   const analysesTicks = useMemo(() => buildAxisTicks(0, analysesMax, 4).map((value) => Math.round(value)), [analysesMax])
   const analysesDateTicks = useMemo(() => getIntermediateDateTicks(analysesTrend), [analysesTrend])
   const scoreValues = useMemo(() => averageScoreTrend.map((item) => parseFiniteNumber(item.value)).filter((value) => value !== null), [averageScoreTrend])
   const scoreMin = useMemo(() => (scoreValues.length ? Math.min(...scoreValues) : 0), [scoreValues])
-  const scoreMax = useMemo(() => (scoreValues.length ? Math.max(...scoreValues) : 10), [scoreValues])
-  const scoreTicks = useMemo(() => buildAxisTicks(Math.max(0, scoreMin - 0.5), Math.min(10, scoreMax + 0.5), 4).map((value) => Number(value.toFixed(2))), [scoreMin, scoreMax])
+  const scoreMax = useMemo(() => (scoreValues.length ? Math.max(...scoreValues) : 1), [scoreValues])
+  const scoreAxisMin = useMemo(() => Math.max(0, scoreMin - 0.5), [scoreMin])
+  const scoreAxisMax = useMemo(() => Math.max(scoreAxisMin + 1, scoreMax + 0.5), [scoreAxisMin, scoreMax])
+  const scoreTicks = useMemo(() => buildAxisTicks(scoreAxisMin, scoreAxisMax, 4).map((value) => Number(value.toFixed(2))), [scoreAxisMin, scoreAxisMax])
+  const averageScorePoints = useMemo(() => buildScoreChartPoints(averageScoreTrend, scoreAxisMin, scoreAxisMax), [averageScoreTrend, scoreAxisMin, scoreAxisMax])
   const scoreDateTicks = useMemo(() => getIntermediateDateTicks(averageScoreTrend), [averageScoreTrend])
   const showAnalysesChart = analysesTrend.length > 0 && !isAnalysesEmpty
-  const showScoreChart = averageScoreTrend.length > 0 && hasScoreData && !hasSparseScoreData
+  const showScoreChart = fetchState === 'success' && validScorePointCount > 0
 
   return (
     <div className="new-dashboard">
@@ -314,7 +329,7 @@ export default function NewDashboard() {
               <div className="new-dashboard__y-axis" aria-hidden="true">
                 {analysesTicks.map((tick) => <span key={`analyses-tick-${tick}`}>{tick}</span>)}
               </div>
-              <div className="new-dashboard__chart" aria-label="Analyses trend bar chart with count axis and date ticks">
+              <div className={`new-dashboard__chart ${isAnalysesChartDense ? 'new-dashboard__chart--dense' : ''}`} aria-label="Analyses trend bar chart with count axis and date ticks">
               {analysesBars.map((bar) => {
                 const isPeak = bar.hasData && bar.value === analysesSummary.peak.value && analysesSummary.peak.value > 0
                 return (
@@ -342,9 +357,7 @@ export default function NewDashboard() {
           </div>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
-          {!hasScoreData && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No completed score data yet. Complete analyses to start score tracking.</p> : null}
-          {isScoreEmpty ? <p className="new-dashboard__empty-state">No chart data for selected filters.</p> : null}
-          {hasSparseScoreData ? <p className="new-dashboard__empty-state">Not enough score data yet. Complete more analyses to see score trends.</p> : null}
+          {isScoreEmpty && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No completed score data is available for the selected filters.</p> : null}
           {showScoreChart && (
             <div className="new-dashboard__chart-shell">
               <div className="new-dashboard__y-axis" aria-hidden="true">
@@ -352,7 +365,7 @@ export default function NewDashboard() {
               </div>
               <div className="new-dashboard__chart new-dashboard__chart--line" aria-label="Average score trend line chart with score axis and date ticks">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="new-dashboard__line-svg" aria-hidden="true">
-                  {buildLineSegments(averageScoreBars).map((segment) => (
+                  {buildLineSegments(averageScorePoints).map((segment) => (
                     <polyline
                       key={segment.join('-')}
                       fill="none"
@@ -362,15 +375,15 @@ export default function NewDashboard() {
                     />
                   ))}
                 </svg>
-                {averageScoreBars.map((bar, index) => (
+                {averageScorePoints.filter((point) => point.hasData).map((point) => (
                   <button
-                    key={bar.id}
+                    key={point.id}
                     type="button"
                     className="new-dashboard__point"
-                    style={{ left: `${(index / Math.max(averageScoreBars.length - 1, 1)) * 100}%`, bottom: `${bar.hasData ? bar.height : 6}%` }}
-                    aria-label={bar.hasData ? `${bar.label}: ${formatScore(bar.value)} score` : `${bar.label}: no score data for this period`}
-                    data-tooltip={bar.hasData ? `${bar.label}: ${formatScore(bar.value)} score` : `${bar.label}: No score data`}
-                    data-state={bar.hasData ? 'value' : 'missing'}
+                    style={{ left: `${point.x}%`, bottom: `${point.height}%` }}
+                    aria-label={`${point.label}: ${formatScore(point.value)} score`}
+                    data-tooltip={`${point.label}: ${formatScore(point.value)} score`}
+                    data-state="value"
                   />
                 ))}
               </div>
