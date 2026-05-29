@@ -1561,20 +1561,28 @@
 /* Drawer 3-column body */
 .dd-body {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
 }
 @media (max-width: 900px) { .dd-body { grid-template-columns: 1fr; } }
 
-.dd-col { min-width: 0; }
+.dd-col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
 .dd-section-card {
-  background: #0d0d0d;
-  border: 1px solid #1e1e1e;
+  background: var(--hf-surface-2);
+  border: 1px solid var(--hf-border);
   border-radius: 10px;
   padding: 12px;
-  margin-bottom: 12px;
 }
-.dd-section-card--compact { padding: 10px 12px; }
+.dd-section-card--compact {
+  min-height: 92px;
+  padding: 12px;
+}
 
 .dd-col-label {
   font-size: 11px;
@@ -1636,7 +1644,7 @@
 .dd-list { display: flex; flex-direction: column; }
 
 .dd-facts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.dd-fact-card { background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dd-fact-card { background: var(--hf-surface-2); border: 1px solid var(--hf-border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
 .dd-facts { display: flex; flex-direction: column; gap: 7px; }
 
@@ -1679,10 +1687,10 @@
 
 /* Analysis boxes (strengths / considerations) */
 .dd-analysis-box {
-  background: #0d0d0d;
+  background: var(--hf-surface-2);
   border-radius: 10px;
   padding: 12px;
-  border: 1px solid #1e1e1e;
+  border: 1px solid var(--hf-border);
 }
 .dd-analysis-box--green { border-top-color: rgba(200, 255, 0, 0.2); }
 .dd-analysis-box--amber { border-top-color: rgba(255, 165, 0, 0.2); }
@@ -1807,19 +1815,80 @@
   outline: 2px solid var(--hf-lime);
   outline-offset: 2px;
 }
-.dd-resume-file { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border: 1px solid #2a2a2a; border-radius: 10px; background: #0d0d0d; color: var(--color-text-secondary); }
+.dd-section-card--resume { min-height: 92px; }
+.dd-resume-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--hf-border-2);
+  border-radius: 12px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--hf-surface) 82%, transparent), var(--hf-surface-2));
+  color: var(--color-text-secondary);
+}
+.dd-resume-icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hf-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hf-lime) 8%, transparent);
+  color: var(--hf-lime);
+}
+.dd-resume-copy { min-width: 0; }
 .dd-resume-filename {
   font-family: var(--font-body, 'DM Sans', sans-serif);
   font-size: 13px;
-  line-height: 1.5;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--color-text-primary);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dd-resume-meta {
+  margin-top: 2px;
   font-family: var(--font-body, 'DM Sans', sans-serif);
   color: var(--color-text-muted);
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.35;
+}
+.dd-resume-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--hf-border-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--hf-text-2);
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.dd-resume-action:not(:disabled):hover {
+  border-color: var(--hf-lime-border);
+  background: var(--hf-lime-dim);
+  color: var(--hf-lime);
+}
+.dd-resume-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.dd-resume-action:focus-visible {
+  outline: 2px solid var(--hf-lime);
+  outline-offset: 3px;
+}
+@media (max-width: 520px) {
+  .dd-resume-file { grid-template-columns: auto minmax(0, 1fr); }
+  .dd-resume-action { grid-column: 1 / -1; width: 100%; }
 }
 
 .dd-skill-cat {
