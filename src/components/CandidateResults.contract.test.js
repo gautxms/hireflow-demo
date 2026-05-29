@@ -5,6 +5,7 @@ import { normalizeCandidateResultsPayload } from './candidateResultsPayload.js'
 
 const candidateResultsSource = readFileSync(new URL('./CandidateResults.jsx', import.meta.url), 'utf8')
 const candidateResultsStyles = readFileSync(new URL('../styles/candidate-results.css', import.meta.url), 'utf8')
+const designTokens = readFileSync(new URL('../styles/variables.css', import.meta.url), 'utf8')
 
 test('normalizeCandidateResultsPayload handles empty payload', () => {
   assert.deepEqual(normalizeCandidateResultsPayload(null), {
@@ -137,6 +138,14 @@ test('skill gap and matched skill pills use distinct classes and warning style c
   assert.match(candidateResultsSource, /className="dd-top-skill dd-top-skill--warn"/)
   assert.match(candidateResultsStyles, /\.dd-top-skill--warn[\s\S]*var\(--hf-warning\)/)
   assert.doesNotMatch(candidateResultsStyles, /\.dd-top-skill--warn[\s\S]*color:\s*#ffffff/)
+})
+
+
+test('skill gap warning pills resolve to canonical amber status tokens', () => {
+  assert.match(designTokens, /--hf-warning:\s*var\(--hf-status-warning\)/)
+  assert.match(designTokens, /--hf-score-possible:\s*var\(--hf-status-warning\)/)
+  assert.match(candidateResultsStyles, /\.dd-top-skill--warn\s*\{[^}]*color:\s*var\(--hf-warning\)/)
+  assert.doesNotMatch(candidateResultsStyles, /\.dd-top-skill--warn\s*\{[^}]*var\(--hf-score-possible\)/)
 })
 
 
