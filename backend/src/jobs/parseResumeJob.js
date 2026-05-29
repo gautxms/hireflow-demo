@@ -1,7 +1,12 @@
+import { Buffer } from 'node:buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
-import { prepareResumePayloadForAnalysis as prepareDocumentPayloadForAnalysis } from '../services/resumeDocumentExtractionService.js'
+import {
+  buildSafeResumeFileDiagnostics,
+  logSafeResumeFileDiagnostics,
+  prepareResumePayloadForAnalysis as prepareDocumentPayloadForAnalysis,
+} from '../services/resumeDocumentExtractionService.js'
 import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
@@ -229,12 +234,25 @@ function isLegacyWordDocument({ filename, mimeType, originalMimeType, fileBuffer
   return getLegacyWordDocumentDetection({ filename, mimeType, originalMimeType, fileBuffer }).isLegacyWordDocument
 }
 
-async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, originalMimeType, filename, fileSize, logger = console }) {
+async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, originalMimeType, filename, displayFilename = null, fileSize, logger = console, diagnosticsContext = {} }) {
   if (!fileBufferBase64) {
     throw new Error('Resume payload is empty')
   }
 
   const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
+  const baseDiagnosticsInput = {
+    resumeId: diagnosticsContext?.resumeId || null,
+    analysisId: diagnosticsContext?.analysisId || null,
+    parseJobId: diagnosticsContext?.parseJobId || null,
+    originalFilename: filename || null,
+    displayFilename,
+    mimeType,
+    originalMimeType,
+    normalizedMimeType: mimeType,
+    fileSize,
+    fileBuffer,
+    extension: diagnosticsContext?.fileExtension || null,
+  }
   const legacyWordDetection = getLegacyWordDocumentDetection({ filename, mimeType, originalMimeType, fileBuffer })
 
   if (legacyWordDetection.isLegacyWordDocument) {
@@ -247,7 +265,17 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, ori
         hasOleMagic: legacyWordDetection.hasOleMagic,
       })
     }
-    throw createUnsupportedLegacyWordError({ detection: legacyWordDetection })
+    const error = createUnsupportedLegacyWordError({ detection: legacyWordDetection })
+    error.diagnostics = {
+      ...(error.diagnostics || {}),
+      ...buildSafeResumeFileDiagnostics({
+        ...baseDiagnosticsInput,
+        extractionMethod: 'legacy_doc_rejected',
+        extractedTextCharCount: 0,
+      }),
+    }
+    logSafeResumeFileDiagnostics(logger, 'extraction_decision', error.diagnostics, 'warn')
+    throw error
   }
 
   const preparedPayload = await prepareDocumentPayloadForAnalysis({
@@ -255,7 +283,10 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, ori
     mimeType,
     originalMimeType,
     filename,
+    displayFilename,
     fileSize,
+    logger,
+    diagnosticsContext,
   })
 
   return {
@@ -266,6 +297,10 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, ori
     resumeInputMode: preparedPayload.inputMode || preparedPayload.inputKind || 'document_file',
     extractedText: preparedPayload.extractedText || null,
     originalMimeType: preparedPayload.originalMimeType || mimeType || null,
+    diagnostics: preparedPayload.diagnostics || null,
+    preparedMimeType: preparedPayload.preparedMimeType || preparedPayload.mimeType || mimeType || null,
+    inputKind: preparedPayload.inputKind || null,
+    sourceFormat: preparedPayload.sourceFormat || null,
   }
 }
 
@@ -642,8 +677,9 @@ export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionCo
 }
 
 export async function runParse(job) {
-  const { resumeId, filename, originalFilename, originalMimeType, fileExtension, mimeType, fileSize, fileBufferBase64 } = job.data
+  const { resumeId, filename, originalFilename, originalMimeType, fileExtension, mimeType, fileSize, fileBufferBase64, analysisId } = job.data
   const analysisFilename = originalFilename || filename
+  const displayFilename = filename && filename !== analysisFilename ? filename : null
   const startedAt = Date.now()
 
   await setJobState(job.id, {
@@ -659,8 +695,20 @@ export async function runParse(job) {
     mimeType,
     originalMimeType,
     filename: analysisFilename,
+    displayFilename,
     fileSize,
+    logger: console,
+    diagnosticsContext: {
+      resumeId,
+      analysisId: analysisId || null,
+      parseJobId: job.id,
+      fileExtension,
+    },
   })
+
+  if (preparedResumePayload.diagnostics) {
+    logSafeResumeFileDiagnostics(console, 'prepared_payload', preparedResumePayload.diagnostics)
+  }
 
   await new Promise((resolve) => setTimeout(resolve, 400))
   await setJobState(job.id, { progress: 45 })
@@ -741,6 +789,7 @@ export async function runParse(job) {
     methodUsed: analysisResult?.methodUsed || parseMethod,
     ...analysisResult,
     jobDescriptionId: job.data.jobDescriptionId || null,
+    parseDiagnostics: preparedResumePayload.diagnostics || null,
     jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
     jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
     jobDescriptionContextMissingReason: jobDescriptionContext?.hasContext
@@ -856,8 +905,15 @@ parseQueue.process(async (job) => {
           hasContext: Boolean(job?.data?.jobDescriptionId),
         },
       })
+      const failureDiagnostics = error?.diagnostics && typeof error.diagnostics === 'object'
+        ? error.diagnostics
+        : null
+      if (failureDiagnostics) {
+        logSafeResumeFileDiagnostics(console, 'parse_job_failure', failureDiagnostics, 'warn')
+      }
       const failurePayload = {
         error: normalizedError.normalizedMessage,
+        parseDiagnostics: failureDiagnostics,
         providerChain: providerChainAttempts.length > 0
           ? {
               attempts: providerChainAttempts,

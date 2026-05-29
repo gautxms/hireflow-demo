@@ -1,8 +1,15 @@
+import { Buffer } from 'node:buffer'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import JSZip from 'jszip'
 
-import { compareResumeTextFingerprints, inspectDocxBuffer, prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
+import {
+  buildSafeResumeFileDiagnostics,
+  classifyResumeFileMagic,
+  compareResumeTextFingerprints,
+  inspectDocxBuffer,
+  prepareResumePayloadForAnalysis,
+} from './resumeDocumentExtractionService.js'
 import { UNSUPPORTED_LEGACY_WORD_MESSAGE } from '../utils/legacyWordDocument.js'
 
 async function buildDocxBuffer(paragraphs = [], tableRows = []) {
@@ -39,6 +46,67 @@ const quietLogger = {
 }
 
 
+
+test('classifyResumeFileMagic identifies PDF, DOCX zip, legacy DOC OLE, and unknown buffers', async () => {
+  const pdfBuffer = Buffer.from('%PDF-1.7\nbody')
+  const docxBuffer = await buildDocxBuffer(['Jane Doe'], [])
+  const oleDocBuffer = Buffer.concat([
+    Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    Buffer.from('legacy-doc-body'),
+  ])
+  const unknownBuffer = Buffer.from('not a recognized document')
+
+  assert.deepEqual(classifyResumeFileMagic(pdfBuffer), {
+    classification: 'pdf',
+    hasWordDocumentXml: false,
+  })
+  assert.deepEqual(classifyResumeFileMagic(docxBuffer), {
+    classification: 'docx_zip',
+    hasWordDocumentXml: true,
+  })
+  assert.deepEqual(classifyResumeFileMagic(oleDocBuffer), {
+    classification: 'legacy_doc_ole',
+    hasWordDocumentXml: false,
+  })
+  assert.deepEqual(classifyResumeFileMagic(unknownBuffer), {
+    classification: 'unknown',
+    hasWordDocumentXml: false,
+  })
+})
+
+test('safe resume file diagnostics omit content and base64 while preserving file identity fields', async () => {
+  const docxBuffer = await buildDocxBuffer(['Private Candidate Name'], [])
+  const diagnostics = buildSafeResumeFileDiagnostics({
+    resumeId: 'resume-123',
+    analysisId: 'analysis-456',
+    parseJobId: 'resume:resume-123',
+    originalFilename: 'candidate.docx',
+    displayFilename: 'candidate_upload.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    originalMimeType: 'application/octet-stream',
+    normalizedMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    fileSize: docxBuffer.length,
+    fileBuffer: docxBuffer,
+    extension: 'docx',
+    extractionMethod: 'docx_mammoth_text_extraction',
+    extractedTextCharCount: 23,
+    preparedMimeType: 'text/plain',
+    inputKind: 'extracted_text',
+  })
+  const serialized = JSON.stringify(diagnostics)
+
+  assert.equal(diagnostics.resumeId, 'resume-123')
+  assert.equal(diagnostics.analysisId, 'analysis-456')
+  assert.equal(diagnostics.parseJobId, 'resume:resume-123')
+  assert.equal(diagnostics.originalFilename, 'candidate.docx')
+  assert.equal(diagnostics.displayFilename, 'candidate_upload.docx')
+  assert.equal(diagnostics.fileSignature, 'docx_zip')
+  assert.equal(diagnostics.hasWordDocumentXml, true)
+  assert.equal(serialized.includes('Private Candidate Name'), false)
+  assert.equal(serialized.includes('base64'), false)
+  assert.equal(serialized.includes('content'), false)
+})
+
 test('compareResumeTextFingerprints identifies equivalent extracted resume text without exposing content', () => {
   const left = 'Resume\nPriya Nair\nQA Automation Engineer\nPage 1 of 2\nPlaywright   regression automation'
   const right = '  priya nair  \nqa automation engineer\nplaywright regression automation\n'
@@ -51,12 +119,12 @@ test('compareResumeTextFingerprints identifies equivalent extracted resume text 
 })
 
 test('prepareResumePayloadForAnalysis keeps PDF payload unchanged', async () => {
-  const payload = Buffer.from('fake pdf bytes').toString('base64')
+  const payload = Buffer.from('%PDF-1.7 fake pdf bytes').toString('base64')
   const result = await prepareResumePayloadForAnalysis({
     fileBufferBase64: payload,
     mimeType: 'application/pdf',
     filename: 'resume.pdf',
-    fileSize: Buffer.from('fake pdf bytes').length,
+    fileSize: Buffer.from('%PDF-1.7 fake pdf bytes').length,
   })
 
   assert.equal(result.fileBufferBase64, payload)
@@ -65,9 +133,12 @@ test('prepareResumePayloadForAnalysis keeps PDF payload unchanged', async () => 
   assert.equal(result.inputKind, 'pdf_binary')
   assert.equal(result.inputMode, 'binary')
   assert.equal(result.diagnostics.sourceFormat, 'pdf')
-  assert.equal(result.diagnostics.extractionMethod, 'provider_pdf_binary')
+  assert.equal(result.diagnostics.extractionMethod, 'pdf_binary_provider_input')
   assert.equal(result.diagnostics.extractedTextCharCount, 0)
   assert.equal(result.diagnostics.normalizedTextFingerprint, null)
+  assert.equal(result.diagnostics.fileSignature, 'pdf')
+  assert.equal(result.diagnostics.preparedMimeType, 'application/pdf')
+  assert.equal(result.diagnostics.inputKind, 'pdf_binary')
 })
 
 test('prepareResumePayloadForAnalysis extracts selectable text from a valid DOCX with paragraphs and a table', async () => {
@@ -94,9 +165,13 @@ test('prepareResumePayloadForAnalysis extracts selectable text from a valid DOCX
   assert.match(result.extractedText, /Playwright/)
   assert.equal(Buffer.from(result.fileBufferBase64, 'base64').toString('utf8'), result.extractedText)
   assert.equal(result.diagnostics.sourceFormat, 'docx')
-  assert.equal(result.diagnostics.extractionMethod, 'mammoth_raw_text')
+  assert.equal(result.diagnostics.extractionMethod, 'docx_mammoth_text_extraction')
   assert.equal(result.diagnostics.extractedTextCharCount, result.extractedText.length)
   assert.equal(typeof result.diagnostics.normalizedTextFingerprint, 'string')
+  assert.equal(result.diagnostics.fileSignature, 'docx_zip')
+  assert.equal(result.diagnostics.hasWordDocumentXml, true)
+  assert.equal(result.diagnostics.preparedMimeType, 'text/plain')
+  assert.equal(result.diagnostics.inputKind, 'extracted_text')
 })
 
 test('prepareResumePayloadForAnalysis accepts octet-stream DOCX via extension fallback path', async () => {
@@ -129,6 +204,8 @@ test('prepareResumePayloadForAnalysis fails invalid DOCX with deterministic inva
       assert.equal(error.diagnostics.decodedBufferByteLength, fakeDocxBuffer.length)
       assert.equal(error.diagnostics.hasDocxZipMagic, false)
       assert.equal(error.diagnostics.hasWordDocumentXml, false)
+      assert.equal(error.diagnostics.extractionMethod, 'docx_mammoth_text_extraction')
+      assert.equal(error.diagnostics.originalFilename, 'resume.docx')
       return true
     },
   )
@@ -149,6 +226,8 @@ test('prepareResumePayloadForAnalysis fails DOCX missing readable text with empt
       assert.equal(error.diagnostics.hasDocxZipMagic, true)
       assert.equal(error.diagnostics.hasWordDocumentXml, true)
       assert.equal(error.diagnostics.mammothTextLength, 0)
+      assert.equal(error.diagnostics.extractionMethod, 'docx_mammoth_text_extraction')
+      assert.equal(error.diagnostics.fileSignature, 'docx_zip')
       return true
     },
   )
@@ -185,6 +264,8 @@ test('prepareResumePayloadForAnalysis fails .doc filename with application/mswor
       assert.equal(error.nonRetriable, true)
       assert.equal(error.diagnostics.hasDocExtension, true)
       assert.equal(error.diagnostics.hasLegacyMimeType, true)
+      assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_rejected')
+      assert.equal(error.diagnostics.fileSignature, 'unknown')
       return true
     },
   )
@@ -219,6 +300,8 @@ test('prepareResumePayloadForAnalysis fails extensionless application/msword as 
       assert.match(error.message, /^resume_unsupported_legacy_doc::/)
       assert.equal(error.diagnostics.extension, null)
       assert.equal(error.diagnostics.hasLegacyMimeType, true)
+      assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_rejected')
+      assert.equal(error.diagnostics.fileSignature, 'unknown')
       return true
     },
   )
@@ -243,6 +326,8 @@ test('prepareResumePayloadForAnalysis fails OLE compound legacy DOC before Mammo
       assert.match(error.message, /^resume_unsupported_legacy_doc::/)
       assert.equal(error.diagnostics.hasOleMagic, true)
       assert.equal(error.diagnostics.hasMismatch, true)
+      assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_rejected')
+      assert.equal(error.diagnostics.fileSignature, 'legacy_doc_ole')
       assert.doesNotMatch(error.message, /docx_empty_extraction/)
       return true
     },
@@ -262,6 +347,6 @@ test('prepareResumePayloadForAnalysis normalizes text/plain into extracted_text 
   assert.equal(result.inputKind, 'extracted_text')
   assert.equal(result.inputMode, 'extracted_text')
   assert.equal(result.extractedText, text)
-  assert.equal(result.diagnostics.extractionMethod, 'uploaded_text')
+  assert.equal(result.diagnostics.extractionMethod, 'text_plain_extraction')
   assert.equal(result.diagnostics.extractedTextCharCount, text.length)
 })
