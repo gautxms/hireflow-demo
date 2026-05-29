@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -34,6 +34,7 @@ export default function AccountSettingsPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [passwordHint, setPasswordHint] = useState('')
   const [passwordMismatch, setPasswordMismatch] = useState('')
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [isSigningOutAll, setIsSigningOutAll] = useState(false)
   const [toast, setToast] = useState({ type: 'success', message: '' })
@@ -43,18 +44,19 @@ export default function AccountSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const token = useMemo(() => localStorage.getItem(TOKEN_STORAGE_KEY), [])
+  const isProfileDirty = Boolean(profile) && (company !== (profile.company || '') || phone !== (profile.phone || ''))
 
-  const pushToast = (type, message) => {
+  const pushToast = useCallback((type, message) => {
     setToast({ type, message })
     window.setTimeout(() => setToast({ type: 'success', message: '' }), 2800)
-  }
+  }, [])
 
   const authHeaders = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
   }
 
-  async function loadProfile() {
+  const loadProfile = useCallback(async () => {
     if (!token) {
       pushToast('error', 'Please log in first.')
       setLoading(false)
@@ -79,14 +81,18 @@ export default function AccountSettingsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [pushToast, token])
 
   useEffect(() => {
     loadProfile()
-  }, [])
+  }, [loadProfile])
 
   const handleProfileSave = async (event) => {
     event.preventDefault()
+
+    if (!isProfileDirty) {
+      return
+    }
 
     if (phone.trim() && !E164_REGEX.test(phone.trim())) {
       pushToast('error', 'Phone must use E.164 format (example: +14155552671).')
@@ -94,6 +100,7 @@ export default function AccountSettingsPage() {
     }
 
     try {
+      setIsSavingProfile(true)
       const response = await fetch(`${API_BASE}/profile/me`, {
         method: 'PATCH',
         headers: authHeaders,
@@ -106,10 +113,14 @@ export default function AccountSettingsPage() {
       }
 
       setProfile(payload.user)
+      setCompany(payload.user.company || '')
+      setPhone(payload.user.phone || '')
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user))
       pushToast('success', 'Profile updated successfully.')
     } catch (error) {
       pushToast('error', error.message)
+    } finally {
+      setIsSavingProfile(false)
     }
   }
 
@@ -275,18 +286,12 @@ export default function AccountSettingsPage() {
           </label>
 
           <label className="account-settings-label account-settings-label--readonly">
-            <span className="account-settings-label-heading">
-              Email
-              <span className="account-settings-readonly-badge" aria-label="Read-only field">Read only</span>
-            </span>
+            <span>Email</span>
             <input className="account-settings-input account-settings-input--readonly" value={profile.email || ''} disabled />
           </label>
 
           <label className="account-settings-label account-settings-label--readonly">
-            <span className="account-settings-label-heading">
-              Subscription status
-              <span className="account-settings-readonly-badge" aria-label="Read-only field">Read only</span>
-            </span>
+            <span>Subscription status</span>
             <input
               className="account-settings-input account-settings-input--readonly"
               value={profile.subscription_status || 'inactive'}
@@ -298,13 +303,11 @@ export default function AccountSettingsPage() {
             To change subscription, visit <a href="/pricing">Billing</a>.
           </div>
 
-          <div className="type-small account-settings-note account-settings-metadata">
-            Account created: {profile.created_at ? new Date(profile.created_at).toLocaleString() : 'Unknown'}
-          </div>
-
-          <button type="submit" className="type-button account-settings-button account-settings-button--fit">
-            Save profile
-          </button>
+          {isProfileDirty && (
+            <button type="submit" className="type-button account-settings-button account-settings-button--fit" disabled={isSavingProfile}>
+              {isSavingProfile ? 'Saving…' : 'Save profile'}
+            </button>
+          )}
         </form>
 
         <div className="type-small account-settings-metadata-row">
