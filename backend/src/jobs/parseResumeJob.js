@@ -18,6 +18,43 @@ function normalizeUnavailableReason(reason) {
   return raw ? raw.slice(0, 180) : 'unknown'
 }
 
+const PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES = new Set([
+  'docx_empty_extraction',
+  'docx_invalid_or_unreadable',
+  'docx_extraction_failed',
+  'extraction_empty',
+  'legacy_word_format',
+  'resume_unsupported_legacy_doc',
+])
+
+function getFailureCategory(error) {
+  const message = String(error?.message || error?.unavailableReason || '').trim()
+  const prefixedCategory = message.match(/^([a-z0-9_]+)::/i)?.[1]
+  return normalizeString(error?.category)
+    || normalizeString(error?.extractionCategory)
+    || normalizeString(error?.failureCategory)
+    || normalizeString(prefixedCategory)
+}
+
+function isPreProviderLocalExtractionFailure(error) {
+  const category = getFailureCategory(error)
+  return PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES.has(category)
+}
+
+function normalizeProviderName(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized.includes('anthropic')) return 'anthropic'
+  if (normalized.includes('openai')) return 'openai'
+  return normalized
+}
+
+function getProviderFromFailureMetadata(error) {
+  return normalizeProviderName(error?.provider)
+    || normalizeProviderName(error?.providerName)
+    || normalizeProviderName(error?.providerLabel)
+}
+
 function normalizeString(value) {
   const normalized = String(value || '').trim()
   return normalized || null
@@ -372,6 +409,102 @@ async function persistTokenUsageMetric({
   )
 }
 
+
+function buildTokenUsageMetadata({ attempt = {}, filename, jobDescriptionContext, success }) {
+  return {
+    source: 'ai_primary_or_fallback_parse',
+    credentialLabel: attempt?.credentialLabel || 'primary',
+    providerSource: attempt?.providerSource || 'unknown',
+    failureCategory: attempt?.failureCategory || null,
+    failureReason: attempt?.failureReason || null,
+    promptVersion: Number(attempt?.promptVersion || 1),
+    promptIsDefaultFallback: Boolean(attempt?.promptIsDefaultFallback),
+    success: Boolean(success),
+    filename,
+    jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
+    jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
+  }
+}
+
+async function persistAiSuccessTokenUsage({ aiResponse, resumeId, parseJobId, userId, jobDescriptionId, filename, jobDescriptionContext }) {
+  const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
+    ? aiResponse.attempts
+    : [{
+        success: true,
+        provider: aiResponse?.provider || 'anthropic-primary',
+        model: aiResponse?.model || null,
+        credentialLabel: aiResponse?.credentialLabel || 'primary',
+        providerSource: aiResponse?.providerSource || 'unknown',
+        tokenUsage: aiResponse?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
+      }]
+
+  for (const attempt of usageAttempts) {
+    await persistTokenUsageMetric({
+      resumeId,
+      parseJobId,
+      userId,
+      jobDescriptionId,
+      provider: attempt?.provider || 'anthropic',
+      model: attempt?.model || null,
+      tokenUsage: attempt?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
+      metadata: buildTokenUsageMetadata({ attempt, filename, jobDescriptionContext, success: attempt?.success }),
+    })
+  }
+}
+
+async function persistAiFailureTokenUsage({ error, resumeId, parseJobId, userId, jobDescriptionId, filename, jobDescriptionContext }) {
+  const failedAttempts = Array.isArray(error?.attempts) ? error.attempts : []
+  if (failedAttempts.length > 0) {
+    for (const attempt of failedAttempts) {
+      await persistTokenUsageMetric({
+        resumeId,
+        parseJobId,
+        userId,
+        jobDescriptionId,
+        provider: attempt?.provider || 'anthropic',
+        model: attempt?.model || null,
+        tokenUsage: attempt?.tokenUsage || {
+          usageAvailable: false,
+          unavailableReason: `provider_request_failed:${normalizeUnavailableReason(error.message)}`,
+        },
+        metadata: buildTokenUsageMetadata({ attempt, filename, jobDescriptionContext, success: false }),
+      })
+    }
+    return { persisted: failedAttempts.length, reason: 'provider_attempts' }
+  }
+
+  if (isPreProviderLocalExtractionFailure(error)) {
+    return { persisted: 0, reason: 'pre_provider_local_extraction_failure' }
+  }
+
+  const provider = getProviderFromFailureMetadata(error)
+  if (!provider) {
+    return { persisted: 0, reason: 'provider_not_attempted' }
+  }
+
+  await persistTokenUsageMetric({
+    resumeId,
+    parseJobId,
+    userId,
+    jobDescriptionId,
+    provider,
+    model: error?.model || null,
+    tokenUsage: {
+      usageAvailable: false,
+      unavailableReason: `provider_request_failed:${normalizeUnavailableReason(error.message)}`,
+    },
+    metadata: {
+      source: 'ai_primary_or_fallback_parse',
+      promptVersion: 1,
+      promptIsDefaultFallback: true,
+      filename,
+      jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
+      jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
+    },
+  })
+  return { persisted: 1, reason: 'provider_failure_metadata' }
+}
+
 async function setJobState(jobId, fields) {
   const columns = Object.keys(fields)
   const values = Object.values(fields)
@@ -528,43 +661,17 @@ export async function runParse(job) {
       },
     )
     const aiResult = aiResponse?.result || {}
-    const usageAttempts = Array.isArray(aiResponse?.attempts) && aiResponse.attempts.length > 0
-      ? aiResponse.attempts
-      : [{
-          success: true,
-          provider: aiResponse?.provider || 'anthropic-primary',
-          model: aiResponse?.model || null,
-          credentialLabel: aiResponse?.credentialLabel || 'primary',
-          providerSource: aiResponse?.providerSource || 'unknown',
-          tokenUsage: aiResponse?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
-        }]
-
-    for (const attempt of usageAttempts) {
-      await persistTokenUsageMetric({
-        resumeId,
-        parseJobId: job.id,
-        userId: job.data.userId,
-        jobDescriptionId: job.data.jobDescriptionId || null,
-        provider: attempt?.provider || 'anthropic',
-        model: attempt?.model || null,
-        tokenUsage: attempt?.tokenUsage || { usageAvailable: false, unavailableReason: 'provider_usage_missing' },
-        metadata: {
-          source: 'ai_primary_or_fallback_parse',
-          credentialLabel: attempt?.credentialLabel || 'primary',
-          providerSource: attempt?.providerSource || 'unknown',
-          failureCategory: attempt?.failureCategory || null,
-          failureReason: attempt?.failureReason || null,
-          promptVersion: Number(attempt?.promptVersion || 1),
-          promptIsDefaultFallback: Boolean(attempt?.promptIsDefaultFallback),
-          success: Boolean(attempt?.success),
-          filename,
-          jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
-          jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
-        },
-      }).catch((persistError) => {
-        console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
-      })
-    }
+    await persistAiSuccessTokenUsage({
+      aiResponse,
+      resumeId,
+      parseJobId: job.id,
+      userId: job.data.userId,
+      jobDescriptionId: job.data.jobDescriptionId || null,
+      filename,
+      jobDescriptionContext,
+    }).catch((persistError) => {
+      console.warn('[Parse] Failed to persist token usage metadata:', persistError.message)
+    })
 
     const postAiCancellation = await cancelIfAnalysisInactive(job, 'after_ai')
     if (postAiCancellation) return postAiCancellation
@@ -573,59 +680,17 @@ export async function runParse(job) {
     analysisResult = aiResult
     parseMethod = aiResponse?.provider || 'anthropic-primary'
   } catch (aiError) {
-    const failedAttempts = Array.isArray(aiError?.attempts) ? aiError.attempts : []
-    if (failedAttempts.length > 0) {
-      for (const attempt of failedAttempts) {
-        await persistTokenUsageMetric({
-          resumeId,
-          parseJobId: job.id,
-          userId: job.data.userId,
-          jobDescriptionId: job.data.jobDescriptionId || null,
-          provider: attempt?.provider || 'anthropic',
-          model: attempt?.model || null,
-          tokenUsage: attempt?.tokenUsage || {
-            usageAvailable: false,
-            unavailableReason: `provider_request_failed:${normalizeUnavailableReason(aiError.message)}`,
-          },
-          metadata: {
-            source: 'ai_primary_or_fallback_parse',
-            credentialLabel: attempt?.credentialLabel || 'primary',
-            providerSource: attempt?.providerSource || 'unknown',
-            failureCategory: attempt?.failureCategory || null,
-            failureReason: attempt?.failureReason || null,
-            promptVersion: Number(attempt?.promptVersion || 1),
-            promptIsDefaultFallback: Boolean(attempt?.promptIsDefaultFallback),
-            success: false,
-            filename,
-            jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
-            jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
-          },
-        }).catch((persistError) => {
-          console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
-        })
-      }
-    } else {
-      await persistTokenUsageMetric({
-        resumeId,
-        parseJobId: job.id,
-        userId: job.data.userId,
-        jobDescriptionId: job.data.jobDescriptionId || null,
-        tokenUsage: {
-          usageAvailable: false,
-          unavailableReason: `provider_request_failed:${normalizeUnavailableReason(aiError.message)}`,
-        },
-        metadata: {
-          source: 'ai_primary_or_fallback_parse',
-          promptVersion: 1,
-          promptIsDefaultFallback: true,
-          filename,
-          jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
-          jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
-        },
-      }).catch((persistError) => {
-        console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
-      })
-    }
+    await persistAiFailureTokenUsage({
+      error: aiError,
+      resumeId,
+      parseJobId: job.id,
+      userId: job.data.userId,
+      jobDescriptionId: job.data.jobDescriptionId || null,
+      filename,
+      jobDescriptionContext,
+    }).catch((persistError) => {
+      console.warn('[Parse] Failed to persist missing token usage metadata:', persistError.message)
+    })
 
     throw aiError
   }
@@ -814,4 +879,7 @@ export const __testables = {
   buildNormalizedCandidates,
   runParse,
   isAnalysisActiveForJob,
+  isPreProviderLocalExtractionFailure,
+  persistAiFailureTokenUsage,
+  persistAiSuccessTokenUsage,
 }
