@@ -17,6 +17,7 @@ import VerifyEmailInfoPage from './components/VerifyEmailInfoPage'
 import VerifyEmail from './pages/VerifyEmail'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
+import CookiePolicyPage from './components/CookiePolicyPage'
 import RefundPolicy from './pages/RefundPolicy'
 const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
 const BillingCancel = lazy(() => import('./pages/BillingCancel'))
@@ -40,6 +41,7 @@ import BrandLogo from './components/BrandLogo'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
 import PublicRouteChunkErrorBoundary from './components/PublicRouteChunkErrorBoundary'
+import CookieConsentProvider from './components/privacy/CookieConsentProvider'
 import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
 import API_BASE from './config/api'
 import IntentLandingPage from './pages/seo/IntentLandingPage'
@@ -89,6 +91,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/demo',
   '/privacy',
   '/terms',
+  '/cookie-policy',
   '/refund-policy',
   ...INTENT_PAGE_ORDER,
 ])
@@ -474,6 +477,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (resolvedPathname === '/privacy') {
       return <PrivacyPage />
+    }
+
+    if (resolvedPathname === '/cookie-policy') {
+      return <CookiePolicyPage />
     }
 
     if (resolvedPathname === '/refund-policy') {
@@ -1397,20 +1404,22 @@ export default function App() {
 
   return (
     <AdminAuthProvider>
-      <MainSite
-      isAuthenticated={isAuthenticated}
-      onLogout={logout}
-      onRequireAuth={requireAuth}
-      pathname={pathname}
-      onAuthSuccess={handleAuthSuccess}
-      onSignupSuccess={handleSignupSuccess}
-      onUserProfileUpdate={handleUserProfileUpdate}
-      authPrompt={authPrompt}
-      subscriptionStatus={subscriptionStatus}
-      userProfile={userProfile}
-      pendingVerificationEmail={pendingVerificationEmail}
-      setPendingVerificationEmail={setPendingVerificationEmail}
-    />
+      <CookieConsentProvider>
+        <MainSite
+          isAuthenticated={isAuthenticated}
+          onLogout={logout}
+          onRequireAuth={requireAuth}
+          pathname={pathname}
+          onAuthSuccess={handleAuthSuccess}
+          onSignupSuccess={handleSignupSuccess}
+          onUserProfileUpdate={handleUserProfileUpdate}
+          authPrompt={authPrompt}
+          subscriptionStatus={subscriptionStatus}
+          userProfile={userProfile}
+          pendingVerificationEmail={pendingVerificationEmail}
+          setPendingVerificationEmail={setPendingVerificationEmail}
+        />
+      </CookieConsentProvider>
     </AdminAuthProvider>
   )
 }

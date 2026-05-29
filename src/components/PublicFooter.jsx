@@ -1,3 +1,5 @@
+import { openCookiePreferences } from '../privacy/cookieConsent'
+
 export default function PublicFooter() {
   const seoLinks = [
     { href: '/ai-resume-screening', label: 'AI Resume Screening' },
@@ -39,9 +41,17 @@ export default function PublicFooter() {
           <ul className="public-footer__list">
             <li><a className="public-footer__link" href="/privacy">Privacy</a></li>
             <li><a className="public-footer__link" href="/terms">Terms</a></li>
+            <li><a className="public-footer__link" href="/cookie-policy">Cookie Policy</a></li>
             <li><a className="public-footer__link" href="/refund-policy">Refund Policy</a></li>
           </ul>
         </nav>
+      </div>
+
+      <p className="public-footer__trust-copy">Privacy-conscious by design. Necessary cookies keep your account secure; optional analytics help us improve HireFlow.</p>
+
+      <div className="public-footer__utility" aria-label="Privacy controls">
+        <button type="button" className="public-footer__button-link" onClick={openCookiePreferences}>Cookie preferences</button>
+        <a className="public-footer__button-link" href="/cookie-policy">Cookie Policy</a>
       </div>
 
       <p className="public-footer__copyright">© 2026 Hireflow. All rights reserved.</p>

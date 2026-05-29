@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { openCookiePreferences } from '../privacy/cookieConsent'
 import './SettingsPage.css'
 
 const tabs = [
@@ -124,7 +125,7 @@ export default function SettingsPage({ onBack }) {
 
           {activeTab === 'billing' && (<div role="tabpanel" id="settings-panel-billing" aria-labelledby="settings-tab-billing"><h2 className="settings-tab-title">Billing</h2><div className="settings-card"><h3 className="settings-card-title">Plan & Subscription</h3><div className="settings-block-spacing">Pro Plan • $299/month</div><button type="button" className="settings-secondary-btn">Manage subscription</button></div><div className="settings-card"><h3 className="settings-card-title">Payment Methods</h3><div className="settings-block-spacing">Visa ending in 4242</div><ComingSoonRow title="Billing contacts" description="Invoice recipients and billing contact rules will be available soon." /></div></div>)}
 
-          {activeTab === 'privacy' && (<div role="tabpanel" id="settings-panel-privacy" aria-labelledby="settings-tab-privacy"><h2 className="settings-tab-title">Privacy & Data</h2><div className="settings-card"><h3 className="settings-card-title">Export Data</h3><ComingSoonRow title="Account data export" description="Download a copy of your account data when export tooling is ready." /></div><div className="settings-card"><h3 className="settings-card-title">Delete Data</h3><ComingSoonRow title="Account deletion" description="Self-serve permanent account deletion workflow is coming soon." /></div></div>)}
+          {activeTab === 'privacy' && (<div role="tabpanel" id="settings-panel-privacy" aria-labelledby="settings-tab-privacy"><h2 className="settings-tab-title">Privacy & Data</h2><div className="settings-card"><h3 className="settings-card-title">Cookie Preferences</h3><p className="settings-block-spacing">Manage optional analytics and marketing cookies. Necessary cookies stay enabled for account security and app functionality.</p><button type="button" className="settings-secondary-btn" onClick={openCookiePreferences}>Open cookie preferences</button></div><div className="settings-card"><h3 className="settings-card-title">Export Data</h3><ComingSoonRow title="Account data export" description="Download a copy of your account data when export tooling is ready." /></div><div className="settings-card"><h3 className="settings-card-title">Delete Data</h3><ComingSoonRow title="Account deletion" description="Self-serve permanent account deletion workflow is coming soon." /></div></div>)}
         </div>
       </div>
 

@@ -44,6 +44,10 @@ export const PUBLIC_PAGE_SEO = {
     title: 'HireFlow Privacy Policy',
     description: 'Learn how HireFlow collects, uses, and protects personal information processed on our hiring platform.',
   },
+  '/cookie-policy': {
+    title: 'HireFlow Cookie Policy',
+    description: 'Learn how HireFlow uses necessary cookies, optional analytics, and privacy-safe cookie preferences.',
+  },
   '/refund-policy': {
     title: 'HireFlow Refund Policy',
     description: 'Read HireFlow refund terms for subscriptions, trials, and billing support response timelines.',
