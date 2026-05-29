@@ -9,6 +9,7 @@ import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js
 import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
+import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -224,28 +225,35 @@ function getPreferredJobDescriptionText(row = {}) {
   return candidates.map((value) => normalizeString(value)).find(Boolean) || null
 }
 
-function isLegacyWordDocument({ filename, mimeType }) {
-  const normalizedMime = String(mimeType || '').trim().toLowerCase()
-  const normalizedName = String(filename || '').trim().toLowerCase()
-
-  if (normalizedName.endsWith('.docx')) return false
-  if (normalizedName.endsWith('.doc')) return true
-
-  return normalizedMime === 'application/msword'
+function isLegacyWordDocument({ filename, mimeType, originalMimeType, fileBuffer } = {}) {
+  return getLegacyWordDocumentDetection({ filename, mimeType, originalMimeType, fileBuffer }).isLegacyWordDocument
 }
 
-async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename, fileSize }) {
+async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, originalMimeType, filename, fileSize, logger = console }) {
   if (!fileBufferBase64) {
     throw new Error('Resume payload is empty')
   }
 
-  if (isLegacyWordDocument({ filename, mimeType })) {
-    throw new Error('resume_unsupported_legacy_doc::Legacy .doc files are not supported')
+  const fileBuffer = Buffer.from(String(fileBufferBase64 || ''), 'base64')
+  const legacyWordDetection = getLegacyWordDocumentDetection({ filename, mimeType, originalMimeType, fileBuffer })
+
+  if (legacyWordDetection.isLegacyWordDocument) {
+    if (legacyWordDetection.hasMismatch) {
+      logger?.warn?.('[Parse] Legacy Word MIME/extension mismatch rejected before document extraction', {
+        filename: filename || null,
+        mimeType: mimeType || null,
+        originalMimeType: originalMimeType || null,
+        extension: legacyWordDetection.extension || null,
+        hasOleMagic: legacyWordDetection.hasOleMagic,
+      })
+    }
+    throw createUnsupportedLegacyWordError({ detection: legacyWordDetection })
   }
 
   const preparedPayload = await prepareDocumentPayloadForAnalysis({
     fileBufferBase64,
     mimeType,
+    originalMimeType,
     filename,
     fileSize,
   })
@@ -649,6 +657,7 @@ export async function runParse(job) {
   const preparedResumePayload = await prepareResumePayloadForAnalysis({
     fileBufferBase64,
     mimeType,
+    originalMimeType,
     filename: analysisFilename,
     fileSize,
   })

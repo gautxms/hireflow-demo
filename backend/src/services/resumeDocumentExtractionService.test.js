@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import JSZip from 'jszip'
 
 import { compareResumeTextFingerprints, inspectDocxBuffer, prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
+import { UNSUPPORTED_LEGACY_WORD_MESSAGE } from '../utils/legacyWordDocument.js'
 
 async function buildDocxBuffer(paragraphs = [], tableRows = []) {
   const zip = new JSZip()
@@ -170,14 +171,81 @@ test('inspectDocxBuffer reports zip signature and document XML without exposing 
   assert.equal(JSON.stringify(diagnostics).includes('Priya'), false)
 })
 
-test('prepareResumePayloadForAnalysis fails legacy .doc as unsupported before provider stage', async () => {
+test('prepareResumePayloadForAnalysis fails .doc filename with application/msword as unsupported legacy DOC', async () => {
   await assert.rejects(
     () => prepareResumePayloadForAnalysis({
       fileBufferBase64: Buffer.from('legacy').toString('base64'),
       mimeType: 'application/msword',
       filename: 'resume.doc',
+      logger: quietLogger,
     }),
-    /legacy_word_format::/,
+    (error) => {
+      assert.match(error.message, /^resume_unsupported_legacy_doc::/)
+      assert.equal(error.message, `resume_unsupported_legacy_doc::${UNSUPPORTED_LEGACY_WORD_MESSAGE}`)
+      assert.equal(error.nonRetriable, true)
+      assert.equal(error.diagnostics.hasDocExtension, true)
+      assert.equal(error.diagnostics.hasLegacyMimeType, true)
+      return true
+    },
+  )
+})
+
+test('prepareResumePayloadForAnalysis fails uppercase .DOC as unsupported legacy DOC', async () => {
+  await assert.rejects(
+    () => prepareResumePayloadForAnalysis({
+      fileBufferBase64: Buffer.from('legacy').toString('base64'),
+      mimeType: 'application/octet-stream',
+      filename: 'RESUME.DOC',
+      logger: quietLogger,
+    }),
+    (error) => {
+      assert.match(error.message, /^resume_unsupported_legacy_doc::/)
+      assert.equal(error.diagnostics.extension, 'doc')
+      assert.equal(error.diagnostics.hasDocExtension, true)
+      return true
+    },
+  )
+})
+
+test('prepareResumePayloadForAnalysis fails extensionless application/msword as unsupported legacy DOC', async () => {
+  await assert.rejects(
+    () => prepareResumePayloadForAnalysis({
+      fileBufferBase64: Buffer.from('legacy').toString('base64'),
+      mimeType: 'application/msword',
+      filename: 'resume',
+      logger: quietLogger,
+    }),
+    (error) => {
+      assert.match(error.message, /^resume_unsupported_legacy_doc::/)
+      assert.equal(error.diagnostics.extension, null)
+      assert.equal(error.diagnostics.hasLegacyMimeType, true)
+      return true
+    },
+  )
+})
+
+test('prepareResumePayloadForAnalysis fails OLE compound legacy DOC before Mammoth DOCX extraction', async () => {
+  const oleDocBuffer = Buffer.concat([
+    Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    Buffer.from('legacy-doc-body'),
+  ])
+
+  await assert.rejects(
+    () => prepareResumePayloadForAnalysis({
+      fileBufferBase64: oleDocBuffer.toString('base64'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      originalMimeType: 'application/msword',
+      filename: 'resume.docx',
+      fileSize: oleDocBuffer.length,
+      logger: quietLogger,
+    }),
+    (error) => {
+      assert.match(error.message, /^resume_unsupported_legacy_doc::/)
+      assert.equal(error.diagnostics.hasOleMagic, true)
+      assert.equal(error.diagnostics.hasMismatch, true)
+      assert.doesNotMatch(error.message, /docx_empty_extraction/)
+      return true
+    },
   )
 })
 

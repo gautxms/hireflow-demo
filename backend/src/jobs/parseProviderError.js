@@ -7,7 +7,7 @@ const CATEGORY_MESSAGES = {
   invalid_request_error: 'Request validation failed before provider execution.',
   persistence_schema_error: 'Database schema mismatch blocked saving AI analysis results.',
   extraction_failed: 'Unable to extract readable text from the uploaded file.',
-  unsupported_format: 'Unsupported document format; please upload DOCX or PDF.',
+  unsupported_format: 'Legacy Word .doc files are not supported. Please upload this resume as DOCX or text-based PDF.',
   not_found_error: 'AI model configuration issue in Admin Security.',
   auth_error: 'AI key invalid or expired.',
   billing_quota_error: 'AI provider billing/quota issue; update credits or switch provider.',
@@ -139,8 +139,8 @@ function buildHints(category, { provider, model } = {}) {
     return {
       action: 'reupload_as_docx_or_pdf',
       remediationSteps: [
-        'Legacy .doc files are not supported for parsing.',
-        'Re-save the document as DOCX or export to PDF, then retry.',
+        'Legacy Word .doc files are not supported.',
+        'Please upload this resume as DOCX or text-based PDF.',
       ],
     }
   }
@@ -278,6 +278,8 @@ export function detectProviderErrorCategory(errorLike) {
 
   if (
     lower.includes('legacy_word_format')
+    || lower.includes('resume_unsupported_legacy_doc')
+    || lower.includes('legacy word .doc')
     || lower.includes('legacy .doc')
   ) {
     return { category: 'unsupported_format', extractedDetails: '' }

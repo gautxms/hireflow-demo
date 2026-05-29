@@ -1,8 +1,12 @@
 import { createHash } from 'crypto'
+import {
+  createUnsupportedLegacyWordError,
+  getLegacyWordDocumentDetection,
+  DOCX_MIME_TYPE,
+} from '../utils/legacyWordDocument.js'
 
 let mammothClient = null
 
-const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 const DOCX_DOCUMENT_XML_PATH = 'word/document.xml'
 const TEXT_FINGERPRINT_VERSION = 'resume-text-fingerprint-v1'
 
@@ -238,18 +242,35 @@ export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.d
   }
 }
 
-export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename, fileSize, logger = console }) {
+export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, originalMimeType, filename, fileSize, logger = console }) {
   const normalizedMimeType = String(mimeType || '').toLowerCase().trim()
+  const normalizedOriginalMimeType = String(originalMimeType || mimeType || '').toLowerCase().trim()
   const normalizedFilename = String(filename || '').trim()
   const lowerFilename = normalizedFilename.toLowerCase()
+  const fileBuffer = decodeBase64ToBuffer(fileBufferBase64)
+  const legacyWordDetection = getLegacyWordDocumentDetection({
+    filename: normalizedFilename,
+    mimeType: normalizedMimeType,
+    originalMimeType: normalizedOriginalMimeType,
+    fileBuffer,
+  })
 
-  if (lowerFilename.endsWith('.doc')) {
-    throw new Error(`legacy_word_format::Legacy .doc files are not supported for ${normalizedFilename || 'uploaded file'}. Please upload .docx or PDF.`)
+  if (legacyWordDetection.isLegacyWordDocument) {
+    if (legacyWordDetection.hasMismatch) {
+      logger?.warn?.('[ResumeExtraction] Legacy Word MIME/extension mismatch rejected before DOCX extraction', {
+        filename: normalizedFilename || null,
+        mimeType: normalizedMimeType || null,
+        originalMimeType: normalizedOriginalMimeType || null,
+        extension: legacyWordDetection.extension || null,
+        hasOleMagic: legacyWordDetection.hasOleMagic,
+      })
+    }
+    throw createUnsupportedLegacyWordError({ detection: legacyWordDetection })
   }
 
   const buildBase = () => ({
     originalFilename: normalizedFilename || null,
-    originalMimeType: normalizedMimeType || null,
+    originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
     extractionWarnings: [],
   })
 
@@ -271,7 +292,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
         inputKind: 'extracted_text',
         inputMode: 'extracted_text',
         preparedMimeType: 'text/plain',
-        originalMimeType: normalizedMimeType || null,
+        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
         extractedText,
         extractionMethod: 'uploaded_text',
       }),
@@ -294,7 +315,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
         inputKind: 'pdf_binary',
         inputMode: 'binary',
         preparedMimeType: normalizedMimeType,
-        originalMimeType: normalizedMimeType || null,
+        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
         extractionMethod: 'provider_pdf_binary',
         fallbackUsed: false,
       }),
@@ -302,10 +323,9 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
   }
 
   if (normalizedMimeType === DOCX_MIME_TYPE || lowerFilename.endsWith('.docx')) {
-    const fileBuffer = decodeBase64ToBuffer(fileBufferBase64)
     const extractedText = await extractTextFromDocxBuffer(fileBuffer, normalizedFilename || 'resume.docx', {
       mimeType: normalizedMimeType || mimeType || DOCX_MIME_TYPE,
-      originalMimeType: normalizedMimeType || mimeType || null,
+      originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
       fileSize,
       logger,
     })
@@ -324,7 +344,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
         inputKind: 'extracted_text',
         inputMode: 'extracted_text',
         preparedMimeType: 'text/plain',
-        originalMimeType: normalizedMimeType || mimeType || null,
+        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
         extractedText,
         extractionMethod: 'mammoth_raw_text',
       }),
@@ -346,7 +366,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputKind: 'binary_unknown',
       inputMode: 'binary',
       preparedMimeType: normalizedMimeType || mimeType,
-      originalMimeType: normalizedMimeType || null,
+      originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
       extractionMethod: 'provider_binary_unknown',
     }),
   }

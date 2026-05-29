@@ -14,6 +14,7 @@ const DETERMINISTIC_PATTERNS = [
   /legacy_word_format/i,
   /unsupported (file )?format/i,
   /legacy \.doc files are not supported/i,
+  /legacy word \.doc files are not supported/i,
   /resume_unsupported_legacy_doc::/i,
   /local request validation failed/i,
   /local payload validation failed/i,
