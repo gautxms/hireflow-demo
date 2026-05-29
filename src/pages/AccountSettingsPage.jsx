@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
+import { openCookiePreferences } from '../privacy/cookieConsent'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -387,6 +388,19 @@ export default function AccountSettingsPage() {
             <button className="type-button account-settings-button" onClick={handleDownloadData}>
               Download personal data (JSON)
             </button>
+          </div>
+        </div>
+
+        <div className="account-settings-subsection">
+          <h3 className="type-h3 account-settings-subsection-title">Cookie preferences</h3>
+          <p className="type-small account-settings-note">
+            Manage optional analytics and marketing cookie choices without changing necessary account and security storage.
+          </p>
+          <div className="account-settings-actions">
+            <button type="button" className="type-button account-settings-button" onClick={openCookiePreferences}>
+              Open cookie preferences
+            </button>
+            <a className="type-button account-settings-button" href="/cookie-policy">Read Cookie Policy</a>
           </div>
         </div>
 
