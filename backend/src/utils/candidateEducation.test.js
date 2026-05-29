@@ -3,14 +3,12 @@ import assert from 'node:assert/strict'
 
 import { formatEducationForDisplay, normalizeCandidateEducation } from './candidateEducation.js'
 
-test('normalizeCandidateEducation preserves AI structured education entries', () => {
+test('normalizeCandidateEducation summarizes AI structured education entries', () => {
   const education = normalizeCandidateEducation([
     { degree: 'MBA', school: 'Example University', graduation_year: '2010' },
   ])
 
-  assert.deepEqual(education, [
-    { degree: 'MBA', school: 'Example University', graduation_year: 2010 },
-  ])
+  assert.deepEqual(education, ['MBA, Example University (2010)'])
 })
 
 test('normalizeCandidateEducation keeps legacy string entries and rejects object coercion artifacts', () => {

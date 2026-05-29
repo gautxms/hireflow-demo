@@ -423,27 +423,29 @@ export function buildCandidateRenderContract(candidate = {}) {
     topSkills: topSkills.slice(0, 3),
   }
 }
-export function toDisplayText(value, fallback = 'N/A') {
-  if (value === null || value === undefined) {
-    return fallback
-  }
+function cleanDisplayString(value, fallback = '') {
+  if (value === null || value === undefined) return fallback
+  if (typeof value === 'object') return fallback
+  const normalized = String(value).replace(/\s+/g, ' ').trim()
+  if (!normalized || /^\[object\s+object\]$/i.test(normalized)) return fallback
+  return normalized
+}
 
-  if (typeof value === 'string') {
-    const normalized = value.trim()
-    return normalized || fallback
-  }
+function joinDisplayParts(parts, separator = ' — ') {
+  return parts.map((part) => cleanDisplayString(part, '')).filter(Boolean).join(separator)
+}
 
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? String(value) : fallback
-  }
+export function formatCandidateFieldForDisplay(value, fallback = 'N/A', fieldName = '') {
+  if (value === null || value === undefined) return fallback
 
-  if (typeof value === 'boolean') {
-    return value ? 'Yes' : 'No'
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+    return cleanDisplayString(value, fallback)
   }
 
   if (Array.isArray(value)) {
     const joined = value
-      .map((entry) => toDisplayText(entry, ''))
+      .map((entry) => formatCandidateFieldForDisplay(entry, '', fieldName))
       .filter(Boolean)
       .join(', ')
       .trim()
@@ -451,18 +453,48 @@ export function toDisplayText(value, fallback = 'N/A') {
   }
 
   if (typeof value === 'object') {
-    if (typeof value.text === 'string' && value.text.trim()) {
-      return value.text.trim()
+    if (fieldName === 'education') {
+      const degree = cleanDisplayString(value.degree || value.qualification || value.program || value.course || value.field_of_study || value.fieldOfStudy, '')
+      const school = cleanDisplayString(value.school || value.institution || value.university || value.college, '')
+      const year = cleanDisplayString(value.graduation_year || value.graduationYear || value.year || value.dates, '')
+      const label = [degree, school].filter(Boolean).join(', ') || cleanDisplayString(value.text || value.label || value.value || value.name, '')
+      if (label) return year ? `${label} (${year})` : label
     }
 
-    if (typeof value.value === 'string' && value.value.trim()) {
-      return value.value.trim()
+    if (fieldName === 'experience') {
+      const title = cleanDisplayString(value.title || value.role || value.position, '')
+      const company = cleanDisplayString(value.company || value.organization || value.employer, '')
+      const dates = cleanDisplayString(value.dates || value.duration || value.period || [value.startDate || value.start, value.endDate || value.end].filter(Boolean).join(' - '), '')
+      const summary = formatCandidateFieldForDisplay(value.summary || value.description || value.highlights || value.responsibilities, '', '')
+      const headline = joinDisplayParts([[title, company].filter(Boolean).join(' at '), dates])
+      const label = [headline, summary].filter(Boolean).join(': ')
+      if (label) return label
     }
 
-    return fallback
+    if (fieldName === 'projects') {
+      const name = cleanDisplayString(value.name || value.title, '')
+      const description = formatCandidateFieldForDisplay(value.description || value.summary || value.details, '', '')
+      const technologies = formatCandidateFieldForDisplay(value.technologies || value.tech || value.stack || value.tools, '', '')
+      const label = joinDisplayParts([name, description, technologies ? `Technologies: ${technologies}` : ''])
+      if (label) return label
+    }
+
+    const direct = cleanDisplayString(value.text || value.value || value.label, '')
+    if (direct) return direct
+
+    if (!fieldName) return fallback
+
+    const scalarValues = Object.values(value)
+      .map((entry) => (typeof entry === 'string' || typeof entry === 'number' ? cleanDisplayString(entry, '') : ''))
+      .filter(Boolean)
+    return [...new Set(scalarValues)].slice(0, 4).join(' — ') || fallback
   }
 
   return fallback
+}
+
+export function toDisplayText(value, fallback = 'N/A') {
+  return formatCandidateFieldForDisplay(value, fallback)
 }
 
 
@@ -476,16 +508,16 @@ function normalizeEducationRecord(record) {
   if (record == null) return null
 
   if (typeof record === 'string') {
-    const text = record.trim()
+    const text = cleanDisplayString(record, '')
     return text ? { degree: text, school: '', graduationYear: '', text } : null
   }
 
   if (typeof record !== 'object' || Array.isArray(record)) return null
 
-  const degree = toDisplayText(record.degree || record.qualification || record.program || record.course, '').trim()
-  const school = toDisplayText(record.school || record.institution || record.university || record.college, '').trim()
-  const graduationYear = toDisplayText(record.graduation_year || record.graduationYear || record.year, '').trim()
-  const fallbackText = toDisplayText(record.text || record.label || record.value || record.name, '').trim()
+  const degree = formatCandidateFieldForDisplay(record.degree || record.qualification || record.program || record.course || record.field_of_study || record.fieldOfStudy, '').trim()
+  const school = formatCandidateFieldForDisplay(record.school || record.institution || record.university || record.college, '').trim()
+  const graduationYear = formatCandidateFieldForDisplay(record.graduation_year || record.graduationYear || record.year || record.dates, '').trim()
+  const fallbackText = formatCandidateFieldForDisplay(record, '', 'education').trim()
 
   if (!degree && !school && !fallbackText) return null
 
@@ -620,7 +652,7 @@ export function buildScoreBreakdownRows(candidate = {}) {
 
 function toStringArray(value) {
   if (!Array.isArray(value)) return []
-  return value.map((entry) => toDisplayText(entry, '')).filter(Boolean)
+  return value.map((entry) => formatCandidateFieldForDisplay(entry, '')).filter(Boolean)
 }
 
 function toPlainObject(value) {
@@ -655,7 +687,8 @@ export function sanitizeExpandedCandidate(candidate = {}) {
     considerations: toStringArray(source.considerations),
     mustHaveSkills: toStringArray(source.mustHaveSkills),
     missingSkills: toStringArray(source.missingSkills),
-    experience: Array.isArray(source.experience) ? source.experience.map((entry) => toPlainObject(entry)) : [],
+    experience: Array.isArray(source.experience) ? source.experience.map((entry) => formatCandidateFieldForDisplay(entry, '', 'experience')).filter(Boolean) : [],
+    projects: Array.isArray(source.projects) ? source.projects.map((entry) => formatCandidateFieldForDisplay(entry, '', 'projects')).filter(Boolean) : [],
     integrity_checks: Array.isArray(source.integrity_checks) ? source.integrity_checks : [],
     fit_assessment: {
       ...fitAssessment,
@@ -739,7 +772,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
     const displayScore = tenPoint == null ? null : tenPoint.toFixed(1)
     const hasDisplayScore = displayScore != null
 
-    const candidateTitle = toDisplayText(candidate?.experience?.[0]?.title || candidate.current_title, '')
+    const candidateTitle = toDisplayText(candidate.current_title, '')
     const yearsRaw = Number(candidate.years_experience)
     const yearsNumber = Number.isFinite(yearsRaw) ? yearsRaw : null
     const experienceLabel = yearsNumber != null ? `${yearsNumber} yrs exp` : '0 yrs exp'

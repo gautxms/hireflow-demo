@@ -14,6 +14,7 @@ import {
   resolveActiveCandidateScore,
   sanitizeExpandedCandidate,
   toDisplayText,
+  formatCandidateFieldForDisplay,
   resolveEducationLabel,
   toSafeScore,
   parseScorePercentage,
@@ -93,6 +94,29 @@ test('toDisplayText normalizes object/array candidate fields into safe renderabl
   assert.equal(toDisplayText(['React', { text: 'Node.js' }, 7]), 'React, Node.js, 7')
 })
 
+
+
+test('formatCandidateFieldForDisplay renders structured education experience and projects without object placeholders', () => {
+  assert.equal(formatCandidateFieldForDisplay({ degree: 'MBA', institution: 'IIM Bangalore', year: 2021 }, 'Not provided', 'education'), 'MBA, IIM Bangalore (2021)')
+  assert.equal(formatCandidateFieldForDisplay({ title: 'Engineer', company: 'Acme', dates: '2020-2024', summary: 'Built APIs' }, 'Not provided', 'experience'), 'Engineer at Acme — 2020-2024: Built APIs')
+  assert.equal(formatCandidateFieldForDisplay({ name: 'Portal', description: 'Hiring workflow', technologies: ['React', 'Node'] }, 'Not provided', 'projects'), 'Portal — Hiring workflow — Technologies: React, Node')
+  assert.equal(formatCandidateFieldForDisplay('[object Object]', 'Not provided', 'education'), 'Not provided')
+})
+
+test('buildExpandedCandidateDrawerViewModel handles historical malformed object fields gracefully', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    education: ['[object Object]', { degree: 'MBA', institution: 'IIM Bangalore', year: 2021 }],
+    experience: ['[object Object]', { title: 'Engineer', company: 'Acme', dates: '2020-2024' }],
+    strengths: [{ label: 'Strong delivery record' }, '[object Object]'],
+  })
+
+  assert.equal(vm.educationLabel, 'MBA — IIM Bangalore (2021)')
+  assert.deepEqual(vm.candidate.experience, ['Engineer at Acme — 2020-2024'])
+  assert.deepEqual(vm.candidateStrengths, ['Strong delivery record'])
+  assert.equal(vm.educationLabel.includes('[object Object]'), false)
+  assert.equal(vm.candidate.experience.join(' ').includes('[object Object]'), false)
+})
 
 test('resolveEducationLabel supports legacy string and malformed payloads safely', () => {
   assert.equal(resolveEducationLabel('B.Tech, IIT Delhi'), 'B.Tech, IIT Delhi')
@@ -299,7 +323,7 @@ test('sanitizeExpandedCandidate strictly defaults arrays, nested objects, and di
   assert.deepEqual(sanitized.fit_assessment.missing, [])
   assert.equal(sanitized.fit_assessment.reason, 'good')
   assert.deepEqual(sanitized.scoreBreakdown, {})
-  assert.deepEqual(sanitized.experience, [{ title: 'Engineer' }, {}])
+  assert.deepEqual(sanitized.experience, ['Engineer'])
 })
 
 test('buildExpandedCandidateDrawerViewModel normalizes malformed candidate shapes safely', async () => {
