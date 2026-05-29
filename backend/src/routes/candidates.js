@@ -10,6 +10,7 @@ import { applyJobDescriptionScoringMode } from '../jobs/parseResumeJob.js'
 import { syncCandidateProfilesForUser } from '../services/candidateProfilesService.js'
 import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { normalizeCandidateDirectoryQuery } from '../../../src/schemas/candidateDirectoryQuerySchema.js'
+import { getDisplayFilename } from '../utils/resumeFileMetadata.js'
 
 const router = Router()
 
@@ -23,6 +24,10 @@ const s3Client = new S3Client({
       }
     : undefined,
 })
+
+export function closeCandidateRouteResourcesForTests() {
+  s3Client.destroy()
+}
 
 async function streamToBuffer(streamOrBuffer) {
   if (Buffer.isBuffer(streamOrBuffer)) return streamOrBuffer
@@ -387,6 +392,9 @@ router.get('/directory', requireAuth, async (req, res) => {
               cp.source_updated_at,
               cp.updated_at,
               r.filename,
+              r.original_filename,
+              r.file_extension,
+              r.file_type,
               r.profile_score,
               r.years_experience,
               COALESCE(r.parse_status, 'complete') AS parse_status,
@@ -424,7 +432,7 @@ router.get('/directory', requireAuth, async (req, res) => {
         return {
           resumeId: String(row.resume_id),
           profile,
-          name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
+          name: normalizeString(profile.name) || normalizeString(profile.full_name) || getDisplayFilename(row) || 'Candidate',
           skills,
           profileScore,
           yearsExperience,
@@ -688,13 +696,21 @@ router.get('/:resumeId/resume', requireAuth, async (req, res) => {
 
   try {
     const uploadResult = await pool.query(
-      `SELECT assembled_s3_key, filename, mime_type
-       FROM upload_chunks
-       WHERE user_id = $1
-         AND resume_id = $2
-         AND status = 'completed'
-         AND assembled_s3_key IS NOT NULL
-       ORDER BY updated_at DESC
+      `SELECT uc.assembled_s3_key,
+              uc.filename,
+              uc.mime_type,
+              r.filename AS resume_filename,
+              r.original_filename,
+              r.file_extension,
+              r.original_mime_type,
+              r.file_type
+       FROM upload_chunks uc
+       LEFT JOIN resumes r ON r.id = uc.resume_id
+       WHERE uc.user_id = $1
+         AND uc.resume_id = $2
+         AND uc.status = 'completed'
+         AND uc.assembled_s3_key IS NOT NULL
+       ORDER BY uc.updated_at DESC
        LIMIT 1`,
       [req.userId, resumeId],
     )
@@ -710,8 +726,13 @@ router.get('/:resumeId/resume', requireAuth, async (req, res) => {
     }))
 
     const fileBuffer = await streamToBuffer(objectResponse.Body)
-    const filename = normalizeString(upload.filename) || `resume-${resumeId}`
-    const contentType = normalizeString(upload.mime_type) || objectResponse.ContentType || 'application/octet-stream'
+    const filename = getDisplayFilename({
+      filename: normalizeString(upload.filename) || normalizeString(upload.resume_filename),
+      original_filename: upload.original_filename,
+      file_extension: upload.file_extension,
+      file_type: upload.file_type || upload.mime_type,
+    }) || `resume-${resumeId}`
+    const contentType = normalizeString(upload.mime_type) || normalizeString(upload.file_type) || objectResponse.ContentType || 'application/octet-stream'
 
     res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`)
@@ -739,6 +760,9 @@ router.get('/:resumeId', requireAuth, async (req, res) => {
               cp.created_at,
               cp.updated_at,
               r.filename,
+              r.original_filename,
+              r.file_extension,
+              r.file_type,
               r.profile_score,
               r.years_experience,
               r.job_description_id,
@@ -770,7 +794,7 @@ router.get('/:resumeId', requireAuth, async (req, res) => {
       resumeId: String(row.resume_id),
       profile,
       fields: {
-        name: normalizeString(profile.name) || normalizeString(profile.full_name) || normalizeString(row.filename) || 'Candidate',
+        name: normalizeString(profile.name) || normalizeString(profile.full_name) || getDisplayFilename(row) || 'Candidate',
         email: normalizeString(profile.email),
         phone: normalizeString(profile.phone),
         summary: normalizeString(profile.summary),

@@ -2,7 +2,7 @@ import multer from 'multer'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
-import { sanitizeFilename } from '../utils/sanitize.js'
+import { normalizeResumeFileMetadata } from '../utils/resumeFileMetadata.js'
 import { enqueueParseJob } from '../services/jobQueue.js'
 import { scanFileBuffer } from '../services/virusScanService.js'
 import {
@@ -27,11 +27,14 @@ const upload = multer({
   },
   fileFilter: (_req, file, cb) => {
     if (!isAcceptedResumeFile(file.mimetype, file.originalname)) {
-      return cb(new Error('Only PDF, DOCX, and TXT files are allowed'))
+      return cb(new Error('Only PDF, DOC, DOCX, and TXT files are allowed'))
     }
 
-    file.safeName = sanitizeFilename(file.originalname)
-    file.mimetype = resolveMimeFromUpload(file.mimetype, file.originalname) || file.mimetype
+    const metadata = normalizeResumeFileMetadata({ originalFilename: file.originalname, reportedMimeType: file.mimetype })
+    file.safeName = metadata.storageFilename
+    file.originalMimeType = metadata.originalMimeType
+    file.fileExtension = metadata.fileExtension
+    file.mimetype = metadata.normalizedMimeType || file.mimetype
     return cb(null, true)
   },
 })
@@ -58,6 +61,9 @@ async function ensureResumeParseColumns() {
     ADD COLUMN IF NOT EXISTS scan_result JSONB,
     ADD COLUMN IF NOT EXISTS file_sha256 TEXT,
     ADD COLUMN IF NOT EXISTS job_description_id UUID,
+    ADD COLUMN IF NOT EXISTS original_filename TEXT,
+    ADD COLUMN IF NOT EXISTS file_extension TEXT,
+    ADD COLUMN IF NOT EXISTS original_mime_type TEXT,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
   `)
 }
@@ -158,11 +164,19 @@ router.post(
       const uploadResults = []
 
       for (const file of req.files) {
-        const safeName = file.safeName || sanitizeFilename(file.originalname)
-        const effectiveMimeType = resolveMimeFromUpload(file.mimetype, file.originalname) || file.mimetype
+        const fileMetadata = normalizeResumeFileMetadata({
+          originalFilename: file.originalname,
+          reportedMimeType: file.originalMimeType || file.mimetype,
+          mimeType: file.mimetype,
+        })
+        const safeName = file.safeName || fileMetadata.storageFilename
+        const effectiveMimeType = resolveMimeFromUpload(file.mimetype, safeName) || fileMetadata.normalizedMimeType || file.mimetype
 
         const scanResult = await scanFileBuffer(file.buffer, {
           filename: safeName,
+          originalFilename: fileMetadata.originalFilename,
+          originalMimeType: fileMetadata.originalMimeType,
+          fileExtension: fileMetadata.fileExtension || null,
           mimetype: effectiveMimeType,
           userId,
           analysisId,
@@ -171,6 +185,10 @@ router.post(
         if (!scanResult.ok) {
           uploadResults.push({
             filename: safeName,
+            originalFilename: fileMetadata.originalFilename,
+            fileExtension: fileMetadata.fileExtension || null,
+            mimeType: effectiveMimeType,
+            originalMimeType: fileMetadata.originalMimeType,
             status: 'failed',
             reason: scanResult.reason || 'Scan failed',
           })
@@ -179,8 +197,8 @@ router.post(
 
         const resumeInsert = await pool.query(
           `INSERT INTO resumes
-            (user_id, file_name, file_size, file_type, parse_status, scan_status, scan_result, file_sha256, uploaded_at)
-           VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, NOW())
+            (user_id, filename, file_size, file_type, parse_status, scan_status, scan_result, file_sha256, original_filename, file_extension, original_mime_type, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, NOW(), NOW())
            RETURNING id`,
           [
             userId,
@@ -190,6 +208,9 @@ router.post(
             scanResult.status || 'clean',
             scanResult.details ? JSON.stringify(scanResult.details) : null,
             scanResult.sha256 || null,
+            fileMetadata.originalFilename,
+            fileMetadata.fileExtension || null,
+            fileMetadata.originalMimeType,
           ],
         )
 
@@ -198,6 +219,9 @@ router.post(
           resumeId,
           userId,
           filename: safeName,
+          originalFilename: fileMetadata.originalFilename,
+          originalMimeType: fileMetadata.originalMimeType,
+          fileExtension: fileMetadata.fileExtension || null,
           mimetype: effectiveMimeType,
           fileBuffer: file.buffer,
           analysisId,
@@ -213,6 +237,10 @@ router.post(
 
         uploadResults.push({
           filename: safeName,
+          originalFilename: fileMetadata.originalFilename,
+          fileExtension: fileMetadata.fileExtension || null,
+          mimeType: effectiveMimeType,
+          originalMimeType: fileMetadata.originalMimeType,
           status: 'queued',
           resumeId,
           parseJobId: parseJob.jobId,

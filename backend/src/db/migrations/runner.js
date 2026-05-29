@@ -35,6 +35,7 @@ const migrationFiles = [
   '031-make-years-experience-decimal',
   '032-shortlist-lifecycle-states',
   '033-add-shortlist-job-context',
+  '034-add-resume-file-metadata',
 ]
 
 async function ensureMigrationsTable(client) {

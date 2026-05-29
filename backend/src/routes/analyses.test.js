@@ -72,8 +72,23 @@ test('GET /analyses failedItems omits raw error text', async (t) => {
   server.close()
 
   assert.equal(response.status, 200)
-  assert.deepEqual(payload.items[0].failedItems, [{ filename: 'broken.pdf', status: 'failed' }])
-  assert.deepEqual(payload.items[0].filesPreview, [{ name: 'Unknown file', status: 'queued' }])
+  assert.deepEqual(payload.items[0].failedItems, [{
+    filename: 'broken.pdf',
+    originalFilename: 'broken.pdf',
+    fileExtension: null,
+    mimeType: null,
+    originalMimeType: null,
+    status: 'failed',
+  }])
+  assert.deepEqual(payload.items[0].filesPreview, [{
+    name: 'Unknown file',
+    filename: null,
+    originalFilename: null,
+    fileExtension: null,
+    mimeType: null,
+    originalMimeType: null,
+    status: 'queued',
+  }])
   assert.equal(Object.prototype.hasOwnProperty.call(payload.items[0].failedItems[0], 'error'), false)
 })
 test('GET /analyses/:id returns owner-only detail payload', async (t) => {
@@ -84,7 +99,7 @@ test('GET /analyses/:id returns owner-only detail payload', async (t) => {
       return { rows: [{ id: 22, user_id: 9, status: 'queued', name: 'Business Analyst (4–6 Years Experience)', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: 4, job_description_title: 'Product Manager' }] }
     }
     if (sql.includes('FROM analysis_items ai')) {
-      return { rows: [{ id: 101, resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'a.pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: { candidates: [{ name: 'Alice' }] } }] }
+      return { rows: [{ id: 101, resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'a.pdf', original_filename: 'a.pdf', file_extension: 'pdf', original_mime_type: 'application/pdf', file_type: 'application/pdf', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: { candidates: [{ name: 'Alice' }] } }] }
     }
     if (sql.includes('UPDATE analyses')) return { rows: [] }
     return { rows: [] }
@@ -101,6 +116,11 @@ test('GET /analyses/:id returns owner-only detail payload', async (t) => {
   assert.equal(payload.id, '22')
   assert.equal(payload.name, 'Business Analyst (4–6 Years Experience)')
   assert.equal(Object.keys(payload).filter((key) => key === 'diagnostics').length, 1)
+  assert.equal(payload.items[0].filename, 'a.pdf')
+  assert.equal(payload.items[0].originalFilename, 'a.pdf')
+  assert.equal(payload.items[0].fileExtension, 'pdf')
+  assert.equal(payload.items[0].mimeType, 'application/pdf')
+  assert.equal(payload.items[0].originalMimeType, 'application/pdf')
   assert.equal(payload.error, undefined)
   assert.equal(payload.jobDescriptionTitle, 'Product Manager')
   assert.equal(payload.items[0].id, '101')

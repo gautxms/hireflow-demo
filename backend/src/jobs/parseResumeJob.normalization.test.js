@@ -10,8 +10,15 @@ after(async () => {
   await parseQueue.close().catch(() => {})
 })
 
-const { buildNormalizedCandidates } = __testables
+const { buildNormalizedCandidates, isLegacyWordDocument } = __testables
 
+
+
+test('legacy Word detection trusts .docx filename over misreported application/msword MIME', () => {
+  assert.equal(isLegacyWordDocument({ filename: 'resume.docx', mimeType: 'application/msword' }), false)
+  assert.equal(isLegacyWordDocument({ filename: 'resume.doc', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), true)
+  assert.equal(isLegacyWordDocument({ filename: 'resume', mimeType: 'application/msword' }), true)
+})
 
 test('buildNormalizedCandidates preserves fractional/integer/null years_experience values', () => {
   const [fractional] = buildNormalizedCandidates({ candidates: [{ years_experience: 3.5 }] }, { resumeId: 'r1', filename: 'a.pdf' })

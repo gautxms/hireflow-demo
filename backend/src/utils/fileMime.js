@@ -1,5 +1,6 @@
 const EXTENSION_MIME_MAP = {
   pdf: 'application/pdf',
+  doc: 'application/msword',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   txt: 'text/plain',
 }
@@ -19,13 +20,14 @@ export function getFileExtension(filename) {
 
 export function resolveEffectiveMimeType(reportedMimeType, filename) {
   const normalizedMimeType = String(reportedMimeType || '').trim().toLowerCase()
+  const extension = getFileExtension(filename)
+  const extensionMimeType = EXTENSION_MIME_MAP[extension]
 
-  if (normalizedMimeType && normalizedMimeType !== 'application/octet-stream') {
-    return normalizedMimeType
+  if (extensionMimeType) {
+    return extensionMimeType
   }
 
-  const extension = getFileExtension(filename)
-  return EXTENSION_MIME_MAP[extension] || (normalizedMimeType || null)
+  return normalizedMimeType || null
 }
 
 export function isAcceptedResumeUpload(reportedMimeType, filename) {
