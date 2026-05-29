@@ -34,6 +34,7 @@ import adminLogsRoutes from './routes/admin/logs.js'
 import adminUxRoutes from './routes/admin/ux.js'
 import webhooksRoutes from './routes/webhooks.js'
 import telemetryRoutes from './routes/telemetry.js'
+import usageRoutes from './routes/usage.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
@@ -163,6 +164,7 @@ app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/telemetry', requireAuth, generalApiLimiterAuth, telemetryRoutes)
 app.use('/api/notifications', requireAuth, generalApiLimiterAuth, notificationsRoutes)
 app.use('/api/analyses', requireAuth, generalApiLimiterAuth, analysesRoutes)
+app.use('/api/usage', requireAuth, generalApiLimiterAuth, usageRoutes)
 app.use('/api/reports', requireAuth, generalApiLimiterAuth, reportsRoutes)
 app.use('/api/admin', requireAdminAuth, adminActionAuditMiddleware, adminRoutes)
 app.use('/api/admin/subscriptions', requireAdminAuth, adminActionAuditMiddleware, adminSubscriptionsRoutes)

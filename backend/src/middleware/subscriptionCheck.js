@@ -5,11 +5,11 @@ import {
 } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
 
-function getMonthStart(referenceDate = new Date()) {
+export function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
 }
 
-async function getUsageOverride(userId, monthStart) {
+export async function getUsageOverride(userId, monthStart) {
   const overrideResult = await pool.query(
     `SELECT upload_limit, reset_usage
      FROM usage_overrides
@@ -21,7 +21,7 @@ async function getUsageOverride(userId, monthStart) {
   return overrideResult.rows[0] || null
 }
 
-async function getUsageCount(userId, monthStart, shouldResetUsage = false) {
+export async function getUsageCount(userId, monthStart, shouldResetUsage = false) {
   if (shouldResetUsage) {
     return 0
   }
