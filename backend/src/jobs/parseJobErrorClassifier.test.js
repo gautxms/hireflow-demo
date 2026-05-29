@@ -21,8 +21,33 @@ test('local request validation failure is non-retriable', () => {
   assert.equal(result.retryable, false)
 })
 
+
+const deterministicLocalFailures = [
+  ['docx_empty_extraction', 'docx_empty_extraction::Unable to extract text content from DOCX file resume.docx.'],
+  ['docx_invalid_or_unreadable', 'docx_invalid_or_unreadable::DOCX file could not be read'],
+  ['docx_extraction_failed', 'docx_extraction_failed::Failed to extract DOCX text'],
+  ['extraction_empty', 'extraction_empty::No parseable resume content was extracted'],
+  ['legacy_word_format', 'legacy_word_format::Legacy .doc files are not supported'],
+  ['resume_unsupported_legacy_doc', 'resume_unsupported_legacy_doc::Legacy Word format is not supported'],
+  ['unsupported file format', 'unsupported file format: application/vnd.ms-word'],
+  ['local payload validation', 'local payload validation failed: missing fileBufferBase64'],
+]
+
+for (const [name, message] of deterministicLocalFailures) {
+  test(`${name} is non-retriable deterministic local failure`, () => {
+    const result = classifyParseJobRetryability(new Error(message))
+    assert.equal(result.retryable, false)
+    assert.equal(result.reason, 'deterministic_local_failure')
+  })
+}
+
 test('network timeout is retriable', () => {
   const result = classifyParseJobRetryability(new Error('Network timeout while connecting to provider'))
+  assert.equal(result.retryable, true)
+})
+
+test('network connection errors are retriable', () => {
+  const result = classifyParseJobRetryability(new Error('ECONNRESET network error while connecting to provider'))
   assert.equal(result.retryable, true)
 })
 
