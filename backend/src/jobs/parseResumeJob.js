@@ -1,6 +1,7 @@
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
+import { prepareResumePayloadForAnalysis as prepareDocumentPayloadForAnalysis } from '../services/resumeDocumentExtractionService.js'
 import { triggerWebhook } from '../services/webhookService.js'
 import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../services/candidateProfilesService.js'
 import { normalizeProviderError } from './parseProviderError.js'
@@ -193,40 +194,24 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, fil
     throw new Error('resume_unsupported_legacy_doc::Legacy .doc files are not supported')
   }
 
-  const normalizedMime = String(mimeType || '').trim().toLowerCase()
-  const output = {
+  const preparedPayload = await prepareDocumentPayloadForAnalysis({
     fileBufferBase64,
     mimeType,
     filename,
     fileSize,
-    resumeInputMode: 'document_file',
-    extractedText: null,
-    originalMimeType: null,
+  })
+
+  return {
+    fileBufferBase64: preparedPayload.fileBufferBase64,
+    mimeType: preparedPayload.preparedMimeType || preparedPayload.mimeType || mimeType,
+    filename,
+    fileSize,
+    resumeInputMode: preparedPayload.inputMode || preparedPayload.inputKind || 'document_file',
+    extractedText: preparedPayload.extractedText || null,
+    originalMimeType: preparedPayload.originalMimeType || mimeType || null,
   }
-
-  if (normalizedMime === 'text/plain') {
-    try {
-      const decodedText = Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8')
-      const extractedText = String(decodedText || '').trim()
-      if (!extractedText) {
-        throw new Error('extraction_empty::No parseable resume content extracted from text payload')
-      }
-
-      output.fileBufferBase64 = Buffer.from(extractedText, 'utf8').toString('base64')
-      output.mimeType = 'text/plain'
-      output.resumeInputMode = 'extracted_text'
-      output.extractedText = extractedText
-      output.originalMimeType = mimeType
-    } catch (error) {
-      if (String(error?.message || '').includes('extraction_empty')) {
-        throw error
-      }
-      throw new Error('extraction_failed::Unable to extract parseable text payload')
-    }
-  }
-
-  return output
 }
+
 
 export function buildJobDescriptionContext(row) {
   if (!row) {
