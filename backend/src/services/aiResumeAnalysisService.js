@@ -605,6 +605,7 @@ function createAttemptRecord({
   role = null,
   attemptNumber = null,
   normalizedReason = null,
+  inputDiagnostics = null,
 }) {
   return {
     success: Boolean(success),
@@ -631,6 +632,7 @@ function createAttemptRecord({
     role,
     attemptNumber: Number.isFinite(Number(attemptNumber)) ? Number(attemptNumber) : null,
     normalizedReason,
+    inputDiagnostics: inputDiagnostics && typeof inputDiagnostics === 'object' ? inputDiagnostics : null,
   }
 }
 
@@ -1323,6 +1325,9 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const preparedPayload = await prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename })
   const preparedMimeType = preparedPayload.preparedMimeType || preparedPayload.mimeType
   const inputKind = preparedPayload.inputKind || (String(preparedMimeType).toLowerCase() === 'text/plain' ? 'extracted_text' : 'pdf_binary')
+  const inputDiagnostics = preparedPayload.diagnostics && typeof preparedPayload.diagnostics === 'object'
+    ? preparedPayload.diagnostics
+    : null
   const isTextPayload = String(preparedMimeType || '').toLowerCase() === 'text/plain'
   const rawExtractedText = preparedPayload.extractedText || (isTextPayload ? Buffer.from(String(preparedPayload.fileBufferBase64 || ''), 'base64').toString('utf8') : '')
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(rawExtractedText, { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
@@ -1340,6 +1345,15 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     preparedMimeType,
     sourceFormat: preparedPayload.sourceFormat || 'unknown',
     inputKind,
+    promptInputMode: cleanedPayload ? 'text_content' : 'document_file',
+    extractionMethod: inputDiagnostics?.extractionMethod || null,
+    extractedTextCharCount: inputDiagnostics?.extractedTextCharCount || 0,
+    normalizedTextCharCount: inputDiagnostics?.normalizedTextCharCount || 0,
+    normalizedTextFingerprint: inputDiagnostics?.normalizedTextFingerprint || null,
+    providerPlan: attemptPlan.map((entry) => `${entry.provider}:${entry.keyLabel}`),
+    compactModeDecision: complexityEstimator.recommendedMode,
+    jobDescriptionContextUsed: Boolean(options?.jobDescriptionContext?.hasContext),
+    jobDescriptionContextSource: options?.jobDescriptionContext?.source || 'none',
   })
 
   const selectableAttempts = []
@@ -1351,6 +1365,8 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         keyLabel: entry.keyLabel,
         preparedMimeType,
         inputKind,
+        extractionMethod: inputDiagnostics?.extractionMethod || null,
+        extractedTextCharCount: inputDiagnostics?.extractedTextCharCount || 0,
       })
       continue
     }
@@ -1428,6 +1444,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
             tokenUsage: response.tokenUsage,
             tokenBudgetAttempts: response.tokenBudgetAttempts,
             complexityEstimator,
+            inputDiagnostics,
           }),
         ],
       }
@@ -1567,6 +1584,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
         retryReason: overloadFailure ? 'overload_retries_exhausted' : null,
         statusCode,
         complexityEstimator,
+        inputDiagnostics,
       }))
       if (failureCategory === 'response_truncated_error' && isFallbackDisabledOnTruncation()) {
         throw createTerminalProviderError(error, attemptHistory)

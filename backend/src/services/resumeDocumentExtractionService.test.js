@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import JSZip from 'jszip'
 
-import { inspectDocxBuffer, prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
+import { compareResumeTextFingerprints, inspectDocxBuffer, prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
 
 async function buildDocxBuffer(paragraphs = [], tableRows = []) {
   const zip = new JSZip()
@@ -37,6 +37,18 @@ const quietLogger = {
   warn() {},
 }
 
+
+test('compareResumeTextFingerprints identifies equivalent extracted resume text without exposing content', () => {
+  const left = 'Resume\nPriya Nair\nQA Automation Engineer\nPage 1 of 2\nPlaywright   regression automation'
+  const right = '  priya nair  \nqa automation engineer\nplaywright regression automation\n'
+  const comparison = compareResumeTextFingerprints(left, right)
+
+  assert.equal(comparison.comparable, true)
+  assert.equal(comparison.equivalent, true)
+  assert.equal(comparison.left.normalizedTextCharCount, comparison.right.normalizedTextCharCount)
+  assert.equal(JSON.stringify(comparison).includes('Priya'), false)
+})
+
 test('prepareResumePayloadForAnalysis keeps PDF payload unchanged', async () => {
   const payload = Buffer.from('fake pdf bytes').toString('base64')
   const result = await prepareResumePayloadForAnalysis({
@@ -51,6 +63,10 @@ test('prepareResumePayloadForAnalysis keeps PDF payload unchanged', async () => 
   assert.equal(result.preparedMimeType, 'application/pdf')
   assert.equal(result.inputKind, 'pdf_binary')
   assert.equal(result.inputMode, 'binary')
+  assert.equal(result.diagnostics.sourceFormat, 'pdf')
+  assert.equal(result.diagnostics.extractionMethod, 'provider_pdf_binary')
+  assert.equal(result.diagnostics.extractedTextCharCount, 0)
+  assert.equal(result.diagnostics.normalizedTextFingerprint, null)
 })
 
 test('prepareResumePayloadForAnalysis extracts selectable text from a valid DOCX with paragraphs and a table', async () => {
@@ -76,6 +92,10 @@ test('prepareResumePayloadForAnalysis extracts selectable text from a valid DOCX
   assert.match(result.extractedText, /QA Automation Engineer/)
   assert.match(result.extractedText, /Playwright/)
   assert.equal(Buffer.from(result.fileBufferBase64, 'base64').toString('utf8'), result.extractedText)
+  assert.equal(result.diagnostics.sourceFormat, 'docx')
+  assert.equal(result.diagnostics.extractionMethod, 'mammoth_raw_text')
+  assert.equal(result.diagnostics.extractedTextCharCount, result.extractedText.length)
+  assert.equal(typeof result.diagnostics.normalizedTextFingerprint, 'string')
 })
 
 test('prepareResumePayloadForAnalysis accepts octet-stream DOCX via extension fallback path', async () => {
@@ -174,4 +194,6 @@ test('prepareResumePayloadForAnalysis normalizes text/plain into extracted_text 
   assert.equal(result.inputKind, 'extracted_text')
   assert.equal(result.inputMode, 'extracted_text')
   assert.equal(result.extractedText, text)
+  assert.equal(result.diagnostics.extractionMethod, 'uploaded_text')
+  assert.equal(result.diagnostics.extractedTextCharCount, text.length)
 })

@@ -600,7 +600,12 @@ test('analyzeResumeWithConfiguredFallback sends DOCX-derived text/plain payload 
 
   assert.equal(capturedMime, 'text/plain')
   assert.equal(response.result.candidates[0].id, 'cand-openai-text')
-  assert.equal(response.attempts[0].provider, 'openai-primary')
+  assert.equal(response.attempts[1].provider, 'openai-primary')
+  assert.equal(response.attempts[1].inputDiagnostics.sourceFormat, 'unknown')
+  assert.equal(response.attempts[1].inputDiagnostics.inputKind, 'extracted_text')
+  assert.equal(response.attempts[1].inputDiagnostics.preparedMimeType, 'text/plain')
+  assert.equal(response.attempts[1].inputDiagnostics.extractedTextCharCount, 'Experienced backend engineer'.length)
+  assert.equal(typeof response.attempts[1].inputDiagnostics.normalizedTextFingerprint, 'string')
 })
 
 

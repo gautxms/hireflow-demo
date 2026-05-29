@@ -423,6 +423,15 @@ function buildTokenUsageMetadata({ attempt = {}, filename, jobDescriptionContext
     filename,
     jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
     jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
+    inputFormat: attempt?.inputDiagnostics?.sourceFormat || null,
+    inputKind: attempt?.inputDiagnostics?.inputKind || null,
+    promptInputMode: attempt?.inputDiagnostics?.inputMode === 'extracted_text' ? 'text_content' : (attempt?.inputDiagnostics?.inputMode === 'binary' ? 'document_file' : null),
+    preparedMimeType: attempt?.inputDiagnostics?.preparedMimeType || null,
+    extractedTextCharCount: Number.isFinite(Number(attempt?.inputDiagnostics?.extractedTextCharCount)) ? Number(attempt.inputDiagnostics.extractedTextCharCount) : null,
+    normalizedTextCharCount: Number.isFinite(Number(attempt?.inputDiagnostics?.normalizedTextCharCount)) ? Number(attempt.inputDiagnostics.normalizedTextCharCount) : null,
+    normalizedTextFingerprint: attempt?.inputDiagnostics?.normalizedTextFingerprint || null,
+    extractionMethod: attempt?.inputDiagnostics?.extractionMethod || null,
+    compactMode: attempt?.mode || null,
   }
 }
 

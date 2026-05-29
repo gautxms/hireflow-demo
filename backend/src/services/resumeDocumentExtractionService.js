@@ -1,7 +1,91 @@
+import { createHash } from 'crypto'
+
 let mammothClient = null
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 const DOCX_DOCUMENT_XML_PATH = 'word/document.xml'
+const TEXT_FINGERPRINT_VERSION = 'resume-text-fingerprint-v1'
+
+
+export function normalizeResumeTextForFingerprint(text = '') {
+  return String(text || '')
+    .normalize('NFKC')
+    .replace(/\u0000/g, ' ')
+    .replace(/\uFFFD/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim().toLowerCase())
+    .filter(Boolean)
+    .filter((line) => !/^page\s+\d+(\s+of\s+\d+)?$/i.test(line))
+    .filter((line) => !/^(confidential|curriculum vitae|resume)$/i.test(line))
+    .join('\n')
+}
+
+export function buildResumeTextFingerprint(text = '') {
+  const normalizedText = normalizeResumeTextForFingerprint(text)
+  if (!normalizedText) {
+    return {
+      version: TEXT_FINGERPRINT_VERSION,
+      comparable: false,
+      reason: 'empty_normalized_text',
+      normalizedCharCount: 0,
+      normalizedLineCount: 0,
+      sha256: null,
+    }
+  }
+
+  return {
+    version: TEXT_FINGERPRINT_VERSION,
+    comparable: true,
+    reason: null,
+    normalizedCharCount: normalizedText.length,
+    normalizedLineCount: normalizedText.split('\n').length,
+    sha256: createHash('sha256').update(normalizedText).digest('hex'),
+  }
+}
+
+export function compareResumeTextFingerprints(leftText = '', rightText = '') {
+  const left = buildResumeTextFingerprint(leftText)
+  const right = buildResumeTextFingerprint(rightText)
+  return {
+    comparable: Boolean(left.comparable && right.comparable),
+    equivalent: Boolean(left.comparable && right.comparable && left.sha256 === right.sha256),
+    left,
+    right,
+    charCountDelta: Math.abs(Number(left.normalizedCharCount || 0) - Number(right.normalizedCharCount || 0)),
+    lineCountDelta: Math.abs(Number(left.normalizedLineCount || 0) - Number(right.normalizedLineCount || 0)),
+  }
+}
+
+function buildPreparedPayloadDiagnostics({
+  sourceFormat,
+  inputKind,
+  inputMode,
+  preparedMimeType,
+  originalMimeType,
+  extractedText = null,
+  extractionMethod = null,
+  fallbackUsed = false,
+  fallbackReason = null,
+}) {
+  const text = String(extractedText || '')
+  const fingerprint = text ? buildResumeTextFingerprint(text) : null
+  return {
+    sourceFormat: sourceFormat || 'unknown',
+    inputKind: inputKind || null,
+    inputMode: inputMode || null,
+    preparedMimeType: preparedMimeType || null,
+    originalMimeType: originalMimeType || null,
+    extractionMethod: extractionMethod || null,
+    extractedTextCharCount: text.length,
+    normalizedTextCharCount: fingerprint?.normalizedCharCount || 0,
+    normalizedTextLineCount: fingerprint?.normalizedLineCount || 0,
+    normalizedTextFingerprint: fingerprint?.sha256 || null,
+    fallbackUsed: Boolean(fallbackUsed),
+    fallbackReason: fallbackReason || null,
+  }
+}
 
 function createDocxExtractionError(category, message, { cause = null, diagnostics = null } = {}) {
   const error = new Error(`${category}::${message}`, cause ? { cause } : undefined)
@@ -170,16 +254,27 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
   })
 
   if (normalizedMimeType === 'text/plain') {
+    const extractedText = Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8').trim()
+    const sourceFormat = lowerFilename.endsWith('.txt') ? 'txt' : 'unknown'
     return {
       ...buildBase(),
       fileBufferBase64,
       mimeType: 'text/plain',
       preparedMimeType: 'text/plain',
-      sourceFormat: lowerFilename.endsWith('.txt') ? 'txt' : 'unknown',
+      sourceFormat,
       inputKind: 'extracted_text',
       inputMode: 'extracted_text',
-      extractedText: Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8').trim(),
+      extractedText,
       base64File: null,
+      diagnostics: buildPreparedPayloadDiagnostics({
+        sourceFormat,
+        inputKind: 'extracted_text',
+        inputMode: 'extracted_text',
+        preparedMimeType: 'text/plain',
+        originalMimeType: normalizedMimeType || null,
+        extractedText,
+        extractionMethod: 'uploaded_text',
+      }),
     }
   }
 
@@ -194,6 +289,15 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputMode: 'binary',
       extractedText: null,
       base64File: fileBufferBase64,
+      diagnostics: buildPreparedPayloadDiagnostics({
+        sourceFormat: 'pdf',
+        inputKind: 'pdf_binary',
+        inputMode: 'binary',
+        preparedMimeType: normalizedMimeType,
+        originalMimeType: normalizedMimeType || null,
+        extractionMethod: 'provider_pdf_binary',
+        fallbackUsed: false,
+      }),
     }
   }
 
@@ -215,6 +319,15 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputMode: 'extracted_text',
       extractedText,
       base64File: null,
+      diagnostics: buildPreparedPayloadDiagnostics({
+        sourceFormat: lowerFilename.endsWith('.docx') ? 'docx' : 'unknown',
+        inputKind: 'extracted_text',
+        inputMode: 'extracted_text',
+        preparedMimeType: 'text/plain',
+        originalMimeType: normalizedMimeType || mimeType || null,
+        extractedText,
+        extractionMethod: 'mammoth_raw_text',
+      }),
     }
   }
 
@@ -228,5 +341,13 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     inputMode: 'binary',
     extractedText: null,
     base64File: fileBufferBase64,
+    diagnostics: buildPreparedPayloadDiagnostics({
+      sourceFormat: 'unknown',
+      inputKind: 'binary_unknown',
+      inputMode: 'binary',
+      preparedMimeType: normalizedMimeType || mimeType,
+      originalMimeType: normalizedMimeType || null,
+      extractionMethod: 'provider_binary_unknown',
+    }),
   }
 }
