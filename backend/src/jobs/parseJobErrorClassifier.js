@@ -7,10 +7,16 @@ const DETERMINISTIC_PATTERNS = [
   /relation .* does not exist/i,
   /cannot cast type/i,
   /malformed (array|json)/i,
+  /docx_empty_extraction/i,
+  /docx_invalid_or_unreadable/i,
+  /docx_extraction_failed/i,
+  /extraction_empty/i,
+  /legacy_word_format/i,
   /unsupported (file )?format/i,
   /legacy \.doc files are not supported/i,
   /resume_unsupported_legacy_doc::/i,
   /local request validation failed/i,
+  /local payload validation failed/i,
   /payload validation failed/i,
 ]
 

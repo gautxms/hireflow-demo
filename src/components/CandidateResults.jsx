@@ -1696,7 +1696,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   : <div className="dd-analysis-item">Run re-analysis to generate detailed AI considerations</div>}
               </div>
             </DrawerSection>
-            <DrawerSection title="View resume" className="dd-section-card--compact dd-section-card--resume">
+            <DrawerSection title="Resume" className="dd-section-card--compact dd-section-card--resume">
               <div className="dd-resume-file">
                 <div className="dd-resume-icon">
                   <FileText size={18} strokeWidth={1.5} aria-hidden="true" />
