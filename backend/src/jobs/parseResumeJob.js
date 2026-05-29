@@ -6,6 +6,7 @@ import { CANDIDATE_PROFILE_SCHEMA_VERSION, upsertCandidateProfile } from '../ser
 import { normalizeProviderError } from './parseProviderError.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
+import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
@@ -115,6 +116,7 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
       profile_score: normalizeNullableNumber(candidate?.profile_score),
       strengths: clampStringArray(candidate?.strengths, 5, 160),
       considerations: clampStringArray(candidate?.considerations, 5, 160),
+      education: normalizeCandidateEducation(candidate?.education),
       seniority_level: normalizeString(candidate?.seniority_level),
       tags: normalizeStringArray(candidate?.tags),
       top_skills: normalizeStringArray(candidate?.top_skills).slice(0, 15),

@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
+import { formatEducationForDisplay } from '../utils/candidateEducation.js'
 
 const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -135,9 +136,7 @@ export function normalizeCandidate(candidate = {}) {
   const experienceValue = Array.isArray(candidate.experience)
     ? candidate.experience.map((entry) => entry?.duration).filter(Boolean).join(' | ')
     : candidate.experience
-  const educationValue = Array.isArray(candidate.education)
-    ? candidate.education.map((entry) => `${entry?.degree || ''}${entry?.school ? `, ${entry.school}` : ''}`.trim()).filter(Boolean).join(' | ')
-    : candidate.education
+  const educationValue = formatEducationForDisplay(candidate.education)
 
   const normalizedSkillsObject = candidate.skills_structured && typeof candidate.skills_structured === 'object'
     ? candidate.skills_structured
