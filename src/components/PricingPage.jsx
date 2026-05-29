@@ -6,7 +6,7 @@ const FAQ_ITEMS = [
   { q: 'Can I change plans anytime?', a: 'Yes, you can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.' },
   { q: 'What if I need more than 800 resumes/month?', a: 'Contact our sales team for custom volume packages. We offer discounts for high-volume users.' },
   { q: 'Is there a free trial?', a: 'Yes! Start with 14 days free on any plan. No credit card required.' },
-  { q: 'Do you offer annual billing?', a: 'Annual plans include the same monthly fair-use allowance of up to 800 resume analyses/month. Annual billing gives you a discounted yearly price, and your resume allowance resets each billing period.' }
+  { q: 'Do you offer annual billing?', a: 'Annual plans include the same monthly fair-use allowance of up to 800 resume analyses/month. Annual billing gives you a discounted yearly price, and your resume allowance resets each calendar month.' }
 ]
 
 export default function PricingPage() {

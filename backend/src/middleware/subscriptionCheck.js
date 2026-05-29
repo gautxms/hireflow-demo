@@ -21,7 +21,7 @@ async function getUsageOverride(userId, monthStart) {
   return overrideResult.rows[0] || null
 }
 
-async function getUsageCount(userId, ipAddress, monthStart, shouldResetUsage = false) {
+async function getUsageCount(userId, monthStart, shouldResetUsage = false) {
   if (shouldResetUsage) {
     return 0
   }
@@ -30,9 +30,8 @@ async function getUsageCount(userId, ipAddress, monthStart, shouldResetUsage = f
     `SELECT COUNT(*)::INT AS usage_count
      FROM usage_log
      WHERE user_id = $1
-       AND ip_address = $2
-       AND month_start = $3`,
-    [userId, ipAddress, monthStart],
+       AND month_start = $2`,
+    [userId, monthStart],
   )
 
   return usageResult.rows[0]?.usage_count ?? 0
@@ -85,9 +84,10 @@ export async function enforceUploadLimit(req, res, next) {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown'
     const usageOverride = await getUsageOverride(req.userId, monthStart)
     const uploadLimit = resolveUploadLimit(req.subscriptionStatus, usageOverride)
-    const currentUsage = await getUsageCount(req.userId, ipAddress, monthStart, usageOverride?.reset_usage)
+    const currentUsage = await getUsageCount(req.userId, monthStart, usageOverride?.reset_usage)
     const requestedUploads = Math.max(req.files?.length || 1, 1)
     const projectedUsage = currentUsage + requestedUploads
+    const remainingUploads = Math.max(uploadLimit - currentUsage, 0)
 
     if (projectedUsage > uploadLimit) {
       return res.status(429).json({
@@ -96,6 +96,7 @@ export async function enforceUploadLimit(req, res, next) {
         limit: uploadLimit,
         used: currentUsage,
         requested: requestedUploads,
+        remaining: remainingUploads,
       })
     }
 
@@ -110,6 +111,7 @@ export async function enforceUploadLimit(req, res, next) {
       uploadLimit,
       currentUsage,
       requestedUploads,
+      remainingUploads,
       usageOverride,
     }
 

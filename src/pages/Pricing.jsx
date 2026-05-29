@@ -63,7 +63,7 @@ const PRICING_FAQ = [
   },
   {
     question: 'Do you offer discounts for annual plans?',
-    answer: 'Annual plans include the same monthly fair-use allowance of up to 800 resume analyses/month. Annual billing gives you a discounted yearly price, and your resume allowance resets each billing period.',
+    answer: 'Annual plans include the same monthly fair-use allowance of up to 800 resume analyses/month. Annual billing gives you a discounted yearly price, and your resume allowance resets each calendar month.',
   },
 ]
 
