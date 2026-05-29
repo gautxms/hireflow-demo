@@ -46,7 +46,7 @@ test('normalizeCompactAnalysis preserves rich candidate fields in compact pipeli
     summary: 'Experienced BA in capital markets.',
     strengths: ['Domain depth'],
     considerations: ['Power BI not listed'],
-    education: ['MBA'],
+    education: [{ degree: 'MBA', school: 'Example University', graduation_year: 2010 }],
     experience: ['Lead BA - 10 years'],
     certifications: ['CBAP'],
     languages: ['English'],
@@ -129,4 +129,21 @@ test('normalizeCompactAnalysis defaults both concerns and considerations to arra
 
   assert.deepEqual(result.candidates[0].considerations, [])
   assert.deepEqual(result.candidates[0].concerns, [])
+})
+
+test('normalizeCompactAnalysis does not coerce structured education objects to display artifacts', () => {
+  const result = normalizeCompactAnalysis({
+    candidates: [{
+      education: [
+        { degree: 'M.Tech', school: 'IIT Bombay', graduation_year: '2020' },
+        '[object Object]',
+        { label: 'Executive Education, Example School' },
+      ],
+    }],
+  })
+
+  assert.deepEqual(result.candidates[0].education, [
+    { degree: 'M.Tech', school: 'IIT Bombay', graduation_year: 2020 },
+    'Executive Education, Example School',
+  ])
 })

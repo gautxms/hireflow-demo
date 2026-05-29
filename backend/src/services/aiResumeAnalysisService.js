@@ -4,6 +4,7 @@ import { getActiveAiProviderCredentials } from './aiProviderConfigService.js'
 import { AI_MODEL_CONFIG } from '../config/aiModels.js'
 import { getRuntimeSystemPromptConfig } from './adminSystemPromptService.js'
 import { prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
+import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
@@ -194,7 +195,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     profile_score: Number.isFinite(Number(candidate?.profile_score)) ? Math.max(0, Math.min(100, Number(candidate.profile_score))) : null,
     seniority_level: clampString(candidate?.seniority_level || '', 80),
     experienceHighlights: minimalMode ? [] : clampStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
-    education: minimalMode ? [] : clampStringArray(candidate?.education || [], { maxItems: 20, maxItemLength: 200 }),
+    education: minimalMode ? [] : normalizeCandidateEducation(candidate?.education, { maxItems: 20, maxItemLength: 200 }),
     experience: minimalMode ? [] : clampStringArray(candidate?.experience || [], { maxItems: 30, maxItemLength: 220 }),
     certifications: minimalMode ? [] : clampStringArray(candidate?.certifications || [], { maxItems: 20, maxItemLength: 160 }),
     languages: clampStringArray(candidate?.languages || [], { maxItems: 20, maxItemLength: 80 }),
