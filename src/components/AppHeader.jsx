@@ -1,4 +1,5 @@
 import { Bell } from 'lucide-react'
+import { getAppHeaderInitials } from './appHeaderInitials.js'
 
 export default function AppHeader({ user, isSubscribed, pageTitle }) {
   const navigateTo = (path) => {
@@ -7,9 +8,7 @@ export default function AppHeader({ user, isSubscribed, pageTitle }) {
     }
   }
 
-  const initials = user?.name
-    ? user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()
-    : 'U'
+  const initials = getAppHeaderInitials(user)
   const analysesLeft = user?.analysesRemaining ?? null
 
   return (
