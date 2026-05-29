@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
-import { parseQueue } from '../services/jobQueue.js'
+import { cancelParseJobsByIds, parseQueue } from '../services/jobQueue.js'
 import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
 
 const router = Router()
@@ -444,6 +444,30 @@ router.delete('/:id', requireAuth, async (req, res) => {
       await client.query('ROLLBACK')
       if (existenceResult.rowCount === 0) return res.status(404).json({ error: 'Analysis not found' })
       return res.status(403).json({ error: 'Forbidden' })
+    }
+
+    const parseJobsResult = await client.query(
+      `SELECT parse_job_id
+       FROM analysis_items
+       WHERE analysis_id = $1
+         AND parse_job_id IS NOT NULL`,
+      [req.params.id],
+    )
+    const parseJobIds = parseJobsResult.rows.map((row) => row.parse_job_id).filter(Boolean)
+
+    await cancelParseJobsByIds(parseJobIds, { logger: console })
+
+    if (parseJobIds.length > 0) {
+      await client.query(
+        `UPDATE parse_jobs
+         SET status = 'cancelled',
+             progress = CASE WHEN progress < 100 THEN 100 ELSE progress END,
+             error_message = COALESCE(NULLIF(error_message, ''), 'Analysis was deleted before parsing completed'),
+             updated_at = NOW()
+         WHERE job_id = ANY($1::text[])
+           AND status IN ('pending', 'queued', 'processing', 'retrying')`,
+        [parseJobIds.map((jobId) => String(jobId))],
+      )
     }
 
     await client.query('DELETE FROM analysis_items WHERE analysis_id = $1', [req.params.id])

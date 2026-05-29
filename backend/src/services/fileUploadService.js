@@ -491,6 +491,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
     mimeType: normalizedMimeType,
     fileSize: row.file_size,
     fileBufferBase64: assembledBuffer.toString('base64'),
+    analysisId: row.analysis_id || null,
     jobDescriptionId: row.job_description_id,
   })
 

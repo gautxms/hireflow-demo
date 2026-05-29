@@ -68,10 +68,15 @@ export async function enqueueParseJob({
   userId,
   filename,
   mimeType,
+  mimetype,
   fileSize,
   fileBufferBase64,
+  fileBuffer,
+  analysisId = null,
   jobDescriptionId = null,
 }) {
+  const resolvedMimeType = mimeType || mimetype || null
+  const resolvedFileBufferBase64 = fileBufferBase64 || (fileBuffer ? Buffer.from(fileBuffer).toString('base64') : null)
   const existing = await pool.query(
     `SELECT job_id
      FROM parse_jobs
@@ -94,9 +99,10 @@ export async function enqueueParseJob({
       resumeId,
       userId,
       filename,
-      mimeType,
+      mimeType: resolvedMimeType,
       fileSize,
-      fileBufferBase64,
+      fileBufferBase64: resolvedFileBufferBase64,
+      analysisId,
       jobDescriptionId,
     },
     {
@@ -127,6 +133,41 @@ export async function enqueueParseJob({
   )
 
   return job
+}
+
+export async function cancelParseJobsByIds(jobIds = [], { logger = console } = {}) {
+  const uniqueJobIds = [...new Set((jobIds || []).map((jobId) => String(jobId || '').trim()).filter(Boolean))]
+  const summary = {
+    requested: uniqueJobIds.length,
+    removed: 0,
+    skipped: 0,
+    missing: 0,
+    errors: 0,
+  }
+
+  for (const jobId of uniqueJobIds) {
+    try {
+      const queueJob = await parseQueue.getJob(jobId)
+      if (!queueJob) {
+        summary.missing += 1
+        continue
+      }
+
+      const state = typeof queueJob.getState === 'function' ? await queueJob.getState() : null
+      if (['completed', 'failed', 'active'].includes(String(state || '').toLowerCase())) {
+        summary.skipped += 1
+        continue
+      }
+
+      await queueJob.remove()
+      summary.removed += 1
+    } catch (error) {
+      summary.errors += 1
+      logger.warn?.(`[Queue] Failed to remove parse job ${jobId} during analysis cancellation:`, error)
+    }
+  }
+
+  return summary
 }
 
 export async function initializeJobQueue() {

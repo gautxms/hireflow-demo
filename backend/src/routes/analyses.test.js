@@ -1,10 +1,15 @@
-import test from 'node:test'
+import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import analysesRouter from './analyses.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
+
+
+after(async () => {
+  await parseQueue.close().catch(() => {})
+})
 
 function buildApp() {
   const app = express()
@@ -271,4 +276,54 @@ test('DELETE /analyses/:id returns 404 when analysis is missing', async (t) => {
 
   assert.equal(response.status, 404)
   assert.equal(payload.error, 'Analysis not found')
+})
+
+test('DELETE /analyses/:id attempts queued parse job cancellation and tolerates missing/completed jobs', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const removed = []
+  t.mock.method(parseQueue, 'getJob', async (jobId) => {
+    if (jobId === 'p-waiting') {
+      return {
+        async getState() { return 'waiting' },
+        async remove() { removed.push(jobId) },
+      }
+    }
+    if (jobId === 'p-completed') {
+      return {
+        async getState() { return 'completed' },
+        async remove() { removed.push(jobId) },
+      }
+    }
+    return null
+  })
+
+  const client = {
+    released: false,
+    query: t.mock.fn(async (sql) => {
+      if (sql.includes('SELECT id FROM analyses WHERE id = $1 AND user_id = $2')) return { rowCount: 1, rows: [{ id: 'a-1' }] }
+      if (sql.includes('SELECT parse_job_id')) {
+        return { rows: [{ parse_job_id: 'p-waiting' }, { parse_job_id: 'p-missing' }, { parse_job_id: 'p-completed' }] }
+      }
+      return { rowCount: 1, rows: [] }
+    }),
+    release() { this.released = true },
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/a-1`, { method: 'DELETE', headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.ok, true)
+  assert.deepEqual(removed, ['p-waiting'])
+  assert.equal(client.released, true)
+  assert.equal(
+    client.query.mock.calls.some((call) => String(call.arguments[0]).includes("SET status = 'cancelled'")),
+    true,
+  )
+  assert.equal(client.query.mock.calls.at(-1).arguments[0], 'COMMIT')
 })
