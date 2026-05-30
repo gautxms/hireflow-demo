@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import Bull from 'bull'
 import { pool } from '../db/client.js'
 
@@ -79,6 +80,9 @@ export async function enqueueParseJob({
   jobDescriptionId = null,
 }) {
   const resolvedMimeType = mimeType || mimetype || null
+  const resolvedFileSize = fileSize !== null && fileSize !== undefined && fileSize !== '' && Number.isFinite(Number(fileSize))
+    ? Number(fileSize)
+    : (fileBuffer ? Buffer.from(fileBuffer).length : null)
   const resolvedFileBufferBase64 = fileBufferBase64 || (fileBuffer ? Buffer.from(fileBuffer).toString('base64') : null)
   const existing = await pool.query(
     `SELECT job_id
@@ -106,7 +110,7 @@ export async function enqueueParseJob({
       originalMimeType: originalMimeType || null,
       fileExtension: fileExtension || null,
       mimeType: resolvedMimeType,
-      fileSize,
+      fileSize: resolvedFileSize,
       fileBufferBase64: resolvedFileBufferBase64,
       analysisId,
       jobDescriptionId,

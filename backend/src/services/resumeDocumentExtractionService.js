@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { createHash } from 'crypto'
 import {
   createUnsupportedLegacyWordError,
@@ -8,6 +9,11 @@ import {
 let mammothClient = null
 
 const DOCX_DOCUMENT_XML_PATH = 'word/document.xml'
+const PDF_MAGIC = Buffer.from('%PDF', 'ascii')
+const ZIP_LOCAL_FILE_MAGIC = [0x50, 0x4b, 0x03, 0x04]
+const ZIP_EMPTY_ARCHIVE_MAGIC = [0x50, 0x4b, 0x05, 0x06]
+const ZIP_SPANNED_ARCHIVE_MAGIC = [0x50, 0x4b, 0x07, 0x08]
+const OLE_COMPOUND_FILE_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]
 const TEXT_FINGERPRINT_VERSION = 'resume-text-fingerprint-v1'
 
 
@@ -59,6 +65,183 @@ export function compareResumeTextFingerprints(leftText = '', rightText = '') {
     right,
     charCountDelta: Math.abs(Number(left.normalizedCharCount || 0) - Number(right.normalizedCharCount || 0)),
     lineCountDelta: Math.abs(Number(left.normalizedLineCount || 0) - Number(right.normalizedLineCount || 0)),
+  }
+}
+
+function normalizeMimeType(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function getFileExtensionFromFilename(filename) {
+  const normalizedFilename = String(filename || '').trim()
+  const lastDotIndex = normalizedFilename.lastIndexOf('.')
+  if (lastDotIndex <= 0 || lastDotIndex === normalizedFilename.length - 1) {
+    return ''
+  }
+  return normalizedFilename.slice(lastDotIndex + 1).toLowerCase()
+}
+
+function bufferStartsWith(fileBuffer, signature) {
+  if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length < signature.length) return false
+  return signature.every((byte, index) => fileBuffer[index] === byte)
+}
+
+function hasPdfMagic(fileBuffer) {
+  return Buffer.isBuffer(fileBuffer) && fileBuffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC)
+}
+
+function hasZipMagic(fileBuffer) {
+  return bufferStartsWith(fileBuffer, ZIP_LOCAL_FILE_MAGIC)
+    || bufferStartsWith(fileBuffer, ZIP_EMPTY_ARCHIVE_MAGIC)
+    || bufferStartsWith(fileBuffer, ZIP_SPANNED_ARCHIVE_MAGIC)
+}
+
+function hasOleMagic(fileBuffer) {
+  return bufferStartsWith(fileBuffer, OLE_COMPOUND_FILE_MAGIC)
+}
+
+export function classifyResumeFileMagic(fileBuffer) {
+  const hasWordDocumentXml = zipContainsEntry(fileBuffer, DOCX_DOCUMENT_XML_PATH)
+
+  if (hasPdfMagic(fileBuffer)) {
+    return { classification: 'pdf', hasWordDocumentXml: false }
+  }
+
+  if (hasZipMagic(fileBuffer) && hasWordDocumentXml) {
+    return { classification: 'docx_zip', hasWordDocumentXml }
+  }
+
+  if (hasOleMagic(fileBuffer)) {
+    return { classification: 'legacy_doc_ole', hasWordDocumentXml: false }
+  }
+
+  return { classification: 'unknown', hasWordDocumentXml: Boolean(hasWordDocumentXml) }
+}
+
+
+function buildNonReversibleFingerprint(value, namespace) {
+  const normalizedValue = Buffer.isBuffer(value)
+    ? value
+    : String(value || '').trim().normalize('NFKC')
+  const isEmptyBuffer = Buffer.isBuffer(normalizedValue) && normalizedValue.length === 0
+  const isEmptyString = !Buffer.isBuffer(normalizedValue) && !normalizedValue
+  if (isEmptyBuffer || isEmptyString) {
+    return null
+  }
+
+  return createHash('sha256')
+    .update(`${namespace}:`)
+    .update(normalizedValue)
+    .digest('hex')
+    .slice(0, 16)
+}
+
+function buildFilenameFingerprint(filename) {
+  return buildNonReversibleFingerprint(filename, 'resume-filename-fingerprint-v1')
+}
+
+function buildFileContentFingerprint(fileBuffer) {
+  return Buffer.isBuffer(fileBuffer)
+    ? buildNonReversibleFingerprint(fileBuffer, 'resume-file-content-fingerprint-v1')
+    : null
+}
+
+function buildSafeFilenameDiagnostics(filename) {
+  const normalizedFilename = String(filename || '').trim()
+  return {
+    extension: getFileExtensionFromFilename(normalizedFilename) || null,
+    fingerprint: buildFilenameFingerprint(normalizedFilename),
+  }
+}
+
+function normalizeFileSize(value) {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+export function buildSafeResumeFileDiagnostics({
+  resumeId = null,
+  analysisId = null,
+  parseJobId = null,
+  originalFilename = null,
+  displayFilename = null,
+  filename = null,
+  mimeType = null,
+  originalMimeType = null,
+  normalizedMimeType = null,
+  fileSize = null,
+  fileBuffer = null,
+  extension = null,
+  extractionMethod = null,
+  extractedTextCharCount = null,
+  preparedMimeType = null,
+  inputKind = null,
+} = {}) {
+  const resolvedOriginalFilename = String(originalFilename || filename || '').trim() || null
+  const resolvedDisplayFilename = String(displayFilename || '').trim() || null
+  const originalFilenameDiagnostics = buildSafeFilenameDiagnostics(resolvedOriginalFilename)
+  const displayFilenameDiagnostics = buildSafeFilenameDiagnostics(resolvedDisplayFilename)
+  const resolvedNormalizedMimeType = normalizeMimeType(normalizedMimeType || mimeType) || null
+  const magic = classifyResumeFileMagic(fileBuffer)
+  const decodedBufferByteLength = Buffer.isBuffer(fileBuffer) ? fileBuffer.length : 0
+  const resolvedExtension = String(extension || originalFilenameDiagnostics.extension || displayFilenameDiagnostics.extension || '').trim().toLowerCase() || null
+  const numericTextCount = extractedTextCharCount === null || extractedTextCharCount === undefined
+    ? null
+    : Number(extractedTextCharCount)
+
+  return {
+    resumeId: resumeId || null,
+    analysisId: analysisId || null,
+    parseJobId: parseJobId ? String(parseJobId) : null,
+    originalFilenameFingerprint: originalFilenameDiagnostics.fingerprint,
+    displayFilenameFingerprint: resolvedDisplayFilename && resolvedDisplayFilename !== resolvedOriginalFilename
+      ? displayFilenameDiagnostics.fingerprint
+      : null,
+    fileContentFingerprint: buildFileContentFingerprint(fileBuffer),
+    uploadMimeType: normalizeMimeType(originalMimeType || mimeType) || null,
+    normalizedMimeType: resolvedNormalizedMimeType,
+    uploadFileSize: normalizeFileSize(fileSize),
+    decodedBufferByteLength,
+    extension: resolvedExtension,
+    fileSignature: magic.classification,
+    hasWordDocumentXml: magic.hasWordDocumentXml,
+    extractionMethod: extractionMethod || null,
+    extractedTextCharCount: Number.isFinite(numericTextCount) ? numericTextCount : null,
+    preparedMimeType: preparedMimeType || null,
+    inputKind: inputKind || null,
+  }
+}
+
+function compactResumeFileDiagnostics(diagnostics = {}) {
+  const originalFilenameDiagnostics = buildSafeFilenameDiagnostics(diagnostics.originalFilename)
+  const displayFilenameDiagnostics = buildSafeFilenameDiagnostics(diagnostics.displayFilename)
+
+  return {
+    resumeId: diagnostics.resumeId || null,
+    analysisId: diagnostics.analysisId || null,
+    parseJobId: diagnostics.parseJobId || null,
+    originalFilenameFingerprint: diagnostics.originalFilenameFingerprint || originalFilenameDiagnostics.fingerprint || null,
+    displayFilenameFingerprint: diagnostics.displayFilenameFingerprint || displayFilenameDiagnostics.fingerprint || null,
+    fileContentFingerprint: diagnostics.fileContentFingerprint || null,
+    uploadMimeType: diagnostics.uploadMimeType || diagnostics.originalMimeType || null,
+    normalizedMimeType: diagnostics.normalizedMimeType || null,
+    uploadFileSize: diagnostics.uploadFileSize ?? diagnostics.declaredFileSize ?? null,
+    decodedBufferByteLength: diagnostics.decodedBufferByteLength ?? null,
+    extension: diagnostics.extension || originalFilenameDiagnostics.extension || displayFilenameDiagnostics.extension || null,
+    fileSignature: diagnostics.fileSignature || null,
+    hasWordDocumentXml: diagnostics.hasWordDocumentXml ?? null,
+    extractionMethod: diagnostics.extractionMethod || null,
+    extractedTextCharCount: diagnostics.extractedTextCharCount ?? null,
+    preparedMimeType: diagnostics.preparedMimeType || null,
+    inputKind: diagnostics.inputKind || null,
+  }
+}
+
+export function logSafeResumeFileDiagnostics(logger, event, diagnostics, level = 'info') {
+  const target = logger?.[level] || logger?.log
+  if (typeof target === 'function') {
+    target.call(logger, `[ResumeDiagnostics] ${event}`, compactResumeFileDiagnostics(diagnostics))
   }
 }
 
@@ -152,8 +335,11 @@ function buildDocxDiagnostics({
   mammothTextLength = null,
   errorCategory = null,
 }) {
+  const filenameDiagnostics = buildSafeFilenameDiagnostics(filename)
+
   return {
-    filename: filename || null,
+    filenameExtension: filenameDiagnostics.extension,
+    filenameFingerprint: filenameDiagnostics.fingerprint,
     mimeType: mimeType || null,
     originalMimeType: originalMimeType || null,
     declaredFileSize: Number.isFinite(Number(fileSize)) ? Number(fileSize) : null,
@@ -242,12 +428,31 @@ export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.d
   }
 }
 
-export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, originalMimeType, filename, fileSize, logger = console }) {
+export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, originalMimeType, filename, displayFilename = null, fileSize, logger = console, diagnosticsContext = {} }) {
   const normalizedMimeType = String(mimeType || '').toLowerCase().trim()
   const normalizedOriginalMimeType = String(originalMimeType || mimeType || '').toLowerCase().trim()
   const normalizedFilename = String(filename || '').trim()
   const lowerFilename = normalizedFilename.toLowerCase()
   const fileBuffer = decodeBase64ToBuffer(fileBufferBase64)
+  const baseDiagnosticsInput = {
+    resumeId: diagnosticsContext?.resumeId || null,
+    analysisId: diagnosticsContext?.analysisId || null,
+    parseJobId: diagnosticsContext?.parseJobId || null,
+    originalFilename: normalizedFilename || null,
+    displayFilename,
+    mimeType,
+    originalMimeType: normalizedOriginalMimeType || originalMimeType || mimeType || null,
+    normalizedMimeType,
+    fileSize,
+    fileBuffer,
+    extension: diagnosticsContext?.fileExtension || null,
+  }
+
+  logSafeResumeFileDiagnostics(
+    logger,
+    'parse_job_input',
+    buildSafeResumeFileDiagnostics(baseDiagnosticsInput),
+  )
   const legacyWordDetection = getLegacyWordDocumentDetection({
     filename: normalizedFilename,
     mimeType: normalizedMimeType,
@@ -257,16 +462,41 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
 
   if (legacyWordDetection.isLegacyWordDocument) {
     if (legacyWordDetection.hasMismatch) {
+      const filenameDiagnostics = buildSafeFilenameDiagnostics(normalizedFilename)
       logger?.warn?.('[ResumeExtraction] Legacy Word MIME/extension mismatch rejected before DOCX extraction', {
-        filename: normalizedFilename || null,
+        filenameExtension: filenameDiagnostics.extension,
+        filenameFingerprint: filenameDiagnostics.fingerprint,
         mimeType: normalizedMimeType || null,
         originalMimeType: normalizedOriginalMimeType || null,
         extension: legacyWordDetection.extension || null,
         hasOleMagic: legacyWordDetection.hasOleMagic,
       })
     }
-    throw createUnsupportedLegacyWordError({ detection: legacyWordDetection })
+    const error = createUnsupportedLegacyWordError({ detection: legacyWordDetection })
+    error.diagnostics = {
+      ...(error.diagnostics || {}),
+      ...buildSafeResumeFileDiagnostics({
+        ...baseDiagnosticsInput,
+        extractionMethod: 'legacy_doc_rejected',
+        preparedMimeType: null,
+        inputKind: null,
+        extractedTextCharCount: 0,
+      }),
+    }
+    logSafeResumeFileDiagnostics(logger, 'extraction_decision', error.diagnostics, 'warn')
+    throw error
   }
+
+  const mergeSafeDiagnostics = (diagnostics, { extractionMethod, extractedTextCharCount = null, preparedMimeType = null, inputKind = null } = {}) => ({
+    ...(diagnostics || {}),
+    ...buildSafeResumeFileDiagnostics({
+      ...baseDiagnosticsInput,
+      extractionMethod,
+      extractedTextCharCount,
+      preparedMimeType,
+      inputKind,
+    }),
+  })
 
   const buildBase = () => ({
     originalFilename: normalizedFilename || null,
@@ -287,14 +517,19 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputMode: 'extracted_text',
       extractedText,
       base64File: null,
-      diagnostics: buildPreparedPayloadDiagnostics({
+      diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
         sourceFormat,
         inputKind: 'extracted_text',
         inputMode: 'extracted_text',
         preparedMimeType: 'text/plain',
         originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
         extractedText,
-        extractionMethod: 'uploaded_text',
+        extractionMethod: 'text_plain_extraction',
+      }), {
+        extractionMethod: 'text_plain_extraction',
+        extractedTextCharCount: extractedText.length,
+        preparedMimeType: 'text/plain',
+        inputKind: 'extracted_text',
       }),
     }
   }
@@ -310,25 +545,42 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputMode: 'binary',
       extractedText: null,
       base64File: fileBufferBase64,
-      diagnostics: buildPreparedPayloadDiagnostics({
+      diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
         sourceFormat: 'pdf',
         inputKind: 'pdf_binary',
         inputMode: 'binary',
         preparedMimeType: normalizedMimeType,
         originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
-        extractionMethod: 'provider_pdf_binary',
+        extractionMethod: 'pdf_binary_provider_input',
         fallbackUsed: false,
+      }), {
+        extractionMethod: 'pdf_binary_provider_input',
+        extractedTextCharCount: 0,
+        preparedMimeType: normalizedMimeType,
+        inputKind: 'pdf_binary',
       }),
     }
   }
 
   if (normalizedMimeType === DOCX_MIME_TYPE || lowerFilename.endsWith('.docx')) {
-    const extractedText = await extractTextFromDocxBuffer(fileBuffer, normalizedFilename || 'resume.docx', {
-      mimeType: normalizedMimeType || mimeType || DOCX_MIME_TYPE,
-      originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
-      fileSize,
-      logger,
-    })
+    let extractedText
+    try {
+      extractedText = await extractTextFromDocxBuffer(fileBuffer, normalizedFilename || 'resume.docx', {
+        mimeType: normalizedMimeType || mimeType || DOCX_MIME_TYPE,
+        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
+        fileSize,
+        logger,
+      })
+    } catch (error) {
+      error.diagnostics = mergeSafeDiagnostics(error.diagnostics || {}, {
+        extractionMethod: 'docx_mammoth_text_extraction',
+        extractedTextCharCount: error?.diagnostics?.mammothTextLength ?? 0,
+        preparedMimeType: null,
+        inputKind: 'extracted_text',
+      })
+      logSafeResumeFileDiagnostics(logger, 'extraction_decision', error.diagnostics, 'warn')
+      throw error
+    }
     return {
       ...buildBase(),
       fileBufferBase64: Buffer.from(extractedText, 'utf8').toString('base64'),
@@ -339,14 +591,19 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputMode: 'extracted_text',
       extractedText,
       base64File: null,
-      diagnostics: buildPreparedPayloadDiagnostics({
+      diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
         sourceFormat: lowerFilename.endsWith('.docx') ? 'docx' : 'unknown',
         inputKind: 'extracted_text',
         inputMode: 'extracted_text',
         preparedMimeType: 'text/plain',
         originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
         extractedText,
-        extractionMethod: 'mammoth_raw_text',
+        extractionMethod: 'docx_mammoth_text_extraction',
+      }), {
+        extractionMethod: 'docx_mammoth_text_extraction',
+        extractedTextCharCount: extractedText.length,
+        preparedMimeType: 'text/plain',
+        inputKind: 'extracted_text',
       }),
     }
   }
@@ -361,13 +618,18 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     inputMode: 'binary',
     extractedText: null,
     base64File: fileBufferBase64,
-    diagnostics: buildPreparedPayloadDiagnostics({
+    diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
       sourceFormat: 'unknown',
       inputKind: 'binary_unknown',
       inputMode: 'binary',
       preparedMimeType: normalizedMimeType || mimeType,
       originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
-      extractionMethod: 'provider_binary_unknown',
+      extractionMethod: 'unsupported_or_unknown',
+    }), {
+      extractionMethod: 'unsupported_or_unknown',
+      extractedTextCharCount: 0,
+      preparedMimeType: normalizedMimeType || mimeType,
+      inputKind: 'binary_unknown',
     }),
   }
 }
