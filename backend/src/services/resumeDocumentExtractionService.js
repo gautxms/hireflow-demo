@@ -118,6 +118,42 @@ export function classifyResumeFileMagic(fileBuffer) {
   return { classification: 'unknown', hasWordDocumentXml: Boolean(hasWordDocumentXml) }
 }
 
+
+function buildNonReversibleFingerprint(value, namespace) {
+  const normalizedValue = Buffer.isBuffer(value)
+    ? value
+    : String(value || '').trim().normalize('NFKC')
+  const isEmptyBuffer = Buffer.isBuffer(normalizedValue) && normalizedValue.length === 0
+  const isEmptyString = !Buffer.isBuffer(normalizedValue) && !normalizedValue
+  if (isEmptyBuffer || isEmptyString) {
+    return null
+  }
+
+  return createHash('sha256')
+    .update(`${namespace}:`)
+    .update(normalizedValue)
+    .digest('hex')
+    .slice(0, 16)
+}
+
+function buildFilenameFingerprint(filename) {
+  return buildNonReversibleFingerprint(filename, 'resume-filename-fingerprint-v1')
+}
+
+function buildFileContentFingerprint(fileBuffer) {
+  return Buffer.isBuffer(fileBuffer)
+    ? buildNonReversibleFingerprint(fileBuffer, 'resume-file-content-fingerprint-v1')
+    : null
+}
+
+function buildSafeFilenameDiagnostics(filename) {
+  const normalizedFilename = String(filename || '').trim()
+  return {
+    extension: getFileExtensionFromFilename(normalizedFilename) || null,
+    fingerprint: buildFilenameFingerprint(normalizedFilename),
+  }
+}
+
 function normalizeFileSize(value) {
   if (value === null || value === undefined || value === '') return null
   const numeric = Number(value)
@@ -144,10 +180,12 @@ export function buildSafeResumeFileDiagnostics({
 } = {}) {
   const resolvedOriginalFilename = String(originalFilename || filename || '').trim() || null
   const resolvedDisplayFilename = String(displayFilename || '').trim() || null
+  const originalFilenameDiagnostics = buildSafeFilenameDiagnostics(resolvedOriginalFilename)
+  const displayFilenameDiagnostics = buildSafeFilenameDiagnostics(resolvedDisplayFilename)
   const resolvedNormalizedMimeType = normalizeMimeType(normalizedMimeType || mimeType) || null
   const magic = classifyResumeFileMagic(fileBuffer)
   const decodedBufferByteLength = Buffer.isBuffer(fileBuffer) ? fileBuffer.length : 0
-  const resolvedExtension = String(extension || getFileExtensionFromFilename(resolvedOriginalFilename || resolvedDisplayFilename || filename) || '').trim().toLowerCase() || null
+  const resolvedExtension = String(extension || originalFilenameDiagnostics.extension || displayFilenameDiagnostics.extension || '').trim().toLowerCase() || null
   const numericTextCount = extractedTextCharCount === null || extractedTextCharCount === undefined
     ? null
     : Number(extractedTextCharCount)
@@ -156,8 +194,11 @@ export function buildSafeResumeFileDiagnostics({
     resumeId: resumeId || null,
     analysisId: analysisId || null,
     parseJobId: parseJobId ? String(parseJobId) : null,
-    originalFilename: resolvedOriginalFilename,
-    displayFilename: resolvedDisplayFilename && resolvedDisplayFilename !== resolvedOriginalFilename ? resolvedDisplayFilename : null,
+    originalFilenameFingerprint: originalFilenameDiagnostics.fingerprint,
+    displayFilenameFingerprint: resolvedDisplayFilename && resolvedDisplayFilename !== resolvedOriginalFilename
+      ? displayFilenameDiagnostics.fingerprint
+      : null,
+    fileContentFingerprint: buildFileContentFingerprint(fileBuffer),
     uploadMimeType: normalizeMimeType(originalMimeType || mimeType) || null,
     normalizedMimeType: resolvedNormalizedMimeType,
     uploadFileSize: normalizeFileSize(fileSize),
@@ -173,17 +214,21 @@ export function buildSafeResumeFileDiagnostics({
 }
 
 function compactResumeFileDiagnostics(diagnostics = {}) {
+  const originalFilenameDiagnostics = buildSafeFilenameDiagnostics(diagnostics.originalFilename)
+  const displayFilenameDiagnostics = buildSafeFilenameDiagnostics(diagnostics.displayFilename)
+
   return {
     resumeId: diagnostics.resumeId || null,
     analysisId: diagnostics.analysisId || null,
     parseJobId: diagnostics.parseJobId || null,
-    originalFilename: diagnostics.originalFilename || null,
-    displayFilename: diagnostics.displayFilename || null,
+    originalFilenameFingerprint: diagnostics.originalFilenameFingerprint || originalFilenameDiagnostics.fingerprint || null,
+    displayFilenameFingerprint: diagnostics.displayFilenameFingerprint || displayFilenameDiagnostics.fingerprint || null,
+    fileContentFingerprint: diagnostics.fileContentFingerprint || null,
     uploadMimeType: diagnostics.uploadMimeType || diagnostics.originalMimeType || null,
     normalizedMimeType: diagnostics.normalizedMimeType || null,
     uploadFileSize: diagnostics.uploadFileSize ?? diagnostics.declaredFileSize ?? null,
     decodedBufferByteLength: diagnostics.decodedBufferByteLength ?? null,
-    extension: diagnostics.extension || null,
+    extension: diagnostics.extension || originalFilenameDiagnostics.extension || displayFilenameDiagnostics.extension || null,
     fileSignature: diagnostics.fileSignature || null,
     hasWordDocumentXml: diagnostics.hasWordDocumentXml ?? null,
     extractionMethod: diagnostics.extractionMethod || null,
@@ -290,8 +335,11 @@ function buildDocxDiagnostics({
   mammothTextLength = null,
   errorCategory = null,
 }) {
+  const filenameDiagnostics = buildSafeFilenameDiagnostics(filename)
+
   return {
-    filename: filename || null,
+    filenameExtension: filenameDiagnostics.extension,
+    filenameFingerprint: filenameDiagnostics.fingerprint,
     mimeType: mimeType || null,
     originalMimeType: originalMimeType || null,
     declaredFileSize: Number.isFinite(Number(fileSize)) ? Number(fileSize) : null,
@@ -414,8 +462,10 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
 
   if (legacyWordDetection.isLegacyWordDocument) {
     if (legacyWordDetection.hasMismatch) {
+      const filenameDiagnostics = buildSafeFilenameDiagnostics(normalizedFilename)
       logger?.warn?.('[ResumeExtraction] Legacy Word MIME/extension mismatch rejected before DOCX extraction', {
-        filename: normalizedFilename || null,
+        filenameExtension: filenameDiagnostics.extension,
+        filenameFingerprint: filenameDiagnostics.fingerprint,
         mimeType: normalizedMimeType || null,
         originalMimeType: normalizedOriginalMimeType || null,
         extension: legacyWordDetection.extension || null,

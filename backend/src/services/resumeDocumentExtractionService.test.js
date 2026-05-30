@@ -8,6 +8,7 @@ import {
   classifyResumeFileMagic,
   compareResumeTextFingerprints,
   inspectDocxBuffer,
+  logSafeResumeFileDiagnostics,
   prepareResumePayloadForAnalysis,
 } from './resumeDocumentExtractionService.js'
 import { UNSUPPORTED_LEGACY_WORD_MESSAGE } from '../utils/legacyWordDocument.js'
@@ -74,7 +75,7 @@ test('classifyResumeFileMagic identifies PDF, DOCX zip, legacy DOC OLE, and unkn
   })
 })
 
-test('safe resume file diagnostics omit content and base64 while preserving file identity fields', async () => {
+test('safe resume file diagnostics omit content, base64, and raw filenames while preserving file identity fingerprints', async () => {
   const docxBuffer = await buildDocxBuffer(['Private Candidate Name'], [])
   const diagnostics = buildSafeResumeFileDiagnostics({
     resumeId: 'resume-123',
@@ -98,13 +99,44 @@ test('safe resume file diagnostics omit content and base64 while preserving file
   assert.equal(diagnostics.resumeId, 'resume-123')
   assert.equal(diagnostics.analysisId, 'analysis-456')
   assert.equal(diagnostics.parseJobId, 'resume:resume-123')
-  assert.equal(diagnostics.originalFilename, 'candidate.docx')
-  assert.equal(diagnostics.displayFilename, 'candidate_upload.docx')
+  assert.match(diagnostics.originalFilenameFingerprint, /^[a-f0-9]{16}$/)
+  assert.match(diagnostics.displayFilenameFingerprint, /^[a-f0-9]{16}$/)
+  assert.match(diagnostics.fileContentFingerprint, /^[a-f0-9]{16}$/)
+  assert.notEqual(diagnostics.originalFilenameFingerprint, diagnostics.displayFilenameFingerprint)
+  assert.equal(diagnostics.extension, 'docx')
   assert.equal(diagnostics.fileSignature, 'docx_zip')
   assert.equal(diagnostics.hasWordDocumentXml, true)
   assert.equal(serialized.includes('Private Candidate Name'), false)
+  assert.equal(serialized.includes('candidate.docx'), false)
+  assert.equal(serialized.includes('candidate_upload.docx'), false)
   assert.equal(serialized.includes('base64'), false)
   assert.equal(serialized.includes('content'), false)
+})
+
+test('safe resume file diagnostics logger strips raw filename fields from legacy diagnostic objects', () => {
+  const logged = []
+  const logger = {
+    info(message, payload) {
+      logged.push({ message, payload })
+    },
+  }
+
+  logSafeResumeFileDiagnostics(logger, 'parse_job_input', {
+    resumeId: 'resume-123',
+    originalFilename: 'Jane_Doe_Resume.pdf',
+    displayFilename: 'Jane_Doe_Upload.pdf',
+    uploadMimeType: 'application/pdf',
+    extension: 'pdf',
+  })
+
+  assert.equal(logged.length, 1)
+  assert.equal(logged[0].message, '[ResumeDiagnostics] parse_job_input')
+  assert.equal(logged[0].payload.originalFilename, undefined)
+  assert.equal(logged[0].payload.displayFilename, undefined)
+  assert.match(logged[0].payload.originalFilenameFingerprint, /^[a-f0-9]{16}$/)
+  assert.match(logged[0].payload.displayFilenameFingerprint, /^[a-f0-9]{16}$/)
+  assert.equal(logged[0].payload.extension, 'pdf')
+  assert.equal(JSON.stringify(logged[0].payload).includes('Jane_Doe'), false)
 })
 
 test('compareResumeTextFingerprints identifies equivalent extracted resume text without exposing content', () => {
@@ -205,7 +237,9 @@ test('prepareResumePayloadForAnalysis fails invalid DOCX with deterministic inva
       assert.equal(error.diagnostics.hasDocxZipMagic, false)
       assert.equal(error.diagnostics.hasWordDocumentXml, false)
       assert.equal(error.diagnostics.extractionMethod, 'docx_mammoth_text_extraction')
-      assert.equal(error.diagnostics.originalFilename, 'resume.docx')
+      assert.equal(error.diagnostics.originalFilename, undefined)
+      assert.match(error.diagnostics.originalFilenameFingerprint, /^[a-f0-9]{16}$/)
+      assert.equal(JSON.stringify(error.diagnostics).includes('resume.docx'), false)
       return true
     },
   )
@@ -241,13 +275,16 @@ test('inspectDocxBuffer reports zip signature and document XML without exposing 
     fileSize: docxBuffer.length,
   })
 
-  assert.equal(diagnostics.filename, 'resume.docx')
+  assert.equal(diagnostics.filename, undefined)
+  assert.equal(diagnostics.filenameExtension, 'docx')
+  assert.match(diagnostics.filenameFingerprint, /^[a-f0-9]{16}$/)
   assert.equal(diagnostics.mimeType, 'application/octet-stream')
   assert.equal(diagnostics.declaredFileSize, docxBuffer.length)
   assert.equal(diagnostics.decodedBufferByteLength, docxBuffer.length)
   assert.equal(diagnostics.hasDocxZipMagic, true)
   assert.equal(diagnostics.hasWordDocumentXml, true)
   assert.equal(JSON.stringify(diagnostics).includes('Priya'), false)
+  assert.equal(JSON.stringify(diagnostics).includes('resume.docx'), false)
 })
 
 test('prepareResumePayloadForAnalysis fails .doc filename with application/msword as unsupported legacy DOC', async () => {

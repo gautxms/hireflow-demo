@@ -257,8 +257,11 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, ori
 
   if (legacyWordDetection.isLegacyWordDocument) {
     if (legacyWordDetection.hasMismatch) {
+      const mismatchDiagnostics = buildSafeResumeFileDiagnostics(baseDiagnosticsInput)
       logger?.warn?.('[Parse] Legacy Word MIME/extension mismatch rejected before document extraction', {
-        filename: filename || null,
+        filenameExtension: mismatchDiagnostics.extension || null,
+        filenameFingerprint: mismatchDiagnostics.originalFilenameFingerprint || null,
+        fileContentFingerprint: mismatchDiagnostics.fileContentFingerprint || null,
         mimeType: mimeType || null,
         originalMimeType: originalMimeType || null,
         extension: legacyWordDetection.extension || null,
