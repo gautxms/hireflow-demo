@@ -28,6 +28,7 @@ function normalizeUnavailableReason(reason) {
 const PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES = new Set([
   'docx_empty_extraction',
   'docx_invalid_or_unreadable',
+  'docx_dependency_missing',
   'docx_extraction_failed',
   'extraction_empty',
   'legacy_word_format',

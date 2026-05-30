@@ -9,6 +9,7 @@ const DETERMINISTIC_PATTERNS = [
   /malformed (array|json)/i,
   /docx_empty_extraction/i,
   /docx_invalid_or_unreadable/i,
+  /docx_dependency_missing/i,
   /docx_extraction_failed/i,
   /extraction_empty/i,
   /legacy_word_format/i,

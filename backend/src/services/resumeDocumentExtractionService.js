@@ -7,6 +7,7 @@ import {
 } from '../utils/legacyWordDocument.js'
 
 let mammothClient = null
+let mammothClientOverrideForTests = undefined
 
 const DOCX_DOCUMENT_XML_PATH = 'word/document.xml'
 const PDF_MAGIC = Buffer.from('%PDF', 'ascii')
@@ -15,12 +16,13 @@ const ZIP_EMPTY_ARCHIVE_MAGIC = [0x50, 0x4b, 0x05, 0x06]
 const ZIP_SPANNED_ARCHIVE_MAGIC = [0x50, 0x4b, 0x07, 0x08]
 const OLE_COMPOUND_FILE_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]
 const TEXT_FINGERPRINT_VERSION = 'resume-text-fingerprint-v1'
+const NULL_CHARACTER = String.fromCharCode(0)
 
 
 export function normalizeResumeTextForFingerprint(text = '') {
   return String(text || '')
     .normalize('NFKC')
-    .replace(/\u0000/g, ' ')
+    .split(NULL_CHARACTER).join(' ')
     .replace(/\uFFFD/g, ' ')
     .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
     .replace(/\r/g, '\n')
@@ -284,13 +286,42 @@ function createDocxExtractionError(category, message, { cause = null, diagnostic
   return error
 }
 
+function buildSafeErrorCauseDiagnostics(error) {
+  if (!error) return null
+  const message = String(error?.message || '').trim()
+  return {
+    name: String(error?.name || 'Error').slice(0, 80),
+    code: error?.code ? String(error.code).slice(0, 80) : null,
+    messageFingerprint: message ? buildNonReversibleFingerprint(message, 'resume-extraction-error-message-v1') : null,
+  }
+}
+
 function getErrorCategory(error) {
   const message = String(error?.message || '')
   const prefixedCategory = message.match(/^([a-z0-9_]+)::/i)?.[1]
   return error?.category || error?.extractionCategory || prefixedCategory || 'unknown'
 }
 
+export function __setMammothClientForTests(client) {
+  mammothClientOverrideForTests = client
+}
+
+export function __resetMammothClientForTests() {
+  mammothClientOverrideForTests = undefined
+  mammothClient = null
+}
+
 async function getMammothClient() {
+  if (mammothClientOverrideForTests !== undefined) {
+    if (!mammothClientOverrideForTests) {
+      throw createDocxExtractionError(
+        'docx_dependency_missing',
+        'DOCX parsing dependency is unavailable. Please reinstall dependencies.',
+      )
+    }
+    return mammothClientOverrideForTests
+  }
+
   if (mammothClient) {
     return mammothClient
   }
@@ -298,6 +329,9 @@ async function getMammothClient() {
   try {
     const mammothModule = await import('mammoth')
     mammothClient = mammothModule?.default || mammothModule
+    if (!mammothClient || typeof mammothClient.extractRawText !== 'function') {
+      throw new Error('mammoth_extract_raw_text_unavailable')
+    }
     return mammothClient
   } catch (error) {
     throw createDocxExtractionError(
@@ -334,6 +368,7 @@ function buildDocxDiagnostics({
   fileBuffer,
   mammothTextLength = null,
   errorCategory = null,
+  cause = null,
 }) {
   const filenameDiagnostics = buildSafeFilenameDiagnostics(filename)
 
@@ -348,6 +383,7 @@ function buildDocxDiagnostics({
     hasWordDocumentXml: zipContainsEntry(fileBuffer, DOCX_DOCUMENT_XML_PATH),
     mammothTextLength: Number.isFinite(Number(mammothTextLength)) ? Number(mammothTextLength) : null,
     errorCategory: errorCategory || null,
+    cause: buildSafeErrorCauseDiagnostics(cause),
   }
 }
 
@@ -371,7 +407,7 @@ export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.d
   } = options || {}
   let mammothTextLength = null
 
-  const buildDiagnostics = (errorCategory = null) => buildDocxDiagnostics({
+  const buildDiagnostics = (errorCategory = null, cause = null) => buildDocxDiagnostics({
     filename,
     mimeType,
     originalMimeType,
@@ -379,7 +415,17 @@ export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.d
     fileBuffer,
     mammothTextLength,
     errorCategory,
+    cause,
   })
+
+  if (hasOleMagic(fileBuffer)) {
+    throw createUnsupportedLegacyWordError({ detection: getLegacyWordDocumentDetection({
+      filename,
+      mimeType,
+      originalMimeType,
+      fileBuffer,
+    }) })
+  }
 
   if (!hasDocxZipMagic(fileBuffer) || !zipContainsEntry(fileBuffer, DOCX_DOCUMENT_XML_PATH)) {
     const diagnostics = buildDiagnostics('docx_invalid_or_unreadable')
@@ -393,6 +439,12 @@ export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.d
 
   try {
     const mammoth = await getMammothClient()
+    if (!mammoth || typeof mammoth.extractRawText !== 'function') {
+      throw createDocxExtractionError(
+        'docx_dependency_missing',
+        'DOCX parsing dependency is unavailable. Please reinstall dependencies.',
+      )
+    }
     const { value } = await mammoth.extractRawText({ buffer: fileBuffer })
     const extractedText = String(value || '').trim()
     mammothTextLength = extractedText.length
@@ -411,14 +463,25 @@ export async function extractTextFromDocxBuffer(fileBuffer, filename = 'resume.d
     const category = getErrorCategory(error)
     if (category === 'docx_empty_extraction' || category === 'docx_dependency_missing') {
       if (category === 'docx_dependency_missing') {
-        const diagnostics = buildDiagnostics(category)
+        const diagnostics = buildDiagnostics(category, error?.cause || error)
         logDocxDiagnostics(logger, diagnostics)
         error.diagnostics = error.diagnostics || diagnostics
       }
       throw error
     }
 
-    const diagnostics = buildDiagnostics('docx_extraction_failed')
+    const invalidDocxPattern = /(end of central directory|corrupt|invalid zip|not a zip|can't find|cannot find|missing .*document\.xml|file not found|no such file|unrecognized archive|bad archive)/i
+    if (invalidDocxPattern.test(String(error?.message || ''))) {
+      const diagnostics = buildDiagnostics('docx_invalid_or_unreadable', error)
+      logDocxDiagnostics(logger, diagnostics)
+      throw createDocxExtractionError(
+        'docx_invalid_or_unreadable',
+        `Unable to read DOCX file ${filename}. Please upload a valid .docx file or PDF.`,
+        { cause: error, diagnostics },
+      )
+    }
+
+    const diagnostics = buildDiagnostics('docx_extraction_failed', error)
     logDocxDiagnostics(logger, diagnostics)
     throw createDocxExtractionError(
       'docx_extraction_failed',
