@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import JSZip from 'jszip'
 
 import {
+  __resetMammothClientForTests,
+  __setMammothClientForTests,
   buildSafeResumeFileDiagnostics,
   classifyResumeFileMagic,
   compareResumeTextFingerprints,
@@ -38,6 +40,13 @@ async function buildDocxBuffer(paragraphs = [], tableRows = []) {
   <w:body>${paragraphXml}${tableXml}<w:sectPr/></w:body>
 </w:document>`)
 
+  return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+async function buildZipMissingDocumentXmlBuffer() {
+  const zip = new JSZip()
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types/>')
+  zip.folder('word').file('styles.xml', '<?xml version="1.0" encoding="UTF-8"?><w:styles/>')
   return zip.generateAsync({ type: 'nodebuffer' })
 }
 
@@ -240,6 +249,110 @@ test('prepareResumePayloadForAnalysis fails invalid DOCX with deterministic inva
       assert.equal(error.diagnostics.originalFilename, undefined)
       assert.match(error.diagnostics.originalFilenameFingerprint, /^[a-f0-9]{16}$/)
       assert.equal(JSON.stringify(error.diagnostics).includes('resume.docx'), false)
+      return true
+    },
+  )
+})
+
+
+
+test('prepareResumePayloadForAnalysis fails corrupt ZIP-like DOCX with invalid/unreadable category', async () => {
+  const corruptDocxBuffer = Buffer.concat([
+    Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+    Buffer.from('word/document.xml present but zip central directory is corrupt'),
+  ])
+
+  await assert.rejects(
+    () => prepareResumePayloadForAnalysis({
+      fileBufferBase64: corruptDocxBuffer.toString('base64'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      filename: 'resume.docx',
+      fileSize: corruptDocxBuffer.length,
+      logger: quietLogger,
+    }),
+    (error) => {
+      assert.match(error.message, /^docx_invalid_or_unreadable::/)
+      assert.equal(error.diagnostics.hasDocxZipMagic, true)
+      assert.equal(error.diagnostics.hasWordDocumentXml, true)
+      assert.equal(error.cause instanceof Error, true)
+      assert.match(error.diagnostics.cause.messageFingerprint, /^[a-f0-9]{16}$/)
+      return true
+    },
+  )
+})
+
+test('prepareResumePayloadForAnalysis fails ZIP missing word/document.xml with invalid/unreadable category', async () => {
+  const zipBuffer = await buildZipMissingDocumentXmlBuffer()
+  await assert.rejects(
+    () => prepareResumePayloadForAnalysis({
+      fileBufferBase64: zipBuffer.toString('base64'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      filename: 'resume.docx',
+      fileSize: zipBuffer.length,
+      logger: quietLogger,
+    }),
+    (error) => {
+      assert.match(error.message, /^docx_invalid_or_unreadable::/)
+      assert.equal(error.diagnostics.hasDocxZipMagic, true)
+      assert.equal(error.diagnostics.hasWordDocumentXml, false)
+      assert.equal(error.diagnostics.extractionMethod, 'docx_mammoth_text_extraction')
+      assert.equal(error.cause, undefined)
+      return true
+    },
+  )
+})
+
+test('prepareResumePayloadForAnalysis maps Mammoth unexpected runtime failure to extraction_failed with sanitized cause metadata', async (t) => {
+  const docxBuffer = await buildDocxBuffer(['Priya Nair'], [])
+  const originalError = new Error('simulated mammoth runtime failure for private resume text Priya Nair')
+  originalError.code = 'SIMULATED_RUNTIME'
+  __setMammothClientForTests({
+    async extractRawText() {
+      throw originalError
+    },
+  })
+  t.after(() => __resetMammothClientForTests())
+
+  await assert.rejects(
+    () => prepareResumePayloadForAnalysis({
+      fileBufferBase64: docxBuffer.toString('base64'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      filename: 'resume.docx',
+      fileSize: docxBuffer.length,
+      logger: quietLogger,
+    }),
+    (error) => {
+      assert.match(error.message, /^docx_extraction_failed::/)
+      assert.equal(error.cause, originalError)
+      assert.equal(error.diagnostics.errorCategory, 'docx_extraction_failed')
+      assert.equal(error.diagnostics.cause.name, 'Error')
+      assert.equal(error.diagnostics.cause.code, 'SIMULATED_RUNTIME')
+      assert.match(error.diagnostics.cause.messageFingerprint, /^[a-f0-9]{16}$/)
+      assert.equal(JSON.stringify(error.diagnostics).includes('Priya Nair'), false)
+      assert.equal(JSON.stringify(error.diagnostics).includes('private resume text'), false)
+      return true
+    },
+  )
+})
+
+test('prepareResumePayloadForAnalysis maps Mammoth dependency/runtime shape issues to dependency_missing', async (t) => {
+  const docxBuffer = await buildDocxBuffer(['Priya Nair'], [])
+  __setMammothClientForTests(null)
+  t.after(() => __resetMammothClientForTests())
+
+  await assert.rejects(
+    () => prepareResumePayloadForAnalysis({
+      fileBufferBase64: docxBuffer.toString('base64'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      filename: 'resume.docx',
+      fileSize: docxBuffer.length,
+      logger: quietLogger,
+    }),
+    (error) => {
+      assert.match(error.message, /^docx_dependency_missing::/)
+      assert.equal(error.diagnostics.errorCategory, 'docx_dependency_missing')
+      assert.equal(error.diagnostics.hasDocxZipMagic, true)
+      assert.equal(error.diagnostics.hasWordDocumentXml, true)
       return true
     },
   )

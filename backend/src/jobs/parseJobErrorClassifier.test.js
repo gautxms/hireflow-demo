@@ -25,6 +25,7 @@ test('local request validation failure is non-retriable', () => {
 const deterministicLocalFailures = [
   ['docx_empty_extraction', 'docx_empty_extraction::Unable to extract text content from DOCX file resume.docx.'],
   ['docx_invalid_or_unreadable', 'docx_invalid_or_unreadable::DOCX file could not be read'],
+  ['docx_dependency_missing', 'docx_dependency_missing::DOCX parsing dependency is unavailable'],
   ['docx_extraction_failed', 'docx_extraction_failed::Failed to extract DOCX text'],
   ['extraction_empty', 'extraction_empty::No parseable resume content was extracted'],
   ['legacy_word_format', 'legacy_word_format::Legacy .doc files are not supported'],
