@@ -444,6 +444,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  white-space: nowrap;
 }
 
 .analyses-layout__status-badge {
@@ -521,6 +522,14 @@
   background: color-mix(in srgb, var(--color-bg-secondary), #000 20%);
   border: 1px solid color-mix(in srgb, var(--color-border), var(--color-primary) 16%);
   box-shadow: var(--shadow-md);
+}
+
+.analyses-status-summary__detail {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-ui);
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .analyses-status-summary__list {
@@ -701,14 +710,6 @@
 .analysis-items-panel__table th {
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-medium);
-}
-
-.analyses-layout__partial-copy {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--color-text-secondary);
-  font-family: var(--font-family-ui);
-  font-size: 0.78rem;
 }
 
 .analyses-files-preview__file {

@@ -67,7 +67,12 @@ test('status alias mapping stays consistent across analyses list and detail view
 
 test('summary bucket labels and partial counts are aligned across analyses list and detail views', () => {
   assert.match(analysesPageSource, /<dt>Total<\/dt><dd>\{Number\(summary\.total \|\| 0\)\}<\/dd>/)
-  assert.match(analysesPageSource, /Partial results: \$\{complete\} of \$\{total\} resumes analysed, \$\{failed\} failed/)
+  assert.match(analysesPageSource, /Partial results: \$\{complete\} of \$\{total\} resumes analysed, \$\{failed\} failed\./)
+  assert.match(analysesPageSource, /<p id=\{`\$\{popoverId\}-partial-detail`\} className="analyses-status-summary__detail">\{partialSummary\}<\/p>/)
+  assert.match(analysesPageSource, /aria-label=\{partialSummary \? 'View partial analysis details' : 'View analysis status details'\}/)
+  assert.match(analysesPageSource, /aria-describedby=\{isOpen && partialSummary \? `\$\{popoverId\}-partial-detail` : undefined\}/)
+  assert.doesNotMatch(analysesPageSource, /analyses-layout__partial-copy/)
+  assert.doesNotMatch(analysesPageSource, /status === 'partial' && <span/)
   assert.match(analysisDetailSource, /Partial results: \$\{complete\} of \$\{total\} resumes were analysed\./)
   assert.match(analysisDetailSource, /Summary — Total \{summary\.total \|\| 0\} · Complete \{completeCount\} · Failed \{failedCount\}/)
 })

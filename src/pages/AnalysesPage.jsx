@@ -66,7 +66,7 @@ function formatPartialSummary(analysis) {
   const complete = Number(summary.complete || 0)
   const failed = Number(summary.failed || 0)
   if (complete > 0 && failed > 0) {
-    return `Partial results: ${complete} of ${total} resumes analysed, ${failed} failed`
+    return `Partial results: ${complete} of ${total} resumes analysed, ${failed} failed.`
   }
   return ''
 }
@@ -420,7 +420,6 @@ export default function AnalysesPage() {
                             popoverId={`analysis-summary-popover-${analysis.id}`}
                           />
                         </div>
-                        {status === 'partial' && <span className="analyses-layout__partial-copy">{formatPartialSummary(analysis)}</span>}
                       </td>
                       <td className="analyses-layout__cell analyses-layout__cell--files" data-label="Files">
                         <FilesPreviewPopover
@@ -634,6 +633,8 @@ function StatusSummaryPopover({ analysis, isOpen, onOpen, onClose, popoverId }) 
   const popoverRef = useRef(null)
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const summary = analysis?.summary
+  const status = deriveDisplayStatus(analysis)
+  const partialSummary = status === 'partial' ? formatPartialSummary(analysis) : ''
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -667,9 +668,10 @@ function StatusSummaryPopover({ analysis, isOpen, onOpen, onClose, popoverId }) 
         ref={anchorRef}
         type="button"
         className="analyses-status-summary__trigger"
-        aria-label="View analysis status details"
+        aria-label={partialSummary ? 'View partial analysis details' : 'View analysis status details'}
         aria-expanded={isOpen}
         aria-controls={popoverId}
+        aria-describedby={isOpen && partialSummary ? `${popoverId}-partial-detail` : undefined}
         onMouseEnter={onOpen}
         onFocus={onOpen}
         onClick={() => (isOpen ? onClose() : onOpen())}
@@ -677,11 +679,12 @@ function StatusSummaryPopover({ analysis, isOpen, onOpen, onClose, popoverId }) 
         <Info size={14} aria-hidden="true" />
       </button>
       {isOpen && createPortal(
-        <div id={popoverId} ref={popoverRef} role="dialog" className="analyses-status-summary__popover" data-summary-popover-root="true">
+        <div id={popoverId} ref={popoverRef} role="dialog" aria-label="Analysis status details" className="analyses-status-summary__popover" data-summary-popover-root="true">
           {!summary ? (
             <p className="analyses-status-summary__empty">No file summary available yet.</p>
           ) : (
             <>
+              {partialSummary && <p id={`${popoverId}-partial-detail`} className="analyses-status-summary__detail">{partialSummary}</p>}
               <dl className="analyses-status-summary__list">
                 <div><dt>Total</dt><dd>{Number(summary.total || 0)}</dd></div>
                 <div><dt>Completed</dt><dd>{Number(summary.complete || 0)}</dd></div>
