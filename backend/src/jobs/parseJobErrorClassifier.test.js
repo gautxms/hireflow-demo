@@ -38,9 +38,34 @@ for (const [name, message] of deterministicLocalFailures) {
   test(`${name} is non-retriable deterministic local failure`, () => {
     const result = classifyParseJobRetryability(new Error(message))
     assert.equal(result.retryable, false)
-    assert.equal(result.reason, 'deterministic_local_failure')
+    assert.match(result.reason, /^deterministic_local_failure/)
   })
 }
+
+
+test('deterministic extraction category metadata is non-retriable even without a prefixed message', () => {
+  const error = new Error('Unable to extract readable text from DOCX file resume.docx')
+  error.extractionCategory = 'docx_empty_extraction'
+
+  const result = classifyParseJobRetryability(error)
+
+  assert.equal(result.retryable, false)
+  assert.equal(result.reason, 'deterministic_local_failure:docx_empty_extraction')
+})
+
+test('local MIME and extension mismatches are non-retriable deterministic failures', () => {
+  const result = classifyParseJobRetryability(new Error('MIME/extension mismatch: .docx upload reported as application/msword'))
+
+  assert.equal(result.retryable, false)
+  assert.equal(result.reason, 'deterministic_local_failure')
+})
+
+test('empty local payload validation is non-retriable', () => {
+  const result = classifyParseJobRetryability(new Error('Resume payload is empty'))
+
+  assert.equal(result.retryable, false)
+  assert.equal(result.reason, 'deterministic_local_failure')
+})
 
 test('network timeout is retriable', () => {
   const result = classifyParseJobRetryability(new Error('Network timeout while connecting to provider'))

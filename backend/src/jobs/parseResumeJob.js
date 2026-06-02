@@ -892,74 +892,79 @@ export async function runParse(job) {
   return parseResult
 }
 
+export async function handleParseJobFailure(job, error, { cacheFailureResult = cacheJobResult, logger = console } = {}) {
+  const normalizedError = normalizeProviderError(error)
+  const retryability = classifyParseJobRetryability(error)
+  const isNonRetriableFailure =
+    retryability.retryable === false || normalizedError?.isRetriable === false
+  const isTerminalFailure = isTerminalJobFailure(job) || isNonRetriableFailure
+  const providerChainAttempts = buildFailureAttemptMetadata(error)
+  const providerChainSummary = buildFailureSummaryMetadata(error, {
+    fileBufferBase64: job?.data?.fileBufferBase64,
+    jobDescriptionContext: {
+      hasContext: Boolean(job?.data?.jobDescriptionId),
+    },
+  })
+  const failureDiagnostics = error?.diagnostics && typeof error.diagnostics === 'object'
+    ? error.diagnostics
+    : null
+  if (failureDiagnostics) {
+    logSafeResumeFileDiagnostics(logger, 'parse_job_failure', failureDiagnostics, 'warn')
+  }
+  const failurePayload = {
+    error: normalizedError.normalizedMessage,
+    parseDiagnostics: failureDiagnostics,
+    providerChain: providerChainAttempts.length > 0
+      ? {
+          attempts: providerChainAttempts,
+          summary: providerChainSummary,
+        }
+      : null,
+    retryable: retryability.retryable,
+    retryClassification: retryability.reason,
+  }
+
+  if (isTerminalFailure) {
+    await pool.query(
+      `UPDATE resumes
+       SET parse_status = 'failed',
+           parse_error = $2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [job.data.resumeId, normalizedError.normalizedMessage],
+    )
+  }
+
+  await setJobState(job.id, {
+    status: isTerminalFailure ? 'failed' : 'retrying',
+    progress: isTerminalFailure ? 100 : Number(job.progress() || 0),
+    error_message: normalizedError.normalizedMessage,
+    result: JSON.stringify(failurePayload),
+    attempts: job.attemptsMade + 1,
+  })
+
+  if (isTerminalFailure) {
+    await cacheFailureResult(String(job.id), {
+      status: 'failed',
+      progress: 100,
+      result: failurePayload,
+      error: normalizedError.normalizedMessage,
+    })
+  }
+
+  if (isNonRetriableFailure) {
+    job.discard()
+  }
+
+  return { failurePayload, isTerminalFailure, isNonRetriableFailure }
+}
+
 export function registerParseResumeJobProcessor() {
-parseQueue.process(async (job) => {
+  parseQueue.process(async (job) => {
     try {
       return await runParse(job)
     } catch (error) {
-      const normalizedError = normalizeProviderError(error)
-      const retryability = classifyParseJobRetryability(error)
-      const isNonRetriableFailure =
-        retryability.retryable === false || normalizedError?.isRetriable === false
-      const isTerminalFailure = isTerminalJobFailure(job) || isNonRetriableFailure
-      const providerChainAttempts = buildFailureAttemptMetadata(error)
-      const providerChainSummary = buildFailureSummaryMetadata(error, {
-        fileBufferBase64: job?.data?.fileBufferBase64,
-        jobDescriptionContext: {
-          hasContext: Boolean(job?.data?.jobDescriptionId),
-        },
-      })
-      const failureDiagnostics = error?.diagnostics && typeof error.diagnostics === 'object'
-        ? error.diagnostics
-        : null
-      if (failureDiagnostics) {
-        logSafeResumeFileDiagnostics(console, 'parse_job_failure', failureDiagnostics, 'warn')
-      }
-      const failurePayload = {
-        error: normalizedError.normalizedMessage,
-        parseDiagnostics: failureDiagnostics,
-        providerChain: providerChainAttempts.length > 0
-          ? {
-              attempts: providerChainAttempts,
-              summary: providerChainSummary,
-            }
-          : null,
-        retryable: retryability.retryable,
-        retryClassification: retryability.reason,
-      }
-
-      if (isTerminalFailure) {
-        await pool.query(
-          `UPDATE resumes
-           SET parse_status = 'failed',
-               parse_error = $2,
-               updated_at = NOW()
-           WHERE id = $1`,
-          [job.data.resumeId, normalizedError.normalizedMessage],
-        )
-      }
-
-      await setJobState(job.id, {
-        status: isTerminalFailure ? 'failed' : 'retrying',
-        progress: isTerminalFailure ? 100 : Number(job.progress() || 0),
-        error_message: normalizedError.normalizedMessage,
-        result: JSON.stringify(failurePayload),
-        attempts: job.attemptsMade + 1,
-      })
-
-      if (isTerminalFailure) {
-        await cacheJobResult(String(job.id), {
-          status: 'failed',
-          progress: 100,
-          result: failurePayload,
-          error: normalizedError.normalizedMessage,
-        })
-      }
-
-      if (isNonRetriableFailure) {
-        job.discard()
-      }
-
+      await handleParseJobFailure(job, error)
       throw error
     }
   })
@@ -976,4 +981,5 @@ export const __testables = {
   isPreProviderLocalExtractionFailure,
   persistAiFailureTokenUsage,
   persistAiSuccessTokenUsage,
+  handleParseJobFailure,
 }

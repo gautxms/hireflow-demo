@@ -340,3 +340,54 @@ test('successful Anthropic and OpenAI usage telemetry persists token counts and 
   assert.deepEqual(inserts.map(({ params }) => params[10]), [1500, 1250])
   assert.deepEqual(inserts.map(({ params }) => params[11]), [0.0045, 0.0012])
 })
+
+test('parse job failure handler discards deterministic local extraction errors', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+
+  const discarded = []
+  const cached = []
+  const job = {
+    id: 'parse-job-docx-empty-failure',
+    attemptsMade: 0,
+    opts: { attempts: 3 },
+    data: {
+      resumeId: 'resume-docx-empty-failure',
+      userId: 7,
+      jobDescriptionId: null,
+      fileBufferBase64: Buffer.from('bad docx').toString('base64'),
+    },
+    progress() {
+      return 25
+    },
+    discard() {
+      discarded.push(true)
+    },
+  }
+  const error = new Error('docx_empty_extraction::Unable to extract readable text from DOCX file resume.docx')
+  error.extractionCategory = 'docx_empty_extraction'
+
+  const result = await __testables.handleParseJobFailure(job, error, {
+    cacheFailureResult: async (jobId, payload) => cached.push({ jobId, payload }),
+    logger: { warn() {} },
+  })
+
+  assert.equal(result.isNonRetriableFailure, true)
+  assert.equal(result.isTerminalFailure, true)
+  assert.equal(result.failurePayload.retryable, false)
+  assert.equal(result.failurePayload.retryClassification, 'deterministic_local_failure:docx_empty_extraction')
+  assert.deepEqual(discarded, [true])
+  assert.equal(cached.length, 1)
+  assert.equal(cached[0].payload.status, 'failed')
+  assert.equal(
+    queries.some(({ sql, params }) => sql.includes('UPDATE resumes') && params.includes('resume-docx-empty-failure')),
+    true,
+  )
+  assert.equal(
+    queries.some(({ sql, params }) => sql.includes('UPDATE parse_jobs') && params.includes('failed')),
+    true,
+  )
+})
