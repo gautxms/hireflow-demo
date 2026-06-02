@@ -16,6 +16,27 @@ import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
 
+let analyzeResumeWithConfiguredFallbackOverrideForTests = null
+let cacheJobResultOverrideForTests = null
+
+function getAnalyzeResumeWithConfiguredFallback() {
+  return analyzeResumeWithConfiguredFallbackOverrideForTests || analyzeResumeWithConfiguredFallback
+}
+
+function getCacheJobResult() {
+  return cacheJobResultOverrideForTests || cacheJobResult
+}
+
+export function __setParseResumeJobTestOverrides({ analyzeResumeWithConfiguredFallback: analyzeOverride = null, cacheJobResult: cacheOverride = null } = {}) {
+  analyzeResumeWithConfiguredFallbackOverrideForTests = analyzeOverride
+  cacheJobResultOverrideForTests = cacheOverride
+}
+
+export function __resetParseResumeJobTestOverrides() {
+  analyzeResumeWithConfiguredFallbackOverrideForTests = null
+  cacheJobResultOverrideForTests = null
+}
+
 export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
 }
@@ -766,7 +787,7 @@ export async function runParse(job) {
 
   try {
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    const aiResponse = await analyzeResumeWithConfiguredFallback(
+    const aiResponse = await getAnalyzeResumeWithConfiguredFallback()(
       preparedResumePayload.fileBufferBase64,
       preparedResumePayload.mimeType,
       preparedResumePayload.filename,
@@ -902,7 +923,7 @@ export async function runParse(job) {
     console.warn('[Parse] Failed to upsert candidate profile snapshot:', error.message)
   })
 
-  await cacheJobResult(String(job.id), {
+  await getCacheJobResult()(String(job.id), {
     status: 'complete',
     progress: 100,
     result: parseResult,

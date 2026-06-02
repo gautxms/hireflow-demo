@@ -20,10 +20,11 @@ test('enqueueParseJob preserves distinct filename, extension, and MIME metadata 
     return { id: options.jobId, jobId: options.jobId }
   })
 
+  const baseName = '04_Vikram_Rao_Junior_SDE_Resume'
   const uploads = [
-    { resumeId: '00000000-0000-0000-0000-000000000001', filename: 'resume.pdf', mimeType: 'application/pdf', fileExtension: 'pdf' },
-    { resumeId: '00000000-0000-0000-0000-000000000002', filename: 'resume.doc', mimeType: 'application/msword', fileExtension: 'doc' },
-    { resumeId: '00000000-0000-0000-0000-000000000003', filename: 'resume.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', fileExtension: 'docx' },
+    { resumeId: '00000000-0000-0000-0000-000000000001', filename: `${baseName}.pdf`, mimeType: 'application/pdf', fileExtension: 'pdf' },
+    { resumeId: '00000000-0000-0000-0000-000000000002', filename: `${baseName}.doc`, mimeType: 'application/msword', fileExtension: 'doc' },
+    { resumeId: '00000000-0000-0000-0000-000000000003', filename: `${baseName}.docx`, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', fileExtension: 'docx' },
   ]
 
   for (const upload of uploads) {
@@ -36,8 +37,10 @@ test('enqueueParseJob preserves distinct filename, extension, and MIME metadata 
     })
   }
 
-  assert.deepEqual(addedJobs.map((job) => job.data.filename), ['resume.pdf', 'resume.doc', 'resume.docx'])
-  assert.deepEqual(addedJobs.map((job) => job.data.originalFilename), ['resume.pdf', 'resume.doc', 'resume.docx'])
+  assert.deepEqual(addedJobs.map((job) => job.data.filename), uploads.map((upload) => upload.filename))
+  assert.deepEqual(addedJobs.map((job) => job.data.originalFilename), uploads.map((upload) => upload.filename))
+  assert.equal(new Set(addedJobs.map((job) => job.options.jobId)).size, 3)
+  assert.deepEqual(addedJobs.map((job) => job.options.jobId), uploads.map((upload) => `resume:${upload.resumeId}`))
   assert.deepEqual(addedJobs.map((job) => job.data.fileExtension), ['pdf', 'doc', 'docx'])
   assert.deepEqual(addedJobs.map((job) => job.data.mimeType), [
     'application/pdf',
