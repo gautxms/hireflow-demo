@@ -1,8 +1,14 @@
 import { Buffer } from 'node:buffer'
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
+import JSZip from 'jszip'
 
-import { __testables } from './parseResumeJob.js'
+import {
+  __resetParseResumeJobTestOverrides,
+  __setParseResumeJobTestOverrides,
+  __testables,
+} from './parseResumeJob.js'
+import { __resetMammothClientForTests, __setMammothClientForTests } from '../services/resumeDocumentExtractionService.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
 
@@ -468,4 +474,226 @@ test('parse job failure handler discards deterministic local extraction errors',
     queries.some(({ sql, params }) => sql.includes('UPDATE parse_jobs') && params.includes('failed')),
     true,
   )
+})
+
+
+async function buildMinimalDocxBuffer(text) {
+  const zip = new JSZip()
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`)
+  zip.folder('_rels').file('.rels', `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`)
+  zip.folder('word').file('document.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body>
+</w:document>`)
+  return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+function createParseJob({ id, resumeId, filename, mimeType, originalMimeType, fileExtension, fileBuffer }) {
+  const progressValues = []
+  return {
+    id,
+    attemptsMade: 0,
+    opts: { attempts: 3 },
+    data: {
+      resumeId,
+      userId: 7,
+      analysisId: 'analysis-same-base-multiformat',
+      filename,
+      originalFilename: filename,
+      originalMimeType,
+      fileExtension,
+      mimeType,
+      fileSize: fileBuffer.length,
+      fileBufferBase64: fileBuffer.toString('base64'),
+      jobDescriptionId: null,
+    },
+    async progress(value) {
+      if (typeof value === 'number') progressValues.push(value)
+      return progressValues.at(-1) || 0
+    },
+    discard() {
+      this.discarded = true
+    },
+    get progressValues() {
+      return progressValues
+    },
+  }
+}
+
+test('same-base-name PDF, DOC, and DOCX parse jobs preserve identity and route formats independently', async (t) => {
+  const baseName = '04_Vikram_Rao_Junior_SDE_Resume'
+  const pdfFilename = `${baseName}.pdf`
+  const docFilename = `${baseName}.doc`
+  const docxFilename = `${baseName}.docx`
+  const pdfBuffer = Buffer.from('%PDF-1.7\nsmall test pdf body')
+  const legacyDocBuffer = Buffer.concat([
+    Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    Buffer.from('small legacy doc body'),
+  ])
+  const docxBuffer = await buildMinimalDocxBuffer('Vikram Rao junior SDE resume text')
+
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    if (String(sql).includes('FROM analyses')) {
+      return { rows: [{ id: 'analysis-same-base-multiformat', status: 'processing' }], rowCount: 1 }
+    }
+    if (String(sql).includes('FROM integration_webhooks')) {
+      return { rows: [], rowCount: 0 }
+    }
+    return { rows: [], rowCount: 1 }
+  })
+
+  const mammothCalls = []
+  __setMammothClientForTests({
+    async extractRawText(input) {
+      mammothCalls.push(input)
+      return { value: 'Vikram Rao junior SDE resume text' }
+    },
+  })
+
+  const aiCalls = []
+  __setParseResumeJobTestOverrides({
+    analyzeResumeWithConfiguredFallback: async (fileBufferBase64, mimeType, filename, options = {}) => {
+      aiCalls.push({ fileBufferBase64, mimeType, filename, options })
+      return {
+        result: {
+          candidates: [{
+            id: `candidate-${filename}`,
+            name: 'Vikram Rao',
+            email: 'vikram@example.com',
+            score: 88,
+            profile_score: 88,
+            years_experience: 1,
+          }],
+          methodUsed: mimeType === 'text/plain' ? 'mock-docx-extracted-text' : 'mock-pdf-binary',
+        },
+        provider: mimeType === 'text/plain' ? 'openai-fallback' : 'anthropic-primary',
+        model: 'mock-model',
+        attempts: [{
+          success: true,
+          provider: mimeType === 'text/plain' ? 'openai-fallback' : 'anthropic-primary',
+          model: 'mock-model',
+          credentialLabel: 'primary',
+          providerSource: 'test_mock',
+          tokenUsage: { usageAvailable: false, unavailableReason: 'test_mock' },
+          inputDiagnostics: {
+            sourceFormat: mimeType === 'text/plain' ? 'docx' : 'pdf',
+            inputKind: mimeType === 'text/plain' ? 'extracted_text' : 'pdf_binary',
+            inputMode: mimeType === 'text/plain' ? 'extracted_text' : 'binary',
+            preparedMimeType: mimeType,
+          },
+        }],
+      }
+    },
+    cacheJobResult: async () => {},
+  })
+  t.after(() => {
+    __resetMammothClientForTests()
+    __resetParseResumeJobTestOverrides()
+  })
+
+  const jobs = [
+    createParseJob({
+      id: 'parse-same-base-pdf',
+      resumeId: 'resume-same-base-pdf',
+      filename: pdfFilename,
+      mimeType: 'application/pdf',
+      originalMimeType: 'application/pdf',
+      fileExtension: 'pdf',
+      fileBuffer: pdfBuffer,
+    }),
+    createParseJob({
+      id: 'parse-same-base-doc',
+      resumeId: 'resume-same-base-doc',
+      filename: docFilename,
+      mimeType: 'application/msword',
+      originalMimeType: 'application/msword',
+      fileExtension: 'doc',
+      fileBuffer: legacyDocBuffer,
+    }),
+    createParseJob({
+      id: 'parse-same-base-docx',
+      resumeId: 'resume-same-base-docx',
+      filename: docxFilename,
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      originalMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileExtension: 'docx',
+      fileBuffer: docxBuffer,
+    }),
+  ]
+
+  const pdfResult = await __testables.runParse(jobs[0])
+  let docError = null
+  await assert.rejects(
+    () => __testables.runParse(jobs[1]),
+    (error) => {
+      docError = error
+      assert.equal(error.extractionCategory, 'resume_unsupported_legacy_doc')
+      assert.equal(error.nonRetriable, true)
+      assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_rejected')
+      assert.equal(error.diagnostics.extension, 'doc')
+      assert.equal(error.diagnostics.fileSignature, 'legacy_doc_ole')
+      return true
+    },
+  )
+  const docFailure = await __testables.handleParseJobFailure(jobs[1], docError, {
+    cacheFailureResult: async () => {},
+    logger: { warn() {} },
+  })
+  const docxResult = await __testables.runParse(jobs[2])
+
+  assert.deepEqual(jobs.map((job) => job.id), ['parse-same-base-pdf', 'parse-same-base-doc', 'parse-same-base-docx'])
+  assert.deepEqual(jobs.map((job) => job.data.resumeId), ['resume-same-base-pdf', 'resume-same-base-doc', 'resume-same-base-docx'])
+  assert.deepEqual(jobs.map((job) => job.data.originalFilename), [pdfFilename, docFilename, docxFilename])
+  assert.deepEqual(jobs.map((job) => job.data.fileExtension), ['pdf', 'doc', 'docx'])
+  assert.deepEqual(jobs.map((job) => job.data.originalMimeType), [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ])
+
+  assert.equal(pdfResult.originalFilename, pdfFilename)
+  assert.equal(pdfResult.fileExtension, 'pdf')
+  assert.equal(pdfResult.mimeType, 'application/pdf')
+  assert.equal(pdfResult.originalMimeType, 'application/pdf')
+  assert.equal(pdfResult.parseDiagnostics.extractionMethod, 'pdf_binary_provider_input')
+  assert.equal(pdfResult.parseDiagnostics.inputKind, 'pdf_binary')
+
+  assert.equal(docFailure.isNonRetriableFailure, true)
+  assert.equal(docFailure.failurePayload.retryable, false)
+  assert.equal(jobs[1].discarded, true)
+
+  assert.equal(docxResult.originalFilename, docxFilename)
+  assert.equal(docxResult.fileExtension, 'docx')
+  assert.equal(docxResult.mimeType, 'text/plain')
+  assert.equal(docxResult.originalMimeType, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  assert.equal(docxResult.parseDiagnostics.extractionMethod, 'docx_mammoth_text_extraction')
+  assert.equal(docxResult.parseDiagnostics.inputKind, 'extracted_text')
+  assert.equal(docxResult.parseDiagnostics.preparedMimeType, 'text/plain')
+  assert.equal(mammothCalls.length, 1)
+
+  assert.deepEqual(aiCalls.map((call) => call.filename), [pdfFilename, docxFilename])
+  assert.deepEqual(aiCalls.map((call) => call.mimeType), ['application/pdf', 'text/plain'])
+  assert.equal(aiCalls.some((call) => call.filename === docFilename), false)
+
+  const tokenUsageInserts = queries.filter(({ sql }) => String(sql).includes('INSERT INTO resume_analysis_token_usage'))
+  assert.equal(tokenUsageInserts.some(({ params }) => params?.[0] === 'resume-same-base-doc'), false)
+  assert.equal(tokenUsageInserts.some(({ params }) => params?.[4] === 'anthropic-primary' && params?.[0] === 'resume-same-base-doc'), false)
+  assert.equal(tokenUsageInserts.some(({ params }) => params?.[4] === 'openai-fallback' && params?.[0] === 'resume-same-base-doc'), false)
+
+  const completedResumeUpdates = queries
+    .filter(({ sql }) => String(sql).includes('UPDATE resumes') && String(sql).includes("parse_status = 'complete'"))
+    .map(({ params }) => ({ resumeId: params[0], result: JSON.parse(params[1]) }))
+  assert.deepEqual(completedResumeUpdates.map((update) => update.resumeId), ['resume-same-base-pdf', 'resume-same-base-docx'])
+  assert.deepEqual(completedResumeUpdates.map((update) => update.result.originalFilename), [pdfFilename, docxFilename])
+  assert.equal(new Set(completedResumeUpdates.map((update) => update.result.originalFilename)).size, 2)
 })
