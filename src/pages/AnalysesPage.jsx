@@ -5,6 +5,7 @@ import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analysesPaginationState'
 import '../styles/analyses.css'
+import { buildResumeFileIdentity } from '../utils/resumeFileIdentity.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const MAX_FILE_SIZE = 100 * 1024 * 1024
@@ -57,6 +58,17 @@ function deriveDisplayStatus(analysis) {
   if (total > 0 && complete > 0 && failed > 0 && pending === 0 && processing === 0) return 'partial'
 
   return normalizeStatus(analysis?.liveStatus || analysis?.status)
+}
+
+function formatPartialSummary(analysis) {
+  const summary = analysis?.summary || {}
+  const total = Number(summary.total || 0)
+  const complete = Number(summary.complete || 0)
+  const failed = Number(summary.failed || 0)
+  if (complete > 0 && failed > 0) {
+    return `Partial results: ${complete} of ${total} resumes analysed, ${failed} failed`
+  }
+  return ''
 }
 
 function inferResumeMimeType(fileLike = {}) {
@@ -408,6 +420,7 @@ export default function AnalysesPage() {
                             popoverId={`analysis-summary-popover-${analysis.id}`}
                           />
                         </div>
+                        {status === 'partial' && <span className="analyses-layout__partial-copy">{formatPartialSummary(analysis)}</span>}
                       </td>
                       <td className="analyses-layout__cell analyses-layout__cell--files" data-label="Files">
                         <FilesPreviewPopover
@@ -533,12 +546,19 @@ function FilesPreviewPopover({ analysis, isOpen, onOpen, onClose, popoverId }) {
             <p className="analyses-status-summary__empty">File names unavailable for this analysis.</p>
           ) : (
             <ul className="analyses-files-preview__list">
-              {fileItems.map((file, index) => (
-                <li key={`${file.name || 'unknown'}-${index}`}>
-                  <span>{file.name || 'Unknown file'}</span>
-                  <span>{file.status || 'queued'}</span>
-                </li>
-              ))}
+              {fileItems.map((file, index) => {
+                const identity = buildResumeFileIdentity(file)
+                return (
+                  <li key={`${identity.filename || 'unknown'}-${index}`}>
+                    <span className="analyses-files-preview__file">
+                      <span>{identity.filename}</span>
+                      {!identity.hasExtension && identity.mimeType ? <span className="analysis-file-badge analysis-file-badge--muted">{identity.mimeType}</span> : null}
+                    </span>
+                    <span className="analysis-file-badge">{identity.fileType}</span>
+                    <span>{file.status || 'queued'}</span>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>,

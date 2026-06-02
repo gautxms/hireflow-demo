@@ -21,27 +21,6 @@ function safeParseResult(result) {
   return typeof result === 'object' ? result : null
 }
 
-function normalizeItemResult(result, diagnostics) {
-  const parsed = safeParseResult(result)
-  if (!parsed || typeof parsed !== 'object') {
-    diagnostics.invalid += 1
-    return null
-  }
-
-  if (Array.isArray(parsed.candidates)) {
-    diagnostics.valid += 1
-    return { candidates: parsed.candidates }
-  }
-
-  if (parsed.output && typeof parsed.output === 'object' && Array.isArray(parsed.output.candidates)) {
-    diagnostics.valid += 1
-    return { candidates: parsed.output.candidates }
-  }
-
-  diagnostics.invalid += 1
-  return null
-}
-
 function extractCandidatesFromResult(result) {
   const diagnostics = {
     parseableObject: false,

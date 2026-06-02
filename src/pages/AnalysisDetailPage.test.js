@@ -446,3 +446,53 @@ test('analysis detail page back affordance consistently routes to analyses index
   assert.match(analysisDetailSource, /← Back to Analyses/)
   assert.match(analysisDetailSource, /window\.location\.assign\('\/analyses'\)/)
 })
+
+test('toCandidateResultsPayload carries item file identity metadata into completed candidates', () => {
+  const payload = toCandidateResultsPayload({
+    id: 'analysis-file-identity',
+    summary: { total: 3, complete: 2, failed: 1 },
+    items: [
+      {
+        resumeId: 'resume-pdf',
+        filename: 'resume.pdf',
+        originalFilename: 'resume.pdf',
+        fileExtension: 'pdf',
+        mimeType: 'application/pdf',
+        status: 'complete',
+        normalizedCandidates: [{ id: 'candidate-pdf', name: 'PDF Candidate', matchScore: 90 }],
+      },
+      {
+        resumeId: 'resume-docx',
+        filename: 'resume.docx',
+        originalFilename: 'resume.docx',
+        fileExtension: 'docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        status: 'complete',
+        normalizedCandidates: [{ id: 'candidate-docx', name: 'DOCX Candidate', matchScore: 80 }],
+      },
+      {
+        resumeId: 'resume-doc',
+        filename: 'resume.doc',
+        originalFilename: 'resume.doc',
+        fileExtension: 'doc',
+        mimeType: 'application/msword',
+        status: 'failed',
+        error: '{"raw":"unsupported legacy doc"}',
+        normalizedCandidates: [],
+      },
+    ],
+  })
+
+  assert.equal(payload.candidates.length, 2)
+  assert.equal(payload.candidates[0].filename, 'resume.pdf')
+  assert.equal(payload.candidates[0].fileExtension, 'pdf')
+  assert.equal(payload.candidates[1].filename, 'resume.docx')
+  assert.equal(payload.candidates[1].mimeType, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+})
+
+test('analysis detail source exposes partial results and sanitized failed file sections without raw JSON blocks for users', () => {
+  assert.match(analysisDetailSource, /Partial results: \$\{complete\} of \$\{total\} resumes were analysed\./)
+  assert.match(analysisDetailSource, /<FailedFilesSection items=\{analysisItems\} \/>/)
+  assert.match(analysisDetailSource, /toSafeResumeFailureReason\(item\?\.error/)
+  assert.doesNotMatch(analysisDetailSource, /JSON\.stringify\(item\?\.error/)
+})

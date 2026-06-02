@@ -1508,7 +1508,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     safeText(candidate.seniority_level, 'Seniority unavailable'),
                   ].filter(Boolean).join(' · ')}
                 </span>
-                <span className="rc-expand-hint" aria-hidden="true">
+                <span className="rc-expand-hint" aria-hidden="true" title="View full profile">
                   {isExpanded ? 'Collapse details' : 'Expand details'}
                 </span>
               </div>

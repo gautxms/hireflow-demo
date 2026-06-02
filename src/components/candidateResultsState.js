@@ -1,3 +1,5 @@
+import { buildResumeFileIdentity } from '../utils/resumeFileIdentity.js'
+
 export const RESULTS_SORT_OPTIONS = new Set(['match_score', 'name', 'experience', 'upload_date'])
 
 export function normalizeSortBy(sortBy) {
@@ -823,7 +825,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       missingSkills,
       allSkills,
       totalSkills: matchedSkills.length + missingSkills.length,
-      resumeFileLabel: toDisplayText(candidate.filename || candidate.resume_filename, 'Resume unavailable'),
+      resumeFileLabel: buildResumeFileIdentity(candidate, 'Resume unavailable').filename,
       email: toDisplayText(candidate.email, ''),
       educationLabel: resolveEducationLabel(candidate.education, 'Education details unavailable'),
     }
