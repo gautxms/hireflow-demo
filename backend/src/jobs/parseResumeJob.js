@@ -33,7 +33,25 @@ const PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES = new Set([
   'extraction_empty',
   'legacy_word_format',
   'resume_unsupported_legacy_doc',
+  'unsupported_file_format',
+  'local_payload_validation_failure',
 ])
+
+const PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_PATTERNS = [
+  /docx_empty_extraction/i,
+  /docx_invalid_or_unreadable/i,
+  /docx_dependency_missing/i,
+  /docx_extraction_failed/i,
+  /extraction_empty/i,
+  /legacy_word_format/i,
+  /resume_unsupported_legacy_doc/i,
+  /legacy \.doc files are not supported/i,
+  /legacy word \.doc files are not supported/i,
+  /unsupported (file )?format/i,
+  /local request validation failed/i,
+  /local payload validation failed/i,
+  /payload validation failed/i,
+]
 
 function getFailureCategory(error) {
   const message = String(error?.message || error?.unavailableReason || '').trim()
@@ -46,7 +64,10 @@ function getFailureCategory(error) {
 
 function isPreProviderLocalExtractionFailure(error) {
   const category = getFailureCategory(error)
-  return PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES.has(category)
+  if (PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES.has(category)) return true
+
+  const message = String(error?.message || error?.unavailableReason || '').trim()
+  return PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_PATTERNS.some((pattern) => pattern.test(message))
 }
 
 function normalizeProviderName(value) {
@@ -61,6 +82,14 @@ function getProviderFromFailureMetadata(error) {
   return normalizeProviderName(error?.provider)
     || normalizeProviderName(error?.providerName)
     || normalizeProviderName(error?.providerLabel)
+}
+
+function getProviderFromAttempt(attempt) {
+  const rawProvider = normalizeString(attempt?.provider)
+    || normalizeString(attempt?.providerName)
+    || normalizeString(attempt?.providerLabel)
+
+  return normalizeProviderName(rawProvider) ? rawProvider : null
 }
 
 function normalizeString(value) {
@@ -521,15 +550,22 @@ async function persistAiSuccessTokenUsage({ aiResponse, resumeId, parseJobId, us
 }
 
 async function persistAiFailureTokenUsage({ error, resumeId, parseJobId, userId, jobDescriptionId, filename, jobDescriptionContext }) {
-  const failedAttempts = Array.isArray(error?.attempts) ? error.attempts : []
-  if (failedAttempts.length > 0) {
-    for (const attempt of failedAttempts) {
+  const attempts = Array.isArray(error?.attempts) ? error.attempts : []
+  const failedProviderAttempts = attempts.filter((attempt) => getProviderFromAttempt(attempt))
+
+  if (isPreProviderLocalExtractionFailure(error) && failedProviderAttempts.length === 0) {
+    return { persisted: 0, reason: 'pre_provider_local_extraction_failure' }
+  }
+
+  if (failedProviderAttempts.length > 0) {
+    for (const attempt of failedProviderAttempts) {
+      const provider = getProviderFromAttempt(attempt)
       await persistTokenUsageMetric({
         resumeId,
         parseJobId,
         userId,
         jobDescriptionId,
-        provider: attempt?.provider || 'anthropic',
+        provider,
         model: attempt?.model || null,
         tokenUsage: attempt?.tokenUsage || {
           usageAvailable: false,
@@ -538,11 +574,7 @@ async function persistAiFailureTokenUsage({ error, resumeId, parseJobId, userId,
         metadata: buildTokenUsageMetadata({ attempt, filename, jobDescriptionContext, success: false }),
       })
     }
-    return { persisted: failedAttempts.length, reason: 'provider_attempts' }
-  }
-
-  if (isPreProviderLocalExtractionFailure(error)) {
-    return { persisted: 0, reason: 'pre_provider_local_extraction_failure' }
+    return { persisted: failedProviderAttempts.length, reason: 'provider_attempts' }
   }
 
   const provider = getProviderFromFailureMetadata(error)
@@ -974,6 +1006,7 @@ export const __testables = {
   isLegacyWordDocument,
   isAnalysisActiveForJob,
   isPreProviderLocalExtractionFailure,
+  getProviderFromAttempt,
   persistAiFailureTokenUsage,
   persistAiSuccessTokenUsage,
 }

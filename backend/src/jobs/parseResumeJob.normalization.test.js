@@ -245,6 +245,84 @@ test('docx_empty_extraction failure does not create Anthropic token usage teleme
   assert.equal(queries.some(({ params }) => params?.includes('anthropic')), false)
 })
 
+test('legacy .doc failure does not create Anthropic or OpenAI token usage telemetry', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+
+  const error = new Error('legacy_word_format::Legacy Word .doc files are not supported for resume.doc')
+  error.category = 'legacy_word_format'
+
+  const result = await __testables.persistAiFailureTokenUsage({
+    error,
+    resumeId: 'resume-legacy-doc',
+    parseJobId: 'parse-job-legacy-doc',
+    userId: 7,
+    jobDescriptionId: null,
+    filename: 'resume.doc',
+    jobDescriptionContext: { hasContext: false, source: 'none' },
+  })
+
+  assert.deepEqual(result, { persisted: 0, reason: 'pre_provider_local_extraction_failure' })
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO resume_analysis_token_usage')), false)
+  assert.equal(queries.some(({ params }) => params?.includes('anthropic') || params?.includes('openai')), false)
+})
+
+test('local validation and unsupported format failures do not default to Anthropic telemetry', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+
+  for (const error of [
+    new Error('unsupported file format: image/png'),
+    new Error('local payload validation failed: missing fileBufferBase64'),
+  ]) {
+    const result = await __testables.persistAiFailureTokenUsage({
+      error,
+      resumeId: 'resume-local-validation',
+      parseJobId: 'parse-job-local-validation',
+      userId: 7,
+      jobDescriptionId: null,
+      filename: 'resume.png',
+      jobDescriptionContext: { hasContext: false, source: 'none' },
+    })
+
+    assert.deepEqual(result, { persisted: 0, reason: 'pre_provider_local_extraction_failure' })
+  }
+
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO resume_analysis_token_usage')), false)
+  assert.equal(queries.some(({ params }) => params?.includes('anthropic') || params?.includes('openai')), false)
+})
+
+test('failure attempts without provider metadata do not default to Anthropic telemetry', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+
+  const error = new Error('docx_empty_extraction::Unable to extract readable text from DOCX file resume.docx')
+  error.attempts = [{ success: false, failureCategory: 'docx_empty_extraction' }]
+
+  const result = await __testables.persistAiFailureTokenUsage({
+    error,
+    resumeId: 'resume-attempt-without-provider',
+    parseJobId: 'parse-job-attempt-without-provider',
+    userId: 7,
+    jobDescriptionId: null,
+    filename: 'resume.docx',
+    jobDescriptionContext: { hasContext: false, source: 'none' },
+  })
+
+  assert.deepEqual(result, { persisted: 0, reason: 'pre_provider_local_extraction_failure' })
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO resume_analysis_token_usage')), false)
+  assert.equal(queries.some(({ params }) => params?.includes('anthropic')), false)
+})
+
 test('real Anthropic provider failure still creates Anthropic token usage telemetry', async (t) => {
   const queries = []
   t.mock.method(pool, 'query', async (sql, params) => {
