@@ -4,6 +4,7 @@ import CandidateResults from '../components/CandidateResults'
 import '../styles/analyses.css'
 import { toCandidateResultsPayload } from './analysisDetailPayload.js'
 import { validateAnalysisResultsPayload } from '../schemas/analysisResultsSchema.js'
+import { buildResumeFileIdentity, toSafeResumeFailureReason } from '../utils/resumeFileIdentity.js'
 import {
   logResultsFallbackToLastKnownGood,
   logResultsPayloadCompatibilityIssues,
@@ -46,6 +47,82 @@ function deriveDisplayStatus(analysis) {
   return normalizeStatus(analysis?.liveStatus || analysis?.status)
 }
 
+
+function formatAnalysisProgressMessage(summary = {}) {
+  const total = Number(summary.total || 0)
+  const complete = Number(summary.complete || 0)
+  const failed = Number(summary.failed || 0)
+
+  if (complete > 0 && failed > 0) {
+    return `Partial results: ${complete} of ${total} resumes were analysed. ${failed} file${failed === 1 ? '' : 's'} could not be processed.`
+  }
+
+  if (total > 0 && failed === total) {
+    return `No resumes were analysed. ${failed} file${failed === 1 ? '' : 's'} could not be processed.`
+  }
+
+  return ''
+}
+
+function FailedFilesSection({ items = [], title = 'Failed files' }) {
+  const failedItems = (Array.isArray(items) ? items : []).filter((item) => String(item?.status || '').toLowerCase() === 'failed' || item?.error)
+  if (failedItems.length === 0) return null
+
+  return (
+    <section className="analysis-failed-files" role="status" aria-live="polite">
+      <h2>{title}</h2>
+      <p>Review the failed file below, then upload a corrected DOCX, TXT, or text-based PDF.</p>
+      <ul className="analysis-failed-files__list">
+        {failedItems.map((item, index) => {
+          const identity = buildResumeFileIdentity(item)
+          return (
+            <li key={`${item?.resumeId || item?.itemId || item?.id || identity.filename}-${index}`} className="analysis-failed-files__item">
+              <div className="analysis-failed-files__header">
+                <span className="analysis-failed-files__name">{identity.filename}</span>
+                <span className="analysis-file-badge">{identity.fileType}</span>
+                {!identity.hasExtension && identity.mimeType ? <span className="analysis-file-badge analysis-file-badge--muted">{identity.mimeType}</span> : null}
+              </div>
+              <p>{toSafeResumeFailureReason(item?.error || item?.failureReason || item?.message, item)}</p>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+function AnalysisItemsTable({ items = [] }) {
+  const rows = Array.isArray(items) ? items : []
+  if (rows.length === 0) return null
+
+  return (
+    <section className="analysis-items-panel">
+      <h2>Resume files</h2>
+      <div className="analysis-items-panel__table-wrap">
+        <table className="analysis-items-panel__table">
+          <thead>
+            <tr><th>File</th><th>Type</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((item, index) => {
+              const identity = buildResumeFileIdentity(item)
+              return (
+                <tr key={`${item?.itemId || item?.id || identity.filename}-${index}`}>
+                  <td>
+                    <span className="analysis-items-panel__filename">{identity.filename}</span>
+                    {!identity.hasExtension && identity.mimeType ? <span className="analysis-items-panel__mime">{identity.mimeType}</span> : null}
+                  </td>
+                  <td><span className="analysis-file-badge">{identity.fileType}</span></td>
+                  <td>{normalizeStatus(item?.status)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
 
 function shortenAnalysisId(value) {
   const normalized = String(value || '').trim()
@@ -244,6 +321,9 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
   const candidateCount = candidateResultsPayload.candidates.length
   const hasCandidateResults = candidateResultsPayload.candidates.length > 0
   const failedCount = Number(summary.failed || 0)
+  const completeCount = Number(summary.complete || 0)
+  const partialMessage = formatAnalysisProgressMessage(summary)
+  const analysisItems = Array.isArray(analysis?.items) ? analysis.items : []
   const pageTitle = useMemo(() => deriveAnalysisPageTitle(analysis, analysisId), [analysis, analysisId])
 
   useEffect(() => {
@@ -308,6 +388,14 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
             <p>Some candidate details were sanitized for compatibility.</p>
           </section>
         )}
+        {(displayStatus === 'partial' || displayStatus === 'failed') && partialMessage && (
+          <section className="analysis-partial-results" role="status" aria-live="polite">
+            <h2>{displayStatus === 'partial' ? 'Partial results' : 'Analysis failed'}</h2>
+            <p>{partialMessage}</p>
+          </section>
+        )}
+        <FailedFilesSection items={analysisItems} />
+        <AnalysisItemsTable items={analysisItems} />
 
         <CandidateResults
           candidates={candidateResultsPayload}
@@ -340,7 +428,10 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
         ) : (
           <p>This analysis is still processing. Results will be available when processing completes.</p>
         )}
-        <p>Summary — Total {summary.total || 0} · Complete {summary.complete || 0} · Failed {failedCount} · Processing {summary.processing || 0} · Pending {summary.pending || 0}</p>
+        {partialMessage && <p>{partialMessage}</p>}
+        <p>Summary — Total {summary.total || 0} · Complete {completeCount} · Failed {failedCount} · Processing {summary.processing || 0} · Pending {summary.pending || 0}</p>
+        <FailedFilesSection items={analysisItems} />
+        <AnalysisItemsTable items={analysisItems} />
       </section>
     </main>
   )

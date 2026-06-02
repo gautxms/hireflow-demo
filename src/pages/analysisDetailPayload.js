@@ -149,6 +149,10 @@ function toCandidateResultsPayload(analysis) {
               id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
               resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
               filename: normalizeString(item?.filename || normalized?.filename, ''),
+              originalFilename: normalizeString(item?.originalFilename || item?.original_filename || normalized?.originalFilename || normalized?.original_filename, ''),
+              fileExtension: normalizeString(item?.fileExtension || item?.file_extension || normalized?.fileExtension || normalized?.file_extension, ''),
+              mimeType: normalizeString(item?.mimeType || item?.mime_type || normalized?.mimeType || normalized?.mime_type, ''),
+              originalMimeType: normalizeString(item?.originalMimeType || item?.original_mime_type || normalized?.originalMimeType || normalized?.original_mime_type, ''),
             }
           } catch {
             return null
@@ -170,6 +174,10 @@ function toCandidateResultsPayload(analysis) {
             id: normalized.id || `${item?.resumeId || item?.id || 'candidate'}-${index}`,
             resumeId: normalizeString(item?.resumeId || normalized?.resumeId, ''),
             filename: normalizeString(item?.filename || result?.filename || normalized?.filename, ''),
+            originalFilename: normalizeString(item?.originalFilename || item?.original_filename || result?.originalFilename || result?.original_filename || normalized?.originalFilename || normalized?.original_filename, ''),
+            fileExtension: normalizeString(item?.fileExtension || item?.file_extension || result?.fileExtension || result?.file_extension || normalized?.fileExtension || normalized?.file_extension, ''),
+            mimeType: normalizeString(item?.mimeType || item?.mime_type || result?.mimeType || result?.mime_type || normalized?.mimeType || normalized?.mime_type, ''),
+            originalMimeType: normalizeString(item?.originalMimeType || item?.original_mime_type || result?.originalMimeType || result?.original_mime_type || normalized?.originalMimeType || normalized?.original_mime_type, ''),
           }
         } catch {
           return null
@@ -193,6 +201,10 @@ function toCandidateResultsPayload(analysis) {
       ...candidate,
       resumeId: normalizeString(candidate?.resumeId || candidate?.resume_id, ''),
       filename: normalizeString(candidate?.filename, ''),
+      originalFilename: normalizeString(candidate?.originalFilename || candidate?.original_filename, ''),
+      fileExtension: normalizeString(candidate?.fileExtension || candidate?.file_extension, ''),
+      mimeType: normalizeString(candidate?.mimeType || candidate?.mime_type, ''),
+      originalMimeType: normalizeString(candidate?.originalMimeType || candidate?.original_mime_type, ''),
     }))
 
   const outputCount = candidates.length

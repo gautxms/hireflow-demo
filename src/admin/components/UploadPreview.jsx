@@ -1,4 +1,5 @@
 import API_BASE from '../../config/api'
+import { buildResumeFileIdentity } from '../../utils/resumeFileIdentity.js'
 function statusStyles(status) {
   if (status === 'complete') return 'bg-admin-success-subtle text-admin-success border-admin-success'
   if (status === 'failed') return 'bg-admin-danger-subtle text-admin-danger border-admin-danger'
@@ -30,6 +31,8 @@ function formatMoney(value) {
 
 export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsageSummary, retriedAt, onRetry, retrying }) {
   if (!upload) return null
+
+  const fileIdentity = buildResumeFileIdentity(upload)
 
   const downloadParseResult = () => {
     const data = JSON.stringify(upload.parseResult || {}, null, 2)
@@ -72,11 +75,11 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <InfoTile label="Filename" value={upload.filename} />
+        <InfoTile label="Filename" value={fileIdentity.filename} />
         <InfoTile label="User" value={upload.userEmail || `User #${upload.userId}`} />
         <InfoTile label="Uploaded" value={date(upload.createdAt)} />
         <InfoTile label="File size" value={bytes(upload.fileSize)} />
-        <InfoTile label="File format" value={upload.format || upload.fileType} />
+        <InfoTile label="File format" value={fileIdentity.fileType} />
         <InfoTile label="Last retried" value={date(retriedAt)} />
         <div className="ui-card p-4">
           <p className="text-xs uppercase tracking-wide text-admin-muted">Parse status</p>
@@ -100,6 +103,7 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-admin-muted">
+                <th className="py-2 pr-3">File</th>
                 <th className="py-2 pr-3">Captured</th>
                 <th className="py-2 pr-3">Provider</th>
                 <th className="py-2 pr-3">Model</th>
@@ -113,10 +117,11 @@ export default function UploadPreview({ upload, tokenUsageHistory = [], tokenUsa
             <tbody>
               {tokenUsageHistory.length === 0 ? (
                 <tr className="border-t border-admin">
-                  <td className="py-3 text-admin-muted" colSpan={8}>No token usage records for this upload yet.</td>
+                  <td className="py-3 text-admin-muted" colSpan={9}>No token usage records for this upload yet.</td>
                 </tr>
               ) : tokenUsageHistory.map((entry) => (
                 <tr key={entry.id} className="border-t border-admin">
+                  <td className="py-2 pr-3">{fileIdentity.filename}</td>
                   <td className="py-2 pr-3">{date(entry.createdAt)}</td>
                   <td className="py-2 pr-3">{entry.provider || '—'}</td>
                   <td className="py-2 pr-3">{entry.model || '—'}</td>

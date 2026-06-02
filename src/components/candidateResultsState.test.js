@@ -507,3 +507,20 @@ test('sortCandidatesForResults preserves selected sort order (name, experience, 
   assert.deepEqual(sortCandidatesForResults(rows, 'experience').map((c) => c.name), ['Amy', 'Bob', 'Zed'])
   assert.deepEqual(sortCandidatesForResults(rows, 'match_score').map((c) => c.name), ['Zed', 'Bob', 'Amy'])
 })
+
+test('buildExpandedCandidateDrawerViewModel shows original resume filename with extension or safe historical fallback', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  assert.equal(buildExpandedCandidateDrawerViewModel({ filename: 'resume.pdf' }).resumeFileLabel, 'resume.pdf')
+  assert.equal(buildExpandedCandidateDrawerViewModel({ filename: 'resume', fileExtension: 'docx' }).resumeFileLabel, 'resume.docx')
+  assert.equal(buildExpandedCandidateDrawerViewModel({ filename: 'resume', originalMimeType: 'application/pdf' }).resumeFileLabel, 'resume')
+})
+
+test('sortCandidatesForResults ranks only completed/renderable candidates supplied to results', () => {
+  const completedCandidates = [
+    normalizeCandidateForResults({ id: 'resume-pdf', name: 'PDF', score: 70, filename: 'resume.pdf' }, 0),
+    normalizeCandidateForResults({ id: 'resume-docx', name: 'DOCX', score: 90, filename: 'resume.docx' }, 1),
+  ]
+
+  const sorted = sortCandidatesForResults(completedCandidates, 'match_score')
+  assert.deepEqual(sorted.map((candidate) => candidate.filename), ['resume.docx', 'resume.pdf'])
+})
