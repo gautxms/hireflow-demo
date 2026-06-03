@@ -5,7 +5,32 @@ const LEGACY_DOC_EXTRACTION_FAILURE_CATEGORY = 'legacy_doc_extraction_failed'
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled'])
 const MAX_ERROR_DETAIL_LENGTH = 120
 const MIN_TEXT_RUN_LENGTH = 4
+const DEFAULT_MAX_LEGACY_DOC_BYTES = 5 * 1024 * 1024
+const DEFAULT_EXTRACTION_TIMEOUT_MS = 2000
+const LOOP_DEADLINE_CHECK_INTERVAL = 8192
 const NULL_CHARACTER = String.fromCharCode(0)
+
+function normalizePositiveInteger(value, fallback) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : fallback
+}
+
+export function getLegacyDocExtractionLimits(env = process.env) {
+  return {
+    maxBytes: normalizePositiveInteger(env?.LEGACY_DOC_EXTRACTION_MAX_BYTES, DEFAULT_MAX_LEGACY_DOC_BYTES),
+    timeoutMs: normalizePositiveInteger(env?.LEGACY_DOC_EXTRACTION_TIMEOUT_MS, DEFAULT_EXTRACTION_TIMEOUT_MS),
+  }
+}
+
+function createDeadline(timeoutMs) {
+  return Date.now() + timeoutMs
+}
+
+function assertNotPastDeadline(deadline) {
+  if (Date.now() > deadline) {
+    throw createLegacyDocExtractionError('extraction_timeout')
+  }
+}
 
 function normalizeFeatureFlag(value) {
   return String(value || '').trim().toLowerCase()
@@ -50,11 +75,13 @@ function pushRun(runs, chars) {
   }
 }
 
-function extractAsciiRuns(fileBuffer) {
+function extractAsciiRuns(fileBuffer, deadline) {
   const runs = []
   let chars = []
 
-  for (const byte of fileBuffer) {
+  for (let offset = 0; offset < fileBuffer.length; offset += 1) {
+    if (offset % LOOP_DEADLINE_CHECK_INTERVAL === 0) assertNotPastDeadline(deadline)
+    const byte = fileBuffer[offset]
     if (isAsciiTextByte(byte)) {
       chars.push(String.fromCharCode(byte))
     } else {
@@ -67,11 +94,12 @@ function extractAsciiRuns(fileBuffer) {
   return runs
 }
 
-function extractUtf16LeRuns(fileBuffer) {
+function extractUtf16LeRuns(fileBuffer, deadline) {
   const runs = []
   let chars = []
 
   for (let index = 0; index < fileBuffer.length - 1; index += 2) {
+    if (index % LOOP_DEADLINE_CHECK_INTERVAL === 0) assertNotPastDeadline(deadline)
     const byte = fileBuffer[index]
     const highByte = fileBuffer[index + 1]
     if (highByte === 0x00 && isAsciiTextByte(byte)) {
@@ -141,6 +169,8 @@ function buildLegacyDocDiagnostics({ fileBuffer, filename = null, mimeType = nul
 
 export async function extractTextFromLegacyDocBuffer(fileBuffer, options = {}) {
   const { filename = 'resume.doc', mimeType = null, originalMimeType = null, logger = console } = options || {}
+  const limits = getLegacyDocExtractionLimits(options?.env || process.env)
+  const deadline = createDeadline(limits.timeoutMs)
 
   if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
     throw createLegacyDocExtractionError('invalid_input_buffer', {
@@ -148,9 +178,15 @@ export async function extractTextFromLegacyDocBuffer(fileBuffer, options = {}) {
     })
   }
 
+  if (fileBuffer.length > limits.maxBytes) {
+    throw createLegacyDocExtractionError('file_too_large', {
+      diagnostics: buildLegacyDocDiagnostics({ fileBuffer, filename, mimeType, originalMimeType, errorCategory: 'file_too_large' }),
+    })
+  }
+
   const extractedText = normalizeExtractedTextRuns([
-    ...extractUtf16LeRuns(fileBuffer),
-    ...extractAsciiRuns(fileBuffer),
+    ...extractUtf16LeRuns(fileBuffer, deadline),
+    ...extractAsciiRuns(fileBuffer, deadline),
   ])
 
   const diagnostics = buildLegacyDocDiagnostics({ fileBuffer, filename, mimeType, originalMimeType, extractedText })
