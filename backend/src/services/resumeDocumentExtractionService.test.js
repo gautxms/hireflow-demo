@@ -485,6 +485,43 @@ test('prepareResumePayloadForAnalysis fails OLE compound legacy DOC before Mammo
   )
 })
 
+
+test('prepareResumePayloadForAnalysis keeps extractable legacy DOC unsupported when legacy extraction flag is off by default', async () => {
+  const previousFlag = process.env.ENABLE_LEGACY_DOC_EXTRACTION
+  delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
+  const extractedDocText = 'Jane Default Flag Off\nLegacy DOC Candidate'
+  const oleDocBuffer = Buffer.concat([
+    Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    Buffer.from(extractedDocText, 'utf16le'),
+  ])
+
+  try {
+    await assert.rejects(
+      () => prepareResumePayloadForAnalysis({
+        fileBufferBase64: oleDocBuffer.toString('base64'),
+        mimeType: 'application/msword',
+        filename: 'resume.doc',
+        fileSize: oleDocBuffer.length,
+        logger: quietLogger,
+      }),
+      (error) => {
+        assert.match(error.message, /^resume_unsupported_legacy_doc::/)
+        assert.equal(error.nonRetriable, true)
+        assert.equal(error.extractionCategory, 'resume_unsupported_legacy_doc')
+        assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_rejected')
+        assert.equal(error.diagnostics.preparedMimeType, null)
+        assert.equal(error.diagnostics.inputKind, null)
+        assert.equal(error.diagnostics.fileSignature, 'legacy_doc_ole')
+        assert.equal(JSON.stringify(error.diagnostics).includes(extractedDocText), false)
+        return true
+      },
+    )
+  } finally {
+    if (typeof previousFlag === 'undefined') delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
+    else process.env.ENABLE_LEGACY_DOC_EXTRACTION = previousFlag
+  }
+})
+
 test('prepareResumePayloadForAnalysis extracts enabled legacy DOC locally as text/plain without Mammoth', async () => {
   const previousFlag = process.env.ENABLE_LEGACY_DOC_EXTRACTION
   process.env.ENABLE_LEGACY_DOC_EXTRACTION = 'true'
