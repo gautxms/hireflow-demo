@@ -5,6 +5,11 @@ import {
   getLegacyWordDocumentDetection,
   DOCX_MIME_TYPE,
 } from '../utils/legacyWordDocument.js'
+import {
+  createLegacyDocExtractionError,
+  extractTextFromLegacyDocBuffer,
+  isLegacyDocExtractionEnabled,
+} from './legacyDocExtractionService.js'
 
 let mammothClient = null
 let mammothClientOverrideForTests = undefined
@@ -523,33 +528,6 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     fileBuffer,
   })
 
-  if (legacyWordDetection.isLegacyWordDocument) {
-    if (legacyWordDetection.hasMismatch) {
-      const filenameDiagnostics = buildSafeFilenameDiagnostics(normalizedFilename)
-      logger?.warn?.('[ResumeExtraction] Legacy Word MIME/extension mismatch rejected before DOCX extraction', {
-        filenameExtension: filenameDiagnostics.extension,
-        filenameFingerprint: filenameDiagnostics.fingerprint,
-        mimeType: normalizedMimeType || null,
-        originalMimeType: normalizedOriginalMimeType || null,
-        extension: legacyWordDetection.extension || null,
-        hasOleMagic: legacyWordDetection.hasOleMagic,
-      })
-    }
-    const error = createUnsupportedLegacyWordError({ detection: legacyWordDetection })
-    error.diagnostics = {
-      ...(error.diagnostics || {}),
-      ...buildSafeResumeFileDiagnostics({
-        ...baseDiagnosticsInput,
-        extractionMethod: 'legacy_doc_rejected',
-        preparedMimeType: null,
-        inputKind: null,
-        extractedTextCharCount: 0,
-      }),
-    }
-    logSafeResumeFileDiagnostics(logger, 'extraction_decision', error.diagnostics, 'warn')
-    throw error
-  }
-
   const mergeSafeDiagnostics = (diagnostics, { extractionMethod, extractedTextCharCount = null, preparedMimeType = null, inputKind = null } = {}) => ({
     ...(diagnostics || {}),
     ...buildSafeResumeFileDiagnostics({
@@ -561,11 +539,91 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     }),
   })
 
+
   const buildBase = () => ({
     originalFilename: normalizedFilename || null,
     originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
     extractionWarnings: [],
   })
+
+  if (legacyWordDetection.isLegacyWordDocument) {
+    if (legacyWordDetection.hasMismatch) {
+      const filenameDiagnostics = buildSafeFilenameDiagnostics(normalizedFilename)
+      logger?.warn?.('[ResumeExtraction] Legacy Word MIME/extension mismatch handled before DOCX extraction', {
+        filenameExtension: filenameDiagnostics.extension,
+        filenameFingerprint: filenameDiagnostics.fingerprint,
+        mimeType: normalizedMimeType || null,
+        originalMimeType: normalizedOriginalMimeType || null,
+        extension: legacyWordDetection.extension || null,
+        hasOleMagic: legacyWordDetection.hasOleMagic,
+      })
+    }
+
+    if (!isLegacyDocExtractionEnabled()) {
+      const error = createUnsupportedLegacyWordError({ detection: legacyWordDetection })
+      error.diagnostics = {
+        ...(error.diagnostics || {}),
+        ...buildSafeResumeFileDiagnostics({
+          ...baseDiagnosticsInput,
+          extractionMethod: 'legacy_doc_rejected',
+          preparedMimeType: null,
+          inputKind: null,
+          extractedTextCharCount: 0,
+        }),
+      }
+      logSafeResumeFileDiagnostics(logger, 'extraction_decision', error.diagnostics, 'warn')
+      throw error
+    }
+
+    let extractedText
+    try {
+      extractedText = await extractTextFromLegacyDocBuffer(fileBuffer, {
+        filename: normalizedFilename || 'resume.doc',
+        mimeType: normalizedMimeType || mimeType || 'application/msword',
+        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
+        logger,
+      })
+    } catch (error) {
+      const wrappedError = error?.extractionCategory === 'legacy_doc_extraction_failed'
+        ? error
+        : createLegacyDocExtractionError(error?.message || 'failed', { cause: error })
+      wrappedError.diagnostics = mergeSafeDiagnostics(wrappedError.diagnostics || {}, {
+        extractionMethod: 'legacy_doc_text_extraction',
+        extractedTextCharCount: wrappedError?.diagnostics?.extractedTextCharCount ?? 0,
+        preparedMimeType: null,
+        inputKind: 'extracted_text',
+      })
+      logSafeResumeFileDiagnostics(logger, 'extraction_decision', wrappedError.diagnostics, 'warn')
+      throw wrappedError
+    }
+
+    return {
+      ...buildBase(),
+      fileBufferBase64: Buffer.from(extractedText, 'utf8').toString('base64'),
+      mimeType: 'text/plain',
+      preparedMimeType: 'text/plain',
+      sourceFormat: 'doc',
+      inputKind: 'extracted_text',
+      inputMode: 'extracted_text',
+      extractionMethod: 'legacy_doc_text_extraction',
+      extractedText,
+      base64File: null,
+      diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
+        sourceFormat: 'doc',
+        inputKind: 'extracted_text',
+        inputMode: 'extracted_text',
+        preparedMimeType: 'text/plain',
+        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
+        extractedText,
+        extractionMethod: 'legacy_doc_text_extraction',
+      }), {
+        extractionMethod: 'legacy_doc_text_extraction',
+        extractedTextCharCount: extractedText.length,
+        preparedMimeType: 'text/plain',
+        inputKind: 'extracted_text',
+      }),
+    }
+  }
 
   if (normalizedMimeType === 'text/plain') {
     const extractedText = Buffer.from(String(fileBufferBase64 || ''), 'base64').toString('utf8').trim()
