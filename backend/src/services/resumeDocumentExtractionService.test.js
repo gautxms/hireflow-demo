@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import JSZip from 'jszip'
@@ -482,6 +483,83 @@ test('prepareResumePayloadForAnalysis fails OLE compound legacy DOC before Mammo
       return true
     },
   )
+})
+
+test('prepareResumePayloadForAnalysis extracts enabled legacy DOC locally as text/plain without Mammoth', async () => {
+  const previousFlag = process.env.ENABLE_LEGACY_DOC_EXTRACTION
+  process.env.ENABLE_LEGACY_DOC_EXTRACTION = 'true'
+  let mammothCalled = false
+  __setMammothClientForTests({
+    async extractRawText() {
+      mammothCalled = true
+      throw new Error('mammoth_should_not_be_called_for_doc')
+    },
+  })
+
+  const extractedDocText = 'Jane Legacy\nSenior DOC Engineer'
+  const oleDocBuffer = Buffer.concat([
+    Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    Buffer.from(extractedDocText, 'utf16le'),
+  ])
+
+  try {
+    const result = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: oleDocBuffer.toString('base64'),
+      mimeType: 'application/msword',
+      filename: 'resume.doc',
+      fileSize: oleDocBuffer.length,
+      logger: quietLogger,
+    })
+
+    assert.equal(mammothCalled, false)
+    assert.equal(result.mimeType, 'text/plain')
+    assert.equal(result.preparedMimeType, 'text/plain')
+    assert.equal(result.sourceFormat, 'doc')
+    assert.equal(result.inputKind, 'extracted_text')
+    assert.equal(result.inputMode, 'extracted_text')
+    assert.equal(result.extractionMethod, 'legacy_doc_text_extraction')
+    assert.equal(result.extractedText, extractedDocText)
+    assert.equal(result.base64File, null)
+    assert.equal(result.fileBufferBase64, Buffer.from(extractedDocText, 'utf8').toString('base64'))
+    assert.equal(result.diagnostics.extractionMethod, 'legacy_doc_text_extraction')
+    assert.equal(result.diagnostics.preparedMimeType, 'text/plain')
+    assert.equal(result.diagnostics.inputKind, 'extracted_text')
+    assert.equal(result.diagnostics.fileSignature, 'legacy_doc_ole')
+  } finally {
+    __resetMammothClientForTests()
+    if (typeof previousFlag === 'undefined') delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
+    else process.env.ENABLE_LEGACY_DOC_EXTRACTION = previousFlag
+  }
+})
+
+test('prepareResumePayloadForAnalysis wraps enabled legacy DOC extraction failures as non-retriable local errors', async () => {
+  const previousFlag = process.env.ENABLE_LEGACY_DOC_EXTRACTION
+  process.env.ENABLE_LEGACY_DOC_EXTRACTION = 'true'
+  const oleDocBuffer = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00, 0x01])
+
+  try {
+    await assert.rejects(
+      () => prepareResumePayloadForAnalysis({
+        fileBufferBase64: oleDocBuffer.toString('base64'),
+        mimeType: 'application/msword',
+        filename: 'resume.doc',
+        logger: quietLogger,
+      }),
+      (error) => {
+        assert.match(error.message, /^legacy_doc_extraction_failed::empty_extracted_text$/)
+        assert.equal(error.nonRetriable, true)
+        assert.equal(error.extractionCategory, 'legacy_doc_extraction_failed')
+        assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_text_extraction')
+        assert.equal(error.diagnostics.inputKind, 'extracted_text')
+        assert.equal(error.diagnostics.preparedMimeType, null)
+        assert.equal(error.diagnostics.fileSignature, 'legacy_doc_ole')
+        return true
+      },
+    )
+  } finally {
+    if (typeof previousFlag === 'undefined') delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
+    else process.env.ENABLE_LEGACY_DOC_EXTRACTION = previousFlag
+  }
 })
 
 test('prepareResumePayloadForAnalysis normalizes text/plain into extracted_text with original mime preserved', async () => {

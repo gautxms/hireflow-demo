@@ -14,6 +14,7 @@ import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js
 import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
+import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
@@ -51,6 +52,7 @@ const PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES = new Set([
   'docx_invalid_or_unreadable',
   'docx_dependency_missing',
   'docx_extraction_failed',
+  'legacy_doc_extraction_failed',
   'extraction_empty',
   'legacy_word_format',
   'resume_unsupported_legacy_doc',
@@ -63,6 +65,7 @@ const PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_PATTERNS = [
   /docx_invalid_or_unreadable/i,
   /docx_dependency_missing/i,
   /docx_extraction_failed/i,
+  /legacy_doc_extraction_failed/i,
   /extraction_empty/i,
   /legacy_word_format/i,
   /resume_unsupported_legacy_doc/i,
@@ -306,7 +309,7 @@ async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, ori
   }
   const legacyWordDetection = getLegacyWordDocumentDetection({ filename, mimeType, originalMimeType, fileBuffer })
 
-  if (legacyWordDetection.isLegacyWordDocument) {
+  if (legacyWordDetection.isLegacyWordDocument && !isLegacyDocExtractionEnabled()) {
     if (legacyWordDetection.hasMismatch) {
       const mismatchDiagnostics = buildSafeResumeFileDiagnostics(baseDiagnosticsInput)
       logger?.warn?.('[Parse] Legacy Word MIME/extension mismatch rejected before document extraction', {

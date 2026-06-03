@@ -274,6 +274,7 @@ export function detectProviderErrorCategory(errorLike) {
     || lower.includes('docx_invalid_or_unreadable')
     || lower.includes('docx_dependency_missing')
     || lower.includes('docx_extraction_failed')
+    || lower.includes('legacy_doc_extraction_failed')
     || lower.includes('no readable text')
   ) {
     return { category: 'extraction_failed', extractedDetails: '' }
