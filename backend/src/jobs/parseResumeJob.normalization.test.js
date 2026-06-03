@@ -477,6 +477,76 @@ test('parse job failure handler discards deterministic local extraction errors',
 })
 
 
+test('enabled legacy DOC local extraction failure stops before AI and token telemetry', async (t) => {
+  const previousFlag = process.env.ENABLE_LEGACY_DOC_EXTRACTION
+  process.env.ENABLE_LEGACY_DOC_EXTRACTION = 'true'
+  const corruptOleLikeDocBuffer = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00, 0x01])
+  const queries = []
+  const aiCalls = []
+  const discarded = []
+  const cached = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [], rowCount: 1 }
+  })
+  __setParseResumeJobTestOverrides({
+    analyzeResumeWithConfiguredFallback: async (...args) => {
+      aiCalls.push(args)
+      throw new Error('analyzeResumeWithConfiguredFallback_should_not_be_called_for_local_doc_failure')
+    },
+    cacheJobResult: async () => {},
+  })
+  t.after(() => {
+    __resetParseResumeJobTestOverrides()
+    if (typeof previousFlag === 'undefined') delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
+    else process.env.ENABLE_LEGACY_DOC_EXTRACTION = previousFlag
+  })
+
+  const job = createParseJob({
+    id: 'parse-enabled-doc-local-failure',
+    resumeId: 'resume-enabled-doc-local-failure',
+    filename: 'resume.doc',
+    mimeType: 'application/msword',
+    originalMimeType: 'application/msword',
+    fileExtension: 'doc',
+    fileBuffer: corruptOleLikeDocBuffer,
+  })
+  job.discard = () => {
+    discarded.push(true)
+    job.discarded = true
+  }
+
+  let docError = null
+  await assert.rejects(
+    () => __testables.runParse(job),
+    (error) => {
+      docError = error
+      assert.match(error.message, /^legacy_doc_extraction_failed::empty_extracted_text$/)
+      assert.equal(error.nonRetriable, true)
+      assert.equal(error.extractionCategory, 'legacy_doc_extraction_failed')
+      assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_text_extraction')
+      assert.equal(error.diagnostics.fileSignature, 'legacy_doc_ole')
+      return true
+    },
+  )
+
+  const failure = await __testables.handleParseJobFailure(job, docError, {
+    cacheFailureResult: async (jobId, payload) => cached.push({ jobId, payload }),
+    logger: { warn() {} },
+  })
+
+  assert.equal(aiCalls.length, 0)
+  assert.equal(failure.isNonRetriableFailure, true)
+  assert.equal(failure.failurePayload.retryable, false)
+  assert.equal(failure.failurePayload.retryClassification, 'legacy_doc_extraction_failed')
+  assert.deepEqual(discarded, [true])
+  assert.equal(cached.length, 1)
+  assert.equal(queries.some(({ sql }) => String(sql).includes('INSERT INTO resume_analysis_token_usage')), false)
+  assert.equal(queries.some(({ params }) => params?.includes('anthropic') || params?.includes('openai')), false)
+})
+
+
 async function buildMinimalDocxBuffer(text) {
   const zip = new JSZip()
   zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8"?>

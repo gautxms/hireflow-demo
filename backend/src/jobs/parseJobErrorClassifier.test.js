@@ -54,6 +54,16 @@ test('deterministic extraction category metadata is non-retriable even without a
   assert.equal(result.reason, 'deterministic_local_failure:docx_empty_extraction')
 })
 
+test('legacy DOC extraction category metadata is non-retriable even without a prefixed message', () => {
+  const error = new Error('Unable to extract readable text from corrupt OLE-like DOC file resume.doc')
+  error.extractionCategory = 'legacy_doc_extraction_failed'
+
+  const result = classifyParseJobRetryability(error)
+
+  assert.equal(result.retryable, false)
+  assert.equal(result.reason, 'deterministic_local_failure:legacy_doc_extraction_failed')
+})
+
 test('local MIME and extension mismatches are non-retriable deterministic failures', () => {
   const result = classifyParseJobRetryability(new Error('MIME/extension mismatch: .docx upload reported as application/msword'))
 

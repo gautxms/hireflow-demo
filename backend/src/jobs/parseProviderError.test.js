@@ -104,6 +104,12 @@ test('normalizeProviderError categorizes legacy DOC extraction failures before p
   assert.equal(result.action, 'reupload_as_pdf')
 })
 
+test('normalizeProviderError categorizes corrupt OLE-like DOC local extraction failures before provider calls', () => {
+  const result = normalizeProviderError('legacy_doc_extraction_failed::empty_extracted_text for corrupt OLE-like resume.doc')
+  assert.equal(result.category, 'extraction_failed')
+  assert.equal(result.action, 'reupload_as_pdf')
+})
+
 test('normalizeProviderError categorizes legacy DOC as unsupported format before provider calls', () => {
   const result = normalizeProviderError('resume_unsupported_legacy_doc::Legacy Word .doc files are not supported. Please upload this resume as DOCX or text-based PDF.')
   assert.equal(result.category, 'unsupported_format')
