@@ -490,8 +490,9 @@ test('toCandidateResultsPayload carries item file identity metadata into complet
   assert.equal(payload.candidates[1].mimeType, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 })
 
-test('analysis detail source exposes partial results and sanitized failed file sections without raw JSON blocks for users', () => {
+test('analysis detail source keeps failed file details without rendering a large partial-results banner', () => {
   assert.match(analysisDetailSource, /Partial results: \$\{complete\} of \$\{total\} resumes were analysed\./)
+  assert.doesNotMatch(analysisDetailSource, /displayStatus === 'partial' \? 'Partial results' : 'Analysis failed'/)
   assert.match(analysisDetailSource, /<FailedFilesSection items=\{analysisItems\} \/>/)
   assert.match(analysisDetailSource, /toSafeResumeFailureReason\(item\?\.error/)
   assert.doesNotMatch(analysisDetailSource, /JSON\.stringify\(item\?\.error/)
