@@ -30,12 +30,13 @@ test('analyses list page provides conditional and keyboard-accessible pagination
   assert.match(analysesPageSource, /Page \{currentPage\} of \{totalPages\}/)
 })
 
-test('analysis detail page renders terminal flow to CandidateResults while keeping partial failures visible', () => {
+test('analysis detail page renders terminal flow to CandidateResults while keeping partial failures visible without a large partial banner', () => {
   assert.match(analysisDetailSource, /displayStatus === 'complete'/)
   assert.match(analysisDetailSource, /displayStatus === 'partial'/)
   assert.match(analysisDetailSource, /<CandidateResults/)
   assert.match(analysisDetailSource, /<FailedFilesSection items=\{analysisItems\} \/>/)
   assert.match(analysisDetailSource, /<AnalysisItemsTable items=\{analysisItems\} \/>/)
+  assert.doesNotMatch(analysisDetailSource, /displayStatus === 'partial' \? 'Partial results' : 'Analysis failed'/)
 })
 
 test('analysis detail page renders failed state messaging and sanitized failed file section', () => {
@@ -74,6 +75,7 @@ test('summary bucket labels and partial counts are aligned across analyses list 
   assert.doesNotMatch(analysesPageSource, /analyses-layout__partial-copy/)
   assert.doesNotMatch(analysesPageSource, /status === 'partial' && <span/)
   assert.match(analysisDetailSource, /Partial results: \$\{complete\} of \$\{total\} resumes were analysed\./)
+  assert.doesNotMatch(analysisDetailSource, /displayStatus === 'partial' \? 'Partial results' : 'Analysis failed'/)
   assert.match(analysisDetailSource, /Summary — Total \{summary\.total \|\| 0\} · Complete \{completeCount\} · Failed \{failedCount\}/)
 })
 

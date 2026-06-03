@@ -388,9 +388,9 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
             <p>Some candidate details were sanitized for compatibility.</p>
           </section>
         )}
-        {(displayStatus === 'partial' || displayStatus === 'failed') && partialMessage && (
+        {displayStatus === 'failed' && partialMessage && (
           <section className="analysis-partial-results" role="status" aria-live="polite">
-            <h2>{displayStatus === 'partial' ? 'Partial results' : 'Analysis failed'}</h2>
+            <h2>Analysis failed</h2>
             <p>{partialMessage}</p>
           </section>
         )}
