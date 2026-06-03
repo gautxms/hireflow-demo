@@ -1816,7 +1816,7 @@
   outline: 2px solid var(--hf-lime);
   outline-offset: 2px;
 }
-.dd-section-card--resume { min-height: 92px; }
+.dd-section-card--resume { min-height: auto; }
 .dd-resume-file {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1862,15 +1862,14 @@
   min-height: 34px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
   border: 1px solid var(--hf-border-2);
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
   color: var(--hf-text-2);
-  font-family: var(--font-body, 'DM Sans', sans-serif);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 0 12px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
@@ -1888,8 +1887,10 @@
   outline-offset: 3px;
 }
 @media (max-width: 520px) {
-  .dd-resume-file { grid-template-columns: auto minmax(0, 1fr); }
-  .dd-resume-action { grid-column: 1 / -1; width: 100%; }
+  .dd-resume-file {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+  }
 }
 
 .dd-skill-cat {

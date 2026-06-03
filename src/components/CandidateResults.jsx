@@ -1702,19 +1702,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   <FileText size={18} strokeWidth={1.5} aria-hidden="true" />
                 </div>
                 <div className="dd-resume-copy">
-                  <div className="dd-resume-filename">{detailVm.resumeFileLabel}</div>
-                  <div className="dd-resume-meta">
-                    {hasResumeForOpen ? 'Uploaded resume available to open.' : 'Resume file is unavailable for this candidate.'}
-                  </div>
+                  <div className="dd-resume-filename" title={detailVm.resumeFileLabel}>{detailVm.resumeFileLabel}</div>
+                  {!hasResumeForOpen && (
+                    <div className="dd-resume-meta">Resume file is unavailable for this candidate.</div>
+                  )}
                 </div>
                 <button
                   className="dd-resume-action"
                   type="button"
                   onClick={() => openCandidateResumeInNewTab(candidate)}
                   disabled={!hasResumeForOpen}
-                  aria-label={hasResumeForOpen ? `Open resume for ${detailVm.candidateName}` : 'Resume unavailable'}
+                  aria-label="Open uploaded resume"
+                  title="Open resume"
                 >
-                  <span>Open</span>
                   <ExternalLink size={16} strokeWidth={1.5} aria-hidden="true" />
                 </button>
               </div>

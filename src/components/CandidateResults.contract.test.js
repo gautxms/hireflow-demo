@@ -90,19 +90,24 @@ test('click-path regression: crash panel copy is never used for candidate click 
 })
 
 
-test('candidate drawer includes labelled View resume section that uses existing open handler', () => {
-  assert.match(candidateResultsSource, /title="View resume"/)
+test('candidate drawer includes compact Resume section with icon-only open handler', () => {
+  assert.match(candidateResultsSource, /title="Resume"/)
   assert.match(candidateResultsSource, /className="dd-resume-file"/)
+  assert.match(candidateResultsSource, /title=\{detailVm\.resumeFileLabel\}/)
   assert.match(candidateResultsSource, /\{detailVm\.resumeFileLabel\}/)
   assert.match(candidateResultsSource, /onClick=\{\(\) => openCandidateResumeInNewTab\(candidate\)\}/)
   assert.match(candidateResultsSource, /disabled=\{!hasResumeForOpen\}/)
+  assert.match(candidateResultsSource, /aria-label="Open uploaded resume"/)
+  assert.match(candidateResultsSource, /title="Open resume"/)
+  assert.doesNotMatch(candidateResultsSource, /Uploaded resume available to open\./)
+  assert.doesNotMatch(candidateResultsSource, />Open<\/span>/)
 })
 
 
-test('expanded drawer third-column order keeps view resume after considerations and before integrity checks', () => {
+test('expanded drawer third-column order keeps resume after considerations and before integrity checks', () => {
   const strengthsIndex = candidateResultsSource.indexOf('title="Strengths"')
   const considerationsIndex = candidateResultsSource.indexOf('title="Considerations"')
-  const viewResumeIndex = candidateResultsSource.indexOf('title="View resume"')
+  const viewResumeIndex = candidateResultsSource.indexOf('title="Resume"')
   const integrityIndex = candidateResultsSource.indexOf('integrityChecks.length > 0')
 
   assert.ok(strengthsIndex !== -1)
