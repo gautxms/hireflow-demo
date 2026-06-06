@@ -14,7 +14,8 @@ import {
   logSafeResumeFileDiagnostics,
   prepareResumePayloadForAnalysis,
 } from './resumeDocumentExtractionService.js'
-import { buildSyntheticPdfResumeFixture, buildMissingTextPdfFixture, buildMalformedPdfFixture } from './resumeFormatDiagnosticFixtures.js'
+import { buildSyntheticPdfResumeFixture, buildMissingTextPdfFixture, buildMalformedPdfFixture, buildPdfJsTextContentMockFromFixtures } from './resumeFormatDiagnosticFixtures.js'
+import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from './pdfCanonicalExtractionService.js'
 import { UNSUPPORTED_LEGACY_WORD_MESSAGE } from '../utils/legacyWordDocument.js'
 
 async function buildDocxBuffer(paragraphs = [], tableRows = []) {
@@ -629,6 +630,9 @@ test('prepareResumePayloadForAnalysis runs PDF observe-only extraction behind fe
   }
   try {
     const fixture = buildSyntheticPdfResumeFixture()
+    __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([fixture]))
+    assert.equal(fixture.buffer.includes(Buffer.from('/FlateDecode')), true)
+    assert.equal(fixture.buffer.includes(Buffer.from('Synthetic Candidate Alpha')), false)
     const payload = fixture.buffer.toString('base64')
     const result = await prepareResumePayloadForAnalysis({
       fileBufferBase64: payload,
@@ -657,6 +661,7 @@ test('prepareResumePayloadForAnalysis runs PDF observe-only extraction behind fe
   } finally {
     if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
     else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+    __resetPdfJsClientForTests()
   }
 })
 
@@ -665,6 +670,7 @@ test('PDF observe-only extraction classifies missing-text and malformed PDFs wit
   process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
   try {
     const missing = buildMissingTextPdfFixture()
+    __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([missing]))
     const missingResult = await prepareResumePayloadForAnalysis({
       fileBufferBase64: missing.buffer.toString('base64'),
       mimeType: 'application/pdf',
@@ -690,5 +696,6 @@ test('PDF observe-only extraction classifies missing-text and malformed PDFs wit
   } finally {
     if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
     else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+    __resetPdfJsClientForTests()
   }
 })

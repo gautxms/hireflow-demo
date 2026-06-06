@@ -2,16 +2,20 @@ import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { performance } from 'node:perf_hooks'
 import { createHash } from 'node:crypto'
+import {
+  buildResumeTextFingerprint,
+  normalizeResumeTextForFingerprint,
+} from './resumeTextFingerprint.js'
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled'])
 const PDF_MAGIC = Buffer.from('%PDF', 'ascii')
-const DEFAULT_MAX_BYTES = 10 * 1024 * 1024
+const DEFAULT_MAX_BYTES = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT_MS = 1500
-const BUILTIN_PARSER_VERSION = 'builtin-pdf-selectable-text-v1'
-const EXTRACTION_METHOD = 'pdf_selectable_text_observe_only_builtin'
+const DEFAULT_MAX_PAGES = 20
+const PDFJS_PACKAGE_VERSION = '5.4.394'
+const PDFJS_IMPORT_TARGET = 'pdfjs-dist/legacy/build/pdf.mjs'
+const EXTRACTION_METHOD = 'pdfjs_dist_text_content_observe_only'
 const SECTION_MARKERS = ['summary', 'skills', 'experience', 'education', 'certification', 'projects']
-const TEXT_FINGERPRINT_VERSION = 'resume-text-fingerprint-v1'
-const NULL_CHARACTER = String.fromCharCode(0)
 const CATEGORY = {
   usable: 'usable_text_extraction',
   lowDensity: 'low_text_density',
@@ -22,49 +26,13 @@ const CATEGORY = {
   error: 'parser_error',
 }
 
+let pdfJsClient = null
+let pdfJsClientOverrideForTests = undefined
 
 function round(value, digits = 4) {
   if (!Number.isFinite(Number(value))) return 0
   const factor = 10 ** digits
   return Math.round(Number(value) * factor) / factor
-}
-
-function normalizeResumeTextForFingerprint(text = '') {
-  return String(text || '')
-    .normalize('NFKC')
-    .split(NULL_CHARACTER).join(' ')
-    .replace(/\uFFFD/g, ' ')
-    .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim().toLowerCase())
-    .filter(Boolean)
-    .filter((line) => !/^page\s+\d+(\s+of\s+\d+)?$/i.test(line))
-    .filter((line) => !/^(confidential|curriculum vitae|resume)$/i.test(line))
-    .join('\n')
-}
-
-function buildResumeTextFingerprint(text = '') {
-  const normalizedText = normalizeResumeTextForFingerprint(text)
-  if (!normalizedText) {
-    return {
-      version: TEXT_FINGERPRINT_VERSION,
-      comparable: false,
-      reason: 'empty_normalized_text',
-      normalizedCharCount: 0,
-      normalizedLineCount: 0,
-      sha256: null,
-    }
-  }
-
-  return {
-    version: TEXT_FINGERPRINT_VERSION,
-    comparable: true,
-    reason: null,
-    normalizedCharCount: normalizedText.length,
-    normalizedLineCount: normalizedText.split('\n').length,
-    sha256: createHash('sha256').update(normalizedText).digest('hex'),
-  }
 }
 
 function getLines(text = '') {
@@ -89,7 +57,7 @@ function isSuspiciousNoise(char) {
   return codePoint < 0x20 && ![0x09, 0x0a, 0x0d].includes(codePoint)
 }
 
-function calculateSafeTextQualityMetrics(text = '', expectedMarkers = []) {
+function calculatePdfSafeTextQualityMetrics(text = '', expectedMarkers = []) {
   const safeText = String(text || '')
   const chars = [...safeText]
   const lines = getLines(safeText)
@@ -127,19 +95,30 @@ export function getPdfCanonicalExtractionObserveOnlyLimits(env = process.env) {
   return {
     maxBytes: normalizePositiveInteger(env?.PDF_CANONICAL_EXTRACTION_MAX_BYTES, DEFAULT_MAX_BYTES),
     timeoutMs: normalizePositiveInteger(env?.PDF_CANONICAL_EXTRACTION_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
+    maxPages: normalizePositiveInteger(env?.PDF_CANONICAL_EXTRACTION_MAX_PAGES, DEFAULT_MAX_PAGES),
   }
 }
 
-function createDeadline(timeoutMs) {
-  return performance.now() + timeoutMs
+export function __setPdfJsClientForTests(client) {
+  pdfJsClientOverrideForTests = client
+  pdfJsClient = null
 }
 
-function assertWithinDeadline(deadline) {
-  if (performance.now() > deadline) {
-    const error = new Error('parser_timeout')
-    error.category = CATEGORY.timeout
-    throw error
-  }
+export function __resetPdfJsClientForTests() {
+  pdfJsClientOverrideForTests = undefined
+  pdfJsClient = null
+}
+
+function createTimeoutError() {
+  const error = new Error('parser_timeout')
+  error.category = CATEGORY.timeout
+  return error
+}
+
+function createDependencyError(error) {
+  const dependencyError = new Error('pdfjs_dependency_missing', error ? { cause: error } : undefined)
+  dependencyError.category = CATEGORY.error
+  return dependencyError
 }
 
 function hasPdfMagic(fileBuffer) {
@@ -151,129 +130,142 @@ function buildErrorFingerprint(error) {
   return createHash('sha256').update(`pdf-observe-error-v1:${normalized}`).digest('hex').slice(0, 16)
 }
 
-function decodePdfEscapes(value = '') {
-  let output = ''
-  for (let index = 0; index < value.length; index += 1) {
-    const char = value[index]
-    if (char !== '\\') {
-      output += char
-      continue
+async function getPdfJsClient() {
+  if (pdfJsClientOverrideForTests !== undefined) {
+    if (!pdfJsClientOverrideForTests) {
+      throw createDependencyError()
     }
-    const next = value[index + 1]
-    if (next === undefined) break
-    if (next === 'n') output += '\n'
-    else if (next === 'r') output += '\n'
-    else if (next === 't') output += '\t'
-    else if (next === 'b' || next === 'f') output += ' '
-    else if (next === '(' || next === ')' || next === '\\') output += next
-    else if (/[0-7]/.test(next)) {
-      const octal = value.slice(index + 1, index + 4).match(/^[0-7]{1,3}/)?.[0] || next
-      output += String.fromCharCode(Number.parseInt(octal, 8))
-      index += octal.length - 1
+    return pdfJsClientOverrideForTests
+  }
+
+  if (pdfJsClient) {
+    return pdfJsClient
+  }
+
+  try {
+    const pdfjsModule = await import(PDFJS_IMPORT_TARGET)
+    if (!pdfjsModule || typeof pdfjsModule.getDocument !== 'function') {
+      throw new Error('pdfjs_get_document_unavailable')
+    }
+    if (pdfjsModule.GlobalWorkerOptions) {
+      pdfjsModule.GlobalWorkerOptions.workerSrc = ''
+    }
+    pdfJsClient = pdfjsModule
+    return pdfJsClient
+  } catch (error) {
+    throw createDependencyError(error)
+  }
+}
+
+async function withTimeout(promise, timeoutMs, onTimeout = null) {
+  let timeoutId
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      if (typeof onTimeout === 'function') onTimeout()
+      reject(createTimeoutError())
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function assertBeforeDeadline(deadline) {
+  if (performance.now() > deadline) {
+    throw createTimeoutError()
+  }
+}
+
+function getTextItemPosition(item = {}) {
+  const transform = Array.isArray(item.transform) ? item.transform : []
+  return {
+    text: String(item.str || '').normalize('NFKC'),
+    x: Number.isFinite(Number(transform[4])) ? Number(transform[4]) : 0,
+    y: Number.isFinite(Number(transform[5])) ? Number(transform[5]) : 0,
+    width: Number.isFinite(Number(item.width)) ? Number(item.width) : 0,
+    height: Number.isFinite(Number(item.height)) ? Number(item.height) : Math.abs(Number(transform[3] || 0)) || 10,
+  }
+}
+
+function buildLayoutAwarePageText(items = [], deadline) {
+  const positionedItems = items
+    .map(getTextItemPosition)
+    .filter((item) => item.text.trim())
+    .sort((left, right) => {
+      const yDelta = right.y - left.y
+      if (Math.abs(yDelta) > Math.max(3, Math.min(left.height || 10, right.height || 10) * 0.5)) return yDelta
+      return left.x - right.x
+    })
+
+  const lines = []
+  for (const item of positionedItems) {
+    assertBeforeDeadline(deadline)
+    const currentLine = lines.at(-1)
+    const tolerance = Math.max(3, Math.min(item.height || 10, currentLine?.height || item.height || 10) * 0.6)
+    if (!currentLine || Math.abs(currentLine.y - item.y) > tolerance) {
+      lines.push({ y: item.y, height: item.height || 10, items: [item] })
     } else {
-      output += next
-    }
-    index += 1
-  }
-  return output
-}
-
-function decodeHexPdfString(value = '') {
-  const normalized = String(value || '').replace(/[^a-f0-9]/gi, '')
-  const padded = normalized.length % 2 === 0 ? normalized : `${normalized}0`
-  const bytes = []
-  for (let index = 0; index < padded.length; index += 2) {
-    bytes.push(Number.parseInt(padded.slice(index, index + 2), 16))
-  }
-  return Buffer.from(bytes).toString('utf8')
-}
-
-function extractLiteralStrings(content = '', deadline) {
-  const strings = []
-  for (let index = 0; index < content.length; index += 1) {
-    if (index % 4096 === 0) assertWithinDeadline(deadline)
-    if (content[index] !== '(') continue
-    let depth = 1
-    let escaped = false
-    let value = ''
-    for (let cursor = index + 1; cursor < content.length; cursor += 1) {
-      const char = content[cursor]
-      if (escaped) {
-        value += `\\${char}`
-        escaped = false
-        continue
-      }
-      if (char === '\\') {
-        escaped = true
-        continue
-      }
-      if (char === '(') {
-        depth += 1
-        value += char
-        continue
-      }
-      if (char === ')') {
-        depth -= 1
-        if (depth === 0) {
-          strings.push(decodePdfEscapes(value))
-          index = cursor
-          break
-        }
-      } else {
-        value += char
-      }
+      currentLine.items.push(item)
+      currentLine.height = Math.max(currentLine.height, item.height || 10)
     }
   }
-  return strings
-}
 
-function extractHexStrings(content = '', deadline) {
-  const strings = []
-  const regex = /<([a-f0-9\s]{4,})>/gi
-  let match
-  while ((match = regex.exec(content))) {
-    assertWithinDeadline(deadline)
-    strings.push(decodeHexPdfString(match[1]))
-  }
-  return strings
-}
-
-function normalizePdfExtractedText(strings = []) {
-  return strings
-    .map((item) => String(item || '').normalize('NFKC').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' '))
-    .join('\n')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .split('\n')
-    .map((line) => line.trim())
+  return lines
+    .map((line) => line.items
+      .sort((left, right) => left.x - right.x)
+      .map((item) => item.text.trim())
+      .filter(Boolean)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim())
     .filter(Boolean)
     .join('\n')
-    .trim()
 }
 
-function countPdfPages(bufferText = '') {
-  const matches = bufferText.match(/\/Type\s*\/Page\b/g)
-  return Array.isArray(matches) ? matches.length : null
-}
+async function extractTextWithPdfJs(fileBuffer, { timeoutMs, maxPages }) {
+  const pdfjs = await getPdfJsClient()
+  const parserVersion = String(pdfjs.version || PDFJS_PACKAGE_VERSION)
+  let loadingTask = null
+  let pdfDocument = null
+  const deadline = performance.now() + timeoutMs
 
-function extractTextWithBuiltinParser(fileBuffer, deadline) {
-  const bufferText = fileBuffer.toString('latin1')
-  const strings = []
-  const streamRegex = /stream\r?\n?([\s\S]*?)\r?\n?endstream/g
-  let match
-  while ((match = streamRegex.exec(bufferText))) {
-    assertWithinDeadline(deadline)
-    const stream = match[1] || ''
-    strings.push(...extractLiteralStrings(stream, deadline), ...extractHexStrings(stream, deadline))
-  }
+  try {
+    loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(fileBuffer),
+      disableWorker: true,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      stopAtErrors: false,
+      disableFontFace: true,
+    })
+    pdfDocument = await withTimeout(Promise.resolve(loadingTask.promise), timeoutMs, () => loadingTask?.destroy?.())
+    const pageCount = Number.isFinite(Number(pdfDocument.numPages)) ? Number(pdfDocument.numPages) : null
+    const pagesToRead = Math.min(pageCount || 0, maxPages)
+    const pageTexts = []
 
-  if (strings.length === 0) {
-    strings.push(...extractLiteralStrings(bufferText, deadline), ...extractHexStrings(bufferText, deadline))
-  }
+    for (let pageNumber = 1; pageNumber <= pagesToRead; pageNumber += 1) {
+      assertBeforeDeadline(deadline)
+      const remainingMs = Math.max(1, Math.floor(deadline - performance.now()))
+      const page = await withTimeout(Promise.resolve(pdfDocument.getPage(pageNumber)), remainingMs)
+      assertBeforeDeadline(deadline)
+      const textContent = await withTimeout(Promise.resolve(page.getTextContent({ includeMarkedContent: false })), remainingMs)
+      const items = Array.isArray(textContent?.items) ? textContent.items : []
+      pageTexts.push(buildLayoutAwarePageText(items, deadline))
+      page?.cleanup?.()
+    }
 
-  return {
-    extractedText: normalizePdfExtractedText(strings),
-    pageCount: countPdfPages(bufferText),
+    return {
+      extractedText: pageTexts.filter(Boolean).join('\n').trim(),
+      pageCount,
+      pagesRead: pagesToRead,
+      parserVersion,
+    }
+  } finally {
+    await Promise.resolve(pdfDocument?.destroy?.()).catch(() => {})
+    await Promise.resolve(loadingTask?.destroy?.()).catch(() => {})
   }
 }
 
@@ -290,23 +282,25 @@ function classifyPdfExtraction({ text, metrics, byteSize, pageCount }) {
   if (metrics.suspiciousNoiseRatio > 0.05 || metrics.printableRatio < 0.92) {
     return { qualityClassification: CATEGORY.noise, ocrRequired }
   }
-  if (textLength < 200 || charsPerPage < 120 || textDensity < 0.015) {
+  if (textLength < 200 || charsPerPage < 120 || textDensity < 0.01) {
     return { qualityClassification: CATEGORY.lowDensity, ocrRequired }
   }
   return { qualityClassification: CATEGORY.usable, ocrRequired: false }
 }
 
-function buildFailureResult({ category, startedAt, fileBuffer, error = null }) {
+function buildFailureResult({ category, startedAt, fileBuffer, error = null, parserVersion = PDFJS_PACKAGE_VERSION }) {
   return {
     enabled: true,
     success: false,
     extractionMethod: EXTRACTION_METHOD,
-    parserVersion: BUILTIN_PARSER_VERSION,
-    durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+    parserVersion,
+    durationMs: round(performance.now() - startedAt, 2),
     inputByteSize: Buffer.isBuffer(fileBuffer) ? fileBuffer.length : 0,
     pageCount: null,
+    pagesRead: 0,
     lineCount: 0,
     extractedTextLength: 0,
+    canonicalTextLength: 0,
     normalizedFingerprint: null,
     normalizedTextCharCount: 0,
     normalizedTextLineCount: 0,
@@ -334,23 +328,26 @@ export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}
       return buildFailureResult({ category: CATEGORY.error, startedAt, fileBuffer, error: new Error('file_too_large') })
     }
 
-    const deadline = createDeadline(limits.timeoutMs)
-    const { extractedText, pageCount } = extractTextWithBuiltinParser(fileBuffer, deadline)
-    const canonicalText = normalizeResumeTextForFingerprint(extractedText)
+    const extraction = await withTimeout(
+      extractTextWithPdfJs(fileBuffer, limits),
+      limits.timeoutMs,
+    )
+    const canonicalText = normalizeResumeTextForFingerprint(extraction.extractedText)
     const fingerprint = buildResumeTextFingerprint(canonicalText)
-    const metrics = calculateSafeTextQualityMetrics(canonicalText, SECTION_MARKERS)
-    const classification = classifyPdfExtraction({ text: canonicalText, metrics, byteSize: fileBuffer.length, pageCount })
+    const metrics = calculatePdfSafeTextQualityMetrics(canonicalText, SECTION_MARKERS)
+    const classification = classifyPdfExtraction({ text: canonicalText, metrics, byteSize: fileBuffer.length, pageCount: extraction.pageCount })
 
     return {
       enabled: true,
       success: true,
       extractionMethod: EXTRACTION_METHOD,
-      parserVersion: BUILTIN_PARSER_VERSION,
-      durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+      parserVersion: extraction.parserVersion || PDFJS_PACKAGE_VERSION,
+      durationMs: round(performance.now() - startedAt, 2),
       inputByteSize: fileBuffer.length,
-      pageCount,
+      pageCount: extraction.pageCount,
+      pagesRead: extraction.pagesRead,
       lineCount: metrics.lineCount,
-      extractedTextLength: extractedText.length,
+      extractedTextLength: String(extraction.extractedText || '').length,
       canonicalTextLength: canonicalText.length,
       normalizedFingerprint: fingerprint?.sha256 || null,
       normalizedTextCharCount: fingerprint?.normalizedCharCount || 0,
@@ -377,3 +374,9 @@ export function logSafePdfCanonicalExtractionDiagnostics(logger, diagnostics) {
 }
 
 export const PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_CATEGORIES = CATEGORY
+export const PDF_CANONICAL_EXTRACTION_PARSER_METADATA = {
+  packageName: 'pdfjs-dist',
+  packageVersion: PDFJS_PACKAGE_VERSION,
+  importTarget: PDFJS_IMPORT_TARGET,
+  extractionMethod: EXTRACTION_METHOD,
+}

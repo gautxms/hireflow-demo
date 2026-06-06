@@ -323,6 +323,42 @@ export function detectDominantVarianceSource({ extractionResults = [], scoringRu
   return 'no_variance_detected'
 }
 
+
+export function buildPdfObserveOnlyStagingValidationSummary(report = {}) {
+  const fixtures = Array.isArray(report?.fixtures) ? report.fixtures : []
+  const pdfDiagnostics = fixtures
+    .map((fixture) => fixture?.pdfCanonicalExtractionObserveOnly)
+    .filter((diagnostic) => diagnostic && diagnostic.enabled)
+  const classificationCounts = {}
+  for (const diagnostic of pdfDiagnostics) {
+    const key = diagnostic.qualityClassification || diagnostic.failureCategory || 'unknown'
+    classificationCounts[key] = (classificationCounts[key] || 0) + 1
+  }
+  const comparablePairs = Array.isArray(report?.fingerprintComparisons)
+    ? report.fingerprintComparisons.filter((comparison) => comparison.comparable)
+    : []
+  const equivalentPairs = comparablePairs.filter((comparison) => comparison.equivalent)
+  const durations = pdfDiagnostics.map((diagnostic) => Number(diagnostic.durationMs)).filter(Number.isFinite)
+  const textLengths = pdfDiagnostics.map((diagnostic) => Number(diagnostic.extractedTextLength)).filter(Number.isFinite)
+  const markerRatios = pdfDiagnostics.map((diagnostic) => Number(diagnostic.safeSectionMarkerCoverage?.ratio)).filter(Number.isFinite)
+
+  return {
+    totalPdfFixtures: pdfDiagnostics.length,
+    parserSuccessCount: pdfDiagnostics.filter((diagnostic) => diagnostic.success).length,
+    parserFailureCount: pdfDiagnostics.filter((diagnostic) => !diagnostic.success).length,
+    parserSuccessRate: pdfDiagnostics.length > 0 ? round(pdfDiagnostics.filter((diagnostic) => diagnostic.success).length / pdfDiagnostics.length) : 0,
+    classificationCounts,
+    averageDurationMs: durations.length > 0 ? round(durations.reduce((sum, value) => sum + value, 0) / durations.length, 2) : 0,
+    maxDurationMs: durations.length > 0 ? Math.max(...durations) : 0,
+    averageExtractedTextLength: textLengths.length > 0 ? round(textLengths.reduce((sum, value) => sum + value, 0) / textLengths.length, 2) : 0,
+    averageSectionMarkerCoverage: markerRatios.length > 0 ? round(markerRatios.reduce((sum, value) => sum + value, 0) / markerRatios.length) : 0,
+    comparablePairCount: comparablePairs.length,
+    equivalentPairCount: equivalentPairs.length,
+    equivalentPairRate: comparablePairs.length > 0 ? round(equivalentPairs.length / comparablePairs.length) : 0,
+    ocrRequiredCount: pdfDiagnostics.filter((diagnostic) => diagnostic.ocrRequired).length,
+  }
+}
+
 export function compareCanonicalTexts(leftText = '', rightText = '') {
   return compareResumeTextFingerprints(leftText, rightText)
 }

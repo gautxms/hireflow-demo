@@ -10,6 +10,7 @@ import {
   compareCanonicalTexts,
   detectDominantVarianceSource,
   evaluateAsyncPersistenceIdempotency,
+  buildPdfObserveOnlyStagingValidationSummary,
   runCanonicalScoringDiagnostics,
   runResumeFormatExtractionDiagnostics,
 } from './resumeFormatDiagnosticHarness.js'
@@ -19,6 +20,7 @@ import {
   buildBulletsPdfResumeFixture,
   buildEquivalentFormatFixtures,
   buildHeaderFooterPdfResumeFixture,
+  buildPdfJsTextContentMockFromFixtures,
   buildLargePdfResumeFixture,
   buildMalformedPdfFixture,
   buildMultiColumnPdfResumeFixture,
@@ -29,6 +31,7 @@ import {
   buildSyntheticPdfResumeFixture,
   buildTablesPdfResumeFixture,
 } from './resumeFormatDiagnosticFixtures.js'
+import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from './pdfCanonicalExtractionService.js'
 
 const quietLogger = { debug() {}, info() {}, warn() {}, log() {} }
 
@@ -42,6 +45,7 @@ function withPdfObserveOnlyEnabled(fn) {
     } finally {
       if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
       else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+      __resetPdfJsClientForTests()
     }
   }
 }
@@ -252,6 +256,9 @@ test('PDF fixture remains non-comparable to extracted text formats until unified
   __setMammothClientForTests({ extractRawText: async () => ({ value: SYNTHETIC_CANONICAL_RESUME_TEXT }) })
   const docx = await buildSyntheticDocxResumeFixture()
   const pdf = buildSyntheticPdfResumeFixture()
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([pdf]))
+  assert.equal(pdf.buffer.includes(Buffer.from('/FlateDecode')), true)
+  assert.equal(pdf.buffer.includes(Buffer.from('Synthetic Candidate Alpha')), false)
   const report = await runResumeFormatExtractionDiagnostics([pdf, docx], {
     expectedMarkers: SYNTHETIC_MARKERS,
     logger: quietLogger,
@@ -266,6 +273,9 @@ test('PDF observe-only diagnostics make synthetic PDF and DOCX equivalence measu
   __setMammothClientForTests({ extractRawText: async () => ({ value: SYNTHETIC_CANONICAL_RESUME_TEXT }) })
   const docx = await buildSyntheticDocxResumeFixture()
   const pdf = buildSyntheticPdfResumeFixture()
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([pdf]))
+  assert.equal(pdf.buffer.includes(Buffer.from('/FlateDecode')), true)
+  assert.equal(pdf.buffer.includes(Buffer.from('Synthetic Candidate Alpha')), false)
   const report = await runResumeFormatExtractionDiagnostics([pdf, docx], {
     expectedMarkers: SYNTHETIC_MARKERS,
     logger: quietLogger,
@@ -287,7 +297,7 @@ test('PDF observe-only diagnostics make synthetic PDF and DOCX equivalence measu
 })))
 
 test('PDF observe-only synthetic corpus records safe classifications for layouts, missing text, malformed, and large PDFs', withPdfObserveOnlyEnabled(async () => {
-  const report = await runResumeFormatExtractionDiagnostics([
+  const fixtures = [
     buildMultiColumnPdfResumeFixture(),
     buildBulletsPdfResumeFixture(),
     buildTablesPdfResumeFixture(),
@@ -295,7 +305,11 @@ test('PDF observe-only synthetic corpus records safe classifications for layouts
     buildMissingTextPdfFixture(),
     buildMalformedPdfFixture(),
     buildLargePdfResumeFixture(),
-  ], {
+  ]
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures(fixtures))
+  assert.equal(fixtures[0].buffer.includes(Buffer.from('/FlateDecode')), true)
+  assert.equal(fixtures[1].expectedPdfTextItems[0].some((item) => String(item.str).includes('•')), true)
+  const report = await runResumeFormatExtractionDiagnostics(fixtures, {
     expectedMarkers: SYNTHETIC_MARKERS,
     logger: quietLogger,
   })
@@ -309,6 +323,11 @@ test('PDF observe-only synthetic corpus records safe classifications for layouts
   assert.equal(byId['synthetic-missing-text-pdf'].pdfCanonicalExtractionObserveOnly.ocrRequired, true)
   assert.equal(byId['synthetic-malformed-pdf'].pdfCanonicalExtractionObserveOnly.failureCategory, 'malformed_pdf')
   assert.equal(byId['synthetic-large-pdf'].pdfCanonicalExtractionObserveOnly.success, true)
+  const summary = buildPdfObserveOnlyStagingValidationSummary(report)
+  assert.equal(summary.totalPdfFixtures, 7)
+  assert.equal(summary.parserSuccessCount, 6)
+  assert.equal(summary.classificationCounts.usable_text_extraction >= 4, true)
+  assert.equal(summary.ocrRequiredCount >= 1, true)
 
   const serialized = JSON.stringify(report)
   assert.equal(serialized.includes('Synthetic Candidate Alpha'), false)

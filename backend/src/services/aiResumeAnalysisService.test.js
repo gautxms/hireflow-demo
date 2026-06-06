@@ -9,7 +9,8 @@ import {
   extractJsonWithContext,
   extractOpenAiResponseText,
 } from './aiResumeAnalysisService.js'
-import { buildSyntheticPdfResumeFixture } from './resumeFormatDiagnosticFixtures.js'
+import { buildPdfJsTextContentMockFromFixtures, buildSyntheticPdfResumeFixture } from './resumeFormatDiagnosticFixtures.js'
+import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from './pdfCanonicalExtractionService.js'
 
 test('buildPromptWithJobDescription includes AVAILABLE JD block when context exists', () => {
   const prompt = buildPromptWithJobDescription('Base prompt', {
@@ -773,6 +774,7 @@ test('PDF observe-only extraction does not alter scoring payload or create an ex
   const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
   process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
   const fixture = buildSyntheticPdfResumeFixture()
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([fixture]))
   const credentials = {
     activeProvider: 'anthropic',
     providers: {
@@ -808,5 +810,6 @@ test('PDF observe-only extraction does not alter scoring payload or create an ex
   } finally {
     if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
     else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+    __resetPdfJsClientForTests()
   }
 })
