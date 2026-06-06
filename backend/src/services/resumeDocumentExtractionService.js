@@ -10,6 +10,11 @@ import {
   extractTextFromLegacyDocBuffer,
   isLegacyDocExtractionEnabled,
 } from './legacyDocExtractionService.js'
+import {
+  isPdfCanonicalExtractionObserveOnlyEnabled,
+  observePdfCanonicalTextExtraction,
+  logSafePdfCanonicalExtractionDiagnostics,
+} from './pdfCanonicalExtractionService.js'
 
 let mammothClient = null
 let mammothClientOverrideForTests = undefined
@@ -656,6 +661,14 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
   }
 
   if (normalizedMimeType === 'application/pdf') {
+    const pdfObserveOnlyEnabled = isPdfCanonicalExtractionObserveOnlyEnabled()
+    let pdfCanonicalExtractionObserveOnly = { enabled: false }
+
+    if (pdfObserveOnlyEnabled) {
+      pdfCanonicalExtractionObserveOnly = await observePdfCanonicalTextExtraction(fileBuffer)
+      logSafePdfCanonicalExtractionDiagnostics(logger, pdfCanonicalExtractionObserveOnly)
+    }
+
     return {
       ...buildBase(),
       fileBufferBase64,
@@ -666,15 +679,19 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputMode: 'binary',
       extractedText: null,
       base64File: fileBufferBase64,
-      diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
-        sourceFormat: 'pdf',
-        inputKind: 'pdf_binary',
-        inputMode: 'binary',
-        preparedMimeType: normalizedMimeType,
-        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
-        extractionMethod: 'pdf_binary_provider_input',
-        fallbackUsed: false,
-      }), {
+      diagnostics: mergeSafeDiagnostics({
+        ...buildPreparedPayloadDiagnostics({
+          sourceFormat: 'pdf',
+          inputKind: 'pdf_binary',
+          inputMode: 'binary',
+          preparedMimeType: normalizedMimeType,
+          originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
+          extractionMethod: 'pdf_binary_provider_input',
+          fallbackUsed: false,
+        }),
+        pdfCanonicalExtractionObserveOnlyEnabled: pdfObserveOnlyEnabled,
+        pdfCanonicalExtractionObserveOnly,
+      }, {
         extractionMethod: 'pdf_binary_provider_input',
         extractedTextCharCount: 0,
         preparedMimeType: normalizedMimeType,

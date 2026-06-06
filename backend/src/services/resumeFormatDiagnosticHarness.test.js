@@ -16,15 +16,35 @@ import {
 import {
   SYNTHETIC_CANONICAL_RESUME_TEXT,
   SYNTHETIC_MARKERS,
+  buildBulletsPdfResumeFixture,
   buildEquivalentFormatFixtures,
+  buildHeaderFooterPdfResumeFixture,
+  buildLargePdfResumeFixture,
+  buildMalformedPdfFixture,
+  buildMultiColumnPdfResumeFixture,
   buildLowQualityLegacyDocFixture,
   buildMissingTextPdfFixture,
   buildSyntheticDocxResumeFixture,
   buildSyntheticLegacyDocResumeFixture,
   buildSyntheticPdfResumeFixture,
+  buildTablesPdfResumeFixture,
 } from './resumeFormatDiagnosticFixtures.js'
 
 const quietLogger = { debug() {}, info() {}, warn() {}, log() {} }
+
+
+function withPdfObserveOnlyEnabled(fn) {
+  return async () => {
+    const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+    process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+    try {
+      await fn()
+    } finally {
+      if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+      else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+    }
+  }
+}
 
 function withLegacyDocExtractionEnabled(fn) {
   return async () => {
@@ -239,4 +259,58 @@ test('PDF fixture remains non-comparable to extracted text formats until unified
 
   assert.equal(report.fingerprintComparisons[0].comparable, false)
   assert.equal(report.dominantSource, 'extraction_variance')
+}))
+
+
+test('PDF observe-only diagnostics make synthetic PDF and DOCX equivalence measurable without changing PDF input mode', withPdfObserveOnlyEnabled(withLegacyDocExtractionEnabled(async () => {
+  __setMammothClientForTests({ extractRawText: async () => ({ value: SYNTHETIC_CANONICAL_RESUME_TEXT }) })
+  const docx = await buildSyntheticDocxResumeFixture()
+  const pdf = buildSyntheticPdfResumeFixture()
+  const report = await runResumeFormatExtractionDiagnostics([pdf, docx], {
+    expectedMarkers: SYNTHETIC_MARKERS,
+    logger: quietLogger,
+  })
+
+  const [pdfResult] = report.fixtures
+  assert.equal(pdfResult.inputKind, 'pdf_binary')
+  assert.equal(pdfResult.inputMode, 'binary')
+  assert.equal(pdfResult.extractionMethod, 'pdf_binary_provider_input')
+  assert.equal(pdfResult.normalizedFingerprint, null)
+  assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.success, true)
+  assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.qualityClassification, 'usable_text_extraction')
+  assert.equal(report.fingerprintComparisons[0].comparable, true)
+  assert.equal(report.fingerprintComparisons[0].equivalent, true)
+
+  const serialized = JSON.stringify(report)
+  assert.equal(serialized.includes('Synthetic Candidate Alpha'), false)
+  assert.equal(serialized.includes('synthetic-equivalent-resume'), false)
+})))
+
+test('PDF observe-only synthetic corpus records safe classifications for layouts, missing text, malformed, and large PDFs', withPdfObserveOnlyEnabled(async () => {
+  const report = await runResumeFormatExtractionDiagnostics([
+    buildMultiColumnPdfResumeFixture(),
+    buildBulletsPdfResumeFixture(),
+    buildTablesPdfResumeFixture(),
+    buildHeaderFooterPdfResumeFixture(),
+    buildMissingTextPdfFixture(),
+    buildMalformedPdfFixture(),
+    buildLargePdfResumeFixture(),
+  ], {
+    expectedMarkers: SYNTHETIC_MARKERS,
+    logger: quietLogger,
+  })
+  const byId = Object.fromEntries(report.fixtures.map((entry) => [entry.fixtureId, entry]))
+
+  assert.equal(byId['synthetic-multi-column-pdf'].pdfCanonicalExtractionObserveOnly.success, true)
+  assert.equal(byId['synthetic-bullets-pdf'].pdfCanonicalExtractionObserveOnly.safeSectionMarkerCoverage.found >= 3, true)
+  assert.equal(byId['synthetic-tables-pdf'].pdfCanonicalExtractionObserveOnly.qualityClassification, 'usable_text_extraction')
+  assert.equal(byId['synthetic-header-footer-pdf'].pdfCanonicalExtractionObserveOnly.success, true)
+  assert.equal(byId['synthetic-missing-text-pdf'].pdfCanonicalExtractionObserveOnly.qualityClassification, 'likely_scanned_pdf')
+  assert.equal(byId['synthetic-missing-text-pdf'].pdfCanonicalExtractionObserveOnly.ocrRequired, true)
+  assert.equal(byId['synthetic-malformed-pdf'].pdfCanonicalExtractionObserveOnly.failureCategory, 'malformed_pdf')
+  assert.equal(byId['synthetic-large-pdf'].pdfCanonicalExtractionObserveOnly.success, true)
+
+  const serialized = JSON.stringify(report)
+  assert.equal(serialized.includes('Synthetic Candidate Alpha'), false)
+  assert.equal(serialized.includes('synthetic-large-resume'), false)
 }))

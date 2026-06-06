@@ -21,6 +21,49 @@ export const SYNTHETIC_MARKERS = [
 
 const OLE_HEADER = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
 
+
+function escapePdfText(value = '') {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/\r?\n/g, ') Tj T* (')
+}
+
+function buildSimpleSelectablePdf({ pages = [SYNTHETIC_CANONICAL_RESUME_TEXT], largePaddingBytes = 0 } = {}) {
+  const objects = []
+  const pageRefs = []
+  const addObject = (body) => {
+    objects.push(body)
+    return objects.length
+  }
+
+  addObject('<< /Type /Catalog /Pages 2 0 R >>')
+  objects.push(null)
+
+  for (const pageText of pages) {
+    const stream = `BT /F1 11 Tf 72 740 Td (${escapePdfText(pageText)}) Tj ET${largePaddingBytes > 0 ? `\n% ${'x'.repeat(largePaddingBytes)}` : ''}`
+    const contentId = addObject(`<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream`)
+    const pageId = addObject(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /Contents ${contentId} 0 R >>`)
+    pageRefs.push(`${pageId} 0 R`)
+  }
+
+  objects[1] = `<< /Type /Pages /Kids [${pageRefs.join(' ')}] /Count ${pageRefs.length} >>`
+  let pdf = '%PDF-1.7\n'
+  const offsets = [0]
+  objects.forEach((body, index) => {
+    offsets.push(Buffer.byteLength(pdf, 'utf8'))
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`
+  })
+  const xrefOffset = Buffer.byteLength(pdf, 'utf8')
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`
+  })
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
+  return Buffer.from(pdf, 'utf8')
+}
+
 function escapeXml(value = '') {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -62,12 +105,65 @@ export function buildSyntheticLegacyDocResumeFixture({ text = SYNTHETIC_CANONICA
   }
 }
 
-export function buildSyntheticPdfResumeFixture({ text = SYNTHETIC_CANONICAL_RESUME_TEXT, filename = 'synthetic-equivalent-resume.pdf' } = {}) {
+export function buildSyntheticPdfResumeFixture({ text = SYNTHETIC_CANONICAL_RESUME_TEXT, filename = 'synthetic-equivalent-resume.pdf', id = 'synthetic-pdf' } = {}) {
   return {
-    id: 'synthetic-pdf',
+    id,
     filename,
     mimeType: 'application/pdf',
-    buffer: Buffer.from(`%PDF-1.7\n% synthetic selectable text marker only\n${String(text || '')}\n%%EOF`, 'utf8'),
+    buffer: buildSimpleSelectablePdf({ pages: [text] }),
+  }
+}
+
+export function buildMultiColumnPdfResumeFixture() {
+  return buildSyntheticPdfResumeFixture({
+    id: 'synthetic-multi-column-pdf',
+    filename: 'synthetic-multi-column-resume.pdf',
+    text: [
+      'Summary: Synthetic Candidate Alpha builds recruiting systems. Skills: Node.js, PostgreSQL, Redis.',
+      'Experience: Senior Software Engineer, Example Hiring Labs, 2021-2026. Education: Example State University.',
+    ].join('\n'),
+  })
+}
+
+export function buildBulletsPdfResumeFixture() {
+  return buildSyntheticPdfResumeFixture({
+    id: 'synthetic-bullets-pdf',
+    filename: 'synthetic-bullets-resume.pdf',
+    text: `${SYNTHETIC_CANONICAL_RESUME_TEXT}\n• Built Node.js services\n• Improved PostgreSQL reporting`,
+  })
+}
+
+export function buildTablesPdfResumeFixture() {
+  return buildSyntheticPdfResumeFixture({
+    id: 'synthetic-tables-pdf',
+    filename: 'synthetic-tables-resume.pdf',
+    text: `${SYNTHETIC_CANONICAL_RESUME_TEXT}\nSkill | Evidence\nNode.js | Production APIs\nPostgreSQL | Analytics schema`,
+  })
+}
+
+export function buildHeaderFooterPdfResumeFixture() {
+  return buildSyntheticPdfResumeFixture({
+    id: 'synthetic-header-footer-pdf',
+    filename: 'synthetic-header-footer-resume.pdf',
+    text: `Resume\n${SYNTHETIC_CANONICAL_RESUME_TEXT}\nPage 1 of 1\nConfidential`,
+  })
+}
+
+export function buildMalformedPdfFixture() {
+  return {
+    id: 'synthetic-malformed-pdf',
+    filename: 'synthetic-malformed-resume.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('not actually a pdf', 'utf8'),
+  }
+}
+
+export function buildLargePdfResumeFixture() {
+  return {
+    id: 'synthetic-large-pdf',
+    filename: 'synthetic-large-resume.pdf',
+    mimeType: 'application/pdf',
+    buffer: buildSimpleSelectablePdf({ pages: [SYNTHETIC_CANONICAL_RESUME_TEXT], largePaddingBytes: 256 * 1024 }),
   }
 }
 

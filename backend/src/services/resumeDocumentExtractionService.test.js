@@ -14,6 +14,7 @@ import {
   logSafeResumeFileDiagnostics,
   prepareResumePayloadForAnalysis,
 } from './resumeDocumentExtractionService.js'
+import { buildSyntheticPdfResumeFixture, buildMissingTextPdfFixture, buildMalformedPdfFixture } from './resumeFormatDiagnosticFixtures.js'
 import { UNSUPPORTED_LEGACY_WORD_MESSAGE } from '../utils/legacyWordDocument.js'
 
 async function buildDocxBuffer(paragraphs = [], tableRows = []) {
@@ -614,4 +615,80 @@ test('prepareResumePayloadForAnalysis normalizes text/plain into extracted_text 
   assert.equal(result.extractedText, text)
   assert.equal(result.diagnostics.extractionMethod, 'text_plain_extraction')
   assert.equal(result.diagnostics.extractedTextCharCount, text.length)
+})
+
+
+test('prepareResumePayloadForAnalysis runs PDF observe-only extraction behind feature flag without changing scoring payload', async () => {
+  const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+  process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+  const logged = []
+  const logger = {
+    info(message, payload) { logged.push({ level: 'info', message, payload }) },
+    warn(message, payload) { logged.push({ level: 'warn', message, payload }) },
+    debug() {},
+  }
+  try {
+    const fixture = buildSyntheticPdfResumeFixture()
+    const payload = fixture.buffer.toString('base64')
+    const result = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: payload,
+      mimeType: 'application/pdf',
+      filename: 'resume.pdf',
+      fileSize: fixture.buffer.length,
+      logger,
+    })
+
+    assert.equal(result.fileBufferBase64, payload)
+    assert.equal(result.preparedMimeType, 'application/pdf')
+    assert.equal(result.inputKind, 'pdf_binary')
+    assert.equal(result.inputMode, 'binary')
+    assert.equal(result.extractedText, null)
+    assert.equal(result.diagnostics.extractionMethod, 'pdf_binary_provider_input')
+    assert.equal(result.diagnostics.extractedTextCharCount, 0)
+    assert.equal(result.diagnostics.normalizedTextFingerprint, null)
+    assert.equal(result.diagnostics.pdfCanonicalExtractionObserveOnlyEnabled, true)
+    assert.equal(result.diagnostics.pdfCanonicalExtractionObserveOnly.success, true)
+    assert.equal(result.diagnostics.pdfCanonicalExtractionObserveOnly.qualityClassification, 'usable_text_extraction')
+    assert.match(result.diagnostics.pdfCanonicalExtractionObserveOnly.normalizedFingerprint, /^[a-f0-9]{64}$/)
+
+    const serializedLogs = JSON.stringify(logged)
+    assert.equal(serializedLogs.includes('Synthetic Candidate Alpha'), false)
+    assert.equal(serializedLogs.includes('synthetic-equivalent-resume'), false)
+  } finally {
+    if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+  }
+})
+
+test('PDF observe-only extraction classifies missing-text and malformed PDFs without throwing', async () => {
+  const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+  process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+  try {
+    const missing = buildMissingTextPdfFixture()
+    const missingResult = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: missing.buffer.toString('base64'),
+      mimeType: 'application/pdf',
+      filename: missing.filename,
+      fileSize: missing.buffer.length,
+      logger: quietLogger,
+    })
+    assert.equal(missingResult.inputKind, 'pdf_binary')
+    assert.equal(missingResult.diagnostics.pdfCanonicalExtractionObserveOnly.qualityClassification, 'likely_scanned_pdf')
+    assert.equal(missingResult.diagnostics.pdfCanonicalExtractionObserveOnly.ocrRequired, true)
+
+    const malformed = buildMalformedPdfFixture()
+    const malformedResult = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: malformed.buffer.toString('base64'),
+      mimeType: 'application/pdf',
+      filename: malformed.filename,
+      fileSize: malformed.buffer.length,
+      logger: quietLogger,
+    })
+    assert.equal(malformedResult.inputKind, 'pdf_binary')
+    assert.equal(malformedResult.diagnostics.pdfCanonicalExtractionObserveOnly.success, false)
+    assert.equal(malformedResult.diagnostics.pdfCanonicalExtractionObserveOnly.failureCategory, 'malformed_pdf')
+  } finally {
+    if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+  }
 })
