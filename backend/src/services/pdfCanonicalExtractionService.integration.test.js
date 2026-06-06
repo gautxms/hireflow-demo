@@ -10,14 +10,23 @@ import {
   buildSyntheticPdfResumeFixture,
 } from './resumeFormatDiagnosticFixtures.js'
 
+function isExplicitlyEnabled(value) {
+  return ['1', 'true', 'yes', 'on', 'enabled'].includes(String(value || '').trim().toLowerCase())
+}
+
 async function requireRealPdfJs(t) {
   try {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
     assert.equal(typeof pdfjs.getDocument, 'function')
     return pdfjs
   } catch (error) {
-    t.skip(`pdfjs-dist production import unavailable in this environment: ${String(error?.code || error?.message || error)}`)
-    return null
+    const message = `pdfjs-dist production import unavailable: ${String(error?.code || error?.message || error)}`
+    if (isExplicitlyEnabled(process.env.ALLOW_PDFJS_INTEGRATION_TEST_SKIP)) {
+      t.skip(message)
+      return null
+    }
+
+    throw new Error(message, { cause: error })
   }
 }
 

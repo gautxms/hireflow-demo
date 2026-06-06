@@ -40,7 +40,7 @@ PR 1A now uses `pdfjs-dist` as the observe-only parser so staging benchmarks exe
 | Item | Decision |
 | --- | --- |
 | Package | `pdfjs-dist` |
-| Version | `^5.4.394` pinned in `package-lock.json` to `5.4.394` |
+| Version | `5.4.394` pinned exactly in `package.json` and `package-lock.json` |
 | License | Apache-2.0 |
 | Import target | `pdfjs-dist/legacy/build/pdf.mjs` |
 | Runtime dependency profile | Pure JavaScript PDF.js distribution; no required native runtime dependency. The optional `@napi-rs/canvas` package is not required for text extraction. |
