@@ -23,6 +23,8 @@ const CATEGORY = {
   noise: 'suspicious_noise',
   malformed: 'malformed_pdf',
   timeout: 'parser_timeout',
+  dependency: 'dependency_error',
+  fileTooLarge: 'file_too_large',
   error: 'parser_error',
 }
 
@@ -117,7 +119,7 @@ function createTimeoutError() {
 
 function createDependencyError(error) {
   const dependencyError = new Error('pdfjs_dependency_missing', error ? { cause: error } : undefined)
-  dependencyError.category = CATEGORY.error
+  dependencyError.category = CATEGORY.dependency
   return dependencyError
 }
 
@@ -261,6 +263,8 @@ async function extractTextWithPdfJs(fileBuffer, { timeoutMs, maxPages }) {
       extractedText: pageTexts.filter(Boolean).join('\n').trim(),
       pageCount,
       pagesRead: pagesToRead,
+      observationTruncated: Boolean(pageCount && pagesToRead < pageCount),
+      pageLimitReached: Boolean(pageCount && pagesToRead < pageCount),
       parserVersion,
     }
   } finally {
@@ -269,9 +273,9 @@ async function extractTextWithPdfJs(fileBuffer, { timeoutMs, maxPages }) {
   }
 }
 
-function classifyPdfExtraction({ text, metrics, byteSize, pageCount }) {
+function classifyPdfExtraction({ text, metrics, byteSize, pagesRead }) {
   const textLength = String(text || '').length
-  const pages = Number.isFinite(Number(pageCount)) && Number(pageCount) > 0 ? Number(pageCount) : 1
+  const pages = Number.isFinite(Number(pagesRead)) && Number(pagesRead) > 0 ? Number(pagesRead) : 1
   const textDensity = byteSize > 0 ? textLength / byteSize : 0
   const charsPerPage = textLength / pages
   const ocrRequired = textLength < 80 || charsPerPage < 80
@@ -298,6 +302,8 @@ function buildFailureResult({ category, startedAt, fileBuffer, error = null, par
     inputByteSize: Buffer.isBuffer(fileBuffer) ? fileBuffer.length : 0,
     pageCount: null,
     pagesRead: 0,
+    observationTruncated: false,
+    pageLimitReached: false,
     lineCount: 0,
     extractedTextLength: 0,
     canonicalTextLength: 0,
@@ -325,7 +331,7 @@ export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}
       return buildFailureResult({ category: CATEGORY.malformed, startedAt, fileBuffer })
     }
     if (fileBuffer.length > limits.maxBytes) {
-      return buildFailureResult({ category: CATEGORY.error, startedAt, fileBuffer, error: new Error('file_too_large') })
+      return buildFailureResult({ category: CATEGORY.fileTooLarge, startedAt, fileBuffer, error: new Error('file_too_large') })
     }
 
     const extraction = await withTimeout(
@@ -335,7 +341,7 @@ export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}
     const canonicalText = normalizeResumeTextForFingerprint(extraction.extractedText)
     const fingerprint = buildResumeTextFingerprint(canonicalText)
     const metrics = calculatePdfSafeTextQualityMetrics(canonicalText, SECTION_MARKERS)
-    const classification = classifyPdfExtraction({ text: canonicalText, metrics, byteSize: fileBuffer.length, pageCount: extraction.pageCount })
+    const classification = classifyPdfExtraction({ text: canonicalText, metrics, byteSize: fileBuffer.length, pagesRead: extraction.pagesRead })
 
     return {
       enabled: true,
@@ -346,6 +352,8 @@ export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}
       inputByteSize: fileBuffer.length,
       pageCount: extraction.pageCount,
       pagesRead: extraction.pagesRead,
+      observationTruncated: Boolean(extraction.observationTruncated),
+      pageLimitReached: Boolean(extraction.pageLimitReached),
       lineCount: metrics.lineCount,
       extractedTextLength: String(extraction.extractedText || '').length,
       canonicalTextLength: canonicalText.length,
@@ -361,7 +369,7 @@ export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}
       failureCategory: null,
     }
   } catch (error) {
-    const category = error?.category === CATEGORY.timeout ? CATEGORY.timeout : CATEGORY.error
+    const category = Object.values(CATEGORY).includes(error?.category) ? error.category : CATEGORY.error
     return buildFailureResult({ category, startedAt, fileBuffer, error })
   }
 }

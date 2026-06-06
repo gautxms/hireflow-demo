@@ -29,6 +29,7 @@ When `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=true`, PDF preparation also 
   - `PDF_CANONICAL_EXTRACTION_MAX_BYTES` defaults to 5 MiB for the observe-only benchmark.
   - `PDF_CANONICAL_EXTRACTION_TIMEOUT_MS` defaults to 1500 ms.
   - `PDF_CANONICAL_EXTRACTION_MAX_PAGES` defaults to 20 pages.
+- Capped observations preserve both `pageCount` and `pagesRead`, set `observationTruncated=true` / `pageLimitReached=true`, and are excluded from full-document equivalence claims.
 
 Rollback is disabling or removing `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED`.
 
@@ -61,8 +62,10 @@ Classifications are diagnostic only:
 - `likely_scanned_pdf`: no or extremely little selectable text; OCR may be required in a future PR.
 - `suspicious_noise`: printable-character ratio below 0.92 or suspicious-noise ratio above 0.05.
 - `malformed_pdf`: missing PDF magic header or invalid empty input.
+- `dependency_error`: `pdfjs-dist` production import or required API is unavailable.
+- `file_too_large`: the file exceeds `PDF_CANONICAL_EXTRACTION_MAX_BYTES`.
 - `parser_timeout`: deadline exceeded.
-- `parser_error`: dependency, size-limit, or controlled parser failure.
+- `parser_error`: controlled parser failure not covered by the more specific categories.
 
 Conservative thresholds:
 
@@ -87,6 +90,8 @@ Structured logs include only PII-safe fields:
   "inputByteSize": 1820,
   "pageCount": 1,
   "pagesRead": 1,
+  "observationTruncated": false,
+  "pageLimitReached": false,
   "lineCount": 7,
   "extractedTextLength": 361,
   "canonicalTextLength": 361,
@@ -132,7 +137,8 @@ Use the existing resume-format diagnostic harness with `PDF_CANONICAL_EXTRACTION
 - extracted-text length statistics;
 - section-marker coverage;
 - OCR-required count;
-- comparable/equivalent fingerprint pair rates.
+- truncated-observation count;
+- comparable/equivalent fingerprint pair rates, excluding truncated PDF observations from full-document equivalence claims.
 
 No raw text, filenames, emails, phone numbers, candidate names, or binary content are emitted.
 

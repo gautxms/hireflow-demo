@@ -20,6 +20,7 @@ import {
   buildBulletsPdfResumeFixture,
   buildEquivalentFormatFixtures,
   buildHeaderFooterPdfResumeFixture,
+  buildOverPageLimitPdfFixture,
   buildPdfJsTextContentMockFromFixtures,
   buildLargePdfResumeFixture,
   buildMalformedPdfFixture,
@@ -332,4 +333,31 @@ test('PDF observe-only synthetic corpus records safe classifications for layouts
   const serialized = JSON.stringify(report)
   assert.equal(serialized.includes('Synthetic Candidate Alpha'), false)
   assert.equal(serialized.includes('synthetic-large-resume'), false)
+}))
+
+
+test('PDF observe-only harness does not claim equivalence when page observation is truncated', withPdfObserveOnlyEnabled(async () => {
+  const previousMaxPages = process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES
+  process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES = '2'
+  try {
+    const pdf = buildOverPageLimitPdfFixture({ pageCount: 4 })
+    const docx = await buildSyntheticDocxResumeFixture()
+    __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([pdf]))
+    __setMammothClientForTests({ extractRawText: async () => ({ value: SYNTHETIC_CANONICAL_RESUME_TEXT }) })
+
+    const report = await runResumeFormatExtractionDiagnostics([pdf, docx], {
+      expectedMarkers: SYNTHETIC_MARKERS,
+      logger: quietLogger,
+    })
+
+    const pdfResult = report.fixtures[0]
+    assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.pageCount, 4)
+    assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.pagesRead, 2)
+    assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.observationTruncated, true)
+    assert.equal(report.fingerprintComparisons[0].comparable, false)
+    assert.equal(report.fingerprintComparisons[0].equivalent, false)
+  } finally {
+    if (previousMaxPages === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES
+    else process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES = previousMaxPages
+  }
 }))

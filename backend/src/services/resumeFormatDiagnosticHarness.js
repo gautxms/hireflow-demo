@@ -119,6 +119,9 @@ function buildFixtureResult({ fixture, preparedPayload, durationMs, expectedMark
       durationMs: pdfObserveOnly.durationMs ?? null,
       inputByteSize: pdfObserveOnly.inputByteSize ?? null,
       pageCount: pdfObserveOnly.pageCount ?? null,
+      pagesRead: pdfObserveOnly.pagesRead ?? null,
+      observationTruncated: Boolean(pdfObserveOnly.observationTruncated),
+      pageLimitReached: Boolean(pdfObserveOnly.pageLimitReached),
       lineCount: pdfObserveOnly.lineCount ?? null,
       extractedTextLength: pdfObserveOnly.extractedTextLength ?? 0,
       normalizedFingerprint: observedFingerprint,
@@ -174,8 +177,8 @@ export async function runResumeFormatExtractionDiagnostics(fixtures, options = {
       const right = results[rightIndex]
       const leftFingerprint = left.normalizedFingerprint || left.pdfCanonicalExtractionObserveOnly?.normalizedFingerprint || null
       const rightFingerprint = right.normalizedFingerprint || right.pdfCanonicalExtractionObserveOnly?.normalizedFingerprint || null
-      const leftComparable = Boolean(left.normalizedFingerprintComparable || left.pdfCanonicalExtractionObserveOnly?.normalizedFingerprintComparable)
-      const rightComparable = Boolean(right.normalizedFingerprintComparable || right.pdfCanonicalExtractionObserveOnly?.normalizedFingerprintComparable)
+      const leftComparable = Boolean(left.normalizedFingerprintComparable || (left.pdfCanonicalExtractionObserveOnly?.normalizedFingerprintComparable && !left.pdfCanonicalExtractionObserveOnly?.observationTruncated))
+      const rightComparable = Boolean(right.normalizedFingerprintComparable || (right.pdfCanonicalExtractionObserveOnly?.normalizedFingerprintComparable && !right.pdfCanonicalExtractionObserveOnly?.observationTruncated))
       const leftLineCount = left.normalizedLineCount || left.pdfCanonicalExtractionObserveOnly?.lineCount || 0
       const rightLineCount = right.normalizedLineCount || right.pdfCanonicalExtractionObserveOnly?.lineCount || 0
       const leftTextLength = left.extractedTextLength || left.pdfCanonicalExtractionObserveOnly?.extractedTextLength || 0
@@ -356,6 +359,7 @@ export function buildPdfObserveOnlyStagingValidationSummary(report = {}) {
     equivalentPairCount: equivalentPairs.length,
     equivalentPairRate: comparablePairs.length > 0 ? round(equivalentPairs.length / comparablePairs.length) : 0,
     ocrRequiredCount: pdfDiagnostics.filter((diagnostic) => diagnostic.ocrRequired).length,
+    observationTruncatedCount: pdfDiagnostics.filter((diagnostic) => diagnostic.observationTruncated).length,
   }
 }
 

@@ -220,6 +220,24 @@ export function buildLargePdfResumeFixture() {
   }
 }
 
+
+export function buildOverPageLimitPdfFixture({ pageCount = 4 } = {}) {
+  const pages = Array.from({ length: pageCount }, (_, index) => [
+    `Synthetic Candidate Alpha Page ${index + 1}`,
+    'Summary: backend platform engineer for recruiting workflow systems.',
+    'Skills: Node.js, PostgreSQL, Redis.',
+    `Experience: Example Hiring Labs, 202${index}-202${index + 1}.`,
+  ].join('\n'))
+  const pdf = buildSimpleSelectablePdf({ pages, fixtureId: 'synthetic-over-page-limit-pdf' })
+  return {
+    id: 'synthetic-over-page-limit-pdf',
+    filename: 'synthetic-over-page-limit-resume.pdf',
+    mimeType: 'application/pdf',
+    buffer: pdf.buffer,
+    expectedPdfTextItems: pdf.pageTextItems,
+  }
+}
+
 export function buildMissingTextPdfFixture() {
   return {
     id: 'synthetic-missing-text-pdf',
