@@ -87,6 +87,10 @@ export function calculateSafeTextQualityMetrics(text = '', expectedMarkers = [])
 function buildFixtureResult({ fixture, preparedPayload, durationMs, expectedMarkers, profileExtractor }) {
   const extractedText = String(preparedPayload?.extractedText || '')
   const diagnostics = preparedPayload?.diagnostics || {}
+  const pdfObserveOnly = diagnostics.pdfCanonicalExtractionObserveOnly && typeof diagnostics.pdfCanonicalExtractionObserveOnly === 'object'
+    ? diagnostics.pdfCanonicalExtractionObserveOnly
+    : null
+  const observedFingerprint = pdfObserveOnly?.normalizedFingerprint || null
   const fingerprint = extractedText ? buildResumeTextFingerprint(extractedText) : null
   const profileFields = extractedText && typeof profileExtractor === 'function'
     ? profileExtractor(extractedText)
@@ -107,6 +111,29 @@ function buildFixtureResult({ fixture, preparedPayload, durationMs, expectedMark
     extractionDurationMs: round(durationMs, 2),
     ocrUsed: Boolean(diagnostics.ocrUsed),
     quality: calculateSafeTextQualityMetrics(extractedText, expectedMarkers),
+    pdfCanonicalExtractionObserveOnly: pdfObserveOnly ? {
+      enabled: Boolean(pdfObserveOnly.enabled),
+      success: Boolean(pdfObserveOnly.success),
+      extractionMethod: pdfObserveOnly.extractionMethod || null,
+      parserVersion: pdfObserveOnly.parserVersion || null,
+      durationMs: pdfObserveOnly.durationMs ?? null,
+      inputByteSize: pdfObserveOnly.inputByteSize ?? null,
+      pageCount: pdfObserveOnly.pageCount ?? null,
+      pagesRead: pdfObserveOnly.pagesRead ?? null,
+      observationTruncated: Boolean(pdfObserveOnly.observationTruncated),
+      pageLimitReached: Boolean(pdfObserveOnly.pageLimitReached),
+      lineCount: pdfObserveOnly.lineCount ?? null,
+      extractedTextLength: pdfObserveOnly.extractedTextLength ?? 0,
+      normalizedFingerprint: observedFingerprint,
+      normalizedFingerprintComparable: Boolean(observedFingerprint),
+      printableRatio: pdfObserveOnly.printableRatio ?? 0,
+      suspiciousNoiseRatio: pdfObserveOnly.suspiciousNoiseRatio ?? 0,
+      duplicateLineRatio: pdfObserveOnly.duplicateLineRatio ?? 0,
+      safeSectionMarkerCoverage: pdfObserveOnly.safeSectionMarkerCoverage || null,
+      qualityClassification: pdfObserveOnly.qualityClassification || null,
+      ocrRequired: Boolean(pdfObserveOnly.ocrRequired),
+      failureCategory: pdfObserveOnly.failureCategory || null,
+    } : null,
     profileFields,
   }
 }
@@ -148,15 +175,23 @@ export async function runResumeFormatExtractionDiagnostics(fixtures, options = {
     for (let rightIndex = leftIndex + 1; rightIndex < results.length; rightIndex += 1) {
       const left = results[leftIndex]
       const right = results[rightIndex]
+      const leftFingerprint = left.normalizedFingerprint || left.pdfCanonicalExtractionObserveOnly?.normalizedFingerprint || null
+      const rightFingerprint = right.normalizedFingerprint || right.pdfCanonicalExtractionObserveOnly?.normalizedFingerprint || null
+      const leftComparable = Boolean(left.normalizedFingerprintComparable || (left.pdfCanonicalExtractionObserveOnly?.normalizedFingerprintComparable && !left.pdfCanonicalExtractionObserveOnly?.observationTruncated))
+      const rightComparable = Boolean(right.normalizedFingerprintComparable || (right.pdfCanonicalExtractionObserveOnly?.normalizedFingerprintComparable && !right.pdfCanonicalExtractionObserveOnly?.observationTruncated))
+      const leftLineCount = left.normalizedLineCount || left.pdfCanonicalExtractionObserveOnly?.lineCount || 0
+      const rightLineCount = right.normalizedLineCount || right.pdfCanonicalExtractionObserveOnly?.lineCount || 0
+      const leftTextLength = left.extractedTextLength || left.pdfCanonicalExtractionObserveOnly?.extractedTextLength || 0
+      const rightTextLength = right.extractedTextLength || right.pdfCanonicalExtractionObserveOnly?.extractedTextLength || 0
       fingerprintComparisons.push({
         leftFixtureId: left.fixtureId,
         rightFixtureId: right.fixtureId,
-        comparable: Boolean(left.normalizedFingerprintComparable && right.normalizedFingerprintComparable),
-        equivalent: Boolean(left.normalizedFingerprintComparable && right.normalizedFingerprintComparable && left.normalizedFingerprint === right.normalizedFingerprint),
-        leftFingerprint: left.normalizedFingerprint,
-        rightFingerprint: right.normalizedFingerprint,
-        lineCountDelta: Math.abs(left.normalizedLineCount - right.normalizedLineCount),
-        textLengthDelta: Math.abs(left.extractedTextLength - right.extractedTextLength),
+        comparable: Boolean(leftComparable && rightComparable),
+        equivalent: Boolean(leftComparable && rightComparable && leftFingerprint === rightFingerprint),
+        leftFingerprint,
+        rightFingerprint,
+        lineCountDelta: Math.abs(leftLineCount - rightLineCount),
+        textLengthDelta: Math.abs(leftTextLength - rightTextLength),
       })
     }
   }
@@ -289,6 +324,43 @@ export function detectDominantVarianceSource({ extractionResults = [], scoringRu
   if (fallbackVariance) return 'retry_or_fallback_behavior'
   if (persistenceVariance) return 'async_persistence_behavior'
   return 'no_variance_detected'
+}
+
+
+export function buildPdfObserveOnlyStagingValidationSummary(report = {}) {
+  const fixtures = Array.isArray(report?.fixtures) ? report.fixtures : []
+  const pdfDiagnostics = fixtures
+    .map((fixture) => fixture?.pdfCanonicalExtractionObserveOnly)
+    .filter((diagnostic) => diagnostic && diagnostic.enabled)
+  const classificationCounts = {}
+  for (const diagnostic of pdfDiagnostics) {
+    const key = diagnostic.qualityClassification || diagnostic.failureCategory || 'unknown'
+    classificationCounts[key] = (classificationCounts[key] || 0) + 1
+  }
+  const comparablePairs = Array.isArray(report?.fingerprintComparisons)
+    ? report.fingerprintComparisons.filter((comparison) => comparison.comparable)
+    : []
+  const equivalentPairs = comparablePairs.filter((comparison) => comparison.equivalent)
+  const durations = pdfDiagnostics.map((diagnostic) => Number(diagnostic.durationMs)).filter(Number.isFinite)
+  const textLengths = pdfDiagnostics.map((diagnostic) => Number(diagnostic.extractedTextLength)).filter(Number.isFinite)
+  const markerRatios = pdfDiagnostics.map((diagnostic) => Number(diagnostic.safeSectionMarkerCoverage?.ratio)).filter(Number.isFinite)
+
+  return {
+    totalPdfFixtures: pdfDiagnostics.length,
+    parserSuccessCount: pdfDiagnostics.filter((diagnostic) => diagnostic.success).length,
+    parserFailureCount: pdfDiagnostics.filter((diagnostic) => !diagnostic.success).length,
+    parserSuccessRate: pdfDiagnostics.length > 0 ? round(pdfDiagnostics.filter((diagnostic) => diagnostic.success).length / pdfDiagnostics.length) : 0,
+    classificationCounts,
+    averageDurationMs: durations.length > 0 ? round(durations.reduce((sum, value) => sum + value, 0) / durations.length, 2) : 0,
+    maxDurationMs: durations.length > 0 ? Math.max(...durations) : 0,
+    averageExtractedTextLength: textLengths.length > 0 ? round(textLengths.reduce((sum, value) => sum + value, 0) / textLengths.length, 2) : 0,
+    averageSectionMarkerCoverage: markerRatios.length > 0 ? round(markerRatios.reduce((sum, value) => sum + value, 0) / markerRatios.length) : 0,
+    comparablePairCount: comparablePairs.length,
+    equivalentPairCount: equivalentPairs.length,
+    equivalentPairRate: comparablePairs.length > 0 ? round(equivalentPairs.length / comparablePairs.length) : 0,
+    ocrRequiredCount: pdfDiagnostics.filter((diagnostic) => diagnostic.ocrRequired).length,
+    observationTruncatedCount: pdfDiagnostics.filter((diagnostic) => diagnostic.observationTruncated).length,
+  }
 }
 
 export function compareCanonicalTexts(leftText = '', rightText = '') {

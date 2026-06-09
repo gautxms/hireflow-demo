@@ -1,6 +1,11 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'crypto'
 import {
+  buildResumeTextFingerprint,
+  compareResumeTextFingerprints,
+  normalizeResumeTextForFingerprint,
+} from './resumeTextFingerprint.js'
+import {
   createUnsupportedLegacyWordError,
   getLegacyWordDocumentDetection,
   DOCX_MIME_TYPE,
@@ -10,6 +15,11 @@ import {
   extractTextFromLegacyDocBuffer,
   isLegacyDocExtractionEnabled,
 } from './legacyDocExtractionService.js'
+import {
+  isPdfCanonicalExtractionObserveOnlyEnabled,
+  observePdfCanonicalTextExtraction,
+  logSafePdfCanonicalExtractionDiagnostics,
+} from './pdfCanonicalExtractionService.js'
 
 let mammothClient = null
 let mammothClientOverrideForTests = undefined
@@ -20,59 +30,11 @@ const ZIP_LOCAL_FILE_MAGIC = [0x50, 0x4b, 0x03, 0x04]
 const ZIP_EMPTY_ARCHIVE_MAGIC = [0x50, 0x4b, 0x05, 0x06]
 const ZIP_SPANNED_ARCHIVE_MAGIC = [0x50, 0x4b, 0x07, 0x08]
 const OLE_COMPOUND_FILE_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]
-const TEXT_FINGERPRINT_VERSION = 'resume-text-fingerprint-v1'
-const NULL_CHARACTER = String.fromCharCode(0)
 
-
-export function normalizeResumeTextForFingerprint(text = '') {
-  return String(text || '')
-    .normalize('NFKC')
-    .split(NULL_CHARACTER).join(' ')
-    .replace(/\uFFFD/g, ' ')
-    .replace(/[\u200B-\u200D\uFEFF]/g, ' ')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim().toLowerCase())
-    .filter(Boolean)
-    .filter((line) => !/^page\s+\d+(\s+of\s+\d+)?$/i.test(line))
-    .filter((line) => !/^(confidential|curriculum vitae|resume)$/i.test(line))
-    .join('\n')
-}
-
-export function buildResumeTextFingerprint(text = '') {
-  const normalizedText = normalizeResumeTextForFingerprint(text)
-  if (!normalizedText) {
-    return {
-      version: TEXT_FINGERPRINT_VERSION,
-      comparable: false,
-      reason: 'empty_normalized_text',
-      normalizedCharCount: 0,
-      normalizedLineCount: 0,
-      sha256: null,
-    }
-  }
-
-  return {
-    version: TEXT_FINGERPRINT_VERSION,
-    comparable: true,
-    reason: null,
-    normalizedCharCount: normalizedText.length,
-    normalizedLineCount: normalizedText.split('\n').length,
-    sha256: createHash('sha256').update(normalizedText).digest('hex'),
-  }
-}
-
-export function compareResumeTextFingerprints(leftText = '', rightText = '') {
-  const left = buildResumeTextFingerprint(leftText)
-  const right = buildResumeTextFingerprint(rightText)
-  return {
-    comparable: Boolean(left.comparable && right.comparable),
-    equivalent: Boolean(left.comparable && right.comparable && left.sha256 === right.sha256),
-    left,
-    right,
-    charCountDelta: Math.abs(Number(left.normalizedCharCount || 0) - Number(right.normalizedCharCount || 0)),
-    lineCountDelta: Math.abs(Number(left.normalizedLineCount || 0) - Number(right.normalizedLineCount || 0)),
-  }
+export {
+  buildResumeTextFingerprint,
+  compareResumeTextFingerprints,
+  normalizeResumeTextForFingerprint,
 }
 
 function normalizeMimeType(value) {
@@ -656,6 +618,14 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
   }
 
   if (normalizedMimeType === 'application/pdf') {
+    const pdfObserveOnlyEnabled = isPdfCanonicalExtractionObserveOnlyEnabled()
+    let pdfCanonicalExtractionObserveOnly = { enabled: false }
+
+    if (pdfObserveOnlyEnabled) {
+      pdfCanonicalExtractionObserveOnly = await observePdfCanonicalTextExtraction(fileBuffer)
+      logSafePdfCanonicalExtractionDiagnostics(logger, pdfCanonicalExtractionObserveOnly)
+    }
+
     return {
       ...buildBase(),
       fileBufferBase64,
@@ -666,15 +636,19 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       inputMode: 'binary',
       extractedText: null,
       base64File: fileBufferBase64,
-      diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
-        sourceFormat: 'pdf',
-        inputKind: 'pdf_binary',
-        inputMode: 'binary',
-        preparedMimeType: normalizedMimeType,
-        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
-        extractionMethod: 'pdf_binary_provider_input',
-        fallbackUsed: false,
-      }), {
+      diagnostics: mergeSafeDiagnostics({
+        ...buildPreparedPayloadDiagnostics({
+          sourceFormat: 'pdf',
+          inputKind: 'pdf_binary',
+          inputMode: 'binary',
+          preparedMimeType: normalizedMimeType,
+          originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
+          extractionMethod: 'pdf_binary_provider_input',
+          fallbackUsed: false,
+        }),
+        pdfCanonicalExtractionObserveOnlyEnabled: pdfObserveOnlyEnabled,
+        pdfCanonicalExtractionObserveOnly,
+      }, {
         extractionMethod: 'pdf_binary_provider_input',
         extractedTextCharCount: 0,
         preparedMimeType: normalizedMimeType,

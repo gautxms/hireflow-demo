@@ -10,21 +10,46 @@ import {
   compareCanonicalTexts,
   detectDominantVarianceSource,
   evaluateAsyncPersistenceIdempotency,
+  buildPdfObserveOnlyStagingValidationSummary,
   runCanonicalScoringDiagnostics,
   runResumeFormatExtractionDiagnostics,
 } from './resumeFormatDiagnosticHarness.js'
 import {
   SYNTHETIC_CANONICAL_RESUME_TEXT,
   SYNTHETIC_MARKERS,
+  buildBulletsPdfResumeFixture,
   buildEquivalentFormatFixtures,
+  buildHeaderFooterPdfResumeFixture,
+  buildOverPageLimitPdfFixture,
+  buildPdfJsTextContentMockFromFixtures,
+  buildLargePdfResumeFixture,
+  buildMalformedPdfFixture,
+  buildMultiColumnPdfResumeFixture,
   buildLowQualityLegacyDocFixture,
   buildMissingTextPdfFixture,
   buildSyntheticDocxResumeFixture,
   buildSyntheticLegacyDocResumeFixture,
   buildSyntheticPdfResumeFixture,
+  buildTablesPdfResumeFixture,
 } from './resumeFormatDiagnosticFixtures.js'
+import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from './pdfCanonicalExtractionService.js'
 
 const quietLogger = { debug() {}, info() {}, warn() {}, log() {} }
+
+
+function withPdfObserveOnlyEnabled(fn) {
+  return async () => {
+    const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+    process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+    try {
+      await fn()
+    } finally {
+      if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+      else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+      __resetPdfJsClientForTests()
+    }
+  }
+}
 
 function withLegacyDocExtractionEnabled(fn) {
   return async () => {
@@ -232,6 +257,9 @@ test('PDF fixture remains non-comparable to extracted text formats until unified
   __setMammothClientForTests({ extractRawText: async () => ({ value: SYNTHETIC_CANONICAL_RESUME_TEXT }) })
   const docx = await buildSyntheticDocxResumeFixture()
   const pdf = buildSyntheticPdfResumeFixture()
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([pdf]))
+  assert.equal(pdf.buffer.includes(Buffer.from('/FlateDecode')), true)
+  assert.equal(pdf.buffer.includes(Buffer.from('Synthetic Candidate Alpha')), false)
   const report = await runResumeFormatExtractionDiagnostics([pdf, docx], {
     expectedMarkers: SYNTHETIC_MARKERS,
     logger: quietLogger,
@@ -239,4 +267,97 @@ test('PDF fixture remains non-comparable to extracted text formats until unified
 
   assert.equal(report.fingerprintComparisons[0].comparable, false)
   assert.equal(report.dominantSource, 'extraction_variance')
+}))
+
+
+test('PDF observe-only diagnostics make synthetic PDF and DOCX equivalence measurable without changing PDF input mode', withPdfObserveOnlyEnabled(withLegacyDocExtractionEnabled(async () => {
+  __setMammothClientForTests({ extractRawText: async () => ({ value: SYNTHETIC_CANONICAL_RESUME_TEXT }) })
+  const docx = await buildSyntheticDocxResumeFixture()
+  const pdf = buildSyntheticPdfResumeFixture()
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([pdf]))
+  assert.equal(pdf.buffer.includes(Buffer.from('/FlateDecode')), true)
+  assert.equal(pdf.buffer.includes(Buffer.from('Synthetic Candidate Alpha')), false)
+  const report = await runResumeFormatExtractionDiagnostics([pdf, docx], {
+    expectedMarkers: SYNTHETIC_MARKERS,
+    logger: quietLogger,
+  })
+
+  const [pdfResult] = report.fixtures
+  assert.equal(pdfResult.inputKind, 'pdf_binary')
+  assert.equal(pdfResult.inputMode, 'binary')
+  assert.equal(pdfResult.extractionMethod, 'pdf_binary_provider_input')
+  assert.equal(pdfResult.normalizedFingerprint, null)
+  assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.success, true)
+  assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.qualityClassification, 'usable_text_extraction')
+  assert.equal(report.fingerprintComparisons[0].comparable, true)
+  assert.equal(report.fingerprintComparisons[0].equivalent, true)
+
+  const serialized = JSON.stringify(report)
+  assert.equal(serialized.includes('Synthetic Candidate Alpha'), false)
+  assert.equal(serialized.includes('synthetic-equivalent-resume'), false)
+})))
+
+test('PDF observe-only synthetic corpus records safe classifications for layouts, missing text, malformed, and large PDFs', withPdfObserveOnlyEnabled(async () => {
+  const fixtures = [
+    buildMultiColumnPdfResumeFixture(),
+    buildBulletsPdfResumeFixture(),
+    buildTablesPdfResumeFixture(),
+    buildHeaderFooterPdfResumeFixture(),
+    buildMissingTextPdfFixture(),
+    buildMalformedPdfFixture(),
+    buildLargePdfResumeFixture(),
+  ]
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures(fixtures))
+  assert.equal(fixtures[0].buffer.includes(Buffer.from('/FlateDecode')), true)
+  assert.equal(fixtures[1].expectedPdfTextItems[0].some((item) => String(item.str).includes('•')), true)
+  const report = await runResumeFormatExtractionDiagnostics(fixtures, {
+    expectedMarkers: SYNTHETIC_MARKERS,
+    logger: quietLogger,
+  })
+  const byId = Object.fromEntries(report.fixtures.map((entry) => [entry.fixtureId, entry]))
+
+  assert.equal(byId['synthetic-multi-column-pdf'].pdfCanonicalExtractionObserveOnly.success, true)
+  assert.equal(byId['synthetic-bullets-pdf'].pdfCanonicalExtractionObserveOnly.safeSectionMarkerCoverage.found >= 3, true)
+  assert.equal(byId['synthetic-tables-pdf'].pdfCanonicalExtractionObserveOnly.qualityClassification, 'usable_text_extraction')
+  assert.equal(byId['synthetic-header-footer-pdf'].pdfCanonicalExtractionObserveOnly.success, true)
+  assert.equal(byId['synthetic-missing-text-pdf'].pdfCanonicalExtractionObserveOnly.qualityClassification, 'likely_scanned_pdf')
+  assert.equal(byId['synthetic-missing-text-pdf'].pdfCanonicalExtractionObserveOnly.ocrRequired, true)
+  assert.equal(byId['synthetic-malformed-pdf'].pdfCanonicalExtractionObserveOnly.failureCategory, 'malformed_pdf')
+  assert.equal(byId['synthetic-large-pdf'].pdfCanonicalExtractionObserveOnly.success, true)
+  const summary = buildPdfObserveOnlyStagingValidationSummary(report)
+  assert.equal(summary.totalPdfFixtures, 7)
+  assert.equal(summary.parserSuccessCount, 6)
+  assert.equal(summary.classificationCounts.usable_text_extraction >= 4, true)
+  assert.equal(summary.ocrRequiredCount >= 1, true)
+
+  const serialized = JSON.stringify(report)
+  assert.equal(serialized.includes('Synthetic Candidate Alpha'), false)
+  assert.equal(serialized.includes('synthetic-large-resume'), false)
+}))
+
+
+test('PDF observe-only harness does not claim equivalence when page observation is truncated', withPdfObserveOnlyEnabled(async () => {
+  const previousMaxPages = process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES
+  process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES = '2'
+  try {
+    const pdf = buildOverPageLimitPdfFixture({ pageCount: 4 })
+    const docx = await buildSyntheticDocxResumeFixture()
+    __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([pdf]))
+    __setMammothClientForTests({ extractRawText: async () => ({ value: SYNTHETIC_CANONICAL_RESUME_TEXT }) })
+
+    const report = await runResumeFormatExtractionDiagnostics([pdf, docx], {
+      expectedMarkers: SYNTHETIC_MARKERS,
+      logger: quietLogger,
+    })
+
+    const pdfResult = report.fixtures[0]
+    assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.pageCount, 4)
+    assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.pagesRead, 2)
+    assert.equal(pdfResult.pdfCanonicalExtractionObserveOnly.observationTruncated, true)
+    assert.equal(report.fingerprintComparisons[0].comparable, false)
+    assert.equal(report.fingerprintComparisons[0].equivalent, false)
+  } finally {
+    if (previousMaxPages === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES
+    else process.env.PDF_CANONICAL_EXTRACTION_MAX_PAGES = previousMaxPages
+  }
 }))

@@ -9,6 +9,8 @@ import {
   extractJsonWithContext,
   extractOpenAiResponseText,
 } from './aiResumeAnalysisService.js'
+import { buildPdfJsTextContentMockFromFixtures, buildSyntheticPdfResumeFixture } from './resumeFormatDiagnosticFixtures.js'
+import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from './pdfCanonicalExtractionService.js'
 
 test('buildPromptWithJobDescription includes AVAILABLE JD block when context exists', () => {
   const prompt = buildPromptWithJobDescription('Base prompt', {
@@ -765,4 +767,49 @@ test('analyzeResumeWithConfiguredFallback counts only executed attempts against 
   assert.equal(response.attempts[0].success, true)
   assert.equal(response.attempts[0].provider, 'openai-primary')
   delete process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+})
+
+
+test('PDF observe-only extraction does not alter scoring payload or create an extra AI call', async () => {
+  const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+  process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+  const fixture = buildSyntheticPdfResumeFixture()
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([fixture]))
+  const credentials = {
+    activeProvider: 'anthropic',
+    providers: {
+      anthropic: {
+        primary: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+  const calls = []
+  try {
+    await analyzeResumeWithConfiguredFallback(fixture.buffer.toString('base64'), 'application/pdf', 'resume.pdf', {
+      credentials,
+      systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+      analyzeWithAnthropic: async (fileB64, mimeType, filename) => {
+        calls.push({ fileB64, mimeType, filename })
+        return {
+          result: { candidates: [{ id: 'cand-pdf' }] },
+          provider: 'anthropic-primary',
+          model: 'claude-sonnet-4',
+          tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+        }
+      },
+      analyzeWithOpenAI: async () => {
+        throw new Error('openai should not be called')
+      },
+    })
+
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].fileB64, fixture.buffer.toString('base64'))
+    assert.equal(calls[0].mimeType, 'application/pdf')
+    assert.equal(calls[0].filename, 'resume.pdf')
+  } finally {
+    if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+    __resetPdfJsClientForTests()
+  }
 })
