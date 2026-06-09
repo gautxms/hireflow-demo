@@ -72,7 +72,10 @@ function buildSimpleSelectablePdf({
 } = {}) {
   const objects = []
   const pageRefs = []
-  const pageTextItems = pages.map((pageText) => buildTextItemsFromLines(String(pageText || '').split('\n'), { columns }))
+  const pageTextItems = pages.map((pageText) => {
+    const lines = Array.isArray(pageText) ? pageText : String(pageText || '').split('\n')
+    return buildTextItemsFromLines(lines, { columns })
+  })
   const addObject = (body) => {
     objects.push(body)
     return objects.length
@@ -239,12 +242,16 @@ export function buildOverPageLimitPdfFixture({ pageCount = 4 } = {}) {
 }
 
 export function buildMissingTextPdfFixture() {
+  const pdf = buildSimpleSelectablePdf({
+    pages: [[]],
+    fixtureId: 'synthetic-missing-text-pdf',
+  })
   return {
     id: 'synthetic-missing-text-pdf',
     filename: 'synthetic-missing-text-resume.pdf',
     mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /XObject /Subtype /Image >>\nendobj\n%%EOF', 'utf8'),
-    expectedPdfTextItems: [[]],
+    buffer: pdf.buffer,
+    expectedPdfTextItems: pdf.pageTextItems,
   }
 }
 

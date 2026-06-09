@@ -149,9 +149,6 @@ async function getPdfJsClient() {
     if (!pdfjsModule || typeof pdfjsModule.getDocument !== 'function') {
       throw new Error('pdfjs_get_document_unavailable')
     }
-    if (pdfjsModule.GlobalWorkerOptions) {
-      pdfjsModule.GlobalWorkerOptions.workerSrc = ''
-    }
     pdfJsClient = pdfjsModule
     return pdfJsClient
   } catch (error) {
