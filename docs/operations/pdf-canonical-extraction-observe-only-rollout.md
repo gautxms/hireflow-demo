@@ -34,7 +34,7 @@ If eligibility evaluation or parsing fails, the existing PDF binary analysis flo
 | Variable | Default | Behavior |
 | --- | --- | --- |
 | `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED` | `false` | Master kill switch. Only `1`, `true`, `yes`, `on`, or `enabled` enable any observe-only parsing. Missing or false means the parser never runs. |
-| `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE` | `0` | Deterministic sampling percentage from `0` to `100`. Missing, invalid, or negative values fall back to `0`; values above `100` are clamped to `100`. |
+| `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE` | `0` | Deterministic sampling percentage from `0` to `100`. Missing, empty, invalid, negative, and above-`100` values fail closed to `0`. |
 | `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS` | empty | Comma-separated internal user IDs. Whitespace is trimmed. Empty entries are ignored. Do not use emails. |
 | `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS` | empty | Comma-separated analysis IDs. Whitespace is trimmed. Empty entries are ignored. |
 | `PDF_CANONICAL_EXTRACTION_MAX_BYTES` | `5242880` | Existing parser byte cap. |
@@ -62,19 +62,30 @@ Algorithm:
 1. Hash `pdf-canonical-observe-only-sampling-v1:<stable identifier>` with SHA-256.
 2. Read the first 12 hex characters of the hash.
 3. Convert that value to an integer and map it into bucket `0..9999` with modulo `10000`.
-4. Convert the configured percentage to a threshold with `Math.floor(sampleRate * 100)`.
-5. Select the upload when `bucket < threshold`.
+4. Accept only configured sample rates from `0` through `100`; missing, empty, invalid, negative, and above-`100` values become `0`.
+5. Convert the configured percentage to a threshold with `Math.floor(sampleRate * 100)`.
+6. Select the upload when `bucket < threshold`.
 
 Examples:
 
 - sample rate `0` has no threshold and never samples;
 - sample rate `1` selects buckets `0..99`;
 - sample rate `5` selects buckets `0..499`;
-- sample rate `100` selects every non-empty stable identifier.
+- sample rate `100` selects every non-empty stable identifier;
+- sample rates such as `100.5`, `250`, or `1000` fail closed to `0` and select nothing.
 
 The same file-content fingerprint produces the same bucket and decision across runs.
 
+
+## Duplicate-parser guard
+
+The async parse path prepares the resume before AI analysis and the AI analysis service also normalizes inputs before calling a provider. Without a guard, an eligible PDF could run observe-only parsing once in `runParse()` and again inside `analyzeResumeWithConfiguredFallback()`, doubling local parser CPU for the same resume.
+
+The parse job now passes a narrow diagnostics marker to the AI analysis call after the first preparation step. The second preparation reuses the prior safe `observeOnlyEligibility` and `pdfCanonicalExtractionObserveOnly` diagnostics and skips local observe-only extraction. Provider retry/fallback attempts reuse the single prepared payload, so retries do not trigger additional observe-only parsing.
+
 ## Safe diagnostic metadata
+
+A PII-safe eligibility decision log is emitted for every PDF preparation decision, including master-disabled and not-selected uploads. The eligibility log contains only `masterEnabled`, `eligible`, `eligibilityReason`, `allowlistMatched`, `matchedAllowlistType`, `sampled`, `sampleRate`, and `samplingBucket`.
 
 Structured diagnostics include eligibility fields and parser metrics only:
 

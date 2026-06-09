@@ -53,8 +53,8 @@ function parseCommaSeparatedAllowlist(value) {
 function normalizeObserveOnlySampleRate(value) {
   if (value === null || value === undefined || String(value).trim() === '') return 0
   const numeric = Number(value)
-  if (!Number.isFinite(numeric) || numeric < 0) return 0
-  return Math.min(100, numeric)
+  if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100) return 0
+  return numeric
 }
 
 function buildDeterministicSamplingBucket(stableIdentifier) {
@@ -130,6 +130,26 @@ export function evaluatePdfCanonicalExtractionObserveOnlyEligibility({
 }
 
 export const PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ELIGIBILITY_REASONS = ELIGIBILITY_REASON
+
+function compactPdfCanonicalExtractionEligibility(eligibility = {}) {
+  return {
+    masterEnabled: Boolean(eligibility?.masterEnabled),
+    eligible: Boolean(eligibility?.eligible),
+    eligibilityReason: eligibility?.eligibilityReason || ELIGIBILITY_REASON.notSelected,
+    allowlistMatched: Boolean(eligibility?.allowlistMatched),
+    matchedAllowlistType: eligibility?.matchedAllowlistType || null,
+    sampled: Boolean(eligibility?.sampled),
+    sampleRate: Number.isFinite(Number(eligibility?.sampleRate)) ? Number(eligibility.sampleRate) : 0,
+    samplingBucket: Number.isInteger(eligibility?.samplingBucket) ? eligibility.samplingBucket : null,
+  }
+}
+
+export function logSafePdfCanonicalExtractionEligibility(logger, eligibility) {
+  const target = logger?.info || logger?.log
+  if (typeof target === 'function') {
+    target.call(logger, '[ResumeDiagnostics] pdf_canonical_extraction_observe_only_eligibility', compactPdfCanonicalExtractionEligibility(eligibility))
+  }
+}
 
 function round(value, digits = 4) {
   if (!Number.isFinite(Number(value))) return 0

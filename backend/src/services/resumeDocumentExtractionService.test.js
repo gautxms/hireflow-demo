@@ -280,24 +280,125 @@ test('PDF observe-only rollout supports analysis allowlist without user allowlis
   assert.equal(blocked.result.diagnostics.observeOnlyEligibility.eligibilityReason, 'not_selected')
 })
 
-test('PDF observe-only deterministic sampling is bounded, stable, and does not use randomness', () => {
+test('PDF observe-only deterministic sampling is bounded, stable, and fails closed for unsafe values', () => {
   const base = {
     PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
     PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: '',
     PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS: '',
   }
-  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0' }, fileContentFingerprint: 'file-fp-1' }).sampled, false)
-  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100' }, fileContentFingerprint: 'file-fp-1' }).sampled, true)
-  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: 'invalid' }, fileContentFingerprint: 'file-fp-1' }).sampleRate, 0)
-  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '-1' }, fileContentFingerprint: 'file-fp-1' }).sampleRate, 0)
-  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '250' }, fileContentFingerprint: 'file-fp-1' }).sampleRate, 100)
+  const evaluateRate = (rate) => evaluatePdfCanonicalExtractionObserveOnlyEligibility({
+    env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: rate },
+    fileContentFingerprint: 'file-fp-1',
+  })
 
-  const first = evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-1' })
-  const second = evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-1' })
+  assert.equal(evaluateRate('0').sampleRate, 0)
+  assert.equal(evaluateRate('0').sampled, false)
+  assert.equal(evaluateRate('1').sampleRate, 1)
+  assert.equal(evaluateRate('5').sampleRate, 5)
+  assert.equal(evaluateRate('100').sampleRate, 100)
+  assert.equal(evaluateRate('100').sampled, true)
+  assert.equal(evaluateRate('-1').sampleRate, 0)
+  assert.equal(evaluateRate('invalid').sampleRate, 0)
+  assert.equal(evaluateRate('').sampleRate, 0)
+  assert.equal(evaluateRate('100.5').sampleRate, 0)
+  assert.equal(evaluateRate('250').sampleRate, 0)
+  assert.equal(evaluateRate('1000').sampleRate, 0)
+
+  const first = evaluateRate('5')
+  const second = evaluateRate('5')
   const different = evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-2' })
   assert.equal(first.samplingBucket, second.samplingBucket)
   assert.equal(first.sampled, second.sampled)
   assert.notEqual(first.samplingBucket, different.samplingBucket)
+})
+
+async function preparePdfAndCollectEligibilityLogs(env, diagnosticsContext = {}) {
+  const fixture = buildSyntheticPdfResumeFixture()
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([fixture]))
+  const restore = withPdfObserveOnlyEnv(env)
+  const logs = []
+  const logger = {
+    debug() {},
+    warn(message, payload) { logs.push({ level: 'warn', message, payload }) },
+    info(message, payload) { logs.push({ level: 'info', message, payload }) },
+    log(message, payload) { logs.push({ level: 'log', message, payload }) },
+  }
+  try {
+    const result = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: fixture.buffer.toString('base64'),
+      mimeType: 'application/pdf',
+      filename: 'Unsafe_Candidate_Name_resume.pdf',
+      fileSize: fixture.buffer.length,
+      logger,
+      diagnosticsContext,
+    })
+    return {
+      result,
+      fixture,
+      eligibilityLogs: logs.filter((entry) => entry.message === '[ResumeDiagnostics] pdf_canonical_extraction_observe_only_eligibility'),
+    }
+  } finally {
+    restore()
+  }
+}
+
+test('PDF observe-only eligibility decisions are logged safely for selected and skipped PDFs', async () => {
+  const cases = [
+    {
+      env: {},
+      context: { userId: 'raw-user-26', analysisId: 'raw-analysis-master-disabled', resumeId: 'raw-resume-master-disabled' },
+      reason: 'master_disabled',
+    },
+    {
+      env: {
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+      },
+      context: { userId: 'raw-user-99', analysisId: 'raw-analysis-not-selected', resumeId: 'raw-resume-not-selected' },
+      reason: 'not_selected',
+    },
+    {
+      env: {
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'raw-user-26',
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+      },
+      context: { userId: 'raw-user-26', analysisId: 'raw-analysis-allowlisted', resumeId: 'raw-resume-allowlisted' },
+      reason: 'user_allowlist',
+    },
+    {
+      env: {
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100',
+      },
+      context: { userId: 'raw-user-sampled', analysisId: 'raw-analysis-sampled', resumeId: 'raw-resume-sampled' },
+      reason: 'deterministic_sample',
+    },
+  ]
+
+  for (const entry of cases) {
+    const { result, fixture, eligibilityLogs } = await preparePdfAndCollectEligibilityLogs(entry.env, entry.context)
+    assert.equal(eligibilityLogs.length, 1)
+    assert.equal(eligibilityLogs[0].payload.eligibilityReason, entry.reason)
+    assert.deepEqual(Object.keys(eligibilityLogs[0].payload).sort(), [
+      'allowlistMatched',
+      'eligible',
+      'eligibilityReason',
+      'masterEnabled',
+      'matchedAllowlistType',
+      'sampleRate',
+      'sampled',
+      'samplingBucket',
+    ].sort())
+    const serializedEligibilityLog = JSON.stringify(eligibilityLogs)
+    assert.equal(serializedEligibilityLog.includes(entry.context.userId), false)
+    assert.equal(serializedEligibilityLog.includes(entry.context.analysisId), false)
+    assert.equal(serializedEligibilityLog.includes(entry.context.resumeId), false)
+    assert.equal(serializedEligibilityLog.includes('Unsafe_Candidate_Name'), false)
+    assert.equal(serializedEligibilityLog.includes(fixture.buffer.toString('base64')), false)
+    assert.equal(result.inputKind, 'pdf_binary')
+    assert.equal(result.extractedText, null)
+  }
 })
 
 test('PDF observe-only parser failure is diagnostic-only and does not expose unsafe metadata', async () => {

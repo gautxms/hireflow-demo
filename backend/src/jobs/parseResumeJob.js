@@ -796,8 +796,13 @@ export async function runParse(job) {
       preparedResumePayload.mimeType,
       preparedResumePayload.filename,
       {
-      jobDescriptionContext,
+        jobDescriptionContext,
         resumeInputMode: preparedResumePayload.resumeInputMode,
+        diagnosticsContext: {
+          pdfCanonicalExtractionObserveOnlyAlreadyEvaluated: true,
+          observeOnlyEligibility: preparedResumePayload.diagnostics?.observeOnlyEligibility || null,
+          pdfCanonicalExtractionObserveOnly: preparedResumePayload.diagnostics?.pdfCanonicalExtractionObserveOnly || null,
+        },
       },
     )
     const aiResult = aiResponse?.result || {}
