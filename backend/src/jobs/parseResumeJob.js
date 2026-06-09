@@ -760,6 +760,7 @@ export async function runParse(job) {
     logger: console,
     diagnosticsContext: {
       resumeId,
+      userId: job.data.userId ?? null,
       analysisId: analysisId || null,
       parseJobId: job.id,
       fileExtension,
@@ -935,7 +936,7 @@ export async function runParse(job) {
   try {
     await triggerWebhook('parse.completed', {
       resumeId,
-      userId: job.data.userId || null,
+      userId: job.data.userId ?? null,
       candidates: parseResult?.candidates || [],
       jobDescriptionId: parseResult?.jobDescriptionId || null,
       matchScores: parseResult?.matchScores || null,

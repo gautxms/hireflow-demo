@@ -15,7 +15,11 @@ import {
   prepareResumePayloadForAnalysis,
 } from './resumeDocumentExtractionService.js'
 import { buildSyntheticPdfResumeFixture, buildMissingTextPdfFixture, buildMalformedPdfFixture, buildPdfJsTextContentMockFromFixtures } from './resumeFormatDiagnosticFixtures.js'
-import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from './pdfCanonicalExtractionService.js'
+import {
+  __resetPdfJsClientForTests,
+  __setPdfJsClientForTests,
+  evaluatePdfCanonicalExtractionObserveOnlyEligibility,
+} from './pdfCanonicalExtractionService.js'
 import { UNSUPPORTED_LEGACY_WORD_MESSAGE } from '../utils/legacyWordDocument.js'
 
 async function buildDocxBuffer(paragraphs = [], tableRows = []) {
@@ -55,7 +59,56 @@ async function buildZipMissingDocumentXmlBuffer() {
 
 const quietLogger = {
   debug() {},
+  info() {},
   warn() {},
+}
+
+function withPdfObserveOnlyEnv(overrides = {}) {
+  const keys = [
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED',
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE',
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS',
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS',
+  ]
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  for (const key of keys) delete process.env[key]
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) process.env[key] = value
+  }
+  return () => {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key]
+      else process.env[key] = previous[key]
+    }
+    __resetPdfJsClientForTests()
+  }
+}
+
+async function preparePdfWithCountingParser(env, diagnosticsContext = {}) {
+  const fixture = buildSyntheticPdfResumeFixture()
+  let parserCalls = 0
+  const mock = buildPdfJsTextContentMockFromFixtures([fixture, fixture, fixture])
+  __setPdfJsClientForTests({
+    ...mock,
+    getDocument(...args) {
+      parserCalls += 1
+      return mock.getDocument(...args)
+    },
+  })
+  const restore = withPdfObserveOnlyEnv(env)
+  try {
+    const result = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: fixture.buffer.toString('base64'),
+      mimeType: 'application/pdf',
+      filename: fixture.filename,
+      fileSize: fixture.buffer.length,
+      logger: quietLogger,
+      diagnosticsContext,
+    })
+    return { result, parserCalls, fixture }
+  } finally {
+    restore()
+  }
 }
 
 
@@ -160,6 +213,130 @@ test('compareResumeTextFingerprints identifies equivalent extracted resume text 
   assert.equal(comparison.equivalent, true)
   assert.equal(comparison.left.normalizedTextCharCount, comparison.right.normalizedTextCharCount)
   assert.equal(JSON.stringify(comparison).includes('Priya'), false)
+})
+
+
+test('PDF observe-only rollout master flag defaults off and false prevents parser execution', async () => {
+  let run = await preparePdfWithCountingParser({}, { userId: '26', analysisId: 'analysis-id-1', resumeId: 'resume-1' })
+  assert.equal(run.parserCalls, 0)
+  assert.equal(run.result.diagnostics.observeOnlyEligibility.masterEnabled, false)
+  assert.equal(run.result.diagnostics.observeOnlyEligibility.eligibilityReason, 'master_disabled')
+  assert.equal(run.result.diagnostics.pdfCanonicalExtractionObserveOnly.enabled, false)
+
+  run = await preparePdfWithCountingParser({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'false',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: '26',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100',
+  }, { userId: '26', resumeId: 'resume-1' })
+  assert.equal(run.parserCalls, 0)
+  assert.equal(run.result.diagnostics.observeOnlyEligibility.masterEnabled, false)
+  assert.equal(run.result.diagnostics.observeOnlyEligibility.eligible, false)
+})
+
+test('PDF observe-only rollout requires allowlist when sample rate is zero', async () => {
+  const blocked = await preparePdfWithCountingParser({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: ' 26, 41 ',
+  }, { userId: '99', resumeId: 'resume-2' })
+  assert.equal(blocked.parserCalls, 0)
+  assert.equal(blocked.result.diagnostics.observeOnlyEligibility.eligibilityReason, 'not_selected')
+  assert.equal(blocked.result.diagnostics.observeOnlyEligibility.allowlistMatched, false)
+
+  const allowed = await preparePdfWithCountingParser({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: ' 26, 41 ',
+  }, { userId: '41', resumeId: 'resume-3' })
+  assert.equal(allowed.parserCalls, 1)
+  assert.equal(allowed.result.diagnostics.observeOnlyEligibility.eligible, true)
+  assert.equal(allowed.result.diagnostics.observeOnlyEligibility.eligibilityReason, 'user_allowlist')
+  assert.equal(allowed.result.diagnostics.observeOnlyEligibility.matchedAllowlistType, 'user_id')
+
+  const emptyAllowlist = await preparePdfWithCountingParser({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: ' , , ',
+  }, { userId: '41', resumeId: 'resume-4' })
+  assert.equal(emptyAllowlist.parserCalls, 0)
+})
+
+test('PDF observe-only rollout supports analysis allowlist without user allowlist', async () => {
+  const allowed = await preparePdfWithCountingParser({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS: 'analysis-id-1, analysis-id-2',
+  }, { userId: '99', analysisId: 'analysis-id-2', resumeId: 'resume-5' })
+  assert.equal(allowed.parserCalls, 1)
+  assert.equal(allowed.result.diagnostics.observeOnlyEligibility.eligibilityReason, 'analysis_allowlist')
+  assert.equal(allowed.result.diagnostics.observeOnlyEligibility.matchedAllowlistType, 'analysis_id')
+
+  const blocked = await preparePdfWithCountingParser({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS: 'analysis-id-1, analysis-id-2',
+  }, { userId: '99', analysisId: 'analysis-id-3', resumeId: 'resume-6' })
+  assert.equal(blocked.parserCalls, 0)
+  assert.equal(blocked.result.diagnostics.observeOnlyEligibility.eligibilityReason, 'not_selected')
+})
+
+test('PDF observe-only deterministic sampling is bounded, stable, and does not use randomness', () => {
+  const base = {
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: '',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS: '',
+  }
+  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0' }, fileContentFingerprint: 'file-fp-1' }).sampled, false)
+  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100' }, fileContentFingerprint: 'file-fp-1' }).sampled, true)
+  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: 'invalid' }, fileContentFingerprint: 'file-fp-1' }).sampleRate, 0)
+  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '-1' }, fileContentFingerprint: 'file-fp-1' }).sampleRate, 0)
+  assert.equal(evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '250' }, fileContentFingerprint: 'file-fp-1' }).sampleRate, 100)
+
+  const first = evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-1' })
+  const second = evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-1' })
+  const different = evaluatePdfCanonicalExtractionObserveOnlyEligibility({ env: { ...base, PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-2' })
+  assert.equal(first.samplingBucket, second.samplingBucket)
+  assert.equal(first.sampled, second.sampled)
+  assert.notEqual(first.samplingBucket, different.samplingBucket)
+})
+
+test('PDF observe-only parser failure is diagnostic-only and does not expose unsafe metadata', async () => {
+  let parserCalls = 0
+  __setPdfJsClientForTests({
+    version: 'failure-mock',
+    getDocument() {
+      parserCalls += 1
+      throw new Error('synthetic parser failure containing Jane Doe jane@example.com 555-0100 resume.pdf')
+    },
+  })
+  const restore = withPdfObserveOnlyEnv({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: '26',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+  })
+  try {
+    const payload = Buffer.from('%PDF-1.7 fake pdf bytes').toString('base64')
+    const result = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: payload,
+      mimeType: 'application/pdf',
+      filename: 'Jane_Doe_resume.pdf',
+      fileSize: Buffer.from('%PDF-1.7 fake pdf bytes').length,
+      logger: quietLogger,
+      diagnosticsContext: { userId: '26', resumeId: 'resume-7' },
+    })
+    assert.equal(parserCalls, 1)
+    assert.equal(result.fileBufferBase64, payload)
+    assert.equal(result.base64File, payload)
+    assert.equal(result.extractedText, null)
+    assert.equal(result.diagnostics.pdfCanonicalExtractionObserveOnly.success, false)
+    const serialized = JSON.stringify(result.diagnostics)
+    assert.equal(serialized.includes('Jane_Doe'), false)
+    assert.equal(serialized.includes('jane@example.com'), false)
+    assert.equal(serialized.includes('555-0100'), false)
+    assert.equal(serialized.includes(payload), false)
+  } finally {
+    restore()
+  }
 })
 
 test('prepareResumePayloadForAnalysis keeps PDF payload unchanged', async () => {
@@ -620,8 +797,10 @@ test('prepareResumePayloadForAnalysis normalizes text/plain into extracted_text 
 
 
 test('prepareResumePayloadForAnalysis runs PDF observe-only extraction behind feature flag without changing scoring payload', async () => {
-  const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
-  process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+  const restoreEnv = withPdfObserveOnlyEnv({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100',
+  })
   const logged = []
   const logger = {
     info(message, payload) { logged.push({ level: 'info', message, payload }) },
@@ -659,15 +838,15 @@ test('prepareResumePayloadForAnalysis runs PDF observe-only extraction behind fe
     assert.equal(serializedLogs.includes('Synthetic Candidate Alpha'), false)
     assert.equal(serializedLogs.includes('synthetic-equivalent-resume'), false)
   } finally {
-    if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
-    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
-    __resetPdfJsClientForTests()
+    restoreEnv()
   }
 })
 
 test('PDF observe-only extraction classifies missing-text and malformed PDFs without throwing', async () => {
-  const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
-  process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+  const restoreEnv = withPdfObserveOnlyEnv({
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100',
+  })
   try {
     const missing = buildMissingTextPdfFixture()
     __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([missing]))
@@ -694,8 +873,6 @@ test('PDF observe-only extraction classifies missing-text and malformed PDFs wit
     assert.equal(malformedResult.diagnostics.pdfCanonicalExtractionObserveOnly.success, false)
     assert.equal(malformedResult.diagnostics.pdfCanonicalExtractionObserveOnly.failureCategory, 'malformed_pdf')
   } finally {
-    if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
-    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
-    __resetPdfJsClientForTests()
+    restoreEnv()
   }
 })

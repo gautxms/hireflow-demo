@@ -1,18 +1,24 @@
 # PDF canonical extraction observe-only rollout (PR 1A)
 
-## RCA: why the first handcrafted parser was insufficient
+## RCA: production-only safety gap
 
-The original PR 1A implementation used a handcrafted parser that decoded PDF bytes as Latin-1, regex-matched `stream ... endstream`, and extracted literal/hex strings. That was safe but not representative enough for staging evidence: real resume PDFs often use FlateDecode compressed streams, object streams, embedded/subset fonts, ToUnicode maps, split text operators, and positional text items. A parser tailored to uncompressed literal-string fixtures could misclassify selectable-text PDFs as `likely_scanned_pdf` or `low_text_density`, which would produce misleading evidence for PR 1B.
+PR #974 added non-blocking, observe-only PDF canonical extraction diagnostics with `pdfjs-dist/legacy/build/pdf.mjs`. That implementation was intentionally shadow-only, but HireFlow currently has only a production environment. A single global enablement flag is therefore too broad: setting `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=true` would run the parser for every production PDF upload.
 
-## Current PDF flow
+This update keeps the master kill switch disabled by default and adds internal allowlisting plus deterministic sampling so validation can start with controlled uploads only.
 
-- PDF uploads are prepared as `application/pdf` binary provider inputs with `inputKind: pdf_binary` and `inputMode: binary`.
-- `extractedText` remains `null` for PDFs and the AI provider receives the original base64 PDF bytes.
-- DOCX and enabled legacy DOC files continue to be locally extracted to `text/plain` before AI analysis.
+## Current PDF flow and insertion point
+
+- PDF uploads enter `prepareResumePayloadForAnalysis()` from the AI analysis path and the async parse job path.
+- The async parse job already has `userId`, `analysisId`, `resumeId`, parse-job ID, file metadata, and safe file-content fingerprints available through diagnostics context.
+- The smallest safe insertion point is inside the existing PDF branch of `prepareResumePayloadForAnalysis()`, immediately before the observe-only parser is called.
+- The eligibility decision only controls whether diagnostics run; it does not alter the prepared scoring payload.
+- PDF scoring remains `preparedMimeType: application/pdf`, `inputKind: pdf_binary`, `inputMode: binary`, `extractedText: null`, and `base64File` set to the original PDF base64 payload.
+
+DOCX and enabled legacy DOC files continue to be locally extracted to `text/plain` before AI analysis. This rollout does not change DOCX, legacy DOC, retry/fallback, ranking, rendering, or historical data behavior.
 
 ## Observe-only flow
 
-When `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=true`, PDF preparation also runs local selectable-text diagnostics using `pdfjs-dist` text-content extraction. The diagnostic result is attached to safe in-memory diagnostics and logged as structured metadata only. It does **not**:
+When a PDF is eligible, preparation runs local selectable-text diagnostics using PDF.js text-content extraction. The diagnostic result is attached to safe in-memory diagnostics and logged as structured metadata only. It does **not**:
 
 - change `fileBufferBase64`;
 - change `preparedMimeType`;
@@ -21,21 +27,102 @@ When `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=true`, PDF preparation also 
 - trigger a second AI call;
 - reject or reroute PDF analysis based on quality classification.
 
-## Feature flag and limits
+If eligibility evaluation or parsing fails, the existing PDF binary analysis flow continues and the failure is represented only as controlled diagnostics.
 
-- Flag: `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED`
-- Default: disabled. Only `1`, `true`, `yes`, `on`, or `enabled` enable it.
-- Limits:
-  - `PDF_CANONICAL_EXTRACTION_MAX_BYTES` defaults to 5 MiB for the observe-only benchmark.
-  - `PDF_CANONICAL_EXTRACTION_TIMEOUT_MS` defaults to 1500 ms.
-  - `PDF_CANONICAL_EXTRACTION_MAX_PAGES` defaults to 20 pages.
-- Capped observations preserve both `pageCount` and `pagesRead`, set `observationTruncated=true` / `pageLimitReached=true`, and are excluded from full-document equivalence claims.
+## Environment variables
 
-Rollback is disabling or removing `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED`.
+| Variable | Default | Behavior |
+| --- | --- | --- |
+| `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED` | `false` | Master kill switch. Only `1`, `true`, `yes`, `on`, or `enabled` enable any observe-only parsing. Missing or false means the parser never runs. |
+| `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE` | `0` | Deterministic sampling percentage from `0` to `100`. Missing, invalid, or negative values fall back to `0`; values above `100` are clamped to `100`. |
+| `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS` | empty | Comma-separated internal user IDs. Whitespace is trimmed. Empty entries are ignored. Do not use emails. |
+| `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS` | empty | Comma-separated analysis IDs. Whitespace is trimmed. Empty entries are ignored. |
+| `PDF_CANONICAL_EXTRACTION_MAX_BYTES` | `5242880` | Existing parser byte cap. |
+| `PDF_CANONICAL_EXTRACTION_TIMEOUT_MS` | `1500` | Existing parser timeout cap. |
+| `PDF_CANONICAL_EXTRACTION_MAX_PAGES` | `20` | Existing parser page cap. |
+
+Rollback is setting `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=false`. No DB migration or scoring rollback is required.
+
+## Eligibility order
+
+When preparing a PDF:
+
+1. If the master flag is missing or false, eligibility is `master_disabled` and the parser does not run.
+2. If the current user ID matches `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS`, eligibility is `user_allowlist`.
+3. Else, if the current analysis ID matches `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS`, eligibility is `analysis_allowlist`.
+4. Else, if the sample rate is greater than `0`, deterministic sampling is evaluated.
+5. Otherwise eligibility is `not_selected` and the parser does not run.
+
+## Deterministic sampling algorithm
+
+Sampling uses only safe stable identifiers. The preferred identifier is the existing non-reversible file-content fingerprint; if that is unavailable, the code falls back to resume ID and then analysis ID. It never uses raw filename, email address, candidate name, phone number, resume text, binary content, or `Math.random()`.
+
+Algorithm:
+
+1. Hash `pdf-canonical-observe-only-sampling-v1:<stable identifier>` with SHA-256.
+2. Read the first 12 hex characters of the hash.
+3. Convert that value to an integer and map it into bucket `0..9999` with modulo `10000`.
+4. Convert the configured percentage to a threshold with `Math.floor(sampleRate * 100)`.
+5. Select the upload when `bucket < threshold`.
+
+Examples:
+
+- sample rate `0` has no threshold and never samples;
+- sample rate `1` selects buckets `0..99`;
+- sample rate `5` selects buckets `0..499`;
+- sample rate `100` selects every non-empty stable identifier.
+
+The same file-content fingerprint produces the same bucket and decision across runs.
+
+## Safe diagnostic metadata
+
+Structured diagnostics include eligibility fields and parser metrics only:
+
+```json
+{
+  "observeOnlyEligibility": {
+    "masterEnabled": true,
+    "eligible": true,
+    "eligibilityReason": "user_allowlist",
+    "allowlistMatched": true,
+    "matchedAllowlistType": "user_id",
+    "sampled": false,
+    "sampleRate": 0,
+    "samplingBucket": null
+  },
+  "pdfCanonicalExtractionObserveOnly": {
+    "enabled": true,
+    "success": true,
+    "extractionMethod": "pdfjs_dist_text_content_observe_only",
+    "parserVersion": "5.4.394",
+    "durationMs": 12.4,
+    "inputByteSize": 1820,
+    "pageCount": 1,
+    "pagesRead": 1,
+    "observationTruncated": false,
+    "pageLimitReached": false,
+    "lineCount": 7,
+    "extractedTextLength": 361,
+    "canonicalTextLength": 361,
+    "normalizedFingerprint": "<sha256>",
+    "printableRatio": 1,
+    "suspiciousNoiseRatio": 0,
+    "duplicateLineRatio": 0,
+    "safeSectionMarkerCoverage": { "expected": 6, "found": 4, "ratio": 0.6667 },
+    "qualityClassification": "usable_text_extraction",
+    "ocrRequired": false,
+    "failureCategory": null
+  }
+}
+```
+
+Allowed eligibility reasons are `master_disabled`, `user_allowlist`, `analysis_allowlist`, `deterministic_sample`, and `not_selected`. Allowed allowlist match types are `user_id`, `analysis_id`, and `null`.
+
+Never log raw extracted resume text, candidate names, emails, phone numbers, filenames, or binary content. Ordinary observe-only logs should prefer boolean match fields, reasons, fingerprints, counts, timings, and classifications rather than raw identifiers.
 
 ## Parser/dependency decision
 
-PR 1A now uses `pdfjs-dist` as the observe-only parser so staging benchmarks exercise the likely production candidate rather than a handcrafted parser.
+PR 1A uses `pdfjs-dist` as the observe-only parser so diagnostics exercise the likely production candidate rather than a handcrafted parser.
 
 | Item | Decision |
 | --- | --- |
@@ -43,12 +130,8 @@ PR 1A now uses `pdfjs-dist` as the observe-only parser so staging benchmarks exe
 | Version | `5.4.394` pinned exactly in `package.json` and `package-lock.json` |
 | License | Apache-2.0 |
 | Import target | `pdfjs-dist/legacy/build/pdf.mjs` |
-| Runtime dependency profile | Pure JavaScript PDF.js distribution; no required native runtime dependency. The optional `@napi-rs/canvas` package is not required for text extraction. |
-| Node/Railway compatibility | Repository engines require Node `>=20.19.0`; `pdfjs-dist@5.4.394` declares Node `>=20.16.0 || >=22.3.0`, so the current Railway-compatible runtime satisfies it. Local inspection ran on Node `v24.15.0` / npm `11.4.2`. |
 | Worker configuration | Observe-only extraction passes `disableWorker: true` and uses the legacy ESM build in-process to avoid worker asset deployment/configuration fragility on Railway. |
-| Memory considerations | The upload buffer is already resident for the provider call. Observe-only parsing copies it to `Uint8Array`, reads text-content items only, caps bytes/pages, and never persists raw text. |
-| Timeout considerations | The wrapper races PDF.js document/page/text-content promises against `PDF_CANONICAL_EXTRACTION_TIMEOUT_MS`, destroys the loading task on timeout, checks deadlines between pages and text-item layout passes, and returns `parser_timeout` as diagnostics only. PDF.js internals cannot be force-interrupted at every CPU instruction, so rollout uses conservative size/page limits. |
-| Package-size impact | Adds the PDF.js distribution package, which is materially larger than the removed internal parser (release dist zip is roughly 6–7 MiB; npm unpacked package is larger because it includes builds/assets/types). |
+| Timeout considerations | The wrapper races PDF.js document/page/text-content promises against `PDF_CANONICAL_EXTRACTION_TIMEOUT_MS`, destroys the loading task on timeout, checks deadlines between pages and text-item layout passes, and returns `parser_timeout` as diagnostics only. |
 | Rollback procedure | Disable `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED`; no DB migration or scoring rollback is required. |
 
 Native Poppler/PDFium wrappers were rejected for PR 1A because they introduce deployment-specific binaries. `pdf-parse` was rejected because it wraps/abstracts PDF.js with less direct access to layout-position metadata needed for multi-column diagnostics.
@@ -67,80 +150,38 @@ Classifications are diagnostic only:
 - `parser_timeout`: deadline exceeded.
 - `parser_error`: controlled parser failure not covered by the more specific categories.
 
-Conservative thresholds:
-
-- OCR heuristic: total canonical text below 80 characters or below 80 characters/page.
-- Likely scanned: zero text or below 20 characters/page.
-- Low density: below 200 canonical characters, below 120 characters/page, or below 0.01 text characters per input byte.
-- Suspicious noise: suspicious-noise ratio above 5% or printable ratio below 92%.
-
 These thresholds must not reject, reroute, or rescore PDFs in PR 1A.
 
-## Safe diagnostic metadata
+## Production-only internal rollout sequence
 
-Structured logs include only PII-safe fields:
+1. Deploy with:
+   - `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=false`
+2. Add the remaining variables while still disabled:
+   - `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE=0`
+   - `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS=<internal user ID>`
+   - `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS=`
+3. Enable:
+   - `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=true`
+4. Upload controlled internal PDF and DOCX fixtures only.
+5. Monitor:
+   - `eligibilityReason`;
+   - extraction duration;
+   - `qualityClassification`;
+   - `failureCategory`;
+   - `ocrRequired`;
+   - `pageCount`;
+   - `pagesRead`;
+   - `observationTruncated`;
+   - marker coverage;
+   - worker latency;
+   - async completion behavior.
+6. Roll back immediately by setting:
+   - `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=false`
+7. Only after internal validation, consider:
+   - `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE=1`
+8. Expand gradually to `5` only after reviewing latency and parser-error rates.
 
-```json
-{
-  "enabled": true,
-  "success": true,
-  "extractionMethod": "pdfjs_dist_text_content_observe_only",
-  "parserVersion": "5.4.394",
-  "durationMs": 12.4,
-  "inputByteSize": 1820,
-  "pageCount": 1,
-  "pagesRead": 1,
-  "observationTruncated": false,
-  "pageLimitReached": false,
-  "lineCount": 7,
-  "extractedTextLength": 361,
-  "canonicalTextLength": 361,
-  "normalizedFingerprint": "<sha256>",
-  "printableRatio": 1,
-  "suspiciousNoiseRatio": 0,
-  "duplicateLineRatio": 0,
-  "safeSectionMarkerCoverage": { "expected": 6, "found": 4, "ratio": 0.6667 },
-  "qualityClassification": "usable_text_extraction",
-  "ocrRequired": false,
-  "failureCategory": null
-}
-```
-
-Never log raw extracted resume text, candidate names, emails, phone numbers, filenames, or binary content.
-
-## Synthetic test corpus
-
-The diagnostic fixtures use synthetic candidate data only and now include compressed/layout-aware PDFs rather than only uncompressed literal-string PDFs:
-
-- standard selectable-text PDF with FlateDecode-compressed content stream;
-- split text across multiple text operations;
-- positional text items consumed through PDF.js `getTextContent()`;
-- genuine two-column-like positional fixture;
-- table-like rows;
-- bullets;
-- headers and footers;
-- employment date ranges;
-- WinAnsi font encoding coverage where practical in generated fixtures;
-- image-only/missing-text PDF;
-- malformed PDF;
-- large PDF within upload constraints.
-
-The harness compares PDF observe-only diagnostics to equivalent DOCX/DOC fixtures using normalized fingerprints, marker coverage, text-length variance, date-range preservation, skills preservation, and practical section-order signals.
-
-## Staging validation tooling
-
-Use the existing resume-format diagnostic harness with `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=true`. The helper summary reports only PII-safe aggregate evidence:
-
-- parser success/failure counts and success rate;
-- quality-classification counts;
-- average/max extraction latency;
-- extracted-text length statistics;
-- section-marker coverage;
-- OCR-required count;
-- truncated-observation count;
-- comparable/equivalent fingerprint pair rates, excluding truncated PDF observations from full-document equivalence claims.
-
-No raw text, filenames, emails, phone numbers, candidate names, or binary content are emitted.
+Do not enable broad sampling automatically.
 
 ## Evidence required before PR 1B
 
@@ -153,18 +194,9 @@ Do not change PDF scoring inputs until observe-only data shows:
 5. Clear handling plan for scanned/image-only PDFs, likely requiring OCR in a separate PR.
 6. No PII/raw text leakage in logs.
 
-## Staged rollout instructions
-
-1. Keep the flag disabled in production while deploying the code.
-2. Enable `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=true` in staging with default 5 MiB / 1500 ms / 20-page limits.
-3. Run synthetic exported pairs through the diagnostic harness and review only aggregate/fingerprint metadata.
-4. Sample a small staging upload cohort and monitor parser latency, timeout/error classifications, and OCR-required rate.
-5. If worker latency rises or parser errors spike, disable the flag immediately.
-6. Only after stable staging evidence should PR 1B propose changing scoring inputs.
-
 ## Known limitations
 
 - PDF.js timeout is enforced around async document/page/text-content calls and between layout passes, but CPU inside PDF.js cannot be interrupted at every instruction; conservative size/page limits mitigate this.
 - `disableWorker: true` avoids Railway worker asset complexity but runs parsing in the current process when enabled.
 - Some PDFs with unusual font maps can still produce sparse or noisy text and should remain diagnostics-only until corpus evidence is reviewed.
-- OCR is intentionally out of scope for PR 1A.
+- OCR and PR 1B scoring changes are intentionally out of scope.

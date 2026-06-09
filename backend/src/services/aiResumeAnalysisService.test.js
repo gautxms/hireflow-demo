@@ -771,8 +771,12 @@ test('analyzeResumeWithConfiguredFallback counts only executed attempts against 
 
 
 test('PDF observe-only extraction does not alter scoring payload or create an extra AI call', async () => {
-  const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+  const previous = {
+    enabled: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED,
+    sampleRate: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE,
+  }
   process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+  process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = '100'
   const fixture = buildSyntheticPdfResumeFixture()
   __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([fixture]))
   const credentials = {
@@ -786,7 +790,7 @@ test('PDF observe-only extraction does not alter scoring payload or create an ex
   }
   const calls = []
   try {
-    await analyzeResumeWithConfiguredFallback(fixture.buffer.toString('base64'), 'application/pdf', 'resume.pdf', {
+    const response = await analyzeResumeWithConfiguredFallback(fixture.buffer.toString('base64'), 'application/pdf', 'resume.pdf', {
       credentials,
       systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
       analyzeWithAnthropic: async (fileB64, mimeType, filename) => {
@@ -807,9 +811,17 @@ test('PDF observe-only extraction does not alter scoring payload or create an ex
     assert.equal(calls[0].fileB64, fixture.buffer.toString('base64'))
     assert.equal(calls[0].mimeType, 'application/pdf')
     assert.equal(calls[0].filename, 'resume.pdf')
+    assert.equal(response.attempts.length, 1)
+    assert.equal(response.attempts[0].inputDiagnostics.preparedMimeType, 'application/pdf')
+    assert.equal(response.attempts[0].inputDiagnostics.inputKind, 'pdf_binary')
+    assert.equal(response.attempts[0].inputDiagnostics.inputMode, 'binary')
+    assert.equal(response.attempts[0].inputDiagnostics.extractedTextCharCount, 0)
+    assert.equal(response.attempts[0].inputDiagnostics.pdfCanonicalExtractionObserveOnly.success, true)
   } finally {
-    if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
-    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+    if (previous.enabled === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous.enabled
+    if (previous.sampleRate === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE
+    else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = previous.sampleRate
     __resetPdfJsClientForTests()
   }
 })
