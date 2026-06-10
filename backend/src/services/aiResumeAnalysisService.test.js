@@ -774,9 +774,11 @@ test('PDF observe-only extraction does not alter scoring payload or create an ex
   const previous = {
     enabled: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED,
     sampleRate: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE,
+    maxAttemptsPerFile: process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE,
   }
   process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
   process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = '100'
+  process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = '8'
   const fixture = buildSyntheticPdfResumeFixture()
   __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([fixture]))
   const credentials = {
@@ -822,6 +824,8 @@ test('PDF observe-only extraction does not alter scoring payload or create an ex
     else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous.enabled
     if (previous.sampleRate === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE
     else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = previous.sampleRate
+    if (previous.maxAttemptsPerFile === undefined) delete process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+    else process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = previous.maxAttemptsPerFile
     __resetPdfJsClientForTests()
   }
 })
@@ -831,9 +835,11 @@ test('PDF observe-only extraction runs once across provider fallback retries', a
   const previous = {
     enabled: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED,
     sampleRate: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE,
+    maxAttemptsPerFile: process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE,
   }
   process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
   process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = '100'
+  process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = '8'
   const fixture = buildSyntheticPdfResumeFixture({ id: 'retry-parser-once-pdf' })
   let parserCalls = 0
   const mock = buildPdfJsTextContentMockFromFixtures([fixture, fixture])
@@ -891,6 +897,8 @@ test('PDF observe-only extraction runs once across provider fallback retries', a
     else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous.enabled
     if (previous.sampleRate === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE
     else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = previous.sampleRate
+    if (previous.maxAttemptsPerFile === undefined) delete process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+    else process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = previous.maxAttemptsPerFile
     __resetPdfJsClientForTests()
   }
 })
