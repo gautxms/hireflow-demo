@@ -39,13 +39,19 @@ const quietLogger = { debug() {}, info() {}, warn() {}, log() {} }
 
 function withPdfObserveOnlyEnabled(fn) {
   return async () => {
-    const previous = process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+    const previous = {
+      enabled: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED,
+      sampleRate: process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE,
+    }
     process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = 'true'
+    process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = '100'
     try {
       await fn()
     } finally {
-      if (previous === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
-      else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous
+      if (previous.enabled === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED
+      else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED = previous.enabled
+      if (previous.sampleRate === undefined) delete process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE
+      else process.env.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE = previous.sampleRate
       __resetPdfJsClientForTests()
     }
   }

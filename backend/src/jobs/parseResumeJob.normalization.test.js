@@ -9,6 +9,8 @@ import {
   __testables,
 } from './parseResumeJob.js'
 import { __resetMammothClientForTests, __setMammothClientForTests } from '../services/resumeDocumentExtractionService.js'
+import { buildPdfJsTextContentMockFromFixtures, buildSyntheticPdfResumeFixture } from '../services/resumeFormatDiagnosticFixtures.js'
+import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from '../services/pdfCanonicalExtractionService.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
 
@@ -19,6 +21,27 @@ after(async () => {
 
 const { buildNormalizedCandidates, isLegacyWordDocument } = __testables
 
+
+function withPdfObserveOnlyEnv(overrides = {}) {
+  const keys = [
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED',
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE',
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS',
+    'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS',
+  ]
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  for (const key of keys) delete process.env[key]
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) process.env[key] = value
+  }
+  return () => {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key]
+      else process.env[key] = previous[key]
+    }
+    __resetPdfJsClientForTests()
+  }
+}
 
 
 test('legacy Word detection rejects DOC extension, application/msword MIME, and OLE magic', () => {
@@ -597,6 +620,99 @@ function createParseJob({ id, resumeId, filename, mimeType, originalMimeType, fi
     },
   }
 }
+
+
+test('runParse skips duplicate PDF observe-only parsing for allowlisted and sampled PDFs', async (t) => {
+  for (const scenario of [
+    {
+      name: 'allowlisted',
+      env: {
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: '7',
+      },
+      expectedReason: 'user_allowlist',
+    },
+    {
+      name: 'sampled',
+      env: {
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+        PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100',
+      },
+      expectedReason: 'deterministic_sample',
+    },
+  ]) {
+    const restoreEnv = withPdfObserveOnlyEnv(scenario.env)
+    const fixture = buildSyntheticPdfResumeFixture({ id: `parse-${scenario.name}-pdf` })
+    let parserCalls = 0
+    const mock = buildPdfJsTextContentMockFromFixtures([fixture, fixture])
+    __setPdfJsClientForTests({
+      ...mock,
+      getDocument(...args) {
+        parserCalls += 1
+        return mock.getDocument(...args)
+      },
+    })
+
+    const queries = []
+    t.mock.method(pool, 'query', async (sql, params) => {
+      queries.push({ sql, params })
+      if (String(sql).includes('FROM analyses')) {
+        return { rows: [{ id: 'analysis-same-base-multiformat', status: 'processing' }], rowCount: 1 }
+      }
+      if (String(sql).includes('FROM integration_webhooks')) {
+        return { rows: [], rowCount: 0 }
+      }
+      return { rows: [], rowCount: 1 }
+    })
+
+    const aiCalls = []
+    __setParseResumeJobTestOverrides({
+      analyzeResumeWithConfiguredFallback: async (fileBufferBase64, mimeType, filename, options = {}) => {
+        aiCalls.push({ fileBufferBase64, mimeType, filename, options })
+        assert.equal(options.diagnosticsContext?.pdfCanonicalExtractionObserveOnlyAlreadyEvaluated, true)
+        assert.equal(options.diagnosticsContext?.observeOnlyEligibility?.eligibilityReason, scenario.expectedReason)
+        return {
+          result: {
+            candidates: [{ id: `candidate-${scenario.name}`, name: 'Synthetic Candidate', profile_score: 90 }],
+            methodUsed: 'mock-pdf-binary',
+          },
+          provider: 'anthropic-primary',
+          model: 'mock-model',
+          attempts: [{ success: true, provider: 'anthropic-primary', tokenUsage: { usageAvailable: false, unavailableReason: 'test_mock' } }],
+        }
+      },
+      cacheJobResult: async () => {},
+    })
+
+    try {
+      const job = createParseJob({
+        id: `parse-${scenario.name}-duplicate-guard`,
+        resumeId: `resume-${scenario.name}-duplicate-guard`,
+        filename: `${scenario.name}-resume.pdf`,
+        mimeType: 'application/pdf',
+        originalMimeType: 'application/pdf',
+        fileExtension: 'pdf',
+        fileBuffer: fixture.buffer,
+      })
+      const result = await __testables.runParse(job)
+
+      assert.equal(parserCalls, 1)
+      assert.equal(aiCalls.length, 1)
+      assert.equal(aiCalls[0].fileBufferBase64, fixture.buffer.toString('base64'))
+      assert.equal(aiCalls[0].mimeType, 'application/pdf')
+      assert.equal(result.parseDiagnostics.preparedMimeType, 'application/pdf')
+      assert.equal(result.parseDiagnostics.inputKind, 'pdf_binary')
+      assert.equal(result.parseDiagnostics.inputMode, 'binary')
+      assert.equal(result.parseDiagnostics.extractedTextCharCount, 0)
+      assert.equal(result.parseDiagnostics.observeOnlyEligibility.eligibilityReason, scenario.expectedReason)
+    } finally {
+      restoreEnv()
+      __resetParseResumeJobTestOverrides()
+      t.mock.reset()
+    }
+  }
+})
 
 test('same-base-name PDF, DOC, and DOCX parse jobs preserve identity and route formats independently', async (t) => {
   const baseName = '04_Vikram_Rao_Junior_SDE_Resume'

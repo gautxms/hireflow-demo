@@ -1321,7 +1321,12 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
     if (!configuredModels.length) return false
     return configuredModels.includes(String(entry?.model || '').trim())
   }
-  const preparedPayload = await prepareResumePayloadForAnalysis({ fileBufferBase64, mimeType, filename })
+  const preparedPayload = await prepareResumePayloadForAnalysis({
+    fileBufferBase64,
+    mimeType,
+    filename,
+    diagnosticsContext: options?.diagnosticsContext || {},
+  })
   const preparedMimeType = preparedPayload.preparedMimeType || preparedPayload.mimeType
   const inputKind = preparedPayload.inputKind || (String(preparedMimeType).toLowerCase() === 'text/plain' ? 'extracted_text' : 'pdf_binary')
   const inputDiagnostics = preparedPayload.diagnostics && typeof preparedPayload.diagnostics === 'object'

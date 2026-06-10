@@ -31,6 +31,126 @@ const CATEGORY = {
 let pdfJsClient = null
 let pdfJsClientOverrideForTests = undefined
 
+const ELIGIBILITY_REASON = {
+  masterDisabled: 'master_disabled',
+  userAllowlist: 'user_allowlist',
+  analysisAllowlist: 'analysis_allowlist',
+  deterministicSample: 'deterministic_sample',
+  notSelected: 'not_selected',
+}
+const MATCHED_ALLOWLIST_TYPE = {
+  userId: 'user_id',
+  analysisId: 'analysis_id',
+}
+
+function parseCommaSeparatedAllowlist(value) {
+  return new Set(String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean))
+}
+
+function normalizeObserveOnlySampleRate(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return 0
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100) return 0
+  return numeric
+}
+
+function buildDeterministicSamplingBucket(stableIdentifier) {
+  const normalized = String(stableIdentifier || '').trim()
+  if (!normalized) return null
+  const hashPrefix = createHash('sha256')
+    .update('pdf-canonical-observe-only-sampling-v1:')
+    .update(normalized)
+    .digest('hex')
+    .slice(0, 12)
+  return Number.parseInt(hashPrefix, 16) % 10000
+}
+
+export function evaluatePdfCanonicalExtractionObserveOnlyEligibility({
+  env = process.env,
+  userId = null,
+  analysisId = null,
+  resumeId = null,
+  fileContentFingerprint = null,
+} = {}) {
+  const masterEnabled = isPdfCanonicalExtractionObserveOnlyEnabled(env)
+  const sampleRate = normalizeObserveOnlySampleRate(env?.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE)
+  const base = {
+    masterEnabled,
+    eligible: false,
+    eligibilityReason: ELIGIBILITY_REASON.masterDisabled,
+    allowlistMatched: false,
+    matchedAllowlistType: null,
+    sampled: false,
+    sampleRate,
+    samplingBucket: null,
+  }
+
+  if (!masterEnabled) return base
+
+  const normalizedUserId = userId === null || userId === undefined ? '' : String(userId).trim()
+  const normalizedAnalysisId = analysisId === null || analysisId === undefined ? '' : String(analysisId).trim()
+  const allowedUserIds = parseCommaSeparatedAllowlist(env?.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS)
+  const allowedAnalysisIds = parseCommaSeparatedAllowlist(env?.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS)
+
+  if (normalizedUserId && allowedUserIds.has(normalizedUserId)) {
+    return {
+      ...base,
+      eligible: true,
+      eligibilityReason: ELIGIBILITY_REASON.userAllowlist,
+      allowlistMatched: true,
+      matchedAllowlistType: MATCHED_ALLOWLIST_TYPE.userId,
+    }
+  }
+
+  if (normalizedAnalysisId && allowedAnalysisIds.has(normalizedAnalysisId)) {
+    return {
+      ...base,
+      eligible: true,
+      eligibilityReason: ELIGIBILITY_REASON.analysisAllowlist,
+      allowlistMatched: true,
+      matchedAllowlistType: MATCHED_ALLOWLIST_TYPE.analysisId,
+    }
+  }
+
+  const stableSamplingIdentifier = fileContentFingerprint || resumeId || normalizedAnalysisId || null
+  const samplingBucket = sampleRate > 0 ? buildDeterministicSamplingBucket(stableSamplingIdentifier) : null
+  const threshold = Math.floor(sampleRate * 100)
+  const sampled = samplingBucket !== null && threshold > 0 && samplingBucket < threshold
+
+  return {
+    ...base,
+    eligibilityReason: sampled ? ELIGIBILITY_REASON.deterministicSample : ELIGIBILITY_REASON.notSelected,
+    eligible: sampled,
+    sampled,
+    samplingBucket,
+  }
+}
+
+export const PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ELIGIBILITY_REASONS = ELIGIBILITY_REASON
+
+function compactPdfCanonicalExtractionEligibility(eligibility = {}) {
+  return {
+    masterEnabled: Boolean(eligibility?.masterEnabled),
+    eligible: Boolean(eligibility?.eligible),
+    eligibilityReason: eligibility?.eligibilityReason || ELIGIBILITY_REASON.notSelected,
+    allowlistMatched: Boolean(eligibility?.allowlistMatched),
+    matchedAllowlistType: eligibility?.matchedAllowlistType || null,
+    sampled: Boolean(eligibility?.sampled),
+    sampleRate: Number.isFinite(Number(eligibility?.sampleRate)) ? Number(eligibility.sampleRate) : 0,
+    samplingBucket: Number.isInteger(eligibility?.samplingBucket) ? eligibility.samplingBucket : null,
+  }
+}
+
+export function logSafePdfCanonicalExtractionEligibility(logger, eligibility) {
+  const target = logger?.info || logger?.log
+  if (typeof target === 'function') {
+    target.call(logger, '[ResumeDiagnostics] pdf_canonical_extraction_observe_only_eligibility', compactPdfCanonicalExtractionEligibility(eligibility))
+  }
+}
+
 function round(value, digits = 4) {
   if (!Number.isFinite(Number(value))) return 0
   const factor = 10 ** digits

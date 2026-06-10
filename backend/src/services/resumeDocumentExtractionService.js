@@ -16,9 +16,10 @@ import {
   isLegacyDocExtractionEnabled,
 } from './legacyDocExtractionService.js'
 import {
-  isPdfCanonicalExtractionObserveOnlyEnabled,
+  evaluatePdfCanonicalExtractionObserveOnlyEligibility,
   observePdfCanonicalTextExtraction,
   logSafePdfCanonicalExtractionDiagnostics,
+  logSafePdfCanonicalExtractionEligibility,
 } from './pdfCanonicalExtractionService.js'
 
 let mammothClient = null
@@ -212,6 +213,32 @@ export function logSafeResumeFileDiagnostics(logger, event, diagnostics, level =
   if (typeof target === 'function') {
     target.call(logger, `[ResumeDiagnostics] ${event}`, compactResumeFileDiagnostics(diagnostics))
   }
+}
+
+
+function compactObserveOnlyEligibilityForReuse(eligibility = null) {
+  if (!eligibility || typeof eligibility !== 'object') return null
+  return {
+    masterEnabled: Boolean(eligibility.masterEnabled),
+    eligible: Boolean(eligibility.eligible),
+    eligibilityReason: eligibility.eligibilityReason || 'not_selected',
+    allowlistMatched: Boolean(eligibility.allowlistMatched),
+    matchedAllowlistType: eligibility.matchedAllowlistType || null,
+    sampled: Boolean(eligibility.sampled),
+    sampleRate: Number.isFinite(Number(eligibility.sampleRate)) ? Number(eligibility.sampleRate) : 0,
+    samplingBucket: Number.isInteger(eligibility.samplingBucket) ? eligibility.samplingBucket : null,
+  }
+}
+
+function compactPdfObserveOnlyDiagnosticsForReuse(diagnostics = null) {
+  if (!diagnostics || typeof diagnostics !== 'object') return { enabled: false }
+  const safeDiagnostics = { ...diagnostics }
+  delete safeDiagnostics.extractedText
+  delete safeDiagnostics.rawText
+  delete safeDiagnostics.text
+  delete safeDiagnostics.binaryContent
+  delete safeDiagnostics.base64File
+  return safeDiagnostics
 }
 
 function buildPreparedPayloadDiagnostics({
@@ -465,8 +492,8 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
   const lowerFilename = normalizedFilename.toLowerCase()
   const fileBuffer = decodeBase64ToBuffer(fileBufferBase64)
   const baseDiagnosticsInput = {
-    resumeId: diagnosticsContext?.resumeId || null,
-    analysisId: diagnosticsContext?.analysisId || null,
+    resumeId: diagnosticsContext?.resumeId ?? null,
+    analysisId: diagnosticsContext?.analysisId ?? null,
     parseJobId: diagnosticsContext?.parseJobId || null,
     originalFilename: normalizedFilename || null,
     displayFilename,
@@ -618,12 +645,68 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
   }
 
   if (normalizedMimeType === 'application/pdf') {
-    const pdfObserveOnlyEnabled = isPdfCanonicalExtractionObserveOnlyEnabled()
+    let observeOnlyEligibility
     let pdfCanonicalExtractionObserveOnly = { enabled: false }
 
-    if (pdfObserveOnlyEnabled) {
-      pdfCanonicalExtractionObserveOnly = await observePdfCanonicalTextExtraction(fileBuffer)
-      logSafePdfCanonicalExtractionDiagnostics(logger, pdfCanonicalExtractionObserveOnly)
+    const skipDuplicateObserveOnlyExtraction = Boolean(diagnosticsContext?.pdfCanonicalExtractionObserveOnlyAlreadyEvaluated)
+
+    if (skipDuplicateObserveOnlyExtraction) {
+      observeOnlyEligibility = compactObserveOnlyEligibilityForReuse(diagnosticsContext?.observeOnlyEligibility) || {
+        masterEnabled: false,
+        eligible: false,
+        eligibilityReason: 'not_selected',
+        allowlistMatched: false,
+        matchedAllowlistType: null,
+        sampled: false,
+        sampleRate: 0,
+        samplingBucket: null,
+      }
+      pdfCanonicalExtractionObserveOnly = compactPdfObserveOnlyDiagnosticsForReuse(diagnosticsContext?.pdfCanonicalExtractionObserveOnly)
+    } else {
+      try {
+        observeOnlyEligibility = evaluatePdfCanonicalExtractionObserveOnlyEligibility({
+          userId: diagnosticsContext?.userId ?? null,
+          analysisId: diagnosticsContext?.analysisId ?? null,
+          resumeId: diagnosticsContext?.resumeId ?? null,
+          fileContentFingerprint: buildFileContentFingerprint(fileBuffer),
+        })
+      } catch (error) {
+        observeOnlyEligibility = {
+          masterEnabled: false,
+          eligible: false,
+          eligibilityReason: 'not_selected',
+          allowlistMatched: false,
+          matchedAllowlistType: null,
+          sampled: false,
+          sampleRate: 0,
+          samplingBucket: null,
+        }
+        pdfCanonicalExtractionObserveOnly = {
+          enabled: false,
+          success: false,
+          failureCategory: 'eligibility_evaluation_error',
+          errorFingerprint: buildSafeErrorCauseDiagnostics(error)?.messageFingerprint || null,
+        }
+      }
+    }
+
+    logSafePdfCanonicalExtractionEligibility(logger, observeOnlyEligibility)
+
+    if (!skipDuplicateObserveOnlyExtraction && observeOnlyEligibility.eligible) {
+      try {
+        pdfCanonicalExtractionObserveOnly = await observePdfCanonicalTextExtraction(fileBuffer)
+      } catch (error) {
+        pdfCanonicalExtractionObserveOnly = {
+          enabled: true,
+          success: false,
+          failureCategory: 'parser_error',
+          errorFingerprint: buildSafeErrorCauseDiagnostics(error)?.messageFingerprint || null,
+        }
+      }
+      logSafePdfCanonicalExtractionDiagnostics(logger, {
+        ...pdfCanonicalExtractionObserveOnly,
+        observeOnlyEligibility,
+      })
     }
 
     return {
@@ -646,7 +729,8 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
           extractionMethod: 'pdf_binary_provider_input',
           fallbackUsed: false,
         }),
-        pdfCanonicalExtractionObserveOnlyEnabled: pdfObserveOnlyEnabled,
+        pdfCanonicalExtractionObserveOnlyEnabled: observeOnlyEligibility.masterEnabled,
+        observeOnlyEligibility,
         pdfCanonicalExtractionObserveOnly,
       }, {
         extractionMethod: 'pdf_binary_provider_input',
