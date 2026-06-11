@@ -259,6 +259,8 @@ function compactLegacyDocSemanticObserveOnlyDiagnosticsForReuse(diagnostics = nu
   if (!diagnostics || typeof diagnostics !== 'object') return { enabled: false }
   const safeDiagnostics = { ...diagnostics }
   delete safeDiagnostics.semanticText
+  delete safeDiagnostics.semanticTextForScoring
+  delete safeDiagnostics.semanticTextForFingerprint
   delete safeDiagnostics.extractedText
   delete safeDiagnostics.rawText
   delete safeDiagnostics.text
@@ -286,6 +288,8 @@ function compactLegacyDocSemanticScoringExperimentDiagnosticsForReuse(diagnostic
   if (!diagnostics || typeof diagnostics !== 'object') return null
   const safeDiagnostics = { ...diagnostics }
   delete safeDiagnostics.semanticText
+  delete safeDiagnostics.semanticTextForScoring
+  delete safeDiagnostics.semanticTextForFingerprint
   delete safeDiagnostics.extractedText
   delete safeDiagnostics.rawText
   delete safeDiagnostics.text
@@ -836,11 +840,11 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       }
     }
 
-    const semanticText = semanticExtractionResult?.semanticText || ''
+    const semanticTextForScoring = semanticExtractionResult?.semanticTextForScoring || ''
     const semanticScoringFallbackReason = getLegacyDocSemanticTextScoringFallbackReason({
       eligibility: scoringExperimentEligibility,
       extractionDiagnostics: semanticExtractionResult,
-      semanticText,
+      semanticText: semanticTextForScoring,
     })
     const useSemanticTextForScoring = !skipDuplicateSemanticExtraction && !semanticScoringFallbackReason
 
@@ -860,14 +864,14 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     if (useSemanticTextForScoring) {
       return {
         ...buildBase(),
-        fileBufferBase64: Buffer.from(semanticText, 'utf8').toString('base64'),
+        fileBufferBase64: Buffer.from(semanticTextForScoring, 'utf8').toString('base64'),
         mimeType: 'text/plain',
         preparedMimeType: 'text/plain',
         sourceFormat: 'doc',
         inputKind: 'extracted_text',
         inputMode: 'extracted_text',
         extractionMethod: LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
-        extractedText: semanticText,
+        extractedText: semanticTextForScoring,
         base64File: null,
         diagnostics: mergeSafeDiagnostics({
           ...buildPreparedPayloadDiagnostics({
@@ -876,7 +880,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
             inputMode: 'extracted_text',
             preparedMimeType: 'text/plain',
             originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
-            extractedText: semanticText,
+            extractedText: semanticTextForScoring,
             extractionMethod: LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
             fallbackUsed: false,
           }),
@@ -884,7 +888,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
           legacyDocSemanticTextScoringExperiment,
         }, {
           extractionMethod: LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
-          extractedTextCharCount: semanticText.length,
+          extractedTextCharCount: semanticTextForScoring.length,
           preparedMimeType: 'text/plain',
           inputKind: 'extracted_text',
         }),

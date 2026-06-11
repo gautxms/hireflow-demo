@@ -7,6 +7,7 @@ import JSZip from 'jszip'
 import {
   __resetMammothClientForTests,
   __setMammothClientForTests,
+  buildResumeTextFingerprint,
   buildSafeResumeFileDiagnostics,
   classifyResumeFileMagic,
   compareResumeTextFingerprints,
@@ -1290,7 +1291,7 @@ test('legacy DOC semantic text scoring experiment selects semantic text for user
   })
   assert.equal(userAllowed.parserCalls, 1)
   assert.equal(userAllowed.result.extractionMethod, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
-  assert.equal(userAllowed.result.extractedText, usableSemanticText.toLowerCase())
+  assert.equal(userAllowed.result.extractedText, usableSemanticText)
   assert.equal(userAllowed.result.preparedMimeType, 'text/plain')
   assert.equal(userAllowed.result.inputKind, 'extracted_text')
   assert.equal(userAllowed.result.inputMode, 'extracted_text')
@@ -1309,6 +1310,50 @@ test('legacy DOC semantic text scoring experiment selects semantic text for user
   assert.equal(analysisAllowed.result.extractionMethod, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
   assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringExperimentEligibilityReason, 'analysis_allowlist')
   assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringExperimentMatchedAllowlistType, 'analysis_id')
+})
+
+
+test('legacy DOC semantic text scoring preserves readable case-sensitive content while diagnostics stay fingerprint-only', async () => {
+  const caseSensitiveSemanticText = [
+    'Aarav McDONALD',
+    'SUMMARY',
+    'Built Node.js services backed by PostgreSQL for a REST API platform.',
+    'Experience: Led API reliability, SaaS recruiting workflows, and SOC2 readiness.',
+    'Skills: Node.js, PostgreSQL, REST API, AWS, TypeScript.',
+  ].join('\n')
+  const expectedFingerprint = buildResumeTextFingerprint(caseSensitiveSemanticText)
+
+  const allowed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42', analysisId: 'analysis-case-sensitive' },
+    semanticText: caseSensitiveSemanticText,
+  })
+
+  assert.equal(allowed.parserCalls, 1)
+  assert.equal(allowed.result.extractionMethod, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
+  assert.equal(allowed.result.extractedText, caseSensitiveSemanticText)
+  assert.equal(allowed.result.fileBufferBase64, Buffer.from(caseSensitiveSemanticText, 'utf8').toString('base64'))
+  assert.ok(allowed.result.extractedText.indexOf('Aarav McDONALD') < allowed.result.extractedText.indexOf('SUMMARY'))
+  assert.ok(allowed.result.extractedText.indexOf('SUMMARY') < allowed.result.extractedText.indexOf('Built Node.js'))
+  assert.match(allowed.result.extractedText, /Node\.js/)
+  assert.match(allowed.result.extractedText, /PostgreSQL/)
+  assert.match(allowed.result.extractedText, /REST API/)
+
+  const scoringDiagnostics = allowed.result.diagnostics.legacyDocSemanticTextScoringExperiment
+  assert.equal(scoringDiagnostics.semanticNormalizedFingerprint, expectedFingerprint.sha256)
+  assert.equal(scoringDiagnostics.semanticNormalizedCharCount, expectedFingerprint.normalizedCharCount)
+  assert.equal(scoringDiagnostics.semanticNormalizedLineCount, expectedFingerprint.normalizedLineCount)
+
+  const serializedDiagnostics = JSON.stringify(scoringDiagnostics)
+  for (const unsafe of ['Aarav McDONALD', 'Node.js', 'PostgreSQL', 'REST API', caseSensitiveSemanticText, Buffer.from(caseSensitiveSemanticText).toString('base64')]) {
+    assert.equal(serializedDiagnostics.includes(unsafe), false)
+  }
+  for (const unsafeKey of ['semanticText', 'semanticTextForScoring', 'semanticTextForFingerprint', 'extractedText', 'text', 'base64File', 'fileBufferBase64']) {
+    assert.equal(Object.prototype.hasOwnProperty.call(scoringDiagnostics, unsafeKey), false)
+  }
 })
 
 test('legacy DOC semantic text scoring experiment reuses observe-only extraction and invokes parser once', async () => {
@@ -1409,7 +1454,7 @@ test('legacy DOC semantic text scoring experiment diagnostics omit raw text and 
   for (const unsafe of ['Private Candidate', 'private.candidate@example.com', '555-333-2222', 'Unsafe_Candidate_Name', 'analysis-private', 'resume-private', Buffer.from(semanticText).toString('base64')]) {
     assert.equal(serializedDiagnostics.includes(unsafe), false)
   }
-  for (const unsafeKey of ['semanticText', 'extractedText', 'text', 'base64File', 'fileBufferBase64']) {
+  for (const unsafeKey of ['semanticText', 'semanticTextForScoring', 'semanticTextForFingerprint', 'extractedText', 'text', 'base64File', 'fileBufferBase64']) {
     assert.equal(Object.prototype.hasOwnProperty.call(result.diagnostics.legacyDocSemanticTextScoringExperiment, unsafeKey), false)
   }
 })

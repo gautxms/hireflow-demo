@@ -201,6 +201,8 @@ function omitSemanticText(result = null) {
   if (!result || typeof result !== 'object') return result
   const safeResult = { ...result }
   delete safeResult.semanticText
+  delete safeResult.semanticTextForScoring
+  delete safeResult.semanticTextForFingerprint
   delete safeResult.extractedText
   delete safeResult.rawText
   delete safeResult.text
@@ -209,6 +211,19 @@ function omitSemanticText(result = null) {
   delete safeResult.base64File
   delete safeResult.fileBufferBase64
   return safeResult
+}
+
+function normalizeSemanticTextForScoring(text = '') {
+  return String(text || '')
+    .replace(/\u0000/g, '')
+    .replace(/\uFFFD/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function normalizeWordExtractorText(document) {
@@ -443,17 +458,19 @@ export async function observeLegacyDocSemanticExtraction(fileBuffer, options = {
     const rawSemanticText = normalizeWordExtractorText(document)
     const outputTruncated = rawSemanticText.length > limits.maxOutputChars
     const boundedSemanticText = outputTruncated ? rawSemanticText.slice(0, limits.maxOutputChars) : rawSemanticText
-    const semanticText = normalizeResumeTextForFingerprint(boundedSemanticText)
-    const semanticFingerprint = buildResumeTextFingerprint(semanticText)
+    const semanticTextForScoring = normalizeSemanticTextForScoring(boundedSemanticText)
+    const semanticTextForFingerprint = normalizeResumeTextForFingerprint(semanticTextForScoring)
+    const semanticFingerprint = buildResumeTextFingerprint(semanticTextForFingerprint)
     const currentFingerprint = buildResumeTextFingerprint(currentLegacyText || '')
-    const normalizedMetrics = calculateSafeTextQualityMetrics(semanticText)
-    const rawMetrics = calculateSafeTextQualityMetrics(boundedSemanticText)
+    const normalizedMetrics = calculateSafeTextQualityMetrics(semanticTextForFingerprint)
+    const scoringMetrics = calculateSafeTextQualityMetrics(semanticTextForScoring)
+    const boundedRawMetrics = calculateSafeTextQualityMetrics(boundedSemanticText)
     const metrics = {
       duplicateLineRatio: normalizedMetrics.duplicateLineRatio,
-      printableRatio: rawMetrics.printableRatio > 0 ? Math.min(normalizedMetrics.printableRatio || rawMetrics.printableRatio, rawMetrics.printableRatio) : normalizedMetrics.printableRatio,
-      suspiciousNoiseRatio: Math.max(normalizedMetrics.suspiciousNoiseRatio, rawMetrics.suspiciousNoiseRatio),
+      printableRatio: scoringMetrics.printableRatio > 0 ? Math.min(normalizedMetrics.printableRatio || scoringMetrics.printableRatio, scoringMetrics.printableRatio, boundedRawMetrics.printableRatio || scoringMetrics.printableRatio) : normalizedMetrics.printableRatio,
+      suspiciousNoiseRatio: Math.max(normalizedMetrics.suspiciousNoiseRatio, scoringMetrics.suspiciousNoiseRatio, boundedRawMetrics.suspiciousNoiseRatio),
     }
-    const qualityClassification = classifySemanticExtraction({ text: semanticText, metrics, outputTruncated })
+    const qualityClassification = classifySemanticExtraction({ text: semanticTextForScoring, metrics, outputTruncated })
     const success = qualityClassification === CATEGORY.usable || qualityClassification === CATEGORY.outputTruncated
 
     const result = {
@@ -461,7 +478,7 @@ export async function observeLegacyDocSemanticExtraction(fileBuffer, options = {
       success,
       durationMs: round(performance.now() - startedAt, 2),
       outputTruncated,
-      semanticTextLength: boundedSemanticText.length,
+      semanticTextLength: semanticTextForScoring.length,
       semanticNormalizedCharCount: semanticFingerprint?.normalizedCharCount || 0,
       semanticNormalizedLineCount: semanticFingerprint?.normalizedLineCount || 0,
       semanticNormalizedFingerprint: semanticFingerprint?.sha256 || null,
@@ -476,7 +493,8 @@ export async function observeLegacyDocSemanticExtraction(fileBuffer, options = {
       qualityClassification,
       failureCategory: success ? null : qualityClassification,
       errorFingerprint: null,
-      semanticText,
+      semanticTextForScoring,
+      semanticTextForFingerprint,
     }
     return includeSemanticText ? result : omitSemanticText(result)
   } catch (error) {
