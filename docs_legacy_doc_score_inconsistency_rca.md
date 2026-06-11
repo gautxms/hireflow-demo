@@ -62,8 +62,8 @@ The code already contains a quality-validation script whose recommendation expli
 
 Do not broaden the PDF experiment or change scoring yet. First collect safe diagnostics for the exact Priya Nair analysis/resume IDs:
 
-1. Compare `parseDiagnostics.extractionMethod`, `inputKind`, `promptInputMode`, `extractedTextCharCount`, `normalizedTextCharCount`, and `normalizedTextFingerprint` across the `.pdf`, `.docx`, and `.doc` parse results.
-2. Compare AI token-usage rows by `parse_job_id`, including `prompt_input_mode`, `input_kind`, provider/model, success/failure attempts, and token counts.
+1. Compare `parseDiagnostics.extractionMethod`, `parseDiagnostics.inputKind`, `parseDiagnostics.inputMode`, `parseDiagnostics.extractedTextCharCount`, `parseDiagnostics.normalizedTextCharCount`, and `parseDiagnostics.normalizedTextFingerprint` across the `.pdf`, `.docx`, and `.doc` parse results.
+2. Compare AI token-usage rows by `parse_job_id`, including provider/model, success/failure attempts, token counts, and the prompt/input fields stored inside the token-usage `metadata` JSONB payload rather than standalone columns. Example lookups: `metadata->>'promptInputMode'` and `metadata->>'inputKind'`.
 3. Run a redacted local/staging text-equivalence check for the exact `.doc` and `.docx` files using existing fingerprint/quality utilities. Use only hashes, marker coverage, line counts, char counts, duplicate ratios, printable ratios, and suspicious-noise ratios; do not log raw resume text.
 4. If permitted in a controlled non-production environment, use a real Word binary parser/converter as an oracle for the Priya `.doc` and compare safe metrics against the current lightweight extractor.
 
