@@ -15,6 +15,7 @@ const DEFAULT_MAX_PAGES = 20
 const PDFJS_PACKAGE_VERSION = '5.4.394'
 const PDFJS_IMPORT_TARGET = 'pdfjs-dist/legacy/build/pdf.mjs'
 const EXTRACTION_METHOD = 'pdfjs_dist_text_content_observe_only'
+export const PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD = 'pdfjs_dist_canonical_text_scoring_experiment'
 const SECTION_MARKERS = ['summary', 'skills', 'experience', 'education', 'certification', 'projects']
 const CATEGORY = {
   usable: 'usable_text_extraction',
@@ -37,6 +38,12 @@ const ELIGIBILITY_REASON = {
   analysisAllowlist: 'analysis_allowlist',
   deterministicSample: 'deterministic_sample',
   notSelected: 'not_selected',
+}
+const SCORING_EXPERIMENT_ELIGIBILITY_REASON = {
+  masterDisabled: 'master_disabled',
+  userAllowlist: 'user_allowlist',
+  analysisAllowlist: 'analysis_allowlist',
+  notAllowlisted: 'not_allowlisted',
 }
 const MATCHED_ALLOWLIST_TYPE = {
   userId: 'user_id',
@@ -130,6 +137,7 @@ export function evaluatePdfCanonicalExtractionObserveOnlyEligibility({
 }
 
 export const PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ELIGIBILITY_REASONS = ELIGIBILITY_REASON
+export const PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ELIGIBILITY_REASONS = SCORING_EXPERIMENT_ELIGIBILITY_REASON
 
 function compactPdfCanonicalExtractionEligibility(eligibility = {}) {
   return {
@@ -211,6 +219,57 @@ function normalizePositiveInteger(value, fallback) {
 
 export function isPdfCanonicalExtractionObserveOnlyEnabled(env = process.env) {
   return TRUE_VALUES.has(String(env?.PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED || '').trim().toLowerCase())
+}
+
+export function isPdfCanonicalTextScoringExperimentEnabled(env = process.env) {
+  return TRUE_VALUES.has(String(env?.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED || '').trim().toLowerCase())
+}
+
+export function evaluatePdfCanonicalTextScoringExperimentEligibility({
+  env = process.env,
+  userId = null,
+  analysisId = null,
+} = {}) {
+  const masterEnabled = isPdfCanonicalTextScoringExperimentEnabled(env)
+  const base = {
+    masterEnabled,
+    eligible: false,
+    eligibilityReason: SCORING_EXPERIMENT_ELIGIBILITY_REASON.masterDisabled,
+    allowlistMatched: false,
+    matchedAllowlistType: null,
+  }
+
+  if (!masterEnabled) return base
+
+  const normalizedUserId = userId === null || userId === undefined ? '' : String(userId).trim()
+  const normalizedAnalysisId = analysisId === null || analysisId === undefined ? '' : String(analysisId).trim()
+  const allowedUserIds = parseCommaSeparatedAllowlist(env?.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS)
+  const allowedAnalysisIds = parseCommaSeparatedAllowlist(env?.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS)
+
+  if (normalizedUserId && allowedUserIds.has(normalizedUserId)) {
+    return {
+      ...base,
+      eligible: true,
+      eligibilityReason: SCORING_EXPERIMENT_ELIGIBILITY_REASON.userAllowlist,
+      allowlistMatched: true,
+      matchedAllowlistType: MATCHED_ALLOWLIST_TYPE.userId,
+    }
+  }
+
+  if (normalizedAnalysisId && allowedAnalysisIds.has(normalizedAnalysisId)) {
+    return {
+      ...base,
+      eligible: true,
+      eligibilityReason: SCORING_EXPERIMENT_ELIGIBILITY_REASON.analysisAllowlist,
+      allowlistMatched: true,
+      matchedAllowlistType: MATCHED_ALLOWLIST_TYPE.analysisId,
+    }
+  }
+
+  return {
+    ...base,
+    eligibilityReason: SCORING_EXPERIMENT_ELIGIBILITY_REASON.notAllowlisted,
+  }
 }
 
 export function getPdfCanonicalExtractionObserveOnlyLimits(env = process.env) {
@@ -438,7 +497,7 @@ function buildFailureResult({ category, startedAt, fileBuffer, error = null, par
   }
 }
 
-export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}) {
+export async function extractPdfCanonicalTextForInternalUse(fileBuffer, options = {}) {
   const { env = process.env } = options || {}
   const startedAt = performance.now()
   const limits = getPdfCanonicalExtractionObserveOnlyLimits(env)
@@ -484,6 +543,7 @@ export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}
       qualityClassification: classification.qualityClassification,
       ocrRequired: classification.ocrRequired,
       failureCategory: null,
+      canonicalText,
     }
   } catch (error) {
     const category = Object.values(CATEGORY).includes(error?.category) ? error.category : CATEGORY.error
@@ -491,10 +551,31 @@ export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}
   }
 }
 
+function omitCanonicalTextFromPdfExtractionResult(result = null) {
+  if (!result || typeof result !== 'object') return result
+  const safeResult = { ...result }
+  delete safeResult.canonicalText
+  delete safeResult.extractedText
+  delete safeResult.rawText
+  delete safeResult.text
+  delete safeResult.binaryContent
+  delete safeResult.base64File
+  return safeResult
+}
+
+export async function observePdfCanonicalTextExtraction(fileBuffer, options = {}) {
+  return omitCanonicalTextFromPdfExtractionResult(await extractPdfCanonicalTextForInternalUse(fileBuffer, options))
+}
+
+export function toSafePdfCanonicalExtractionDiagnostics(result = null) {
+  return omitCanonicalTextFromPdfExtractionResult(result)
+}
+
 export function logSafePdfCanonicalExtractionDiagnostics(logger, diagnostics) {
-  const target = diagnostics?.success ? (logger?.info || logger?.log) : (logger?.warn || logger?.log)
+  const safeDiagnostics = toSafePdfCanonicalExtractionDiagnostics(diagnostics)
+  const target = safeDiagnostics?.success ? (logger?.info || logger?.log) : (logger?.warn || logger?.log)
   if (typeof target === 'function') {
-    target.call(logger, '[ResumeDiagnostics] pdf_canonical_extraction_observe_only', diagnostics)
+    target.call(logger, '[ResumeDiagnostics] pdf_canonical_extraction_observe_only', safeDiagnostics)
   }
 }
 

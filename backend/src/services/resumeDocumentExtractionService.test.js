@@ -14,7 +14,7 @@ import {
   logSafeResumeFileDiagnostics,
   prepareResumePayloadForAnalysis,
 } from './resumeDocumentExtractionService.js'
-import { buildSyntheticPdfResumeFixture, buildMissingTextPdfFixture, buildMalformedPdfFixture, buildPdfJsTextContentMockFromFixtures } from './resumeFormatDiagnosticFixtures.js'
+import { buildSyntheticPdfResumeFixture, buildMissingTextPdfFixture, buildMalformedPdfFixture, buildOverPageLimitPdfFixture, buildPdfJsTextContentMockFromFixtures, SYNTHETIC_CANONICAL_RESUME_TEXT } from './resumeFormatDiagnosticFixtures.js'
 import {
   __resetPdfJsClientForTests,
   __setPdfJsClientForTests,
@@ -69,6 +69,10 @@ function withPdfObserveOnlyEnv(overrides = {}) {
     'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE',
     'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS',
     'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS',
+    'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED',
+    'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS',
+    'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS',
+    'PDF_CANONICAL_EXTRACTION_MAX_PAGES',
   ]
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
   for (const key of keys) delete process.env[key]
@@ -112,6 +116,220 @@ async function preparePdfWithCountingParser(env, diagnosticsContext = {}) {
 }
 
 
+function buildNoisyPdfFixture() {
+  return buildSyntheticPdfResumeFixture({
+    id: 'synthetic-noisy-pdf',
+    filename: 'synthetic-noisy-resume.pdf',
+    text: `${SYNTHETIC_CANONICAL_RESUME_TEXT}
+${'\u0001'.repeat(80)}`,
+  })
+}
+
+async function preparePdfForScoringExperiment({ fixture = buildSyntheticPdfResumeFixture(), env = {}, diagnosticsContext = {}, logger = quietLogger, client = null } = {}) {
+  let parserCalls = 0
+  const mock = client || buildPdfJsTextContentMockFromFixtures([fixture])
+  __setPdfJsClientForTests({
+    ...mock,
+    getDocument(...args) {
+      parserCalls += 1
+      return mock.getDocument(...args)
+    },
+  })
+  const restore = withPdfObserveOnlyEnv(env)
+  try {
+    const originalBase64 = fixture.buffer.toString('base64')
+    const result = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: originalBase64,
+      mimeType: 'application/pdf',
+      filename: fixture.filename,
+      fileSize: fixture.buffer.length,
+      logger,
+      diagnosticsContext,
+    })
+    return { result, parserCalls, fixture, originalBase64 }
+  } finally {
+    restore()
+  }
+}
+
+
+
+
+test('PDF canonical text scoring experiment defaults off and preserves binary scoring payload', async () => {
+  const run = await preparePdfForScoringExperiment({ diagnosticsContext: { userId: '26', analysisId: 'analysis-1' } })
+  assert.equal(run.parserCalls, 0)
+  assert.equal(run.result.preparedMimeType, 'application/pdf')
+  assert.equal(run.result.inputKind, 'pdf_binary')
+  assert.equal(run.result.inputMode, 'binary')
+  assert.equal(run.result.extractedText, null)
+  assert.equal(run.result.base64File, run.originalBase64)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentMasterEnabled, false)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligible, false)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'master_disabled')
+})
+
+test('PDF canonical text scoring experiment master false fails closed even with allowlist', async () => {
+  const run = await preparePdfForScoringExperiment({
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'false',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '26',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS: 'analysis-1',
+    },
+    diagnosticsContext: { userId: '26', analysisId: 'analysis-1' },
+  })
+  assert.equal(run.parserCalls, 0)
+  assert.equal(run.result.inputKind, 'pdf_binary')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligible, false)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'master_disabled')
+})
+
+test('PDF canonical text scoring experiment enabled but not allowlisted preserves binary payload', async () => {
+  const run = await preparePdfForScoringExperiment({
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '26',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS: 'analysis-1',
+    },
+    diagnosticsContext: { userId: '99', analysisId: 'analysis-2' },
+  })
+  assert.equal(run.parserCalls, 0)
+  assert.equal(run.result.inputKind, 'pdf_binary')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentMasterEnabled, true)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligible, false)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligibilityReason, 'not_allowlisted')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'not_allowlisted')
+})
+
+test('PDF canonical text scoring experiment allowlisted user with usable extraction selects text/plain canonical text', async () => {
+  const run = await preparePdfForScoringExperiment({
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '26',
+    },
+    diagnosticsContext: { userId: '26', analysisId: 'analysis-2' },
+  })
+  assert.equal(run.parserCalls, 1)
+  assert.equal(run.result.preparedMimeType, 'text/plain')
+  assert.equal(run.result.mimeType, 'text/plain')
+  assert.equal(run.result.sourceFormat, 'pdf')
+  assert.equal(run.result.inputKind, 'extracted_text')
+  assert.equal(run.result.inputMode, 'extracted_text')
+  assert.equal(run.result.base64File, null)
+  assert.equal(run.result.fileBufferBase64, Buffer.from(run.result.extractedText, 'utf8').toString('base64'))
+  assert.equal(run.result.extractedText, SYNTHETIC_CANONICAL_RESUME_TEXT.toLowerCase())
+  assert.equal(run.result.diagnostics.originalMimeType, 'application/pdf')
+  assert.equal(run.result.diagnostics.preparedMimeType, 'text/plain')
+  assert.equal(run.result.diagnostics.extractionMethod, 'pdfjs_dist_canonical_text_scoring_experiment')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligibilityReason, 'user_allowlist')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'canonical_text_selected')
+  assert.equal(JSON.stringify(run.result.diagnostics).includes(SYNTHETIC_CANONICAL_RESUME_TEXT), false)
+})
+
+test('PDF canonical text scoring experiment allowlisted analysis ID with usable extraction selects text/plain canonical text', async () => {
+  const run = await preparePdfForScoringExperiment({
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS: 'analysis-2',
+    },
+    diagnosticsContext: { userId: '99', analysisId: 'analysis-2' },
+  })
+  assert.equal(run.parserCalls, 1)
+  assert.equal(run.result.inputKind, 'extracted_text')
+  assert.equal(run.result.preparedMimeType, 'text/plain')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligibilityReason, 'analysis_allowlist')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentMatchedAllowlistType, 'analysis_id')
+})
+
+test('PDF canonical text scoring experiment parser failure and malformed PDFs fall back to original binary', async () => {
+  const failingClient = {
+    version: 'failure-mock',
+    getDocument() {
+      throw new Error('synthetic failure with Jane Doe jane@example.com 555-0100')
+    },
+  }
+  const parserFailure = await preparePdfForScoringExperiment({
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '26',
+    },
+    diagnosticsContext: { userId: '26' },
+    client: failingClient,
+  })
+  assert.equal(parserFailure.parserCalls, 1)
+  assert.equal(parserFailure.result.inputKind, 'pdf_binary')
+  assert.equal(parserFailure.result.base64File, parserFailure.originalBase64)
+  assert.equal(parserFailure.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'extraction_failed')
+
+  const malformed = await preparePdfForScoringExperiment({
+    fixture: buildMalformedPdfFixture(),
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '26',
+    },
+    diagnosticsContext: { userId: '26' },
+  })
+  assert.equal(malformed.parserCalls, 0)
+  assert.equal(malformed.result.inputKind, 'pdf_binary')
+  assert.equal(malformed.result.base64File, malformed.originalBase64)
+  assert.equal(malformed.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'extraction_failed')
+})
+
+test('PDF canonical text scoring experiment unsafe quality classifications fall back to binary', async () => {
+  const cases = [
+    { name: 'low-density', fixture: buildSyntheticPdfResumeFixture({ text: 'Short text only but not empty.' }), reason: 'ocr_required' },
+    { name: 'scanned', fixture: buildMissingTextPdfFixture(), reason: 'empty_canonical_text' },
+    { name: 'noisy', fixture: buildNoisyPdfFixture(), reason: 'unusable_text_extraction' },
+    { name: 'truncated', fixture: buildOverPageLimitPdfFixture({ pageCount: 3 }), env: { PDF_CANONICAL_EXTRACTION_MAX_PAGES: '1' }, reason: 'observation_truncated' },
+  ]
+
+  for (const entry of cases) {
+    const run = await preparePdfForScoringExperiment({
+      fixture: entry.fixture,
+      env: {
+        PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+        PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '26',
+        ...(entry.env || {}),
+      },
+      diagnosticsContext: { userId: '26', analysisId: `analysis-${entry.name}` },
+    })
+    assert.equal(run.result.inputKind, 'pdf_binary', entry.name)
+    assert.equal(run.result.preparedMimeType, 'application/pdf', entry.name)
+    assert.equal(run.result.fileBufferBase64, run.originalBase64, entry.name)
+    assert.equal(run.result.base64File, run.originalBase64, entry.name)
+    assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, entry.reason, entry.name)
+  }
+})
+
+test('PDF canonical text scoring experiment canonical text path logs no resume text, filename, email, phone, or base64', async () => {
+  const logged = []
+  const logger = {
+    debug(message, payload) { logged.push({ level: 'debug', message, payload }) },
+    info(message, payload) { logged.push({ level: 'info', message, payload }) },
+    warn(message, payload) { logged.push({ level: 'warn', message, payload }) },
+    log(message, payload) { logged.push({ level: 'log', message, payload }) },
+  }
+  const piiText = `${SYNTHETIC_CANONICAL_RESUME_TEXT}\nEmail: jane.private@example.com\nPhone: 555-0100`
+  const fixture = buildSyntheticPdfResumeFixture({ filename: 'Jane_Private_Resume.pdf', text: piiText })
+  const run = await preparePdfForScoringExperiment({
+    fixture,
+    logger,
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '26',
+    },
+    diagnosticsContext: { userId: '26' },
+  })
+  assert.equal(run.result.inputKind, 'extracted_text')
+  const serializedLogs = JSON.stringify(logged)
+  const serializedDiagnostics = JSON.stringify(run.result.diagnostics)
+  for (const serialized of [serializedLogs, serializedDiagnostics]) {
+    assert.equal(serialized.includes('Synthetic Candidate Alpha'), false)
+    assert.equal(serialized.includes('jane.private@example.com'), false)
+    assert.equal(serialized.includes('555-0100'), false)
+    assert.equal(serialized.includes('Jane_Private_Resume'), false)
+    assert.equal(serialized.includes(run.originalBase64), false)
+  }
+})
 
 test('classifyResumeFileMagic identifies PDF, DOCX zip, legacy DOC OLE, and unknown buffers', async () => {
   const pdfBuffer = Buffer.from('%PDF-1.7\nbody')

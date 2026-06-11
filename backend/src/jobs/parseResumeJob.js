@@ -800,8 +800,10 @@ export async function runParse(job) {
         resumeInputMode: preparedResumePayload.resumeInputMode,
         diagnosticsContext: {
           pdfCanonicalExtractionObserveOnlyAlreadyEvaluated: true,
+          pdfCanonicalTextScoringExperimentAlreadyEvaluated: true,
           observeOnlyEligibility: preparedResumePayload.diagnostics?.observeOnlyEligibility || null,
           pdfCanonicalExtractionObserveOnly: preparedResumePayload.diagnostics?.pdfCanonicalExtractionObserveOnly || null,
+          pdfCanonicalTextScoringExperiment: preparedResumePayload.diagnostics?.pdfCanonicalTextScoringExperiment || null,
         },
       },
     )
