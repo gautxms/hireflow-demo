@@ -20,6 +20,13 @@ import {
   __setPdfJsClientForTests,
   evaluatePdfCanonicalExtractionObserveOnlyEligibility,
 } from './pdfCanonicalExtractionService.js'
+import {
+  __resetLegacyDocSemanticExtractorForTests,
+  __setLegacyDocSemanticExtractorForTests,
+  evaluateLegacyDocSemanticExtractionObserveOnlyEligibility,
+  getLegacyDocSemanticExtractionLimits,
+  observeLegacyDocSemanticExtraction,
+} from './legacyDocSemanticExtractionService.js'
 import { UNSUPPORTED_LEGACY_WORD_MESSAGE } from '../utils/legacyWordDocument.js'
 
 async function buildDocxBuffer(paragraphs = [], tableRows = []) {
@@ -85,6 +92,70 @@ function withPdfObserveOnlyEnv(overrides = {}) {
       else process.env[key] = previous[key]
     }
     __resetPdfJsClientForTests()
+  }
+}
+
+function withLegacyDocSemanticObserveOnlyEnv(overrides = {}) {
+  const keys = [
+    'ENABLE_LEGACY_DOC_EXTRACTION',
+    'LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED',
+    'LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE',
+    'LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS',
+    'LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS',
+    'LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_BYTES',
+    'LEGACY_DOC_SEMANTIC_EXTRACTION_TIMEOUT_MS',
+    'LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_OUTPUT_CHARS',
+  ]
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  for (const key of keys) delete process.env[key]
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) process.env[key] = value
+  }
+  return () => {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key]
+      else process.env[key] = previous[key]
+    }
+    __resetLegacyDocSemanticExtractorForTests()
+  }
+}
+
+function buildOleDocBuffer(text = 'Jane Legacy\nSenior DOC Engineer') {
+  return Buffer.concat([
+    Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    Buffer.from(text, 'utf16le'),
+  ])
+}
+
+async function prepareLegacyDocWithSemanticObserver({ env = {}, diagnosticsContext = {}, semanticText = 'Jane Semantic\nSenior DOC Engineer', logger = quietLogger, semanticClient = null } = {}) {
+  let parserCalls = 0
+  __setLegacyDocSemanticExtractorForTests(semanticClient !== null ? semanticClient : {
+    async extract(input) {
+      parserCalls += 1
+      assert.equal(Buffer.isBuffer(input), true)
+      return {
+        getBody() { return semanticText },
+      }
+    },
+  })
+  const restore = withLegacyDocSemanticObserveOnlyEnv({
+    ENABLE_LEGACY_DOC_EXTRACTION: 'true',
+    ...env,
+  })
+  const currentLegacyText = 'Jane Legacy\nSenior DOC Engineer'
+  const oleDocBuffer = buildOleDocBuffer(currentLegacyText)
+  try {
+    const result = await prepareResumePayloadForAnalysis({
+      fileBufferBase64: oleDocBuffer.toString('base64'),
+      mimeType: 'application/msword',
+      filename: 'Unsafe_Candidate_Name_resume.doc',
+      fileSize: oleDocBuffer.length,
+      logger,
+      diagnosticsContext,
+    })
+    return { result, parserCalls, oleDocBuffer, currentLegacyText, semanticText }
+  } finally {
+    restore()
   }
 }
 
@@ -1064,6 +1135,265 @@ test('prepareResumePayloadForAnalysis extracts enabled legacy DOC locally as tex
     __resetMammothClientForTests()
     if (typeof previousFlag === 'undefined') delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
     else process.env.ENABLE_LEGACY_DOC_EXTRACTION = previousFlag
+  }
+})
+
+
+test('legacy DOC semantic observe-only eligibility is default-off and deterministic', () => {
+  const base = {
+    LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: '',
+    LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS: '',
+  }
+
+  assert.equal(evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: {}, isLegacyBinaryDoc: true }).sampleRate, 0)
+  assert.equal(evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: {}, isLegacyBinaryDoc: true }).eligible, false)
+  assert.equal(evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: { LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'false' }, isLegacyBinaryDoc: true }).eligibilityReason, 'master_disabled')
+  assert.equal(evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: base, isLegacyBinaryDoc: false }).eligibilityReason, 'unsupported_format')
+  assert.equal(evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0' }, isLegacyBinaryDoc: true }).eligibilityReason, 'not_allowlisted')
+
+  const userAllowed = evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({
+    env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-1,user-2' },
+    userId: 'user-2',
+    isLegacyBinaryDoc: true,
+  })
+  assert.equal(userAllowed.eligible, true)
+  assert.equal(userAllowed.eligibilityReason, 'user_allowlist')
+  assert.equal(userAllowed.matchedAllowlistType, 'user_id')
+
+  const analysisAllowed = evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({
+    env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS: 'analysis-1,analysis-2' },
+    analysisId: 'analysis-2',
+    isLegacyBinaryDoc: true,
+  })
+  assert.equal(analysisAllowed.eligible, true)
+  assert.equal(analysisAllowed.eligibilityReason, 'analysis_allowlist')
+  assert.equal(analysisAllowed.matchedAllowlistType, 'analysis_id')
+
+  const first = evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-1', isLegacyBinaryDoc: true })
+  const second = evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-1', isLegacyBinaryDoc: true })
+  const different = evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '5' }, fileContentFingerprint: 'file-fp-2', isLegacyBinaryDoc: true })
+  assert.equal(first.samplingBucket, second.samplingBucket)
+  assert.equal(first.sampled, second.sampled)
+  assert.notEqual(first.samplingBucket, different.samplingBucket)
+  assert.equal(evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100' }, fileContentFingerprint: 'file-fp-1', isLegacyBinaryDoc: true }).sampled, true)
+  assert.equal(evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({ env: { ...base, LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '100.5' }, fileContentFingerprint: 'file-fp-1', isLegacyBinaryDoc: true }).sampleRate, 0)
+})
+
+test('legacy DOC semantic observe-only stays disabled unless allowlisted or sampled', async () => {
+  const unset = await prepareLegacyDocWithSemanticObserver()
+  assert.equal(unset.parserCalls, 0)
+  assert.equal(unset.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(unset.result.diagnostics.legacyDocSemanticExtractionObserveOnly.enabled, false)
+  assert.equal(unset.result.diagnostics.legacyDocSemanticExtractionObserveOnly.eligible, false)
+  assert.equal(unset.result.diagnostics.legacyDocSemanticExtractionObserveOnly.eligibilityReason, 'master_disabled')
+
+  const notAllowlisted = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    },
+  })
+  assert.equal(notAllowlisted.parserCalls, 0)
+  assert.equal(notAllowlisted.result.diagnostics.legacyDocSemanticExtractionObserveOnly.eligibilityReason, 'not_allowlisted')
+})
+
+test('legacy DOC semantic observe-only can run for user and analysis allowlists without changing scoring payload', async () => {
+  const userAllowed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    },
+    diagnosticsContext: { userId: 'user-42', analysisId: 'analysis-7', resumeId: 'resume-7' },
+  })
+  assert.equal(userAllowed.parserCalls, 1)
+  assert.equal(userAllowed.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(userAllowed.result.inputKind, 'extracted_text')
+  assert.equal(userAllowed.result.inputMode, 'extracted_text')
+  assert.equal(userAllowed.result.preparedMimeType, 'text/plain')
+  assert.equal(userAllowed.result.extractedText, userAllowed.currentLegacyText)
+  assert.equal(userAllowed.result.fileBufferBase64, Buffer.from(userAllowed.currentLegacyText, 'utf8').toString('base64'))
+  assert.equal(userAllowed.result.diagnostics.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(userAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.success, false)
+  assert.equal(userAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.qualityClassification, 'text_too_short')
+  assert.equal(userAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.extractionMethod, 'legacy_doc_word_extractor_observe_only')
+  assert.equal(userAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.parserPackageName, 'word-extractor')
+  assert.equal(userAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.parserPackageVersion, '1.0.4')
+  assert.match(userAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.semanticNormalizedFingerprint, /^[a-f0-9]{64}$/)
+
+  const analysisAllowed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS: 'analysis-42',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    },
+    diagnosticsContext: { userId: 'user-99', analysisId: 'analysis-42', resumeId: 'resume-42' },
+  })
+  assert.equal(analysisAllowed.parserCalls, 1)
+  assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.eligibilityReason, 'analysis_allowlist')
+  assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.matchedAllowlistType, 'analysis_id')
+})
+
+test('legacy DOC semantic observe-only failures and limits are safe diagnostics only', async () => {
+  const tooLarge = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_BYTES: '8',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+  })
+  assert.equal(tooLarge.parserCalls, 0)
+  assert.equal(tooLarge.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(tooLarge.result.diagnostics.legacyDocSemanticExtractionObserveOnly.failureCategory, 'file_too_large')
+
+  const parserError = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+    semanticClient: {
+      async extract() {
+        throw new Error('malformed ole with candidate@example.com and 555-111-2222')
+      },
+    },
+  })
+  assert.equal(parserError.parserCalls, 0)
+  assert.equal(parserError.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(parserError.result.diagnostics.legacyDocSemanticExtractionObserveOnly.failureCategory, 'parser_error')
+  assert.match(parserError.result.diagnostics.legacyDocSemanticExtractionObserveOnly.errorFingerprint, /^[a-f0-9]{16}$/)
+
+  const importFailure = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+    semanticClient: false,
+  })
+  assert.equal(importFailure.result.diagnostics.legacyDocSemanticExtractionObserveOnly.failureCategory, 'dependency_import_failed')
+
+  const empty = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+    semanticText: '',
+  })
+  assert.equal(empty.result.diagnostics.legacyDocSemanticExtractionObserveOnly.failureCategory, 'empty_extraction')
+
+  const truncated = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_OUTPUT_CHARS: '12',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+    semanticText: 'A long semantic resume body that must be capped before diagnostics.',
+  })
+  assert.equal(truncated.result.diagnostics.legacyDocSemanticExtractionObserveOnly.outputTruncated, true)
+  assert.equal(truncated.result.diagnostics.legacyDocSemanticExtractionObserveOnly.semanticTextLength, 12)
+  assert.equal(truncated.result.extractedText, truncated.currentLegacyText)
+})
+
+test('legacy DOC semantic observe-only diagnostics and logs omit raw text and PII-like values', async () => {
+  const logs = []
+  const logger = {
+    debug() {},
+    info(message, payload) { logs.push({ message, payload }) },
+    warn(message, payload) { logs.push({ message, payload }) },
+    log(message, payload) { logs.push({ message, payload }) },
+  }
+  const semanticText = 'Sensitive Candidate\nemail candidate@example.com\nphone 555-111-2222\nSecret Skill'
+  const { result } = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42', analysisId: 'analysis-secret', resumeId: 'resume-secret' },
+    semanticText,
+    logger,
+  })
+  const serializedDiagnostics = JSON.stringify(result.diagnostics.legacyDocSemanticExtractionObserveOnly)
+  const serializedLogs = JSON.stringify(logs.filter((entry) => String(entry.message || '').includes('legacy_doc_semantic_extraction_observe_only')))
+  for (const unsafe of ['Sensitive Candidate', 'candidate@example.com', '555-111-2222', 'Unsafe_Candidate_Name', 'analysis-secret', 'resume-secret', Buffer.from(semanticText).toString('base64')]) {
+    assert.equal(serializedDiagnostics.includes(unsafe), false)
+    assert.equal(serializedLogs.includes(unsafe), false)
+  }
+  assert.equal(Object.prototype.hasOwnProperty.call(result.diagnostics.legacyDocSemanticExtractionObserveOnly, 'semanticText'), false)
+  assert.equal(Object.prototype.hasOwnProperty.call(result.diagnostics.legacyDocSemanticExtractionObserveOnly, 'text'), false)
+})
+
+
+test('legacy DOC semantic observe-only timeout produces safe diagnostics only', async () => {
+  assert.deepEqual(getLegacyDocSemanticExtractionLimits({}), {
+    maxBytes: 5 * 1024 * 1024,
+    timeoutMs: 2000,
+    maxOutputChars: 20000,
+  })
+  __setLegacyDocSemanticExtractorForTests({
+    async extract() {
+      return new Promise((resolve) => setTimeout(() => resolve({ getBody: () => 'late semantic text' }), 50))
+    },
+  })
+  try {
+    const result = await observeLegacyDocSemanticExtraction(buildOleDocBuffer('Jane Timeout\nLegacy Text'), {
+      env: { LEGACY_DOC_SEMANTIC_EXTRACTION_TIMEOUT_MS: '1' },
+      eligibility: {
+        masterEnabled: true,
+        eligible: true,
+        eligibilityReason: 'user_allowlist',
+        allowlistMatched: true,
+        matchedAllowlistType: 'user_id',
+        sampled: false,
+        sampleRate: 0,
+        samplingBucket: null,
+      },
+      currentLegacyText: 'Jane Timeout\nLegacy Text',
+    })
+    assert.equal(result.success, false)
+    assert.equal(result.failureCategory, 'parser_timeout')
+    assert.equal(result.scoringFallbackReason, 'observe_only')
+    assert.equal(Object.prototype.hasOwnProperty.call(result, 'semanticText'), false)
+  } finally {
+    __resetLegacyDocSemanticExtractorForTests()
+  }
+})
+
+test('legacy DOC semantic observe-only flag does not bypass existing legacy DOC acceptance flag', async () => {
+  const restore = withLegacyDocSemanticObserveOnlyEnv({
+    ENABLE_LEGACY_DOC_EXTRACTION: 'false',
+    LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+    LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+  })
+  __setLegacyDocSemanticExtractorForTests({
+    async extract() {
+      throw new Error('semantic_parser_should_not_run_when_legacy_doc_disabled')
+    },
+  })
+  const oleDocBuffer = buildOleDocBuffer('Jane Disabled\nLegacy DOC Candidate')
+  try {
+    await assert.rejects(
+      () => prepareResumePayloadForAnalysis({
+        fileBufferBase64: oleDocBuffer.toString('base64'),
+        mimeType: 'application/msword',
+        filename: 'resume.doc',
+        fileSize: oleDocBuffer.length,
+        logger: quietLogger,
+        diagnosticsContext: { userId: 'user-42' },
+      }),
+      (error) => {
+        assert.equal(error.extractionCategory, 'resume_unsupported_legacy_doc')
+        assert.equal(error.diagnostics.extractionMethod, 'legacy_doc_rejected')
+        assert.equal(error.diagnostics.legacyDocSemanticExtractionObserveOnly, undefined)
+        return true
+      },
+    )
+  } finally {
+    restore()
   }
 })
 

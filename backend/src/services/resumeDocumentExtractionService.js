@@ -25,6 +25,13 @@ import {
   logSafePdfCanonicalExtractionEligibility,
   toSafePdfCanonicalExtractionDiagnostics,
 } from './pdfCanonicalExtractionService.js'
+import {
+  evaluateLegacyDocSemanticExtractionObserveOnlyEligibility,
+  logSafeLegacyDocSemanticExtractionDiagnostics,
+  logSafeLegacyDocSemanticExtractionEligibility,
+  observeLegacyDocSemanticExtraction,
+  toSafeLegacyDocSemanticExtractionDiagnostics,
+} from './legacyDocSemanticExtractionService.js'
 
 let mammothClient = null
 let mammothClientOverrideForTests = undefined
@@ -242,6 +249,20 @@ function compactPdfObserveOnlyDiagnosticsForReuse(diagnostics = null) {
   delete safeDiagnostics.text
   delete safeDiagnostics.binaryContent
   delete safeDiagnostics.base64File
+  return safeDiagnostics
+}
+
+function compactLegacyDocSemanticObserveOnlyDiagnosticsForReuse(diagnostics = null) {
+  if (!diagnostics || typeof diagnostics !== 'object') return { enabled: false }
+  const safeDiagnostics = { ...diagnostics }
+  delete safeDiagnostics.semanticText
+  delete safeDiagnostics.extractedText
+  delete safeDiagnostics.rawText
+  delete safeDiagnostics.text
+  delete safeDiagnostics.body
+  delete safeDiagnostics.binaryContent
+  delete safeDiagnostics.base64File
+  delete safeDiagnostics.fileBufferBase64
   return safeDiagnostics
 }
 
@@ -627,6 +648,70 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       throw wrappedError
     }
 
+    let legacyDocSemanticExtractionObserveOnly = { enabled: false }
+    const skipDuplicateSemanticExtraction = Boolean(diagnosticsContext?.legacyDocSemanticExtractionObserveOnlyAlreadyEvaluated)
+
+    if (skipDuplicateSemanticExtraction) {
+      legacyDocSemanticExtractionObserveOnly = compactLegacyDocSemanticObserveOnlyDiagnosticsForReuse(
+        diagnosticsContext?.legacyDocSemanticExtractionObserveOnly,
+      )
+    } else {
+      let semanticEligibility
+      try {
+        semanticEligibility = evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({
+          userId: diagnosticsContext?.userId ?? null,
+          analysisId: diagnosticsContext?.analysisId ?? null,
+          resumeId: diagnosticsContext?.resumeId ?? null,
+          fileContentFingerprint: buildFileContentFingerprint(fileBuffer),
+          isLegacyBinaryDoc: Boolean(legacyWordDetection.hasOleMagic),
+        })
+      } catch (error) {
+        semanticEligibility = {
+          masterEnabled: false,
+          eligible: false,
+          eligibilityReason: 'master_disabled',
+          allowlistMatched: false,
+          matchedAllowlistType: null,
+          sampled: false,
+          sampleRate: 0,
+          samplingBucket: null,
+        }
+        legacyDocSemanticExtractionObserveOnly = {
+          enabled: false,
+          success: false,
+          failureCategory: 'eligibility_evaluation_error',
+          errorFingerprint: buildSafeErrorCauseDiagnostics(error)?.messageFingerprint || null,
+          scoringFallbackReason: 'observe_only',
+        }
+      }
+
+      logSafeLegacyDocSemanticExtractionEligibility(logger, semanticEligibility)
+
+      if (semanticEligibility?.eligible) {
+        try {
+          legacyDocSemanticExtractionObserveOnly = toSafeLegacyDocSemanticExtractionDiagnostics(await observeLegacyDocSemanticExtraction(fileBuffer, {
+            eligibility: semanticEligibility,
+            currentLegacyText: extractedText,
+          }))
+        } catch (error) {
+          legacyDocSemanticExtractionObserveOnly = {
+            enabled: true,
+            eligible: true,
+            success: false,
+            failureCategory: 'parser_error',
+            errorFingerprint: buildSafeErrorCauseDiagnostics(error)?.messageFingerprint || null,
+            scoringFallbackReason: 'observe_only',
+          }
+        }
+        logSafeLegacyDocSemanticExtractionDiagnostics(logger, legacyDocSemanticExtractionObserveOnly)
+      } else {
+        legacyDocSemanticExtractionObserveOnly = toSafeLegacyDocSemanticExtractionDiagnostics(await observeLegacyDocSemanticExtraction(fileBuffer, {
+          eligibility: semanticEligibility,
+          currentLegacyText: extractedText,
+        }))
+      }
+    }
+
     return {
       ...buildBase(),
       fileBufferBase64: Buffer.from(extractedText, 'utf8').toString('base64'),
@@ -638,15 +723,18 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       extractionMethod: 'legacy_doc_text_extraction',
       extractedText,
       base64File: null,
-      diagnostics: mergeSafeDiagnostics(buildPreparedPayloadDiagnostics({
-        sourceFormat: 'doc',
-        inputKind: 'extracted_text',
-        inputMode: 'extracted_text',
-        preparedMimeType: 'text/plain',
-        originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
-        extractedText,
-        extractionMethod: 'legacy_doc_text_extraction',
-      }), {
+      diagnostics: mergeSafeDiagnostics({
+        ...buildPreparedPayloadDiagnostics({
+          sourceFormat: 'doc',
+          inputKind: 'extracted_text',
+          inputMode: 'extracted_text',
+          preparedMimeType: 'text/plain',
+          originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
+          extractedText,
+          extractionMethod: 'legacy_doc_text_extraction',
+        }),
+        legacyDocSemanticExtractionObserveOnly,
+      }, {
         extractionMethod: 'legacy_doc_text_extraction',
         extractedTextCharCount: extractedText.length,
         preparedMimeType: 'text/plain',
