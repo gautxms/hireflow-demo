@@ -14,6 +14,7 @@ const DEFAULT_MAX_OUTPUT_CHARS = 20000
 const PACKAGE_NAME = 'word-extractor'
 const PACKAGE_VERSION = '1.0.4'
 const EXTRACTION_METHOD = 'legacy_doc_word_extractor_observe_only'
+const SCORING_EXPERIMENT_EXTRACTION_METHOD = 'legacy_doc_word_extractor_semantic_text_scoring_experiment'
 
 const ELIGIBILITY_REASON = {
   masterDisabled: 'master_disabled',
@@ -280,6 +281,10 @@ export function isLegacyDocSemanticExtractionObserveOnlyEnabled(env = process.en
   return TRUE_VALUES.has(normalizeFeatureFlag(env?.LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED))
 }
 
+export function isLegacyDocSemanticTextScoringExperimentEnabled(env = process.env) {
+  return TRUE_VALUES.has(normalizeFeatureFlag(env?.LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED))
+}
+
 export function getLegacyDocSemanticExtractionLimits(env = process.env) {
   return {
     maxBytes: normalizePositiveInteger(env?.LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_BYTES, DEFAULT_MAX_BYTES),
@@ -353,11 +358,62 @@ export function evaluateLegacyDocSemanticExtractionObserveOnlyEligibility({
   }
 }
 
+
+export function evaluateLegacyDocSemanticTextScoringExperimentEligibility({
+  env = process.env,
+  userId = null,
+  analysisId = null,
+  isLegacyBinaryDoc = false,
+} = {}) {
+  const masterEnabled = isLegacyDocSemanticTextScoringExperimentEnabled(env)
+  const base = {
+    masterEnabled,
+    eligible: false,
+    eligibilityReason: ELIGIBILITY_REASON.masterDisabled,
+    allowlistMatched: false,
+    matchedAllowlistType: null,
+    sampled: false,
+    sampleRate: 0,
+    samplingBucket: null,
+  }
+
+  if (!masterEnabled) return base
+  if (!isLegacyBinaryDoc) return { ...base, eligibilityReason: ELIGIBILITY_REASON.unsupportedFormat }
+
+  const normalizedUserId = userId === null || userId === undefined ? '' : String(userId).trim()
+  const normalizedAnalysisId = analysisId === null || analysisId === undefined ? '' : String(analysisId).trim()
+  const allowedUserIds = parseCommaSeparatedAllowlist(env?.LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS)
+  const allowedAnalysisIds = parseCommaSeparatedAllowlist(env?.LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS)
+
+  if (normalizedUserId && allowedUserIds.has(normalizedUserId)) {
+    return {
+      ...base,
+      eligible: true,
+      eligibilityReason: ELIGIBILITY_REASON.userAllowlist,
+      allowlistMatched: true,
+      matchedAllowlistType: MATCHED_ALLOWLIST_TYPE.userId,
+    }
+  }
+
+  if (normalizedAnalysisId && allowedAnalysisIds.has(normalizedAnalysisId)) {
+    return {
+      ...base,
+      eligible: true,
+      eligibilityReason: ELIGIBILITY_REASON.analysisAllowlist,
+      allowlistMatched: true,
+      matchedAllowlistType: MATCHED_ALLOWLIST_TYPE.analysisId,
+    }
+  }
+
+  return { ...base, eligibilityReason: ELIGIBILITY_REASON.notAllowlisted }
+}
+
 export async function observeLegacyDocSemanticExtraction(fileBuffer, options = {}) {
   const {
     env = process.env,
     eligibility = null,
     currentLegacyText = '',
+    includeSemanticText = false,
   } = options || {}
   const startedAt = performance.now()
   const limits = getLegacyDocSemanticExtractionLimits(env)
@@ -390,11 +446,17 @@ export async function observeLegacyDocSemanticExtraction(fileBuffer, options = {
     const semanticText = normalizeResumeTextForFingerprint(boundedSemanticText)
     const semanticFingerprint = buildResumeTextFingerprint(semanticText)
     const currentFingerprint = buildResumeTextFingerprint(currentLegacyText || '')
-    const metrics = calculateSafeTextQualityMetrics(semanticText)
+    const normalizedMetrics = calculateSafeTextQualityMetrics(semanticText)
+    const rawMetrics = calculateSafeTextQualityMetrics(boundedSemanticText)
+    const metrics = {
+      duplicateLineRatio: normalizedMetrics.duplicateLineRatio,
+      printableRatio: rawMetrics.printableRatio > 0 ? Math.min(normalizedMetrics.printableRatio || rawMetrics.printableRatio, rawMetrics.printableRatio) : normalizedMetrics.printableRatio,
+      suspiciousNoiseRatio: Math.max(normalizedMetrics.suspiciousNoiseRatio, rawMetrics.suspiciousNoiseRatio),
+    }
     const qualityClassification = classifySemanticExtraction({ text: semanticText, metrics, outputTruncated })
     const success = qualityClassification === CATEGORY.usable || qualityClassification === CATEGORY.outputTruncated
 
-    return omitSemanticText({
+    const result = {
       ...buildDefaultDiagnostics({ eligibility: resolvedEligibility, fileBuffer, currentLegacyText }),
       success,
       durationMs: round(performance.now() - startedAt, 2),
@@ -414,7 +476,9 @@ export async function observeLegacyDocSemanticExtraction(fileBuffer, options = {
       qualityClassification,
       failureCategory: success ? null : qualityClassification,
       errorFingerprint: null,
-    })
+      semanticText,
+    }
+    return includeSemanticText ? result : omitSemanticText(result)
   } catch (error) {
     const category = Object.values(CATEGORY).includes(error?.category) ? error.category : CATEGORY.parserError
     return buildDefaultDiagnostics({
@@ -449,6 +513,7 @@ export function logSafeLegacyDocSemanticExtractionDiagnostics(logger, diagnostic
 
 export const LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ELIGIBILITY_REASONS = ELIGIBILITY_REASON
 export const LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES = CATEGORY
+export const LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD = SCORING_EXPERIMENT_EXTRACTION_METHOD
 export const LEGACY_DOC_SEMANTIC_EXTRACTION_PARSER_METADATA = {
   packageName: PACKAGE_NAME,
   packageVersion: PACKAGE_VERSION,

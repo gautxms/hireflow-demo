@@ -24,6 +24,7 @@ import {
   __resetLegacyDocSemanticExtractorForTests,
   __setLegacyDocSemanticExtractorForTests,
   evaluateLegacyDocSemanticExtractionObserveOnlyEligibility,
+  evaluateLegacyDocSemanticTextScoringExperimentEligibility,
   getLegacyDocSemanticExtractionLimits,
   observeLegacyDocSemanticExtraction,
 } from './legacyDocSemanticExtractionService.js'
@@ -102,6 +103,9 @@ function withLegacyDocSemanticObserveOnlyEnv(overrides = {}) {
     'LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE',
     'LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS',
     'LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS',
+    'LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED',
+    'LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS',
+    'LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS',
     'LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_BYTES',
     'LEGACY_DOC_SEMANTIC_EXTRACTION_TIMEOUT_MS',
     'LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_OUTPUT_CHARS',
@@ -1239,6 +1243,176 @@ test('legacy DOC semantic observe-only can run for user and analysis allowlists 
   assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.matchedAllowlistType, 'analysis_id')
 })
 
+
+
+test('legacy DOC semantic text scoring experiment is default-off and allowlist gated', async () => {
+  const usableSemanticText = [
+    'Semantic Candidate Summary with enough resume detail for safe extraction scoring.',
+    'Experience includes backend services, hiring workflows, analytics, and production operations.',
+    'Skills include Node.js, PostgreSQL, distributed systems, reliability, and recruiting SaaS.',
+  ].join('\n')
+
+  assert.equal(evaluateLegacyDocSemanticTextScoringExperimentEligibility({ isLegacyBinaryDoc: true }).eligible, false)
+
+  const unset = await prepareLegacyDocWithSemanticObserver({ semanticText: usableSemanticText })
+  assert.equal(unset.parserCalls, 0)
+  assert.equal(unset.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(unset.result.extractedText, unset.currentLegacyText)
+  assert.equal(unset.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringExperimentMasterEnabled, false)
+  assert.equal(unset.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'master_disabled')
+
+  const notAllowlisted = await prepareLegacyDocWithSemanticObserver({
+    env: { LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED: 'true' },
+    diagnosticsContext: { userId: 'user-not-allowed', analysisId: 'analysis-not-allowed' },
+    semanticText: usableSemanticText,
+  })
+  assert.equal(notAllowlisted.parserCalls, 0)
+  assert.equal(notAllowlisted.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(notAllowlisted.result.extractedText, notAllowlisted.currentLegacyText)
+  assert.equal(notAllowlisted.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringExperimentEligible, false)
+  assert.equal(notAllowlisted.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'not_allowlisted')
+})
+
+test('legacy DOC semantic text scoring experiment selects semantic text for user or analysis allowlist only after quality gates pass', async () => {
+  const usableSemanticText = [
+    'Semantic Candidate Summary with enough resume detail for safe extraction scoring.',
+    'Experience includes backend services, hiring workflows, analytics, and production operations.',
+    'Skills include Node.js, PostgreSQL, distributed systems, reliability, and recruiting SaaS.',
+  ].join('\n')
+
+  const userAllowed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42', analysisId: 'analysis-7' },
+    semanticText: usableSemanticText,
+  })
+  assert.equal(userAllowed.parserCalls, 1)
+  assert.equal(userAllowed.result.extractionMethod, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
+  assert.equal(userAllowed.result.extractedText, usableSemanticText.toLowerCase())
+  assert.equal(userAllowed.result.preparedMimeType, 'text/plain')
+  assert.equal(userAllowed.result.inputKind, 'extracted_text')
+  assert.equal(userAllowed.result.inputMode, 'extracted_text')
+  assert.equal(userAllowed.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringExperimentMatchedAllowlistType, 'user_id')
+  assert.equal(userAllowed.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'semantic_text_selected')
+
+  const analysisAllowed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS: 'analysis-42',
+    },
+    diagnosticsContext: { userId: 'user-99', analysisId: 'analysis-42' },
+    semanticText: usableSemanticText,
+  })
+  assert.equal(analysisAllowed.parserCalls, 1)
+  assert.equal(analysisAllowed.result.extractionMethod, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
+  assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringExperimentEligibilityReason, 'analysis_allowlist')
+  assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringExperimentMatchedAllowlistType, 'analysis_id')
+})
+
+test('legacy DOC semantic text scoring experiment reuses observe-only extraction and invokes parser once', async () => {
+  const usableSemanticText = [
+    'Semantic Candidate Summary with enough resume detail for safe extraction scoring.',
+    'Experience includes backend services, hiring workflows, analytics, and production operations.',
+    'Skills include Node.js, PostgreSQL, distributed systems, reliability, and recruiting SaaS.',
+  ].join('\n')
+  const observedAndScored = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42', analysisId: 'analysis-7' },
+    semanticText: usableSemanticText,
+  })
+  assert.equal(observedAndScored.parserCalls, 1)
+  assert.equal(observedAndScored.result.extractionMethod, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
+  assert.equal(observedAndScored.result.diagnostics.legacyDocSemanticExtractionObserveOnly.success, true)
+  assert.equal(observedAndScored.result.diagnostics.legacyDocSemanticTextScoringExperiment.semanticExtractionReused, true)
+})
+
+test('legacy DOC semantic text scoring experiment falls back safely for failures and quality gates', async () => {
+  const baseEnv = {
+    LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+    LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: 'user-42',
+  }
+  const diagnosticsContext = { userId: 'user-42' }
+
+  const importFailure = await prepareLegacyDocWithSemanticObserver({ env: baseEnv, diagnosticsContext, semanticClient: false })
+  assert.equal(importFailure.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(importFailure.result.extractedText, importFailure.currentLegacyText)
+  assert.equal(importFailure.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'semantic_extraction_failed')
+
+  const parserError = await prepareLegacyDocWithSemanticObserver({
+    env: baseEnv,
+    diagnosticsContext,
+    semanticClient: { async extract() { throw new Error('parser boom with candidate@example.com') } },
+  })
+  assert.equal(parserError.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(parserError.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'semantic_extraction_failed')
+
+  const timeout = await prepareLegacyDocWithSemanticObserver({
+    env: { ...baseEnv, LEGACY_DOC_SEMANTIC_EXTRACTION_TIMEOUT_MS: '1' },
+    diagnosticsContext,
+    semanticClient: { async extract() { return new Promise((resolve) => setTimeout(() => resolve({ getBody: () => 'late semantic text' }), 50)) } },
+  })
+  assert.equal(timeout.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(timeout.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'parser_timeout')
+
+  const empty = await prepareLegacyDocWithSemanticObserver({ env: baseEnv, diagnosticsContext, semanticText: '' })
+  assert.equal(empty.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(empty.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'empty_semantic_text')
+
+  const tooLarge = await prepareLegacyDocWithSemanticObserver({ env: { ...baseEnv, LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_BYTES: '8' }, diagnosticsContext })
+  assert.equal(tooLarge.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(tooLarge.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'file_too_large')
+
+  const truncated = await prepareLegacyDocWithSemanticObserver({
+    env: { ...baseEnv, LEGACY_DOC_SEMANTIC_EXTRACTION_MAX_OUTPUT_CHARS: '20' },
+    diagnosticsContext,
+    semanticText: 'A long semantic resume body that must be capped before diagnostics and never scored partially.',
+  })
+  assert.equal(truncated.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(truncated.result.extractedText, truncated.currentLegacyText)
+  assert.equal(truncated.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'output_truncated')
+
+  const duplicate = await prepareLegacyDocWithSemanticObserver({
+    env: baseEnv,
+    diagnosticsContext,
+    semanticText: Array(8).fill('Repeated resume line with enough semantic content to be unsafe').join('\n'),
+  })
+  assert.equal(duplicate.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(duplicate.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'quality_gate_failed_duplicate_line_ratio')
+
+  const suspiciousNoise = await prepareLegacyDocWithSemanticObserver({
+    env: baseEnv,
+    diagnosticsContext,
+    semanticText: 'Semantic resume detail with production operations and recruiting analytics.\nSkills include Node.js, PostgreSQL, reliability, and workflow automation.�',
+  })
+  assert.equal(suspiciousNoise.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(suspiciousNoise.result.diagnostics.legacyDocSemanticTextScoringExperiment.scoringFallbackReason, 'quality_gate_failed_suspicious_noise_ratio')
+})
+
+test('legacy DOC semantic text scoring experiment diagnostics omit raw text and PII-like values', async () => {
+  const semanticText = 'Private Candidate\nprivate.candidate@example.com\n555-333-2222\nExperience includes Node.js platform leadership and recruiting SaaS operations.'
+  const { result } = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42', analysisId: 'analysis-private', resumeId: 'resume-private' },
+    semanticText,
+  })
+  const serializedDiagnostics = JSON.stringify(result.diagnostics.legacyDocSemanticTextScoringExperiment)
+  for (const unsafe of ['Private Candidate', 'private.candidate@example.com', '555-333-2222', 'Unsafe_Candidate_Name', 'analysis-private', 'resume-private', Buffer.from(semanticText).toString('base64')]) {
+    assert.equal(serializedDiagnostics.includes(unsafe), false)
+  }
+  for (const unsafeKey of ['semanticText', 'extractedText', 'text', 'base64File', 'fileBufferBase64']) {
+    assert.equal(Object.prototype.hasOwnProperty.call(result.diagnostics.legacyDocSemanticTextScoringExperiment, unsafeKey), false)
+  }
+})
 
 test('legacy DOC semantic observe-only includes textbox-only visible content without changing scoring payload', async () => {
   const textboxText = [

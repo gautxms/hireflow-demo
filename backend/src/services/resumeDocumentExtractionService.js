@@ -26,7 +26,10 @@ import {
   toSafePdfCanonicalExtractionDiagnostics,
 } from './pdfCanonicalExtractionService.js'
 import {
+  LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES,
+  LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
   evaluateLegacyDocSemanticExtractionObserveOnlyEligibility,
+  evaluateLegacyDocSemanticTextScoringExperimentEligibility,
   logSafeLegacyDocSemanticExtractionDiagnostics,
   logSafeLegacyDocSemanticExtractionEligibility,
   observeLegacyDocSemanticExtraction,
@@ -276,6 +279,88 @@ function compactPdfScoringExperimentDiagnosticsForReuse(diagnostics = null) {
   delete safeDiagnostics.binaryContent
   delete safeDiagnostics.base64File
   return safeDiagnostics
+}
+
+
+function compactLegacyDocSemanticScoringExperimentDiagnosticsForReuse(diagnostics = null) {
+  if (!diagnostics || typeof diagnostics !== 'object') return null
+  const safeDiagnostics = { ...diagnostics }
+  delete safeDiagnostics.semanticText
+  delete safeDiagnostics.extractedText
+  delete safeDiagnostics.rawText
+  delete safeDiagnostics.text
+  delete safeDiagnostics.body
+  delete safeDiagnostics.binaryContent
+  delete safeDiagnostics.base64File
+  delete safeDiagnostics.fileBufferBase64
+  return safeDiagnostics
+}
+
+function buildLegacyDocSemanticScoringExperimentDiagnostics({
+  eligibility,
+  extractionDiagnostics = null,
+  scoringInputKind = 'extracted_text',
+  scoringExtractionMethod = 'legacy_doc_text_extraction',
+  scoringFallbackReason = null,
+  semanticExtractionReused = false,
+} = {}) {
+  return compactLegacyDocSemanticScoringExperimentDiagnosticsForReuse({
+    scoringExperimentMasterEnabled: Boolean(eligibility?.masterEnabled),
+    scoringExperimentEligible: Boolean(eligibility?.eligible),
+    scoringExperimentEligibilityReason: eligibility?.eligibilityReason || 'master_disabled',
+    scoringExperimentAllowlistMatched: Boolean(eligibility?.allowlistMatched),
+    scoringExperimentMatchedAllowlistType: eligibility?.matchedAllowlistType || null,
+    scoringInputKind,
+    scoringExtractionMethod,
+    scoringFallbackReason,
+    semanticExtractionReused: Boolean(semanticExtractionReused),
+    qualityClassification: extractionDiagnostics?.qualityClassification || null,
+    semanticNormalizedCharCount: Number.isFinite(Number(extractionDiagnostics?.semanticNormalizedCharCount)) ? Number(extractionDiagnostics.semanticNormalizedCharCount) : 0,
+    semanticNormalizedLineCount: Number.isFinite(Number(extractionDiagnostics?.semanticNormalizedLineCount)) ? Number(extractionDiagnostics.semanticNormalizedLineCount) : 0,
+    semanticNormalizedFingerprint: extractionDiagnostics?.semanticNormalizedFingerprint || null,
+    durationMs: Number.isFinite(Number(extractionDiagnostics?.durationMs)) ? Number(extractionDiagnostics.durationMs) : 0,
+    failureCategory: extractionDiagnostics?.failureCategory || null,
+    errorFingerprint: extractionDiagnostics?.errorFingerprint || null,
+    outputTruncated: Boolean(extractionDiagnostics?.outputTruncated),
+  })
+}
+
+function mapLegacyDocSemanticQualityFallbackReason(extractionDiagnostics = {}) {
+  switch (extractionDiagnostics?.qualityClassification || extractionDiagnostics?.failureCategory) {
+    case LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.duplicateLines:
+      return 'quality_gate_failed_duplicate_line_ratio'
+    case LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.lowPrintable:
+      return 'quality_gate_failed_printable_ratio'
+    case LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.binaryNoise:
+      return 'quality_gate_failed_suspicious_noise_ratio'
+    case LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.textTooShort:
+      return 'quality_gate_failed_normalized_char_count'
+    default:
+      return 'quality_gate_failed'
+  }
+}
+
+function getLegacyDocSemanticTextScoringFallbackReason({ eligibility, extractionDiagnostics, semanticText } = {}) {
+  if (!eligibility?.masterEnabled) return 'master_disabled'
+  if (!eligibility?.eligible) return eligibility?.eligibilityReason || 'not_allowlisted'
+  if (!extractionDiagnostics) return 'semantic_extraction_failed'
+  if (extractionDiagnostics.failureCategory === LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.fileTooLarge) return 'file_too_large'
+  if (extractionDiagnostics.failureCategory === LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.timeout) return 'parser_timeout'
+  if (extractionDiagnostics.failureCategory === LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.dependencyImportFailed) return 'semantic_extraction_failed'
+  if (extractionDiagnostics.failureCategory === LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.parserError) return 'semantic_extraction_failed'
+  if (!extractionDiagnostics.success) {
+    if (extractionDiagnostics.failureCategory === LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.empty) return 'empty_semantic_text'
+    return mapLegacyDocSemanticQualityFallbackReason(extractionDiagnostics)
+  }
+  if (!String(semanticText || '').trim()) return 'empty_semantic_text'
+  if (extractionDiagnostics.outputTruncated) return 'output_truncated'
+  if (extractionDiagnostics.qualityClassification !== LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_CATEGORIES.usable) return mapLegacyDocSemanticQualityFallbackReason(extractionDiagnostics)
+  if (!Number.isFinite(Number(extractionDiagnostics.semanticNormalizedCharCount)) || Number(extractionDiagnostics.semanticNormalizedCharCount) <= 0) return 'quality_gate_failed_normalized_char_count'
+  if (!Number.isFinite(Number(extractionDiagnostics.semanticNormalizedLineCount)) || Number(extractionDiagnostics.semanticNormalizedLineCount) <= 0) return 'quality_gate_failed_normalized_line_count'
+  if (!Number.isFinite(Number(extractionDiagnostics.printableRatio)) || Number(extractionDiagnostics.printableRatio) < 0.92) return 'quality_gate_failed_printable_ratio'
+  if (!Number.isFinite(Number(extractionDiagnostics.duplicateLineRatio)) || Number(extractionDiagnostics.duplicateLineRatio) > 0.35) return 'quality_gate_failed_duplicate_line_ratio'
+  if (Number(extractionDiagnostics.suspiciousNoiseRatio) > 0) return 'quality_gate_failed_suspicious_noise_ratio'
+  return null
 }
 
 function buildPdfScoringExperimentDiagnostics({ eligibility, scoringInputKind = 'pdf_binary', scoringExtractionMethod = 'pdf_binary_provider_input', scoringFallbackReason = null } = {}) {
@@ -649,12 +734,44 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
     }
 
     let legacyDocSemanticExtractionObserveOnly = { enabled: false }
+    let legacyDocSemanticTextScoringExperiment = null
+    let semanticExtractionResult = null
+    let semanticExtractionReused = false
     const skipDuplicateSemanticExtraction = Boolean(diagnosticsContext?.legacyDocSemanticExtractionObserveOnlyAlreadyEvaluated)
+    const scoringExperimentEligibility = (() => {
+      try {
+        return evaluateLegacyDocSemanticTextScoringExperimentEligibility({
+          userId: diagnosticsContext?.userId ?? null,
+          analysisId: diagnosticsContext?.analysisId ?? null,
+          isLegacyBinaryDoc: Boolean(legacyWordDetection.hasOleMagic),
+        })
+      } catch (error) {
+        legacyDocSemanticTextScoringExperiment = {
+          ...buildLegacyDocSemanticScoringExperimentDiagnostics({ scoringFallbackReason: 'semantic_extraction_failed' }),
+          errorFingerprint: buildSafeErrorCauseDiagnostics(error)?.messageFingerprint || null,
+        }
+        return {
+          masterEnabled: false,
+          eligible: false,
+          eligibilityReason: 'master_disabled',
+          allowlistMatched: false,
+          matchedAllowlistType: null,
+          sampled: false,
+          sampleRate: 0,
+          samplingBucket: null,
+        }
+      }
+    })()
 
     if (skipDuplicateSemanticExtraction) {
       legacyDocSemanticExtractionObserveOnly = compactLegacyDocSemanticObserveOnlyDiagnosticsForReuse(
         diagnosticsContext?.legacyDocSemanticExtractionObserveOnly,
       )
+      if (diagnosticsContext?.legacyDocSemanticTextScoringExperimentAlreadyEvaluated) {
+        legacyDocSemanticTextScoringExperiment = compactLegacyDocSemanticScoringExperimentDiagnosticsForReuse(
+          diagnosticsContext?.legacyDocSemanticTextScoringExperiment,
+        )
+      }
     } else {
       let semanticEligibility
       try {
@@ -687,14 +804,17 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
 
       logSafeLegacyDocSemanticExtractionEligibility(logger, semanticEligibility)
 
-      if (semanticEligibility?.eligible) {
+      const shouldRunSemanticExtraction = Boolean(semanticEligibility?.eligible || scoringExperimentEligibility?.eligible)
+      if (shouldRunSemanticExtraction) {
         try {
-          legacyDocSemanticExtractionObserveOnly = toSafeLegacyDocSemanticExtractionDiagnostics(await observeLegacyDocSemanticExtraction(fileBuffer, {
-            eligibility: semanticEligibility,
+          semanticExtractionResult = await observeLegacyDocSemanticExtraction(fileBuffer, {
+            eligibility: semanticEligibility?.eligible ? semanticEligibility : scoringExperimentEligibility,
             currentLegacyText: extractedText,
-          }))
+            includeSemanticText: true,
+          })
+          semanticExtractionReused = Boolean(semanticEligibility?.eligible && scoringExperimentEligibility?.eligible)
         } catch (error) {
-          legacyDocSemanticExtractionObserveOnly = {
+          semanticExtractionResult = {
             enabled: true,
             eligible: true,
             success: false,
@@ -703,12 +823,71 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
             scoringFallbackReason: 'observe_only',
           }
         }
+      }
+
+      if (semanticEligibility?.eligible) {
+        legacyDocSemanticExtractionObserveOnly = toSafeLegacyDocSemanticExtractionDiagnostics(semanticExtractionResult)
         logSafeLegacyDocSemanticExtractionDiagnostics(logger, legacyDocSemanticExtractionObserveOnly)
-      } else {
+      } else if (!legacyDocSemanticExtractionObserveOnly?.failureCategory) {
         legacyDocSemanticExtractionObserveOnly = toSafeLegacyDocSemanticExtractionDiagnostics(await observeLegacyDocSemanticExtraction(fileBuffer, {
           eligibility: semanticEligibility,
           currentLegacyText: extractedText,
         }))
+      }
+    }
+
+    const semanticText = semanticExtractionResult?.semanticText || ''
+    const semanticScoringFallbackReason = getLegacyDocSemanticTextScoringFallbackReason({
+      eligibility: scoringExperimentEligibility,
+      extractionDiagnostics: semanticExtractionResult,
+      semanticText,
+    })
+    const useSemanticTextForScoring = !skipDuplicateSemanticExtraction && !semanticScoringFallbackReason
+
+    if (!legacyDocSemanticTextScoringExperiment) {
+      legacyDocSemanticTextScoringExperiment = buildLegacyDocSemanticScoringExperimentDiagnostics({
+        eligibility: scoringExperimentEligibility,
+        extractionDiagnostics: semanticExtractionResult,
+        scoringInputKind: 'extracted_text',
+        scoringExtractionMethod: useSemanticTextForScoring
+          ? LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD
+          : 'legacy_doc_text_extraction',
+        scoringFallbackReason: useSemanticTextForScoring ? 'semantic_text_selected' : semanticScoringFallbackReason,
+        semanticExtractionReused,
+      })
+    }
+
+    if (useSemanticTextForScoring) {
+      return {
+        ...buildBase(),
+        fileBufferBase64: Buffer.from(semanticText, 'utf8').toString('base64'),
+        mimeType: 'text/plain',
+        preparedMimeType: 'text/plain',
+        sourceFormat: 'doc',
+        inputKind: 'extracted_text',
+        inputMode: 'extracted_text',
+        extractionMethod: LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
+        extractedText: semanticText,
+        base64File: null,
+        diagnostics: mergeSafeDiagnostics({
+          ...buildPreparedPayloadDiagnostics({
+            sourceFormat: 'doc',
+            inputKind: 'extracted_text',
+            inputMode: 'extracted_text',
+            preparedMimeType: 'text/plain',
+            originalMimeType: normalizedOriginalMimeType || normalizedMimeType || mimeType || null,
+            extractedText: semanticText,
+            extractionMethod: LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
+            fallbackUsed: false,
+          }),
+          legacyDocSemanticExtractionObserveOnly,
+          legacyDocSemanticTextScoringExperiment,
+        }, {
+          extractionMethod: LEGACY_DOC_SEMANTIC_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
+          extractedTextCharCount: semanticText.length,
+          preparedMimeType: 'text/plain',
+          inputKind: 'extracted_text',
+        }),
       }
     }
 
@@ -734,6 +913,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
           extractionMethod: 'legacy_doc_text_extraction',
         }),
         legacyDocSemanticExtractionObserveOnly,
+        legacyDocSemanticTextScoringExperiment,
       }, {
         extractionMethod: 'legacy_doc_text_extraction',
         extractedTextCharCount: extractedText.length,
