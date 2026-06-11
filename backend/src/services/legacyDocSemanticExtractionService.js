@@ -213,7 +213,7 @@ function omitSemanticText(result = null) {
 function normalizeWordExtractorText(document) {
   if (!document) return ''
   const candidates = []
-  for (const getter of ['getBody', 'getHeaders', 'getFooters', 'getFootnotes', 'getEndnotes']) {
+  for (const getter of ['getBody', 'getTextboxes', 'getHeaders', 'getFooters', 'getFootnotes', 'getEndnotes']) {
     if (typeof document[getter] === 'function') {
       candidates.push(document[getter]())
     }

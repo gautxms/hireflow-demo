@@ -127,15 +127,19 @@ function buildOleDocBuffer(text = 'Jane Legacy\nSenior DOC Engineer') {
   ])
 }
 
-async function prepareLegacyDocWithSemanticObserver({ env = {}, diagnosticsContext = {}, semanticText = 'Jane Semantic\nSenior DOC Engineer', logger = quietLogger, semanticClient = null } = {}) {
+async function prepareLegacyDocWithSemanticObserver({ env = {}, diagnosticsContext = {}, semanticText = 'Jane Semantic\nSenior DOC Engineer', textboxText = null, logger = quietLogger, semanticClient = null } = {}) {
   let parserCalls = 0
   __setLegacyDocSemanticExtractorForTests(semanticClient !== null ? semanticClient : {
     async extract(input) {
       parserCalls += 1
       assert.equal(Buffer.isBuffer(input), true)
-      return {
+      const document = {
         getBody() { return semanticText },
       }
+      if (textboxText !== null) {
+        document.getTextboxes = () => textboxText
+      }
+      return document
     },
   })
   const restore = withLegacyDocSemanticObserveOnlyEnv({
@@ -1233,6 +1237,143 @@ test('legacy DOC semantic observe-only can run for user and analysis allowlists 
   assert.equal(analysisAllowed.parserCalls, 1)
   assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.eligibilityReason, 'analysis_allowlist')
   assert.equal(analysisAllowed.result.diagnostics.legacyDocSemanticExtractionObserveOnly.matchedAllowlistType, 'analysis_id')
+})
+
+
+test('legacy DOC semantic observe-only includes textbox-only visible content without changing scoring payload', async () => {
+  const textboxText = [
+    'Textbox Resume Candidate',
+    'Summary: product engineering leader with platform modernization experience.',
+    'Skills: Node.js, PostgreSQL, distributed systems, hiring operations.',
+    'Experience: led recruiting workflow automation and analytics delivery.',
+  ].join('\n')
+  const observed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE: '0',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+    semanticText: '',
+    textboxText,
+  })
+  const diagnostics = observed.result.diagnostics.legacyDocSemanticExtractionObserveOnly
+
+  assert.equal(observed.parserCalls, 1)
+  assert.equal(observed.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(observed.result.preparedMimeType, 'text/plain')
+  assert.equal(observed.result.inputKind, 'extracted_text')
+  assert.equal(observed.result.inputMode, 'extracted_text')
+  assert.equal(observed.result.extractedText, observed.currentLegacyText)
+  assert.equal(observed.result.fileBufferBase64, Buffer.from(observed.currentLegacyText, 'utf8').toString('base64'))
+  assert.equal(diagnostics.success, true)
+  assert.equal(diagnostics.qualityClassification, 'usable_text_extraction')
+  assert.ok(diagnostics.semanticNormalizedCharCount >= 80)
+  assert.equal(diagnostics.semanticNormalizedLineCount, 4)
+  assert.match(diagnostics.semanticNormalizedFingerprint, /^[a-f0-9]{64}$/)
+})
+
+test('legacy DOC semantic observe-only combines body and textbox content safely', async () => {
+  const bodyText = [
+    'Body Resume Candidate',
+    'Summary: backend engineering manager with SaaS reliability ownership.',
+    'Experience: improved parsing pipelines and operational diagnostics.',
+  ].join('\n')
+  const textboxText = [
+    'Textbox Skills: Node.js, observability, incident response, recruiting systems.',
+    'Textbox Education: Computer Science and applied distributed systems.',
+  ].join('\n')
+  const logs = []
+  const logger = {
+    debug() {},
+    info(message, payload) { logs.push({ message, payload }) },
+    warn(message, payload) { logs.push({ message, payload }) },
+    log(message, payload) { logs.push({ message, payload }) },
+  }
+
+  const observed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+    semanticText: bodyText,
+    textboxText,
+    logger,
+  })
+  const diagnostics = observed.result.diagnostics.legacyDocSemanticExtractionObserveOnly
+  const bodyOnlyChars = bodyText.toLowerCase().length
+  const textboxOnlyChars = textboxText.toLowerCase().length
+  const serializedDiagnostics = JSON.stringify(diagnostics)
+  const serializedSemanticLogs = JSON.stringify(logs.filter((entry) => String(entry.message || '').includes('legacy_doc_semantic_extraction_observe_only')))
+
+  assert.equal(diagnostics.success, true)
+  assert.equal(diagnostics.qualityClassification, 'usable_text_extraction')
+  assert.ok(diagnostics.semanticNormalizedCharCount > bodyOnlyChars)
+  assert.ok(diagnostics.semanticNormalizedCharCount > textboxOnlyChars)
+  assert.equal(diagnostics.semanticNormalizedLineCount, 5)
+  assert.match(diagnostics.semanticNormalizedFingerprint, /^[a-f0-9]{64}$/)
+  for (const unsafe of ['Body Resume Candidate', 'Textbox Skills', 'Textbox Education']) {
+    assert.equal(serializedDiagnostics.includes(unsafe), false)
+    assert.equal(serializedSemanticLogs.includes(unsafe), false)
+  }
+  assert.equal(observed.result.extractedText, observed.currentLegacyText)
+  assert.equal(observed.result.fileBufferBase64, Buffer.from(observed.currentLegacyText, 'utf8').toString('base64'))
+})
+
+test('legacy DOC semantic observe-only keeps existing behavior when textbox getter is absent', async () => {
+  const observed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42' },
+    semanticText: 'Jane Semantic\nSenior DOC Engineer',
+  })
+  const diagnostics = observed.result.diagnostics.legacyDocSemanticExtractionObserveOnly
+
+  assert.equal(observed.parserCalls, 1)
+  assert.equal(diagnostics.qualityClassification, 'text_too_short')
+  assert.equal(diagnostics.semanticNormalizedLineCount, 2)
+  assert.match(diagnostics.semanticNormalizedFingerprint, /^[a-f0-9]{64}$/)
+  assert.equal(observed.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(observed.result.fileBufferBase64, Buffer.from(observed.currentLegacyText, 'utf8').toString('base64'))
+})
+
+test('legacy DOC semantic observe-only does not expose textbox PII in diagnostics or logs', async () => {
+  const logs = []
+  const logger = {
+    debug() {},
+    info(message, payload) { logs.push({ message, payload }) },
+    warn(message, payload) { logs.push({ message, payload }) },
+    log(message, payload) { logs.push({ message, payload }) },
+  }
+  const textboxText = [
+    'Textbox Candidate Jane Private',
+    'Email jane.private@example.com',
+    'Phone 555-222-3333',
+    'Summary: engineering leader with recruiting workflow expertise and systems experience.',
+  ].join('\n')
+
+  const observed = await prepareLegacyDocWithSemanticObserver({
+    env: {
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ENABLED: 'true',
+      LEGACY_DOC_SEMANTIC_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS: 'user-42',
+    },
+    diagnosticsContext: { userId: 'user-42', analysisId: 'analysis-textbox-private', resumeId: 'resume-textbox-private' },
+    semanticText: '',
+    textboxText,
+    logger,
+  })
+  const serializedDiagnostics = JSON.stringify(observed.result.diagnostics.legacyDocSemanticExtractionObserveOnly)
+  const serializedSemanticLogs = JSON.stringify(logs.filter((entry) => String(entry.message || '').includes('legacy_doc_semantic_extraction_observe_only')))
+
+  for (const unsafe of ['Jane Private', 'jane.private@example.com', '555-222-3333', 'analysis-textbox-private', 'resume-textbox-private', Buffer.from(textboxText).toString('base64')]) {
+    assert.equal(serializedDiagnostics.includes(unsafe), false)
+    assert.equal(serializedSemanticLogs.includes(unsafe), false)
+  }
+  assert.equal(observed.result.extractionMethod, 'legacy_doc_text_extraction')
+  assert.equal(observed.result.inputMode, 'extracted_text')
 })
 
 test('legacy DOC semantic observe-only failures and limits are safe diagnostics only', async () => {
