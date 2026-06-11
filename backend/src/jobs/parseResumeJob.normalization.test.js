@@ -28,6 +28,9 @@ function withPdfObserveOnlyEnv(overrides = {}) {
     'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_SAMPLE_RATE',
     'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_USER_IDS',
     'PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ALLOWED_ANALYSIS_IDS',
+    'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED',
+    'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS',
+    'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS',
   ]
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
   for (const key of keys) delete process.env[key]
@@ -711,6 +714,81 @@ test('runParse skips duplicate PDF observe-only parsing for allowlisted and samp
       __resetParseResumeJobTestOverrides()
       t.mock.reset()
     }
+  }
+})
+
+
+
+test('runParse prepares allowlisted PDF canonical text once for scoring experiment', async (t) => {
+  const restoreEnv = withPdfObserveOnlyEnv({
+    PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+    PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '7',
+  })
+  const fixture = buildSyntheticPdfResumeFixture({ id: 'parse-scoring-experiment-pdf' })
+  let parserCalls = 0
+  const mock = buildPdfJsTextContentMockFromFixtures([fixture, fixture])
+  __setPdfJsClientForTests({
+    ...mock,
+    getDocument(...args) {
+      parserCalls += 1
+      return mock.getDocument(...args)
+    },
+  })
+
+  t.mock.method(pool, 'query', async (sql) => {
+    if (String(sql).includes('FROM analyses')) {
+      return { rows: [{ id: 'analysis-same-base-multiformat', status: 'processing' }], rowCount: 1 }
+    }
+    if (String(sql).includes('FROM integration_webhooks')) {
+      return { rows: [], rowCount: 0 }
+    }
+    return { rows: [], rowCount: 1 }
+  })
+
+  const aiCalls = []
+  __setParseResumeJobTestOverrides({
+    analyzeResumeWithConfiguredFallback: async (fileBufferBase64, mimeType, filename, options = {}) => {
+      aiCalls.push({ fileBufferBase64, mimeType, filename, options })
+      assert.equal(options.diagnosticsContext?.pdfCanonicalExtractionObserveOnlyAlreadyEvaluated, true)
+      assert.equal(options.diagnosticsContext?.pdfCanonicalTextScoringExperimentAlreadyEvaluated, true)
+      assert.equal(options.diagnosticsContext?.pdfCanonicalTextScoringExperiment?.scoringFallbackReason, 'canonical_text_selected')
+      return {
+        result: {
+          candidates: [{ id: 'candidate-scoring-experiment', name: 'Synthetic Candidate', profile_score: 91 }],
+          methodUsed: 'mock-pdf-canonical-text',
+        },
+        provider: 'openai-primary',
+        model: 'mock-model',
+        attempts: [{ success: true, provider: 'openai-primary', tokenUsage: { usageAvailable: false, unavailableReason: 'test_mock' } }],
+      }
+    },
+    cacheJobResult: async () => {},
+  })
+
+  try {
+    const result = await __testables.runParse(createParseJob({
+      id: 'parse-scoring-experiment-duplicate-guard',
+      resumeId: 'resume-scoring-experiment-duplicate-guard',
+      filename: 'scoring-experiment-resume.pdf',
+      mimeType: 'application/pdf',
+      originalMimeType: 'application/pdf',
+      fileExtension: 'pdf',
+      fileBuffer: fixture.buffer,
+    }))
+
+    assert.equal(parserCalls, 1)
+    assert.equal(aiCalls.length, 1)
+    assert.equal(aiCalls[0].mimeType, 'text/plain')
+    assert.notEqual(aiCalls[0].fileBufferBase64, fixture.buffer.toString('base64'))
+    assert.equal(result.parseDiagnostics.preparedMimeType, 'text/plain')
+    assert.equal(result.parseDiagnostics.inputKind, 'extracted_text')
+    assert.equal(result.parseDiagnostics.inputMode, 'extracted_text')
+    assert.equal(result.parseDiagnostics.extractionMethod, 'pdfjs_dist_canonical_text_scoring_experiment')
+    assert.equal(result.parseDiagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'canonical_text_selected')
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+    t.mock.reset()
   }
 })
 

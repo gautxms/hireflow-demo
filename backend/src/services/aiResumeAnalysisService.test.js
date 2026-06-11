@@ -902,3 +902,77 @@ test('PDF observe-only extraction runs once across provider fallback retries', a
     __resetPdfJsClientForTests()
   }
 })
+
+
+test('PDF canonical text scoring experiment sends text/plain only once and reuses payload across fallback attempts', async () => {
+  const previous = {
+    scoringEnabled: process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED,
+    scoringUsers: process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS,
+    maxAttemptsPerFile: process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE,
+  }
+  process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED = 'true'
+  process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS = '26'
+  process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = '8'
+  const fixture = buildSyntheticPdfResumeFixture({ id: 'scoring-parser-once-pdf' })
+  let parserCalls = 0
+  const mock = buildPdfJsTextContentMockFromFixtures([fixture, fixture])
+  __setPdfJsClientForTests({
+    ...mock,
+    getDocument(...args) {
+      parserCalls += 1
+      return mock.getDocument(...args)
+    },
+  })
+  const credentials = {
+    activeProvider: 'openai',
+    providers: {
+      openai: {
+        primary: { apiKey: 'oa-key', model: 'gpt-5-mini-2026-01-15', source: 'admin' },
+      },
+      anthropic: {
+        fallback: { apiKey: 'anth-key', model: 'claude-sonnet-4', source: 'admin' },
+      },
+    },
+    governance: { aiEnabled: true, workflowToggles: { resumeAnalysisEnabled: true } },
+  }
+  const providerCalls = []
+  try {
+    const response = await analyzeResumeWithConfiguredFallback(fixture.buffer.toString('base64'), 'application/pdf', 'resume.pdf', {
+      credentials,
+      diagnosticsContext: { userId: '26', analysisId: 'analysis-scoring' },
+      systemPromptConfig: { systemPrompt: 'Base prompt', promptVersion: 2, isDefaultFallback: false },
+      analyzeWithOpenAI: async (fileB64, mimeType, filename) => {
+        providerCalls.push({ provider: 'openai', fileB64, mimeType, filename })
+        throw new Error('provider_timeout::synthetic primary timeout')
+      },
+      analyzeWithAnthropic: async (fileB64, mimeType, filename) => {
+        providerCalls.push({ provider: 'anthropic', fileB64, mimeType, filename })
+        return {
+          result: { candidates: [{ id: 'cand-pdf-text' }] },
+          provider: 'anthropic-fallback',
+          model: 'claude-sonnet-4',
+          tokenUsage: { usageAvailable: false, unavailableReason: 'not_collected' },
+        }
+      },
+    })
+
+    assert.equal(parserCalls, 1)
+    assert.equal(providerCalls.length, 2)
+    assert.deepEqual(providerCalls.map((call) => call.mimeType), ['text/plain', 'text/plain'])
+    assert.notEqual(providerCalls[0].fileB64, fixture.buffer.toString('base64'))
+    assert.equal(providerCalls[0].fileB64, providerCalls[1].fileB64)
+    assert.equal(Buffer.from(providerCalls[0].fileB64, 'base64').toString('utf8').includes('synthetic candidate alpha'), true)
+    assert.equal(response.attempts.at(-1).inputDiagnostics.preparedMimeType, 'text/plain')
+    assert.equal(response.attempts.at(-1).inputDiagnostics.inputKind, 'extracted_text')
+    assert.equal(response.attempts.at(-1).inputDiagnostics.extractionMethod, 'pdfjs_dist_canonical_text_scoring_experiment')
+    assert.equal(response.attempts.at(-1).inputDiagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'canonical_text_selected')
+  } finally {
+    if (previous.scoringEnabled === undefined) delete process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED
+    else process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED = previous.scoringEnabled
+    if (previous.scoringUsers === undefined) delete process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS
+    else process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS = previous.scoringUsers
+    if (previous.maxAttemptsPerFile === undefined) delete process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE
+    else process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = previous.maxAttemptsPerFile
+    __resetPdfJsClientForTests()
+  }
+})

@@ -16,10 +16,14 @@ import {
   isLegacyDocExtractionEnabled,
 } from './legacyDocExtractionService.js'
 import {
+  PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_CATEGORIES,
+  PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
   evaluatePdfCanonicalExtractionObserveOnlyEligibility,
-  observePdfCanonicalTextExtraction,
+  evaluatePdfCanonicalTextScoringExperimentEligibility,
+  extractPdfCanonicalTextForInternalUse,
   logSafePdfCanonicalExtractionDiagnostics,
   logSafePdfCanonicalExtractionEligibility,
+  toSafePdfCanonicalExtractionDiagnostics,
 } from './pdfCanonicalExtractionService.js'
 
 let mammothClient = null
@@ -239,6 +243,43 @@ function compactPdfObserveOnlyDiagnosticsForReuse(diagnostics = null) {
   delete safeDiagnostics.binaryContent
   delete safeDiagnostics.base64File
   return safeDiagnostics
+}
+
+function compactPdfScoringExperimentDiagnosticsForReuse(diagnostics = null) {
+  if (!diagnostics || typeof diagnostics !== 'object') return null
+  const safeDiagnostics = { ...diagnostics }
+  delete safeDiagnostics.extractedText
+  delete safeDiagnostics.rawText
+  delete safeDiagnostics.text
+  delete safeDiagnostics.canonicalText
+  delete safeDiagnostics.binaryContent
+  delete safeDiagnostics.base64File
+  return safeDiagnostics
+}
+
+function buildPdfScoringExperimentDiagnostics({ eligibility, scoringInputKind = 'pdf_binary', scoringExtractionMethod = 'pdf_binary_provider_input', scoringFallbackReason = null } = {}) {
+  return {
+    scoringExperimentMasterEnabled: Boolean(eligibility?.masterEnabled),
+    scoringExperimentEligible: Boolean(eligibility?.eligible),
+    scoringExperimentEligibilityReason: eligibility?.eligibilityReason || 'master_disabled',
+    scoringExperimentAllowlistMatched: Boolean(eligibility?.allowlistMatched),
+    scoringExperimentMatchedAllowlistType: eligibility?.matchedAllowlistType || null,
+    scoringInputKind,
+    scoringExtractionMethod,
+    scoringFallbackReason,
+  }
+}
+
+function getPdfCanonicalTextScoringFallbackReason({ eligibility, extractionDiagnostics, canonicalText } = {}) {
+  if (!eligibility?.masterEnabled) return 'master_disabled'
+  if (!eligibility?.eligible) return eligibility?.eligibilityReason || 'not_allowlisted'
+  if (!extractionDiagnostics?.success) return 'extraction_failed'
+  if (!String(canonicalText || '').trim()) return 'empty_canonical_text'
+  if (extractionDiagnostics.ocrRequired) return 'ocr_required'
+  if (extractionDiagnostics.observationTruncated) return 'observation_truncated'
+  if (extractionDiagnostics.pageLimitReached) return 'page_limit_reached'
+  if (extractionDiagnostics.qualityClassification !== PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_CATEGORIES.usable) return 'unusable_text_extraction'
+  return null
 }
 
 function buildPreparedPayloadDiagnostics({
@@ -647,8 +688,13 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
   if (normalizedMimeType === 'application/pdf') {
     let observeOnlyEligibility
     let pdfCanonicalExtractionObserveOnly = { enabled: false }
+    let scoringExperimentEligibility
+    let pdfCanonicalTextScoringExperiment = null
+    let internalPdfExtractionResult = null
+    let safePdfExtractionDiagnostics = null
 
     const skipDuplicateObserveOnlyExtraction = Boolean(diagnosticsContext?.pdfCanonicalExtractionObserveOnlyAlreadyEvaluated)
+    const skipDuplicateScoringExtraction = Boolean(diagnosticsContext?.pdfCanonicalTextScoringExperimentAlreadyEvaluated)
 
     if (skipDuplicateObserveOnlyExtraction) {
       observeOnlyEligibility = compactObserveOnlyEligibilityForReuse(diagnosticsContext?.observeOnlyEligibility) || {
@@ -690,23 +736,111 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
       }
     }
 
+    try {
+      scoringExperimentEligibility = evaluatePdfCanonicalTextScoringExperimentEligibility({
+        userId: diagnosticsContext?.userId ?? null,
+        analysisId: diagnosticsContext?.analysisId ?? null,
+      })
+    } catch (error) {
+      scoringExperimentEligibility = {
+        masterEnabled: false,
+        eligible: false,
+        eligibilityReason: 'master_disabled',
+        allowlistMatched: false,
+        matchedAllowlistType: null,
+      }
+      pdfCanonicalTextScoringExperiment = {
+        ...buildPdfScoringExperimentDiagnostics({ scoringFallbackReason: 'eligibility_evaluation_error' }),
+        errorFingerprint: buildSafeErrorCauseDiagnostics(error)?.messageFingerprint || null,
+      }
+    }
+
     logSafePdfCanonicalExtractionEligibility(logger, observeOnlyEligibility)
 
-    if (!skipDuplicateObserveOnlyExtraction && observeOnlyEligibility.eligible) {
+    if (skipDuplicateScoringExtraction) {
+      pdfCanonicalTextScoringExperiment = compactPdfScoringExperimentDiagnosticsForReuse(diagnosticsContext?.pdfCanonicalTextScoringExperiment)
+    }
+
+    const shouldRunPdfExtraction = !skipDuplicateObserveOnlyExtraction
+      && !skipDuplicateScoringExtraction
+      && (observeOnlyEligibility.eligible || scoringExperimentEligibility.eligible)
+
+    if (shouldRunPdfExtraction) {
       try {
-        pdfCanonicalExtractionObserveOnly = await observePdfCanonicalTextExtraction(fileBuffer)
+        internalPdfExtractionResult = await extractPdfCanonicalTextForInternalUse(fileBuffer)
       } catch (error) {
-        pdfCanonicalExtractionObserveOnly = {
+        internalPdfExtractionResult = {
           enabled: true,
           success: false,
           failureCategory: 'parser_error',
           errorFingerprint: buildSafeErrorCauseDiagnostics(error)?.messageFingerprint || null,
         }
       }
+      safePdfExtractionDiagnostics = toSafePdfCanonicalExtractionDiagnostics(internalPdfExtractionResult)
+    } else if (skipDuplicateObserveOnlyExtraction) {
+      safePdfExtractionDiagnostics = pdfCanonicalExtractionObserveOnly
+    }
+
+    if (!skipDuplicateObserveOnlyExtraction && observeOnlyEligibility.eligible) {
+      pdfCanonicalExtractionObserveOnly = safePdfExtractionDiagnostics || { enabled: false }
       logSafePdfCanonicalExtractionDiagnostics(logger, {
         ...pdfCanonicalExtractionObserveOnly,
         observeOnlyEligibility,
       })
+    }
+
+    const canonicalText = internalPdfExtractionResult?.canonicalText || ''
+    const scoringFallbackReason = getPdfCanonicalTextScoringFallbackReason({
+      eligibility: scoringExperimentEligibility,
+      extractionDiagnostics: safePdfExtractionDiagnostics,
+      canonicalText,
+    })
+    const useCanonicalTextForScoring = !skipDuplicateScoringExtraction && !scoringFallbackReason
+
+    if (!pdfCanonicalTextScoringExperiment) {
+      pdfCanonicalTextScoringExperiment = buildPdfScoringExperimentDiagnostics({
+        eligibility: scoringExperimentEligibility,
+        scoringInputKind: useCanonicalTextForScoring ? 'extracted_text' : 'pdf_binary',
+        scoringExtractionMethod: useCanonicalTextForScoring
+          ? PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD
+          : 'pdf_binary_provider_input',
+        scoringFallbackReason: useCanonicalTextForScoring ? 'canonical_text_selected' : scoringFallbackReason,
+      })
+    }
+
+    if (useCanonicalTextForScoring) {
+      return {
+        ...buildBase(),
+        fileBufferBase64: Buffer.from(canonicalText, 'utf8').toString('base64'),
+        mimeType: 'text/plain',
+        preparedMimeType: 'text/plain',
+        sourceFormat: 'pdf',
+        inputKind: 'extracted_text',
+        inputMode: 'extracted_text',
+        extractedText: canonicalText,
+        base64File: null,
+        diagnostics: mergeSafeDiagnostics({
+          ...buildPreparedPayloadDiagnostics({
+            sourceFormat: 'pdf',
+            inputKind: 'extracted_text',
+            inputMode: 'extracted_text',
+            preparedMimeType: 'text/plain',
+            originalMimeType: normalizedOriginalMimeType || normalizedMimeType || null,
+            extractedText: canonicalText,
+            extractionMethod: PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
+            fallbackUsed: false,
+          }),
+          pdfCanonicalExtractionObserveOnlyEnabled: observeOnlyEligibility.masterEnabled,
+          observeOnlyEligibility,
+          pdfCanonicalExtractionObserveOnly,
+          pdfCanonicalTextScoringExperiment,
+        }, {
+          extractionMethod: PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_EXTRACTION_METHOD,
+          extractedTextCharCount: canonicalText.length,
+          preparedMimeType: 'text/plain',
+          inputKind: 'extracted_text',
+        }),
+      }
     }
 
     return {
@@ -732,6 +866,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
         pdfCanonicalExtractionObserveOnlyEnabled: observeOnlyEligibility.masterEnabled,
         observeOnlyEligibility,
         pdfCanonicalExtractionObserveOnly,
+        pdfCanonicalTextScoringExperiment,
       }, {
         extractionMethod: 'pdf_binary_provider_input',
         extractedTextCharCount: 0,
