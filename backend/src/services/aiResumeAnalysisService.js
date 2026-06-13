@@ -54,7 +54,7 @@ function getMaxProviderAttemptsPerFile() {
   return Math.max(1, Number.parseInt(process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE || '8', 10) || 8)
 }
 const DEFAULT_TEXT_PROMPT_CHAR_LIMIT = 18000
-const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
+export const DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT = 12000
 const CANDIDATE_COMPACT_SCHEMA_VERSION = 'compact-v2'
 
 let claudeTokensUsed = {
@@ -861,7 +861,7 @@ function buildCompactOutputInstructions({ compactMode = false, truncationSafeMod
   ].join('\n')
 }
 
-function cleanExtractedTextForPrompt(text, { maxChars = DEFAULT_TEXT_PROMPT_CHAR_LIMIT } = {}) {
+export function cleanExtractedTextForPrompt(text, { maxChars = DEFAULT_TEXT_PROMPT_CHAR_LIMIT } = {}) {
   const original = String(text || '')
   const lines = dedupeLinesPreserveOrder(
     original

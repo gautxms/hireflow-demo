@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 
 import { analyzeResumeWithConfiguredFallback } from '../src/services/aiResumeAnalysisService.js'
 import {
@@ -22,6 +23,24 @@ export const SYNTHETIC_AI_SCORING_RESUME_TEXT = [
   'Education: B.S. Computer Science, Synthetic State University.',
 ].join('\n')
 
+export const SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT = Object.freeze({
+  hasContext: true,
+  jobDescriptionId: 'synthetic-local-diagnostic-jd',
+  title: 'Synthetic Backend Engineer',
+  description: 'Build reliable backend services and workflow automation.',
+  requirements: 'Node.js or Java, PostgreSQL, REST APIs, testing, observability.',
+  skills: ['Node.js', 'Java', 'PostgreSQL', 'REST APIs', 'Testing', 'Observability'],
+  experienceYears: '3-6',
+  location: 'Remote',
+  source: 'synthetic_local_diagnostic',
+})
+
+export function isDirectExecution() {
+  return process.argv[1]
+    ? import.meta.url === pathToFileURL(process.argv[1]).href
+    : false
+}
+
 function parsePositiveInteger(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback
   const parsed = Number.parseInt(String(value), 10)
@@ -39,6 +58,12 @@ export function resolveRunCount(value) {
 export function assertAiScoringDiagnosticsOptIn(env = process.env) {
   if (String(env?.[OPT_IN_ENV] || '').toLowerCase() !== 'true') {
     throw new Error('local_ai_scoring_diagnostics_opt_in_required')
+  }
+}
+
+export function assertSingleProviderAttemptForNondeterminismMode(env = process.env) {
+  if (String(env?.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE || '').trim() !== '1') {
+    throw new Error('single_provider_attempt_required_for_nondeterminism_mode')
   }
 }
 
@@ -128,12 +153,14 @@ export async function runAiScoringNondeterminismDiagnostics({
   env = process.env,
   credentials,
   systemPromptConfig,
-  jobDescriptionContext = null,
+  jobDescriptionContext = SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT,
   analyzeWithAnthropic,
   analyzeWithOpenAI,
 } = {}) {
   assertAiScoringDiagnosticsOptIn(env)
+  assertSingleProviderAttemptForNondeterminismMode(env)
   const resolvedRunCount = resolveRunCount(runCount)
+  const resolvedJobDescriptionContext = jobDescriptionContext || SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT
   const preparedPayload = await prepareResumePayloadForAnalysis({
     fileBufferBase64: Buffer.from(SYNTHETIC_AI_SCORING_RESUME_TEXT, 'utf8').toString('base64'),
     mimeType: 'text/plain',
@@ -156,7 +183,7 @@ export async function runAiScoringNondeterminismDiagnostics({
       {
         credentials,
         systemPromptConfig,
-        jobDescriptionContext,
+        jobDescriptionContext: resolvedJobDescriptionContext,
         analyzeWithAnthropic,
         analyzeWithOpenAI,
       },
@@ -167,7 +194,7 @@ export async function runAiScoringNondeterminismDiagnostics({
   return {
     diagnostic: 'ai_scoring_nondeterminism_local_staging_only',
     localStagingOnly: true,
-    note: 'Safe aggregate diagnostics only; raw resume text and provider response bodies are intentionally omitted. Recommend AI_MAX_PROVIDER_ATTEMPTS_PER_FILE=1 when isolating model nondeterminism.',
+    note: 'Safe aggregate diagnostics only; raw resume text, synthetic JD text, and provider response bodies are intentionally omitted. Requires AI_MAX_PROVIDER_ATTEMPTS_PER_FILE=1 to isolate one provider attempt.',
     runs,
     variance: calculateAiScoringVariance(runs),
   }
@@ -190,7 +217,11 @@ async function main() {
     console.error(JSON.stringify({
       diagnostic: 'ai_scoring_nondeterminism_local_staging_only',
       localStagingOnly: true,
-      error: ['local_ai_scoring_diagnostics_opt_in_required', 'run_count_exceeds_maximum_10'].includes(error?.message)
+      error: [
+        'local_ai_scoring_diagnostics_opt_in_required',
+        'single_provider_attempt_required_for_nondeterminism_mode',
+        'run_count_exceeds_maximum_10',
+      ].includes(error?.message)
         ? error.message
         : 'diagnostic_failed',
     }))
@@ -198,6 +229,6 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectExecution()) {
   await main()
 }

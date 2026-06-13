@@ -1,13 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 
 import {
   SYNTHETIC_AI_SCORING_RESUME_TEXT,
+  SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT,
   assertAiScoringDiagnosticsOptIn,
+  assertSingleProviderAttemptForNondeterminismMode,
   calculateAiScoringVariance,
+  isDirectExecution,
   resolveRunCount,
   runAiScoringNondeterminismDiagnostics,
 } from './diagnoseAiScoringNondeterminism.local.mjs'
+
+const ENABLED_ENV = {
+  ENABLE_LOCAL_AI_SCORING_DIAGNOSTICS: 'true',
+  AI_MAX_PROVIDER_ATTEMPTS_PER_FILE: '1',
+}
 
 function credentials() {
   return {
@@ -51,10 +60,16 @@ test('AI nondeterminism harness requires explicit local staging opt-in flag', ()
   assert.doesNotThrow(() => assertAiScoringDiagnosticsOptIn({ ENABLE_LOCAL_AI_SCORING_DIAGNOSTICS: 'true' }))
 })
 
-test('AI nondeterminism harness reuses identical prepared input fingerprint and emits safe summaries', async () => {
+test('AI nondeterminism harness requires one provider attempt for default mode', () => {
+  assert.throws(() => assertSingleProviderAttemptForNondeterminismMode({}), /single_provider_attempt_required_for_nondeterminism_mode/)
+  assert.throws(() => assertSingleProviderAttemptForNondeterminismMode({ AI_MAX_PROVIDER_ATTEMPTS_PER_FILE: '2' }), /single_provider_attempt_required_for_nondeterminism_mode/)
+  assert.doesNotThrow(() => assertSingleProviderAttemptForNondeterminismMode({ AI_MAX_PROVIDER_ATTEMPTS_PER_FILE: '1' }))
+})
+
+test('AI nondeterminism harness succeeds with AI_MAX_PROVIDER_ATTEMPTS_PER_FILE=1 and reuses identical prepared input fingerprint', async () => {
   const report = await runAiScoringNondeterminismDiagnostics({
     runCount: 3,
-    env: { ENABLE_LOCAL_AI_SCORING_DIAGNOSTICS: 'true' },
+    env: ENABLED_ENV,
     credentials: credentials(),
     systemPromptConfig: { promptVersion: 11, isDefaultFallback: false, systemPrompt: 'Return safe JSON.' },
     analyzeWithAnthropic: async () => okResponse(),
@@ -69,10 +84,32 @@ test('AI nondeterminism harness reuses identical prepared input fingerprint and 
   assert.equal(serialized.includes('PROVIDER_SECRET_BODY'), false)
 })
 
+test('AI nondeterminism harness uses the fixed synthetic JD context for every run and does not serialize JD content', async () => {
+  const seenContexts = []
+  const report = await runAiScoringNondeterminismDiagnostics({
+    runCount: 2,
+    env: ENABLED_ENV,
+    credentials: credentials(),
+    systemPromptConfig: { promptVersion: 11, isDefaultFallback: false, systemPrompt: 'Return safe JSON.' },
+    analyzeWithAnthropic: async (_base64, _mime, _filename, options) => {
+      seenContexts.push(options.jobDescriptionContext)
+      return okResponse()
+    },
+  })
+  const serialized = JSON.stringify(report)
+
+  assert.equal(seenContexts.length, 2)
+  assert.deepEqual(seenContexts[0], SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT)
+  assert.deepEqual(seenContexts[1], SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT)
+  assert.equal(serialized.includes(SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT.description), false)
+  assert.equal(serialized.includes(SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT.requirements), false)
+  assert.equal(serialized.includes(SYNTHETIC_LOCAL_DIAGNOSTIC_JD_CONTEXT.title), false)
+})
+
 test('AI nondeterminism harness safely emits null for unavailable telemetry fields', async () => {
   const report = await runAiScoringNondeterminismDiagnostics({
     runCount: 1,
-    env: { ENABLE_LOCAL_AI_SCORING_DIAGNOSTICS: 'true' },
+    env: ENABLED_ENV,
     credentials: credentials(),
     systemPromptConfig: { promptVersion: 11, isDefaultFallback: false, systemPrompt: 'Return safe JSON.' },
     analyzeWithAnthropic: async () => ({
@@ -105,4 +142,15 @@ test('AI nondeterminism aggregate variance calculates min, max, average, range, 
   assert.equal(variance.averageScore, 50.6667)
   assert.equal(variance.distinctScoreCount, 2)
   assert.equal(variance.providerModelStableAcrossRuns, true)
+})
+
+test('Windows-safe direct execution helper and CLI invocation are covered', () => {
+  assert.equal(isDirectExecution(), false)
+  const result = spawnSync(process.execPath, ['backend/scripts/diagnoseAiScoringNondeterminism.local.mjs', '--runs', '1'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: { ...process.env, ENABLE_LOCAL_AI_SCORING_DIAGNOSTICS: 'true' },
+  })
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /single_provider_attempt_required_for_nondeterminism_mode/)
 })
