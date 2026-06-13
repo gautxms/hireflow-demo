@@ -38,19 +38,20 @@ function okResponse({ score = 52, providerBodyMarker = 'PROVIDER_SECRET_BODY' } 
     result: {
       candidates: [{
         score,
+        years_experience: score === 52 ? 1.6 : 2,
         profile_score: score - 2,
         verdict: 'diagnostic verdict',
         fit_assessment: { overall_fit_score: score - 1 },
-        matchScore: { score_out_of_ten: score / 10, fit: 'diagnostic fit' },
+        matchScore: { score: score + 10, score_out_of_ten: score / 10, fit: 'diagnostic fit' },
         providerResponseBody: providerBodyMarker,
       }],
     },
   }
 }
 
-test('AI nondeterminism harness rejects run counts above 10 and defaults to 5', () => {
-  assert.equal(resolveRunCount(undefined), 5)
-  assert.equal(resolveRunCount(''), 5)
+test('AI nondeterminism harness rejects run counts above 10 and defaults to 10', () => {
+  assert.equal(resolveRunCount(undefined), 10)
+  assert.equal(resolveRunCount(''), 10)
   assert.equal(resolveRunCount('10'), 10)
   assert.throws(() => resolveRunCount('11'), /run_count_exceeds_maximum_10/)
 })
@@ -80,6 +81,8 @@ test('AI nondeterminism harness succeeds with AI_MAX_PROVIDER_ATTEMPTS_PER_FILE=
   assert.equal(report.runs.length, 3)
   assert.equal(fingerprints.size, 1)
   assert.equal(report.variance.identicalPreparedInputFingerprintAcrossRuns, true)
+  assert.equal(report.runs[0].matchScore, 62)
+  assert.equal(report.runs[0].matchScoreOutOfTen, 5.2)
   assert.equal(serialized.includes(SYNTHETIC_AI_SCORING_RESUME_TEXT), false)
   assert.equal(serialized.includes('PROVIDER_SECRET_BODY'), false)
 })
@@ -124,24 +127,65 @@ test('AI nondeterminism harness safely emits null for unavailable telemetry fiel
   assert.equal(run.profileScore, null)
   assert.equal(run.fitAssessmentOverallScore, null)
   assert.equal(run.matchScore, null)
+  assert.equal(run.matchScoreOutOfTen, null)
+  assert.equal(run.yearsExperience, null)
   assert.equal(run.inputTokens, null)
   assert.equal(run.outputTokens, null)
   assert.equal(run.totalTokens, null)
 })
 
-test('AI nondeterminism aggregate variance calculates min, max, average, range, and distinct count', () => {
+
+test('AI nondeterminism harness keeps explicitly null years_experience values null per run', async () => {
+  const report = await runAiScoringNondeterminismDiagnostics({
+    runCount: 1,
+    env: ENABLED_ENV,
+    credentials: credentials(),
+    systemPromptConfig: { promptVersion: 11, isDefaultFallback: false, systemPrompt: 'Return safe JSON.' },
+    analyzeWithAnthropic: async () => ({
+      provider: 'anthropic-primary',
+      model: 'claude-diagnostic',
+      result: { candidates: [{ score: 52, years_experience: null }] },
+    }),
+  })
+
+  assert.equal(report.runs[0].yearsExperience, null)
+  assert.deepEqual(report.variance.yearsExperienceDistinctValues, [])
+  assert.equal(report.variance.yearsExperienceDistinctCount, 0)
+})
+
+test('AI nondeterminism aggregate variance calculates min, max, average, range, distinct count, and years variance', () => {
   const variance = calculateAiScoringVariance([
-    { score: 48, preparedInputFingerprint: 'same', selectedProvider: 'p', selectedModel: 'm', promptVersion: 1, compactMode: 'compact', retryAttemptCount: 0 },
-    { score: 52, preparedInputFingerprint: 'same', selectedProvider: 'p', selectedModel: 'm', promptVersion: 1, compactMode: 'compact', retryAttemptCount: 0 },
-    { score: 52, preparedInputFingerprint: 'same', selectedProvider: 'p', selectedModel: 'm', promptVersion: 1, compactMode: 'compact', retryAttemptCount: 0 },
+    { score: 48, yearsExperience: 1.6, preparedInputFingerprint: 'same', selectedProvider: 'p', selectedModel: 'm', promptVersion: 1, compactMode: 'compact', retryAttemptCount: 0 },
+    { score: 52, yearsExperience: 2, preparedInputFingerprint: 'same', selectedProvider: 'p', selectedModel: 'm', promptVersion: 1, compactMode: 'compact', retryAttemptCount: 0 },
+    { score: 52, yearsExperience: 1.6, preparedInputFingerprint: 'same', selectedProvider: 'p', selectedModel: 'm', promptVersion: 1, compactMode: 'compact', retryAttemptCount: 0 },
   ])
 
   assert.equal(variance.minimumScore, 48)
   assert.equal(variance.maximumScore, 52)
   assert.equal(variance.scoreRange, 4)
+  assert.equal(variance.scoreSpread, 4)
   assert.equal(variance.averageScore, 50.6667)
   assert.equal(variance.distinctScoreCount, 2)
+  assert.deepEqual(variance.yearsExperienceDistinctValues, [1.6, 2])
+  assert.equal(variance.yearsExperienceDistinctCount, 2)
   assert.equal(variance.providerModelStableAcrossRuns, true)
+})
+
+test('AI nondeterminism aggregate variance excludes missing scores and years instead of treating them as zero', () => {
+  const variance = calculateAiScoringVariance([
+    { score: null, yearsExperience: null, preparedInputFingerprint: 'same' },
+    { score: undefined, yearsExperience: undefined, preparedInputFingerprint: 'same' },
+    { score: '', yearsExperience: '', preparedInputFingerprint: 'same' },
+  ])
+
+  assert.equal(variance.minimumScore, null)
+  assert.equal(variance.maximumScore, null)
+  assert.equal(variance.scoreRange, null)
+  assert.equal(variance.scoreSpread, null)
+  assert.equal(variance.averageScore, null)
+  assert.equal(variance.distinctScoreCount, 0)
+  assert.deepEqual(variance.yearsExperienceDistinctValues, [])
+  assert.equal(variance.yearsExperienceDistinctCount, 0)
 })
 
 test('Windows-safe direct execution helper and CLI invocation are covered', () => {

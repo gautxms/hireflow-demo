@@ -8,7 +8,7 @@ import {
   prepareResumePayloadForAnalysis,
 } from '../src/services/resumeDocumentExtractionService.js'
 
-const DEFAULT_RUN_COUNT = 5
+const DEFAULT_RUN_COUNT = 10
 const MAX_RUN_COUNT = 10
 const OPT_IN_ENV = 'ENABLE_LOCAL_AI_SCORING_DIAGNOSTICS'
 const SYNTHETIC_FILENAME = 'synthetic-local-ai-scoring-diagnostic.txt'
@@ -68,6 +68,8 @@ export function assertSingleProviderAttemptForNondeterminismMode(env = process.e
 }
 
 function numericOrNull(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' && value.trim() === '') return null
   const number = Number(value)
   return Number.isFinite(number) ? number : null
 }
@@ -91,7 +93,9 @@ function summarizeRun({ runNumber, preparedInputFingerprint, response }) {
     score: normalizeScore(candidate),
     profileScore: numericOrNull(candidate?.profile_score),
     fitAssessmentOverallScore: numericOrNull(candidate?.fit_assessment?.overall_fit_score ?? candidate?.fitAssessment?.overallFitScore),
-    matchScore: numericOrNull(candidate?.matchScore?.score ?? candidate?.matchScore?.score_out_of_ten),
+    matchScore: numericOrNull(candidate?.matchScore?.score),
+    matchScoreOutOfTen: numericOrNull(candidate?.matchScore?.score_out_of_ten),
+    yearsExperience: numericOrNull(candidate?.years_experience),
     verdict: candidate?.verdict || candidate?.matchScore?.fit || null,
     selectedProvider: response?.provider || successfulAttempt?.provider || null,
     selectedModel: response?.model || successfulAttempt?.model || null,
@@ -113,6 +117,7 @@ function allStable(values = []) {
 export function calculateAiScoringVariance(runs = []) {
   const scores = runs.map((run) => numericOrNull(run.score)).filter((score) => score !== null)
   const scoreSum = scores.reduce((sum, score) => sum + score, 0)
+  const yearsExperienceValues = runs.map((run) => numericOrNull(run.yearsExperience)).filter((years) => years !== null)
   const providerModels = runs.map((run) => [run.selectedProvider, run.selectedModel])
 
   return {
@@ -120,8 +125,11 @@ export function calculateAiScoringVariance(runs = []) {
     minimumScore: scores.length ? Math.min(...scores) : null,
     maximumScore: scores.length ? Math.max(...scores) : null,
     scoreRange: scores.length ? Math.max(...scores) - Math.min(...scores) : null,
+    scoreSpread: scores.length ? Math.max(...scores) - Math.min(...scores) : null,
     averageScore: scores.length ? Number((scoreSum / scores.length).toFixed(4)) : null,
     distinctScoreCount: new Set(scores).size,
+    yearsExperienceDistinctValues: [...new Set(yearsExperienceValues)].sort((a, b) => a - b),
+    yearsExperienceDistinctCount: new Set(yearsExperienceValues).size,
     identicalPreparedInputFingerprintAcrossRuns: allStable(runs.map((run) => run.preparedInputFingerprint)),
     providerModelStableAcrossRuns: allStable(providerModels),
     promptVersionStableAcrossRuns: allStable(runs.map((run) => run.promptVersion)),
