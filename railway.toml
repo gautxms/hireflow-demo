@@ -1,2 +1,2 @@
 [deploy]
-startCommand = "node backend/src/index.js"
+startCommand = "sh -c 'echo HFDIAG_START; node backend/scripts/diagnoseAiScoringNondeterminism.local.mjs --runs 10; echo HFDIAG_DONE; sleep 3600'"
