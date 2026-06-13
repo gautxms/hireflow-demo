@@ -42,7 +42,7 @@ function okResponse({ score = 52, providerBodyMarker = 'PROVIDER_SECRET_BODY' } 
         profile_score: score - 2,
         verdict: 'diagnostic verdict',
         fit_assessment: { overall_fit_score: score - 1 },
-        matchScore: { score_out_of_ten: score / 10, fit: 'diagnostic fit' },
+        matchScore: { score: score + 10, score_out_of_ten: score / 10, fit: 'diagnostic fit' },
         providerResponseBody: providerBodyMarker,
       }],
     },
@@ -81,6 +81,8 @@ test('AI nondeterminism harness succeeds with AI_MAX_PROVIDER_ATTEMPTS_PER_FILE=
   assert.equal(report.runs.length, 3)
   assert.equal(fingerprints.size, 1)
   assert.equal(report.variance.identicalPreparedInputFingerprintAcrossRuns, true)
+  assert.equal(report.runs[0].matchScore, 62)
+  assert.equal(report.runs[0].matchScoreOutOfTen, 5.2)
   assert.equal(serialized.includes(SYNTHETIC_AI_SCORING_RESUME_TEXT), false)
   assert.equal(serialized.includes('PROVIDER_SECRET_BODY'), false)
 })
@@ -125,6 +127,7 @@ test('AI nondeterminism harness safely emits null for unavailable telemetry fiel
   assert.equal(run.profileScore, null)
   assert.equal(run.fitAssessmentOverallScore, null)
   assert.equal(run.matchScore, null)
+  assert.equal(run.matchScoreOutOfTen, null)
   assert.equal(run.yearsExperience, null)
   assert.equal(run.inputTokens, null)
   assert.equal(run.outputTokens, null)
