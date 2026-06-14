@@ -222,6 +222,97 @@ function normalizeCompactAnalysis(result = {}, { minimalMode = false } = {}) {
   }
 }
 
+
+const CANONICAL_SCORE_FIELDS_VERSION = 'canonical_score_fields_v1'
+
+function isScoreFieldCanonicalizationEnabled(env = process.env) {
+  return String(env.AI_CANONICALIZE_SCORE_FIELDS || '').toLowerCase() === 'true'
+}
+
+function normalizeCanonicalScore(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' && value.trim() === '') return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(100, numeric)) : null
+}
+
+function roundScoreOutOfTen(score) {
+  return Math.round((score / 10) * 10) / 10
+}
+
+function hasObjectValue(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function resolveCanonicalScore(candidate = {}, hasJobDescriptionContext = false) {
+  if (hasJobDescriptionContext) {
+    const matchScore = normalizeCanonicalScore(candidate?.matchScore?.score)
+    if (matchScore !== null) {
+      return {
+        score: matchScore,
+        source: 'matchScore.score',
+        context: 'jd_fit',
+      }
+    }
+
+    const candidateScore = normalizeCanonicalScore(candidate?.score)
+    return {
+      score: candidateScore,
+      source: candidateScore === null ? 'missing' : 'candidate.score',
+      context: 'jd_fit',
+    }
+  }
+
+  const profileScore = normalizeCanonicalScore(candidate?.profile_score)
+  return {
+    score: profileScore,
+    source: profileScore === null ? 'missing' : 'profile_score',
+    context: 'profile_only',
+  }
+}
+
+export function canonicalizeCandidateScoreFields(candidate = {}, { jobDescriptionContext = null, env = process.env } = {}) {
+  if (!isScoreFieldCanonicalizationEnabled(env)) return candidate
+
+  const hasJobDescriptionContext = Boolean(jobDescriptionContext?.hasContext)
+  const { score, source, context } = resolveCanonicalScore(candidate, hasJobDescriptionContext)
+  const nextCandidate = {
+    ...candidate,
+    scoring_contract_version: CANONICAL_SCORE_FIELDS_VERSION,
+    canonical_score_source: source,
+    canonical_score_context: context,
+  }
+
+  if (score === null) {
+    return nextCandidate
+  }
+
+  nextCandidate.score = score
+
+  if (hasJobDescriptionContext) {
+    nextCandidate.matchScore = {
+      ...(hasObjectValue(candidate?.matchScore) ? candidate.matchScore : {}),
+      score,
+      score_out_of_ten: roundScoreOutOfTen(score),
+    }
+
+    if (hasObjectValue(candidate?.fit_assessment)) {
+      nextCandidate.fit_assessment = {
+        ...candidate.fit_assessment,
+        overall_fit_score: score,
+      }
+    }
+  }
+
+  return nextCandidate
+}
+
+export function canonicalizeAnalysisScoreFields(candidates = [], options = {}) {
+  if (!isScoreFieldCanonicalizationEnabled(options.env)) return candidates
+  if (!Array.isArray(candidates)) return candidates
+  return candidates.map((candidate) => canonicalizeCandidateScoreFields(candidate, options))
+}
+
 function createProviderResponseFormatError({
   category = 'response_format_error',
   provider = null,
@@ -1613,4 +1704,4 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 export const analyzeResumeWithClaude = analyzeWithAnthropic
 
 
-export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis }
+export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }

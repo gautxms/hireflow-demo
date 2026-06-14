@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
-import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
+import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields } from '../services/aiResumeAnalysisService.js'
 import {
   buildSafeResumeFileDiagnostics,
   logSafeResumeFileDiagnostics,
@@ -850,7 +850,8 @@ export async function runParse(job) {
   }
 
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
-  const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
+  const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
+  const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
   normalizedCandidates.forEach((candidate) => {
     emitScoreContractShadowDiagnostic(candidate, {
       userId: job.data.userId ?? null,

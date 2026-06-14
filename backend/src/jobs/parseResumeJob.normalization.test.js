@@ -7,6 +7,7 @@ import {
   __resetParseResumeJobTestOverrides,
   __setParseResumeJobTestOverrides,
   __testables,
+  applyJobDescriptionScoringMode,
 } from './parseResumeJob.js'
 import { __resetMammothClientForTests, __setMammothClientForTests } from '../services/resumeDocumentExtractionService.js'
 import { buildPdfJsTextContentMockFromFixtures, buildSyntheticPdfResumeFixture } from '../services/resumeFormatDiagnosticFixtures.js'
@@ -960,4 +961,76 @@ test('same-base-name PDF, DOC, and DOCX parse jobs preserve identity and route f
   assert.deepEqual(completedResumeUpdates.map((update) => update.resumeId), ['resume-same-base-pdf', 'resume-same-base-docx'])
   assert.deepEqual(completedResumeUpdates.map((update) => update.result.originalFilename), [pdfFilename, docxFilename])
   assert.equal(new Set(completedResumeUpdates.map((update) => update.result.originalFilename)).size, 2)
+})
+
+
+test('parse job score canonicalization helper composes after JD scoring mode without mutating flag-off payload', async () => {
+  const { __testables: aiTestables } = await import('../services/aiResumeAnalysisService.js')
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      score: 72,
+      profile_score: 90,
+      fit_assessment: { has_job_description_context: true, overall_fit_score: 78 },
+      matchScore: { score: 82, score_out_of_ten: 7.1 },
+    }],
+  }, { resumeId: 'resume-score-off', filename: 'score.pdf' })
+  const scored = applyJobDescriptionScoringMode([candidate], { hasContext: true })
+  const output = aiTestables.canonicalizeAnalysisScoreFields(scored, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'false' },
+  })
+
+  assert.strictEqual(output, scored)
+  assert.deepEqual(output[0], scored[0])
+  assert.equal(output[0].score, 72)
+  assert.equal(output[0].matchScore.score, 82)
+  assert.equal(output[0].matchScore.score_out_of_ten, 7.1)
+  assert.equal(output[0].fit_assessment.overall_fit_score, 78)
+  assert.equal(output[0].scoring_contract_version, undefined)
+})
+
+test('parse job score canonicalization helper uses candidate.score when JD match score is absent', async () => {
+  const { __testables: aiTestables } = await import('../services/aiResumeAnalysisService.js')
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      score: 74,
+      profile_score: 91,
+      fit_assessment: { has_job_description_context: true, overall_fit_score: 66 },
+      matchScore: null,
+    }],
+  }, { resumeId: 'resume-score-candidate-fallback', filename: 'score.pdf' })
+  const scored = applyJobDescriptionScoringMode([candidate], { hasContext: true })
+  const output = aiTestables.canonicalizeAnalysisScoreFields(scored, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+  })
+
+  assert.equal(output[0].score, 74)
+  assert.deepEqual(output[0].matchScore, { score: 74, score_out_of_ten: 7.4 })
+  assert.equal(output[0].fit_assessment.overall_fit_score, 74)
+  assert.equal(output[0].canonical_score_source, 'candidate.score')
+  assert.equal(output[0].canonical_score_context, 'jd_fit')
+})
+
+test('parse job score canonicalization helper preserves JD-missing semantics when enabled', async () => {
+  const { __testables: aiTestables } = await import('../services/aiResumeAnalysisService.js')
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      score: 0,
+      profile_score: 78,
+      fit_assessment: { has_job_description_context: true, overall_fit_score: 82 },
+      matchScore: { score: 82, score_out_of_ten: 8.2 },
+    }],
+  }, { resumeId: 'resume-score-profile', filename: 'score.pdf' })
+  const scored = applyJobDescriptionScoringMode([candidate], { hasContext: false })
+  const output = aiTestables.canonicalizeAnalysisScoreFields(scored, {
+    jobDescriptionContext: { hasContext: false },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+  })
+
+  assert.equal(output[0].score, 78)
+  assert.equal(output[0].matchScore, null)
+  assert.equal(output[0].fit_assessment.overall_fit_score, null)
+  assert.equal(output[0].canonical_score_source, 'profile_score')
+  assert.equal(output[0].canonical_score_context, 'profile_only')
 })

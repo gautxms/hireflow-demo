@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 import { matchCandidatesToJob } from '../services/matchingService.js'
 import { pool } from '../db/client.js'
 import { normalizeTags } from './candidateTagsState.js'
-import { analyzeResumeWithConfiguredFallback } from '../services/aiResumeAnalysisService.js'
+import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields } from '../services/aiResumeAnalysisService.js'
 import { applyJobDescriptionScoringMode } from '../jobs/parseResumeJob.js'
 import { syncCandidateProfilesForUser } from '../services/candidateProfilesService.js'
 import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
@@ -258,7 +258,8 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
       if (!resumeText) {
         const previousCandidates = Array.isArray(row.parse_result?.candidates) ? row.parse_result.candidates : []
         const rescoredPrevious = applyJobDescriptionScoringMode(previousCandidates, jobDescriptionContext)
-        updatedCandidates.push(...rescoredPrevious)
+        const canonicalizedPrevious = canonicalizeAnalysisScoreFields(rescoredPrevious, { jobDescriptionContext })
+        updatedCandidates.push(...canonicalizedPrevious)
         continue
       }
 
@@ -272,7 +273,8 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
       const analyzedCandidates = Array.isArray(aiResponse?.result?.candidates) ? aiResponse.result.candidates : []
       const normalizedCandidates = analyzedCandidates.map((candidate) => normalizeCandidateFromAnalysis(candidate, row.id, row.filename))
       const scoredCandidates = applyJobDescriptionScoringMode(normalizedCandidates, jobDescriptionContext)
-      const primaryCandidate = scoredCandidates[0] || null
+      const canonicalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
+      const primaryCandidate = canonicalizedCandidates[0] || null
 
       const parseResult = {
         ...(row.parse_result && typeof row.parse_result === 'object' ? row.parse_result : {}),
@@ -280,7 +282,7 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
         jobDescriptionContextUsed: true,
         jobDescriptionContextSource: 'manual_text',
         jobDescriptionContextMissingReason: null,
-        candidates: scoredCandidates,
+        candidates: canonicalizedCandidates,
       }
 
       await pool.query(
@@ -298,7 +300,7 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
         ],
       )
 
-      updatedCandidates.push(...scoredCandidates)
+      updatedCandidates.push(...canonicalizedCandidates)
     }
 
     await pool.query(
