@@ -989,6 +989,29 @@ test('parse job score canonicalization helper composes after JD scoring mode wit
   assert.equal(output[0].scoring_contract_version, undefined)
 })
 
+test('parse job score canonicalization helper uses candidate.score when JD match score is absent', async () => {
+  const { __testables: aiTestables } = await import('../services/aiResumeAnalysisService.js')
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      score: 74,
+      profile_score: 91,
+      fit_assessment: { has_job_description_context: true, overall_fit_score: 66 },
+      matchScore: null,
+    }],
+  }, { resumeId: 'resume-score-candidate-fallback', filename: 'score.pdf' })
+  const scored = applyJobDescriptionScoringMode([candidate], { hasContext: true })
+  const output = aiTestables.canonicalizeAnalysisScoreFields(scored, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+  })
+
+  assert.equal(output[0].score, 74)
+  assert.deepEqual(output[0].matchScore, { score: 74, score_out_of_ten: 7.4 })
+  assert.equal(output[0].fit_assessment.overall_fit_score, 74)
+  assert.equal(output[0].canonical_score_source, 'candidate.score')
+  assert.equal(output[0].canonical_score_context, 'jd_fit')
+})
+
 test('parse job score canonicalization helper preserves JD-missing semantics when enabled', async () => {
   const { __testables: aiTestables } = await import('../services/aiResumeAnalysisService.js')
   const [candidate] = buildNormalizedCandidates({

@@ -247,9 +247,18 @@ function hasObjectValue(value) {
 function resolveCanonicalScore(candidate = {}, hasJobDescriptionContext = false) {
   if (hasJobDescriptionContext) {
     const matchScore = normalizeCanonicalScore(candidate?.matchScore?.score)
+    if (matchScore !== null) {
+      return {
+        score: matchScore,
+        source: 'matchScore.score',
+        context: 'jd_fit',
+      }
+    }
+
+    const candidateScore = normalizeCanonicalScore(candidate?.score)
     return {
-      score: matchScore,
-      source: matchScore === null ? 'missing' : 'matchScore.score',
+      score: candidateScore,
+      source: candidateScore === null ? 'missing' : 'candidate.score',
       context: 'jd_fit',
     }
   }

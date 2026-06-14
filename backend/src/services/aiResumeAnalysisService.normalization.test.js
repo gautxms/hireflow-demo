@@ -204,6 +204,24 @@ test('canonicalizeCandidateScoreFields aligns JD fit score fields and metadata w
   assert.equal(output.canonical_score_context, 'jd_fit')
 })
 
+test('canonicalizeCandidateScoreFields falls back to candidate.score for JD fit when matchScore is missing', () => {
+  const output = __testables.canonicalizeCandidateScoreFields({
+    score: 74,
+    profile_score: 91,
+    fit_assessment: { has_job_description_context: true, overall_fit_score: 66 },
+    matchScore: null,
+  }, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+  })
+
+  assert.equal(output.score, 74)
+  assert.deepEqual(output.matchScore, { score: 74, score_out_of_ten: 7.4 })
+  assert.equal(output.fit_assessment.overall_fit_score, 74)
+  assert.equal(output.canonical_score_source, 'candidate.score')
+  assert.equal(output.canonical_score_context, 'jd_fit')
+})
+
 test('canonicalizeCandidateScoreFields does not fall back to profile_score when JD match score is missing', () => {
   const output = __testables.canonicalizeCandidateScoreFields({
     profile_score: 91,
