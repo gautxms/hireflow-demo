@@ -34,7 +34,7 @@ There are multiple score resolution ladders today:
 3. Results API normalization resolves top-level `score` from `matchScore.score` or numeric `matchScore` first, then `candidate.score`, with no `profile_score` fallback for results ranking.
 4. Results page client sorting resolves in this order: `matchScore.score`, numeric `matchScore`, `score`, `profile_score`, then legacy overall aliases.
 5. Shortlist score display resolves from snapshot/source context analysis scores first, then candidate `score`, then `profile_score`/`profileScore`, normalized to a 10-point display.
-6. Candidate directory resolves `profileScore` from `candidate_profiles.profile.profile_score` first, then `resumes.profile_score`.
+6. Candidate Directory resolves `profileScore` from `candidate_profiles.profile.profile_score` first, then `resumes.profile_score`; its display, filters, and optional score sorting use this resume-only score, not JD-fit score.
 7. Dashboard KPIs average `resumes.profile_score` for completed scored resume windows.
 
 These ladders are intentionally backward-compatible, but they also create drift risk because the same candidate can expose different numeric fields with different semantics.
@@ -45,7 +45,7 @@ These ladders are intentionally backward-compatible, but they also create drift 
 | --- | --- | --- |
 | Analysis Results API (`/api/results`) | Latest completed `parse_jobs.result.candidates`, normalized top-level `score` from `matchScore.score`/numeric `matchScore` before `candidate.score`. | Default sort and score filters use normalized `candidate.score`, so role-fit `matchScore.score` is effectively the ranking source when present. |
 | Analysis Results UI | API payload plus client-side fallback order `matchScore.score`, numeric `matchScore`, `score`, `profile_score`, legacy overall aliases. | Default sort is match score descending; client uses `resolveActiveCandidateScore`, so it can fall back to profile score for legacy/malformed payloads. |
-| Candidate Directory API/UI | `candidate_profiles.profile.profile_score` JSON first, then `resumes.profile_score`. | Directory list itself is ordered by recency in SQL; directory score display/filter metadata uses the resume-only profile score. It is not currently sorted by score in the queried SQL path. |
+| Candidate Directory API/UI | Resume-only `profileScore`, resolved from `candidate_profiles.profile.profile_score` JSON first, then `resumes.profile_score`. | Candidate Directory display, score filters, API sort (`profileScore`), and the Candidates page “Highest score” sort option use `profileScore`. It is therefore a score-ranked surface when sorted by score, but the score semantics are resume-only profile quality, not JD-fit match quality. |
 | Shortlists | Snapshot/source context analysis score first (`score`, `matchScore.score`, numeric `matchScore`, overall/AI aliases), then candidate `score`, then `profile_score`/`profileScore`; normalized to `/10`. | Shortlist display can show role-fit scores captured at add time, but fallback can mix in resume-only profile score. Shortlist helper sorts by rating or added date elsewhere, not by score by default. |
 | Dashboard KPIs | `resumes.profile_score`. | Average score KPI is resume-only profile score, not role-fit match score. |
 | CSV/share exports from results | Normalized results candidates. | Uses the same results `score` semantics supplied to export/share. |
@@ -55,8 +55,8 @@ These ladders are intentionally backward-compatible, but they also create drift 
 1. **Top-level `candidate.score` and `candidate.matchScore.score` can diverge.** Backend compact normalization maps top-level `score` from the AI's `candidate.score` if present, otherwise `matchScore.score`, while some downstream code prefers top-level score and other code prefers match score.
 2. **`matchScore.score_out_of_ten` is model-generated convenience data.** Prompt rules say it must mirror `matchScore.score / 10`, but current normalization preserves it independently instead of deriving it app-side. If the model emits an inconsistent value, display or diagnostics can drift.
 3. **`fit_assessment.overall_fit_score` duplicates role-fit semantics.** It may match `matchScore.score`, but no app-side contract enforces equality. It can therefore diverge from ranking.
-4. **`profile_score` has different semantics from role fit.** It is resume-only and stable relative to JD-specific match score, but results and shortlists use it as a fallback, so legacy/malformed payloads can silently switch from role-fit ranking to profile-quality ranking.
-5. **Different normalizers prefer different field order.** Shared schema prefers `candidate.score` before `matchScore.score`; results route and client results prefer `matchScore.score`; candidate directory and dashboard prefer `profile_score` only.
+4. **`profile_score` has different semantics from role fit.** It is resume-only and stable relative to JD-specific match score, but results and shortlists use it as a fallback, so legacy/malformed payloads can silently switch from role-fit ranking to profile-quality ranking. Candidate Directory intentionally uses `profileScore` for display, filters, and score sorting, so the contract rollout must preserve and label that surface as resume-only score-ranked behavior rather than JD-fit ranking.
+5. **Different normalizers prefer different field order.** Shared schema prefers `candidate.score` before `matchScore.score`; results route and client results prefer `matchScore.score`; Candidate Directory and dashboard prefer resume-only `profile_score`/`profileScore` only.
 6. **Persistence stores role-fit score only inside JSON.** `resumes.profile_score` is scalar and easy to query, but role-fit `matchScore.score` is not separately versioned, cached, or indexed.
 7. **Candidate profile backfill/upsert copies one JSON candidate.** Any historical mismatch inside `parse_result.candidates[0]` is preserved in `candidate_profiles.profile` until a new analysis overwrites that profile.
 
@@ -97,15 +97,14 @@ Compatibility fields can remain during migration:
 
 ## Recommended safest production approach
 
-Use a two-phase rollout with no historical rewrite:
+Use small phased PRs with no historical rewrite:
 
-1. **Diagnostic/contract phase (this RCA PR):** document current sources, add tests only if approved later, and do not alter runtime behavior.
-2. **Feature-flagged canonicalization phase:** add a read-only score contract builder that computes and logs `scores.*` beside existing fields under a disabled-by-default flag such as `SCORING_CONTRACT_V1_SHADOW=true`. In shadow mode, emit drift diagnostics when `score`, `matchScore.score`, `fit_assessment.overall_fit_score`, and `profile_score` differ.
-3. **Deterministic final score phase:** when `ENABLE_DETERMINISTIC_FINAL_SCORE_V1=true`, derive `final_score` app-side from normalized evidence and/or normalized AI sub-scores using a fixed formula. Do not ask the model for the final ranking number. If still using AI sub-scores, treat them as inputs and clamp/round once app-side.
-4. **Optional cache phase:** cache `final_score` keyed by resume fingerprint + JD fingerprint + prompt/model/scoring version. This protects users from rerun variance, but it should complement—not replace—a deterministic app-side final score, because caching alone locks in one nondeterministic model sample.
-5. **Migration phase:** after confidence, update ranking code to consume `scores.final_score` first, keep legacy fallbacks for old records, and never mutate historical records unless a separate approved migration/backfill exists.
+1. **Phase 1 — shadow score contract diagnostics:** add a read-only score contract builder that computes and logs `scores.*` beside existing fields under a disabled-by-default flag such as `SCORING_CONTRACT_V1_SHADOW=true`. In shadow mode, emit drift diagnostics when `score`, `matchScore.score`, `fit_assessment.overall_fit_score`, and `profile_score` differ, and include Candidate Directory `profileScore` usage in the observed surfaces.
+2. **Phase 2 — app-owned deterministic final score:** when `ENABLE_DETERMINISTIC_FINAL_SCORE_V1=true`, derive `final_score` app-side from stable extracted/evidence fields and app-owned rubric weights. Do not ask the model for the canonical final ranking number, and do not rely on model-authored `matchScore.score` or `fit_assessment.overall_fit_score` as deterministic final-score inputs unless score caching is mandatory for that scoring version.
+3. **Phase 3 — optional/mandatory cache only if model-authored sub-scores remain:** if AI judgment sub-scores remain in any formula, cache the resulting score by resume fingerprint + JD fingerprint + prompt/model/scoring version, or treat those sub-scores as non-deterministic advisory signals that are not the canonical final ranking score. Caching alone should not be the preferred fix for a new deterministic scoring version because it can lock in one nondeterministic model sample.
+4. **Phase 4 — reader migration:** after confidence, update ranking readers to consume `scores.final_score` first where JD-fit ranking is intended, keep legacy fallbacks for old records, preserve Candidate Directory score sorting as resume-only `profileScore` semantics unless explicitly redesigned, and never mutate historical records unless a separate approved migration/backfill exists.
 
-Safest minimal fix: shadow a canonical score contract first, then derive `score_out_of_ten` app-side and make `candidate.score`/ranking use `scores.final_score` behind a feature flag. Avoid schema changes until shadow diagnostics prove the contract.
+Safest minimal fix: shadow a canonical score contract first, then derive `score_out_of_ten` app-side and make `candidate.score`/JD-fit ranking use `scores.final_score` behind a feature flag. Avoid schema changes until shadow diagnostics prove the contract.
 
 ## Regression tests proposed
 
@@ -113,7 +112,7 @@ Before functional rollout, add tests that assert:
 
 1. Results route normalization uses the canonical final score when feature flag is enabled and preserves current `matchScore.score` behavior when disabled.
 2. Candidate Results UI sorting uses one canonical resolver and does not switch between `score` and `profile_score` when match score is present.
-3. Candidate Directory continues to use resume-only `profile_score` and labels it as such.
+3. Candidate Directory continues to use resume-only `profileScore` for display, score filters, and “Highest score” sorting, labels it as resume-only, and does not accidentally switch to JD-fit `final_score`.
 4. Shortlist snapshots preserve the score source used at add time and do not recalculate from newer candidate profile data.
 5. `matchScore.score_out_of_ten` is derived from the canonical source and cannot drift from `/10` display.
 6. Existing analyses without `scores.*` still render and rank with current legacy fallbacks.
