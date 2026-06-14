@@ -66,7 +66,7 @@ test('normalizeCompactAnalysis preserves rich candidate fields in compact pipeli
   assert.deepEqual(candidate.fit_assessment, fixtureCandidate.fit_assessment)
   assert.deepEqual(candidate.matchScore, fixtureCandidate.matchScore)
   assert.deepEqual(candidate.confidence, fixtureCandidate.confidence)
-  assert.deepEqual(candidate.education, fixtureCandidate.education)
+  assert.deepEqual(candidate.education, ['MBA, Example University (2010)'])
   assert.deepEqual(candidate.experience, fixtureCandidate.experience)
   assert.deepEqual(candidate.certifications, fixtureCandidate.certifications)
   assert.deepEqual(candidate.languages, fixtureCandidate.languages)
@@ -143,7 +143,116 @@ test('normalizeCompactAnalysis does not coerce structured education objects to d
   })
 
   assert.deepEqual(result.candidates[0].education, [
-    { degree: 'M.Tech', school: 'IIT Bombay', graduation_year: 2020 },
+    'M.Tech, IIT Bombay (2020)',
     'Executive Education, Example School',
   ])
+})
+
+test('canonicalizeCandidateScoreFields flag off preserves current score fields exactly', () => {
+  const candidate = {
+    score: 72,
+    profile_score: 90,
+    fit_assessment: { has_job_description_context: true, overall_fit_score: 78 },
+    matchScore: { score: 82, score_out_of_ten: 7.1, fit: 'Strong', reason: 'Good fit' },
+  }
+
+  const output = __testables.canonicalizeCandidateScoreFields(candidate, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'false' },
+  })
+
+  assert.strictEqual(output, candidate)
+  assert.deepEqual(output, candidate)
+  assert.equal(output.scoring_contract_version, undefined)
+  assert.equal(output.canonical_score_source, undefined)
+  assert.equal(output.canonical_score_context, undefined)
+})
+
+test('canonicalizeCandidateScoreFields derives score_out_of_ten app-side when enabled', () => {
+  const output = __testables.canonicalizeCandidateScoreFields({
+    score: 72,
+    profile_score: 90,
+    fit_assessment: { has_job_description_context: true, overall_fit_score: 78 },
+    matchScore: { score: 82, score_out_of_ten: 1.5, fit: 'Strong', reason: 'Good fit' },
+  }, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+  })
+
+  assert.equal(output.score, 82)
+  assert.equal(output.matchScore.score, 82)
+  assert.equal(output.matchScore.score_out_of_ten, 8.2)
+})
+
+test('canonicalizeCandidateScoreFields aligns JD fit score fields and metadata when enabled', () => {
+  const output = __testables.canonicalizeCandidateScoreFields({
+    score: 72,
+    profile_score: 90,
+    fit_assessment: { has_job_description_context: true, overall_fit_score: 78 },
+    matchScore: { score: 82, score_out_of_ten: 7.1, fit: 'Strong', reason: 'Good fit' },
+  }, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'TRUE' },
+  })
+
+  assert.equal(output.score, 82)
+  assert.equal(output.matchScore.score, 82)
+  assert.equal(output.matchScore.score_out_of_ten, 8.2)
+  assert.equal(output.fit_assessment.overall_fit_score, 82)
+  assert.equal(output.scoring_contract_version, 'canonical_score_fields_v1')
+  assert.equal(output.canonical_score_source, 'matchScore.score')
+  assert.equal(output.canonical_score_context, 'jd_fit')
+})
+
+test('canonicalizeCandidateScoreFields does not fall back to profile_score when JD match score is missing', () => {
+  const output = __testables.canonicalizeCandidateScoreFields({
+    profile_score: 91,
+    fit_assessment: { has_job_description_context: true, overall_fit_score: null },
+    matchScore: { score: null, score_out_of_ten: null },
+  }, {
+    jobDescriptionContext: { hasContext: true },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+  })
+
+  assert.equal(output.score, undefined)
+  assert.equal(output.matchScore.score, null)
+  assert.equal(output.matchScore.score_out_of_ten, null)
+  assert.equal(output.canonical_score_source, 'missing')
+  assert.equal(output.canonical_score_context, 'jd_fit')
+})
+
+test('canonicalizeCandidateScoreFields preserves JD-missing semantics while using profile_score as candidate score', () => {
+  const output = __testables.canonicalizeCandidateScoreFields({
+    score: 0,
+    profile_score: 78,
+    matchScore: null,
+    fit_assessment: { has_job_description_context: false, overall_fit_score: null, notes: ['job_description_missing'] },
+  }, {
+    jobDescriptionContext: { hasContext: false },
+    env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+  })
+
+  assert.equal(output.score, 78)
+  assert.equal(output.matchScore, null)
+  assert.equal(output.fit_assessment.overall_fit_score, null)
+  assert.equal(output.canonical_score_source, 'profile_score')
+  assert.equal(output.canonical_score_context, 'profile_only')
+})
+
+test('canonicalizeCandidateScoreFields does not coerce null blank or non-numeric scores to zero', () => {
+  for (const value of [null, '', '   ', 'not-a-number']) {
+    const output = __testables.canonicalizeCandidateScoreFields({
+      score: undefined,
+      profile_score: value,
+      matchScore: null,
+    }, {
+      jobDescriptionContext: { hasContext: false },
+      env: { AI_CANONICALIZE_SCORE_FIELDS: 'true' },
+    })
+
+    assert.equal(output.score, undefined)
+    assert.equal(output.matchScore, null)
+    assert.equal(output.canonical_score_source, 'missing')
+    assert.equal(output.canonical_score_context, 'profile_only')
+  }
 })
