@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { formatEducationForDisplay } from '../utils/candidateEducation.js'
+import { emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
 
 const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -332,7 +333,11 @@ async function getLatestCandidatesForUser(userId) {
 
   const latestResult = result.rows[0]?.result
   const rawCandidates = Array.isArray(latestResult?.candidates) ? latestResult.candidates : []
-  return rawCandidates.map(normalizeCandidate)
+  return rawCandidates.map((candidate) => {
+    const normalized = normalizeCandidate(candidate)
+    emitScoreContractShadowDiagnostic(normalized, { userId })
+    return normalized
+  })
 }
 
 function cleanupExpiredShareTokens() {

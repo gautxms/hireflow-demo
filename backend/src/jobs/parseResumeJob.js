@@ -16,6 +16,7 @@ import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
+import { emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
@@ -844,6 +845,12 @@ export async function runParse(job) {
 
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
   const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
+  normalizedCandidates.forEach((candidate) => {
+    emitScoreContractShadowDiagnostic(candidate, {
+      userId: job.data.userId ?? null,
+      analysisId: analysisId || null,
+    })
+  })
 
   const parseResult = {
     filename: analysisFilename,
