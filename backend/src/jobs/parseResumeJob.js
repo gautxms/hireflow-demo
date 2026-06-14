@@ -16,6 +16,7 @@ import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
+import { emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
@@ -781,6 +782,7 @@ export async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
+  let scoreContractShadowMetadata = { provider: null, model: null, promptVersion: null }
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
@@ -826,6 +828,11 @@ export async function runParse(job) {
     console.log('[Parse] AI analysis successful')
     analysisResult = aiResult
     parseMethod = aiResponse?.provider || 'anthropic-primary'
+    scoreContractShadowMetadata = {
+      provider: aiResponse?.provider || analysisResult?.provider || null,
+      model: aiResponse?.model || analysisResult?.model || null,
+      promptVersion: aiResponse?.promptVersion || analysisResult?.promptVersion || analysisResult?.prompt_version || null,
+    }
   } catch (aiError) {
     await persistAiFailureTokenUsage({
       error: aiError,
@@ -844,6 +851,14 @@ export async function runParse(job) {
 
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
   const normalizedCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
+  normalizedCandidates.forEach((candidate) => {
+    emitScoreContractShadowDiagnostic(candidate, {
+      userId: job.data.userId ?? null,
+      analysisId: analysisId || null,
+      resumeId,
+      ...scoreContractShadowMetadata,
+    })
+  })
 
   const parseResult = {
     filename: analysisFilename,

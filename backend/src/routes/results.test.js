@@ -147,3 +147,15 @@ test('fixture: results response contract retains filters/sort/pagination envelop
     },
   )
 })
+
+test('existing result candidate scores remain unchanged when diagnostics are available', () => {
+  const normalized = normalizeCandidate({
+    score: 72,
+    matchScore: { score: 82, score_out_of_ten: 7.2 },
+    profile_score: 91,
+  })
+
+  assert.equal(normalized.score, 82)
+  assert.equal(normalized.matchScore.score, 82)
+  assert.equal(normalized.profile_score, 91)
+})
