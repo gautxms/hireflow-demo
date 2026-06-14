@@ -11,6 +11,12 @@ function roundToOneDecimal(value) {
   return Math.round(value * 10) / 10
 }
 
+function normalizeOptionalString(value) {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  return normalized || null
+}
+
 function resolveMatchScore(candidate = {}) {
   if (candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore)) {
     return normalizeOptionalNumber(candidate.matchScore.score)
@@ -58,6 +64,17 @@ function differs(left, right) {
   return left !== null && right !== null && left !== right
 }
 
+function resolveSafeMetadata(candidate = {}, metadata = {}) {
+  return {
+    user_id: normalizeOptionalString(metadata.userId ?? metadata.user_id),
+    analysis_id: normalizeOptionalString(metadata.analysisId ?? metadata.analysis_id),
+    resume_id: normalizeOptionalString(metadata.resumeId ?? metadata.resume_id ?? candidate?.resumeId ?? candidate?.resume_id),
+    provider: normalizeOptionalString(metadata.provider ?? candidate?.provider),
+    model: normalizeOptionalString(metadata.model ?? candidate?.model),
+    prompt_version: normalizeOptionalString(metadata.promptVersion ?? metadata.prompt_version ?? candidate?.promptVersion ?? candidate?.prompt_version),
+  }
+}
+
 export function buildScoreContractShadowDiagnostic(candidate = {}, metadata = {}) {
   const candidateScore = normalizeOptionalNumber(candidate?.score)
   const matchScore = resolveMatchScore(candidate)
@@ -70,8 +87,10 @@ export function buildScoreContractShadowDiagnostic(candidate = {}, metadata = {}
   const directoryProfile = resolveDirectoryProfileScore(candidate, metadata)
   const profileScore = directoryProfile.value
   const resultsResolution = resolveResultsScore(candidate)
+  const safeMetadata = resolveSafeMetadata(candidate, metadata)
 
   return {
+    ...safeMetadata,
     scoring_contract_version: SCORING_CONTRACT_VERSION,
     candidate_score: candidateScore,
     match_score: matchScore,

@@ -14,6 +14,12 @@ test('no drift when score and matchScore.score match', () => {
     fit_assessment: { overall_fit_score: 82 },
   })
 
+  assert.equal(diagnostic.user_id, null)
+  assert.equal(diagnostic.analysis_id, null)
+  assert.equal(diagnostic.resume_id, null)
+  assert.equal(diagnostic.provider, null)
+  assert.equal(diagnostic.model, null)
+  assert.equal(diagnostic.prompt_version, null)
   assert.equal(diagnostic.candidate_score_differs_from_match_score, false)
   assert.equal(diagnostic.fit_score_differs_from_match_score, false)
   assert.equal(diagnostic.model_out_of_ten_differs_from_app_derived, false)
@@ -98,12 +104,51 @@ test('with flag disabled, no shadow logging occurs', () => {
   const logs = []
   const result = emitScoreContractShadowDiagnostic(
     { score: 70, matchScore: { score: 70 } },
-    { userId: 'user-1', analysisId: 'analysis-1' },
+    {
+      userId: 'user-1',
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      provider: 'anthropic-primary',
+      model: 'claude-test',
+      promptVersion: '3',
+    },
     { env: { SCORING_CONTRACT_V1_SHADOW: 'false' }, logger: { info: (...args) => logs.push(args) } },
   )
 
   assert.equal(result, null)
   assert.deepEqual(logs, [])
+})
+
+test('safe metadata appears in diagnostics when provided', () => {
+  const diagnostic = buildScoreContractShadowDiagnostic(
+    { resumeId: 'candidate-resume-fallback', score: 84, matchScore: { score: 84 } },
+    {
+      userId: 'user-1',
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      provider: 'anthropic-primary',
+      model: 'claude-test',
+      promptVersion: 3,
+    },
+  )
+
+  assert.equal(diagnostic.user_id, 'user-1')
+  assert.equal(diagnostic.analysis_id, 'analysis-1')
+  assert.equal(diagnostic.resume_id, 'resume-1')
+  assert.equal(diagnostic.provider, 'anthropic-primary')
+  assert.equal(diagnostic.model, 'claude-test')
+  assert.equal(diagnostic.prompt_version, '3')
+})
+
+test('missing metadata becomes null consistently', () => {
+  const diagnostic = buildScoreContractShadowDiagnostic({ score: 84, matchScore: { score: 84 } })
+
+  assert.equal(diagnostic.user_id, null)
+  assert.equal(diagnostic.analysis_id, null)
+  assert.equal(diagnostic.resume_id, null)
+  assert.equal(diagnostic.provider, null)
+  assert.equal(diagnostic.model, null)
+  assert.equal(diagnostic.prompt_version, null)
 })
 
 test('with flag enabled and allowlist matched, safe shadow diagnostics are emitted', () => {
@@ -118,7 +163,14 @@ test('with flag enabled and allowlist matched, safe shadow diagnostics are emitt
       matchScore: { score: 82, score_out_of_ten: 7.2 },
       fit_assessment: { overall_fit_score: 82 },
     },
-    { userId: 'user-1', analysisId: 'analysis-1' },
+    {
+      userId: 'user-1',
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      provider: 'anthropic-primary',
+      model: 'claude-test',
+      promptVersion: '3',
+    },
     {
       env: {
         SCORING_CONTRACT_V1_SHADOW: 'true',
@@ -134,6 +186,12 @@ test('with flag enabled and allowlist matched, safe shadow diagnostics are emitt
   assert.deepEqual(result, logs[0][1])
   const serialized = JSON.stringify(logs[0])
   assert.doesNotMatch(serialized, /Sensitive Name|sensitive@example\.com|555-0100|private resume text/)
+  assert.equal(result.user_id, 'user-1')
+  assert.equal(result.analysis_id, 'analysis-1')
+  assert.equal(result.resume_id, 'resume-1')
+  assert.equal(result.provider, 'anthropic-primary')
+  assert.equal(result.model, 'claude-test')
+  assert.equal(result.prompt_version, '3')
   assert.equal(result.candidate_score_differs_from_match_score, true)
 })
 
@@ -144,7 +202,14 @@ test('allowlist and sample rate gate shadow diagnostics', () => {
   ), false)
 
   assert.equal(isScoreContractShadowEnabled(
-    { userId: 'user-1', analysisId: 'analysis-1' },
+    {
+      userId: 'user-1',
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      provider: 'anthropic-primary',
+      model: 'claude-test',
+      promptVersion: '3',
+    },
     { SCORING_CONTRACT_V1_SHADOW: 'true', SCORING_CONTRACT_V1_SHADOW_SAMPLE_RATE: '0' },
     () => 0,
   ), false)

@@ -335,7 +335,14 @@ async function getLatestCandidatesForUser(userId) {
   const rawCandidates = Array.isArray(latestResult?.candidates) ? latestResult.candidates : []
   return rawCandidates.map((candidate) => {
     const normalized = normalizeCandidate(candidate)
-    emitScoreContractShadowDiagnostic(normalized, { userId })
+    emitScoreContractShadowDiagnostic(normalized, {
+      userId,
+      analysisId: null,
+      resumeId: normalized.resumeId || null,
+      provider: null,
+      model: null,
+      promptVersion: null,
+    })
     return normalized
   })
 }

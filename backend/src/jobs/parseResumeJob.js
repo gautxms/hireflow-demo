@@ -782,6 +782,7 @@ export async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
+  let scoreContractShadowMetadata = { provider: null, model: null, promptVersion: null }
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
@@ -827,6 +828,11 @@ export async function runParse(job) {
     console.log('[Parse] AI analysis successful')
     analysisResult = aiResult
     parseMethod = aiResponse?.provider || 'anthropic-primary'
+    scoreContractShadowMetadata = {
+      provider: aiResponse?.provider || analysisResult?.provider || null,
+      model: aiResponse?.model || analysisResult?.model || null,
+      promptVersion: aiResponse?.promptVersion || analysisResult?.promptVersion || analysisResult?.prompt_version || null,
+    }
   } catch (aiError) {
     await persistAiFailureTokenUsage({
       error: aiError,
@@ -849,6 +855,8 @@ export async function runParse(job) {
     emitScoreContractShadowDiagnostic(candidate, {
       userId: job.data.userId ?? null,
       analysisId: analysisId || null,
+      resumeId,
+      ...scoreContractShadowMetadata,
     })
   })
 
