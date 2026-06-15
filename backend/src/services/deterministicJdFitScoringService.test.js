@@ -152,12 +152,16 @@ test('No PII/raw text fields are emitted in the deterministic scoring result', (
   }
 })
 
-test('new deterministic service is not imported by guarded runtime paths', () => {
-  for (const path of ['backend/src/jobs/parseResumeJob.js', 'backend/src/routes/results.js', 'backend/src/routes/candidates.js']) {
+test('deterministic service is only imported by guarded backend shadow paths', () => {
+  for (const path of ['backend/src/routes/results.js', 'backend/src/routes/candidates.js']) {
     const source = readFileSync(resolve(path), 'utf8')
     assert.equal(source.includes('deterministicJdFitScoringService'), false, `${path} must not import the scorer`)
     assert.equal(source.includes('scoreCandidateDeterministically'), false, `${path} must not call the scorer`)
   }
+
+  const parseJobSource = readFileSync(resolve('backend/src/jobs/parseResumeJob.js'), 'utf8')
+  assert.equal(parseJobSource.includes('DETERMINISTIC_JD_FIT_SHADOW_ENABLED'), true)
+  assert.equal(parseJobSource.includes('[DeterministicJdFit] shadow diagnostic'), true)
 })
 
 test('hasContext false with source none returns profile_only when profile_score exists', () => {

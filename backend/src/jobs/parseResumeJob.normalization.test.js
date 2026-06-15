@@ -1405,3 +1405,202 @@ test('AI score cache read-shadow read failures fail open and do not fail parse d
     __resetParseResumeJobTestOverrides()
   }
 })
+
+function withDeterministicJdFitShadowEnv(overrides = {}) {
+  const keys = [
+    'DETERMINISTIC_JD_FIT_SHADOW_ENABLED',
+    'DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_USER_IDS',
+    'DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_ANALYSIS_IDS',
+  ]
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  for (const key of keys) delete process.env[key]
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) process.env[key] = value
+  }
+  return () => {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key]
+      else process.env[key] = previous[key]
+    }
+  }
+}
+
+function deterministicShadowCandidateFixture() {
+  return {
+    resumeId: 'resume-1',
+    name: 'Private Candidate',
+    email: 'private@example.com',
+    phone: '555-0101',
+    score: 82,
+    matchScore: { score: 82, reason: 'Do not log recommendation text' },
+    fit_assessment: {
+      overall_fit_score: 82,
+      matched_requirements: ['Do not log matched raw requirement'],
+      missing_requirements: ['Do not log missing raw requirement'],
+      rationale: 'Do not log rationale text',
+    },
+    skills_flat: ['Node.js', 'Postgres'],
+    top_skills: ['Node.js'],
+    years_experience: 6,
+    location: 'Remote',
+  }
+}
+
+test('deterministic JD-fit shadow skips silently when flag is off', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({ DETERMINISTIC_JD_FIT_SHADOW_ENABLED: 'false', DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_USER_IDS: '24' })
+  const logs = []
+  let calls = 0
+  __setParseResumeJobTestOverrides({ scoreCandidateDeterministically: () => { calls += 1; return {} } })
+
+  try {
+    const result = __testables.emitDeterministicJdFitShadowDiagnostic({
+      candidate: deterministicShadowCandidateFixture(),
+      jobDescriptionContext: { hasContext: true, requirements: 'Node', skills: ['Node.js'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(result.computed, false)
+    assert.equal(result.diagnostic, null)
+    assert.equal(calls, 0)
+    assert.equal(logs.length, 0)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('deterministic JD-fit shadow logs skip and does not score without allowlist match', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({ DETERMINISTIC_JD_FIT_SHADOW_ENABLED: 'true' })
+  const logs = []
+  let calls = 0
+  __setParseResumeJobTestOverrides({ scoreCandidateDeterministically: () => { calls += 1; return {} } })
+
+  try {
+    const result = __testables.emitDeterministicJdFitShadowDiagnostic({
+      candidate: deterministicShadowCandidateFixture(),
+      jobDescriptionContext: { hasContext: true, requirements: 'Node', skills: ['Node.js'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(result.computed, false)
+    assert.equal(calls, 0)
+    assert.equal(logs.length, 1)
+    assert.equal(logs[0][0], '[DeterministicJdFit] shadow diagnostic')
+    assert.equal(logs[0][1].action, 'skip')
+    assert.equal(logs[0][1].allowlist_matched, false)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('deterministic JD-fit shadow computes safe diagnostic without mutating candidate or production score', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({
+    DETERMINISTIC_JD_FIT_SHADOW_ENABLED: 'true',
+    DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_USER_IDS: '24',
+  })
+  const logs = []
+  const candidate = deterministicShadowCandidateFixture()
+  const before = structuredClone(candidate)
+  let calls = 0
+  __setParseResumeJobTestOverrides({
+    scoreCandidateDeterministically: (scoredCandidate, context) => {
+      calls += 1
+      assert.strictEqual(scoredCandidate, candidate)
+      assert.equal(context.hasContext, true)
+      return {
+        final_score: 74.5,
+        scoring_contract_version: 'deterministic_jd_fit_v1',
+        scoring_mode: 'jd_fit',
+        score_band: 'strong',
+        verdict: 'Aligned',
+        scoring_breakdown: {
+          requirement_match: { score: 80 },
+          skill_alignment: { score: 70 },
+          experience_alignment: { score: 90 },
+          location_alignment: { score: 65 },
+          evidence_completeness: { score: 100 },
+          risk_penalty: { penalty: 2 },
+          confidence_adjustment: { multiplier: 0.98 },
+        },
+      }
+    },
+  })
+
+  try {
+    const result = __testables.emitDeterministicJdFitShadowDiagnostic({
+      candidate,
+      jobDescriptionContext: { hasContext: true, description: 'Do not log raw JD', requirements: 'Node', skills: ['Node.js'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(result.computed, true)
+    assert.equal(calls, 1)
+    assert.deepEqual(candidate, before)
+    assert.equal(candidate.score, 82)
+    assert.equal(candidate.matchScore.score, 82)
+    assert.equal(candidate.fit_assessment.overall_fit_score, 82)
+    assert.equal(logs[0][0], '[DeterministicJdFit] shadow diagnostic')
+    assert.deepEqual(Object.keys(logs[0][1]).sort(), [
+      'action', 'allowlist_matched', 'analysis_id', 'confidence_multiplier', 'current_ai_score',
+      'deterministic_final_score', 'evidence_score', 'experience_score', 'has_jd_context',
+      'location_score', 'requirement_score', 'resume_id', 'risk_penalty', 'score_band', 'score_delta',
+      'scoring_contract_version', 'scoring_mode', 'skill_score', 'user_id', 'verdict',
+    ].sort())
+    assert.equal(logs[0][1].action, 'computed')
+    assert.equal(logs[0][1].deterministic_final_score, 74.5)
+    assert.equal(logs[0][1].current_ai_score, 82)
+    assert.equal(logs[0][1].score_delta, -7.5)
+    const serializedLog = JSON.stringify(logs)
+    for (const forbidden of ['Private Candidate', 'private@example.com', '555-0101', 'Do not log raw JD', 'Do not log rationale text', 'Do not log matched raw requirement', 'Do not log recommendation text']) {
+      assert.equal(serializedLog.includes(forbidden), false)
+    }
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('deterministic JD-fit shadow failure logs failed_open and does not fail parse diagnostics', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({
+    DETERMINISTIC_JD_FIT_SHADOW_ENABLED: 'true',
+    DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_ANALYSIS_IDS: 'analysis-1',
+  })
+  const logs = []
+  const candidate = deterministicShadowCandidateFixture()
+  const before = structuredClone(candidate)
+  __setParseResumeJobTestOverrides({
+    scoreCandidateDeterministically: () => { throw new Error('scorer failed with private@example.com and raw text') },
+  })
+
+  try {
+    const result = __testables.emitDeterministicJdFitShadowDiagnostic({
+      candidate,
+      jobDescriptionContext: { hasContext: true, requirements: 'Node' },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(result.computed, false)
+    assert.equal(result.diagnostic.action, 'failed_open')
+    assert.deepEqual(candidate, before)
+    assert.equal(logs[0][0], '[DeterministicJdFit] shadow diagnostic')
+    assert.equal(logs[0][1].action, 'failed_open')
+    assert.equal(JSON.stringify(logs).includes('private@example.com'), false)
+    assert.equal(JSON.stringify(logs).includes('raw text'), false)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
