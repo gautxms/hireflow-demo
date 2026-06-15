@@ -17,6 +17,24 @@ function normalizeOptionalNumber(value) {
   return Number.isFinite(numeric) ? numeric : null
 }
 
+function hasUsableContent(value) {
+  if (value === null || value === undefined) return false
+
+  if (typeof value === 'string') return value.trim() !== ''
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (typeof value === 'boolean') return true
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasUsableContent(entry))
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value).some((entry) => hasUsableContent(entry))
+  }
+
+  return false
+}
+
 function roundToOneDecimal(value) {
   return Math.round(value * 10) / 10
 }
@@ -54,21 +72,42 @@ function isAllowedByList(value, rawAllowlist) {
   return allowlist.includes(String(value))
 }
 
+function normalizeCompactMode(compactMode) {
+  return normalizeOptionalString(compactMode)
+}
+
+function resolveMatchScore(candidate = {}) {
+  if (candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore)) {
+    return normalizeOptionalNumber(candidate.matchScore.score)
+  }
+
+  const primitiveMatchScore = normalizeOptionalNumber(candidate?.matchScore)
+  if (primitiveMatchScore !== null) return primitiveMatchScore
+
+  return normalizeOptionalNumber(candidate?.score)
+}
+
+function normalizeSafeDiagnosticToken(value) {
+  const normalized = normalizeOptionalString(value)
+  if (!normalized) return null
+  if (/\.(pdf|docx?|txt)$/i.test(normalized)) return null
+  return /^[a-z0-9_.:-]+$/i.test(normalized) ? normalized : null
+}
+
 export function isAiScoreCacheEnabled(env = process.env) {
   return String(env.AI_SCORE_CACHE_ENABLED || 'false').toLowerCase() === 'true'
 }
 
 export function buildScoreCacheResumeFingerprint({ extractedText, parsedResume, canonicalResumeFields } = {}) {
   const source = canonicalResumeFields ?? parsedResume ?? extractedText
-  if (source === null || source === undefined || source === '') return null
+  if (!hasUsableContent(source)) return null
 
   return sha256Stable({ type: 'resume', source })
 }
 
 export function buildScoreCacheJobDescriptionFingerprint({ jobDescription, allowNoJobDescription = false } = {}) {
-  const normalizedJobDescription = normalizeOptionalString(jobDescription)
-  if (normalizedJobDescription) {
-    return sha256Stable({ type: 'job_description', jobDescription: normalizedJobDescription })
+  if (hasUsableContent(jobDescription)) {
+    return sha256Stable({ type: 'job_description', jobDescription })
   }
 
   return allowNoJobDescription ? SCORE_CACHE_NO_JD_SENTINEL : null
@@ -90,6 +129,7 @@ export function buildScoreCacheKey({
     provider: normalizeOptionalString(provider),
     model: normalizeOptionalString(model),
     promptVersion: normalizeOptionalString(promptVersion),
+    compactMode: normalizeCompactMode(compactMode),
     scoringContractVersion: normalizeOptionalString(scoringContractVersion),
     cacheKeyVersion: normalizeOptionalString(cacheKeyVersion),
   }
@@ -97,10 +137,6 @@ export function buildScoreCacheKey({
   const missingFields = Object.entries(required)
     .filter(([, value]) => !value)
     .map(([key]) => key)
-
-  if (compactMode === null || compactMode === undefined || compactMode === '') {
-    missingFields.push('compactMode')
-  }
 
   if (missingFields.length > 0) {
     return { eligible: false, key: null, missingFields }
@@ -114,7 +150,7 @@ export function buildScoreCacheKey({
     provider: required.provider,
     model: required.model,
     prompt_version: required.promptVersion,
-    compact_mode: Boolean(compactMode),
+    compact_mode: required.compactMode,
   }
 
   return {
@@ -126,12 +162,21 @@ export function buildScoreCacheKey({
 }
 
 export function buildScoreCacheValue(candidate = {}, metadata = {}) {
-  const score = normalizeOptionalNumber(candidate?.matchScore?.score ?? candidate?.score)
+  const canonicalScore = resolveMatchScore(candidate)
+  const canonicalScoreSource = normalizeSafeDiagnosticToken(
+    candidate?.canonical_score_source ?? metadata.canonicalScoreSource ?? metadata.canonical_score_source,
+  )
+  const canonicalScoreContext = normalizeSafeDiagnosticToken(
+    candidate?.canonical_score_context ?? metadata.canonicalScoreContext ?? metadata.canonical_score_context,
+  )
 
   return {
     scoring_contract_version: normalizeOptionalString(metadata.scoringContractVersion) || SCORE_CACHE_SCORING_CONTRACT_VERSION,
-    score,
-    score_out_of_ten: score === null ? null : roundToOneDecimal(score / 10),
+    canonical_score: canonicalScore,
+    score: canonicalScore,
+    score_out_of_ten: canonicalScore === null ? null : roundToOneDecimal(canonicalScore / 10),
+    canonical_score_source: canonicalScoreSource,
+    canonical_score_context: canonicalScoreContext,
   }
 }
 
@@ -157,6 +202,6 @@ export function buildScoreCacheEligibilityDiagnostic(metadata = {}, env = proces
     provider: normalizeOptionalString(metadata.provider),
     model: normalizeOptionalString(metadata.model),
     prompt_version: normalizeOptionalString(metadata.promptVersion),
-    compact_mode: metadata.compactMode === null || metadata.compactMode === undefined || metadata.compactMode === '' ? null : Boolean(metadata.compactMode),
+    compact_mode: normalizeCompactMode(metadata.compactMode),
   }
 }
