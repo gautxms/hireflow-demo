@@ -137,6 +137,34 @@ function getProviderFromAttempt(attempt) {
   return normalizeProviderName(rawProvider) ? rawProvider : null
 }
 
+function parseRuntimeAllowlist(rawValue) {
+  return String(rawValue || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function runtimeAllowlistMatches(value, allowlist) {
+  if (allowlist.length === 0) return false
+  if (value === null || value === undefined || value === '') return false
+  return allowlist.includes(String(value))
+}
+
+function buildRuntimeScoreCacheAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
+  const userAllowlist = parseRuntimeAllowlist(env.AI_SCORE_CACHE_ALLOWED_USER_IDS)
+  const analysisAllowlist = parseRuntimeAllowlist(env.AI_SCORE_CACHE_ALLOWED_ANALYSIS_IDS)
+  const hasRuntimeAllowlist = userAllowlist.length > 0 || analysisAllowlist.length > 0
+  const allowedByUser = runtimeAllowlistMatches(userId, userAllowlist)
+  const allowedByAnalysis = runtimeAllowlistMatches(analysisId, analysisAllowlist)
+
+  return {
+    has_runtime_allowlist: hasRuntimeAllowlist,
+    runtime_allowlist_matched: hasRuntimeAllowlist && (allowedByUser || allowedByAnalysis),
+    runtime_allowed_by_user_allowlist: allowedByUser,
+    runtime_allowed_by_analysis_allowlist: allowedByAnalysis,
+  }
+}
+
 function buildSafeJobDescriptionFingerprintSource(jobDescriptionContext = null) {
   if (!jobDescriptionContext?.hasContext) return null
 
@@ -174,6 +202,7 @@ export async function writeAiScoreCacheShadow({
     jobDescription: buildSafeJobDescriptionFingerprintSource(jobDescriptionContext),
     allowNoJobDescription: true,
   })
+  const scoringContractVersion = candidate?.scoring_contract_version || null
   const metadata = {
     resumeFingerprint,
     jobDescriptionFingerprint,
@@ -181,15 +210,37 @@ export async function writeAiScoreCacheShadow({
     model: aiResponse?.model || null,
     promptVersion: aiResponse?.promptVersion || null,
     compactMode: aiResponse?.mode || null,
-    scoringContractVersion: candidate?.scoring_contract_version || SCORE_CACHE_SCORING_CONTRACT_VERSION,
+    scoringContractVersion,
     userId,
     analysisId,
   }
-  const diagnostic = buildScoreCacheEligibilityDiagnostic(metadata, env)
+  const diagnostic = {
+    ...buildScoreCacheEligibilityDiagnostic(metadata, env),
+    ...buildRuntimeScoreCacheAllowlistDiagnostic({ userId, analysisId, env }),
+    scoring_contract_version: scoringContractVersion,
+  }
 
-  if (!diagnostic.eligible) {
-    logger.info?.('[AiScoreCache] write-only shadow diagnostic', { ...diagnostic, action: 'skip' })
-    return { stored: false, diagnostic }
+  if (scoringContractVersion !== SCORE_CACHE_SCORING_CONTRACT_VERSION) {
+    const skipDiagnostic = {
+      ...diagnostic,
+      eligible: false,
+      action: 'skip',
+      reason: 'missing_or_unsupported_scoring_contract_version',
+    }
+    logger.info?.('[AiScoreCache] write-only shadow diagnostic', skipDiagnostic)
+    return { stored: false, diagnostic: skipDiagnostic }
+  }
+
+  if (!diagnostic.has_runtime_allowlist) {
+    const skipDiagnostic = { ...diagnostic, eligible: false, action: 'skip', reason: 'missing_runtime_allowlist' }
+    logger.info?.('[AiScoreCache] write-only shadow diagnostic', skipDiagnostic)
+    return { stored: false, diagnostic: skipDiagnostic }
+  }
+
+  if (!diagnostic.runtime_allowlist_matched || !diagnostic.key_build_eligible || !diagnostic.enabled) {
+    const skipDiagnostic = { ...diagnostic, eligible: false, action: 'skip' }
+    logger.info?.('[AiScoreCache] write-only shadow diagnostic', skipDiagnostic)
+    return { stored: false, diagnostic: skipDiagnostic }
   }
 
   const cacheKeyResult = buildScoreCacheKey(metadata)

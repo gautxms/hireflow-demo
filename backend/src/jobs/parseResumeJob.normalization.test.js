@@ -1055,13 +1055,13 @@ function withAiScoreCacheEnv(overrides = {}) {
 }
 
 test('AI score cache write-only shadow skips storage when flag is off', async () => {
-  const restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'false' })
+  const restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'false', AI_SCORE_CACHE_ALLOWED_USER_IDS: '24' })
   const upserts = []
   __setParseResumeJobTestOverrides({ upsertScoreCacheEntry: async (payload) => upserts.push(payload) })
 
   try {
     const result = await __testables.writeAiScoreCacheShadow({
-      candidate: { score: 82, canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+      candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
       preparedResumePayload: { extractedText: 'Safe scoring text' },
       jobDescriptionContext: { hasContext: false, source: 'none' },
       userId: 24,
@@ -1089,7 +1089,7 @@ test('AI score cache write-only shadow skips storage when allowlists do not matc
 
   try {
     const result = await __testables.writeAiScoreCacheShadow({
-      candidate: { score: 82, canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+      candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
       preparedResumePayload: { extractedText: 'Safe scoring text' },
       jobDescriptionContext: { hasContext: false, source: 'none' },
       userId: 24,
@@ -1117,7 +1117,7 @@ test('AI score cache write-only shadow upserts once when eligible and stores onl
 
   try {
     const result = await __testables.writeAiScoreCacheShadow({
-      candidate: { score: 82, canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+      candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
       preparedResumePayload: { extractedText: 'Jane Candidate jane@example.com 555-1212 resume text' },
       jobDescriptionContext: { hasContext: true, source: 'manual_text', description: 'Build APIs', requirements: 'Node', skills: ['node'] },
       userId: 24,
@@ -1150,7 +1150,7 @@ test('AI score cache write-only shadow write failures and missing key fields fai
 
   try {
     const failedWrite = await __testables.writeAiScoreCacheShadow({
-      candidate: { score: 82, canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+      candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
       preparedResumePayload: { extractedText: 'Safe scoring text' },
       jobDescriptionContext: { hasContext: false, source: 'none' },
       userId: 24,
@@ -1162,7 +1162,7 @@ test('AI score cache write-only shadow write failures and missing key fields fai
     assert.equal(upserts.length, 1)
 
     const missingKey = await __testables.writeAiScoreCacheShadow({
-      candidate: { score: 82 },
+      candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1' },
       preparedResumePayload: { extractedText: '' },
       jobDescriptionContext: { hasContext: false, source: 'none' },
       userId: 24,
@@ -1172,6 +1172,94 @@ test('AI score cache write-only shadow write failures and missing key fields fai
     })
     assert.equal(missingKey.stored, false)
     assert.equal(upserts.length, 1)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+
+test('AI score cache write-only shadow requires canonical scoring contract before upsert', async () => {
+  const restoreEnv = withAiScoreCacheEnv({
+    AI_SCORE_CACHE_ENABLED: 'true',
+    AI_SCORE_CACHE_ALLOWED_USER_IDS: '24',
+  })
+  const upserts = []
+  __setParseResumeJobTestOverrides({ upsertScoreCacheEntry: async (payload) => { upserts.push(payload); return { stored: true } } })
+
+  try {
+    const missingContract = await __testables.writeAiScoreCacheShadow({
+      candidate: { score: 82, canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+      preparedResumePayload: { extractedText: 'Safe scoring text' },
+      jobDescriptionContext: { hasContext: false, source: 'none' },
+      userId: 24,
+      analysisId: 'analysis-1',
+      aiResponse: { provider: 'openai-primary', model: 'gpt-test', promptVersion: 1, mode: 'compact' },
+      logger: { info() {}, warn() {} },
+    })
+    assert.equal(missingContract.stored, false)
+    assert.equal(missingContract.diagnostic.reason, 'missing_or_unsupported_scoring_contract_version')
+    assert.equal(upserts.length, 0)
+
+    const validContract = await __testables.writeAiScoreCacheShadow({
+      candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+      preparedResumePayload: { extractedText: 'Safe scoring text' },
+      jobDescriptionContext: { hasContext: false, source: 'none' },
+      userId: 24,
+      analysisId: 'analysis-1',
+      aiResponse: { provider: 'openai-primary', model: 'gpt-test', promptVersion: 1, mode: 'compact' },
+      logger: { info() {}, warn() {} },
+    })
+    assert.equal(validContract.stored, true)
+    assert.equal(upserts.length, 1)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('AI score cache write-only shadow requires an explicit runtime allowlist match', async () => {
+  let restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'true' })
+  const upserts = []
+  __setParseResumeJobTestOverrides({ upsertScoreCacheEntry: async (payload) => { upserts.push(payload); return { stored: true } } })
+
+  const request = {
+    candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+    preparedResumePayload: { extractedText: 'Safe scoring text' },
+    jobDescriptionContext: { hasContext: false, source: 'none' },
+    userId: 24,
+    analysisId: 'analysis-1',
+    aiResponse: { provider: 'openai-primary', model: 'gpt-test', promptVersion: 1, mode: 'compact' },
+    logger: { info() {}, warn() {} },
+  }
+
+  try {
+    const missingAllowlist = await __testables.writeAiScoreCacheShadow(request)
+    assert.equal(missingAllowlist.stored, false)
+    assert.equal(missingAllowlist.diagnostic.reason, 'missing_runtime_allowlist')
+    assert.equal(upserts.length, 0)
+
+    restoreEnv()
+    restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'true', AI_SCORE_CACHE_ALLOWED_USER_IDS: '24' })
+    const userMatched = await __testables.writeAiScoreCacheShadow(request)
+    assert.equal(userMatched.stored, true)
+    assert.equal(upserts.length, 1)
+
+    restoreEnv()
+    restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'true', AI_SCORE_CACHE_ALLOWED_ANALYSIS_IDS: 'analysis-1' })
+    const analysisMatched = await __testables.writeAiScoreCacheShadow(request)
+    assert.equal(analysisMatched.stored, true)
+    assert.equal(upserts.length, 2)
+
+    restoreEnv()
+    restoreEnv = withAiScoreCacheEnv({
+      AI_SCORE_CACHE_ENABLED: 'true',
+      AI_SCORE_CACHE_ALLOWED_USER_IDS: '25',
+      AI_SCORE_CACHE_ALLOWED_ANALYSIS_IDS: 'analysis-2',
+    })
+    const nonMatched = await __testables.writeAiScoreCacheShadow(request)
+    assert.equal(nonMatched.stored, false)
+    assert.equal(upserts.length, 2)
   } finally {
     restoreEnv()
     __resetParseResumeJobTestOverrides()
