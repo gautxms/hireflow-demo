@@ -17,6 +17,7 @@ const present = (value) => value !== null && value !== undefined && String(value
 const uniqueNormalized = (values) => [...new Set(asArray(values).map((value) => String(value).trim().toLowerCase()).filter(Boolean))]
 
 const numericValue = (value) => {
+  if (!present(value)) return null
   const number = Number(value)
   return Number.isFinite(number) ? number : null
 }
@@ -29,13 +30,42 @@ const firstNumber = (...values) => {
   return null
 }
 
+const meaningfulJdValue = (value) => {
+  if (Array.isArray(value)) return value.some(meaningfulJdValue)
+  if (isObject(value)) return Object.values(value).some(meaningfulJdValue)
+  if (typeof value === 'boolean') return false
+  return present(value)
+}
+
 const hasJdContext = (context) => {
   if (!isObject(context)) return false
-  return Object.values(context).some((value) => {
-    if (Array.isArray(value)) return value.length > 0
-    if (isObject(value)) return Object.keys(value).length > 0
-    return present(value)
-  })
+  if (context.hasContext === false) return false
+  if (context.hasContext === true) return true
+
+  return [
+    context.title,
+    context.jobTitle,
+    context.description,
+    context.jobDescription,
+    context.requirements,
+    context.required_requirements,
+    context.skills,
+    context.required_skills,
+    context.location,
+    context.fileText,
+    context.required_min_years,
+    context.required_max_years,
+    context.min_years,
+    context.max_years,
+    context.minYears,
+    context.maxYears,
+    context.years_experience_min,
+    context.years_experience_max,
+    context.experienceMin,
+    context.experienceMax,
+    context.experienceYears,
+    context.experience,
+  ].some(meaningfulJdValue)
 }
 
 const requirementBreakdown = (fitAssessment) => {
@@ -67,8 +97,29 @@ const skillBreakdown = (candidate) => {
 }
 
 const requiredYears = (context) => {
-  const min = firstNumber(context?.required_min_years, context?.min_years, context?.minYears, context?.years_experience_min, context?.experience?.min, context?.experience?.minimum)
-  const max = firstNumber(context?.required_max_years, context?.max_years, context?.maxYears, context?.years_experience_max, context?.experience?.max, context?.experience?.maximum)
+  const experienceYears = context?.experienceYears
+  const experienceYearsMin = isObject(experienceYears) ? experienceYears.min : experienceYears
+  const experienceYearsMax = isObject(experienceYears) ? experienceYears.max : null
+  const min = firstNumber(
+    context?.required_min_years,
+    context?.min_years,
+    context?.minYears,
+    context?.years_experience_min,
+    context?.experienceMin,
+    experienceYearsMin,
+    context?.experience?.min,
+    context?.experience?.minimum,
+  )
+  const max = firstNumber(
+    context?.required_max_years,
+    context?.max_years,
+    context?.maxYears,
+    context?.years_experience_max,
+    context?.experienceMax,
+    experienceYearsMax,
+    context?.experience?.max,
+    context?.experience?.maximum,
+  )
   return { min, max }
 }
 

@@ -159,3 +159,37 @@ test('new deterministic service is not imported by guarded runtime paths', () =>
     assert.equal(source.includes('scoreCandidateDeterministically'), false, `${path} must not call the scorer`)
   }
 })
+
+test('hasContext false with source none returns profile_only when profile_score exists', () => {
+  const result = scoreCandidateDeterministically(candidate(), { hasContext: false, source: 'none' })
+  assert.equal(result.scoring_mode, 'profile_only')
+  assert.notEqual(result.final_score, null)
+})
+
+test('hasContext false with source none returns insufficient_evidence when profile_score is missing', () => {
+  const input = candidate()
+  delete input.profile_score
+  const result = scoreCandidateDeterministically(input, { hasContext: false, source: 'none' })
+  assert.equal(result.scoring_mode, 'insufficient_evidence')
+  assert.equal(result.final_score, null)
+})
+
+test('source none alone must not cause jd_fit', () => {
+  const result = scoreCandidateDeterministically(candidate(), { source: 'none' })
+  assert.equal(result.scoring_mode, 'profile_only')
+})
+
+test('hasContext true with minimal JD fields allows jd_fit', () => {
+  const result = scoreCandidateDeterministically(candidate(), { hasContext: true, source: 'none' })
+  assert.equal(result.scoring_mode, 'jd_fit')
+})
+
+test('experienceYears is recognized for required years', () => {
+  const numberResult = scoreCandidateDeterministically(candidate(), { title: 'Engineer', experienceYears: 5 })
+  assert.equal(numberResult.scoring_breakdown.experience_alignment.required_min_years, 5)
+  assert.equal(numberResult.scoring_breakdown.experience_alignment.required_max_years, null)
+
+  const objectResult = scoreCandidateDeterministically(candidate(), { title: 'Engineer', experienceYears: { min: 3, max: 7 } })
+  assert.equal(objectResult.scoring_breakdown.experience_alignment.required_min_years, 3)
+  assert.equal(objectResult.scoring_breakdown.experience_alignment.required_max_years, 7)
+})
