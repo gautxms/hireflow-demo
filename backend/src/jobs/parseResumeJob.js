@@ -27,11 +27,13 @@ import {
   buildScoreCacheValue,
 } from '../services/aiScoreCacheService.js'
 import { buildSafeScoreCacheStoragePayload, getScoreCacheEntry, upsertScoreCacheEntry } from '../services/aiScoreCacheStorageService.js'
+import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
 let upsertScoreCacheEntryOverrideForTests = null
 let getScoreCacheEntryOverrideForTests = null
+let scoreCandidateDeterministicallyOverrideForTests = null
 
 function getAnalyzeResumeWithConfiguredFallback() {
   return analyzeResumeWithConfiguredFallbackOverrideForTests || analyzeResumeWithConfiguredFallback
@@ -49,16 +51,22 @@ function getScoreCacheEntryReader() {
   return getScoreCacheEntryOverrideForTests || getScoreCacheEntry
 }
 
+function getDeterministicJdFitScorer() {
+  return scoreCandidateDeterministicallyOverrideForTests || scoreCandidateDeterministically
+}
+
 export function __setParseResumeJobTestOverrides({
   analyzeResumeWithConfiguredFallback: analyzeOverride = null,
   cacheJobResult: cacheOverride = null,
   upsertScoreCacheEntry: upsertScoreCacheEntryOverride = null,
   getScoreCacheEntry: getScoreCacheEntryOverride = null,
+  scoreCandidateDeterministically: scoreCandidateDeterministicallyOverride = null,
 } = {}) {
   analyzeResumeWithConfiguredFallbackOverrideForTests = analyzeOverride
   cacheJobResultOverrideForTests = cacheOverride
   upsertScoreCacheEntryOverrideForTests = upsertScoreCacheEntryOverride
   getScoreCacheEntryOverrideForTests = getScoreCacheEntryOverride
+  scoreCandidateDeterministicallyOverrideForTests = scoreCandidateDeterministicallyOverride
 }
 
 export function __resetParseResumeJobTestOverrides() {
@@ -66,6 +74,7 @@ export function __resetParseResumeJobTestOverrides() {
   cacheJobResultOverrideForTests = null
   upsertScoreCacheEntryOverrideForTests = null
   getScoreCacheEntryOverrideForTests = null
+  scoreCandidateDeterministicallyOverrideForTests = null
 }
 
 export function isTerminalJobFailure(job) {
@@ -171,6 +180,105 @@ function buildRuntimeScoreCacheAllowlistDiagnostic({ userId, analysisId, env = p
     runtime_allowlist_matched: hasRuntimeAllowlist && (allowedByUser || allowedByAnalysis),
     runtime_allowed_by_user_allowlist: allowedByUser,
     runtime_allowed_by_analysis_allowlist: allowedByAnalysis,
+  }
+}
+
+
+function isDeterministicJdFitShadowEnabled(env = process.env) {
+  return String(env.DETERMINISTIC_JD_FIT_SHADOW_ENABLED || '').trim().toLowerCase() === 'true'
+}
+
+function buildDeterministicJdFitShadowAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
+  const userAllowlist = parseRuntimeAllowlist(env.DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_USER_IDS)
+  const analysisAllowlist = parseRuntimeAllowlist(env.DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_ANALYSIS_IDS)
+  const allowedByUser = runtimeAllowlistMatches(userId, userAllowlist)
+  const allowedByAnalysis = runtimeAllowlistMatches(analysisId, analysisAllowlist)
+
+  return {
+    has_allowlist: userAllowlist.length > 0 || analysisAllowlist.length > 0,
+    allowlist_matched: allowedByUser || allowedByAnalysis,
+  }
+}
+
+function resolveCurrentAiScore(candidate = {}) {
+  return resolveNumericScore(candidate?.matchScore?.score)
+    ?? resolveNumericScore(candidate?.score)
+    ?? resolveNumericScore(candidate?.fit_assessment?.overall_fit_score)
+}
+
+function buildSafeDeterministicJdFitShadowDiagnostic({
+  action = 'skip',
+  candidate = {},
+  deterministicResult = null,
+  userId = null,
+  analysisId = null,
+  resumeId = null,
+  jobDescriptionContext = null,
+  allowlistMatched = false,
+} = {}) {
+  const currentAiScore = resolveCurrentAiScore(candidate)
+  const deterministicScore = resolveNumericScore(deterministicResult?.final_score)
+  const breakdown = deterministicResult?.scoring_breakdown && typeof deterministicResult.scoring_breakdown === 'object'
+    ? deterministicResult.scoring_breakdown
+    : {}
+
+  return {
+    action,
+    analysis_id: analysisId || null,
+    resume_id: resumeId || candidate?.resumeId || null,
+    user_id: userId ?? null,
+    scoring_contract_version: deterministicResult?.scoring_contract_version || null,
+    scoring_mode: deterministicResult?.scoring_mode || null,
+    deterministic_final_score: deterministicScore,
+    current_ai_score: currentAiScore,
+    score_delta: deterministicScore !== null && currentAiScore !== null ? Math.round((deterministicScore - currentAiScore) * 10) / 10 : null,
+    score_band: deterministicResult?.score_band || null,
+    verdict: deterministicResult?.verdict || null,
+    requirement_score: resolveNumericScore(breakdown.requirement_match?.score),
+    skill_score: resolveNumericScore(breakdown.skill_alignment?.score),
+    experience_score: resolveNumericScore(breakdown.experience_alignment?.score),
+    location_score: resolveNumericScore(breakdown.location_alignment?.score),
+    evidence_score: resolveNumericScore(breakdown.evidence_completeness?.score),
+    risk_penalty: resolveNumericScore(breakdown.risk_penalty?.penalty),
+    confidence_multiplier: resolveNumericScore(breakdown.confidence_adjustment?.multiplier),
+    has_jd_context: Boolean(jobDescriptionContext?.hasContext),
+    allowlist_matched: Boolean(allowlistMatched),
+  }
+}
+
+export function emitDeterministicJdFitShadowDiagnostic({
+  candidate,
+  jobDescriptionContext,
+  userId,
+  analysisId,
+  resumeId,
+  logger = console,
+  env = process.env,
+} = {}) {
+  if (!isDeterministicJdFitShadowEnabled(env)) return { computed: false, diagnostic: null }
+
+  const allowlist = buildDeterministicJdFitShadowAllowlistDiagnostic({ userId, analysisId, env })
+  if (!allowlist.allowlist_matched || !jobDescriptionContext?.hasContext) {
+    const diagnostic = buildSafeDeterministicJdFitShadowDiagnostic({
+      action: 'skip', candidate, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: allowlist.allowlist_matched,
+    })
+    logger.info?.('[DeterministicJdFit] shadow diagnostic', diagnostic)
+    return { computed: false, diagnostic }
+  }
+
+  try {
+    const deterministicResult = getDeterministicJdFitScorer()(candidate, jobDescriptionContext)
+    const diagnostic = buildSafeDeterministicJdFitShadowDiagnostic({
+      action: 'computed', candidate, deterministicResult, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true,
+    })
+    logger.info?.('[DeterministicJdFit] shadow diagnostic', diagnostic)
+    return { computed: true, diagnostic, deterministicResult }
+  } catch (error) {
+    const diagnostic = buildSafeDeterministicJdFitShadowDiagnostic({
+      action: 'failed_open', candidate, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true,
+    })
+    logger.warn?.('[DeterministicJdFit] shadow diagnostic', diagnostic)
+    return { computed: false, diagnostic, error }
   }
 }
 
@@ -1143,6 +1251,14 @@ export async function runParse(job) {
       resumeId,
       ...scoreContractShadowMetadata,
     })
+    emitDeterministicJdFitShadowDiagnostic({
+      candidate,
+      jobDescriptionContext,
+      userId: job.data.userId ?? null,
+      analysisId: analysisId || null,
+      resumeId,
+      logger: console,
+    })
     await readAiScoreCacheShadowDiagnostic({
       candidate,
       preparedResumePayload,
@@ -1367,4 +1483,6 @@ export const __testables = {
   handleParseJobFailure,
   readAiScoreCacheShadowDiagnostic,
   writeAiScoreCacheShadow,
+  emitDeterministicJdFitShadowDiagnostic,
+  buildSafeDeterministicJdFitShadowDiagnostic,
 }
