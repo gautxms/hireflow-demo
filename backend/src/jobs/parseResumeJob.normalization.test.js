@@ -1265,3 +1265,143 @@ test('AI score cache write-only shadow requires an explicit runtime allowlist ma
     __resetParseResumeJobTestOverrides()
   }
 })
+
+test('AI score cache read-shadow skips reads when flag is off or allowlist is missing', async () => {
+  let restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'false', AI_SCORE_CACHE_ALLOWED_USER_IDS: '24' })
+  const reads = []
+  __setParseResumeJobTestOverrides({ getScoreCacheEntry: async (cacheKey) => reads.push(cacheKey) })
+
+  const request = {
+    candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+    preparedResumePayload: { extractedText: 'Safe scoring text' },
+    jobDescriptionContext: { hasContext: false, source: 'none' },
+    userId: 24,
+    analysisId: 'analysis-1',
+    aiResponse: { provider: 'openai-primary', model: 'gpt-test', promptVersion: 1, mode: 'compact' },
+    logger: { info() {}, warn() {} },
+  }
+
+  try {
+    const flagOff = await __testables.readAiScoreCacheShadowDiagnostic(request)
+    assert.equal(flagOff.checked, false)
+    assert.equal(reads.length, 0)
+
+    restoreEnv()
+    restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'true' })
+    const noAllowlist = await __testables.readAiScoreCacheShadowDiagnostic(request)
+    assert.equal(noAllowlist.checked, false)
+    assert.equal(reads.length, 0)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('AI score cache read-shadow reads eligible keys, logs safe miss, and does not change candidate', async () => {
+  const restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'true', AI_SCORE_CACHE_ALLOWED_USER_IDS: '24' })
+  const reads = []
+  const logs = []
+  const candidate = { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' }
+  __setParseResumeJobTestOverrides({
+    getScoreCacheEntry: async (cacheKey) => {
+      reads.push(cacheKey)
+      return { found: false, entry: null }
+    },
+  })
+
+  try {
+    const before = structuredClone(candidate)
+    const result = await __testables.readAiScoreCacheShadowDiagnostic({
+      candidate,
+      preparedResumePayload: { extractedText: 'Jane Candidate jane@example.com 555-1212 resume text' },
+      jobDescriptionContext: { hasContext: true, source: 'manual_text', description: 'Build APIs', requirements: 'Node', skills: ['node'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      aiResponse: { provider: 'openai-primary', model: 'gpt-test', promptVersion: 1, mode: 'compact' },
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(result.checked, true)
+    assert.equal(result.hit, false)
+    assert.equal(reads.length, 1)
+    assert.match(reads[0], /^score_cache_v1:/)
+    assert.deepEqual(candidate, before)
+    assert.equal(logs[0][0], '[AiScoreCache] read-shadow diagnostic')
+    assert.equal(logs[0][1].action, 'read_shadow_miss')
+    assert.equal(logs[0][1].cache_hit, false)
+    assert.equal(logs[0][1].same_score, null)
+    assert.equal(logs[0][1].score_delta, null)
+    assert.ok(logs[0][1].cache_key_fingerprint)
+    const serializedLog = JSON.stringify(logs)
+    assert.equal(serializedLog.includes(reads[0]), false)
+    assert.equal(serializedLog.includes('Jane Candidate'), false)
+    assert.equal(serializedLog.includes('jane@example.com'), false)
+    assert.equal(serializedLog.includes('555-1212'), false)
+    assert.equal(serializedLog.includes('Build APIs'), false)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('AI score cache read-shadow logs safe hit comparison without score override', async () => {
+  const restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'true', AI_SCORE_CACHE_ALLOWED_ANALYSIS_IDS: 'analysis-1' })
+  const candidate = { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' }
+  const logs = []
+  __setParseResumeJobTestOverrides({
+    getScoreCacheEntry: async () => ({ found: true, entry: { canonical_score: 80 } }),
+  })
+
+  try {
+    const result = await __testables.readAiScoreCacheShadowDiagnostic({
+      candidate,
+      preparedResumePayload: { extractedText: 'Safe scoring text' },
+      jobDescriptionContext: { hasContext: false, source: 'none' },
+      userId: 24,
+      analysisId: 'analysis-1',
+      aiResponse: { provider: 'openai-primary', model: 'gpt-test', promptVersion: 1, mode: 'compact' },
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(result.checked, true)
+    assert.equal(result.hit, true)
+    assert.equal(candidate.score, 82)
+    assert.equal(logs[0][1].action, 'read_shadow_hit')
+    assert.equal(logs[0][1].cache_hit, true)
+    assert.equal(logs[0][1].same_score, false)
+    assert.equal(logs[0][1].score_delta, -2)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('AI score cache read-shadow read failures fail open and do not fail parse diagnostics', async () => {
+  const restoreEnv = withAiScoreCacheEnv({ AI_SCORE_CACHE_ENABLED: 'true', AI_SCORE_CACHE_ALLOWED_USER_IDS: '24' })
+  const logs = []
+  __setParseResumeJobTestOverrides({
+    getScoreCacheEntry: async () => { throw new Error('db unavailable with cache key score_cache_v1:secret') },
+  })
+
+  try {
+    const result = await __testables.readAiScoreCacheShadowDiagnostic({
+      candidate: { score: 82, scoring_contract_version: 'canonical_score_fields_v1', canonical_score_source: 'matchScore.score', canonical_score_context: 'jd_fit' },
+      preparedResumePayload: { extractedText: 'Safe scoring text' },
+      jobDescriptionContext: { hasContext: false, source: 'none' },
+      userId: 24,
+      analysisId: 'analysis-1',
+      aiResponse: { provider: 'openai-primary', model: 'gpt-test', promptVersion: 1, mode: 'compact' },
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(result.checked, true)
+    assert.equal(result.hit, false)
+    assert.equal(result.diagnostic.action, 'read_shadow_failed_open')
+    assert.equal(logs[0][0], '[AiScoreCache] read-shadow diagnostic')
+    assert.equal(JSON.stringify(logs).includes('db unavailable'), false)
+    assert.equal(JSON.stringify(logs).includes('score_cache_v1:secret'), false)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
