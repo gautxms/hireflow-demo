@@ -95,6 +95,17 @@ export async function upsertScoreCacheEntry(value, db = defaultPool) {
   const validation = validateStoragePayload(value || {})
   if (!validation.valid) return { stored: false, ...validation }
 
+  const safeValue = {
+    ...value,
+    canonical_score_source: normalizeSafeToken(value.canonical_score_source),
+    canonical_score_context: normalizeSafeToken(value.canonical_score_context),
+    provider: normalizeSafeToken(value.provider),
+    model: normalizeSafeToken(value.model),
+    prompt_version: normalizeSafeToken(value.prompt_version),
+    compact_mode: normalizeSafeToken(value.compact_mode),
+    metadata: pickSafeMetadata(value.metadata),
+  }
+
   const result = await db.query(
     `INSERT INTO ai_score_cache (
       cache_key, cache_key_version, scoring_contract_version, canonical_score, score_out_of_ten,
@@ -117,9 +128,9 @@ export async function upsertScoreCacheEntry(value, db = defaultPool) {
       metadata = EXCLUDED.metadata
     RETURNING *`,
     [
-      value.cache_key, value.cache_key_version, value.scoring_contract_version, value.canonical_score, value.score_out_of_ten,
-      value.canonical_score_source, value.canonical_score_context, value.provider, value.model, value.prompt_version, value.compact_mode,
-      value.resume_fingerprint, value.job_description_fingerprint, JSON.stringify(value.metadata || {}),
+      safeValue.cache_key, safeValue.cache_key_version, safeValue.scoring_contract_version, safeValue.canonical_score, safeValue.score_out_of_ten,
+      safeValue.canonical_score_source, safeValue.canonical_score_context, safeValue.provider, safeValue.model, safeValue.prompt_version, safeValue.compact_mode,
+      safeValue.resume_fingerprint, safeValue.job_description_fingerprint, JSON.stringify(safeValue.metadata),
     ],
   )
 

@@ -98,6 +98,69 @@ test('upsert inserts and updates same cache_key', async () => {
   assert.equal(second.entry.canonical_score, 91)
 })
 
+test('upsert sanitizes direct unsafe metadata before DB write without mutating input', async () => {
+  let capturedParams = null
+  const db = {
+    async query(sql, params) {
+      capturedParams = params
+      return { rows: [{ cache_key: params[0], metadata: JSON.parse(params[13]) }] }
+    },
+  }
+  const input = {
+    ...buildValidPayload(),
+    metadata: {
+      schema_version: 'ai_score_cache_storage_v1',
+      resumeText: 'Jane Candidate jane@example.com 555-1212',
+      jobDescription: 'Secret raw JD',
+      filename: 'jane-resume.pdf',
+      notes: 'Call Jane at 555-1212',
+      rawProviderResponse: { text: 'raw model response' },
+    },
+  }
+
+  await upsertScoreCacheEntry(input, db)
+
+  const serializedParams = JSON.stringify(capturedParams)
+  assert.equal(serializedParams.includes('Jane'), false)
+  assert.equal(serializedParams.includes('jane@example.com'), false)
+  assert.equal(serializedParams.includes('555-1212'), false)
+  assert.equal(serializedParams.includes('Secret raw JD'), false)
+  assert.equal(serializedParams.includes('jane-resume.pdf'), false)
+  assert.equal(serializedParams.includes('rawProviderResponse'), false)
+  assert.deepEqual(JSON.parse(capturedParams[13]), { schema_version: 'ai_score_cache_storage_v1' })
+  assert.equal(input.metadata.resumeText, 'Jane Candidate jane@example.com 555-1212')
+})
+
+test('upsert sanitizes direct unsafe optional token fields before DB write', async () => {
+  let capturedParams = null
+  const db = {
+    async query(sql, params) {
+      capturedParams = params
+      return { rows: [{ cache_key: params[0] }] }
+    },
+  }
+  const input = {
+    ...buildValidPayload(),
+    canonical_score_source: 'Jane Candidate jane@example.com 555-1212',
+    canonical_score_context: 'jane-resume.pdf',
+    provider: 'anthropic-primary',
+    model: 'claude-test',
+    prompt_version: 'resume-score-v1',
+    compact_mode: 'standard',
+  }
+
+  await upsertScoreCacheEntry(input, db)
+
+  assert.equal(capturedParams[5], null)
+  assert.equal(capturedParams[6], null)
+  assert.equal(capturedParams[7], 'anthropic-primary')
+  assert.equal(capturedParams[8], 'claude-test')
+  assert.equal(capturedParams[9], 'resume-score-v1')
+  assert.equal(capturedParams[10], 'standard')
+  assert.equal(input.canonical_score_source, 'Jane Candidate jane@example.com 555-1212')
+  assert.equal(input.canonical_score_context, 'jane-resume.pdf')
+})
+
 test('get by cache_key returns expected value', async () => {
   const db = {
     async query(sql, params) {
