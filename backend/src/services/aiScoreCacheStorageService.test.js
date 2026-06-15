@@ -194,24 +194,33 @@ test('mark hit increments hit_count and updates last_used_at', async () => {
 })
 
 test('no runtime analysis path imports storage service yet', async () => {
-  const { execFile } = await import('node:child_process')
-  const { promisify } = await import('node:util')
-  const execFileAsync = promisify(execFile)
-  let stdout = ''
-  try {
-    ;({ stdout } = await execFileAsync('rg', [
-      '-n',
-      'aiScoreCacheStorageService',
-      'backend/src',
-      '--glob',
-      '!backend/src/services/aiScoreCacheStorageService.test.js',
-      '--glob',
-      '!backend/src/services/aiScoreCacheStorageService.js',
-    ]))
-  } catch (error) {
-    if (error.code !== 1) throw error
-    stdout = error.stdout || ''
+  const { readdir, readFile } = await import('node:fs/promises')
+  const path = await import('node:path')
+  const root = path.resolve('backend/src')
+  const ignoredFiles = new Set([
+    path.join(root, 'services/aiScoreCacheStorageService.js'),
+    path.join(root, 'services/aiScoreCacheStorageService.test.js'),
+  ])
+
+  async function collectFiles(directory) {
+    const entries = await readdir(directory, { withFileTypes: true })
+    const files = await Promise.all(entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) return collectFiles(entryPath)
+      if (entry.isFile()) return [entryPath]
+      return []
+    }))
+
+    return files.flat()
   }
 
-  assert.equal(stdout.trim(), '')
+  const references = []
+  for (const file of await collectFiles(root)) {
+    if (ignoredFiles.has(file)) continue
+
+    const contents = await readFile(file, 'utf8')
+    if (contents.includes('aiScoreCacheStorageService')) references.push(path.relative(root, file))
+  }
+
+  assert.deepEqual(references, [])
 })
