@@ -6,7 +6,7 @@ import { matchCandidatesToJob } from '../services/matchingService.js'
 import { pool } from '../db/client.js'
 import { normalizeTags } from './candidateTagsState.js'
 import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields } from '../services/aiResumeAnalysisService.js'
-import { applyJobDescriptionScoringMode, writeAiScoreCacheShadow } from '../jobs/parseResumeJob.js'
+import { applyJobDescriptionScoringMode } from '../jobs/parseResumeJob.js'
 import { syncCandidateProfilesForUser } from '../services/candidateProfilesService.js'
 import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { normalizeCandidateDirectoryQuery } from '../../../src/schemas/candidateDirectoryQuerySchema.js'
@@ -275,23 +275,6 @@ router.post('/reanalyse', requireAuth, async (req, res) => {
       const scoredCandidates = applyJobDescriptionScoringMode(normalizedCandidates, jobDescriptionContext)
       const canonicalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
       const primaryCandidate = canonicalizedCandidates[0] || null
-
-      for (const candidate of canonicalizedCandidates) {
-        await writeAiScoreCacheShadow({
-          candidate,
-          preparedResumePayload: { extractedText: resumeText, diagnostics: null },
-          jobDescriptionContext,
-          userId: req.userId,
-          analysisId: null,
-          aiResponse: {
-            provider: aiResponse?.provider || null,
-            model: aiResponse?.model || null,
-            promptVersion: aiResponse?.promptVersion || null,
-            mode: aiResponse?.mode || null,
-          },
-          logger: console,
-        })
-      }
 
       const parseResult = {
         ...(row.parse_result && typeof row.parse_result === 'object' ? row.parse_result : {}),
