@@ -193,7 +193,7 @@ test('mark hit increments hit_count and updates last_used_at', async () => {
   assert.ok(result.entry.last_used_at)
 })
 
-test('no runtime analysis path imports storage service yet', async () => {
+test('write-only runtime analysis path is the only storage service importer', async () => {
   const { readdir, readFile } = await import('node:fs/promises')
   const path = await import('node:path')
   const root = path.resolve('backend/src')
@@ -222,5 +222,5 @@ test('no runtime analysis path imports storage service yet', async () => {
     if (contents.includes('aiScoreCacheStorageService')) references.push(path.relative(root, file))
   }
 
-  assert.deepEqual(references, [])
+  assert.deepEqual(references, ['jobs/parseResumeJob.js'])
 })

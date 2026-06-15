@@ -17,9 +17,19 @@ import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields
 import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
 import { emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
+import {
+  SCORE_CACHE_SCORING_CONTRACT_VERSION,
+  buildScoreCacheEligibilityDiagnostic,
+  buildScoreCacheJobDescriptionFingerprint,
+  buildScoreCacheKey,
+  buildScoreCacheResumeFingerprint,
+  buildScoreCacheValue,
+} from '../services/aiScoreCacheService.js'
+import { buildSafeScoreCacheStoragePayload, upsertScoreCacheEntry } from '../services/aiScoreCacheStorageService.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
+let upsertScoreCacheEntryOverrideForTests = null
 
 function getAnalyzeResumeWithConfiguredFallback() {
   return analyzeResumeWithConfiguredFallbackOverrideForTests || analyzeResumeWithConfiguredFallback
@@ -29,14 +39,24 @@ function getCacheJobResult() {
   return cacheJobResultOverrideForTests || cacheJobResult
 }
 
-export function __setParseResumeJobTestOverrides({ analyzeResumeWithConfiguredFallback: analyzeOverride = null, cacheJobResult: cacheOverride = null } = {}) {
+function getUpsertScoreCacheEntry() {
+  return upsertScoreCacheEntryOverrideForTests || upsertScoreCacheEntry
+}
+
+export function __setParseResumeJobTestOverrides({
+  analyzeResumeWithConfiguredFallback: analyzeOverride = null,
+  cacheJobResult: cacheOverride = null,
+  upsertScoreCacheEntry: upsertScoreCacheEntryOverride = null,
+} = {}) {
   analyzeResumeWithConfiguredFallbackOverrideForTests = analyzeOverride
   cacheJobResultOverrideForTests = cacheOverride
+  upsertScoreCacheEntryOverrideForTests = upsertScoreCacheEntryOverride
 }
 
 export function __resetParseResumeJobTestOverrides() {
   analyzeResumeWithConfiguredFallbackOverrideForTests = null
   cacheJobResultOverrideForTests = null
+  upsertScoreCacheEntryOverrideForTests = null
 }
 
 export function isTerminalJobFailure(job) {
@@ -115,6 +135,90 @@ function getProviderFromAttempt(attempt) {
     || normalizeString(attempt?.providerLabel)
 
   return normalizeProviderName(rawProvider) ? rawProvider : null
+}
+
+function buildSafeJobDescriptionFingerprintSource(jobDescriptionContext = null) {
+  if (!jobDescriptionContext?.hasContext) return null
+
+  return {
+    source: jobDescriptionContext.source || null,
+    title: jobDescriptionContext.title || null,
+    description: jobDescriptionContext.description || null,
+    requirements: jobDescriptionContext.requirements || null,
+    skills: Array.isArray(jobDescriptionContext.skills) ? jobDescriptionContext.skills : [],
+    experienceYears: jobDescriptionContext.experienceYears ?? null,
+    location: jobDescriptionContext.location || null,
+    fileText: jobDescriptionContext.fileTextAvailable ? (jobDescriptionContext.fileText || null) : null,
+  }
+}
+
+function resolveScoreCacheResumeFingerprint(preparedResumePayload = {}) {
+  const diagnosticFingerprint = preparedResumePayload.diagnostics?.normalizedTextFingerprint
+  if (diagnosticFingerprint) return diagnosticFingerprint
+
+  return buildScoreCacheResumeFingerprint({ extractedText: preparedResumePayload.extractedText })
+}
+
+export async function writeAiScoreCacheShadow({
+  candidate,
+  preparedResumePayload,
+  jobDescriptionContext,
+  userId,
+  analysisId,
+  aiResponse,
+  logger = console,
+  env = process.env,
+} = {}) {
+  const resumeFingerprint = resolveScoreCacheResumeFingerprint(preparedResumePayload)
+  const jobDescriptionFingerprint = buildScoreCacheJobDescriptionFingerprint({
+    jobDescription: buildSafeJobDescriptionFingerprintSource(jobDescriptionContext),
+    allowNoJobDescription: true,
+  })
+  const metadata = {
+    resumeFingerprint,
+    jobDescriptionFingerprint,
+    provider: aiResponse?.provider || null,
+    model: aiResponse?.model || null,
+    promptVersion: aiResponse?.promptVersion || null,
+    compactMode: aiResponse?.mode || null,
+    scoringContractVersion: candidate?.scoring_contract_version || SCORE_CACHE_SCORING_CONTRACT_VERSION,
+    userId,
+    analysisId,
+  }
+  const diagnostic = buildScoreCacheEligibilityDiagnostic(metadata, env)
+
+  if (!diagnostic.eligible) {
+    logger.info?.('[AiScoreCache] write-only shadow diagnostic', { ...diagnostic, action: 'skip' })
+    return { stored: false, diagnostic }
+  }
+
+  const cacheKeyResult = buildScoreCacheKey(metadata)
+  const cacheValue = buildScoreCacheValue(candidate, metadata)
+  const storagePayload = buildSafeScoreCacheStoragePayload(cacheKeyResult, cacheValue, {
+    schema_version: 1,
+    source: 'parse_resume_job_write_only_shadow',
+    cache_key_version: diagnostic.cache_key_version,
+    scoring_contract_version: diagnostic.scoring_contract_version,
+  })
+
+  if (!storagePayload.valid) {
+    const invalidDiagnostic = { ...diagnostic, action: 'skip', missing_storage_fields: storagePayload.missingFields }
+    logger.info?.('[AiScoreCache] write-only shadow diagnostic', invalidDiagnostic)
+    return { stored: false, diagnostic: invalidDiagnostic }
+  }
+
+  try {
+    await getUpsertScoreCacheEntry()(storagePayload.payload)
+    logger.info?.('[AiScoreCache] write-only shadow diagnostic', { ...diagnostic, action: 'stored' })
+    return { stored: true, diagnostic }
+  } catch (error) {
+    logger.warn?.('[AiScoreCache] write-only shadow diagnostic', {
+      ...diagnostic,
+      action: 'write_failed_open',
+      error: error?.message || 'unknown_error',
+    })
+    return { stored: false, diagnostic, error }
+  }
 }
 
 function normalizeString(value) {
@@ -782,7 +886,7 @@ export async function runParse(job) {
 
   let analysisResult
   let parseMethod = 'anthropic-primary'
-  let scoreContractShadowMetadata = { provider: null, model: null, promptVersion: null }
+  let scoreContractShadowMetadata = { provider: null, model: null, promptVersion: null, mode: null }
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
@@ -832,6 +936,7 @@ export async function runParse(job) {
       provider: aiResponse?.provider || analysisResult?.provider || null,
       model: aiResponse?.model || analysisResult?.model || null,
       promptVersion: aiResponse?.promptVersion || analysisResult?.promptVersion || analysisResult?.prompt_version || null,
+      mode: aiResponse?.mode || analysisResult?.mode || null,
     }
   } catch (aiError) {
     await persistAiFailureTokenUsage({
@@ -852,14 +957,23 @@ export async function runParse(job) {
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
   const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
-  normalizedCandidates.forEach((candidate) => {
+  for (const candidate of normalizedCandidates) {
     emitScoreContractShadowDiagnostic(candidate, {
       userId: job.data.userId ?? null,
       analysisId: analysisId || null,
       resumeId,
       ...scoreContractShadowMetadata,
     })
-  })
+    await writeAiScoreCacheShadow({
+      candidate,
+      preparedResumePayload,
+      jobDescriptionContext,
+      userId: job.data.userId ?? null,
+      analysisId: analysisId || null,
+      aiResponse: scoreContractShadowMetadata,
+      logger: console,
+    })
+  }
 
   const parseResult = {
     filename: analysisFilename,
@@ -1063,4 +1177,5 @@ export const __testables = {
   persistAiFailureTokenUsage,
   persistAiSuccessTokenUsage,
   handleParseJobFailure,
+  writeAiScoreCacheShadow,
 }
