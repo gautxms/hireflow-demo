@@ -180,6 +180,29 @@ test('Vikram-like DOC/PDF/DOCX payloads keep experience capped and final scores 
   assert.ok(Math.max(doc.final_score, pdf.final_score, docx.final_score) - Math.min(doc.final_score, pdf.final_score, docx.final_score) <= 5)
 })
 
+
+test('skill-specific duration in summary does not override total experience', () => {
+  const input = candidate()
+  input.years_experience = 6
+  input.summary = '6 years total engineering experience, including 1 year with Kubernetes'
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 4 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  assert.equal(result.scoring_breakdown.experience_alignment.safer_candidate_years, 6)
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
+test('skill-specific duration in missingSkills does not trigger total-experience cap', () => {
+  const input = candidate()
+  input.years_experience = 6
+  input.missingSkills = ['Kubernetes: 1 year only']
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 4 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  assert.equal(result.scoring_breakdown.experience_alignment.safer_candidate_years, 6)
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
 test('candidate years_experience of 2 is capped when text says 1.6 years', () => {
   const input = candidate()
   input.years_experience = 2

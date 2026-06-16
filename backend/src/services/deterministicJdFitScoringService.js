@@ -183,9 +183,32 @@ const BELOW_MIN_EXPERIENCE_PATTERNS = Object.freeze([
   /\bless\s+than\s+(?:the\s+)?(?:minimum|required|target)\b/i,
 ])
 
-const explicitExperienceYearsFromText = (text) => {
-  const matches = [...String(text ?? '').matchAll(/\b(\d+(?:\.\d+)?)\s*(?:\+\s*)?(?:years?|yrs?)\b/gi)]
-  const values = matches.map((match) => Number(match[1])).filter(Number.isFinite)
+const TOTAL_EXPERIENCE_CONTEXT_PATTERN = /\b(?:total|overall|professional|relevant|engineering|software|work)\s+(?:\w+\s+){0,3}experience\b|\bexperience\s*(?::|-)?\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)\b/i
+const BELOW_MINIMUM_CONTEXT_PATTERN = /\b(?:below|minimum|required|target|gap|junior|early\s+career)\b/i
+const SKILL_DURATION_CONTEXT_PATTERN = /\b(?:including|with|in|using|on|for|of)\s+[a-z0-9.+#-]+\b/i
+
+const reliableTotalExperienceYearsFromText = (text) => {
+  const source = String(text ?? '')
+  const matches = [...source.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:\+\s*)?(?:years?|yrs?)\b/gi)]
+  const values = []
+
+  for (const match of matches) {
+    const value = Number(match[1])
+    if (!Number.isFinite(value)) continue
+
+    const index = match.index ?? 0
+    const before = source.slice(Math.max(0, index - 45), index)
+    const after = source.slice(index + match[0].length, Math.min(source.length, index + match[0].length + 45))
+    const near = `${before} ${match[0]} ${after}`
+    const afterNumber = source.slice(index + match[0].length, Math.min(source.length, index + match[0].length + 24))
+    const beforeNumber = source.slice(Math.max(0, index - 24), index)
+    const skillSpecific = SKILL_DURATION_CONTEXT_PATTERN.test(`${beforeNumber} ${afterNumber}`) && !/\bexperience\b/i.test(afterNumber)
+    const totalExperience = TOTAL_EXPERIENCE_CONTEXT_PATTERN.test(near) || /\bhas\s*$/i.test(beforeNumber) || /^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+)?experience\b/i.test(afterNumber)
+    const belowMinimumContext = BELOW_MINIMUM_CONTEXT_PATTERN.test(near)
+
+    if (!skillSpecific && (totalExperience || belowMinimumContext)) values.push(value)
+  }
+
   return values.length > 0 ? Math.min(...values) : null
 }
 
@@ -195,7 +218,7 @@ const belowMinimumExperienceEvidence = (candidate, fitAssessment, requiredMin) =
   let saferYears = null
   let signalCount = 0
   for (const text of candidateExperienceEvidenceTexts(candidate, fitAssessment)) {
-    const explicitYears = explicitExperienceYearsFromText(text)
+    const explicitYears = reliableTotalExperienceYearsFromText(text)
     const normalized = String(text ?? '')
     const hasBelowSignal = BELOW_MIN_EXPERIENCE_PATTERNS.some((pattern) => pattern.test(normalized))
     const hasBelowRequiredRange = new RegExp(`\\bbelow\\s+${requiredMin}(?:\\.0+)?\\s*(?:-|to|–|—)\\s*\\d+(?:\\.\\d+)?\\s*years?\\b`, 'i').test(normalized)
