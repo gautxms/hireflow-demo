@@ -81,6 +81,18 @@ function buildContentFingerprint(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16)
 }
 
+function extractJsonParseErrorPosition(parseError) {
+  const message = String(parseError?.message || '')
+  const match = message.match(/position\s+(\d+)/i)
+    || message.match(/line\s+(\d+)\s+column\s+(\d+)/i)
+  if (!match) return null
+
+  if (match.length >= 3) {
+    return { line: Number(match[1]), column: Number(match[2]) }
+  }
+  return { position: Number(match[1]) }
+}
+
 function buildSafeParseDiagnostics(rawResponse, {
   provider = null,
   model = null,
@@ -93,15 +105,19 @@ function buildSafeParseDiagnostics(rawResponse, {
   analysisId = null,
   resumeId = null,
 } = {}) {
-  const message = sanitizeSnippet(parseError?.message || 'invalid_json', 160)
+  const parseErrorType = parseError?.name || 'SyntaxError'
+  const parseErrorCode = 'invalid_json'
+  const responseCharCount = String(rawResponse || '').length
   return {
     provider,
     model,
     prompt_version: promptVersion ?? null,
-    response_char_count: String(rawResponse || '').length,
-    parse_error_type: parseError?.name || 'SyntaxError',
-    parse_error_message: message,
-    error_fingerprint: buildContentFingerprint(`${provider || 'unknown'}:${model || 'unknown'}:${parseError?.name || 'Error'}:${message}:${String(rawResponse || '').length}`),
+    response_char_count: responseCharCount,
+    parse_error_type: parseErrorType,
+    parse_error_code: parseErrorCode,
+    parse_error_message: parseErrorCode,
+    parse_error_position: extractJsonParseErrorPosition(parseError),
+    error_fingerprint: buildContentFingerprint(`${provider || 'unknown'}:${model || 'unknown'}:${parseErrorType}:${parseErrorCode}:${responseCharCount}`),
     completion_status: completionStatus || null,
     stop_reason: stopReason || null,
     max_output_tokens: maxOutputTokens ?? null,
@@ -1188,7 +1204,7 @@ ${requestPrompt}`,
       const parseFailed = String(error?.message || '').includes('response_format_error::')
       if (!parseFailed) throw error
       const truncated = isLikelyTruncatedResponse(textContent.text, { stopReason: response?.stop_reason })
-      if ((truncated || parseFailed) && index < tokenLadder.length - 1) {
+      if (truncated && index < tokenLadder.length - 1) {
         continue
       }
       if (truncated) {

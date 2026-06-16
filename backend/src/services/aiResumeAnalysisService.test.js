@@ -357,6 +357,8 @@ test('extractJsonWithContext logs safe parse diagnostics without raw response or
   assert.equal(diagnostics.prompt_version, 7)
   assert.equal(diagnostics.response_char_count, rawResponse.length)
   assert.equal(diagnostics.parse_error_type, 'SyntaxError')
+  assert.equal(diagnostics.parse_error_code, 'invalid_json')
+  assert.equal(diagnostics.parse_error_message, 'invalid_json')
   assert.equal(diagnostics.completion_status, 'end_turn')
   assert.equal(diagnostics.max_output_tokens, 2200)
   assert.match(diagnostics.error_fingerprint, /^[a-f0-9]{16}$/)
@@ -373,6 +375,8 @@ test('extractJsonWithContext logs safe parse diagnostics without raw response or
     'Do not log matched raw requirement',
     'Do not log missing raw requirement',
     'Do not log rationale text',
+    'Expected double-quoted property name',
+    'Unexpected token',
   ]) {
     assert.equal(serialized.includes(forbidden), false, `expected logs not to include ${forbidden}`)
   }
@@ -499,13 +503,17 @@ test('analyzeWithOpenAI surfaces truncated error when all max_output_tokens retr
 })
 
 test('analyzeWithAnthropic categorizes truncated output failures', async () => {
+  let callCount = 0
   const anthropicClientFactory = () => ({
     messages: {
-      create: async () => ({
-        stop_reason: 'max_tokens',
-        usage: { input_tokens: 1, output_tokens: 1 },
-        content: [{ type: 'text', text: '{"candidates":[' }],
-      }),
+      create: async () => {
+        callCount += 1
+        return {
+          stop_reason: 'max_tokens',
+          usage: { input_tokens: 1, output_tokens: 1 },
+          content: [{ type: 'text', text: '{"candidates":[' }],
+        }
+      },
     },
   })
 
@@ -518,39 +526,36 @@ test('analyzeWithAnthropic categorizes truncated output failures', async () => {
     }),
     /response_truncated_error::/,
   )
+
+  assert.equal(callCount, 3)
 })
 
-test('analyzeWithAnthropic performs one JSON repair retry on parse failure', async () => {
+test('analyzeWithAnthropic does not advance token ladder for malformed non-truncated JSON', async () => {
   let callCount = 0
   const anthropicClientFactory = () => ({
     messages: {
       create: async () => {
         callCount += 1
-        if (callCount === 1) {
-          return {
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 1, output_tokens: 1 },
-            content: [{ type: 'text', text: '```json\n{"candidates":[{"id":"cand-r"}],}\n```' }],
-          }
-        }
         return {
           stop_reason: 'end_turn',
           usage: { input_tokens: 1, output_tokens: 1 },
-          content: [{ type: 'text', text: '{"candidates":[{"id":"cand-r"}]}' }],
+          content: [{ type: 'text', text: '```json\n{"candidates":[{"id":"cand-r"}],}\n```' }],
         }
       },
     },
   })
 
-  const response = await analyzeWithAnthropic('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
-    apiKey: 'anth-key',
-    model: 'claude-sonnet-4',
-    systemPromptConfig: { systemPrompt: 'Base prompt' },
-    anthropicClientFactory,
-  })
+  await assert.rejects(
+    () => analyzeWithAnthropic('ZmFrZQ==', 'application/pdf', 'resume.pdf', {
+      apiKey: 'anth-key',
+      model: 'claude-sonnet-4',
+      systemPromptConfig: { systemPrompt: 'Base prompt' },
+      anthropicClientFactory,
+    }),
+    /response_format_error::/,
+  )
 
-  assert.equal(callCount, 2)
-  assert.equal(response.result.candidates[0].id, 'cand-r')
+  assert.equal(callCount, 1)
 })
 
 test('analyzeResumeWithConfiguredFallback records failure categories for failover attempts', async () => {
