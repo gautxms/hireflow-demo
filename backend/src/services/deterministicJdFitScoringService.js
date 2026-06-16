@@ -23,7 +23,16 @@ const normalizeEvidenceText = (value) => String(value ?? '')
   .replace(/\s+/g, ' ')
   .trim()
 
-const normalizeEvidenceConceptText = (value) => normalizeEvidenceText(value)
+const withSemanticLanguageTokens = (value) => normalizeEvidenceText(value)
+  .replace(/(^|[^a-z0-9])c\s*\+\s*\+([^a-z0-9]|$)/g, ' cpp ')
+  .replace(/(^|[^a-z0-9])c\s*#([^a-z0-9]|$)/g, ' csharp ')
+  .replace(/(^|[^a-z0-9])f\s*#([^a-z0-9]|$)/g, ' fsharp ')
+  .replace(/\b\.\s*net\b|\bdot\s+net\b/g, ' dotnet ')
+  .replace(/\bnode\s*\.\s*js\b|\bnodejs\b/g, ' nodejs ')
+  .replace(/\bvue\s*\.\s*js\b|\bvuejs\b/g, ' vuejs ')
+  .replace(/\bnext\s*\.\s*js\b|\bnextjs\b/g, ' nextjs ')
+
+const normalizeEvidenceConceptText = (value) => withSemanticLanguageTokens(value)
   .replace(/[.+#-]/g, ' ')
   .replace(/\b(?:with|and|or|the|a|an|for|to|of|in|on|at|required|requirement|requirements|skill|skills|evidence|candidate|has|have|having|no|not|without|missing|minimum|target|strong|good|solid|basic|basics|exposure|ownership|knowledge|hands|on)\b/g, ' ')
   .replace(/\s+/g, ' ')
@@ -37,7 +46,24 @@ const canonicalEvidenceText = (value) => normalizeEvidenceConceptText(value)
 
 const uniqueNormalized = (values) => [...new Set(asArray(values).map(canonicalEvidenceText).filter(Boolean))]
 
+const safeOpaqueBucketKey = (value) => {
+  const source = String(value ?? '')
+  let hash = 2166136261
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `other_${(hash >>> 0).toString(16).padStart(8, '0')}`
+}
+
 const REQUIREMENT_CONCEPT_BUCKETS = Object.freeze([
+  ['language_cpp', /\bcpp\b|(^|[^a-z0-9])c\s*\+\s*\+([^a-z0-9]|$)/i],
+  ['language_csharp', /\bcsharp\b|(^|[^a-z0-9])c\s*#([^a-z0-9]|$)/i],
+  ['language_c', /\bc\b/i],
+  ['language_fsharp', /\bfsharp\b|(^|[^a-z0-9])f\s*#([^a-z0-9]|$)/i],
+  ['dotnet', /\bdotnet\b|\b\.\s*net\b|\bdot\s+net\b/i],
+  ['typescript_javascript_node', /\b(?:typescript|javascript|node\s*js|nodejs|node)\b/i],
+  ['frontend_js_framework', /\b(?:vue\s*js|vuejs|vue|next\s*js|nextjs)\b/i],
   ['experience_years', /\b(?:\d+(?:\.\d+)?\s*(?:\+\s*)?(?:years?|yrs?)|professional\s+experience|work\s+experience|relevant\s+experience|production\s+experience|early\s+career|junior\s+profile|experience\s+gap)\b/i],
   ['cloud_platforms', /\b(?:cloud|aws|azure|gcp|google\s+cloud|kubernetes|k8s|docker|container|containers|deployment|devops)\b/i],
   ['testing_ci', /\b(?:test|testing|unit\s+test|integration\s+test|automation|qa|quality\s+assurance|ci\s*cd|cicd|pipeline|pipelines)\b/i],
@@ -45,18 +71,17 @@ const REQUIREMENT_CONCEPT_BUCKETS = Object.freeze([
   ['async_background', /\b(?:async|asynchronous|queue|queues|background\s+jobs?|workers?|caching|cache|redis|messaging|event\s+driven)\b/i],
   ['auth_security', /\b(?:auth|authentication|authorization|rbac|oauth|jwt|secure\s+api|security|permissions?)\b/i],
   ['backend_framework', /\b(?:backend\s+framework|flask|express|django|fastapi|nestjs?|nest\s+js|spring\s+boot|rails|laravel)\b/i],
-  ['typescript_javascript_node', /\b(?:typescript|javascript|node\s*js|nodejs|node)\b/i],
   ['backend_api', /\b(?:backend|api|apis|rest|graphql|services?|server\s+side)\b/i],
   ['database_sql', /\b(?:sql|postgres|postgresql|mysql|database|databases|mongodb|mongo|nosql)\b/i],
 ])
 
 const requirementConceptKey = (value) => {
-  const normalized = normalizeEvidenceText(value)
+  const normalized = withSemanticLanguageTokens(value)
   if (!normalized) return ''
   for (const [bucket, pattern] of REQUIREMENT_CONCEPT_BUCKETS) {
     if (pattern.test(normalized)) return bucket
   }
-  return canonicalEvidenceText(normalized)
+  return safeOpaqueBucketKey(canonicalEvidenceText(normalized))
 }
 
 const WEAK_EVIDENCE_PATTERN = /\b(?:basic|basics|beginner|exposure|familiar|familiarity|manual|internal\s+tools?|toy|demo|academic)\b/i

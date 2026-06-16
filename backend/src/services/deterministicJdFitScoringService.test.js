@@ -643,3 +643,49 @@ test('true duplicate matched and missing wording still dedupes within the same b
   assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 0)
   assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 1)
 })
+
+test('unknown custom requirement evidence emits only deterministic debug-safe bucket IDs', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Acme Phoenix migration for ClientZephyr']
+  input.fit_assessment.missing_requirements = ['Proprietary Nebula workflow ownership']
+  const first = scoreCandidateDeterministically(input, sdeJdContext())
+  const second = scoreCandidateDeterministically(structuredClone(input), sdeJdContext())
+  const keys = Object.keys(first.scoring_breakdown.requirement_match.requirement_bucket_scores)
+
+  assert.deepEqual(keys, Object.keys(second.scoring_breakdown.requirement_match.requirement_bucket_scores))
+  assert.ok(keys.length > 0)
+  for (const key of keys) {
+    assert.match(key, /^other_[0-9a-f]{8}$/)
+    assert.equal(/acme|phoenix|clientzephyr|nebula|workflow|ownership|proprietary/.test(key), false)
+  }
+  assert.equal(JSON.stringify(first.scoring_breakdown.requirement_match).includes('Acme'), false)
+  assert.equal(JSON.stringify(first.scoring_breakdown.requirement_match).includes('phoenix'), false)
+})
+
+test('matched C# does not cancel missing C++', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['C# production experience']
+  input.fit_assessment.missing_requirements = ['C++ production experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_csharp, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_cpp, 0)
+})
+
+test('matched C does not cancel missing C#', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['C programming']
+  input.fit_assessment.missing_requirements = ['C# production experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_c, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_csharp, 0)
+})
+
+test('Node.js and NodeJS normalize into the same concept bucket', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Node.js production backend']
+  input.fit_assessment.missing_requirements = ['NodeJS production backend']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 0)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.typescript_javascript_node, 1)
+})
