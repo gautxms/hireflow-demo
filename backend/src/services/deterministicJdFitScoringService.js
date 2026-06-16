@@ -72,8 +72,19 @@ const requirementBreakdown = (fitAssessment) => {
   const matched = asArray(fitAssessment?.matched_requirements).length
   const missing = asArray(fitAssessment?.missing_requirements).length
   const total = matched + missing
-  const score = total > 0 ? (matched / total) * 100 : 35
+  const score = total > 0 ? smoothEvidenceRatioScore(matched, missing) : 35
   return { score: roundScore(score), weight: WEIGHTS.requirement_match, matched_count: matched, missing_count: missing, total_count: total }
+}
+
+const smoothEvidenceRatioScore = (matched, missing) => {
+  const total = matched + missing
+  if (total <= 0) return 35
+
+  const rawScore = (matched / total) * 100
+  const dampenedScore = 50 + ((rawScore - 50) * Math.min(1, total / 8))
+
+  if (matched >= 2 && missing >= 2) return clamp(dampenedScore, 40, 60)
+  return dampenedScore
 }
 
 const skillBreakdown = (candidate) => {
@@ -85,7 +96,7 @@ const skillBreakdown = (candidate) => {
   ]).length
   const totalCompared = matched + missing
   let score = 35
-  if (totalCompared > 0) score = (matched / totalCompared) * 100
+  if (totalCompared > 0) score = smoothEvidenceRatioScore(matched, missing)
   else if (candidateSkillCount > 0) score = 55
   return {
     score: roundScore(score),
