@@ -123,24 +123,71 @@ const requiredYears = (context) => {
   return { min, max }
 }
 
-const experienceBreakdown = (candidate, context) => {
+const ROLE_GAP_PATTERNS = Object.freeze([
+  /\bnot\s+sde\b/i,
+  /\bqa\b|quality assurance/i,
+  /production feature/i,
+  /production software development/i,
+  /backend ownership/i,
+  /service ownership/i,
+  /system design/i,
+  /architecture/i,
+  /\bcloud\b/i,
+  /deployment/i,
+  /data structures/i,
+  /algorithms/i,
+])
+
+const roleGapSignalCount = (fitAssessment) => {
+  const signals = [
+    ...asArray(fitAssessment?.missing_requirements),
+    ...asArray(fitAssessment?.risks_or_gaps),
+  ]
+  return signals.reduce((count, signal) => {
+    const text = String(signal ?? '')
+    return count + (ROLE_GAP_PATTERNS.some((pattern) => pattern.test(text)) ? 1 : 0)
+  }, 0)
+}
+
+const experienceRelevanceCap = ({ requirement, skill, roleGapCount }) => {
+  const weakRequirementEvidence = requirement.missing_count >= requirement.matched_count && requirement.missing_count >= 2
+  const weakSkillEvidence = skill.missing_count >= skill.matched_count && skill.missing_count >= 2
+  const weakScoreEvidence = requirement.score < 55 || skill.score < 55
+
+  if (roleGapCount >= 4 && (weakRequirementEvidence || weakSkillEvidence || weakScoreEvidence)) return 55
+  if (roleGapCount >= 2 && (weakRequirementEvidence || weakSkillEvidence) && weakScoreEvidence) return 65
+  if (roleGapCount >= 1 && requirement.score < 40 && skill.score < 40) return 75
+  return null
+}
+
+const experienceBreakdown = (candidate, context, fitAssessment, requirement, skill) => {
   const candidateYears = firstNumber(candidate?.years_experience, candidate?.yearsExperience)
   const required = requiredYears(context)
+  const roleGapCount = roleGapSignalCount(fitAssessment)
   let score = 55
+  let cap = null
   if (candidateYears === null) score = 35
   else if (required.min === null && required.max === null) score = 60
   else if (required.min !== null && candidateYears < required.min) score = Math.max(20, (candidateYears / Math.max(required.min, 1)) * 70)
-  else score = 100
+  else {
+    score = 100
+    cap = experienceRelevanceCap({ requirement, skill, roleGapCount })
+    if (cap !== null) score = Math.min(score, cap)
+  }
   return {
     score: roundScore(score),
     weight: WEIGHTS.experience_alignment,
     candidate_years: candidateYears,
     required_min_years: required.min,
     required_max_years: required.max,
+    experience_relevance_cap_applied: cap !== null,
+    role_gap_signal_count: roleGapCount,
   }
 }
 
-const normalizeLocation = (value) => String(value ?? '').trim().toLowerCase()
+const normalizeLocation = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+const hasExplicitRemote = (value) => /\bremote\b/.test(value)
+const hasFlexibleLocation = (value) => /\bremote\b|\bhybrid\b/.test(value)
 const locationBreakdown = (candidate, context) => {
   const candidateLocation = normalizeLocation(candidate?.location)
   const jdLocation = normalizeLocation(context?.location)
@@ -148,10 +195,12 @@ const locationBreakdown = (candidate, context) => {
   const jdAvailable = jdLocation.length > 0
   let score = 50
   if (candidateAvailable && jdAvailable) {
-    const candidateRemote = /remote|hybrid/.test(candidateLocation)
-    const jdRemote = /remote|hybrid/.test(jdLocation)
+    const candidateRemote = hasExplicitRemote(candidateLocation)
+    const jdFlexible = hasFlexibleLocation(jdLocation)
     if (candidateLocation.includes(jdLocation) || jdLocation.includes(candidateLocation)) score = 95
-    else if (candidateRemote || jdRemote) score = 65
+    else if (candidateRemote && jdFlexible) score = 80
+    else if (jdFlexible) score = 40
+    else if (candidateRemote) score = 35
     else score = 25
   }
   return { score, weight: WEIGHTS.location_alignment, candidate_location_available: candidateAvailable, jd_location_available: jdAvailable }
@@ -230,10 +279,12 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     }
   }
 
+  const requirement = requirementBreakdown(fitAssessment)
+  const skill = skillBreakdown(safeCandidate)
   const breakdown = {
-    requirement_match: requirementBreakdown(fitAssessment),
-    skill_alignment: skillBreakdown(safeCandidate),
-    experience_alignment: experienceBreakdown(safeCandidate, jobDescriptionContext),
+    requirement_match: requirement,
+    skill_alignment: skill,
+    experience_alignment: experienceBreakdown(safeCandidate, jobDescriptionContext, fitAssessment, requirement, skill),
     location_alignment: locationBreakdown(safeCandidate, jobDescriptionContext),
     evidence_completeness: evidenceBreakdown(safeCandidate, jobDescriptionContext, fitAssessment),
     profile_prior: profilePriorBreakdown(safeCandidate),
