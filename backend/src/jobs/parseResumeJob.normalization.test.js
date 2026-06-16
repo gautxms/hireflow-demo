@@ -1492,8 +1492,10 @@ test('deterministic JD-fit shadow logs skip and does not score without allowlist
     assert.equal(calls, 0)
     assert.equal(logs.length, 1)
     assert.equal(logs[0][0], '[DeterministicJdFit] shadow diagnostic')
-    assert.equal(logs[0][1].action, 'skip')
-    assert.equal(logs[0][1].allowlist_matched, false)
+    assert.equal(typeof logs[0][1], 'string')
+    const diagnostic = JSON.parse(logs[0][1])
+    assert.equal(diagnostic.action, 'skip')
+    assert.equal(diagnostic.allowlist_matched, false)
   } finally {
     restoreEnv()
     __resetParseResumeJobTestOverrides()
@@ -1540,6 +1542,8 @@ test('deterministic JD-fit shadow computes safe diagnostic without mutating cand
       userId: 24,
       analysisId: 'analysis-1',
       resumeId: 'resume-1',
+      provider: 'openai-primary',
+      model: 'gpt-test',
       logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
     })
 
@@ -1550,16 +1554,21 @@ test('deterministic JD-fit shadow computes safe diagnostic without mutating cand
     assert.equal(candidate.matchScore.score, 82)
     assert.equal(candidate.fit_assessment.overall_fit_score, 82)
     assert.equal(logs[0][0], '[DeterministicJdFit] shadow diagnostic')
-    assert.deepEqual(Object.keys(logs[0][1]).sort(), [
+    assert.equal(typeof logs[0][1], 'string')
+    const diagnostic = JSON.parse(logs[0][1])
+    assert.deepEqual(Object.keys(diagnostic).sort(), [
       'action', 'allowlist_matched', 'analysis_id', 'confidence_multiplier', 'current_ai_score',
-      'deterministic_final_score', 'evidence_score', 'experience_score', 'has_jd_context',
-      'location_score', 'requirement_score', 'resume_id', 'risk_penalty', 'score_band', 'score_delta',
-      'scoring_contract_version', 'scoring_mode', 'skill_score', 'user_id', 'verdict',
+      'deterministic_final_score', 'evidence_score', 'experience_relevance_cap_applied', 'experience_score',
+      'has_jd_context', 'location_score', 'model', 'provider', 'requirement_score', 'resume_id',
+      'risk_penalty', 'role_gap_signal_count', 'score_band', 'score_delta', 'scoring_contract_version',
+      'scoring_mode', 'skill_score', 'user_id', 'verdict',
     ].sort())
-    assert.equal(logs[0][1].action, 'computed')
-    assert.equal(logs[0][1].deterministic_final_score, 74.5)
-    assert.equal(logs[0][1].current_ai_score, 82)
-    assert.equal(logs[0][1].score_delta, -7.5)
+    assert.equal(diagnostic.action, 'computed')
+    assert.equal(diagnostic.provider, 'openai-primary')
+    assert.equal(diagnostic.model, 'gpt-test')
+    assert.equal(diagnostic.deterministic_final_score, 74.5)
+    assert.equal(diagnostic.current_ai_score, 82)
+    assert.equal(diagnostic.score_delta, -7.5)
     const serializedLog = JSON.stringify(logs)
     for (const forbidden of ['Private Candidate', 'private@example.com', '555-0101', 'Do not log raw JD', 'Do not log rationale text', 'Do not log matched raw requirement', 'Do not log recommendation text']) {
       assert.equal(serializedLog.includes(forbidden), false)
@@ -1596,7 +1605,8 @@ test('deterministic JD-fit shadow failure logs failed_open and does not fail par
     assert.equal(result.diagnostic.action, 'failed_open')
     assert.deepEqual(candidate, before)
     assert.equal(logs[0][0], '[DeterministicJdFit] shadow diagnostic')
-    assert.equal(logs[0][1].action, 'failed_open')
+    assert.equal(typeof logs[0][1], 'string')
+    assert.equal(JSON.parse(logs[0][1]).action, 'failed_open')
     assert.equal(JSON.stringify(logs).includes('private@example.com'), false)
     assert.equal(JSON.stringify(logs).includes('raw text'), false)
   } finally {

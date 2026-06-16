@@ -80,6 +80,48 @@ test('requirement ratio works', () => {
   assert.ok(scoreCandidateDeterministically(high, jdContext()).final_score > scoreCandidateDeterministically(low, jdContext()).final_score)
 })
 
+test('Vikram-like minor evidence count differences are dampened', () => {
+  const vikramLike = ({
+    matchedRequirementCount,
+    missingRequirementCount,
+    matchedSkillCount,
+    missingSkillCount,
+  }) => ({
+    fit_assessment: {
+      matched_requirements: Array.from({ length: matchedRequirementCount }, (_, index) => `matched requirement ${index}`),
+      missing_requirements: Array.from({ length: missingRequirementCount }, (_, index) => `missing requirement ${index}`),
+      risks_or_gaps: ['No cloud ownership evidence', 'No system design evidence'],
+    },
+    matchedSkills: Array.from({ length: matchedSkillCount }, (_, index) => `matched skill ${index}`),
+    missingSkills: Array.from({ length: missingSkillCount }, (_, index) => `missing skill ${index}`),
+    skills_flat: ['Java', 'SQL'],
+    top_skills: ['Backend services'],
+    years_experience: 4,
+    location: 'Remote, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  })
+
+  const docxLike = scoreCandidateDeterministically(vikramLike({
+    matchedRequirementCount: 4,
+    missingRequirementCount: 4,
+    matchedSkillCount: 4,
+    missingSkillCount: 4,
+  }), sdeJdContext())
+  const pdfLike = scoreCandidateDeterministically(vikramLike({
+    matchedRequirementCount: 4,
+    missingRequirementCount: 5,
+    matchedSkillCount: 4,
+    missingSkillCount: 5,
+  }), sdeJdContext())
+
+  assert.ok(docxLike.scoring_breakdown.requirement_match.score >= 45 && docxLike.scoring_breakdown.requirement_match.score <= 50)
+  assert.ok(pdfLike.scoring_breakdown.requirement_match.score >= 44 && pdfLike.scoring_breakdown.requirement_match.score <= 49)
+  assert.ok(docxLike.scoring_breakdown.skill_alignment.score >= 45 && docxLike.scoring_breakdown.skill_alignment.score <= 50)
+  assert.ok(pdfLike.scoring_breakdown.skill_alignment.score >= 44 && pdfLike.scoring_breakdown.skill_alignment.score <= 49)
+  assert.ok(Math.abs(docxLike.final_score - pdfLike.final_score) <= 4)
+})
+
 test('experience score caps when candidate exceeds requirement', () => {
   const input = candidate()
   input.years_experience = 20
@@ -246,6 +288,7 @@ test('candidate with true SDE/backend evidence and enough years keeps high exper
   const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 3 })
   assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
   assert.equal(result.scoring_breakdown.experience_alignment.experience_relevance_cap_applied, false)
+  assert.ok(result.final_score >= 70)
 })
 
 test('Kochi vs Bengaluru/Hyderabad/Pune/Remote Hybrid scores below prior broad remote fallback', () => {

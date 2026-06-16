@@ -215,6 +215,8 @@ function buildSafeDeterministicJdFitShadowDiagnostic({
   resumeId = null,
   jobDescriptionContext = null,
   allowlistMatched = false,
+  provider = null,
+  model = null,
 } = {}) {
   const currentAiScore = resolveCurrentAiScore(candidate)
   const deterministicScore = resolveNumericScore(deterministicResult?.final_score)
@@ -227,6 +229,8 @@ function buildSafeDeterministicJdFitShadowDiagnostic({
     analysis_id: analysisId || null,
     resume_id: resumeId || candidate?.resumeId || null,
     user_id: userId ?? null,
+    provider: provider || null,
+    model: model || null,
     scoring_contract_version: deterministicResult?.scoring_contract_version || null,
     scoring_mode: deterministicResult?.scoring_mode || null,
     deterministic_final_score: deterministicScore,
@@ -243,7 +247,17 @@ function buildSafeDeterministicJdFitShadowDiagnostic({
     confidence_multiplier: resolveNumericScore(breakdown.confidence_adjustment?.multiplier),
     has_jd_context: Boolean(jobDescriptionContext?.hasContext),
     allowlist_matched: Boolean(allowlistMatched),
+    role_gap_signal_count: resolveNumericScore(breakdown.experience_alignment?.role_gap_signal_count),
+    experience_relevance_cap_applied: typeof breakdown.experience_alignment?.experience_relevance_cap_applied === 'boolean'
+      ? breakdown.experience_alignment.experience_relevance_cap_applied
+      : null,
   }
+}
+
+function logDeterministicJdFitShadowDiagnostic(logger, level, diagnostic) {
+  const payload = JSON.stringify(diagnostic)
+  if (level === 'warn') logger.warn?.('[DeterministicJdFit] shadow diagnostic', payload)
+  else logger.info?.('[DeterministicJdFit] shadow diagnostic', payload)
 }
 
 export function emitDeterministicJdFitShadowDiagnostic({
@@ -252,6 +266,8 @@ export function emitDeterministicJdFitShadowDiagnostic({
   userId,
   analysisId,
   resumeId,
+  provider = null,
+  model = null,
   logger = console,
   env = process.env,
 } = {}) {
@@ -260,24 +276,24 @@ export function emitDeterministicJdFitShadowDiagnostic({
   const allowlist = buildDeterministicJdFitShadowAllowlistDiagnostic({ userId, analysisId, env })
   if (!allowlist.allowlist_matched || !jobDescriptionContext?.hasContext) {
     const diagnostic = buildSafeDeterministicJdFitShadowDiagnostic({
-      action: 'skip', candidate, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: allowlist.allowlist_matched,
+      action: 'skip', candidate, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: allowlist.allowlist_matched, provider, model,
     })
-    logger.info?.('[DeterministicJdFit] shadow diagnostic', diagnostic)
+    logDeterministicJdFitShadowDiagnostic(logger, 'info', diagnostic)
     return { computed: false, diagnostic }
   }
 
   try {
     const deterministicResult = getDeterministicJdFitScorer()(candidate, jobDescriptionContext)
     const diagnostic = buildSafeDeterministicJdFitShadowDiagnostic({
-      action: 'computed', candidate, deterministicResult, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true,
+      action: 'computed', candidate, deterministicResult, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true, provider, model,
     })
-    logger.info?.('[DeterministicJdFit] shadow diagnostic', diagnostic)
+    logDeterministicJdFitShadowDiagnostic(logger, 'info', diagnostic)
     return { computed: true, diagnostic, deterministicResult }
   } catch (error) {
     const diagnostic = buildSafeDeterministicJdFitShadowDiagnostic({
-      action: 'failed_open', candidate, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true,
+      action: 'failed_open', candidate, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true, provider, model,
     })
-    logger.warn?.('[DeterministicJdFit] shadow diagnostic', diagnostic)
+    logDeterministicJdFitShadowDiagnostic(logger, 'warn', diagnostic)
     return { computed: false, diagnostic, error }
   }
 }
@@ -1257,6 +1273,8 @@ export async function runParse(job) {
       userId: job.data.userId ?? null,
       analysisId: analysisId || null,
       resumeId,
+      provider: scoreContractShadowMetadata.provider,
+      model: scoreContractShadowMetadata.model,
       logger: console,
     })
     await readAiScoreCacheShadowDiagnostic({
