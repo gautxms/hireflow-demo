@@ -305,6 +305,79 @@ test('extractJsonWithContext keeps strict failure for invalid json body', () => 
 })
 
 
+
+test('extractJsonWithContext logs safe parse diagnostics without raw response or PII', (t) => {
+  const originalWarn = console.warn
+  const originalEnv = process.env.AI_RAW_RESPONSE_DEBUG_LOGS
+  const logs = []
+  process.env.AI_RAW_RESPONSE_DEBUG_LOGS = 'false'
+  console.warn = (...args) => logs.push(args)
+  t.after(() => {
+    console.warn = originalWarn
+    if (originalEnv === undefined) delete process.env.AI_RAW_RESPONSE_DEBUG_LOGS
+    else process.env.AI_RAW_RESPONSE_DEBUG_LOGS = originalEnv
+  })
+
+  const rawResponse = JSON.stringify({
+    candidates: [{
+      name: 'Private Candidate',
+      email: 'private.candidate@example.com',
+      phone: '555-010-9999',
+      summary: 'Secret resume text about payroll modernization',
+      recommendation: 'Do not log recommendation text',
+      fit_assessment: {
+        matched_requirements: ['Do not log matched raw requirement'],
+        missing_requirements: ['Do not log missing raw requirement'],
+        rationale: 'Do not log rationale text',
+      },
+    }],
+    jd: 'Do not log raw JD text',
+  }).replace(/}$/, ',}')
+
+  assert.throws(
+    () => extractJsonWithContext(rawResponse, {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4',
+      promptVersion: 7,
+      maxOutputTokens: 2200,
+      completionStatus: 'end_turn',
+      stopReason: 'end_turn',
+      retryMetadata: { attempt: 1, fallback: false },
+      analysisId: 'analysis-safe-id',
+      resumeId: 'resume-safe-id',
+    }),
+    /response_format_error::/,
+  )
+
+  assert.equal(logs.length, 1)
+  assert.equal(logs[0][0], '[AI Parse] Provider JSON parse failed:')
+  const diagnostics = logs[0][1]
+  assert.equal(diagnostics.provider, 'anthropic')
+  assert.equal(diagnostics.model, 'claude-sonnet-4')
+  assert.equal(diagnostics.prompt_version, 7)
+  assert.equal(diagnostics.response_char_count, rawResponse.length)
+  assert.equal(diagnostics.parse_error_type, 'SyntaxError')
+  assert.equal(diagnostics.completion_status, 'end_turn')
+  assert.equal(diagnostics.max_output_tokens, 2200)
+  assert.match(diagnostics.error_fingerprint, /^[a-f0-9]{16}$/)
+
+  const serialized = JSON.stringify(logs)
+  for (const forbidden of [
+    rawResponse,
+    'Private Candidate',
+    'private.candidate@example.com',
+    '555-010-9999',
+    'Secret resume text',
+    'Do not log raw JD text',
+    'Do not log recommendation text',
+    'Do not log matched raw requirement',
+    'Do not log missing raw requirement',
+    'Do not log rationale text',
+  ]) {
+    assert.equal(serialized.includes(forbidden), false, `expected logs not to include ${forbidden}`)
+  }
+})
+
 test('extractOpenAiResponseText falls back to output content text nodes', () => {
   const payload = {
     output: [

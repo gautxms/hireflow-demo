@@ -1383,7 +1383,7 @@ export async function runParse(job) {
       matchScores: parseResult?.matchScores || null,
     })
   } catch (webhookError) {
-    console.error('[Webhooks] Failed to trigger parse.completed webhook:', webhookError)
+    console.error('[Webhooks] Failed to trigger parse.completed webhook:', { errorType: webhookError?.name || 'Error', message: String(webhookError?.message || 'unknown').slice(0, 180) })
   }
 
   await job.progress(100)

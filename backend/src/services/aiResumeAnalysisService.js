@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import crypto from 'node:crypto'
 import { logTelemetryToDatabase } from '../db/client.js'
 import { getActiveAiProviderCredentials } from './aiProviderConfigService.js'
 import { AI_MODEL_CONFIG } from '../config/aiModels.js'
@@ -69,6 +70,50 @@ export function getClaudeTokenStats() {
 
 export function resetClaudeTokenStats() {
   claudeTokensUsed = { input: 0, output: 0, totalRequests: 0 }
+}
+
+
+function isRawAiResponseDebugLoggingEnabled() {
+  return String(process.env.AI_RAW_RESPONSE_DEBUG_LOGS || '').toLowerCase() === 'true'
+}
+
+function buildContentFingerprint(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16)
+}
+
+function buildSafeParseDiagnostics(rawResponse, {
+  provider = null,
+  model = null,
+  promptVersion = null,
+  maxOutputTokens = null,
+  completionStatus = null,
+  stopReason = null,
+  parseError = null,
+  retryMetadata = null,
+  analysisId = null,
+  resumeId = null,
+} = {}) {
+  const message = sanitizeSnippet(parseError?.message || 'invalid_json', 160)
+  return {
+    provider,
+    model,
+    prompt_version: promptVersion ?? null,
+    response_char_count: String(rawResponse || '').length,
+    parse_error_type: parseError?.name || 'SyntaxError',
+    parse_error_message: message,
+    error_fingerprint: buildContentFingerprint(`${provider || 'unknown'}:${model || 'unknown'}:${parseError?.name || 'Error'}:${message}:${String(rawResponse || '').length}`),
+    completion_status: completionStatus || null,
+    stop_reason: stopReason || null,
+    max_output_tokens: maxOutputTokens ?? null,
+    retry: retryMetadata || null,
+    analysis_id: analysisId || null,
+    resume_id: resumeId || null,
+  }
+}
+
+function logRawAiResponseForLocalDebug(label, rawResponse) {
+  if (!isRawAiResponseDebugLoggingEnabled()) return
+  console.warn(`${label} (AI_RAW_RESPONSE_DEBUG_LOGS enabled; do not enable in production):`, rawResponse)
 }
 
 function sanitizeSnippet(value, maxLength = 180) {
@@ -393,20 +438,22 @@ function isLikelyTruncatedResponse(text = '', { stopReason = null } = {}) {
   return openBraces > closeBraces || openBrackets > closeBrackets || hasUnclosedFence
 }
 
-export function safeParseAIResponse(rawResponse) {
+export function safeParseAIResponse(rawResponse, context = {}) {
   let text = String(rawResponse || '').trim()
   text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '')
   text = text.replace(/^```\s*/i, '').replace(/\s*```$/i, '')
   try {
     return JSON.parse(text)
   } catch (error) {
-    console.error('AI response JSON parse failed:', error)
-    console.error('Raw response was:', rawResponse)
-    throw new Error('AI returned invalid JSON')
+    const invalidJsonError = new Error('AI returned invalid JSON')
+    invalidJsonError.name = 'AIResponseJsonParseError'
+    invalidJsonError.cause = error
+    invalidJsonError.safeParseDiagnostics = buildSafeParseDiagnostics(rawResponse, { ...context, parseError: error })
+    throw invalidJsonError
   }
 }
 
-export function extractJsonWithContext(text = '', { provider = null, model = null } = {}) {
+export function extractJsonWithContext(text = '', { provider = null, model = null, promptVersion = null, maxOutputTokens = null, completionStatus = null, stopReason = null, retryMetadata = null, analysisId = null, resumeId = null } = {}) {
   const trimmed = String(text || '').trim()
   if (!trimmed) {
     throw createProviderResponseFormatError({
@@ -453,16 +500,19 @@ export function extractJsonWithContext(text = '', { provider = null, model = nul
   let lastError = null
   for (const candidate of uniqueCandidates) {
     try {
-      return safeParseAIResponse(candidate)
+      return safeParseAIResponse(candidate, { provider, model, promptVersion, maxOutputTokens, completionStatus, stopReason, retryMetadata, analysisId, resumeId })
     } catch (error) {
       lastError = error
     }
   }
 
+  const diagnostics = lastError?.safeParseDiagnostics || buildSafeParseDiagnostics(trimmed, { provider, model, promptVersion, maxOutputTokens, completionStatus, stopReason, retryMetadata, analysisId, resumeId, parseError: lastError })
+  console.warn('[AI Parse] Provider JSON parse failed:', diagnostics)
+  logRawAiResponseForLocalDebug('[AI Parse] Raw provider response before parse failure', trimmed)
   throw createProviderResponseFormatError({
     provider,
     model,
-    technicalDetails: `Unable to parse provider JSON response (${sanitizeSnippet(lastError?.message || 'invalid_json')}). Snippet: ${sanitizeSnippet(trimmed)}`,
+    technicalDetails: `Unable to parse provider JSON response (${sanitizeSnippet(lastError?.message || 'invalid_json')}; fingerprint=${diagnostics.error_fingerprint}; response_char_count=${diagnostics.response_char_count}).`,
   })
 }
 
@@ -1131,14 +1181,14 @@ ${requestPrompt}`,
     }
 
     try {
-      console.log('[AI][Anthropic] Raw response before parsing:', textContent.text)
-      result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model })
+      logRawAiResponseForLocalDebug('[AI][Anthropic] Raw response before parsing', textContent.text)
+      result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model, promptVersion, maxOutputTokens: maxTokens, completionStatus: response?.stop_reason || null, stopReason: response?.stop_reason || null, retryMetadata: { token_budget_attempt_index: index + 1, token_budget_attempt_count: tokenLadder.length } })
       break
     } catch (error) {
       const parseFailed = String(error?.message || '').includes('response_format_error::')
       if (!parseFailed) throw error
       const truncated = isLikelyTruncatedResponse(textContent.text, { stopReason: response?.stop_reason })
-      if (truncated && index < tokenLadder.length - 1) {
+      if ((truncated || parseFailed) && index < tokenLadder.length - 1) {
         continue
       }
       if (truncated) {
@@ -1354,8 +1404,8 @@ ${promptText}`,
     })
   }
 
-  console.log('[AI][OpenAI] Raw response before parsing:', outputText)
-  const result = normalizeCompactAnalysis(extractJsonWithContext(outputText, { provider: 'openai', model }), { minimalMode: compactMode })
+  logRawAiResponseForLocalDebug('[AI][OpenAI] Raw response before parsing', outputText)
+  const result = normalizeCompactAnalysis(extractJsonWithContext(outputText, { provider: 'openai', model, promptVersion, maxOutputTokens: attemptedMaxOutputTokens, completionStatus: responseStatus || 'completed', stopReason: incompleteReason || null, retryMetadata: { token_budget_attempt_count: attemptedTokenBudgets.length } }), { minimalMode: compactMode })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('OpenAI response is missing candidates array')
   }
