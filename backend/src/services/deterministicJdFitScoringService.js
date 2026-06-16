@@ -186,8 +186,16 @@ const experienceBreakdown = (candidate, context, fitAssessment, requirement, ski
 }
 
 const normalizeLocation = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+const normalizeLocationToken = (value) => normalizeLocation(value).replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
 const hasExplicitRemote = (value) => /\bremote\b/.test(value)
 const hasFlexibleLocation = (value) => /\bremote\b|\bhybrid\b/.test(value)
+const WORK_MODE_LOCATION_TOKENS = new Set(['remote', 'hybrid', 'remote hybrid', 'onsite', 'on site'])
+const tokenizeJdLocations = (value) => normalizeLocation(value)
+  .split(/\s*(?:\/|,|;|\||\bor\b|\band\b)\s*/i)
+  .map(normalizeLocationToken)
+  .filter((token) => token.length > 0 && !WORK_MODE_LOCATION_TOKENS.has(token))
+const locationTokenMatches = (candidateLocation, jdLocation) => tokenizeJdLocations(jdLocation)
+  .some((token) => candidateLocation === token || candidateLocation.startsWith(`${token},`) || candidateLocation.includes(` ${token} `))
 const locationBreakdown = (candidate, context) => {
   const candidateLocation = normalizeLocation(candidate?.location)
   const jdLocation = normalizeLocation(context?.location)
@@ -197,7 +205,7 @@ const locationBreakdown = (candidate, context) => {
   if (candidateAvailable && jdAvailable) {
     const candidateRemote = hasExplicitRemote(candidateLocation)
     const jdFlexible = hasFlexibleLocation(jdLocation)
-    if (candidateLocation.includes(jdLocation) || jdLocation.includes(candidateLocation)) score = 95
+    if (candidateLocation.includes(jdLocation) || jdLocation.includes(candidateLocation) || locationTokenMatches(candidateLocation, jdLocation)) score = 95
     else if (candidateRemote && jdFlexible) score = 80
     else if (jdFlexible) score = 40
     else if (candidateRemote) score = 35

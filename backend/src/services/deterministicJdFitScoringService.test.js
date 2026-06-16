@@ -263,10 +263,24 @@ test('Remote candidate scores higher than non-listed city for Remote Hybrid JD',
   assert.ok(remoteResult.scoring_breakdown.location_alignment.score > kochi.scoring_breakdown.location_alignment.score)
 })
 
+test('listed city tokens in slash-separated Remote Hybrid JD score high', () => {
+  const bengaluru = candidate()
+  bengaluru.location = 'Bengaluru, India'
+  assert.equal(scoreCandidateDeterministically(bengaluru, sdeJdContext()).scoring_breakdown.location_alignment.score, 95)
+
+  const hyderabad = candidate()
+  hyderabad.location = 'Hyderabad, Telangana'
+  assert.equal(scoreCandidateDeterministically(hyderabad, sdeJdContext()).scoring_breakdown.location_alignment.score, 95)
+
+  const pune = candidate()
+  pune.location = 'Pune'
+  assert.equal(scoreCandidateDeterministically(pune, sdeJdContext()).scoring_breakdown.location_alignment.score, 95)
+})
+
 test('exact location match scores high and missing location remains neutral', () => {
   const exact = candidate()
-  exact.location = 'Bengaluru'
-  assert.equal(scoreCandidateDeterministically(exact, sdeJdContext()).scoring_breakdown.location_alignment.score, 95)
+  exact.location = 'Austin, TX'
+  assert.equal(scoreCandidateDeterministically(exact, jdContext()).scoring_breakdown.location_alignment.score, 95)
 
   const missingCandidateLocation = candidate()
   delete missingCandidateLocation.location
