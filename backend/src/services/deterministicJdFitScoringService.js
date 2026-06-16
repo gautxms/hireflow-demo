@@ -18,18 +18,125 @@ const normalizeEvidenceText = (value) => String(value ?? '')
   .trim()
   .toLowerCase()
   .replace(/&/g, ' and ')
+  .replace(/[–—]/g, '-')
   .replace(/[^a-z0-9.+#\s-]/g, ' ')
-  .replace(/\b(?:with|and|or|the|a|an|for|to|of|in|on|at|required|requirement|requirements|experience|experienced|skills?|evidence|candidate|has|have|having)\b/g, ' ')
   .replace(/\s+/g, ' ')
   .trim()
 
-const canonicalEvidenceText = (value) => normalizeEvidenceText(value)
+const withSemanticLanguageTokens = (value) => normalizeEvidenceText(value)
+  .replace(/(^|[^a-z0-9])c\s*\+\s*\+([^a-z0-9]|$)/g, ' cpp ')
+  .replace(/(^|[^a-z0-9])c\s*#([^a-z0-9]|$)/g, ' csharp ')
+  .replace(/(^|[^a-z0-9])f\s*#([^a-z0-9]|$)/g, ' fsharp ')
+  .replace(/\b\.\s*net\b|\bdot\s+net\b/g, ' dotnet ')
+  .replace(/\bnode\s*\.\s*js\b|\bnodejs\b/g, ' nodejs ')
+  .replace(/\bvue\s*\.\s*js\b|\bvuejs\b/g, ' vuejs ')
+  .replace(/\bnext\s*\.\s*js\b|\bnextjs\b/g, ' nextjs ')
+
+const normalizeEvidenceConceptText = (value) => withSemanticLanguageTokens(value)
+  .replace(/[.+#-]/g, ' ')
+  .replace(/\b(?:with|and|or|the|a|an|for|to|of|in|on|at|required|requirement|requirements|skill|skills|evidence|candidate|has|have|having|no|not|without|missing|minimum|target|strong|good|solid|basic|basics|exposure|ownership|knowledge|hands|on)\b/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const canonicalEvidenceText = (value) => normalizeEvidenceConceptText(value)
   .split(' ')
   .filter(Boolean)
   .sort()
   .join(' ')
 
 const uniqueNormalized = (values) => [...new Set(asArray(values).map(canonicalEvidenceText).filter(Boolean))]
+
+const safeOpaqueBucketKey = (value) => {
+  const source = String(value ?? '')
+  let hash = 2166136261
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `other_${(hash >>> 0).toString(16).padStart(8, '0')}`
+}
+
+const REQUIREMENT_CONCEPT_BUCKETS = Object.freeze([
+  ['language_cpp', /\bcpp\b|(^|[^a-z0-9])c\s*\+\s*\+([^a-z0-9]|$)/i],
+  ['language_csharp', /\bcsharp\b|(^|[^a-z0-9])c\s*#([^a-z0-9]|$)/i],
+  ['language_c', /\bc\b/i],
+  ['language_fsharp', /\bfsharp\b|(^|[^a-z0-9])f\s*#([^a-z0-9]|$)/i],
+  ['dotnet', /\bdotnet\b|\b\.\s*net\b|\bdot\s+net\b/i],
+  ['typescript_javascript_node', /\b(?:typescript|javascript|node\s*js|nodejs|node)\b/i],
+  ['frontend_js_framework', /\b(?:vue\s*js|vuejs|vue|next\s*js|nextjs)\b/i],
+  ['experience_years', /\b(?:\d+(?:\.\d+)?\s*(?:\+\s*)?(?:years?|yrs?)|professional\s+experience|work\s+experience|relevant\s+experience|production\s+experience|early\s+career|junior\s+profile|experience\s+gap)\b/i],
+  ['cloud_platforms', /\b(?:cloud|aws|azure|gcp|google\s+cloud|kubernetes|k8s|docker|container|containers|deployment|devops)\b/i],
+  ['testing_ci', /\b(?:test|testing|unit\s+test|integration\s+test|automation|qa|quality\s+assurance|ci\s*cd|cicd|pipeline|pipelines)\b/i],
+  ['system_design', /\b(?:system\s+design|scalability|scalable|distributed\s+systems?|architecture|architectural|microservices?)\b/i],
+  ['async_background', /\b(?:async|asynchronous|queue|queues|background\s+jobs?|workers?|caching|cache|redis|messaging|event\s+driven)\b/i],
+  ['auth_security', /\b(?:auth|authentication|authorization|rbac|oauth|jwt|secure\s+api|security|permissions?)\b/i],
+  ['backend_framework', /\b(?:backend\s+framework|flask|express|django|fastapi|nestjs?|nest\s+js|spring\s+boot|rails|laravel)\b/i],
+  ['backend_api', /\b(?:backend|api|apis|rest|graphql|services?|server\s+side)\b/i],
+  ['database_sql', /\b(?:sql|postgres|postgresql|mysql|database|databases|mongodb|mongo|nosql)\b/i],
+])
+
+const requirementConceptKey = (value) => {
+  const normalized = withSemanticLanguageTokens(value)
+  if (!normalized) return ''
+  for (const [bucket, pattern] of REQUIREMENT_CONCEPT_BUCKETS) {
+    if (pattern.test(normalized)) return bucket
+  }
+  return safeOpaqueBucketKey(canonicalEvidenceText(normalized))
+}
+
+const WEAK_EVIDENCE_PATTERN = /\b(?:basic|basics|beginner|exposure|familiar|familiarity|manual|internal\s+tools?|toy|demo|academic)\b/i
+const DEPTH_GAP_PATTERN = /\b(?:production|depth|maturity|mature|scale|scalable|advanced|strong|hands\s+on|architecture|architectural|cloud\s+platform|aws|gcp|azure|kubernetes|k8s|ci\s*cd|cicd|integration\s+test|auth|authentication|authorization|rbac|async|queue|queues|background\s+jobs?)\b/i
+const STRONG_COVERAGE_PATTERN = /\b(?:production|depth|maturity|mature|scale|scalable|advanced|strong|hands\s+on|architecture|architectural|aws|gcp|azure|kubernetes|k8s|ci\s*cd|cicd|integration\s+test|auth|authentication|authorization|rbac|async|queue|queues|background\s+jobs?)\b/i
+
+const requirementConceptEvidence = (value) => {
+  const normalized = normalizeEvidenceText(value)
+  const canonical = canonicalEvidenceText(normalized)
+  return {
+    bucket: requirementConceptKey(normalized),
+    canonical,
+    weak: WEAK_EVIDENCE_PATTERN.test(normalized),
+    depthGap: DEPTH_GAP_PATTERN.test(normalized),
+    strongCoverage: STRONG_COVERAGE_PATTERN.test(normalized) && !WEAK_EVIDENCE_PATTERN.test(normalized),
+  }
+}
+
+const missingEvidenceCoveredByMatch = (missing, matched) => {
+  if (!missing.bucket || missing.bucket !== matched.bucket) return false
+  if (missing.canonical && missing.canonical === matched.canonical) return true
+  if (!missing.depthGap) return true
+  return matched.strongCoverage && !matched.weak
+}
+
+const normalizedRequirementEvidence = (matchedValues, missingValues) => {
+  const matchedEvidence = asArray(matchedValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
+  const missingEvidence = asArray(missingValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
+  const matchedBuckets = new Set(matchedEvidence.map((evidence) => evidence.bucket))
+  const missingBucketsRaw = new Set(missingEvidence.map((evidence) => evidence.bucket))
+  const missingBuckets = new Set()
+  const missingCanonicalByBucket = new Map()
+
+  for (const missing of missingEvidence) {
+    const covered = matchedEvidence.some((matched) => missingEvidenceCoveredByMatch(missing, matched))
+    if (covered) continue
+    const bucketCanonicals = missingCanonicalByBucket.get(missing.bucket) ?? new Set()
+    bucketCanonicals.add(missing.canonical)
+    missingCanonicalByBucket.set(missing.bucket, bucketCanonicals)
+    missingBuckets.add(missing.bucket)
+  }
+
+  const buckets = [...new Set([...matchedBuckets, ...missingBuckets])].sort()
+  const requirementBucketScores = Object.fromEntries(buckets.map((bucket) => [bucket, missingBuckets.has(bucket) ? 0 : 1]))
+  return {
+    matchedBuckets,
+    missingBuckets,
+    bucketCount: buckets.length,
+    requirementBucketScores,
+    smoothingApplied: asArray(matchedValues).length !== matchedBuckets.size
+      || asArray(missingValues).length !== missingBuckets.size
+      || missingBucketsRaw.size !== missingBuckets.size
+      || [...missingCanonicalByBucket.values()].some((canonicals) => canonicals.size > 1),
+  }
+}
 
 const numericValue = (value) => {
   if (!present(value)) return null
@@ -84,11 +191,23 @@ const hasJdContext = (context) => {
 }
 
 const requirementBreakdown = (fitAssessment) => {
-  const matched = uniqueNormalized(fitAssessment?.matched_requirements).length
-  const missing = uniqueNormalized(fitAssessment?.missing_requirements).length
+  const evidence = normalizedRequirementEvidence(fitAssessment?.matched_requirements, fitAssessment?.missing_requirements)
+  const matched = evidence.matchedBuckets.size
+  const missing = evidence.missingBuckets.size
   const total = matched + missing
   const score = total > 0 ? smoothEvidenceRatioScore(matched, missing) : 35
-  return { score: roundScore(score), weight: WEIGHTS.requirement_match, matched_count: matched, missing_count: missing, total_count: total }
+  return {
+    score: roundScore(score),
+    weight: WEIGHTS.requirement_match,
+    matched_count: matched,
+    missing_count: missing,
+    total_count: total,
+    normalized_requirement_match_count: matched,
+    normalized_requirement_missing_count: missing,
+    normalized_requirement_bucket_count: evidence.bucketCount,
+    requirement_bucket_scores: evidence.requirementBucketScores,
+    requirement_variance_smoothing_applied: evidence.smoothingApplied,
+  }
 }
 
 const smoothEvidenceRatioScore = (matched, missing) => {
@@ -103,8 +222,9 @@ const smoothEvidenceRatioScore = (matched, missing) => {
 }
 
 const skillBreakdown = (candidate) => {
-  const matched = uniqueNormalized(candidate?.matchedSkills).length
-  const missing = uniqueNormalized(candidate?.missingSkills).length
+  const skillEvidence = normalizedRequirementEvidence(candidate?.matchedSkills, candidate?.missingSkills)
+  const matched = skillEvidence.matchedBuckets.size
+  const missing = skillEvidence.missingBuckets.size
   const candidateSkillCount = uniqueNormalized([
     ...asArray(candidate?.skills_flat),
     ...asArray(candidate?.top_skills),
@@ -119,6 +239,10 @@ const skillBreakdown = (candidate) => {
     matched_count: matched,
     missing_count: missing,
     candidate_skill_count: candidateSkillCount,
+    normalized_requirement_match_count: matched,
+    normalized_requirement_missing_count: missing,
+    normalized_requirement_bucket_count: skillEvidence.bucketCount,
+    requirement_variance_smoothing_applied: skillEvidence.smoothingApplied,
   }
 }
 

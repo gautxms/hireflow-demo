@@ -472,3 +472,220 @@ test('exact location match scores high and missing location remains neutral', ()
 
   assert.equal(scoreCandidateDeterministically(candidate(), { title: 'Engineer' }).scoring_breakdown.location_alignment.score, 50)
 })
+
+test('same semantic requirement evidence with duplicated wording produces similar requirement scores', () => {
+  const first = candidate()
+  first.fit_assessment.matched_requirements = ['Node.js backend APIs', 'SQL databases', 'AWS cloud']
+  first.fit_assessment.missing_requirements = ['system design', 'unit testing', 'authorization/RBAC']
+
+  const second = candidate()
+  second.fit_assessment.matched_requirements = [
+    'Backend API services with Node.js',
+    'NodeJS server-side APIs',
+    'SQL database experience',
+    'PostgreSQL databases',
+    'Cloud platform exposure - AWS',
+  ]
+  second.fit_assessment.missing_requirements = [
+    'Distributed systems / scalability design missing',
+    'No architecture or system design evidence',
+    'Missing unit and integration testing',
+    'CI/CD testing pipeline not shown',
+    'No secure API authorization evidence',
+    'RBAC not demonstrated',
+  ]
+
+  const firstResult = scoreCandidateDeterministically(first, jdContext())
+  const secondResult = scoreCandidateDeterministically(second, jdContext())
+  assert.ok(Math.abs(firstResult.scoring_breakdown.requirement_match.score - secondResult.scoring_breakdown.requirement_match.score) <= 5)
+  assert.equal(secondResult.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 3)
+  assert.equal(secondResult.scoring_breakdown.requirement_match.requirement_variance_smoothing_applied, true)
+})
+
+test('duplicate missing requirements do not over-penalize requirement score', () => {
+  const baseline = candidate()
+  baseline.fit_assessment.matched_requirements = ['Java', 'SQL', 'Backend APIs']
+  baseline.fit_assessment.missing_requirements = ['cloud', 'system design']
+
+  const duplicated = structuredClone(baseline)
+  duplicated.fit_assessment.missing_requirements = [
+    'cloud',
+    'AWS experience',
+    'Azure or GCP cloud platform',
+    'system design',
+    'distributed systems architecture',
+    'scalability design',
+  ]
+
+  const baselineResult = scoreCandidateDeterministically(baseline, jdContext())
+  const duplicatedResult = scoreCandidateDeterministically(duplicated, jdContext())
+  assert.equal(duplicatedResult.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 2)
+  assert.equal(duplicatedResult.scoring_breakdown.requirement_match.score, baselineResult.scoring_breakdown.requirement_match.score)
+})
+
+test('missing core SDE concepts still penalize requirement score', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Java', 'SQL']
+  input.fit_assessment.missing_requirements = ['cloud/AWS', 'system design', 'testing/CI/CD', 'auth/RBAC', 'async queues']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.ok(result.scoring_breakdown.requirement_match.score <= 40)
+  assert.ok(result.final_score < 55)
+})
+
+test('Vikram-like DOC/DOCX/PDF requirement wording fixtures stay within five final-score points', () => {
+  const context = { ...sdeJdContext(), required_min_years: 2, required_max_years: 5 }
+  const vikramLike = ({ matched, missing, matchedSkills = matched, missingSkills = missing, aiScore = 50 }) => ({
+    summary: 'Candidate has 1.6 years experience and is below minimum for the role.',
+    recommendation: 'Low-to-moderate fit due to experience and production SDE gaps.',
+    score: aiScore,
+    matchScore: { score: aiScore, reason: 'Below 2-5 years required experience.', breakdown: { experience: 'has 1.6 years' } },
+    fit_assessment: {
+      overall_fit_score: aiScore,
+      rationale: 'Early career backend profile.',
+      matched_requirements: matched,
+      missing_requirements: missing,
+      risks_or_gaps: ['Experience gap: 1.6 years is below minimum for 2-5 years', 'Junior profile for SDE ownership'],
+    },
+    matchedSkills,
+    missingSkills,
+    skills_flat: ['Java', 'SQL'],
+    top_skills: ['Backend services'],
+    years_experience: 1.6,
+    location: 'Pune',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  })
+
+  const results = [
+    scoreCandidateDeterministically(vikramLike({
+      matched: ['Java', 'SQL', 'Backend APIs'],
+      missing: ['2-5 years production experience', 'system design', 'AWS/cloud', 'unit testing', 'auth/RBAC', 'async queues'],
+    }), context),
+    scoreCandidateDeterministically(vikramLike({
+      matched: ['Java', 'SQL', 'Backend API services'],
+      missing: ['professional experience gap', 'distributed systems/scalability', 'cloud platform experience', 'CI/CD and integration tests', 'authorization secure API', 'background jobs/caching', 'AWS', 'Azure'],
+      aiScore: 85,
+    }), context),
+    scoreCandidateDeterministically(vikramLike({
+      matched: ['Java', 'SQL'],
+      missing: ['minimum 2 years experience', 'architecture', 'Kubernetes', 'testing', 'RBAC', 'queues'],
+      aiScore: 15,
+    }), context),
+  ]
+
+  const finalScores = results.map((result) => result.final_score)
+  assert.ok(Math.max(...finalScores) - Math.min(...finalScores) <= 5)
+  for (const result of results) {
+    assert.ok(result.final_score >= 45 && result.final_score <= 53)
+    assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+  }
+})
+
+test('strong SDE candidate with backend cloud testing and system design scores meaningfully higher', () => {
+  const weak = candidate()
+  weak.years_experience = 1.6
+  weak.summary = 'Candidate has 1.6 years experience and is below minimum.'
+  weak.fit_assessment.matched_requirements = ['Java', 'SQL']
+  weak.fit_assessment.missing_requirements = ['cloud', 'system design', 'testing', 'auth', 'async queues']
+  weak.fit_assessment.risks_or_gaps = ['Experience gap: 1.6 years is below minimum for 2 years']
+  weak.matchedSkills = ['Java', 'SQL']
+  weak.missingSkills = ['cloud', 'system design', 'testing', 'auth', 'async queues']
+
+  const strong = candidate()
+  strong.years_experience = 6
+  strong.fit_assessment.matched_requirements = ['Node.js backend APIs', 'SQL databases', 'AWS cloud', 'Kubernetes', 'unit/integration testing', 'system design', 'async queues', 'auth/RBAC']
+  strong.fit_assessment.missing_requirements = []
+  strong.fit_assessment.risks_or_gaps = []
+  strong.matchedSkills = ['Node.js', 'SQL', 'AWS', 'Kubernetes', 'Testing', 'System design', 'Queues', 'RBAC']
+  strong.missingSkills = []
+
+  const weakResult = scoreCandidateDeterministically(weak, { ...jdContext(), required_min_years: 2 })
+  const strongResult = scoreCandidateDeterministically(strong, { ...jdContext(), required_min_years: 2 })
+  assert.ok(strongResult.final_score - weakResult.final_score >= 20)
+  assert.ok(strongResult.final_score >= 75)
+})
+
+test('Docker basics do not cancel production AWS/GCP/Kubernetes cloud gaps', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Docker basics', 'Render deployment', 'Railway deployment']
+  input.fit_assessment.missing_requirements = ['AWS/GCP/Kubernetes production cloud experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 0)
+})
+
+test('TypeScript basics do not cancel TypeScript or Node.js production-depth gaps', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['TypeScript basics']
+  input.fit_assessment.missing_requirements = ['TypeScript production experience', 'Node.js production depth']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.ok(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count >= 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.typescript_javascript_node, 0)
+})
+
+test('pytest basics and manual testing do not cancel integration testing or CI/CD gaps', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Pytest basics', 'Manual testing']
+  input.fit_assessment.missing_requirements = ['integration testing', 'CI/CD test pipelines']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.ok(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count >= 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.testing_ci, 0)
+})
+
+test('true duplicate matched and missing wording still dedupes within the same bucket', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['AWS production cloud experience', 'AWS production cloud experience']
+  input.fit_assessment.missing_requirements = ['AWS production cloud experience', 'AWS production cloud experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 0)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 1)
+})
+
+test('unknown custom requirement evidence emits only deterministic debug-safe bucket IDs', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Acme Phoenix migration for ClientZephyr']
+  input.fit_assessment.missing_requirements = ['Proprietary Nebula workflow ownership']
+  const first = scoreCandidateDeterministically(input, sdeJdContext())
+  const second = scoreCandidateDeterministically(structuredClone(input), sdeJdContext())
+  const keys = Object.keys(first.scoring_breakdown.requirement_match.requirement_bucket_scores)
+
+  assert.deepEqual(keys, Object.keys(second.scoring_breakdown.requirement_match.requirement_bucket_scores))
+  assert.ok(keys.length > 0)
+  for (const key of keys) {
+    assert.match(key, /^other_[0-9a-f]{8}$/)
+    assert.equal(/acme|phoenix|clientzephyr|nebula|workflow|ownership|proprietary/.test(key), false)
+  }
+  assert.equal(JSON.stringify(first.scoring_breakdown.requirement_match).includes('Acme'), false)
+  assert.equal(JSON.stringify(first.scoring_breakdown.requirement_match).includes('phoenix'), false)
+})
+
+test('matched C# does not cancel missing C++', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['C# production experience']
+  input.fit_assessment.missing_requirements = ['C++ production experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_csharp, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_cpp, 0)
+})
+
+test('matched C does not cancel missing C#', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['C programming']
+  input.fit_assessment.missing_requirements = ['C# production experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_c, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.language_csharp, 0)
+})
+
+test('Node.js and NodeJS normalize into the same concept bucket', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Node.js production backend']
+  input.fit_assessment.missing_requirements = ['NodeJS production backend']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 0)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.typescript_javascript_node, 1)
+})
