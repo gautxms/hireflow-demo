@@ -604,3 +604,42 @@ test('strong SDE candidate with backend cloud testing and system design scores m
   assert.ok(strongResult.final_score - weakResult.final_score >= 20)
   assert.ok(strongResult.final_score >= 75)
 })
+
+test('Docker basics do not cancel production AWS/GCP/Kubernetes cloud gaps', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Docker basics', 'Render deployment', 'Railway deployment']
+  input.fit_assessment.missing_requirements = ['AWS/GCP/Kubernetes production cloud experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 0)
+})
+
+test('TypeScript basics do not cancel TypeScript or Node.js production-depth gaps', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['TypeScript basics']
+  input.fit_assessment.missing_requirements = ['TypeScript production experience', 'Node.js production depth']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.ok(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count >= 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.typescript_javascript_node, 0)
+})
+
+test('pytest basics and manual testing do not cancel integration testing or CI/CD gaps', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Pytest basics', 'Manual testing']
+  input.fit_assessment.missing_requirements = ['integration testing', 'CI/CD test pipelines']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.ok(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count >= 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.testing_ci, 0)
+})
+
+test('true duplicate matched and missing wording still dedupes within the same bucket', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['AWS production cloud experience', 'AWS production cloud experience']
+  input.fit_assessment.missing_requirements = ['AWS production cloud experience', 'AWS production cloud experience']
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 0)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 1)
+})

@@ -59,18 +59,57 @@ const requirementConceptKey = (value) => {
   return canonicalEvidenceText(normalized)
 }
 
+const WEAK_EVIDENCE_PATTERN = /\b(?:basic|basics|beginner|exposure|familiar|familiarity|manual|internal\s+tools?|toy|demo|academic)\b/i
+const DEPTH_GAP_PATTERN = /\b(?:production|depth|maturity|mature|scale|scalable|advanced|strong|hands\s+on|architecture|architectural|cloud\s+platform|aws|gcp|azure|kubernetes|k8s|ci\s*cd|cicd|integration\s+test|auth|authentication|authorization|rbac|async|queue|queues|background\s+jobs?)\b/i
+const STRONG_COVERAGE_PATTERN = /\b(?:production|depth|maturity|mature|scale|scalable|advanced|strong|hands\s+on|architecture|architectural|aws|gcp|azure|kubernetes|k8s|ci\s*cd|cicd|integration\s+test|auth|authentication|authorization|rbac|async|queue|queues|background\s+jobs?)\b/i
+
+const requirementConceptEvidence = (value) => {
+  const normalized = normalizeEvidenceText(value)
+  const canonical = canonicalEvidenceText(normalized)
+  return {
+    bucket: requirementConceptKey(normalized),
+    canonical,
+    weak: WEAK_EVIDENCE_PATTERN.test(normalized),
+    depthGap: DEPTH_GAP_PATTERN.test(normalized),
+    strongCoverage: STRONG_COVERAGE_PATTERN.test(normalized) && !WEAK_EVIDENCE_PATTERN.test(normalized),
+  }
+}
+
+const missingEvidenceCoveredByMatch = (missing, matched) => {
+  if (!missing.bucket || missing.bucket !== matched.bucket) return false
+  if (missing.canonical && missing.canonical === matched.canonical) return true
+  if (!missing.depthGap) return true
+  return matched.strongCoverage && !matched.weak
+}
+
 const normalizedRequirementEvidence = (matchedValues, missingValues) => {
-  const matchedBuckets = new Set(asArray(matchedValues).map(requirementConceptKey).filter(Boolean))
-  const missingBucketsRaw = new Set(asArray(missingValues).map(requirementConceptKey).filter(Boolean))
-  const missingBuckets = new Set([...missingBucketsRaw].filter((bucket) => !matchedBuckets.has(bucket)))
+  const matchedEvidence = asArray(matchedValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
+  const missingEvidence = asArray(missingValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
+  const matchedBuckets = new Set(matchedEvidence.map((evidence) => evidence.bucket))
+  const missingBucketsRaw = new Set(missingEvidence.map((evidence) => evidence.bucket))
+  const missingBuckets = new Set()
+  const missingCanonicalByBucket = new Map()
+
+  for (const missing of missingEvidence) {
+    const covered = matchedEvidence.some((matched) => missingEvidenceCoveredByMatch(missing, matched))
+    if (covered) continue
+    const bucketCanonicals = missingCanonicalByBucket.get(missing.bucket) ?? new Set()
+    bucketCanonicals.add(missing.canonical)
+    missingCanonicalByBucket.set(missing.bucket, bucketCanonicals)
+    missingBuckets.add(missing.bucket)
+  }
+
   const buckets = [...new Set([...matchedBuckets, ...missingBuckets])].sort()
-  const requirementBucketScores = Object.fromEntries(buckets.map((bucket) => [bucket, matchedBuckets.has(bucket) ? 1 : 0]))
+  const requirementBucketScores = Object.fromEntries(buckets.map((bucket) => [bucket, missingBuckets.has(bucket) ? 0 : 1]))
   return {
     matchedBuckets,
     missingBuckets,
     bucketCount: buckets.length,
     requirementBucketScores,
-    smoothingApplied: asArray(matchedValues).length !== matchedBuckets.size || asArray(missingValues).length !== missingBuckets.size || missingBucketsRaw.size !== missingBuckets.size,
+    smoothingApplied: asArray(matchedValues).length !== matchedBuckets.size
+      || asArray(missingValues).length !== missingBuckets.size
+      || missingBucketsRaw.size !== missingBuckets.size
+      || [...missingCanonicalByBucket.values()].some((canonicals) => canonicals.size > 1),
   }
 }
 
