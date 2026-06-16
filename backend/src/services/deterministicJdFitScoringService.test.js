@@ -122,6 +122,147 @@ test('Vikram-like minor evidence count differences are dampened', () => {
   assert.ok(Math.abs(docxLike.final_score - pdfLike.final_score) <= 4)
 })
 
+
+test('Vikram-like DOC/PDF/DOCX payloads keep experience capped and final scores close', () => {
+  const vikramBase = ({ years, summary, matched = [], missing = [], matchedSkills = [], missingSkills = [] }) => ({
+    summary,
+    recommendation: 'Low fit due to experience gap against the target range.',
+    matchScore: { reason: 'Candidate is below 2-5 years required experience.', breakdown: { experience: 'has 1.6 years' } },
+    fit_assessment: {
+      rationale: 'Early career profile with some backend exposure.',
+      matched_requirements: matched,
+      missing_requirements: missing,
+      risks_or_gaps: ['Experience gap: 1.6 years is below minimum for 2-5 years', 'Junior profile for SDE ownership'],
+    },
+    matchedSkills,
+    missingSkills,
+    skills_flat: ['Java', 'SQL'],
+    top_skills: ['Backend services'],
+    years_experience: years,
+    location: 'Remote, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  })
+  const context = { ...sdeJdContext(), required_min_years: 2, required_max_years: 5 }
+  const doc = scoreCandidateDeterministically(vikramBase({
+    years: 1.6,
+    summary: 'Candidate has 1.6 years experience and is below minimum.',
+    matched: ['Java', 'SQL'],
+    missing: ['2-5 years production experience', 'system design', 'cloud'],
+    matchedSkills: ['Java', 'SQL'],
+    missingSkills: ['2-5 years experience', 'system design', 'cloud'],
+  }), context)
+  const pdf = scoreCandidateDeterministically(vikramBase({
+    years: 1.6,
+    summary: 'Has 1.6 years; below target for the role.',
+    matched: ['Java', 'SQL'],
+    missing: ['minimum 2 years experience', 'system design', 'cloud', 'deployment'],
+    matchedSkills: ['Java', 'SQL'],
+    missingSkills: ['minimum 2 years experience', 'system design', 'cloud'],
+  }), context)
+  const docx = scoreCandidateDeterministically(vikramBase({
+    years: 2,
+    summary: 'AI normalization says 2 years, but notes state has 1.6 years and below 2-5 years.',
+    matched: ['Java', 'SQL', 'backend services'],
+    missing: ['2-5 years production experience', 'system design', 'cloud', 'deployment'],
+    matchedSkills: ['Java', 'SQL', 'backend services'],
+    missingSkills: ['2-5 years experience', 'system design', 'cloud'],
+  }), context)
+
+  assert.equal(doc.score_band, 'weak')
+  assert.equal(pdf.score_band, 'weak')
+  for (const result of [doc, pdf, docx]) {
+    assert.ok(result.scoring_breakdown.experience_alignment.score >= 50)
+    assert.ok(result.scoring_breakdown.experience_alignment.score <= 60)
+    assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+  }
+  assert.notEqual(docx.scoring_breakdown.experience_alignment.score, 100)
+  assert.ok(Math.max(doc.final_score, pdf.final_score, docx.final_score) - Math.min(doc.final_score, pdf.final_score, docx.final_score) <= 5)
+})
+
+
+test('skill-specific duration in summary does not override total experience', () => {
+  const input = candidate()
+  input.years_experience = 6
+  input.summary = '6 years total engineering experience, including 1 year with Kubernetes'
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 4 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  assert.equal(result.scoring_breakdown.experience_alignment.safer_candidate_years, 6)
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
+test('skill-specific duration in missingSkills does not trigger total-experience cap', () => {
+  const input = candidate()
+  input.years_experience = 6
+  input.missingSkills = ['Kubernetes: 1 year only']
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 4 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  assert.equal(result.scoring_breakdown.experience_alignment.safer_candidate_years, 6)
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
+test('candidate years_experience of 2 is capped when text says 1.6 years', () => {
+  const input = candidate()
+  input.years_experience = 2
+  input.summary = 'Candidate has 1.6 years of experience, below minimum.'
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+  assert.ok(result.scoring_breakdown.experience_alignment.score <= 60)
+})
+
+test('candidate years_experience of 2 is not capped without contradiction or gap signals', () => {
+  const input = candidate()
+  input.years_experience = 2
+  input.summary = 'Candidate has 2 years of relevant experience.'
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
+test('missing requirements mentioning experience gap trigger experience cap', () => {
+  const input = candidate()
+  input.years_experience = 2
+  input.fit_assessment.missing_requirements = ['Experience gap: below minimum 2 years for the role']
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+  assert.ok(result.scoring_breakdown.experience_alignment.score <= 60)
+})
+
+test('fit assessment risks_or_gaps mentioning below minimum trigger experience cap', () => {
+  const input = candidate()
+  input.years_experience = 2
+  input.fit_assessment.risks_or_gaps = ['Below minimum required experience; early career profile']
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+  assert.ok(result.scoring_breakdown.experience_alignment.score <= 60)
+})
+
+test('AI numeric fields still do not influence deterministic score with experience cap signals', () => {
+  const first = candidate()
+  first.years_experience = 2
+  first.summary = 'Has 1.6 years and is below required years.'
+  first.score = 1
+  first.matchScore = { score: 1, reason: 'below minimum experience' }
+  const second = structuredClone(first)
+  second.score = 100
+  second.matchScore.score = 100
+  assert.equal(scoreCandidateDeterministically(first, { ...jdContext(), required_min_years: 2 }).final_score, scoreCandidateDeterministically(second, { ...jdContext(), required_min_years: 2 }).final_score)
+})
+
+test('requirement and skill scoring deduplicates wording-varied matches', () => {
+  const input = candidate()
+  input.fit_assessment.matched_requirements = ['Experience with Node.js', 'Node.js experience', 'SQL']
+  input.fit_assessment.missing_requirements = ['Kubernetes']
+  input.matchedSkills = ['Experience with Node.js', 'Node.js experience', 'SQL']
+  input.missingSkills = ['Kubernetes']
+  const result = scoreCandidateDeterministically(input, jdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.matched_count, 2)
+  assert.equal(result.scoring_breakdown.skill_alignment.matched_count, 2)
+})
+
 test('experience score caps when candidate exceeds requirement', () => {
   const input = candidate()
   input.years_experience = 20

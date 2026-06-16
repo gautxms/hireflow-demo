@@ -14,7 +14,22 @@ const roundScore = (value) => Math.round(clamp(value, 0, 100) * 10) / 10
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
 const asArray = (value) => (Array.isArray(value) ? value : [])
 const present = (value) => value !== null && value !== undefined && String(value).trim() !== ''
-const uniqueNormalized = (values) => [...new Set(asArray(values).map((value) => String(value).trim().toLowerCase()).filter(Boolean))]
+const normalizeEvidenceText = (value) => String(value ?? '')
+  .trim()
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9.+#\s-]/g, ' ')
+  .replace(/\b(?:with|and|or|the|a|an|for|to|of|in|on|at|required|requirement|requirements|experience|experienced|skills?|evidence|candidate|has|have|having)\b/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const canonicalEvidenceText = (value) => normalizeEvidenceText(value)
+  .split(' ')
+  .filter(Boolean)
+  .sort()
+  .join(' ')
+
+const uniqueNormalized = (values) => [...new Set(asArray(values).map(canonicalEvidenceText).filter(Boolean))]
 
 const numericValue = (value) => {
   if (!present(value)) return null
@@ -69,8 +84,8 @@ const hasJdContext = (context) => {
 }
 
 const requirementBreakdown = (fitAssessment) => {
-  const matched = asArray(fitAssessment?.matched_requirements).length
-  const missing = asArray(fitAssessment?.missing_requirements).length
+  const matched = uniqueNormalized(fitAssessment?.matched_requirements).length
+  const missing = uniqueNormalized(fitAssessment?.missing_requirements).length
   const total = matched + missing
   const score = total > 0 ? smoothEvidenceRatioScore(matched, missing) : 35
   return { score: roundScore(score), weight: WEIGHTS.requirement_match, matched_count: matched, missing_count: missing, total_count: total }
@@ -134,6 +149,89 @@ const requiredYears = (context) => {
   return { min, max }
 }
 
+
+const flattenText = (value) => {
+  if (!present(value)) return []
+  if (Array.isArray(value)) return value.flatMap(flattenText)
+  if (isObject(value)) return Object.values(value).flatMap(flattenText)
+  return [String(value)]
+}
+
+const candidateExperienceEvidenceTexts = (candidate, fitAssessment) => [
+  ...flattenText(candidate?.summary),
+  ...flattenText(candidate?.recommendation),
+  ...flattenText(candidate?.matchScore?.reason),
+  ...flattenText(candidate?.matchScore?.breakdown),
+  ...flattenText(fitAssessment?.rationale),
+  ...flattenText(fitAssessment?.notes),
+  ...flattenText(fitAssessment?.risks_or_gaps),
+  ...flattenText(candidate?.missingSkills),
+  ...flattenText(fitAssessment?.missing_requirements),
+  ...flattenText(candidate?.concerns),
+  ...flattenText(candidate?.considerations),
+  ...flattenText(fitAssessment?.concerns),
+  ...flattenText(fitAssessment?.considerations),
+]
+
+const BELOW_MIN_EXPERIENCE_PATTERNS = Object.freeze([
+  /\bbelow\s+(?:the\s+)?(?:minimum|required|target)\b/i,
+  /\b(?:experience|years?)\s+gap\b/i,
+  /\bjunior\s+profile\b/i,
+  /\bearly\s+career\b/i,
+  /\bbelow\s+\d+(?:\.\d+)?\s*(?:-|to|–|—)\s*\d+(?:\.\d+)?\s*years?\b/i,
+  /\bbelow\s+required\s+years?\b/i,
+  /\bless\s+than\s+(?:the\s+)?(?:minimum|required|target)\b/i,
+])
+
+const TOTAL_EXPERIENCE_CONTEXT_PATTERN = /\b(?:total|overall|professional|relevant|engineering|software|work)\s+(?:\w+\s+){0,3}experience\b|\bexperience\s*(?::|-)?\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)\b/i
+const BELOW_MINIMUM_CONTEXT_PATTERN = /\b(?:below|minimum|required|target|gap|junior|early\s+career)\b/i
+const SKILL_DURATION_CONTEXT_PATTERN = /\b(?:including|with|in|using|on|for|of)\s+[a-z0-9.+#-]+\b/i
+
+const reliableTotalExperienceYearsFromText = (text) => {
+  const source = String(text ?? '')
+  const matches = [...source.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:\+\s*)?(?:years?|yrs?)\b/gi)]
+  const values = []
+
+  for (const match of matches) {
+    const value = Number(match[1])
+    if (!Number.isFinite(value)) continue
+
+    const index = match.index ?? 0
+    const before = source.slice(Math.max(0, index - 45), index)
+    const after = source.slice(index + match[0].length, Math.min(source.length, index + match[0].length + 45))
+    const near = `${before} ${match[0]} ${after}`
+    const afterNumber = source.slice(index + match[0].length, Math.min(source.length, index + match[0].length + 24))
+    const beforeNumber = source.slice(Math.max(0, index - 24), index)
+    const skillSpecific = SKILL_DURATION_CONTEXT_PATTERN.test(`${beforeNumber} ${afterNumber}`) && !/\bexperience\b/i.test(afterNumber)
+    const totalExperience = TOTAL_EXPERIENCE_CONTEXT_PATTERN.test(near) || /\bhas\s*$/i.test(beforeNumber) || /^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+)?experience\b/i.test(afterNumber)
+    const belowMinimumContext = BELOW_MINIMUM_CONTEXT_PATTERN.test(near)
+
+    if (!skillSpecific && (totalExperience || belowMinimumContext)) values.push(value)
+  }
+
+  return values.length > 0 ? Math.min(...values) : null
+}
+
+const belowMinimumExperienceEvidence = (candidate, fitAssessment, requiredMin) => {
+  if (requiredMin === null || requiredMin < 2) return { applies: false, safer_years: null, signal_count: 0 }
+
+  let saferYears = null
+  let signalCount = 0
+  for (const text of candidateExperienceEvidenceTexts(candidate, fitAssessment)) {
+    const explicitYears = reliableTotalExperienceYearsFromText(text)
+    const normalized = String(text ?? '')
+    const hasBelowSignal = BELOW_MIN_EXPERIENCE_PATTERNS.some((pattern) => pattern.test(normalized))
+    const hasBelowRequiredRange = new RegExp(`\\bbelow\\s+${requiredMin}(?:\\.0+)?\\s*(?:-|to|–|—)\\s*\\d+(?:\\.\\d+)?\\s*years?\\b`, 'i').test(normalized)
+    const explicitBelowMin = explicitYears !== null && explicitYears < requiredMin && /\b(?:years?|yrs?|experience)\b/i.test(normalized)
+    if (hasBelowSignal || hasBelowRequiredRange || explicitBelowMin) {
+      signalCount += 1
+      if (explicitYears !== null) saferYears = saferYears === null ? explicitYears : Math.min(saferYears, explicitYears)
+    }
+  }
+
+  return { applies: signalCount > 0, safer_years: saferYears, signal_count: signalCount }
+}
+
 const ROLE_GAP_PATTERNS = Object.freeze([
   /\bnot\s+sde\b/i,
   /\bqa\b|quality assurance/i,
@@ -175,14 +273,19 @@ const experienceBreakdown = (candidate, context, fitAssessment, requirement, ski
   const candidateYears = firstNumber(candidate?.years_experience, candidate?.yearsExperience)
   const required = requiredYears(context)
   const roleGapCount = roleGapSignalCount(fitAssessment)
+  const belowMinEvidence = belowMinimumExperienceEvidence(candidate, fitAssessment, required.min)
+  const saferCandidateYears = belowMinEvidence.safer_years !== null && candidateYears !== null
+    ? Math.min(candidateYears, belowMinEvidence.safer_years)
+    : (belowMinEvidence.safer_years ?? candidateYears)
   let score = 55
   let cap = null
-  if (candidateYears === null) score = 35
+  if (saferCandidateYears === null) score = belowMinEvidence.applies ? 55 : 35
   else if (required.min === null && required.max === null) score = 60
-  else if (required.min !== null && candidateYears < required.min) score = Math.max(20, (candidateYears / Math.max(required.min, 1)) * 70)
+  else if (required.min !== null && saferCandidateYears < required.min) score = Math.max(20, (saferCandidateYears / Math.max(required.min, 1)) * 70)
   else {
     score = 100
     cap = experienceRelevanceCap({ requirement, skill, roleGapCount })
+    if (belowMinEvidence.applies) cap = Math.min(cap ?? 58, 58)
     if (cap !== null) score = Math.min(score, cap)
   }
   return {
@@ -191,8 +294,11 @@ const experienceBreakdown = (candidate, context, fitAssessment, requirement, ski
     candidate_years: candidateYears,
     required_min_years: required.min,
     required_max_years: required.max,
-    experience_relevance_cap_applied: cap !== null,
+    experience_relevance_cap_applied: cap !== null || belowMinEvidence.applies,
     role_gap_signal_count: roleGapCount,
+    below_min_experience_evidence_applied: belowMinEvidence.applies,
+    below_min_experience_signal_count: belowMinEvidence.signal_count,
+    safer_candidate_years: saferCandidateYears,
   }
 }
 
