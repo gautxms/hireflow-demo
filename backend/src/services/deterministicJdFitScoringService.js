@@ -18,18 +18,61 @@ const normalizeEvidenceText = (value) => String(value ?? '')
   .trim()
   .toLowerCase()
   .replace(/&/g, ' and ')
+  .replace(/[–—]/g, '-')
   .replace(/[^a-z0-9.+#\s-]/g, ' ')
-  .replace(/\b(?:with|and|or|the|a|an|for|to|of|in|on|at|required|requirement|requirements|experience|experienced|skills?|evidence|candidate|has|have|having)\b/g, ' ')
   .replace(/\s+/g, ' ')
   .trim()
 
-const canonicalEvidenceText = (value) => normalizeEvidenceText(value)
+const normalizeEvidenceConceptText = (value) => normalizeEvidenceText(value)
+  .replace(/[.+#-]/g, ' ')
+  .replace(/\b(?:with|and|or|the|a|an|for|to|of|in|on|at|required|requirement|requirements|skill|skills|evidence|candidate|has|have|having|no|not|without|missing|minimum|target|strong|good|solid|basic|basics|exposure|ownership|knowledge|hands|on)\b/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const canonicalEvidenceText = (value) => normalizeEvidenceConceptText(value)
   .split(' ')
   .filter(Boolean)
   .sort()
   .join(' ')
 
 const uniqueNormalized = (values) => [...new Set(asArray(values).map(canonicalEvidenceText).filter(Boolean))]
+
+const REQUIREMENT_CONCEPT_BUCKETS = Object.freeze([
+  ['experience_years', /\b(?:\d+(?:\.\d+)?\s*(?:\+\s*)?(?:years?|yrs?)|professional\s+experience|work\s+experience|relevant\s+experience|production\s+experience|early\s+career|junior\s+profile|experience\s+gap)\b/i],
+  ['cloud_platforms', /\b(?:cloud|aws|azure|gcp|google\s+cloud|kubernetes|k8s|docker|container|containers|deployment|devops)\b/i],
+  ['testing_ci', /\b(?:test|testing|unit\s+test|integration\s+test|automation|qa|quality\s+assurance|ci\s*cd|cicd|pipeline|pipelines)\b/i],
+  ['system_design', /\b(?:system\s+design|scalability|scalable|distributed\s+systems?|architecture|architectural|microservices?)\b/i],
+  ['async_background', /\b(?:async|asynchronous|queue|queues|background\s+jobs?|workers?|caching|cache|redis|messaging|event\s+driven)\b/i],
+  ['auth_security', /\b(?:auth|authentication|authorization|rbac|oauth|jwt|secure\s+api|security|permissions?)\b/i],
+  ['backend_framework', /\b(?:backend\s+framework|flask|express|django|fastapi|nestjs?|nest\s+js|spring\s+boot|rails|laravel)\b/i],
+  ['typescript_javascript_node', /\b(?:typescript|javascript|node\s*js|nodejs|node)\b/i],
+  ['backend_api', /\b(?:backend|api|apis|rest|graphql|services?|server\s+side)\b/i],
+  ['database_sql', /\b(?:sql|postgres|postgresql|mysql|database|databases|mongodb|mongo|nosql)\b/i],
+])
+
+const requirementConceptKey = (value) => {
+  const normalized = normalizeEvidenceText(value)
+  if (!normalized) return ''
+  for (const [bucket, pattern] of REQUIREMENT_CONCEPT_BUCKETS) {
+    if (pattern.test(normalized)) return bucket
+  }
+  return canonicalEvidenceText(normalized)
+}
+
+const normalizedRequirementEvidence = (matchedValues, missingValues) => {
+  const matchedBuckets = new Set(asArray(matchedValues).map(requirementConceptKey).filter(Boolean))
+  const missingBucketsRaw = new Set(asArray(missingValues).map(requirementConceptKey).filter(Boolean))
+  const missingBuckets = new Set([...missingBucketsRaw].filter((bucket) => !matchedBuckets.has(bucket)))
+  const buckets = [...new Set([...matchedBuckets, ...missingBuckets])].sort()
+  const requirementBucketScores = Object.fromEntries(buckets.map((bucket) => [bucket, matchedBuckets.has(bucket) ? 1 : 0]))
+  return {
+    matchedBuckets,
+    missingBuckets,
+    bucketCount: buckets.length,
+    requirementBucketScores,
+    smoothingApplied: asArray(matchedValues).length !== matchedBuckets.size || asArray(missingValues).length !== missingBuckets.size || missingBucketsRaw.size !== missingBuckets.size,
+  }
+}
 
 const numericValue = (value) => {
   if (!present(value)) return null
@@ -84,11 +127,23 @@ const hasJdContext = (context) => {
 }
 
 const requirementBreakdown = (fitAssessment) => {
-  const matched = uniqueNormalized(fitAssessment?.matched_requirements).length
-  const missing = uniqueNormalized(fitAssessment?.missing_requirements).length
+  const evidence = normalizedRequirementEvidence(fitAssessment?.matched_requirements, fitAssessment?.missing_requirements)
+  const matched = evidence.matchedBuckets.size
+  const missing = evidence.missingBuckets.size
   const total = matched + missing
   const score = total > 0 ? smoothEvidenceRatioScore(matched, missing) : 35
-  return { score: roundScore(score), weight: WEIGHTS.requirement_match, matched_count: matched, missing_count: missing, total_count: total }
+  return {
+    score: roundScore(score),
+    weight: WEIGHTS.requirement_match,
+    matched_count: matched,
+    missing_count: missing,
+    total_count: total,
+    normalized_requirement_match_count: matched,
+    normalized_requirement_missing_count: missing,
+    normalized_requirement_bucket_count: evidence.bucketCount,
+    requirement_bucket_scores: evidence.requirementBucketScores,
+    requirement_variance_smoothing_applied: evidence.smoothingApplied,
+  }
 }
 
 const smoothEvidenceRatioScore = (matched, missing) => {
@@ -103,8 +158,9 @@ const smoothEvidenceRatioScore = (matched, missing) => {
 }
 
 const skillBreakdown = (candidate) => {
-  const matched = uniqueNormalized(candidate?.matchedSkills).length
-  const missing = uniqueNormalized(candidate?.missingSkills).length
+  const skillEvidence = normalizedRequirementEvidence(candidate?.matchedSkills, candidate?.missingSkills)
+  const matched = skillEvidence.matchedBuckets.size
+  const missing = skillEvidence.missingBuckets.size
   const candidateSkillCount = uniqueNormalized([
     ...asArray(candidate?.skills_flat),
     ...asArray(candidate?.top_skills),
@@ -119,6 +175,10 @@ const skillBreakdown = (candidate) => {
     matched_count: matched,
     missing_count: missing,
     candidate_skill_count: candidateSkillCount,
+    normalized_requirement_match_count: matched,
+    normalized_requirement_missing_count: missing,
+    normalized_requirement_bucket_count: skillEvidence.bucketCount,
+    requirement_variance_smoothing_applied: skillEvidence.smoothingApplied,
   }
 }
 
