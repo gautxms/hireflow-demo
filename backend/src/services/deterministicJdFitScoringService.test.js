@@ -197,3 +197,94 @@ test('experienceYears is recognized for required years', () => {
   assert.equal(objectResult.scoring_breakdown.experience_alignment.required_min_years, 3)
   assert.equal(objectResult.scoring_breakdown.experience_alignment.required_max_years, 7)
 })
+
+const priyaLikeCandidate = () => ({
+  fit_assessment: {
+    matched_requirements: ['3 years experience', 'Java basics', 'SQL exposure'],
+    missing_requirements: [
+      'Not SDE experience; QA-focused background',
+      'No production feature ownership evidence',
+      'No backend ownership evidence',
+      'No system design or architecture evidence',
+    ],
+    risks_or_gaps: ['Role transition risk from QA to SDE', 'No deployment ownership evidence'],
+  },
+  matchedSkills: ['Java', 'SQL', 'Testing'],
+  missingSkills: ['Backend services', 'Cloud', 'Data structures', 'Algorithms'],
+  skills_flat: ['Java', 'SQL', 'Manual testing', 'Automation testing'],
+  top_skills: ['QA', 'Testing'],
+  years_experience: 3,
+  location: 'Kochi, India',
+  confidence: { skills: 0.9, experience: 0.98, fit_assessment: 0.98 },
+  profile_score: 80,
+})
+
+const sdeJdContext = () => ({
+  title: 'Software Development Engineer',
+  location: 'Bengaluru/Hyderabad/Pune/Remote Hybrid',
+  required_min_years: 3,
+})
+
+test('QA-focused candidate with missing SDE/backend ownership evidence does not receive max experience score', () => {
+  const result = scoreCandidateDeterministically(priyaLikeCandidate(), sdeJdContext())
+  const experience = result.scoring_breakdown.experience_alignment
+  assert.equal(experience.experience_relevance_cap_applied, true)
+  assert.ok(experience.role_gap_signal_count >= 4)
+  assert.ok(experience.score >= 45 && experience.score <= 65)
+  assert.notEqual(experience.score, 100)
+  assert.ok(result.final_score >= 40 && result.final_score < 50)
+})
+
+test('candidate with true SDE/backend evidence and enough years keeps high experience score', () => {
+  const input = candidate()
+  input.years_experience = 5
+  input.fit_assessment.matched_requirements = ['SDE experience', 'Backend ownership', 'Production feature delivery', 'System design']
+  input.fit_assessment.missing_requirements = ['Kubernetes']
+  input.fit_assessment.risks_or_gaps = []
+  input.matchedSkills = ['Node.js', 'Backend services', 'System design', 'SQL']
+  input.missingSkills = ['Kubernetes']
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 3 })
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+  assert.equal(result.scoring_breakdown.experience_alignment.experience_relevance_cap_applied, false)
+})
+
+test('Kochi vs Bengaluru/Hyderabad/Pune/Remote Hybrid scores below prior broad remote fallback', () => {
+  const result = scoreCandidateDeterministically(priyaLikeCandidate(), sdeJdContext())
+  assert.ok(result.scoring_breakdown.location_alignment.score >= 35)
+  assert.ok(result.scoring_breakdown.location_alignment.score <= 45)
+  assert.notEqual(result.scoring_breakdown.location_alignment.score, 65)
+})
+
+test('Remote candidate scores higher than non-listed city for Remote Hybrid JD', () => {
+  const kochi = scoreCandidateDeterministically(priyaLikeCandidate(), sdeJdContext())
+  const remote = priyaLikeCandidate()
+  remote.location = 'Remote, India'
+  const remoteResult = scoreCandidateDeterministically(remote, sdeJdContext())
+  assert.ok(remoteResult.scoring_breakdown.location_alignment.score > kochi.scoring_breakdown.location_alignment.score)
+})
+
+test('listed city tokens in slash-separated Remote Hybrid JD score high', () => {
+  const bengaluru = candidate()
+  bengaluru.location = 'Bengaluru, India'
+  assert.equal(scoreCandidateDeterministically(bengaluru, sdeJdContext()).scoring_breakdown.location_alignment.score, 95)
+
+  const hyderabad = candidate()
+  hyderabad.location = 'Hyderabad, Telangana'
+  assert.equal(scoreCandidateDeterministically(hyderabad, sdeJdContext()).scoring_breakdown.location_alignment.score, 95)
+
+  const pune = candidate()
+  pune.location = 'Pune'
+  assert.equal(scoreCandidateDeterministically(pune, sdeJdContext()).scoring_breakdown.location_alignment.score, 95)
+})
+
+test('exact location match scores high and missing location remains neutral', () => {
+  const exact = candidate()
+  exact.location = 'Austin, TX'
+  assert.equal(scoreCandidateDeterministically(exact, jdContext()).scoring_breakdown.location_alignment.score, 95)
+
+  const missingCandidateLocation = candidate()
+  delete missingCandidateLocation.location
+  assert.equal(scoreCandidateDeterministically(missingCandidateLocation, sdeJdContext()).scoring_breakdown.location_alignment.score, 50)
+
+  assert.equal(scoreCandidateDeterministically(candidate(), { title: 'Engineer' }).scoring_breakdown.location_alignment.score, 50)
+})
