@@ -301,6 +301,17 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
     allowlist_matched: Boolean(allowlistMatched),
     has_jd_context: Boolean(jobDescriptionContext?.hasContext),
     experience_score: resolveNumericScore(breakdown.experience_alignment?.score),
+    resolved_experience_years: resolveNumericScore(breakdown.experience_alignment?.resolved_experience_years),
+    required_min_experience_years: resolveNumericScore(breakdown.experience_alignment?.required_min_years),
+    experience_shortfall_years: resolveNumericScore(breakdown.experience_alignment?.experience_shortfall_years),
+    experience_resolution_source: typeof breakdown.experience_alignment?.experience_resolution_source === 'string'
+      ? breakdown.experience_alignment.experience_resolution_source
+      : null,
+    requirement_score: resolveNumericScore(breakdown.requirement_match?.score),
+    skill_score: resolveNumericScore(breakdown.skill_alignment?.score),
+    risk_penalty: resolveNumericScore(breakdown.risk_penalty?.penalty),
+    confidence_multiplier: resolveNumericScore(breakdown.confidence_adjustment?.multiplier),
+    final_score_before_rounding: resolveNumericScore(deterministicResult?.final_score_before_rounding),
     experience_relevance_cap_applied: typeof breakdown.experience_alignment?.experience_relevance_cap_applied === 'boolean'
       ? breakdown.experience_alignment.experience_relevance_cap_applied
       : null,
