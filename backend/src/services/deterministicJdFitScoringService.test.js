@@ -242,6 +242,46 @@ test('matched requirement claiming 2 years does not override below-minimum evide
   assert.notEqual(experience.score, 100)
 })
 
+test('non-experience Kubernetes shortfall gap does not trigger below-minimum experience cap', () => {
+  const input = candidate()
+  input.years_experience = 2.2
+  input.summary = 'Candidate has 2.2 years of professional software development experience.'
+  input.fit_assessment.matched_requirements = [
+    '2+ years professional software development experience',
+    'Java',
+    'SQL',
+  ]
+  input.fit_assessment.missing_requirements = ['Kubernetes']
+  input.fit_assessment.risks_or_gaps = ['Falls short of required Kubernetes depth']
+  input.matchedSkills = ['Java', 'SQL']
+  input.missingSkills = ['Kubernetes']
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2 })
+  const experience = result.scoring_breakdown.experience_alignment
+  assert.equal(experience.below_min_experience_evidence_applied, false)
+  assert.equal(experience.experience_relevance_cap_applied, false)
+  assert.equal(experience.score, 100)
+})
+
+test('non-experience architecture depth missing requirement does not trigger below-minimum experience cap', () => {
+  const input = candidate()
+  input.years_experience = 3
+  input.summary = 'Candidate has 3 years of professional software development experience.'
+  input.fit_assessment.matched_requirements = [
+    '3 years professional software development experience',
+    'Java',
+    'SQL',
+  ]
+  input.fit_assessment.missing_requirements = ['short of target architecture depth']
+  input.fit_assessment.risks_or_gaps = []
+  input.matchedSkills = ['Java', 'SQL']
+  input.missingSkills = ['architecture']
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2 })
+  const experience = result.scoring_breakdown.experience_alignment
+  assert.equal(experience.below_min_experience_evidence_applied, false)
+  assert.equal(experience.experience_relevance_cap_applied, false)
+  assert.equal(experience.score, 100)
+})
+
 test('true 2.2 years candidate is not penalized', () => {
   const input = candidate()
   input.years_experience = 2.2
