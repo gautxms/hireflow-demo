@@ -212,6 +212,54 @@ test('candidate years_experience of 2 is capped when text says 1.6 years', () =>
   assert.ok(result.scoring_breakdown.experience_alignment.score <= 60)
 })
 
+test('1.6 years in summary overrides years_experience=2', () => {
+  const input = candidate()
+  input.years_experience = 2
+  input.summary = 'Candidate has 1.6 years of experience and is 0.4 years below minimum.'
+  input.fit_assessment.rationale = 'AI initially rounded this to 2 years, but the resume evidence says 1.6 years.'
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2 })
+  const experience = result.scoring_breakdown.experience_alignment
+  assert.equal(experience.below_min_experience_evidence_applied, true)
+  assert.equal(experience.safer_candidate_years, 1.6)
+  assert.ok(experience.score < 100)
+  assert.ok(experience.score <= 60)
+})
+
+test('matched requirement claiming 2 years does not override below-minimum evidence', () => {
+  const input = candidate()
+  input.years_experience = 2
+  input.fit_assessment.matched_requirements = [
+    '2 years professional software development experience',
+    'Java',
+    'SQL',
+  ]
+  input.fit_assessment.risks_or_gaps = ['Resume states 1.6 years and below 2-year minimum.']
+  input.summary = 'Falls short of the 2-5 year requirement.'
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2, required_max_years: 5 })
+  const experience = result.scoring_breakdown.experience_alignment
+  assert.equal(experience.below_min_experience_evidence_applied, true)
+  assert.ok(experience.score <= 60)
+  assert.notEqual(experience.score, 100)
+})
+
+test('true 2.2 years candidate is not penalized', () => {
+  const input = candidate()
+  input.years_experience = 2.2
+  input.summary = 'Candidate has 2.2 years of professional software development experience.'
+  input.fit_assessment.matched_requirements = [
+    '2+ years professional software development experience',
+    'Java',
+    'SQL',
+  ]
+  input.fit_assessment.missing_requirements = ['Kubernetes']
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 2, required_max_years: 5 })
+  const experience = result.scoring_breakdown.experience_alignment
+  assert.equal(experience.below_min_experience_evidence_applied, false)
+  assert.equal(experience.experience_relevance_cap_applied, false)
+  assert.equal(experience.score, 100)
+})
+
 test('candidate years_experience of 2 is not capped without contradiction or gap signals', () => {
   const input = candidate()
   input.years_experience = 2

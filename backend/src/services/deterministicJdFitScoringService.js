@@ -305,6 +305,8 @@ const BELOW_MIN_EXPERIENCE_PATTERNS = Object.freeze([
   /\bbelow\s+\d+(?:\.\d+)?\s*(?:-|to|–|—)\s*\d+(?:\.\d+)?\s*years?\b/i,
   /\bbelow\s+required\s+years?\b/i,
   /\bless\s+than\s+(?:the\s+)?(?:minimum|required|target)\b/i,
+  /\bfalls?\s+(?:below|short\s+of)\s+(?:the\s+)?(?:\d+(?:\.\d+)?\s*(?:-|to|–|—)\s*\d+(?:\.\d+)?\s*years?|\d+(?:\.\d+)?\s*years?|minimum|required|target)\b/i,
+  /\bshort\s+of\s+(?:the\s+)?(?:\d+(?:\.\d+)?\s*(?:-|to|–|—)\s*\d+(?:\.\d+)?\s*years?|\d+(?:\.\d+)?\s*years?|minimum|required|target)\b/i,
 ])
 
 const TOTAL_EXPERIENCE_CONTEXT_PATTERN = /\b(?:total|overall|professional|relevant|engineering|software|work)\s+(?:\w+\s+){0,3}experience\b|\bexperience\s*(?::|-)?\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)\b/i
