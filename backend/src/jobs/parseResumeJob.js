@@ -188,6 +188,10 @@ function isDeterministicJdFitShadowEnabled(env = process.env) {
   return String(env.DETERMINISTIC_JD_FIT_SHADOW_ENABLED || '').trim().toLowerCase() === 'true'
 }
 
+function isDeterministicJdFitApplyEnabled(env = process.env) {
+  return String(env.DETERMINISTIC_JD_FIT_APPLY_ENABLED || '').trim().toLowerCase() === 'true'
+}
+
 function buildDeterministicJdFitShadowAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
   const userAllowlist = parseRuntimeAllowlist(env.DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_USER_IDS)
   const analysisAllowlist = parseRuntimeAllowlist(env.DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_ANALYSIS_IDS)
@@ -197,6 +201,19 @@ function buildDeterministicJdFitShadowAllowlistDiagnostic({ userId, analysisId, 
   return {
     has_allowlist: userAllowlist.length > 0 || analysisAllowlist.length > 0,
     allowlist_matched: allowedByUser || allowedByAnalysis,
+  }
+}
+
+function buildDeterministicJdFitApplyAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
+  const userAllowlist = parseRuntimeAllowlist(env.DETERMINISTIC_JD_FIT_APPLY_ALLOWED_USER_IDS)
+  const analysisAllowlist = parseRuntimeAllowlist(env.DETERMINISTIC_JD_FIT_APPLY_ALLOWED_ANALYSIS_IDS)
+  const allowedByUser = runtimeAllowlistMatches(userId, userAllowlist)
+  const allowedByAnalysis = runtimeAllowlistMatches(analysisId, analysisAllowlist)
+
+  return {
+    allowlist_matched: allowedByUser || allowedByAnalysis,
+    allowed_by_user_allowlist: allowedByUser,
+    allowed_by_analysis_allowlist: allowedByAnalysis,
   }
 }
 
@@ -252,6 +269,118 @@ function buildSafeDeterministicJdFitShadowDiagnostic({
       ? breakdown.experience_alignment.experience_relevance_cap_applied
       : null,
   }
+}
+
+function buildSafeDeterministicJdFitApplyDiagnostic({
+  action = 'skip',
+  candidate = {},
+  deterministicResult = null,
+  userId = null,
+  analysisId = null,
+  resumeId = null,
+  jobDescriptionContext = null,
+  allowlistMatched = false,
+} = {}) {
+  const originalAiScore = resolveCurrentAiScore(candidate)
+  const deterministicScore = resolveNumericScore(deterministicResult?.final_score)
+
+  return {
+    action,
+    analysis_id: analysisId || null,
+    resume_id: resumeId || candidate?.resumeId || null,
+    user_id: userId ?? null,
+    original_ai_score: originalAiScore,
+    applied_deterministic_score: action === 'applied' ? deterministicScore : null,
+    score_delta: action === 'applied' && deterministicScore !== null && originalAiScore !== null ? Math.round((deterministicScore - originalAiScore) * 10) / 10 : null,
+    scoring_contract_version: deterministicResult?.scoring_contract_version || null,
+    scoring_mode: deterministicResult?.scoring_mode || null,
+    allowlist_matched: Boolean(allowlistMatched),
+    has_jd_context: Boolean(jobDescriptionContext?.hasContext),
+  }
+}
+
+function logDeterministicJdFitApplyDiagnostic(logger, level, diagnostic) {
+  if (level === 'warn') logger.warn?.('[DeterministicJdFit] apply diagnostic', diagnostic)
+  else logger.info?.('[DeterministicJdFit] apply diagnostic', diagnostic)
+}
+
+function isEligibleDeterministicJdFitApply({ deterministicResult, jobDescriptionContext, allowlistMatched }) {
+  return Boolean(
+    allowlistMatched
+    && jobDescriptionContext?.hasContext
+    && deterministicResult?.scoring_mode === 'jd_fit'
+    && deterministicResult?.scoring_contract_version === 'deterministic_jd_fit_v1'
+    && resolveNumericScore(deterministicResult?.final_score) !== null,
+  )
+}
+
+function applyDeterministicJdFitScoreToCandidate(candidate, deterministicResult) {
+  const deterministicScore = resolveNumericScore(deterministicResult?.final_score)
+  if (deterministicScore === null) return candidate
+
+  const nextCandidate = {
+    ...candidate,
+    score: deterministicScore,
+    deterministic_jd_fit_apply_metadata: {
+      original_ai_score: resolveCurrentAiScore(candidate),
+      applied_deterministic_score: deterministicScore,
+      scoring_contract_version: deterministicResult?.scoring_contract_version || null,
+      scoring_mode: deterministicResult?.scoring_mode || null,
+    },
+  }
+
+  if (candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore)) {
+    nextCandidate.matchScore = {
+      ...candidate.matchScore,
+      score: deterministicScore,
+      score_out_of_ten: Math.round((deterministicScore / 10) * 10) / 10,
+    }
+  }
+
+  if (candidate?.fit_assessment && typeof candidate.fit_assessment === 'object' && !Array.isArray(candidate.fit_assessment)) {
+    nextCandidate.fit_assessment = {
+      ...candidate.fit_assessment,
+      overall_fit_score: deterministicScore,
+    }
+  }
+
+  return nextCandidate
+}
+
+export function applyDeterministicJdFitScoresForRuntimeTest({
+  candidates = [],
+  jobDescriptionContext,
+  userId,
+  analysisId,
+  resumeId,
+  logger = console,
+  env = process.env,
+} = {}) {
+  if (!Array.isArray(candidates) || !isDeterministicJdFitApplyEnabled(env)) return candidates
+
+  const allowlist = buildDeterministicJdFitApplyAllowlistDiagnostic({ userId, analysisId, env })
+  if (!allowlist.allowlist_matched || !jobDescriptionContext?.hasContext) return candidates
+
+  return candidates.map((candidate) => {
+    let deterministicResult = null
+    try {
+      deterministicResult = getDeterministicJdFitScorer()(candidate, jobDescriptionContext)
+      if (!isEligibleDeterministicJdFitApply({ deterministicResult, jobDescriptionContext, allowlistMatched: allowlist.allowlist_matched })) {
+        return candidate
+      }
+
+      const appliedCandidate = applyDeterministicJdFitScoreToCandidate(candidate, deterministicResult)
+      logDeterministicJdFitApplyDiagnostic(logger, 'info', buildSafeDeterministicJdFitApplyDiagnostic({
+        action: 'applied', candidate, deterministicResult, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true,
+      }))
+      return appliedCandidate
+    } catch (error) {
+      logDeterministicJdFitApplyDiagnostic(logger, 'warn', buildSafeDeterministicJdFitApplyDiagnostic({
+        action: 'failed_open', candidate, deterministicResult, userId, analysisId, resumeId, jobDescriptionContext, allowlistMatched: true,
+      }))
+      return candidate
+    }
+  })
 }
 
 function logDeterministicJdFitShadowDiagnostic(logger, level, diagnostic) {
@@ -1260,7 +1389,15 @@ export async function runParse(job) {
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
   const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
-  for (const candidate of normalizedCandidates) {
+  const finalCandidates = applyDeterministicJdFitScoresForRuntimeTest({
+    candidates: normalizedCandidates,
+    jobDescriptionContext,
+    userId: job.data.userId ?? null,
+    analysisId: analysisId || null,
+    resumeId,
+    logger: console,
+  })
+  for (const candidate of finalCandidates) {
     emitScoreContractShadowDiagnostic(candidate, {
       userId: job.data.userId ?? null,
       analysisId: analysisId || null,
@@ -1315,7 +1452,7 @@ export async function runParse(job) {
     jobDescriptionContextMissingReason: jobDescriptionContext?.hasContext
       ? null
       : (jobDescriptionContext?.missingReason || 'job_description_missing'),
-    candidates: normalizedCandidates,
+    candidates: finalCandidates,
   }
 
   const parseDurationMs = Date.now() - startedAt
@@ -1323,7 +1460,7 @@ export async function runParse(job) {
   const prePersistCancellation = await cancelIfAnalysisInactive(job, 'before_persist')
   if (prePersistCancellation) return prePersistCancellation
 
-  const primaryCandidate = normalizedCandidates[0] || null
+  const primaryCandidate = finalCandidates[0] || null
   await pool.query(
     `UPDATE resumes
      SET parse_status = 'complete',
@@ -1503,4 +1640,6 @@ export const __testables = {
   writeAiScoreCacheShadow,
   emitDeterministicJdFitShadowDiagnostic,
   buildSafeDeterministicJdFitShadowDiagnostic,
+  applyDeterministicJdFitScoresForRuntimeTest,
+  buildSafeDeterministicJdFitApplyDiagnostic,
 }
