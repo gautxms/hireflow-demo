@@ -283,12 +283,16 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
 } = {}) {
   const originalAiScore = resolveCurrentAiScore(candidate)
   const deterministicScore = resolveNumericScore(deterministicResult?.final_score)
+  const breakdown = deterministicResult?.scoring_breakdown && typeof deterministicResult.scoring_breakdown === 'object'
+    ? deterministicResult.scoring_breakdown
+    : {}
 
   return {
     action,
     analysis_id: analysisId || null,
     resume_id: resumeId || candidate?.resumeId || null,
     user_id: userId ?? null,
+    deterministic_final_score: deterministicScore,
     original_ai_score: originalAiScore,
     applied_deterministic_score: action === 'applied' ? deterministicScore : null,
     score_delta: action === 'applied' && deterministicScore !== null && originalAiScore !== null ? Math.round((deterministicScore - originalAiScore) * 10) / 10 : null,
@@ -296,6 +300,13 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
     scoring_mode: deterministicResult?.scoring_mode || null,
     allowlist_matched: Boolean(allowlistMatched),
     has_jd_context: Boolean(jobDescriptionContext?.hasContext),
+    experience_score: resolveNumericScore(breakdown.experience_alignment?.score),
+    experience_relevance_cap_applied: typeof breakdown.experience_alignment?.experience_relevance_cap_applied === 'boolean'
+      ? breakdown.experience_alignment.experience_relevance_cap_applied
+      : null,
+    below_min_experience_evidence_applied: typeof breakdown.experience_alignment?.below_min_experience_evidence_applied === 'boolean'
+      ? breakdown.experience_alignment.below_min_experience_evidence_applied
+      : null,
   }
 }
 
