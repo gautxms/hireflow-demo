@@ -1727,6 +1727,7 @@ test('deterministic JD-fit apply replaces user-allowlisted JD-backed scores and 
     assert.deepEqual(result[0].fit_assessment.matched_requirements, ['Do not log matched raw requirement'])
     assert.deepEqual(result[0].fit_assessment.missing_requirements, ['Kubernetes'])
     assert.equal(result[0].deterministic_jd_fit_apply_metadata.original_ai_score, 82)
+    assert.equal(__testables.hasDeterministicJdFitAppliedScore(result[0]), true)
     assert.equal(logs[0][0], '[DeterministicJdFit] apply diagnostic')
     assert.equal(logs[0][1].action, 'applied')
     assert.equal(JSON.stringify(logs).includes('Private Candidate'), false)
@@ -1765,6 +1766,24 @@ test('deterministic JD-fit apply replaces analysis-allowlisted JD-backed scores'
     restoreEnv()
     __resetParseResumeJobTestOverrides()
   }
+})
+
+test('AI score-cache shadow gate skips deterministic-applied candidates only', () => {
+  const aiCandidate = deterministicShadowCandidateFixture()
+  const deterministicAppliedCandidate = {
+    ...deterministicShadowCandidateFixture(),
+    deterministic_jd_fit_apply_metadata: {
+      original_ai_score: 82,
+      applied_deterministic_score: 74.5,
+      scoring_contract_version: 'deterministic_jd_fit_v1',
+      scoring_mode: 'jd_fit',
+    },
+  }
+
+  assert.equal(__testables.hasDeterministicJdFitAppliedScore(aiCandidate), false)
+  assert.equal(__testables.hasDeterministicJdFitAppliedScore(deterministicAppliedCandidate), true)
+  assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(aiCandidate), false)
+  assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(deterministicAppliedCandidate), true)
 })
 
 test('deterministic JD-fit apply leaves no-JD and non-finite deterministic scores unchanged', () => {

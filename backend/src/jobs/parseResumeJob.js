@@ -347,6 +347,18 @@ function applyDeterministicJdFitScoreToCandidate(candidate, deterministicResult)
   return nextCandidate
 }
 
+function hasDeterministicJdFitAppliedScore(candidate = {}) {
+  return Boolean(
+    candidate?.deterministic_jd_fit_apply_metadata
+    && typeof candidate.deterministic_jd_fit_apply_metadata === 'object'
+    && !Array.isArray(candidate.deterministic_jd_fit_apply_metadata),
+  )
+}
+
+function shouldSkipAiScoreCacheShadowForCandidate(candidate = {}) {
+  return hasDeterministicJdFitAppliedScore(candidate)
+}
+
 export function applyDeterministicJdFitScoresForRuntimeTest({
   candidates = [],
   jobDescriptionContext,
@@ -1414,6 +1426,8 @@ export async function runParse(job) {
       model: scoreContractShadowMetadata.model,
       logger: console,
     })
+    if (shouldSkipAiScoreCacheShadowForCandidate(candidate)) continue
+
     await readAiScoreCacheShadowDiagnostic({
       candidate,
       preparedResumePayload,
@@ -1642,4 +1656,6 @@ export const __testables = {
   buildSafeDeterministicJdFitShadowDiagnostic,
   applyDeterministicJdFitScoresForRuntimeTest,
   buildSafeDeterministicJdFitApplyDiagnostic,
+  hasDeterministicJdFitAppliedScore,
+  shouldSkipAiScoreCacheShadowForCandidate,
 }
