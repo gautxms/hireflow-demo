@@ -1411,6 +1411,9 @@ function withDeterministicJdFitShadowEnv(overrides = {}) {
     'DETERMINISTIC_JD_FIT_SHADOW_ENABLED',
     'DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_USER_IDS',
     'DETERMINISTIC_JD_FIT_SHADOW_ALLOWED_ANALYSIS_IDS',
+    'DETERMINISTIC_JD_FIT_APPLY_ENABLED',
+    'DETERMINISTIC_JD_FIT_APPLY_ALLOWED_USER_IDS',
+    'DETERMINISTIC_JD_FIT_APPLY_ALLOWED_ANALYSIS_IDS',
   ]
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
   for (const key of keys) delete process.env[key]
@@ -1609,6 +1612,217 @@ test('deterministic JD-fit shadow failure logs failed_open and does not fail par
     assert.equal(JSON.parse(logs[0][1]).action, 'failed_open')
     assert.equal(JSON.stringify(logs).includes('private@example.com'), false)
     assert.equal(JSON.stringify(logs).includes('raw text'), false)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('deterministic JD-fit apply disabled leaves candidate scores unchanged', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({
+    DETERMINISTIC_JD_FIT_APPLY_ENABLED: 'false',
+    DETERMINISTIC_JD_FIT_APPLY_ALLOWED_USER_IDS: '24',
+  })
+  let calls = 0
+  __setParseResumeJobTestOverrides({
+    scoreCandidateDeterministically: () => {
+      calls += 1
+      return { final_score: 74.5, scoring_contract_version: 'deterministic_jd_fit_v1', scoring_mode: 'jd_fit' }
+    },
+  })
+
+  try {
+    const candidate = deterministicShadowCandidateFixture()
+    const result = __testables.applyDeterministicJdFitScoresForRuntimeTest({
+      candidates: [candidate],
+      jobDescriptionContext: { hasContext: true, requirements: 'Node', skills: ['Node.js'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: () => {}, warn: () => {} },
+    })
+
+    assert.strictEqual(result[0], candidate)
+    assert.equal(result[0].score, 82)
+    assert.equal(result[0].matchScore.score, 82)
+    assert.equal(calls, 0)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('deterministic JD-fit apply enabled without allowlist leaves candidate scores unchanged', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({ DETERMINISTIC_JD_FIT_APPLY_ENABLED: 'true' })
+  let calls = 0
+  __setParseResumeJobTestOverrides({
+    scoreCandidateDeterministically: () => {
+      calls += 1
+      return { final_score: 74.5, scoring_contract_version: 'deterministic_jd_fit_v1', scoring_mode: 'jd_fit' }
+    },
+  })
+
+  try {
+    const candidate = deterministicShadowCandidateFixture()
+    const result = __testables.applyDeterministicJdFitScoresForRuntimeTest({
+      candidates: [candidate],
+      jobDescriptionContext: { hasContext: true, requirements: 'Node', skills: ['Node.js'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: () => {}, warn: () => {} },
+    })
+
+    assert.strictEqual(result[0], candidate)
+    assert.equal(result[0].score, 82)
+    assert.equal(result[0].matchScore.score, 82)
+    assert.equal(calls, 0)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('deterministic JD-fit apply replaces user-allowlisted JD-backed scores and preserves reasoning fields', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({
+    DETERMINISTIC_JD_FIT_APPLY_ENABLED: 'true',
+    DETERMINISTIC_JD_FIT_APPLY_ALLOWED_USER_IDS: '24',
+  })
+  const logs = []
+  __setParseResumeJobTestOverrides({
+    scoreCandidateDeterministically: () => ({
+      final_score: 74.5,
+      scoring_contract_version: 'deterministic_jd_fit_v1',
+      scoring_mode: 'jd_fit',
+    }),
+  })
+
+  try {
+    const candidate = {
+      ...deterministicShadowCandidateFixture(),
+      strengths: ['Strong backend delivery'],
+      considerations: ['Limited Kubernetes'],
+      fit_assessment: {
+        ...deterministicShadowCandidateFixture().fit_assessment,
+        missing_requirements: ['Kubernetes'],
+      },
+    }
+    const result = __testables.applyDeterministicJdFitScoresForRuntimeTest({
+      candidates: [candidate],
+      jobDescriptionContext: { hasContext: true, requirements: 'Node', skills: ['Node.js'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+    })
+
+    assert.notStrictEqual(result[0], candidate)
+    assert.equal(result[0].score, 74.5)
+    assert.equal(result[0].matchScore.score, 74.5)
+    assert.equal(result[0].matchScore.score_out_of_ten, 7.5)
+    assert.equal(result[0].fit_assessment.overall_fit_score, 74.5)
+    assert.equal(result[0].matchScore.reason, 'Do not log recommendation text')
+    assert.deepEqual(result[0].strengths, ['Strong backend delivery'])
+    assert.deepEqual(result[0].considerations, ['Limited Kubernetes'])
+    assert.deepEqual(result[0].fit_assessment.matched_requirements, ['Do not log matched raw requirement'])
+    assert.deepEqual(result[0].fit_assessment.missing_requirements, ['Kubernetes'])
+    assert.equal(result[0].deterministic_jd_fit_apply_metadata.original_ai_score, 82)
+    assert.equal(__testables.hasDeterministicJdFitAppliedScore(result[0]), true)
+    assert.equal(logs[0][0], '[DeterministicJdFit] apply diagnostic')
+    assert.equal(logs[0][1].action, 'applied')
+    assert.equal(JSON.stringify(logs).includes('Private Candidate'), false)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('deterministic JD-fit apply replaces analysis-allowlisted JD-backed scores', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({
+    DETERMINISTIC_JD_FIT_APPLY_ENABLED: 'true',
+    DETERMINISTIC_JD_FIT_APPLY_ALLOWED_ANALYSIS_IDS: 'analysis-1',
+  })
+  __setParseResumeJobTestOverrides({
+    scoreCandidateDeterministically: () => ({
+      final_score: 50.1,
+      scoring_contract_version: 'deterministic_jd_fit_v1',
+      scoring_mode: 'jd_fit',
+    }),
+  })
+
+  try {
+    const result = __testables.applyDeterministicJdFitScoresForRuntimeTest({
+      candidates: [deterministicShadowCandidateFixture()],
+      jobDescriptionContext: { hasContext: true, requirements: 'Node', skills: ['Node.js'] },
+      userId: 999,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: () => {}, warn: () => {} },
+    })
+
+    assert.equal(result[0].score, 50.1)
+    assert.equal(result[0].matchScore.score, 50.1)
+  } finally {
+    restoreEnv()
+    __resetParseResumeJobTestOverrides()
+  }
+})
+
+test('AI score-cache shadow gate skips deterministic-applied candidates only', () => {
+  const aiCandidate = deterministicShadowCandidateFixture()
+  const deterministicAppliedCandidate = {
+    ...deterministicShadowCandidateFixture(),
+    deterministic_jd_fit_apply_metadata: {
+      original_ai_score: 82,
+      applied_deterministic_score: 74.5,
+      scoring_contract_version: 'deterministic_jd_fit_v1',
+      scoring_mode: 'jd_fit',
+    },
+  }
+
+  assert.equal(__testables.hasDeterministicJdFitAppliedScore(aiCandidate), false)
+  assert.equal(__testables.hasDeterministicJdFitAppliedScore(deterministicAppliedCandidate), true)
+  assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(aiCandidate), false)
+  assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(deterministicAppliedCandidate), true)
+})
+
+test('deterministic JD-fit apply leaves no-JD and non-finite deterministic scores unchanged', () => {
+  const restoreEnv = withDeterministicJdFitShadowEnv({
+    DETERMINISTIC_JD_FIT_APPLY_ENABLED: 'true',
+    DETERMINISTIC_JD_FIT_APPLY_ALLOWED_USER_IDS: '24',
+  })
+  __setParseResumeJobTestOverrides({
+    scoreCandidateDeterministically: () => ({
+      final_score: Number.NaN,
+      scoring_contract_version: 'deterministic_jd_fit_v1',
+      scoring_mode: 'jd_fit',
+    }),
+  })
+
+  try {
+    const noJdCandidate = deterministicShadowCandidateFixture()
+    const noJdResult = __testables.applyDeterministicJdFitScoresForRuntimeTest({
+      candidates: [noJdCandidate],
+      jobDescriptionContext: { hasContext: false },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: () => {}, warn: () => {} },
+    })
+    assert.strictEqual(noJdResult[0], noJdCandidate)
+    assert.equal(noJdResult[0].score, 82)
+
+    const nonFiniteCandidate = deterministicShadowCandidateFixture()
+    const nonFiniteResult = __testables.applyDeterministicJdFitScoresForRuntimeTest({
+      candidates: [nonFiniteCandidate],
+      jobDescriptionContext: { hasContext: true, requirements: 'Node', skills: ['Node.js'] },
+      userId: 24,
+      analysisId: 'analysis-1',
+      resumeId: 'resume-1',
+      logger: { info: () => {}, warn: () => {} },
+    })
+    assert.strictEqual(nonFiniteResult[0], nonFiniteCandidate)
+    assert.equal(nonFiniteResult[0].matchScore.score, 82)
   } finally {
     restoreEnv()
     __resetParseResumeJobTestOverrides()
