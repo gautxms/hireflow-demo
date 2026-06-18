@@ -748,6 +748,127 @@ test('strong SDE candidate with backend cloud testing and system design scores m
   assert.ok(strongResult.final_score >= 75)
 })
 
+test('Aisha-like DOC/PDF/DOCX evidence drift stays stable from structured resume evidence', () => {
+  const context = { ...sdeJdContext(), required_min_years: 4, required_max_years: 7 }
+  const structuredResumeEvidence = {
+    skills_flat: [
+      'TypeScript',
+      'Node.js',
+      'Express',
+      'NestJS',
+      'React',
+      'Next.js',
+      'PostgreSQL',
+      'Redis',
+      'Docker',
+      'AWS',
+      'Jest',
+      'GitHub Actions',
+      'RBAC',
+      'JWT',
+    ],
+    skills_structured: {
+      backend: ['Node.js', 'Express APIs', 'NestJS services', 'PostgreSQL'],
+      frontend: ['React', 'Next.js'],
+      platform: ['Redis caching', 'Docker deployments', 'AWS'],
+      quality: ['Jest unit tests', 'CI/CD with GitHub Actions'],
+      security: ['RBAC permissions', 'JWT authentication'],
+    },
+    experience: [
+      {
+        title: 'Software Engineer',
+        bullets: [
+          'Built production backend APIs with Node.js, Express, NestJS, and PostgreSQL.',
+          'Implemented RBAC, JWT authentication, Redis caching, async workers, and background jobs.',
+          'Owned incident RCA, monitoring improvements, Jest tests, CI/CD, Docker, and AWS deployments.',
+          'Contributed scalable service architecture and system design reviews.',
+        ],
+      },
+    ],
+    projects: [
+      'Production recruiting workflow using React, Next.js, Node.js APIs, PostgreSQL, Redis queues, and secure RBAC.',
+    ],
+    achievements: ['Reduced API latency with caching and background job processing; improved deployment reliability.'],
+    years_experience: 4.1,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 85,
+  }
+  const aishaLike = ({ matched, missing, matchedSkills = matched, missingSkills = missing, risks = [], aiScore }) => ({
+    ...structuredClone(structuredResumeEvidence),
+    score: aiScore,
+    matchScore: { score: aiScore, reason: 'AI generated format-specific rationale.' },
+    fit_assessment: {
+      overall_fit_score: aiScore,
+      rationale: 'AI generated format-specific fit assessment.',
+      matched_requirements: matched,
+      missing_requirements: missing,
+      risks_or_gaps: risks,
+    },
+    matchedSkills,
+    missingSkills,
+  })
+
+  const docx = scoreCandidateDeterministically(aishaLike({
+    aiScore: 88,
+    matched: ['TypeScript/Node.js', 'React', 'PostgreSQL', '4 years experience'],
+    missing: ['system design depth', 'algorithms', 'cloud breadth'],
+    risks: ['May lack FAANG-scale distributed systems depth', 'Cloud breadth not fully shown'],
+  }), context)
+  const pdf = scoreCandidateDeterministically(aishaLike({
+    aiScore: 88,
+    matched: ['TypeScript/Node.js backend APIs', 'React/Next.js', 'PostgreSQL', 'Redis caching', 'RBAC/JWT API security', 'async/background jobs', 'Bengaluru match', 'testing CI/CD', 'production monitoring and incident RCA'],
+    missing: ['advanced algorithms'],
+    risks: ['Limited big-tech scale evidence'],
+  }), context)
+  const doc = scoreCandidateDeterministically(aishaLike({
+    aiScore: 82,
+    matched: ['Node APIs', 'React', 'SQL', '4 years professional experience'],
+    missing: ['no FAANG-scale distributed systems', 'system design', 'cloud breadth', 'algorithms'],
+    risks: ['Missing system design repeated in narrative', 'No broad cloud platform ownership'],
+  }), context)
+
+  for (const result of [docx, pdf, doc]) {
+    const breakdown = result.scoring_breakdown
+    assert.ok(result.final_score >= 70)
+    assert.equal(breakdown.experience_alignment.resolved_experience_years, 4.1)
+    assert.equal(breakdown.experience_alignment.experience_resolution_source, 'candidate_years')
+    assert.equal(breakdown.experience_alignment.score, 100)
+    assert.ok(breakdown.requirement_match.structured_positive_bucket_count > 0)
+    assert.ok(breakdown.skill_alignment.structured_positive_bucket_count > 0)
+  }
+
+  const scores = [docx.final_score, pdf.final_score, doc.final_score]
+  assert.ok(Math.max(...scores) - Math.min(...scores) <= 5)
+})
+
+test('structured positive evidence covers repeated narrative missing buckets without raw text diagnostics', () => {
+  const input = candidate()
+  input.years_experience = 5
+  input.skills_flat = ['Node.js', 'PostgreSQL', 'Redis', 'JWT', 'RBAC', 'Jest', 'GitHub Actions', 'AWS']
+  input.experience = ['Built backend APIs with async Redis queues, secure JWT/RBAC, Jest tests, CI/CD, AWS deployments, and system design ownership.']
+  input.fit_assessment.matched_requirements = ['Node.js APIs', 'SQL']
+  input.fit_assessment.missing_requirements = [
+    'No system design evidence',
+    'Missing architecture depth',
+    'No async/background jobs',
+    'Missing Redis caching',
+    'No RBAC/JWT security',
+    'Missing CI/CD testing',
+  ]
+  input.fit_assessment.risks_or_gaps = ['No system design evidence', 'No system design evidence']
+  input.matchedSkills = ['Node.js', 'SQL']
+  input.missingSkills = input.fit_assessment.missing_requirements
+
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 4 })
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.system_design, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.async_background, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.auth_security, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.testing_ci, 1)
+  assert.ok(result.scoring_breakdown.risk_penalty.penalty <= 2)
+  assert.equal(JSON.stringify(result).includes(input.experience[0]), false)
+})
+
 test('Docker basics do not cancel production AWS/GCP/Kubernetes cloud gaps', () => {
   const input = candidate()
   input.fit_assessment.matched_requirements = ['Docker basics', 'Render deployment', 'Railway deployment']
