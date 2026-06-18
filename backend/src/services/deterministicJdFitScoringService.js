@@ -619,6 +619,27 @@ const riskBreakdown = (fitAssessment) => {
   return { penalty: Math.min(10, gapCount * 2), gap_count: gapCount }
 }
 
+
+const EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERNS = Object.freeze([
+  /\b(?:junior\s+profile|junior\s+candidate|junior[-\s]*level\s+(?:candidate|experience)|junior\s+role|junior[-\s]*only\s+experience)\b/i,
+  /(?:^|[.;:]\s*)(?:a\s+|an\s+)?junior\s+developers?\b/i,
+  /\b(?:early[-\s]*career|entry[-\s]*level|graduate|trainee)\s+(?:profile|candidate|experience|role)\b/i,
+  /\b(?:basic|basics|beginner|toy|demo|academic|manual\s+testing|manual[-\s]*only|only\s+manual|manual\s+qa\s+only|manual\s+api\s+testing|exposure|frontend[-\s]*only|frontend\s+leaning|frontend\s+focused|limited\s+backend|no\s+backend|no\s+production|not\s+sde|unrelated)\b/i,
+])
+
+const hasExplicitWeakStructuredEvidence = (candidate, fitAssessment) => candidateExperienceEvidenceTexts(candidate, fitAssessment)
+  .some((text) => EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERNS.some((pattern) => pattern.test(String(text ?? ''))))
+
+const shouldApplyStrongStructuredFinalFloor = (candidate, fitAssessment, breakdown, cap) => {
+  if (!hasStrongStructuredSdeCoverage(candidate)) return false
+  if (cap !== null && cap < 85) return false
+  if ((breakdown.evidence_completeness?.available_signal_count ?? 0) < 4) return false
+  if (breakdown.experience_alignment?.below_min_experience_evidence_applied) return false
+  if ((breakdown.experience_alignment?.score ?? 0) < 70) return false
+  if (hasExplicitWeakStructuredEvidence(candidate, fitAssessment)) return false
+  return true
+}
+
 const CORE_DEPTH_GAP_BUCKETS = new Set(['system_design', 'cloud_platforms', 'testing_ci', 'async_background', 'auth_security'])
 
 const finalScoreCap = (breakdown) => {
@@ -699,7 +720,10 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
   const finalScoreBeforeRounding = cap === null
     ? uncappedFinalScoreBeforeRounding
     : Math.min(uncappedFinalScoreBeforeRounding, cap)
-  const finalScore = roundScore(finalScoreBeforeRounding)
+  const roundedFinalScore = roundScore(finalScoreBeforeRounding)
+  const strongStructuredFinalFloorApplied = shouldApplyStrongStructuredFinalFloor(safeCandidate, fitAssessment, breakdown, cap)
+    && roundedFinalScore < 85
+  const finalScore = strongStructuredFinalFloorApplied ? 85 : roundedFinalScore
   const mapping = bandAndVerdict(finalScore)
 
   return {
@@ -709,6 +733,7 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     scoring_mode: 'jd_fit',
     scoring_contract_version: CONTRACT_VERSION,
     final_score_before_rounding: finalScoreBeforeRounding,
+    final_score_floor_applied: strongStructuredFinalFloorApplied,
     score_cap_applied: cap !== null && uncappedFinalScoreBeforeRounding > cap,
     scoring_breakdown: breakdown,
     scoring_explanation: 'Deterministic JD-fit score computed from structured requirement, skill, experience, location, evidence, risk, and confidence signals.',
