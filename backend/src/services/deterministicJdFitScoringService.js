@@ -107,11 +107,18 @@ const missingEvidenceCoveredByMatch = (missing, matched) => {
   return matched.strongCoverage && !matched.weak
 }
 
-const structuredConceptEvidence = (value, bucket) => {
+const STRUCTURED_STRONG_COVERAGE_PATTERN = /\b(?:production|depth|ownership|owned|implementation|implemented|built|delivered|deployed|deployment|rollout|pipeline|infrastructure|secure\s+api|scalable|scale|architecture|architectural)\b/i
+
+const structuredConceptEvidence = (value, bucket, source = 'rich_structured') => {
   const evidence = requirementConceptEvidence(value)
+  const hasStructuredDepthSignal = STRUCTURED_STRONG_COVERAGE_PATTERN.test(String(value ?? ''))
   return {
     ...evidence,
     bucket,
+    strongCoverage: !hasStructuredDepthSignal
+      ? false
+      : evidence.strongCoverage,
+    source,
     structured: true,
   }
 }
@@ -324,22 +331,22 @@ const structuredCandidateEvidenceTexts = (candidate) => {
   ]
   if (richStructuredEvidence.length === 0) return []
   return [
-    ...flattenText(candidate?.skills_flat),
-    ...flattenText(candidate?.top_skills),
-    ...richStructuredEvidence,
+    ...flattenText(candidate?.skills_flat).map((text) => ({ text, source: 'flat_skill' })),
+    ...flattenText(candidate?.top_skills).map((text) => ({ text, source: 'top_skill' })),
+    ...richStructuredEvidence.map((text) => ({ text, source: 'rich_structured' })),
   ]
 }
 
 const structuredPositiveEvidence = (candidate) => {
   const evidenceByBucketAndStrength = new Map()
-  for (const text of structuredCandidateEvidenceTexts(candidate)) {
+  for (const { text, source } of structuredCandidateEvidenceTexts(candidate)) {
     const normalized = withSemanticLanguageTokens(text)
     if (!normalized) continue
     for (const [bucket, pattern] of STRUCTURED_POSITIVE_PATTERNS) {
       if (!pattern.test(normalized)) continue
-      const evidence = structuredConceptEvidence(normalized, bucket)
+      const evidence = structuredConceptEvidence(normalized, bucket, source)
       const strengthKey = evidence.weak ? 'weak' : (evidence.strongCoverage ? 'strong' : 'neutral')
-      evidenceByBucketAndStrength.set(`${bucket}:${strengthKey}`, evidence)
+      evidenceByBucketAndStrength.set(`${bucket}:${source}:${strengthKey}`, evidence)
     }
   }
   return [...evidenceByBucketAndStrength.values()].sort((first, second) => first.bucket.localeCompare(second.bucket))

@@ -964,6 +964,78 @@ test('Pytest basics/manual testing in structured fields do not cancel integratio
   assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.testing_ci, 0)
 })
 
+test('flat skills do not cancel production depth gaps when rich evidence lacks ownership depth', () => {
+  const cases = [
+    {
+      skill: ['AWS'],
+      missing: 'AWS/GCP/Kubernetes production cloud experience',
+      bucket: 'cloud_platforms',
+    },
+    {
+      skill: ['Kubernetes'],
+      missing: 'production Kubernetes infrastructure ownership',
+      bucket: 'cloud_platforms',
+    },
+    {
+      skill: ['RBAC', 'JWT'],
+      missing: 'secure auth/RBAC implementation depth',
+      bucket: 'auth_security',
+    },
+    {
+      skill: ['Redis'],
+      missing: 'production queues/caching ownership',
+      bucket: 'async_background',
+    },
+    {
+      skill: ['GitHub Actions'],
+      missing: 'CI/CD pipeline ownership',
+      bucket: 'testing_ci',
+    },
+  ]
+
+  for (const { skill, missing, bucket } of cases) {
+    const input = candidate()
+    input.skills_flat = skill
+    input.top_skills = skill
+    input.skills_structured = { tools: skill }
+    input.projects = ['Internal demo project with listed tools only.']
+    input.fit_assessment.matched_requirements = ['Backend API']
+    input.fit_assessment.missing_requirements = [missing]
+    input.matchedSkills = ['Backend API']
+    input.missingSkills = [missing]
+
+    const result = scoreCandidateDeterministically(input, sdeJdContext())
+    assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores[bucket], 0, `${skill.join('/')} should not cover ${bucket}`)
+    assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores[bucket], 0, `${skill.join('/')} should not cover skill ${bucket}`)
+  }
+})
+
+test('rich implementation and ownership evidence can cover auth and cloud depth gaps', () => {
+  const input = candidate()
+  input.skills_flat = ['AWS', 'Kubernetes', 'RBAC', 'JWT']
+  input.skills_structured = {
+    security: ['RBAC', 'JWT'],
+    platform: ['AWS', 'Kubernetes'],
+  }
+  input.experience = [
+    'Implemented production RBAC/JWT authentication and owned secure API authorization.',
+    'Owned AWS deployment pipeline and Kubernetes production rollout for backend services.',
+  ]
+  input.fit_assessment.matched_requirements = ['Backend API']
+  input.fit_assessment.missing_requirements = [
+    'secure auth/RBAC implementation depth',
+    'AWS/GCP/Kubernetes production cloud experience',
+  ]
+  input.matchedSkills = ['Backend API']
+  input.missingSkills = input.fit_assessment.missing_requirements
+
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.auth_security, 1)
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 1)
+  assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.auth_security, 1)
+  assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.cloud_platforms, 1)
+})
+
 test('Docker basics do not cancel production AWS/GCP/Kubernetes cloud gaps', () => {
   const input = candidate()
   input.fit_assessment.matched_requirements = ['Docker basics', 'Render deployment', 'Railway deployment']
