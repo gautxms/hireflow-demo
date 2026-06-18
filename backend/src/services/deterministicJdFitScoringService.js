@@ -359,10 +359,18 @@ const structuredPositiveEvidence = (candidate) => {
 }
 
 const candidateExperienceEvidenceTexts = (candidate, fitAssessment) => [
+  ...flattenText(candidate?.years_experience_notes),
+  ...flattenText(candidate?.experience_summary),
   ...flattenText(candidate?.summary),
   ...flattenText(candidate?.recommendation),
   ...flattenText(candidate?.matchScore?.reason),
   ...flattenText(candidate?.matchScore?.breakdown),
+  ...flattenText(candidate?.experience),
+  ...flattenText(candidate?.experiences),
+  ...flattenText(candidate?.work_experience),
+  ...flattenText(candidate?.employment_history),
+  ...flattenText(candidate?.projects),
+  ...flattenText(candidate?.achievements),
   ...flattenText(fitAssessment?.rationale),
   ...flattenText(fitAssessment?.notes),
   ...flattenText(fitAssessment?.risks_or_gaps),
@@ -408,13 +416,14 @@ const reliableTotalExperienceYearsFromText = (text) => {
     const near = `${before} ${match[0]} ${after}`
     const afterNumber = source.slice(index + match[0].length, Math.min(source.length, index + match[0].length + 24))
     const beforeNumber = source.slice(Math.max(0, index - 24), index)
-    const skillSpecific = SKILL_DURATION_CONTEXT_PATTERN.test(`${beforeNumber} ${afterNumber}`) && !/\bexperience\b/i.test(afterNumber)
+    const skillSpecific = SKILL_DURATION_CONTEXT_PATTERN.test(`${beforeNumber} ${afterNumber}`)
+      && !/\b(?:total|overall|professional|relevant|engineering|software|work|experience)\b/i.test(afterNumber)
     const shortfallSpecific = EXPERIENCE_SHORTFALL_CONTEXT_PATTERN.test(near)
       && (/\b(?:below|under|short|shortfall|gap|deficit|less\s+than)\b/i.test(`${beforeNumber} ${afterNumber}`) || /\bby\s*$/i.test(beforeNumber))
       && !/\b(?:has|have|having|with|total|overall|professional|relevant|engineering|software|work)\s*$/i.test(beforeNumber)
       && (/\bby\s*$/i.test(beforeNumber) || !/\b(?:has|have|having|with)\b/i.test(beforeNumber))
       && !/^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+)?experience\b/i.test(afterNumber)
-    const totalExperience = TOTAL_EXPERIENCE_CONTEXT_PATTERN.test(near) || /\bhas\s*$/i.test(beforeNumber) || /^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+)?experience\b/i.test(afterNumber)
+    const totalExperience = TOTAL_EXPERIENCE_CONTEXT_PATTERN.test(near) || /\bhas\s*$/i.test(beforeNumber) || /^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+|engineering\s+|software\s+|work\s+|\w+\s+){0,3}experience\b/i.test(afterNumber)
     const belowMinimumContext = BELOW_MINIMUM_CONTEXT_PATTERN.test(near)
 
     if (!skillSpecific && !shortfallSpecific && (totalExperience || belowMinimumContext)) values.push(value)
