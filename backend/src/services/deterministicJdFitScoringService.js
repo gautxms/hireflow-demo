@@ -314,6 +314,7 @@ const BELOW_MIN_EXPERIENCE_PATTERNS = Object.freeze([
 const TOTAL_EXPERIENCE_CONTEXT_PATTERN = /\b(?:total|overall|professional|relevant|engineering|software|work)\s+(?:\w+\s+){0,3}experience\b|\bexperience\s*(?::|-)?\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)\b/i
 const BELOW_MINIMUM_CONTEXT_PATTERN = /\b(?:below|minimum|required|target|gap|junior|early\s+career)\b/i
 const SKILL_DURATION_CONTEXT_PATTERN = /\b(?:including|with|in|using|on|for|of)\s+[a-z0-9.+#-]+\b/i
+const EXPERIENCE_SHORTFALL_CONTEXT_PATTERN = /\b(?:below|under|short|shortfall|gap|deficit|less\s+than)\b/i
 
 const reliableTotalExperienceYearsFromText = (text) => {
   const source = String(text ?? '')
@@ -331,10 +332,15 @@ const reliableTotalExperienceYearsFromText = (text) => {
     const afterNumber = source.slice(index + match[0].length, Math.min(source.length, index + match[0].length + 24))
     const beforeNumber = source.slice(Math.max(0, index - 24), index)
     const skillSpecific = SKILL_DURATION_CONTEXT_PATTERN.test(`${beforeNumber} ${afterNumber}`) && !/\bexperience\b/i.test(afterNumber)
+    const shortfallSpecific = EXPERIENCE_SHORTFALL_CONTEXT_PATTERN.test(near)
+      && (/\b(?:below|under|short|shortfall|gap|deficit|less\s+than)\b/i.test(`${beforeNumber} ${afterNumber}`) || /\bby\s*$/i.test(beforeNumber))
+      && !/\b(?:has|have|having|with|total|overall|professional|relevant|engineering|software|work)\s*$/i.test(beforeNumber)
+      && (/\bby\s*$/i.test(beforeNumber) || !/\b(?:has|have|having|with)\b/i.test(beforeNumber))
+      && !/^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+)?experience\b/i.test(afterNumber)
     const totalExperience = TOTAL_EXPERIENCE_CONTEXT_PATTERN.test(near) || /\bhas\s*$/i.test(beforeNumber) || /^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+)?experience\b/i.test(afterNumber)
     const belowMinimumContext = BELOW_MINIMUM_CONTEXT_PATTERN.test(near)
 
-    if (!skillSpecific && (totalExperience || belowMinimumContext)) values.push(value)
+    if (!skillSpecific && !shortfallSpecific && (totalExperience || belowMinimumContext)) values.push(value)
   }
 
   return values.length > 0 ? Math.min(...values) : null
@@ -376,14 +382,16 @@ const ROLE_GAP_PATTERNS = Object.freeze([
 ])
 
 const roleGapSignalCount = (fitAssessment) => {
+  const buckets = new Set()
   const signals = [
     ...asArray(fitAssessment?.missing_requirements),
     ...asArray(fitAssessment?.risks_or_gaps),
   ]
-  return signals.reduce((count, signal) => {
+  for (const signal of signals) {
     const text = String(signal ?? '')
-    return count + (ROLE_GAP_PATTERNS.some((pattern) => pattern.test(text)) ? 1 : 0)
-  }, 0)
+    if (ROLE_GAP_PATTERNS.some((pattern) => pattern.test(text))) buckets.add(requirementConceptKey(text))
+  }
+  return buckets.size
 }
 
 const experienceRelevanceCap = ({ requirement, skill, roleGapCount }) => {
@@ -416,12 +424,19 @@ const experienceBreakdown = (candidate, context, fitAssessment, requirement, ski
     if (belowMinEvidence.applies) cap = Math.min(cap ?? 58, 58)
     if (cap !== null) score = Math.min(score, cap)
   }
+  const roundedScore = roundScore(score)
+  const shortfallYears = required.min !== null && saferCandidateYears !== null
+    ? roundScore(Math.max(0, required.min - saferCandidateYears))
+    : null
   return {
-    score: roundScore(score),
+    score: roundedScore,
     weight: WEIGHTS.experience_alignment,
     candidate_years: candidateYears,
+    resolved_experience_years: saferCandidateYears,
     required_min_years: required.min,
     required_max_years: required.max,
+    experience_shortfall_years: shortfallYears,
+    experience_resolution_source: belowMinEvidence.safer_years !== null ? 'explicit_below_minimum_evidence' : (candidateYears !== null ? 'candidate_years' : 'unresolved'),
     experience_relevance_cap_applied: cap !== null || belowMinEvidence.applies,
     role_gap_signal_count: roleGapCount,
     below_min_experience_evidence_applied: belowMinEvidence.applies,
@@ -485,7 +500,8 @@ const confidenceBreakdown = (candidate) => {
 }
 
 const riskBreakdown = (fitAssessment) => {
-  const gapCount = asArray(fitAssessment?.risks_or_gaps).length
+  const gapBuckets = new Set(asArray(fitAssessment?.risks_or_gaps).map(requirementConceptKey).filter(Boolean))
+  const gapCount = gapBuckets.size
   return { penalty: Math.min(10, gapCount * 2), gap_count: gapCount }
 }
 
@@ -546,7 +562,8 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
   }
 
   const weighted = Object.entries(WEIGHTS).reduce((sum, [key, weight]) => sum + breakdown[key].score * weight, 0)
-  const finalScore = roundScore((weighted - breakdown.risk_penalty.penalty) * breakdown.confidence_adjustment.multiplier)
+  const finalScoreBeforeRounding = clamp((weighted - breakdown.risk_penalty.penalty) * breakdown.confidence_adjustment.multiplier, 0, 100)
+  const finalScore = roundScore(finalScoreBeforeRounding)
   const mapping = bandAndVerdict(finalScore)
 
   return {
@@ -555,6 +572,7 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     ...mapping,
     scoring_mode: 'jd_fit',
     scoring_contract_version: CONTRACT_VERSION,
+    final_score_before_rounding: finalScoreBeforeRounding,
     scoring_breakdown: breakdown,
     scoring_explanation: 'Deterministic JD-fit score computed from structured requirement, skill, experience, location, evidence, risk, and confidence signals.',
   }

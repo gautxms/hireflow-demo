@@ -169,17 +169,72 @@ test('Vikram-like DOC/PDF/DOCX payloads keep experience capped and final scores 
     missingSkills: ['2-5 years experience', 'system design', 'cloud'],
   }), context)
 
-  assert.equal(doc.score_band, 'weak')
-  assert.equal(pdf.score_band, 'weak')
   for (const result of [doc, pdf, docx]) {
-    assert.ok(result.scoring_breakdown.experience_alignment.score >= 50)
-    assert.ok(result.scoring_breakdown.experience_alignment.score <= 60)
+    assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 1.6)
+    assert.equal(result.scoring_breakdown.experience_alignment.experience_shortfall_years, 0.4)
+    assert.equal(result.scoring_breakdown.experience_alignment.score, 56)
     assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
   }
   assert.notEqual(docx.scoring_breakdown.experience_alignment.score, 100)
   assert.ok(Math.max(doc.final_score, pdf.final_score, docx.final_score) - Math.min(doc.final_score, pdf.final_score, docx.final_score) <= 5)
 })
 
+
+
+test('DOCX/PDF/DOC explicit 1.6 years below 2-year minimum resolves consistently despite AI wording', () => {
+  const context = { ...sdeJdContext(), required_min_years: 2, required_max_years: 5 }
+  const base = ({ years, summary, missing, risks }) => ({
+    summary,
+    recommendation: 'Potential fit, but below the minimum experience for the role.',
+    fit_assessment: {
+      rationale: 'Backend exposure with early-career experience.',
+      notes: ['Evidence says has 1.6 years.'],
+      matched_requirements: ['Java', 'SQL', 'backend APIs'],
+      missing_requirements: missing,
+      risks_or_gaps: risks,
+    },
+    matchedSkills: ['Java', 'SQL', 'backend APIs'],
+    missingSkills: missing,
+    skills_flat: ['Java', 'SQL'],
+    top_skills: ['Backend APIs'],
+    years_experience: years,
+    location: 'Remote, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  })
+
+  const docx = scoreCandidateDeterministically(base({
+    years: 2,
+    summary: 'AI says meets minimum at lower boundary, but explicit evidence says has 1.6 years of experience.',
+    missing: ['system design depth', 'cloud platforms', 'async/background jobs', 'auth/RBAC'],
+    risks: ['0.4 years below minimum should not be treated as total experience', 'early career profile'],
+  }), context)
+  const pdf = scoreCandidateDeterministically(base({
+    years: 1.6,
+    summary: 'Candidate has 1.6 years of professional software experience; below 2-year minimum.',
+    missing: ['system design', 'cloud platforms', 'async background jobs', 'auth and RBAC'],
+    risks: ['Experience gap: has 1.6 years and is below the 2-year minimum'],
+  }), context)
+  const doc = scoreCandidateDeterministically(base({
+    years: 1.6,
+    summary: 'Has 1.6 years experience.',
+    missing: ['no system design evidence', 'no cloud platform evidence', 'missing queue/background job depth', 'missing auth/RBAC ownership'],
+    risks: ['Falls short of the 2-5 years target by 0.4 years', 'Junior profile with system design/cloud/queues/auth gaps'],
+  }), context)
+
+  for (const result of [docx, pdf, doc]) {
+    const experience = result.scoring_breakdown.experience_alignment
+    assert.equal(experience.below_min_experience_evidence_applied, true)
+    assert.equal(experience.resolved_experience_years, 1.6)
+    assert.equal(experience.required_min_years, 2)
+    assert.equal(experience.experience_shortfall_years, 0.4)
+    assert.equal(experience.experience_resolution_source, 'explicit_below_minimum_evidence')
+    assert.equal(experience.score, 56)
+  }
+
+  const scores = [docx.final_score, pdf.final_score, doc.final_score]
+  assert.ok(Math.max(...scores) - Math.min(...scores) <= 3)
+})
 
 test('skill-specific duration in summary does not override total experience', () => {
   const input = candidate()
