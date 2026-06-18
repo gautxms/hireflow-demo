@@ -1832,3 +1832,27 @@ test('deterministic JD-fit apply leaves no-JD and non-finite deterministic score
     __resetParseResumeJobTestOverrides()
   }
 })
+
+test('buildNormalizedCandidates preserves normalized ai_scoring_contract_v2 and does not replace visible score fields', () => {
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      score: 88,
+      matchScore: { score: 88, score_out_of_ten: 8.8 },
+      fit_assessment: { has_job_description_context: true, overall_fit_score: 88 },
+      ai_scoring_contract_v2: {
+        scoring_contract_version: 'ai_jd_fit_rubric_v2',
+        skills_match_score: 55,
+        relevant_experience_score: 55,
+        education_relevance_score: 55,
+        seniority_progression_score: 55,
+        weighted_total_score: 55,
+        score_confidence: 'low',
+      },
+    }],
+  }, { resumeId: 'resume-v2', filename: 'candidate.pdf' })
+
+  assert.equal(candidate.score, 88)
+  assert.equal(candidate.matchScore.score, 88)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 88)
+  assert.equal(candidate.ai_scoring_contract_v2.weighted_total_score_recomputed, 55)
+})

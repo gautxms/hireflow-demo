@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
-import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields } from '../services/aiResumeAnalysisService.js'
+import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields, normalizeAiScoringContractV2 } from '../services/aiResumeAnalysisService.js'
 import {
   buildSafeResumeFileDiagnostics,
   logSafeResumeFileDiagnostics,
@@ -342,6 +342,24 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
       ? breakdown.experience_alignment.below_min_experience_evidence_applied
       : null,
   }
+}
+
+function logAiScoringContractV2Diagnostic(candidate = {}, metadata = {}, logger = console) {
+  const contract = candidate?.ai_scoring_contract_v2
+  if (!contract || typeof contract !== 'object' || Array.isArray(contract)) return null
+  const diagnostic = {
+    analysis_id: metadata.analysisId || null,
+    resume_id: metadata.resumeId || candidate?.resumeId || null,
+    provider: metadata.provider || null,
+    model: metadata.model || null,
+    prompt_version: metadata.promptVersion || null,
+    scoring_contract_version: contract.scoring_contract_version || null,
+    weighted_total_score_recomputed: contract.weighted_total_score_recomputed ?? null,
+    score_confidence: contract.score_confidence || null,
+    scoring_anomalies: Array.isArray(contract.scoring_anomalies) ? contract.scoring_anomalies : [],
+  }
+  logger.info?.('[AiScoringContractV2] shadow diagnostic', diagnostic)
+  return diagnostic
 }
 
 function logDeterministicJdFitApplyDiagnostic(logger, level, diagnostic) {
@@ -824,6 +842,7 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
       skills: skillsStructured,
       skills_flat: normalizeStringArray(resolvedSkillsFlat).slice(0, 25),
       confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
+      ai_scoring_contract_v2: normalizeAiScoringContractV2(candidate?.ai_scoring_contract_v2),
     }
   })
 }
@@ -1455,12 +1474,14 @@ export async function runParse(job) {
     logger: console,
   })
   for (const candidate of finalCandidates) {
-    emitScoreContractShadowDiagnostic(candidate, {
+    const scoringMetadata = {
       userId: job.data.userId ?? null,
       analysisId: analysisId || null,
       resumeId,
       ...scoreContractShadowMetadata,
-    })
+    }
+    emitScoreContractShadowDiagnostic(candidate, scoringMetadata)
+    logAiScoringContractV2Diagnostic(candidate, scoringMetadata, console)
     emitDeterministicJdFitShadowDiagnostic({
       candidate,
       jobDescriptionContext,
@@ -1703,4 +1724,5 @@ export const __testables = {
   buildSafeDeterministicJdFitApplyDiagnostic,
   hasDeterministicJdFitAppliedScore,
   shouldSkipAiScoreCacheShadowForCandidate,
+  logAiScoringContractV2Diagnostic,
 }

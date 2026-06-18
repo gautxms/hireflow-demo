@@ -166,6 +166,93 @@ function clampStringArray(values, { maxItems, maxItemLength, fieldName = '' }) {
 }
 
 
+
+const AI_SCORING_CONTRACT_V2_VERSION = 'ai_jd_fit_rubric_v2'
+const AI_SCORING_CONTRACT_V2_WEIGHTS = Object.freeze({
+  skills_match_score: 0.40,
+  relevant_experience_score: 0.30,
+  education_relevance_score: 0.15,
+  seniority_progression_score: 0.15,
+})
+const AI_SCORING_CONTRACT_V2_SCORE_FIELDS = Object.freeze(Object.keys(AI_SCORING_CONTRACT_V2_WEIGHTS))
+
+function roundScoringContractScore(value) {
+  return Math.round(value * 10) / 10
+}
+
+function normalizeScoringContractScore(value, fieldName, anomalies) {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    anomalies.add(`${fieldName}_non_numeric`)
+    return null
+  }
+  if (numeric < 0 || numeric > 100) {
+    anomalies.add(`${fieldName}_out_of_range_clamped`)
+  }
+  return roundScoringContractScore(Math.max(0, Math.min(100, numeric)))
+}
+
+function recomputeAiScoringContractV2Total(normalized = {}) {
+  const scores = AI_SCORING_CONTRACT_V2_SCORE_FIELDS.map((field) => normalized[field])
+  if (scores.some((score) => score === null || score === undefined)) return null
+  return roundScoringContractScore(
+    normalized.skills_match_score * AI_SCORING_CONTRACT_V2_WEIGHTS.skills_match_score
+    + normalized.relevant_experience_score * AI_SCORING_CONTRACT_V2_WEIGHTS.relevant_experience_score
+    + normalized.education_relevance_score * AI_SCORING_CONTRACT_V2_WEIGHTS.education_relevance_score
+    + normalized.seniority_progression_score * AI_SCORING_CONTRACT_V2_WEIGHTS.seniority_progression_score,
+  )
+}
+
+export function normalizeAiScoringContractV2(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const anomalies = new Set(clampStringArray(value?.scoring_anomalies || [], { maxItems: 20, maxItemLength: 80 }))
+  const normalized = {
+    scoring_contract_version: AI_SCORING_CONTRACT_V2_VERSION,
+    skills_match_score: normalizeScoringContractScore(value?.skills_match_score, 'skills_match_score', anomalies),
+    relevant_experience_score: normalizeScoringContractScore(value?.relevant_experience_score, 'relevant_experience_score', anomalies),
+    education_relevance_score: normalizeScoringContractScore(value?.education_relevance_score, 'education_relevance_score', anomalies),
+    seniority_progression_score: normalizeScoringContractScore(value?.seniority_progression_score, 'seniority_progression_score', anomalies),
+    weighted_total_score_from_ai: normalizeScoringContractScore(value?.weighted_total_score, 'weighted_total_score', anomalies),
+    weighted_total_score_recomputed: null,
+    score_confidence: ['high', 'medium', 'low'].includes(String(value?.score_confidence || '').toLowerCase())
+      ? String(value.score_confidence).toLowerCase()
+      : 'low',
+    score_confidence_reason: clampString(value?.score_confidence_reason || '', 300),
+    scoring_anomalies: [],
+    has_job_description_context: Boolean(value?.has_job_description_context),
+  }
+
+  if (value?.scoring_contract_version && value.scoring_contract_version !== AI_SCORING_CONTRACT_V2_VERSION) {
+    anomalies.add('scoring_contract_version_mismatch')
+  }
+
+  normalized.weighted_total_score_recomputed = recomputeAiScoringContractV2Total(normalized)
+  if (
+    normalized.weighted_total_score_from_ai !== null
+    && normalized.weighted_total_score_recomputed !== null
+    && Math.abs(normalized.weighted_total_score_from_ai - normalized.weighted_total_score_recomputed) > 1
+  ) {
+    anomalies.add('weighted_total_mismatch')
+  }
+
+  normalized.scoring_anomalies = [...anomalies].slice(0, 20)
+  return normalized
+}
+
+function buildAiScoringContractV2PromptSection(hasJobDescription) {
+  if (!hasJobDescription) return ''
+  return [
+    'AI Scoring Contract v2 (shadow-only; do not replace existing score fields):',
+    'When Job Description context is AVAILABLE, return all existing candidate fields exactly as instructed above and also include optional nested object ai_scoring_contract_v2 per candidate.',
+    'Score candidate against the JD on a 0-100 scale using rubric weights: skills_match_score 40%, relevant_experience_score 30%, education_relevance_score 15%, seniority_progression_score 15%.',
+    'Compute weighted_total_score = skills_match_score*0.40 + relevant_experience_score*0.30 + education_relevance_score*0.15 + seniority_progression_score*0.15.',
+    'Use 0-100 values only; do not use 0-10 values for these fields.',
+    'ai_scoring_contract_v2 schema: {scoring_contract_version:"ai_jd_fit_rubric_v2",skills_match_score:number,relevant_experience_score:number,education_relevance_score:number,seniority_progression_score:number,weighted_total_score:number,score_confidence:"high"|"medium"|"low",score_confidence_reason:string,scoring_anomalies:string[],has_job_description_context:boolean}.',
+  ].join('\n')
+}
+
 function normalizeStructuredSkillsCandidateInput(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const normalized = {
@@ -270,6 +357,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     recommendation: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', 160),
     filename: clampString(candidate?.filename || '', 180),
     resumeId: clampString(candidate?.resumeId || candidate?.resume_id || '', 100),
+    ai_scoring_contract_v2: normalizeAiScoringContractV2(candidate?.ai_scoring_contract_v2),
   }
 }
 
@@ -1066,8 +1154,9 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
 
   const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
+  const aiScoringContractV2Directives = buildAiScoringContractV2PromptSection(hasJobDescription)
 
-  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  return `${basePrompt}\n\n${analysisModeDirectives}${aiScoringContractV2Directives ? `\n\n${aiScoringContractV2Directives}` : ''}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
 
 
@@ -1770,4 +1859,4 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 export const analyzeResumeWithClaude = analyzeWithAnthropic
 
 
-export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }
+export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }
