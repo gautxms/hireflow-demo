@@ -399,6 +399,10 @@ const BELOW_MIN_EXPERIENCE_PATTERNS = Object.freeze([
 const TOTAL_EXPERIENCE_CONTEXT_PATTERN = /\b(?:total|overall|professional|relevant|engineering|software|work)\s+(?:\w+\s+){0,3}experience\b|\bexperience\s*(?::|-)?\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)\b/i
 const BELOW_MINIMUM_CONTEXT_PATTERN = /\b(?:below|minimum|required|target|gap|junior|early\s+career)\b/i
 const SKILL_DURATION_CONTEXT_PATTERN = /\b(?:including|with|in|using|on|for|of)\s+[a-z0-9.+#-]+\b/i
+const TOTAL_EXPERIENCE_AFTER_DURATION_PATTERN = /^\s*(?:of\s+)?(?:(?:total|overall|professional|relevant|engineering|software|work|career)\s+){0,4}experience\b/i
+const PROFESSIONAL_ROLE_AFTER_DURATION_PATTERN = /^\s*(?:as\s+(?:a|an)\s+)?(?:software|backend|frontend|full\s*stack|fullstack|web|application|platform|systems?)\s+(?:development\s+)?(?:engineer|developer|programmer)\b/i
+const PRODUCTION_BUILDING_AFTER_DURATION_PATTERN = /^\s*(?:building|developing|delivering|shipping|owning|implementing)\s+(?:\w+\s+){0,4}(?:production|saas|software|backend|frontend|full\s*stack|fullstack|web|platform|systems?|applications?|features?|services?|apis?)\b/i
+const SKILL_DURATION_NEAR_PATTERN = /\b(?:(?:of|with|in|using|on|for)\s+)?(?:react|next\s*js|nextjs|vue|angular|typescript|javascript|python|java|go|golang|ruby|php|c\s*\+\s*\+|cpp|c#|csharp|node\s*js|nodejs|express|nestjs?|django|flask|fastapi|spring|postgres|postgresql|mysql|mongodb|mongo|sql|redis|aws|azure|gcp|google\s+cloud|docker|kubernetes|k8s|terraform|jenkins|github\s+actions|ci\s*cd)(?:\s+(?:experience|exposure|development|work|projects?))?\b/i
 const EXPERIENCE_SHORTFALL_CONTEXT_PATTERN = /\b(?:below|under|short|shortfall|gap|deficit|less\s+than)\b/i
 
 const reliableTotalExperienceYearsFromText = (text) => {
@@ -416,14 +420,18 @@ const reliableTotalExperienceYearsFromText = (text) => {
     const near = `${before} ${match[0]} ${after}`
     const afterNumber = source.slice(index + match[0].length, Math.min(source.length, index + match[0].length + 24))
     const beforeNumber = source.slice(Math.max(0, index - 24), index)
-    const skillSpecific = SKILL_DURATION_CONTEXT_PATTERN.test(`${beforeNumber} ${afterNumber}`)
-      && !/\b(?:total|overall|professional|relevant|engineering|software|work|experience)\b/i.test(afterNumber)
+    const explicitTotalContext = TOTAL_EXPERIENCE_CONTEXT_PATTERN.test(near)
+      || TOTAL_EXPERIENCE_AFTER_DURATION_PATTERN.test(after)
+      || PROFESSIONAL_ROLE_AFTER_DURATION_PATTERN.test(after)
+      || PRODUCTION_BUILDING_AFTER_DURATION_PATTERN.test(after)
+    const skillSpecific = SKILL_DURATION_NEAR_PATTERN.test(`${beforeNumber} ${after}`)
+      || (SKILL_DURATION_CONTEXT_PATTERN.test(`${beforeNumber} ${afterNumber}`) && !explicitTotalContext)
     const shortfallSpecific = EXPERIENCE_SHORTFALL_CONTEXT_PATTERN.test(near)
       && (/\b(?:below|under|short|shortfall|gap|deficit|less\s+than)\b/i.test(`${beforeNumber} ${afterNumber}`) || /\bby\s*$/i.test(beforeNumber))
       && !/\b(?:has|have|having|with|total|overall|professional|relevant|engineering|software|work)\s*$/i.test(beforeNumber)
       && (/\bby\s*$/i.test(beforeNumber) || !/\b(?:has|have|having|with)\b/i.test(beforeNumber))
       && !/^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+)?experience\b/i.test(afterNumber)
-    const totalExperience = TOTAL_EXPERIENCE_CONTEXT_PATTERN.test(near) || /\bhas\s*$/i.test(beforeNumber) || /^\s*(?:of\s+)?(?:total\s+|professional\s+|relevant\s+|engineering\s+|software\s+|work\s+|\w+\s+){0,3}experience\b/i.test(afterNumber)
+    const totalExperience = explicitTotalContext || /\bhas\s*$/i.test(beforeNumber)
     const belowMinimumContext = BELOW_MINIMUM_CONTEXT_PATTERN.test(near)
 
     if (!skillSpecific && !shortfallSpecific && (totalExperience || belowMinimumContext)) values.push(value)

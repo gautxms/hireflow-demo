@@ -258,6 +258,58 @@ test('skill-specific duration in missingSkills does not trigger total-experience
   assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
 })
 
+test('skill-specific years in narrative do not override total years_experience', () => {
+  const cases = [
+    '1 year of React experience',
+    '2 years of Python experience',
+    '1.5 years of TypeScript experience',
+    '3 years PostgreSQL experience',
+    '2 years of Docker experience',
+  ]
+
+  for (const text of cases) {
+    const input = candidate()
+    input.years_experience = 5
+    input.summary = `Candidate has 5 years total professional experience and ${text}.`
+    input.fit_assessment.risks_or_gaps = []
+    const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 3 })
+    assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 5, `${text} should not be total experience`)
+    assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false, `${text} should not trigger below-minimum evidence`)
+    assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+  }
+})
+
+test('skill-specific months in narrative do not become total years experience', () => {
+  const input = candidate()
+  input.years_experience = 5
+  input.summary = 'Candidate has 5 years total professional experience and 6 months of AWS experience.'
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 3 })
+  assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 5)
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
+test('explicit total-experience phrases with decimal years override rounded AI years when below minimum', () => {
+  const cases = [
+    ['1.6 years of professional software experience', 1.6],
+    ['2.8 years of relevant engineering experience', 2.8],
+    ['4.1 years building production SaaS features', 4.1],
+    ['2.8 years as a software engineer', 2.8],
+  ]
+
+  for (const [text, expectedYears] of cases) {
+    const input = candidate()
+    input.years_experience = Math.ceil(expectedYears)
+    input.summary = `AI rounded the candidate up, but resume-derived evidence says ${text}.`
+    input.fit_assessment.risks_or_gaps = ['Below minimum required experience based on precise resume evidence.']
+    const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 5 })
+    assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, expectedYears, `${text} should resolve as total experience`)
+    assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+    assert.ok(result.scoring_breakdown.experience_alignment.score < 100)
+  }
+})
+
 test('candidate years_experience of 2 is capped when text says 1.6 years', () => {
   const input = candidate()
   input.years_experience = 2
