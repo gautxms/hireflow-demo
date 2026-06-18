@@ -1557,7 +1557,7 @@ describe('production SDE deterministic stability calibration', () => {
       matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
       missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
       risks: ['Conservative narrative omits some structured production details.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
-      summary: 'Strong SDE resume evidence, but conservative narrative lists generic depth gaps.',
+      summary: 'Strong SDE resume evidence, reduced manual review time by 38%, but conservative narrative lists generic depth gaps.',
     }), { ...context(), location: 'Austin, TX' })
 
     assert.equal(result.final_score_floor_applied, true)
@@ -1582,6 +1582,28 @@ describe('production SDE deterministic stability calibration', () => {
     assert.ok(richerSingle.final_score >= 85)
     assert.ok(conservativeMixed.final_score >= 85)
     assert.ok(Math.abs(richerSingle.final_score - conservativeMixed.final_score) <= 5)
+  })
+
+  test('manual testing weak evidence blocks final strong SDE floor but manual review impact does not', () => {
+    const manualReviewImpact = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      aiScore: 88,
+      matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
+      missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
+      risks: ['Conservative narrative omits some structured production details.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
+      summary: 'Reduced manual review time by 38% while delivering production backend workflow automation.',
+    }), { ...context(), location: 'Austin, TX' })
+    const manualTestingOnly = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      aiScore: 52,
+      matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
+      missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
+      risks: ['Manual testing only; weak structured delivery evidence.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
+      summary: 'Manual API testing only, with weak evidence for production SDE ownership.',
+    }), { ...context(), location: 'Austin, TX' })
+
+    assert.equal(manualReviewImpact.final_score_floor_applied, true)
+    assert.ok(manualReviewImpact.final_score >= 85)
+    assert.equal(manualTestingOnly.final_score_floor_applied, false)
+    assert.ok(manualTestingOnly.final_score < 85)
   })
 
   test('frontend-only or junior/basic structured evidence does not trigger final strong SDE floor', () => {

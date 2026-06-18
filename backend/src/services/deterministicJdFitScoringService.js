@@ -620,7 +620,7 @@ const riskBreakdown = (fitAssessment) => {
 }
 
 
-const EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERN = /\b(?:junior|early\s+career|basic|basics|beginner|toy|demo|academic|manual|exposure|frontend[-\s]*only|frontend\s+leaning|frontend\s+focused|limited\s+backend|no\s+backend|no\s+production|not\s+sde|unrelated)\b/i
+const EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERN = /\b(?:junior|early\s+career|basic|basics|beginner|toy|demo|academic|manual\s+testing|manual[-\s]*only|only\s+manual|manual\s+qa\s+only|manual\s+api\s+testing|exposure|frontend[-\s]*only|frontend\s+leaning|frontend\s+focused|limited\s+backend|no\s+backend|no\s+production|not\s+sde|unrelated)\b/i
 
 const hasExplicitWeakStructuredEvidence = (candidate, fitAssessment) => candidateExperienceEvidenceTexts(candidate, fitAssessment)
   .some((text) => EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERN.test(String(text ?? '')))
