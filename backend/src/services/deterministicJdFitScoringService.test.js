@@ -1561,6 +1561,7 @@ describe('production SDE deterministic stability calibration', () => {
     }), { ...context(), location: 'Austin, TX' })
 
     assert.equal(result.final_score_floor_applied, true)
+    assert.deepEqual(result.strong_floor_hard_disqualifier_reasons, [])
     assert.ok(result.final_score >= 85, `Aisha-like final score should not remain below 85: ${result.final_score}`)
     assert.ok(result.final_score <= 92, `Aisha-like final score should stay in target band: ${result.final_score}`)
     assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
@@ -1614,8 +1615,10 @@ describe('production SDE deterministic stability calibration', () => {
     }), { ...context(), location: 'Austin, TX' })
 
     assert.equal(manualReviewImpact.final_score_floor_applied, true)
+    assert.deepEqual(manualReviewImpact.strong_floor_hard_disqualifier_reasons, [])
     assert.ok(manualReviewImpact.final_score >= 85)
     assert.equal(manualTestingOnly.final_score_floor_applied, false)
+    assert.ok(manualTestingOnly.strong_floor_hard_disqualifier_reasons.includes('manual_testing_only'))
     assert.ok(manualTestingOnly.final_score < 85)
   })
 
@@ -1629,6 +1632,7 @@ describe('production SDE deterministic stability calibration', () => {
     }), { ...context(), location: 'Austin, TX' })
 
     assert.equal(juniorProfile.final_score_floor_applied, false)
+    assert.ok(juniorProfile.strong_floor_hard_disqualifier_reasons.includes('junior_or_entry_level_profile'))
     assert.ok(juniorProfile.final_score < 85)
   })
 
