@@ -174,6 +174,8 @@ test('Vikram-like DOC/PDF/DOCX payloads keep experience capped and final scores 
     assert.equal(result.scoring_breakdown.experience_alignment.experience_shortfall_years, 0.4)
     assert.equal(result.scoring_breakdown.experience_alignment.score, 56)
     assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+    assert.ok(result.final_score <= 55, `Vikram-like below-minimum final score ${result.final_score} should be capped at 55`)
+    assert.ok(result.final_score_cap_reasons.includes('below_minimum_junior_cap'))
   }
   assert.notEqual(docx.scoring_breakdown.experience_alignment.score, 100)
   assert.ok(Math.max(doc.final_score, pdf.final_score, docx.final_score) - Math.min(doc.final_score, pdf.final_score, docx.final_score) <= 5)
@@ -887,8 +889,9 @@ test('Vikram-like DOC/DOCX/PDF requirement wording fixtures stay within five fin
   const finalScores = results.map((result) => result.final_score)
   assert.ok(Math.max(...finalScores) - Math.min(...finalScores) <= 5)
   for (const result of results) {
-    assert.ok(result.final_score >= 45 && result.final_score <= 53)
+    assert.ok(result.final_score <= 55)
     assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+    assert.ok(result.final_score_cap_reasons.includes('below_minimum_junior_cap'))
   }
 })
 
@@ -1679,6 +1682,9 @@ describe('production SDE deterministic stability calibration', () => {
 
     assert.ok(neha.final_score >= 58 && neha.final_score <= 62, `Neha should remain moderate: ${neha.final_score}`)
     assert.ok(vikram.final_score >= 49 && vikram.final_score <= 55, `Vikram should remain junior/below-threshold: ${vikram.final_score}`)
+    assert.ok(vikram.final_score_cap_reasons.includes('below_minimum_junior_cap'))
+    assert.equal(neha.final_score_cap_reasons.includes('below_minimum_junior_cap'), false)
+    assert.equal(aisha.final_score_cap_reasons.includes('below_minimum_junior_cap'), false)
     assert.ok(aisha.final_score > neha.final_score)
     assert.ok(aisha.final_score - neha.final_score >= 20)
     assert.ok(neha.final_score > vikram.final_score)

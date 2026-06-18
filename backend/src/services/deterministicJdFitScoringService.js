@@ -673,7 +673,8 @@ const shouldApplyStrongStructuredFinalFloor = (candidate, fitAssessment, context
 
 const CORE_DEPTH_GAP_BUCKETS = new Set(['system_design', 'cloud_platforms', 'testing_ci', 'async_background', 'auth_security'])
 
-const finalScoreCap = (breakdown) => {
+const finalScoreCapDetails = (breakdown) => {
+  const reasons = []
   const roleGapCount = breakdown.experience_alignment?.role_gap_signal_count ?? 0
   const missingCoreDepthBuckets = new Set([
     ...Object.entries(breakdown.requirement_match?.requirement_bucket_scores ?? {})
@@ -684,9 +685,23 @@ const finalScoreCap = (breakdown) => {
       .map(([bucket]) => bucket),
   ])
 
-  if (breakdown.experience_alignment?.below_min_experience_evidence_applied && roleGapCount >= 4) return 49
-  if (missingCoreDepthBuckets.size >= 2 && roleGapCount >= 2) return 92
-  return null
+  const experience = breakdown.experience_alignment ?? {}
+  const resolvedBelowMinimum = experience.resolved_experience_years !== null
+    && experience.resolved_experience_years !== undefined
+    && experience.required_min_years !== null
+    && experience.required_min_years !== undefined
+    && experience.resolved_experience_years < experience.required_min_years
+  const clearJuniorOrBelowThreshold = resolvedBelowMinimum || roleGapCount >= 2
+
+  if (experience.below_min_experience_evidence_applied && clearJuniorOrBelowThreshold) {
+    reasons.push('below_minimum_junior_cap')
+    return { cap: 55, reasons: uniqueReasonCodes(reasons) }
+  }
+  if (missingCoreDepthBuckets.size >= 2 && roleGapCount >= 2) {
+    reasons.push('core_depth_gap_cap')
+    return { cap: 92, reasons: uniqueReasonCodes(reasons) }
+  }
+  return { cap: null, reasons: [] }
 }
 
 const bandAndVerdict = (score) => {
@@ -747,7 +762,8 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
 
   const weighted = Object.entries(WEIGHTS).reduce((sum, [key, weight]) => sum + breakdown[key].score * weight, 0)
   const uncappedFinalScoreBeforeRounding = clamp((weighted - breakdown.risk_penalty.penalty) * breakdown.confidence_adjustment.multiplier, 0, 100)
-  const cap = finalScoreCap(breakdown)
+  const capDetails = finalScoreCapDetails(breakdown)
+  const cap = capDetails.cap
   const finalScoreBeforeRounding = cap === null
     ? uncappedFinalScoreBeforeRounding
     : Math.min(uncappedFinalScoreBeforeRounding, cap)
@@ -770,6 +786,7 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     final_score_floor_applied: strongStructuredFinalFloorApplied,
     strong_floor_hard_disqualifier_reasons: strongFloorHardDisqualifierReasons,
     score_cap_applied: cap !== null && uncappedFinalScoreBeforeRounding > cap,
+    final_score_cap_reasons: capDetails.reasons,
     scoring_breakdown: breakdown,
     scoring_explanation: 'Deterministic JD-fit score computed from structured requirement, skill, experience, location, evidence, risk, and confidence signals.',
   }
