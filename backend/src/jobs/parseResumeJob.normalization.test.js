@@ -1832,3 +1832,115 @@ test('deterministic JD-fit apply leaves no-JD and non-finite deterministic score
     __resetParseResumeJobTestOverrides()
   }
 })
+
+test('buildNormalizedCandidates preserves normalized ai_scoring_contract_v2 and does not replace visible score fields', () => {
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      score: 88,
+      matchScore: { score: 88, score_out_of_ten: 8.8 },
+      fit_assessment: { has_job_description_context: true, overall_fit_score: 88 },
+      ai_scoring_contract_v2: {
+        scoring_contract_version: 'ai_jd_fit_rubric_v2',
+        skills_match_score: 55,
+        relevant_experience_score: 55,
+        education_relevance_score: 55,
+        seniority_progression_score: 55,
+        weighted_total_score: 55,
+        score_confidence: 'low',
+      },
+    }],
+  }, { resumeId: 'resume-v2', filename: 'candidate.pdf' })
+
+  assert.equal(candidate.score, 88)
+  assert.equal(candidate.matchScore.score, 88)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 88)
+  assert.equal(candidate.ai_scoring_contract_v2.weighted_total_score_recomputed, 55)
+})
+
+
+test('AI scoring contract v2 diagnostics are gated by shadow flag and allowlists', () => {
+  const logs = []
+  const candidate = {
+    resumeId: 'resume-v2',
+    ai_scoring_contract_v2: {
+      scoring_contract_version: 'ai_jd_fit_rubric_v2',
+      weighted_total_score_recomputed: 82,
+      score_confidence: 'medium',
+      scoring_anomalies: ['weighted_total_mismatch'],
+    },
+  }
+  const logger = { info: (...args) => logs.push(args) }
+
+  assert.equal(__testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2' }, logger, {}), null)
+  assert.equal(logs.length, 0)
+
+  assert.equal(__testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2' }, logger, {
+    AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true',
+    AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '99',
+  }), null)
+  assert.equal(logs.length, 0)
+
+  const diagnostic = __testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2', provider: 'openai' }, logger, {
+    AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true',
+    AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7',
+  })
+
+  assert.equal(diagnostic.scoring_contract_version, 'ai_jd_fit_rubric_v2')
+  assert.equal(diagnostic.weighted_total_score_recomputed, 82)
+  assert.deepEqual(diagnostic.scoring_anomalies, ['weighted_total_mismatch'])
+  assert.equal(logs.length, 1)
+})
+
+
+test('AI scoring contract v2 diagnostics do not log model-supplied anomaly text', () => {
+  const logs = []
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      ai_scoring_contract_v2: {
+        skills_match_score: 90,
+        relevant_experience_score: 80,
+        education_relevance_score: 70,
+        seniority_progression_score: 60,
+        weighted_total_score: 95,
+        scoring_anomalies: ['Aisha Menon has employer Nexora and email aisha.menon@example.com'],
+      },
+    }],
+  }, { resumeId: 'resume-v2-pii', filename: 'candidate.pdf' })
+  const logger = { info: (...args) => logs.push(args) }
+
+  const diagnostic = __testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2' }, logger, {
+    AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true',
+    AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7',
+  })
+  const serializedLogs = JSON.stringify(logs)
+
+  assert.equal(candidate.ai_scoring_contract_v2.model_reported_anomalies[0].includes('Aisha Menon'), true)
+  assert.equal(diagnostic.scoring_anomalies.includes('weighted_total_mismatch'), true)
+  assert.equal(serializedLogs.includes('Aisha Menon'), false)
+  assert.equal(serializedLogs.includes('Nexora'), false)
+  assert.equal(serializedLogs.includes('aisha.menon@example.com'), false)
+})
+
+test('AI scoring contract v2 diagnostics log generated safe internal anomaly codes', () => {
+  const logs = []
+  const [candidate] = buildNormalizedCandidates({
+    candidates: [{
+      ai_scoring_contract_v2: {
+        skills_match_score: 'unknown',
+        relevant_experience_score: 80,
+        education_relevance_score: 70,
+        seniority_progression_score: 60,
+        weighted_total_score: 95,
+      },
+    }],
+  }, { resumeId: 'resume-v2-code', filename: 'candidate.pdf' })
+  const logger = { info: (...args) => logs.push(args) }
+
+  const diagnostic = __testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2' }, logger, {
+    AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true',
+    AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7',
+  })
+
+  assert.deepEqual(diagnostic.scoring_anomalies, ['skills_match_score_non_numeric'])
+  assert.equal(JSON.stringify(logs).includes('skills_match_score_non_numeric'), true)
+})

@@ -6,6 +6,7 @@ import {
   analyzeWithAnthropic,
   analyzeWithOpenAI,
   buildPromptWithJobDescription,
+  __testables,
   extractJsonWithContext,
   extractOpenAiResponseText,
 } from './aiResumeAnalysisService.js'
@@ -1053,4 +1054,166 @@ test('PDF canonical text scoring experiment sends text/plain only once and reuse
     else process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE = previous.maxAttemptsPerFile
     __resetPdfJsClientForTests()
   }
+})
+
+test('buildPromptWithJobDescription gates AI scoring contract v2 behind shadow flag and JD context', () => {
+  const previousEnabled = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
+  const previousUserAllowlist = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS
+  const previousAnalysisAllowlist = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
+
+  try {
+    delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
+    delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS
+    delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
+
+    const defaultOffPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: true,
+      jobDescriptionId: 'jd-v2',
+      title: 'Software Engineer',
+      __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
+    })
+    assert.equal(defaultOffPrompt.includes('AI Scoring Contract v2'), false)
+
+    process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED = 'true'
+    process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS = '10'
+    process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS = 'analysis-v2'
+
+    const withJdPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: true,
+      jobDescriptionId: 'jd-v2',
+      title: 'Software Engineer',
+      __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
+    })
+    const allowlistMissPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: true,
+      jobDescriptionId: 'jd-v2',
+      title: 'Software Engineer',
+      __aiScoringContractV2ShadowMetadata: { userId: 99, analysisId: 'analysis-v2' },
+    })
+    const withoutJdPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: false,
+      missingReason: 'job_description_missing',
+      __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
+    })
+
+    assert.equal(withJdPrompt.includes('AI Scoring Contract v2'), true)
+    assert.equal(withJdPrompt.includes('ai_scoring_contract_v2'), true)
+    assert.equal(withJdPrompt.includes('return all existing candidate fields'), true)
+    assert.equal(allowlistMissPrompt.includes('AI Scoring Contract v2'), false)
+    assert.equal(withoutJdPrompt.includes('AI Scoring Contract v2'), false)
+  } finally {
+    if (previousEnabled === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
+    else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED = previousEnabled
+    if (previousUserAllowlist === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS
+    else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS = previousUserAllowlist
+    if (previousAnalysisAllowlist === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
+    else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS = previousAnalysisAllowlist
+  }
+})
+
+test('normalizeAiScoringContractV2 returns null for missing object and safely normalizes valid scores', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  assert.equal(normalizeAiScoringContractV2(null), null)
+
+  const normalized = normalizeAiScoringContractV2({
+    scoring_contract_version: 'ai_jd_fit_rubric_v2',
+    skills_match_score: 90,
+    relevant_experience_score: 80,
+    education_relevance_score: 70,
+    seniority_progression_score: 60,
+    weighted_total_score: 79.5,
+    score_confidence: 'High',
+    score_confidence_reason: 'Clear rubric evidence.',
+    scoring_anomalies: [],
+    has_job_description_context: true,
+  })
+
+  assert.equal(normalized.weighted_total_score_from_ai, 79.5)
+  assert.equal(normalized.weighted_total_score_recomputed, 79.5)
+  assert.equal(normalized.score_confidence, 'high')
+  assert.deepEqual(normalized.scoring_anomalies, [])
+})
+
+test('normalizeAiScoringContractV2 does not silently convert 8.6/10 style values to 86/100', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 8.6,
+    relevant_experience_score: 8,
+    education_relevance_score: 7,
+    seniority_progression_score: 6,
+    weighted_total_score: 8,
+    score_confidence: 'medium',
+  })
+
+  assert.equal(normalized.skills_match_score, 8.6)
+  assert.equal(normalized.weighted_total_score_recomputed, 7.8)
+  assert.equal(normalized.scoring_anomalies.includes('weighted_total_mismatch'), false)
+})
+
+test('normalizeAiScoringContractV2 is idempotent for normalized weighted totals and internal anomalies', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const once = normalizeAiScoringContractV2({
+    skills_match_score: 90,
+    relevant_experience_score: 80,
+    education_relevance_score: 70,
+    seniority_progression_score: 60,
+    weighted_total_score: 95,
+    scoring_anomalies: ['model supplied note'],
+  })
+  const twice = normalizeAiScoringContractV2(once)
+
+  assert.equal(once.weighted_total_score_from_ai, 95)
+  assert.equal(twice.weighted_total_score_from_ai, 95)
+  assert.equal(once.weighted_total_score_recomputed, 79.5)
+  assert.equal(twice.weighted_total_score_recomputed, 79.5)
+  assert.deepEqual(twice.scoring_anomalies, once.scoring_anomalies)
+  assert.deepEqual(twice.model_reported_anomalies, once.model_reported_anomalies)
+})
+
+
+test('normalizeAiScoringContractV2 clamps out-of-range scores, nulls non-numeric scores, and flags mismatched totals', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 120,
+    relevant_experience_score: 'not-a-number',
+    education_relevance_score: -10,
+    seniority_progression_score: 50,
+    weighted_total_score: 95,
+    score_confidence: 'certain',
+    scoring_anomalies: ['model_reported_issue'],
+  })
+
+  assert.equal(normalized.skills_match_score, 100)
+  assert.equal(normalized.relevant_experience_score, null)
+  assert.equal(normalized.education_relevance_score, 0)
+  assert.equal(normalized.weighted_total_score_recomputed, null)
+  assert.equal(normalized.score_confidence, 'low')
+  assert.equal(normalized.scoring_anomalies.includes('skills_match_score_out_of_range_clamped'), true)
+  assert.equal(normalized.scoring_anomalies.includes('relevant_experience_score_non_numeric'), true)
+  assert.equal(normalized.scoring_anomalies.includes('education_relevance_score_out_of_range_clamped'), true)
+  assert.equal(normalized.scoring_anomalies.includes('model_reported_issue'), false)
+  assert.deepEqual(normalized.model_reported_anomalies, ['model_reported_issue'])
+})
+
+test('normalizeCompactAnalysis preserves ai_scoring_contract_v2 without replacing visible score', () => {
+  const { normalizeCompactAnalysis } = __testables
+  const result = normalizeCompactAnalysis({
+    candidates: [{
+      score: 88,
+      matchScore: { score: 88 },
+      fit_assessment: { overall_fit_score: 88 },
+      ai_scoring_contract_v2: {
+        skills_match_score: 55,
+        relevant_experience_score: 55,
+        education_relevance_score: 55,
+        seniority_progression_score: 55,
+        weighted_total_score: 55,
+      },
+    }],
+  })
+
+  assert.equal(result.candidates[0].score, 88)
+  assert.equal(result.candidates[0].matchScore.score, 88)
+  assert.equal(result.candidates[0].fit_assessment.overall_fit_score, 88)
+  assert.equal(result.candidates[0].ai_scoring_contract_v2.weighted_total_score_recomputed, 55)
 })

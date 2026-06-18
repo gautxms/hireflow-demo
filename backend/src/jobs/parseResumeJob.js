@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
-import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields } from '../services/aiResumeAnalysisService.js'
+import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields, isAiScoringContractV2ShadowEnabled, normalizeAiScoringContractV2 } from '../services/aiResumeAnalysisService.js'
 import {
   buildSafeResumeFileDiagnostics,
   logSafeResumeFileDiagnostics,
@@ -342,6 +342,48 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
       ? breakdown.experience_alignment.below_min_experience_evidence_applied
       : null,
   }
+}
+
+
+const AI_SCORING_CONTRACT_V2_SAFE_DIAGNOSTIC_ANOMALY_CODES = new Set([
+  'weighted_total_mismatch',
+  'scoring_contract_version_mismatch',
+  'skills_match_score_non_numeric',
+  'relevant_experience_score_non_numeric',
+  'education_relevance_score_non_numeric',
+  'seniority_progression_score_non_numeric',
+  'weighted_total_score_non_numeric',
+  'skills_match_score_out_of_range_clamped',
+  'relevant_experience_score_out_of_range_clamped',
+  'education_relevance_score_out_of_range_clamped',
+  'seniority_progression_score_out_of_range_clamped',
+  'weighted_total_score_out_of_range_clamped',
+])
+
+function normalizeAiScoringContractV2DiagnosticAnomalies(values) {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((entry) => normalizeString(entry))
+    .filter((entry) => AI_SCORING_CONTRACT_V2_SAFE_DIAGNOSTIC_ANOMALY_CODES.has(entry))
+}
+
+function logAiScoringContractV2Diagnostic(candidate = {}, metadata = {}, logger = console, env = process.env) {
+  if (!isAiScoringContractV2ShadowEnabled(metadata, env)) return null
+  const contract = candidate?.ai_scoring_contract_v2
+  if (!contract || typeof contract !== 'object' || Array.isArray(contract)) return null
+  const diagnostic = {
+    analysis_id: metadata.analysisId || null,
+    resume_id: metadata.resumeId || candidate?.resumeId || null,
+    provider: metadata.provider || null,
+    model: metadata.model || null,
+    prompt_version: metadata.promptVersion || null,
+    scoring_contract_version: contract.scoring_contract_version || null,
+    weighted_total_score_recomputed: contract.weighted_total_score_recomputed ?? null,
+    score_confidence: contract.score_confidence || null,
+    scoring_anomalies: normalizeAiScoringContractV2DiagnosticAnomalies(contract.scoring_anomalies),
+  }
+  logger.info?.('[AiScoringContractV2] shadow diagnostic', diagnostic)
+  return diagnostic
 }
 
 function logDeterministicJdFitApplyDiagnostic(logger, level, diagnostic) {
@@ -824,6 +866,7 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
       skills: skillsStructured,
       skills_flat: normalizeStringArray(resolvedSkillsFlat).slice(0, 25),
       confidenceScores: candidate?.confidenceScores || candidate?.confidence || {},
+      ai_scoring_contract_v2: normalizeAiScoringContractV2(candidate?.ai_scoring_contract_v2),
     }
   })
 }
@@ -1380,6 +1423,13 @@ export async function runParse(job) {
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
+  const aiScoringContractV2ShadowMetadata = {
+    userId: job.data.userId ?? null,
+    analysisId: analysisId || null,
+  }
+  if (jobDescriptionContext && typeof jobDescriptionContext === 'object') {
+    jobDescriptionContext.__aiScoringContractV2ShadowMetadata = aiScoringContractV2ShadowMetadata
+  }
 
   const preAiCancellation = await cancelIfAnalysisInactive(job, 'before_ai')
   if (preAiCancellation) return preAiCancellation
@@ -1455,12 +1505,14 @@ export async function runParse(job) {
     logger: console,
   })
   for (const candidate of finalCandidates) {
-    emitScoreContractShadowDiagnostic(candidate, {
+    const scoringMetadata = {
       userId: job.data.userId ?? null,
       analysisId: analysisId || null,
       resumeId,
       ...scoreContractShadowMetadata,
-    })
+    }
+    emitScoreContractShadowDiagnostic(candidate, scoringMetadata)
+    logAiScoringContractV2Diagnostic(candidate, scoringMetadata, console)
     emitDeterministicJdFitShadowDiagnostic({
       candidate,
       jobDescriptionContext,
@@ -1703,4 +1755,5 @@ export const __testables = {
   buildSafeDeterministicJdFitApplyDiagnostic,
   hasDeterministicJdFitAppliedScore,
   shouldSkipAiScoreCacheShadowForCandidate,
+  logAiScoringContractV2Diagnostic,
 }
