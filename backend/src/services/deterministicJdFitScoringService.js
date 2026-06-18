@@ -224,7 +224,7 @@ const requirementBreakdown = (fitAssessment, candidate = {}) => {
   const total = matched + missing
   const score = total > 0 ? smoothEvidenceRatioScore(matched, missing) : 35
   return {
-    score: roundScore(score),
+    score: roundScore(applyStrongStructuredCoverageFloor(score, candidate)),
     weight: WEIGHTS.requirement_match,
     matched_count: matched,
     missing_count: missing,
@@ -263,7 +263,7 @@ const skillBreakdown = (candidate) => {
   if (totalCompared > 0) score = smoothEvidenceRatioScore(matched, missing)
   else if (candidateSkillCount > 0) score = 55
   return {
-    score: roundScore(score),
+    score: roundScore(applyStrongStructuredCoverageFloor(score, candidate)),
     weight: WEIGHTS.skill_alignment,
     matched_count: matched,
     missing_count: missing,
@@ -357,6 +357,26 @@ const structuredPositiveEvidence = (candidate) => {
   }
   return [...evidenceByBucketAndStrength.values()].sort((first, second) => first.bucket.localeCompare(second.bucket))
 }
+
+
+const structuredCoverageBuckets = (candidate) => new Set(
+  structuredPositiveEvidence(candidate)
+    .filter((evidence) => evidence.structured && evidence.source === 'rich_structured' && !evidence.weak)
+    .map((evidence) => evidence.bucket)
+    .filter(Boolean),
+)
+
+const hasStrongStructuredSdeCoverage = (candidate) => {
+  const buckets = structuredCoverageBuckets(candidate)
+  const hasCoreBackend = buckets.has('typescript_javascript_node') && buckets.has('backend_api') && buckets.has('database_sql')
+  const hasDeliveryDepth = buckets.has('testing_ci') && buckets.has('cloud_platforms')
+  const depthBucketCount = ['system_design', 'async_background', 'auth_security'].filter((bucket) => buckets.has(bucket)).length
+  return hasCoreBackend && hasDeliveryDepth && depthBucketCount >= 2 && buckets.size >= 7
+}
+
+const applyStrongStructuredCoverageFloor = (score, candidate) => (
+  hasStrongStructuredSdeCoverage(candidate) ? Math.max(score, 87) : score
+)
 
 const candidateExperienceEvidenceTexts = (candidate, fitAssessment) => [
   ...flattenText(candidate?.years_experience_notes),
