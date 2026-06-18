@@ -175,6 +175,16 @@ const AI_SCORING_CONTRACT_V2_WEIGHTS = Object.freeze({
   seniority_progression_score: 0.15,
 })
 const AI_SCORING_CONTRACT_V2_SCORE_FIELDS = Object.freeze(Object.keys(AI_SCORING_CONTRACT_V2_WEIGHTS))
+const AI_SCORING_CONTRACT_V2_SAFE_ANOMALY_CODES = Object.freeze(new Set([
+  'weighted_total_mismatch',
+  'scoring_contract_version_mismatch',
+  ...AI_SCORING_CONTRACT_V2_SCORE_FIELDS.flatMap((field) => [
+    `${field}_non_numeric`,
+    `${field}_out_of_range_clamped`,
+  ]),
+  'weighted_total_score_non_numeric',
+  'weighted_total_score_out_of_range_clamped',
+]))
 
 function roundScoringContractScore(value) {
   return Math.round(value * 10) / 10
@@ -204,23 +214,51 @@ function recomputeAiScoringContractV2Total(normalized = {}) {
   )
 }
 
+
+function normalizeSafeAiScoringContractV2AnomalyCodes(values) {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((entry) => clampString(entry, 80))
+    .filter((entry) => AI_SCORING_CONTRACT_V2_SAFE_ANOMALY_CODES.has(entry))
+}
+
+function normalizeModelReportedAiScoringContractV2Anomalies(values) {
+  return clampStringArray(values || [], { maxItems: 20, maxItemLength: 120 })
+}
+
+function isAlreadyNormalizedAiScoringContractV2(value = {}) {
+  return value?.weighted_total_score_from_ai !== undefined
+    || value?.weighted_total_score_recomputed !== undefined
+    || value?.model_reported_anomalies !== undefined
+}
+
 export function normalizeAiScoringContractV2(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
 
-  const anomalies = new Set(clampStringArray(value?.scoring_anomalies || [], { maxItems: 20, maxItemLength: 80 }))
+  const alreadyNormalized = isAlreadyNormalizedAiScoringContractV2(value)
+  const anomalies = new Set(alreadyNormalized ? normalizeSafeAiScoringContractV2AnomalyCodes(value?.scoring_anomalies) : [])
+  const weightedTotalSource = value?.weighted_total_score !== undefined
+    ? value.weighted_total_score
+    : value?.weighted_total_score_from_ai
+  const modelReportedAnomalies = normalizeModelReportedAiScoringContractV2Anomalies(
+    value?.model_reported_anomalies !== undefined
+      ? value.model_reported_anomalies
+      : (alreadyNormalized ? [] : value?.scoring_anomalies),
+  )
   const normalized = {
     scoring_contract_version: AI_SCORING_CONTRACT_V2_VERSION,
     skills_match_score: normalizeScoringContractScore(value?.skills_match_score, 'skills_match_score', anomalies),
     relevant_experience_score: normalizeScoringContractScore(value?.relevant_experience_score, 'relevant_experience_score', anomalies),
     education_relevance_score: normalizeScoringContractScore(value?.education_relevance_score, 'education_relevance_score', anomalies),
     seniority_progression_score: normalizeScoringContractScore(value?.seniority_progression_score, 'seniority_progression_score', anomalies),
-    weighted_total_score_from_ai: normalizeScoringContractScore(value?.weighted_total_score, 'weighted_total_score', anomalies),
+    weighted_total_score_from_ai: normalizeScoringContractScore(weightedTotalSource, 'weighted_total_score', anomalies),
     weighted_total_score_recomputed: null,
     score_confidence: ['high', 'medium', 'low'].includes(String(value?.score_confidence || '').toLowerCase())
       ? String(value.score_confidence).toLowerCase()
       : 'low',
     score_confidence_reason: clampString(value?.score_confidence_reason || '', 300),
     scoring_anomalies: [],
+    model_reported_anomalies: modelReportedAnomalies,
     has_job_description_context: Boolean(value?.has_job_description_context),
   }
 
@@ -229,6 +267,13 @@ export function normalizeAiScoringContractV2(value) {
   }
 
   normalized.weighted_total_score_recomputed = recomputeAiScoringContractV2Total(normalized)
+  if (normalized.weighted_total_score_recomputed === null && value?.weighted_total_score_recomputed !== undefined) {
+    normalized.weighted_total_score_recomputed = normalizeScoringContractScore(
+      value.weighted_total_score_recomputed,
+      'weighted_total_score',
+      anomalies,
+    )
+  }
   if (
     normalized.weighted_total_score_from_ai !== null
     && normalized.weighted_total_score_recomputed !== null
@@ -237,7 +282,7 @@ export function normalizeAiScoringContractV2(value) {
     anomalies.add('weighted_total_mismatch')
   }
 
-  normalized.scoring_anomalies = [...anomalies].slice(0, 20)
+  normalized.scoring_anomalies = normalizeSafeAiScoringContractV2AnomalyCodes([...anomalies])
   return normalized
 }
 

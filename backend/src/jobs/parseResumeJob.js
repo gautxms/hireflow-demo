@@ -344,6 +344,29 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
   }
 }
 
+
+const AI_SCORING_CONTRACT_V2_SAFE_DIAGNOSTIC_ANOMALY_CODES = new Set([
+  'weighted_total_mismatch',
+  'scoring_contract_version_mismatch',
+  'skills_match_score_non_numeric',
+  'relevant_experience_score_non_numeric',
+  'education_relevance_score_non_numeric',
+  'seniority_progression_score_non_numeric',
+  'weighted_total_score_non_numeric',
+  'skills_match_score_out_of_range_clamped',
+  'relevant_experience_score_out_of_range_clamped',
+  'education_relevance_score_out_of_range_clamped',
+  'seniority_progression_score_out_of_range_clamped',
+  'weighted_total_score_out_of_range_clamped',
+])
+
+function normalizeAiScoringContractV2DiagnosticAnomalies(values) {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((entry) => normalizeString(entry))
+    .filter((entry) => AI_SCORING_CONTRACT_V2_SAFE_DIAGNOSTIC_ANOMALY_CODES.has(entry))
+}
+
 function logAiScoringContractV2Diagnostic(candidate = {}, metadata = {}, logger = console, env = process.env) {
   if (!isAiScoringContractV2ShadowEnabled(metadata, env)) return null
   const contract = candidate?.ai_scoring_contract_v2
@@ -357,7 +380,7 @@ function logAiScoringContractV2Diagnostic(candidate = {}, metadata = {}, logger 
     scoring_contract_version: contract.scoring_contract_version || null,
     weighted_total_score_recomputed: contract.weighted_total_score_recomputed ?? null,
     score_confidence: contract.score_confidence || null,
-    scoring_anomalies: Array.isArray(contract.scoring_anomalies) ? contract.scoring_anomalies : [],
+    scoring_anomalies: normalizeAiScoringContractV2DiagnosticAnomalies(contract.scoring_anomalies),
   }
   logger.info?.('[AiScoringContractV2] shadow diagnostic', diagnostic)
   return diagnostic

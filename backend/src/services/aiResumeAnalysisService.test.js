@@ -1150,6 +1150,27 @@ test('normalizeAiScoringContractV2 does not silently convert 8.6/10 style values
   assert.equal(normalized.scoring_anomalies.includes('weighted_total_mismatch'), false)
 })
 
+test('normalizeAiScoringContractV2 is idempotent for normalized weighted totals and internal anomalies', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const once = normalizeAiScoringContractV2({
+    skills_match_score: 90,
+    relevant_experience_score: 80,
+    education_relevance_score: 70,
+    seniority_progression_score: 60,
+    weighted_total_score: 95,
+    scoring_anomalies: ['model supplied note'],
+  })
+  const twice = normalizeAiScoringContractV2(once)
+
+  assert.equal(once.weighted_total_score_from_ai, 95)
+  assert.equal(twice.weighted_total_score_from_ai, 95)
+  assert.equal(once.weighted_total_score_recomputed, 79.5)
+  assert.equal(twice.weighted_total_score_recomputed, 79.5)
+  assert.deepEqual(twice.scoring_anomalies, once.scoring_anomalies)
+  assert.deepEqual(twice.model_reported_anomalies, once.model_reported_anomalies)
+})
+
+
 test('normalizeAiScoringContractV2 clamps out-of-range scores, nulls non-numeric scores, and flags mismatched totals', () => {
   const { normalizeAiScoringContractV2 } = __testables
   const normalized = normalizeAiScoringContractV2({
@@ -1170,7 +1191,8 @@ test('normalizeAiScoringContractV2 clamps out-of-range scores, nulls non-numeric
   assert.equal(normalized.scoring_anomalies.includes('skills_match_score_out_of_range_clamped'), true)
   assert.equal(normalized.scoring_anomalies.includes('relevant_experience_score_non_numeric'), true)
   assert.equal(normalized.scoring_anomalies.includes('education_relevance_score_out_of_range_clamped'), true)
-  assert.equal(normalized.scoring_anomalies.includes('model_reported_issue'), true)
+  assert.equal(normalized.scoring_anomalies.includes('model_reported_issue'), false)
+  assert.deepEqual(normalized.model_reported_anomalies, ['model_reported_issue'])
 })
 
 test('normalizeCompactAnalysis preserves ai_scoring_contract_v2 without replacing visible score', () => {
