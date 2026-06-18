@@ -63,7 +63,7 @@ const REQUIREMENT_CONCEPT_BUCKETS = Object.freeze([
   ['language_fsharp', /\bfsharp\b|(^|[^a-z0-9])f\s*#([^a-z0-9]|$)/i],
   ['dotnet', /\bdotnet\b|\b\.\s*net\b|\bdot\s+net\b/i],
   ['typescript_javascript_node', /\b(?:typescript|javascript|node\s*js|nodejs|node)\b/i],
-  ['frontend_js_framework', /\b(?:vue\s*js|vuejs|vue|next\s*js|nextjs)\b/i],
+  ['frontend_js_framework', /\b(?:react|vue\s*js|vuejs|vue|next\s*js|nextjs)\b/i],
   ['experience_years', /\b(?:\d+(?:\.\d+)?\s*(?:\+\s*)?(?:years?|yrs?)|professional\s+experience|work\s+experience|relevant\s+experience|production\s+experience|early\s+career|junior\s+profile|experience\s+gap)\b/i],
   ['cloud_platforms', /\b(?:cloud|aws|azure|gcp|google\s+cloud|kubernetes|k8s|docker|container|containers|deployment|devops)\b/i],
   ['testing_ci', /\b(?:test|testing|unit\s+test|integration\s+test|automation|qa|quality\s+assurance|ci\s*cd|cicd|pipeline|pipelines)\b/i],
@@ -107,8 +107,33 @@ const missingEvidenceCoveredByMatch = (missing, matched) => {
   return matched.strongCoverage && !matched.weak
 }
 
-const normalizedRequirementEvidence = (matchedValues, missingValues) => {
-  const matchedEvidence = asArray(matchedValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
+const STRUCTURED_STRONG_COVERAGE_PATTERN = /\b(?:production|depth|ownership|owned|implementation|implemented|built|delivered|deployed|deployment|rollout|pipeline|infrastructure|secure\s+api|scalable|scale|architecture|architectural)\b/i
+
+const structuredConceptEvidence = (value, bucket, source = 'rich_structured') => {
+  const evidence = requirementConceptEvidence(value)
+  const hasStructuredDepthSignal = STRUCTURED_STRONG_COVERAGE_PATTERN.test(String(value ?? ''))
+  return {
+    ...evidence,
+    bucket,
+    strongCoverage: !hasStructuredDepthSignal
+      ? false
+      : evidence.strongCoverage,
+    source,
+    structured: true,
+  }
+}
+
+const normalizedRequirementEvidence = (matchedValues, missingValues, structuredMatchedEvidence = []) => {
+  const comparisonBuckets = new Set([
+    ...asArray(matchedValues).map(requirementConceptEvidence),
+    ...asArray(missingValues).map(requirementConceptEvidence),
+  ].map((evidence) => evidence.bucket).filter(Boolean))
+  const eligibleStructuredEvidence = asArray(structuredMatchedEvidence)
+    .filter((evidence) => evidence.bucket && comparisonBuckets.has(evidence.bucket))
+  const matchedEvidence = [
+    ...asArray(matchedValues).map(requirementConceptEvidence),
+    ...eligibleStructuredEvidence,
+  ].filter((evidence) => evidence.bucket)
   const missingEvidence = asArray(missingValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
   const matchedBuckets = new Set(matchedEvidence.map((evidence) => evidence.bucket))
   const missingBucketsRaw = new Set(missingEvidence.map((evidence) => evidence.bucket))
@@ -131,6 +156,7 @@ const normalizedRequirementEvidence = (matchedValues, missingValues) => {
     missingBuckets,
     bucketCount: buckets.length,
     requirementBucketScores,
+    structuredPositiveBucketCount: eligibleStructuredEvidence.length,
     smoothingApplied: asArray(matchedValues).length !== matchedBuckets.size
       || asArray(missingValues).length !== missingBuckets.size
       || missingBucketsRaw.size !== missingBuckets.size
@@ -190,8 +216,9 @@ const hasJdContext = (context) => {
   ].some(meaningfulJdValue)
 }
 
-const requirementBreakdown = (fitAssessment) => {
-  const evidence = normalizedRequirementEvidence(fitAssessment?.matched_requirements, fitAssessment?.missing_requirements)
+const requirementBreakdown = (fitAssessment, candidate = {}) => {
+  const structuredEvidence = structuredPositiveEvidence(candidate)
+  const evidence = normalizedRequirementEvidence(fitAssessment?.matched_requirements, fitAssessment?.missing_requirements, structuredEvidence)
   const matched = evidence.matchedBuckets.size
   const missing = evidence.missingBuckets.size
   const total = matched + missing
@@ -206,6 +233,7 @@ const requirementBreakdown = (fitAssessment) => {
     normalized_requirement_missing_count: missing,
     normalized_requirement_bucket_count: evidence.bucketCount,
     requirement_bucket_scores: evidence.requirementBucketScores,
+    structured_positive_bucket_count: evidence.structuredPositiveBucketCount,
     requirement_variance_smoothing_applied: evidence.smoothingApplied,
   }
 }
@@ -222,7 +250,8 @@ const smoothEvidenceRatioScore = (matched, missing) => {
 }
 
 const skillBreakdown = (candidate) => {
-  const skillEvidence = normalizedRequirementEvidence(candidate?.matchedSkills, candidate?.missingSkills)
+  const structuredEvidence = structuredPositiveEvidence(candidate)
+  const skillEvidence = normalizedRequirementEvidence(candidate?.matchedSkills, candidate?.missingSkills, structuredEvidence)
   const matched = skillEvidence.matchedBuckets.size
   const missing = skillEvidence.missingBuckets.size
   const candidateSkillCount = uniqueNormalized([
@@ -242,6 +271,8 @@ const skillBreakdown = (candidate) => {
     normalized_requirement_match_count: matched,
     normalized_requirement_missing_count: missing,
     normalized_requirement_bucket_count: skillEvidence.bucketCount,
+    requirement_bucket_scores: skillEvidence.requirementBucketScores,
+    structured_positive_bucket_count: skillEvidence.structuredPositiveBucketCount,
     requirement_variance_smoothing_applied: skillEvidence.smoothingApplied,
   }
 }
@@ -279,6 +310,52 @@ const flattenText = (value) => {
   if (Array.isArray(value)) return value.flatMap(flattenText)
   if (isObject(value)) return Object.values(value).flatMap(flattenText)
   return [String(value)]
+}
+
+const STRUCTURED_POSITIVE_PATTERNS = Object.freeze([
+  ['typescript_javascript_node', /\b(?:typescript|javascript|node\s*js|nodejs|node|express|nestjs?|nest\s*js)\b/i],
+  ['frontend_js_framework', /\b(?:react|next\s*js|nextjs|vue\s*js|vuejs|vue)\b/i],
+  ['backend_framework', /\b(?:express|nestjs?|nest\s*js|flask|django|fastapi|spring\s+boot|rails|laravel)\b/i],
+  ['backend_api', /\b(?:backend|api|apis|rest|graphql|microservices?|server\s+side)\b/i],
+  ['database_sql', /\b(?:sql|postgres|postgresql|mysql|database|databases|mongodb|mongo|nosql)\b/i],
+  ['cloud_platforms', /\b(?:aws|azure|gcp|google\s+cloud|kubernetes|k8s|docker|container|containers|deployment|devops)\b/i],
+  ['testing_ci', /\b(?:jest|testing|unit\s+test|integration\s+test|automation|ci\s*cd|cicd|github\s+actions?|pipeline|pipelines)\b/i],
+  ['system_design', /\b(?:system\s+design|scalability|scalable|distributed\s+systems?|architecture|architectural|microservices?)\b/i],
+  ['async_background', /\b(?:async|asynchronous|queue|queues|background\s+jobs?|workers?|caching|cache|redis|messaging|event\s+driven)\b/i],
+  ['auth_security', /\b(?:auth|authentication|authorization|rbac|oauth|jwt|secure\s+api|security|permissions?)\b/i],
+])
+
+const structuredCandidateEvidenceTexts = (candidate) => {
+  const richStructuredEvidence = [
+    ...flattenText(candidate?.skills_structured),
+    ...flattenText(candidate?.experience),
+    ...flattenText(candidate?.experiences),
+    ...flattenText(candidate?.work_experience),
+    ...flattenText(candidate?.employment_history),
+    ...flattenText(candidate?.projects),
+    ...flattenText(candidate?.achievements),
+  ]
+  if (richStructuredEvidence.length === 0) return []
+  return [
+    ...flattenText(candidate?.skills_flat).map((text) => ({ text, source: 'flat_skill' })),
+    ...flattenText(candidate?.top_skills).map((text) => ({ text, source: 'top_skill' })),
+    ...richStructuredEvidence.map((text) => ({ text, source: 'rich_structured' })),
+  ]
+}
+
+const structuredPositiveEvidence = (candidate) => {
+  const evidenceByBucketAndStrength = new Map()
+  for (const { text, source } of structuredCandidateEvidenceTexts(candidate)) {
+    const normalized = withSemanticLanguageTokens(text)
+    if (!normalized) continue
+    for (const [bucket, pattern] of STRUCTURED_POSITIVE_PATTERNS) {
+      if (!pattern.test(normalized)) continue
+      const evidence = structuredConceptEvidence(normalized, bucket, source)
+      const strengthKey = evidence.weak ? 'weak' : (evidence.strongCoverage ? 'strong' : 'neutral')
+      evidenceByBucketAndStrength.set(`${bucket}:${source}:${strengthKey}`, evidence)
+    }
+  }
+  return [...evidenceByBucketAndStrength.values()].sort((first, second) => first.bucket.localeCompare(second.bucket))
 }
 
 const candidateExperienceEvidenceTexts = (candidate, fitAssessment) => [
@@ -548,7 +625,7 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     }
   }
 
-  const requirement = requirementBreakdown(fitAssessment)
+  const requirement = requirementBreakdown(fitAssessment, safeCandidate)
   const skill = skillBreakdown(safeCandidate)
   const breakdown = {
     requirement_match: requirement,
