@@ -869,6 +869,101 @@ test('structured positive evidence covers repeated narrative missing buckets wit
   assert.equal(JSON.stringify(result).includes(input.experience[0]), false)
 })
 
+test('Vikram-like rich structured basics do not cancel production depth gaps or inflate final score', () => {
+  const input = {
+    summary: 'Early-career candidate with mostly basic exposure.',
+    fit_assessment: {
+      matched_requirements: ['React UI exposure', 'Flask/Express basics'],
+      missing_requirements: [
+        'TypeScript production depth',
+        'AWS/GCP/Kubernetes production cloud experience',
+        'integration testing / CI/CD',
+        'production debugging',
+        'queues/background jobs',
+      ],
+      risks_or_gaps: [
+        'Experience gap: 1.6 years is below minimum for 2-5 years',
+        'No production TypeScript depth',
+        'No AWS/GCP/Kubernetes production cloud evidence',
+        'No integration testing or CI/CD evidence',
+        'No queues/background jobs evidence',
+      ],
+    },
+    matchedSkills: ['React', 'Flask basics', 'Express basics'],
+    missingSkills: ['TypeScript production depth', 'AWS/GCP/Kubernetes', 'integration testing', 'CI/CD', 'queues/background jobs'],
+    skills_flat: ['TypeScript basics', 'Docker basics', 'Render', 'Railway', 'Pytest basics', 'React', 'Flask', 'Express'],
+    skills_structured: {
+      languages: ['TypeScript basics'],
+      platforms: ['Docker basics', 'Render deployment exposure', 'Railway deployment exposure'],
+      testing: ['Pytest basics', 'manual testing'],
+      frameworks: ['React', 'Flask basics', 'Express basics'],
+    },
+    projects: ['Toy demo app deployed to Render/Railway with Docker basics and manual Pytest checks.'],
+    years_experience: 1.6,
+    location: 'Remote, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  }
+
+  const result = scoreCandidateDeterministically(input, { ...sdeJdContext(), required_min_years: 2, required_max_years: 5 })
+  const requirementBuckets = result.scoring_breakdown.requirement_match.requirement_bucket_scores
+  const skillBuckets = result.scoring_breakdown.skill_alignment.requirement_bucket_scores
+
+  assert.equal(requirementBuckets.typescript_javascript_node, 0)
+  assert.equal(requirementBuckets.cloud_platforms, 0)
+  assert.equal(requirementBuckets.testing_ci, 0)
+  assert.equal(requirementBuckets.async_background, 0)
+  assert.equal(skillBuckets.typescript_javascript_node, 0)
+  assert.equal(skillBuckets.cloud_platforms, 0)
+  assert.equal(skillBuckets.testing_ci, 0)
+  assert.equal(skillBuckets.async_background, 0)
+  assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 1.6)
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+  assert.ok(result.final_score < 55)
+})
+
+test('TypeScript basics in structured fields does not cancel TypeScript production depth', () => {
+  const input = candidate()
+  input.skills_structured = { languages: ['TypeScript basics'] }
+  input.projects = ['Demo React app with TypeScript basics.']
+  input.fit_assessment.matched_requirements = ['React']
+  input.fit_assessment.missing_requirements = ['TypeScript production depth', 'Node.js production depth']
+  input.matchedSkills = ['React']
+  input.missingSkills = input.fit_assessment.missing_requirements
+
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.typescript_javascript_node, 0)
+  assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.typescript_javascript_node, 0)
+})
+
+test('Docker/Render/Railway basics in structured fields do not cancel AWS/GCP/Kubernetes production cloud', () => {
+  const input = candidate()
+  input.skills_structured = { platforms: ['Docker basics', 'Render exposure', 'Railway exposure'] }
+  input.projects = ['Toy demo deployed to Render/Railway using Docker basics.']
+  input.fit_assessment.matched_requirements = ['Backend API']
+  input.fit_assessment.missing_requirements = ['AWS/GCP/Kubernetes production cloud experience']
+  input.matchedSkills = ['Backend API']
+  input.missingSkills = input.fit_assessment.missing_requirements
+
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 0)
+  assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.cloud_platforms, 0)
+})
+
+test('Pytest basics/manual testing in structured fields do not cancel integration testing or CI/CD', () => {
+  const input = candidate()
+  input.skills_structured = { testing: ['Pytest basics', 'manual testing'] }
+  input.projects = ['Demo app with Pytest basics and manual testing only.']
+  input.fit_assessment.matched_requirements = ['Backend API']
+  input.fit_assessment.missing_requirements = ['integration testing', 'CI/CD test pipelines']
+  input.matchedSkills = ['Backend API']
+  input.missingSkills = input.fit_assessment.missing_requirements
+
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.testing_ci, 0)
+  assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.testing_ci, 0)
+})
+
 test('Docker basics do not cancel production AWS/GCP/Kubernetes cloud gaps', () => {
   const input = candidate()
   input.fit_assessment.matched_requirements = ['Docker basics', 'Render deployment', 'Railway deployment']

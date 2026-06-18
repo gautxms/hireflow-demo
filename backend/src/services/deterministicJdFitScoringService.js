@@ -107,19 +107,19 @@ const missingEvidenceCoveredByMatch = (missing, matched) => {
   return matched.strongCoverage && !matched.weak
 }
 
-const structuredConceptEvidence = (bucket) => ({
-  bucket,
-  canonical: `structured ${bucket}`,
-  weak: false,
-  depthGap: false,
-  strongCoverage: true,
-  structured: true,
-})
+const structuredConceptEvidence = (value, bucket) => {
+  const evidence = requirementConceptEvidence(value)
+  return {
+    ...evidence,
+    bucket,
+    structured: true,
+  }
+}
 
-const normalizedRequirementEvidence = (matchedValues, missingValues, structuredMatchedBuckets = []) => {
+const normalizedRequirementEvidence = (matchedValues, missingValues, structuredMatchedEvidence = []) => {
   const matchedEvidence = [
     ...asArray(matchedValues).map(requirementConceptEvidence),
-    ...asArray(structuredMatchedBuckets).map(structuredConceptEvidence),
+    ...asArray(structuredMatchedEvidence),
   ].filter((evidence) => evidence.bucket)
   const missingEvidence = asArray(missingValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
   const matchedBuckets = new Set(matchedEvidence.map((evidence) => evidence.bucket))
@@ -143,7 +143,7 @@ const normalizedRequirementEvidence = (matchedValues, missingValues, structuredM
     missingBuckets,
     bucketCount: buckets.length,
     requirementBucketScores,
-    structuredPositiveBucketCount: asArray(structuredMatchedBuckets).length,
+    structuredPositiveBucketCount: asArray(structuredMatchedEvidence).length,
     smoothingApplied: asArray(matchedValues).length !== matchedBuckets.size
       || asArray(missingValues).length !== missingBuckets.size
       || missingBucketsRaw.size !== missingBuckets.size
@@ -204,8 +204,8 @@ const hasJdContext = (context) => {
 }
 
 const requirementBreakdown = (fitAssessment, candidate = {}) => {
-  const structuredBuckets = structuredPositiveBuckets(candidate)
-  const evidence = normalizedRequirementEvidence(fitAssessment?.matched_requirements, fitAssessment?.missing_requirements, structuredBuckets)
+  const structuredEvidence = structuredPositiveEvidence(candidate)
+  const evidence = normalizedRequirementEvidence(fitAssessment?.matched_requirements, fitAssessment?.missing_requirements, structuredEvidence)
   const matched = evidence.matchedBuckets.size
   const missing = evidence.missingBuckets.size
   const total = matched + missing
@@ -237,8 +237,8 @@ const smoothEvidenceRatioScore = (matched, missing) => {
 }
 
 const skillBreakdown = (candidate) => {
-  const structuredBuckets = structuredPositiveBuckets(candidate)
-  const skillEvidence = normalizedRequirementEvidence(candidate?.matchedSkills, candidate?.missingSkills, structuredBuckets)
+  const structuredEvidence = structuredPositiveEvidence(candidate)
+  const skillEvidence = normalizedRequirementEvidence(candidate?.matchedSkills, candidate?.missingSkills, structuredEvidence)
   const matched = skillEvidence.matchedBuckets.size
   const missing = skillEvidence.missingBuckets.size
   const candidateSkillCount = uniqueNormalized([
@@ -258,6 +258,7 @@ const skillBreakdown = (candidate) => {
     normalized_requirement_match_count: matched,
     normalized_requirement_missing_count: missing,
     normalized_requirement_bucket_count: skillEvidence.bucketCount,
+    requirement_bucket_scores: skillEvidence.requirementBucketScores,
     structured_positive_bucket_count: skillEvidence.structuredPositiveBucketCount,
     requirement_variance_smoothing_applied: skillEvidence.smoothingApplied,
   }
@@ -329,16 +330,19 @@ const structuredCandidateEvidenceTexts = (candidate) => {
   ]
 }
 
-const structuredPositiveBuckets = (candidate) => {
-  const buckets = new Set()
+const structuredPositiveEvidence = (candidate) => {
+  const evidenceByBucketAndStrength = new Map()
   for (const text of structuredCandidateEvidenceTexts(candidate)) {
     const normalized = withSemanticLanguageTokens(text)
     if (!normalized) continue
     for (const [bucket, pattern] of STRUCTURED_POSITIVE_PATTERNS) {
-      if (pattern.test(normalized)) buckets.add(bucket)
+      if (!pattern.test(normalized)) continue
+      const evidence = structuredConceptEvidence(normalized, bucket)
+      const strengthKey = evidence.weak ? 'weak' : (evidence.strongCoverage ? 'strong' : 'neutral')
+      evidenceByBucketAndStrength.set(`${bucket}:${strengthKey}`, evidence)
     }
   }
-  return [...buckets].sort()
+  return [...evidenceByBucketAndStrength.values()].sort((first, second) => first.bucket.localeCompare(second.bucket))
 }
 
 const candidateExperienceEvidenceTexts = (candidate, fitAssessment) => [
