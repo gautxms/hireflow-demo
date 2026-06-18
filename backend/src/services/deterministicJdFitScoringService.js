@@ -620,10 +620,15 @@ const riskBreakdown = (fitAssessment) => {
 }
 
 
-const EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERN = /\b(?:junior|early\s+career|basic|basics|beginner|toy|demo|academic|manual\s+testing|manual[-\s]*only|only\s+manual|manual\s+qa\s+only|manual\s+api\s+testing|exposure|frontend[-\s]*only|frontend\s+leaning|frontend\s+focused|limited\s+backend|no\s+backend|no\s+production|not\s+sde|unrelated)\b/i
+const EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERNS = Object.freeze([
+  /\b(?:junior\s+profile|junior\s+candidate|junior[-\s]*level\s+(?:candidate|experience)|junior\s+role|junior[-\s]*only\s+experience)\b/i,
+  /(?:^|[.;:]\s*)(?:a\s+|an\s+)?junior\s+developers?\b/i,
+  /\b(?:early[-\s]*career|entry[-\s]*level|graduate|trainee)\s+(?:profile|candidate|experience|role)\b/i,
+  /\b(?:basic|basics|beginner|toy|demo|academic|manual\s+testing|manual[-\s]*only|only\s+manual|manual\s+qa\s+only|manual\s+api\s+testing|exposure|frontend[-\s]*only|frontend\s+leaning|frontend\s+focused|limited\s+backend|no\s+backend|no\s+production|not\s+sde|unrelated)\b/i,
+])
 
 const hasExplicitWeakStructuredEvidence = (candidate, fitAssessment) => candidateExperienceEvidenceTexts(candidate, fitAssessment)
-  .some((text) => EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERN.test(String(text ?? '')))
+  .some((text) => EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERNS.some((pattern) => pattern.test(String(text ?? ''))))
 
 const shouldApplyStrongStructuredFinalFloor = (candidate, fitAssessment, breakdown, cap) => {
   if (!hasStrongStructuredSdeCoverage(candidate)) return false

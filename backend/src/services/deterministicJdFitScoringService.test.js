@@ -1584,6 +1584,19 @@ describe('production SDE deterministic stability calibration', () => {
     assert.ok(Math.abs(richerSingle.final_score - conservativeMixed.final_score) <= 5)
   })
 
+  test('positive junior mentorship language does not block final strong SDE floor', () => {
+    const result = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      aiScore: 88,
+      matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
+      missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
+      risks: ['Conservative narrative omits some structured production details.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
+      summary: 'Mentored junior engineers and reviewed code for junior teammates while delivering production backend workflow automation.',
+    }), { ...context(), location: 'Austin, TX' })
+
+    assert.equal(result.final_score_floor_applied, true)
+    assert.ok(result.final_score >= 85)
+  })
+
   test('manual testing weak evidence blocks final strong SDE floor but manual review impact does not', () => {
     const manualReviewImpact = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
       aiScore: 88,
@@ -1604,6 +1617,19 @@ describe('production SDE deterministic stability calibration', () => {
     assert.ok(manualReviewImpact.final_score >= 85)
     assert.equal(manualTestingOnly.final_score_floor_applied, false)
     assert.ok(manualTestingOnly.final_score < 85)
+  })
+
+  test('weak junior-profile language blocks final strong SDE floor', () => {
+    const juniorProfile = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      aiScore: 52,
+      matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
+      missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
+      risks: ['Junior profile; weak structured delivery evidence.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Roadmap planning not specified.'],
+      summary: 'Junior candidate. Junior developer with basic exposure.',
+    }), { ...context(), location: 'Austin, TX' })
+
+    assert.equal(juniorProfile.final_score_floor_applied, false)
+    assert.ok(juniorProfile.final_score < 85)
   })
 
   test('frontend-only or junior/basic structured evidence does not trigger final strong SDE floor', () => {
