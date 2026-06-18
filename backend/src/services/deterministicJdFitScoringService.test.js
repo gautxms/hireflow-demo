@@ -1455,3 +1455,144 @@ test('Node.js and NodeJS normalize into the same concept bucket', () => {
   assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_missing_count, 0)
   assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.typescript_javascript_node, 1)
 })
+
+describe('production SDE deterministic stability calibration', () => {
+  const context = () => ({ ...sdeJdContext(), required_min_years: 4, required_max_years: 7 })
+  const guardrailContext = () => ({ ...sdeJdContext(), required_min_years: 2, required_max_years: 5 })
+  const spread = (scores) => Math.max(...scores) - Math.min(...scores)
+
+  const strongAishaEvidence = () => ({
+    skills_flat: ['TypeScript', 'Node.js', 'Express', 'NestJS', 'React', 'Next.js', 'PostgreSQL', 'Redis', 'Docker', 'AWS', 'Jest', 'GitHub Actions', 'RBAC', 'JWT'],
+    skills_structured: {
+      backend: ['Built production Node.js, Express, and NestJS REST APIs with PostgreSQL.'],
+      frontend: ['Delivered React and Next.js workflows.'],
+      platform: ['Deployed Docker services on AWS and used Redis caching.'],
+      quality: ['Owned Jest unit tests, integration tests, and CI/CD pipelines.'],
+      security: ['Implemented secure APIs with RBAC permissions and JWT authentication.'],
+    },
+    experience: [
+      '4.1 years professional software experience building production backend APIs, PostgreSQL data models, Redis queues, background workers, RBAC/JWT auth, CI/CD, Docker, AWS deployments, incident RCA, and scalable service architecture.',
+    ],
+    projects: ['Production SaaS workflow using Node.js REST APIs, PostgreSQL, Redis background jobs, React, Next.js, and secure RBAC.'],
+    achievements: ['Owned production debugging, reliability improvements, and deployment rollouts.'],
+    years_experience: 4.1,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 85,
+  })
+
+  const frontendNehaEvidence = () => ({
+    skills_flat: ['React', 'Next.js', 'TypeScript', 'Node.js', 'Jest', 'REST APIs'],
+    skills_structured: {
+      frontend: ['Built production React and Next.js user interfaces with TypeScript.'],
+      backend: ['Supported Node.js API integration work.'],
+      quality: ['Wrote Jest component tests.'],
+    },
+    experience: ['2.8 years professional software experience, strongest in frontend React and Next.js with some Node.js API support.'],
+    years_experience: 2.8,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 75,
+  })
+
+  const juniorVikramEvidence = () => ({
+    skills_flat: ['Java', 'SQL', 'React basics', 'Flask basics', 'Express basics', 'Docker basics'],
+    skills_structured: {
+      languages: ['Java', 'SQL'],
+      frameworks: ['React basics', 'Flask basics', 'Express basics'],
+      platforms: ['Docker basics', 'Render deployment exposure', 'Railway deployment exposure'],
+    },
+    experience: ['Resume-derived total experience is 1.6 years of professional software experience.'],
+    projects: ['Toy demo app with Docker basics and manual deployment exposure.'],
+    years_experience: 1.6,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  })
+
+  const withNarrative = (base, { matched, missing, risks = [], aiScore = 80, summary = 'AI narrative variant.' }) => ({
+    ...base(),
+    score: aiScore,
+    matchScore: { score: aiScore, reason: summary },
+    fit_assessment: {
+      overall_fit_score: aiScore,
+      rationale: summary,
+      matched_requirements: matched,
+      missing_requirements: missing,
+      risks_or_gaps: risks,
+    },
+    matchedSkills: matched,
+    missingSkills: missing,
+  })
+
+  test('Aisha DOC/PDF/DOCX-like narratives stay strong and format-stable from structured evidence', () => {
+    const results = [
+      withNarrative(strongAishaEvidence, {
+        aiScore: 92,
+        matched: ['TypeScript/Node.js backend APIs', 'React/Next.js', 'PostgreSQL', 'Redis queues', 'RBAC/JWT', 'testing CI/CD', 'AWS/Docker', '4 years experience'],
+        missing: ['advanced algorithms'],
+      }),
+      withNarrative(strongAishaEvidence, {
+        aiScore: 86,
+        matched: ['Node.js REST APIs', 'React', 'SQL', '4 years professional experience'],
+        missing: ['system design depth', 'DSA', 'Kubernetes', 'serverless', 'alternative frameworks', 'high-scale distributed systems'],
+        risks: ['Generic scale and Kubernetes gaps should remain considerations.'],
+      }),
+      withNarrative(strongAishaEvidence, {
+        aiScore: 86,
+        matched: ['Node APIs', 'PostgreSQL', 'React/Next.js', 'Redis caching', 'testing CI/CD', 'RBAC/JWT', 'AWS deployments', '4 years experience'],
+        missing: ['advanced DSA wording'],
+        risks: ['Narrative is conservative but structured production evidence is strong.'],
+      }),
+    ].map((input) => scoreCandidateDeterministically(input, context()))
+
+    const finalScores = results.map((result) => result.final_score)
+    assert.ok(Math.min(...finalScores) >= 85, `Aisha scores should stay strong: ${finalScores.join(', ')}`)
+    assert.ok(spread(finalScores) <= 5, `Aisha format spread ${spread(finalScores)} from ${finalScores.join(', ')}`)
+  })
+
+  test('Aisha single-vs-mixed narrative drift does not collapse a strong SDE candidate', () => {
+    const richerSingle = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      aiScore: 86,
+      matched: ['TypeScript/Node.js backend APIs', 'React/Next.js', 'PostgreSQL', 'Redis queues', 'RBAC/JWT', 'AWS/Docker', 'testing CI/CD', 'system design', '4 years experience'],
+      missing: ['advanced algorithms'],
+    }), context())
+    const conservativeMixed = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      aiScore: 67,
+      matched: ['TypeScript/Node.js', 'React', 'PostgreSQL', '4 years experience'],
+      missing: ['system design', 'DSA', 'Kubernetes', 'serverless', 'alternative frameworks', 'high-scale distributed systems', 'auth/RBAC depth', 'async/background jobs', 'testing CI/CD'],
+      risks: ['Mixed-analysis narrative overstates generic gaps.'],
+    }), context())
+
+    assert.ok(richerSingle.final_score >= 85)
+    assert.ok(conservativeMixed.final_score >= 85)
+    assert.ok(Math.abs(richerSingle.final_score - conservativeMixed.final_score) <= 5)
+  })
+
+  test('Neha and Vikram guardrails plus mixed ranking remain intact', () => {
+    const aisha = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      matched: ['TypeScript/Node.js', 'React', 'PostgreSQL', '4 years experience'],
+      missing: ['system design', 'DSA', 'Kubernetes', 'serverless'],
+      risks: ['Generic gaps only.'],
+    }), context())
+    const neha = scoreCandidateDeterministically(withNarrative(frontendNehaEvidence, {
+      aiScore: 60,
+      matched: ['React/Next.js', 'TypeScript frontend', 'Jest testing', 'some Node APIs', '2.8 years experience'],
+      missing: ['cloud/platform depth', 'system design', 'queues/background jobs', 'auth/RBAC'],
+      risks: ['Frontend-leaning profile.'],
+    }), guardrailContext())
+    const vikram = scoreCandidateDeterministically(withNarrative(juniorVikramEvidence, {
+      aiScore: 52,
+      summary: 'Candidate has 1.6 years experience and is below minimum for the role.',
+      matched: ['Java', 'SQL', 'backend APIs'],
+      missing: ['minimum 4 years experience', 'system design', 'cloud', 'testing CI/CD', 'auth/RBAC', 'queues/background jobs'],
+      risks: ['Experience gap: 1.6 years is below minimum for 4-7 years', 'Junior profile for SDE ownership'],
+    }), guardrailContext())
+
+    assert.ok(neha.final_score >= 58 && neha.final_score <= 62, `Neha should remain moderate: ${neha.final_score}`)
+    assert.ok(vikram.final_score >= 49 && vikram.final_score <= 55, `Vikram should remain junior/below-threshold: ${vikram.final_score}`)
+    assert.ok(aisha.final_score > neha.final_score)
+    assert.ok(aisha.final_score - neha.final_score >= 20)
+    assert.ok(neha.final_score > vikram.final_score)
+  })
+})
