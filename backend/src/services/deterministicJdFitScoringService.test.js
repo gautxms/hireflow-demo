@@ -1,4 +1,4 @@
-import test from 'node:test'
+import test, { describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -256,6 +256,58 @@ test('skill-specific duration in missingSkills does not trigger total-experience
   assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
   assert.equal(result.scoring_breakdown.experience_alignment.safer_candidate_years, 6)
   assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
+test('skill-specific years in narrative do not override total years_experience', () => {
+  const cases = [
+    '1 year of React experience',
+    '2 years of Python experience',
+    '1.5 years of TypeScript experience',
+    '3 years PostgreSQL experience',
+    '2 years of Docker experience',
+  ]
+
+  for (const text of cases) {
+    const input = candidate()
+    input.years_experience = 5
+    input.summary = `Candidate has 5 years total professional experience and ${text}.`
+    input.fit_assessment.risks_or_gaps = []
+    const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 3 })
+    assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 5, `${text} should not be total experience`)
+    assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false, `${text} should not trigger below-minimum evidence`)
+    assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+  }
+})
+
+test('skill-specific months in narrative do not become total years experience', () => {
+  const input = candidate()
+  input.years_experience = 5
+  input.summary = 'Candidate has 5 years total professional experience and 6 months of AWS experience.'
+  input.fit_assessment.risks_or_gaps = []
+  const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 3 })
+  assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 5)
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  assert.equal(result.scoring_breakdown.experience_alignment.score, 100)
+})
+
+test('explicit total-experience phrases with decimal years override rounded AI years when below minimum', () => {
+  const cases = [
+    ['1.6 years of professional software experience', 1.6],
+    ['2.8 years of relevant engineering experience', 2.8],
+    ['4.1 years building production SaaS features', 4.1],
+    ['2.8 years as a software engineer', 2.8],
+  ]
+
+  for (const [text, expectedYears] of cases) {
+    const input = candidate()
+    input.years_experience = Math.ceil(expectedYears)
+    input.summary = `AI rounded the candidate up, but resume-derived evidence says ${text}.`
+    input.fit_assessment.risks_or_gaps = ['Below minimum required experience based on precise resume evidence.']
+    const result = scoreCandidateDeterministically(input, { ...jdContext(), required_min_years: 5 })
+    assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, expectedYears, `${text} should resolve as total experience`)
+    assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+    assert.ok(result.scoring_breakdown.experience_alignment.score < 100)
+  }
 })
 
 test('candidate years_experience of 2 is capped when text says 1.6 years', () => {
@@ -549,6 +601,122 @@ const sdeJdContext = () => ({
   title: 'Software Development Engineer',
   location: 'Bengaluru/Hyderabad/Pune/Remote Hybrid',
   required_min_years: 3,
+})
+
+describe('format stability regression matrix', () => {
+  const context = () => ({ ...sdeJdContext(), required_min_years: 2, required_max_years: 5 })
+  const scoreSpread = (results) => Math.max(...results.map((result) => result.final_score)) - Math.min(...results.map((result) => result.final_score))
+
+  const aishaBase = () => ({
+    skills_flat: ['TypeScript', 'Node.js', 'Express', 'NestJS', 'React', 'Next.js', 'PostgreSQL', 'Redis', 'Docker', 'AWS', 'Jest', 'GitHub Actions', 'RBAC', 'JWT'],
+    skills_structured: {
+      backend: ['Node.js production APIs', 'Express services', 'NestJS services', 'PostgreSQL'],
+      frontend: ['React', 'Next.js'],
+      platform: ['Redis caching', 'Docker deployments', 'AWS deployments'],
+      quality: ['Jest unit tests', 'CI/CD with GitHub Actions'],
+      security: ['RBAC permissions', 'JWT authentication'],
+    },
+    experience: ['4.1 years professional software experience building production Node.js APIs, PostgreSQL, Redis queues, RBAC/JWT auth, CI/CD, Docker, AWS, and system design reviews.'],
+    projects: ['Recruiting workflow with React, Next.js, Node.js REST APIs, PostgreSQL, Redis background jobs, and secure RBAC.'],
+    years_experience: 4.1,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 85,
+  })
+
+  const nehaBase = () => ({
+    skills_flat: ['React', 'Next.js', 'TypeScript', 'Node.js', 'Jest', 'REST APIs'],
+    skills_structured: {
+      frontend: ['React production UI', 'Next.js pages', 'TypeScript'],
+      backend: ['Node.js API support'],
+      quality: ['Jest component tests'],
+    },
+    experience: ['2.8 years professional software experience, strongest in React and Next.js with some Node.js API work.'],
+    years_experience: 2.8,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 75,
+  })
+
+  const vikramBase = () => ({
+    skills_flat: ['Java', 'SQL', 'React basics', 'Flask basics', 'Express basics', 'Docker basics'],
+    skills_structured: {
+      languages: ['Java', 'SQL'],
+      frameworks: ['React basics', 'Flask basics', 'Express basics'],
+      platforms: ['Docker basics', 'Render deployment exposure', 'Railway deployment exposure'],
+    },
+    experience: ['Resume-derived total experience is 1.6 years of professional software experience.'],
+    projects: ['Toy demo app with Docker basics and manual deployment exposure.'],
+    years_experience: 1.6,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  })
+
+  const variants = {
+    aisha: [
+      { matched: ['TypeScript/Node.js APIs', 'PostgreSQL', 'React/Next.js', 'Redis queues', 'RBAC/JWT', 'testing CI/CD', '4 years experience'], missing: ['advanced algorithms', 'cloud breadth'], risks: ['Limited big-tech scale evidence'], aiScore: 92 },
+      { matched: ['Node.js REST APIs', 'PostgreSQL', 'React/Next.js', 'Redis queues', 'RBAC/JWT', 'AWS/Docker', 'testing CI/CD', 'system design', '4 years experience'], missing: ['advanced algorithms'], risks: [], aiScore: 95 },
+      { matched: ['Node APIs', 'SQL', 'React', 'Redis caching', 'RBAC/JWT', 'CI/CD testing', 'AWS deployments', '4 years professional experience'], missing: ['advanced algorithms'], risks: ['Narrative omits some structured production details'], aiScore: 88 },
+    ],
+    neha: [
+      { matched: ['React/Next.js', 'TypeScript frontend', 'Jest testing', 'some Node APIs'], missing: ['backend ownership depth', 'cloud/platform depth', 'system design', 'queues/background jobs', 'auth/RBAC'], risks: ['Frontend-leaning profile'], aiScore: 61 },
+      { matched: ['React production UI', 'Next.js', 'TypeScript', 'REST API support'], missing: ['distributed systems', 'AWS/GCP/Kubernetes', 'backend service ownership', 'async queues', 'auth/RBAC'], risks: ['Limited backend depth', 'Cloud and async depth not shown'], aiScore: 59 },
+      { matched: ['Strong frontend engineering', '2.8 years experience', 'Node.js exposure'], missing: ['cloud production ownership', 'system design', 'RBAC/auth depth', 'background jobs'], risks: ['Frontend strength should not imply broad SDE depth'], aiScore: 64 },
+    ],
+    vikram: [
+      { years_experience: 1.6, summary: 'Has 1.6 years experience and falls below the 2-5 year requirement.', matched: ['Java', 'SQL', 'backend APIs'], missing: ['minimum 2 years experience', 'system design', 'cloud', 'testing CI/CD', 'auth/RBAC', 'queues/background jobs'], risks: ['Experience gap: 1.6 years is below minimum for 2-5 years', 'No system design evidence', 'No cloud evidence', 'No auth/RBAC evidence', 'No queues/background jobs evidence'], aiScore: 49 },
+      { years_experience: 2, summary: 'AI wording says meets 2-year minimum, but resume-derived evidence says 1.6 years professional software experience.', matched: ['2 years professional software development experience', 'Java', 'SQL', 'React basics'], missing: ['system design depth', 'AWS/GCP/Kubernetes cloud', 'integration testing', 'auth/RBAC', 'queues/background jobs'], risks: ['Falls short of the 2-5 years target by 0.4 years', 'No system design evidence', 'No cloud ownership evidence', 'No auth/RBAC evidence', 'No queues/background jobs evidence'], aiScore: 57 },
+      { years_experience: 2, summary: 'High-potential junior; matched requirements mention 2 years professional experience.', matched: ['2 years professional experience', 'Java', 'SQL', 'Flask/Express basics'], missing: ['production TypeScript depth', 'system design', 'cloud platform experience', 'CI/CD', 'auth/RBAC', 'async queues'], risks: ['Junior profile; experience gap below required years', 'No system design evidence', 'No cloud evidence', 'No CI/CD evidence', 'No async queues evidence'], aiScore: 54 },
+    ],
+  }
+
+  const makeCandidate = (base, variant) => ({
+    ...base(),
+    ...('years_experience' in variant ? { years_experience: variant.years_experience } : {}),
+    ...('summary' in variant ? { summary: variant.summary } : {}),
+    score: variant.aiScore,
+    matchScore: { score: variant.aiScore, reason: variant.summary ?? 'Format-specific AI wording.' },
+    fit_assessment: {
+      overall_fit_score: variant.aiScore,
+      rationale: variant.summary ?? 'Format-specific AI wording.',
+      matched_requirements: variant.matched,
+      missing_requirements: variant.missing,
+      risks_or_gaps: variant.risks,
+    },
+    matchedSkills: variant.matched,
+    missingSkills: variant.missing,
+  })
+
+  test('same candidate/JD/content stays stable across DOC/PDF/DOCX-like wording', () => {
+    const aisha = variants.aisha.map((variant) => scoreCandidateDeterministically(makeCandidate(aishaBase, variant), context()))
+    const neha = variants.neha.map((variant) => scoreCandidateDeterministically(makeCandidate(nehaBase, variant), context()))
+    const vikram = variants.vikram.map((variant) => scoreCandidateDeterministically(makeCandidate(vikramBase, variant), context()))
+
+    assert.ok(scoreSpread(aisha) <= 5, `Aisha spread ${scoreSpread(aisha)} from ${aisha.map((result) => result.final_score).join(', ')}`)
+    assert.ok(scoreSpread(neha) <= 5, `Neha spread ${scoreSpread(neha)} from ${neha.map((result) => result.final_score).join(', ')}`)
+    assert.ok(scoreSpread(vikram) <= 5, `Vikram spread ${scoreSpread(vikram)} from ${vikram.map((result) => result.final_score).join(', ')}`)
+
+    for (const result of aisha) {
+      assert.ok(result.final_score >= 70)
+      assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 4.1)
+    }
+    for (const result of neha) {
+      assert.ok(result.final_score >= 50 && result.final_score < 70)
+      assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 2.8)
+    }
+    for (const result of vikram) {
+      assert.ok(result.final_score < 57, `Vikram final score ${result.final_score} should stay below the moderate-high band`)
+      assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 1.6)
+      assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+    }
+
+    assert.ok(Math.min(...aisha.map((result) => result.final_score)) > Math.max(...neha.map((result) => result.final_score)))
+    assert.ok(
+      Math.min(...neha.map((result) => result.final_score)) > Math.max(...vikram.map((result) => result.final_score)),
+      `Neha scores ${neha.map((result) => result.final_score).join(', ')} should rank above Vikram scores ${vikram.map((result) => result.final_score).join(', ')}`,
+    )
+  })
 })
 
 test('QA-focused candidate with missing SDE/backend ownership evidence does not receive max experience score', () => {
