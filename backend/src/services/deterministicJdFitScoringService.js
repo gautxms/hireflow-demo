@@ -1,4 +1,6 @@
 const CONTRACT_VERSION = 'deterministic_jd_fit_v1'
+const STRONG_STRUCTURED_FINAL_FLOOR = 86
+const STRONG_STRUCTURED_FINAL_CEILING = 91
 
 const WEIGHTS = Object.freeze({
   requirement_match: 0.4,
@@ -224,7 +226,7 @@ const requirementBreakdown = (fitAssessment, candidate = {}) => {
   const total = matched + missing
   const score = total > 0 ? smoothEvidenceRatioScore(matched, missing) : 35
   return {
-    score: roundScore(applyStrongStructuredCoverageFloor(score, candidate)),
+    score: roundScore(score),
     weight: WEIGHTS.requirement_match,
     matched_count: matched,
     missing_count: missing,
@@ -263,7 +265,7 @@ const skillBreakdown = (candidate) => {
   if (totalCompared > 0) score = smoothEvidenceRatioScore(matched, missing)
   else if (candidateSkillCount > 0) score = 55
   return {
-    score: roundScore(applyStrongStructuredCoverageFloor(score, candidate)),
+    score: roundScore(score),
     weight: WEIGHTS.skill_alignment,
     matched_count: matched,
     missing_count: missing,
@@ -366,7 +368,9 @@ const structuredCoverageBuckets = (candidate) => new Set(
     .filter(Boolean),
 )
 
-const hasStrongStructuredSdeCoverage = (candidate) => {
+const hasStrongStructuredSdeCoverage = (candidate, fitAssessment = {}, context = {}) => {
+  void fitAssessment
+  void context
   const buckets = structuredCoverageBuckets(candidate)
   const hasCoreBackend = buckets.has('typescript_javascript_node') && buckets.has('backend_api') && buckets.has('database_sql')
   const hasDeliveryDepth = buckets.has('testing_ci') && buckets.has('cloud_platforms')
@@ -374,9 +378,6 @@ const hasStrongStructuredSdeCoverage = (candidate) => {
   return hasCoreBackend && hasDeliveryDepth && depthBucketCount >= 2 && buckets.size >= 7
 }
 
-const applyStrongStructuredCoverageFloor = (score, candidate) => (
-  hasStrongStructuredSdeCoverage(candidate) ? Math.max(score, 87) : score
-)
 
 const candidateExperienceEvidenceTexts = (candidate, fitAssessment) => [
   ...flattenText(candidate?.years_experience_notes),
@@ -620,24 +621,54 @@ const riskBreakdown = (fitAssessment) => {
 }
 
 
-const EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERNS = Object.freeze([
-  /\b(?:junior\s+profile|junior\s+candidate|junior[-\s]*level\s+(?:candidate|experience)|junior\s+role|junior[-\s]*only\s+experience)\b/i,
-  /(?:^|[.;:]\s*)(?:a\s+|an\s+)?junior\s+developers?\b/i,
-  /\b(?:early[-\s]*career|entry[-\s]*level|graduate|trainee)\s+(?:profile|candidate|experience|role)\b/i,
-  /\b(?:basic|basics|beginner|toy|demo|academic|manual\s+testing|manual[-\s]*only|only\s+manual|manual\s+qa\s+only|manual\s+api\s+testing|exposure|frontend[-\s]*only|frontend\s+leaning|frontend\s+focused|limited\s+backend|no\s+backend|no\s+production|not\s+sde|unrelated)\b/i,
+const strongFloorHardDisqualifierEvidenceTexts = (candidate, fitAssessment) => [
+  ...flattenText(candidate?.years_experience_notes),
+  ...flattenText(candidate?.experience_summary),
+  ...flattenText(candidate?.summary),
+  ...flattenText(candidate?.recommendation),
+  ...flattenText(candidate?.experience),
+  ...flattenText(candidate?.experiences),
+  ...flattenText(candidate?.work_experience),
+  ...flattenText(candidate?.employment_history),
+  ...flattenText(candidate?.projects),
+  ...flattenText(candidate?.achievements),
+  ...flattenText(fitAssessment?.notes),
+  ...flattenText(fitAssessment?.missing_requirements),
+  ...flattenText(fitAssessment?.risks_or_gaps),
+]
+
+const STRONG_FLOOR_HARD_DISQUALIFIER_PATTERNS = Object.freeze([
+  ['junior_or_entry_level_profile', /\b(?:junior\s+profile|junior\s+candidate|junior[-\s]*level\s+(?:candidate|experience|profile)|junior\s+role|junior[-\s]*only\s+experience|early[-\s]*career|entry[-\s]*level|graduate|trainee)\b/i],
+  ['frontend_only_or_unrelated_profile', /\b(?:frontend[-\s]*only|frontend\s+only|frontend[-\s]*leaning|frontend\s+focused|unrelated\s+(?:profile|background|role)|not\s+related)\b/i],
+  ['no_backend_experience', /\b(?:no\s+backend\s+(?:experience|evidence|ownership|delivery)|limited\s+backend\s+(?:experience|evidence|ownership|delivery)|without\s+backend\s+(?:experience|evidence|ownership|delivery))\b/i],
+  ['manual_testing_only', /\b(?:manual\s+api\s+testing\s+only|manual\s+testing\s+only|manual[-\s]*only|only\s+manual\s+(?:qa|testing)|manual\s+qa\s+only)\b/i],
+  ['toy_demo_academic_only', /\b(?:toy\s+demo|demo\s+only|academic\s+only|toy\s+project|demo\s+project)\b/i],
+  ['non_sde_role_mismatch', /\b(?:not\s+sde|non[-\s]*sde|qa[-\s]*focused|quality\s+assurance\s+(?:background|profile|role)|role\s+transition\s+risk)\b/i],
 ])
 
-const hasExplicitWeakStructuredEvidence = (candidate, fitAssessment) => candidateExperienceEvidenceTexts(candidate, fitAssessment)
-  .some((text) => EXPLICIT_WEAK_STRUCTURED_EVIDENCE_PATTERNS.some((pattern) => pattern.test(String(text ?? ''))))
+const uniqueReasonCodes = (reasons) => [...new Set(reasons)].sort()
 
-const shouldApplyStrongStructuredFinalFloor = (candidate, fitAssessment, breakdown, cap) => {
-  if (!hasStrongStructuredSdeCoverage(candidate)) return false
-  if (cap !== null && cap < 85) return false
-  if ((breakdown.evidence_completeness?.available_signal_count ?? 0) < 4) return false
-  if (breakdown.experience_alignment?.below_min_experience_evidence_applied) return false
-  if ((breakdown.experience_alignment?.score ?? 0) < 70) return false
-  if (hasExplicitWeakStructuredEvidence(candidate, fitAssessment)) return false
-  return true
+const getStrongFloorHardDisqualifierReasons = (candidate, fitAssessment, context, breakdown = {}, cap = null) => {
+  const reasons = []
+  if (!hasJdContext(context)) reasons.push('missing_jd_context')
+  if ((breakdown.evidence_completeness?.available_signal_count ?? 0) < 4) reasons.push('insufficient_evidence')
+  if (breakdown.experience_alignment?.below_min_experience_evidence_applied) reasons.push('below_minimum_experience')
+  if ((breakdown.experience_alignment?.score ?? 0) < 70) reasons.push('weak_experience_alignment')
+  if (cap !== null && cap < 85) reasons.push('score_cap_below_floor')
+
+  for (const text of strongFloorHardDisqualifierEvidenceTexts(candidate, fitAssessment)) {
+    const normalized = String(text ?? '')
+    for (const [reason, pattern] of STRONG_FLOOR_HARD_DISQUALIFIER_PATTERNS) {
+      if (pattern.test(normalized)) reasons.push(reason)
+    }
+  }
+
+  return uniqueReasonCodes(reasons)
+}
+
+const shouldApplyStrongStructuredFinalFloor = (candidate, fitAssessment, context, breakdown, cap) => {
+  if (!hasStrongStructuredSdeCoverage(candidate, fitAssessment, context)) return false
+  return getStrongFloorHardDisqualifierReasons(candidate, fitAssessment, context, breakdown, cap).length === 0
 }
 
 const CORE_DEPTH_GAP_BUCKETS = new Set(['system_design', 'cloud_platforms', 'testing_ci', 'async_background', 'auth_security'])
@@ -721,9 +752,12 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     ? uncappedFinalScoreBeforeRounding
     : Math.min(uncappedFinalScoreBeforeRounding, cap)
   const roundedFinalScore = roundScore(finalScoreBeforeRounding)
-  const strongStructuredFinalFloorApplied = shouldApplyStrongStructuredFinalFloor(safeCandidate, fitAssessment, breakdown, cap)
-    && roundedFinalScore < 85
-  const finalScore = strongStructuredFinalFloorApplied ? 85 : roundedFinalScore
+  const strongFloorHardDisqualifierReasons = getStrongFloorHardDisqualifierReasons(safeCandidate, fitAssessment, jobDescriptionContext, breakdown, cap)
+  const strongStructuredFinalFloorEligible = shouldApplyStrongStructuredFinalFloor(safeCandidate, fitAssessment, jobDescriptionContext, breakdown, cap)
+  const strongStructuredFinalFloorApplied = strongStructuredFinalFloorEligible && roundedFinalScore < 85
+  const finalScore = strongStructuredFinalFloorEligible
+    ? clamp(Math.max(roundedFinalScore, STRONG_STRUCTURED_FINAL_FLOOR), 0, STRONG_STRUCTURED_FINAL_CEILING)
+    : roundedFinalScore
   const mapping = bandAndVerdict(finalScore)
 
   return {
@@ -734,6 +768,7 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     scoring_contract_version: CONTRACT_VERSION,
     final_score_before_rounding: finalScoreBeforeRounding,
     final_score_floor_applied: strongStructuredFinalFloorApplied,
+    strong_floor_hard_disqualifier_reasons: strongFloorHardDisqualifierReasons,
     score_cap_applied: cap !== null && uncappedFinalScoreBeforeRounding > cap,
     scoring_breakdown: breakdown,
     scoring_explanation: 'Deterministic JD-fit score computed from structured requirement, skill, experience, location, evidence, risk, and confidence signals.',
