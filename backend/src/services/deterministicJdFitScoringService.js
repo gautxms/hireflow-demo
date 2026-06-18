@@ -582,6 +582,24 @@ const riskBreakdown = (fitAssessment) => {
   return { penalty: Math.min(10, gapCount * 2), gap_count: gapCount }
 }
 
+const CORE_DEPTH_GAP_BUCKETS = new Set(['system_design', 'cloud_platforms', 'testing_ci', 'async_background', 'auth_security'])
+
+const finalScoreCap = (breakdown) => {
+  const roleGapCount = breakdown.experience_alignment?.role_gap_signal_count ?? 0
+  const missingCoreDepthBuckets = new Set([
+    ...Object.entries(breakdown.requirement_match?.requirement_bucket_scores ?? {})
+      .filter(([bucket, score]) => CORE_DEPTH_GAP_BUCKETS.has(bucket) && score === 0)
+      .map(([bucket]) => bucket),
+    ...Object.entries(breakdown.skill_alignment?.requirement_bucket_scores ?? {})
+      .filter(([bucket, score]) => CORE_DEPTH_GAP_BUCKETS.has(bucket) && score === 0)
+      .map(([bucket]) => bucket),
+  ])
+
+  if (breakdown.experience_alignment?.below_min_experience_evidence_applied && roleGapCount >= 4) return 49
+  if (missingCoreDepthBuckets.size >= 2 && roleGapCount >= 2) return 92
+  return null
+}
+
 const bandAndVerdict = (score) => {
   if (score === null) return { score_band: 'insufficient_evidence', verdict: 'Insufficient evidence' }
   if (score >= 85) return { score_band: 'excellent', verdict: 'Highly aligned' }
@@ -639,7 +657,11 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
   }
 
   const weighted = Object.entries(WEIGHTS).reduce((sum, [key, weight]) => sum + breakdown[key].score * weight, 0)
-  const finalScoreBeforeRounding = clamp((weighted - breakdown.risk_penalty.penalty) * breakdown.confidence_adjustment.multiplier, 0, 100)
+  const uncappedFinalScoreBeforeRounding = clamp((weighted - breakdown.risk_penalty.penalty) * breakdown.confidence_adjustment.multiplier, 0, 100)
+  const cap = finalScoreCap(breakdown)
+  const finalScoreBeforeRounding = cap === null
+    ? uncappedFinalScoreBeforeRounding
+    : Math.min(uncappedFinalScoreBeforeRounding, cap)
   const finalScore = roundScore(finalScoreBeforeRounding)
   const mapping = bandAndVerdict(finalScore)
 
@@ -650,6 +672,7 @@ export function scoreCandidateDeterministically(candidate = {}, jobDescriptionCo
     scoring_mode: 'jd_fit',
     scoring_contract_version: CONTRACT_VERSION,
     final_score_before_rounding: finalScoreBeforeRounding,
+    score_cap_applied: cap !== null && uncappedFinalScoreBeforeRounding > cap,
     scoring_breakdown: breakdown,
     scoring_explanation: 'Deterministic JD-fit score computed from structured requirement, skill, experience, location, evidence, risk, and confidence signals.',
   }

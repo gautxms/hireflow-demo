@@ -262,6 +262,11 @@ function buildSafeDeterministicJdFitShadowDiagnostic({
     skill_matched_bucket_count: resolveNumericScore(breakdown.skill_alignment?.normalized_requirement_match_count),
     skill_missing_bucket_count: resolveNumericScore(breakdown.skill_alignment?.normalized_requirement_missing_count),
     structured_positive_bucket_count: resolveNumericScore(breakdown.requirement_match?.structured_positive_bucket_count),
+    structured_positive_applied_bucket_count: resolveNumericScore(breakdown.requirement_match?.structured_positive_bucket_count),
+    normalized_requirement_match_count: resolveNumericScore(breakdown.requirement_match?.normalized_requirement_match_count),
+    normalized_requirement_missing_count: resolveNumericScore(breakdown.requirement_match?.normalized_requirement_missing_count),
+    requirement_bucket_score_keys: Object.keys(breakdown.requirement_match?.requirement_bucket_scores || {}).sort(),
+    skill_bucket_score_keys: Object.keys(breakdown.skill_alignment?.requirement_bucket_scores || {}).sort(),
     experience_score: resolveNumericScore(breakdown.experience_alignment?.score),
     location_score: resolveNumericScore(breakdown.location_alignment?.score),
     evidence_score: resolveNumericScore(breakdown.evidence_completeness?.score),
@@ -270,6 +275,8 @@ function buildSafeDeterministicJdFitShadowDiagnostic({
     has_jd_context: Boolean(jobDescriptionContext?.hasContext),
     allowlist_matched: Boolean(allowlistMatched),
     role_gap_signal_count: resolveNumericScore(breakdown.experience_alignment?.role_gap_signal_count),
+    final_score_before_rounding: resolveNumericScore(deterministicResult?.final_score_before_rounding),
+    score_cap_applied: typeof deterministicResult?.score_cap_applied === 'boolean' ? deterministicResult.score_cap_applied : null,
     experience_relevance_cap_applied: typeof breakdown.experience_alignment?.experience_relevance_cap_applied === 'boolean'
       ? breakdown.experience_alignment.experience_relevance_cap_applied
       : null,
@@ -319,9 +326,15 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
     skill_matched_bucket_count: resolveNumericScore(breakdown.skill_alignment?.normalized_requirement_match_count),
     skill_missing_bucket_count: resolveNumericScore(breakdown.skill_alignment?.normalized_requirement_missing_count),
     structured_positive_bucket_count: resolveNumericScore(breakdown.requirement_match?.structured_positive_bucket_count),
+    structured_positive_applied_bucket_count: resolveNumericScore(breakdown.requirement_match?.structured_positive_bucket_count),
+    normalized_requirement_match_count: resolveNumericScore(breakdown.requirement_match?.normalized_requirement_match_count),
+    normalized_requirement_missing_count: resolveNumericScore(breakdown.requirement_match?.normalized_requirement_missing_count),
+    requirement_bucket_score_keys: Object.keys(breakdown.requirement_match?.requirement_bucket_scores || {}).sort(),
+    skill_bucket_score_keys: Object.keys(breakdown.skill_alignment?.requirement_bucket_scores || {}).sort(),
     risk_penalty: resolveNumericScore(breakdown.risk_penalty?.penalty),
     confidence_multiplier: resolveNumericScore(breakdown.confidence_adjustment?.multiplier),
     final_score_before_rounding: resolveNumericScore(deterministicResult?.final_score_before_rounding),
+    score_cap_applied: typeof deterministicResult?.score_cap_applied === 'boolean' ? deterministicResult.score_cap_applied : null,
     experience_relevance_cap_applied: typeof breakdown.experience_alignment?.experience_relevance_cap_applied === 'boolean'
       ? breakdown.experience_alignment.experience_relevance_cap_applied
       : null,

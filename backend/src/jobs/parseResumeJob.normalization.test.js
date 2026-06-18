@@ -1562,10 +1562,12 @@ test('deterministic JD-fit shadow computes safe diagnostic without mutating cand
     assert.deepEqual(Object.keys(diagnostic).sort(), [
       'action', 'allowlist_matched', 'analysis_id', 'confidence_multiplier', 'current_ai_score',
       'deterministic_final_score', 'evidence_score', 'experience_relevance_cap_applied', 'experience_score',
-      'has_jd_context', 'location_score', 'model', 'provider', 'requirement_matched_bucket_count',
+      'final_score_before_rounding', 'has_jd_context', 'location_score', 'model', 'normalized_requirement_match_count',
+      'normalized_requirement_missing_count', 'provider', 'requirement_bucket_score_keys', 'requirement_matched_bucket_count',
       'requirement_missing_bucket_count', 'requirement_score', 'resume_id', 'risk_penalty',
-      'role_gap_signal_count', 'score_band', 'score_delta', 'scoring_contract_version', 'scoring_mode',
-      'skill_matched_bucket_count', 'skill_missing_bucket_count', 'skill_score', 'structured_positive_bucket_count',
+      'role_gap_signal_count', 'score_band', 'score_cap_applied', 'score_delta', 'scoring_contract_version', 'scoring_mode',
+      'skill_bucket_score_keys', 'skill_matched_bucket_count', 'skill_missing_bucket_count', 'skill_score',
+      'structured_positive_applied_bucket_count', 'structured_positive_bucket_count',
       'user_id', 'verdict',
     ].sort())
     assert.equal(diagnostic.action, 'computed')
