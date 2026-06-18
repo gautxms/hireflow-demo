@@ -1551,6 +1551,21 @@ describe('production SDE deterministic stability calibration', () => {
     assert.ok(spread(finalScores) <= 5, `Aisha format spread ${spread(finalScores)} from ${finalScores.join(', ')}`)
   })
 
+  test('Aisha-like strong structured SDE candidate with conservative narrative receives final strong floor', () => {
+    const result = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
+      aiScore: 88,
+      matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
+      missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
+      risks: ['Conservative narrative omits some structured production details.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
+      summary: 'Strong SDE resume evidence, but conservative narrative lists generic depth gaps.',
+    }), { ...context(), location: 'Austin, TX' })
+
+    assert.equal(result.final_score_floor_applied, true)
+    assert.ok(result.final_score >= 85, `Aisha-like final score should not remain below 85: ${result.final_score}`)
+    assert.ok(result.final_score <= 92, `Aisha-like final score should stay in target band: ${result.final_score}`)
+    assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+  })
+
   test('Aisha single-vs-mixed narrative drift does not collapse a strong SDE candidate', () => {
     const richerSingle = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
       aiScore: 86,
@@ -1567,6 +1582,27 @@ describe('production SDE deterministic stability calibration', () => {
     assert.ok(richerSingle.final_score >= 85)
     assert.ok(conservativeMixed.final_score >= 85)
     assert.ok(Math.abs(richerSingle.final_score - conservativeMixed.final_score) <= 5)
+  })
+
+  test('frontend-only or junior/basic structured evidence does not trigger final strong SDE floor', () => {
+    const frontendOnly = scoreCandidateDeterministically(withNarrative(frontendNehaEvidence, {
+      aiScore: 61,
+      matched: ['React/Next.js', 'TypeScript frontend', 'Jest testing'],
+      missing: ['backend ownership depth', 'database delivery', 'cloud/platform depth', 'system design', 'queues/background jobs', 'auth/RBAC'],
+      risks: ['Frontend-only profile with limited backend delivery depth.'],
+    }), guardrailContext())
+    const juniorBasic = scoreCandidateDeterministically(withNarrative(juniorVikramEvidence, {
+      aiScore: 52,
+      summary: 'Junior profile with basics and below minimum experience.',
+      matched: ['Java', 'SQL', 'Docker basics'],
+      missing: ['minimum 2 years experience', 'production backend ownership', 'system design', 'cloud', 'testing CI/CD', 'auth/RBAC', 'queues/background jobs'],
+      risks: ['Junior profile; basic structured evidence only.'],
+    }), guardrailContext())
+
+    assert.equal(frontendOnly.final_score_floor_applied, false)
+    assert.ok(frontendOnly.final_score < 85)
+    assert.equal(juniorBasic.final_score_floor_applied, false)
+    assert.ok(juniorBasic.final_score < 85)
   })
 
   test('Neha and Vikram guardrails plus mixed ranking remain intact', () => {
