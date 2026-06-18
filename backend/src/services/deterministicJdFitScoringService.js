@@ -124,9 +124,15 @@ const structuredConceptEvidence = (value, bucket, source = 'rich_structured') =>
 }
 
 const normalizedRequirementEvidence = (matchedValues, missingValues, structuredMatchedEvidence = []) => {
+  const comparisonBuckets = new Set([
+    ...asArray(matchedValues).map(requirementConceptEvidence),
+    ...asArray(missingValues).map(requirementConceptEvidence),
+  ].map((evidence) => evidence.bucket).filter(Boolean))
+  const eligibleStructuredEvidence = asArray(structuredMatchedEvidence)
+    .filter((evidence) => evidence.bucket && comparisonBuckets.has(evidence.bucket))
   const matchedEvidence = [
     ...asArray(matchedValues).map(requirementConceptEvidence),
-    ...asArray(structuredMatchedEvidence),
+    ...eligibleStructuredEvidence,
   ].filter((evidence) => evidence.bucket)
   const missingEvidence = asArray(missingValues).map(requirementConceptEvidence).filter((evidence) => evidence.bucket)
   const matchedBuckets = new Set(matchedEvidence.map((evidence) => evidence.bucket))
@@ -150,7 +156,7 @@ const normalizedRequirementEvidence = (matchedValues, missingValues, structuredM
     missingBuckets,
     bucketCount: buckets.length,
     requirementBucketScores,
-    structuredPositiveBucketCount: asArray(structuredMatchedEvidence).length,
+    structuredPositiveBucketCount: eligibleStructuredEvidence.length,
     smoothingApplied: asArray(matchedValues).length !== matchedBuckets.size
       || asArray(missingValues).length !== missingBuckets.size
       || missingBucketsRaw.size !== missingBuckets.size

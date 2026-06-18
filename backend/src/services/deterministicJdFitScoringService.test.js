@@ -812,7 +812,7 @@ test('Aisha-like DOC/PDF/DOCX evidence drift stays stable from structured resume
   const docx = scoreCandidateDeterministically(aishaLike({
     aiScore: 88,
     matched: ['TypeScript/Node.js', 'React', 'PostgreSQL', '4 years experience'],
-    missing: ['system design depth', 'algorithms', 'cloud breadth'],
+    missing: ['system design depth', 'algorithms', 'cloud breadth', 'auth/RBAC depth', 'async/background jobs', 'testing CI/CD'],
     risks: ['May lack FAANG-scale distributed systems depth', 'Cloud breadth not fully shown'],
   }), context)
   const pdf = scoreCandidateDeterministically(aishaLike({
@@ -824,7 +824,7 @@ test('Aisha-like DOC/PDF/DOCX evidence drift stays stable from structured resume
   const doc = scoreCandidateDeterministically(aishaLike({
     aiScore: 82,
     matched: ['Node APIs', 'React', 'SQL', '4 years professional experience'],
-    missing: ['no FAANG-scale distributed systems', 'system design', 'cloud breadth', 'algorithms'],
+    missing: ['no FAANG-scale distributed systems', 'system design', 'cloud breadth', 'algorithms', 'auth/RBAC depth', 'async/background jobs', 'testing CI/CD'],
     risks: ['Missing system design repeated in narrative', 'No broad cloud platform ownership'],
   }), context)
 
@@ -1034,6 +1034,71 @@ test('rich implementation and ownership evidence can cover auth and cloud depth 
   assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 1)
   assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.auth_security, 1)
   assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.cloud_platforms, 1)
+})
+
+test('rich structured resume evidence does not create standalone JD-fit buckets without comparison overlap', () => {
+  const input = candidate()
+  input.skills_flat = ['Node.js', 'React', 'AWS', 'Redis', 'RBAC', 'JWT', 'Docker', 'GitHub Actions']
+  input.skills_structured = {
+    backend: ['Node.js APIs', 'Redis caching', 'RBAC/JWT'],
+    platform: ['AWS', 'Docker', 'GitHub Actions CI/CD'],
+    frontend: ['React'],
+  }
+  input.experience = [
+    'Built production Node.js APIs with Redis caching, RBAC/JWT, Docker, AWS deployments, and CI/CD.',
+  ]
+  input.fit_assessment.matched_requirements = []
+  input.fit_assessment.missing_requirements = []
+  input.matchedSkills = []
+  input.missingSkills = []
+
+  const result = scoreCandidateDeterministically(input, { title: 'Unrelated role', location: 'Remote' })
+  assert.equal(result.scoring_breakdown.requirement_match.normalized_requirement_match_count, 0)
+  assert.equal(result.scoring_breakdown.requirement_match.structured_positive_bucket_count, 0)
+  assert.ok(result.scoring_breakdown.requirement_match.score <= 40)
+  assert.equal(result.scoring_breakdown.skill_alignment.normalized_requirement_match_count, 0)
+  assert.equal(result.scoring_breakdown.skill_alignment.structured_positive_bucket_count, 0)
+})
+
+test('structured evidence may cover missing comparison bucket when JD-fit comparison mentions that bucket', () => {
+  const input = candidate()
+  input.skills_flat = ['AWS']
+  input.skills_structured = { platform: ['AWS'] }
+  input.experience = ['Owned AWS deployment pipeline for production services.']
+  input.fit_assessment.matched_requirements = ['Backend API']
+  input.fit_assessment.missing_requirements = ['AWS cloud platform depth']
+  input.matchedSkills = ['Backend API']
+  input.missingSkills = ['AWS cloud platform depth']
+
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  assert.equal(result.scoring_breakdown.requirement_match.requirement_bucket_scores.cloud_platforms, 1)
+  assert.equal(result.scoring_breakdown.skill_alignment.requirement_bucket_scores.cloud_platforms, 1)
+  assert.ok(result.scoring_breakdown.requirement_match.structured_positive_bucket_count > 0)
+})
+
+test('structured evidence does not introduce new buckets absent from JD-fit comparison', () => {
+  const input = candidate()
+  input.skills_flat = ['PostgreSQL', 'Redis', 'RBAC', 'AWS', 'React']
+  input.skills_structured = {
+    data: ['PostgreSQL'],
+    extras: ['Redis', 'RBAC', 'AWS', 'React'],
+  }
+  input.experience = [
+    'Owned PostgreSQL schema design for production APIs.',
+    'Also built Redis caching, RBAC auth, AWS deployment, and React UI.',
+  ]
+  input.fit_assessment.matched_requirements = []
+  input.fit_assessment.missing_requirements = ['PostgreSQL database depth']
+  input.matchedSkills = []
+  input.missingSkills = ['PostgreSQL database depth']
+
+  const result = scoreCandidateDeterministically(input, sdeJdContext())
+  const requirementBuckets = result.scoring_breakdown.requirement_match.requirement_bucket_scores
+  const skillBuckets = result.scoring_breakdown.skill_alignment.requirement_bucket_scores
+  assert.deepEqual(Object.keys(requirementBuckets), ['database_sql'])
+  assert.deepEqual(Object.keys(skillBuckets), ['database_sql'])
+  assert.equal(requirementBuckets.database_sql, 1)
+  assert.equal(skillBuckets.database_sql, 1)
 })
 
 test('Docker basics do not cancel production AWS/GCP/Kubernetes cloud gaps', () => {
