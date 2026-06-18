@@ -842,6 +842,48 @@ test('Aisha-like DOC/PDF/DOCX evidence drift stays stable from structured resume
   assert.ok(Math.max(...scores) - Math.min(...scores) <= 5)
 })
 
+test('Aisha-like same-format richer narrative cannot jump beyond five points without new JD buckets', () => {
+  const context = { ...sdeJdContext(), required_min_years: 4, required_max_years: 7 }
+  const base = {
+    skills_flat: ['TypeScript', 'Node.js', 'Express', 'NestJS', 'React', 'PostgreSQL', 'Redis', 'Docker', 'AWS', 'Jest', 'RBAC', 'JWT'],
+    skills_structured: {
+      backend: ['Node.js production APIs', 'NestJS services', 'PostgreSQL'],
+      platform: ['Redis caching', 'Docker deployments', 'AWS deployments'],
+      quality: ['Jest tests', 'CI/CD pipeline ownership'],
+      security: ['RBAC permissions', 'JWT authentication'],
+    },
+    experience: ['Built production Node.js APIs, Redis caching, async background jobs, RBAC/JWT auth, Jest tests, CI/CD, Docker and AWS deployments.'],
+    years_experience: 4.1,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 85,
+  }
+  const previousDocx = scoreCandidateDeterministically({
+    ...structuredClone(base),
+    fit_assessment: {
+      matched_requirements: ['TypeScript/Node.js backend APIs', 'React/Next.js', 'PostgreSQL', 'Redis caching', 'RBAC/JWT security', 'async/background jobs', 'testing CI/CD', 'Docker/AWS deployments', '4 years experience'],
+      missing_requirements: ['algorithms'],
+      risks_or_gaps: [],
+    },
+    matchedSkills: ['TypeScript/Node.js backend APIs', 'React/Next.js', 'PostgreSQL', 'Redis caching', 'RBAC/JWT security', 'async/background jobs', 'testing CI/CD', 'Docker/AWS deployments', '4 years experience'],
+    missingSkills: ['algorithms'],
+  }, context)
+  const richerMixedDocx = scoreCandidateDeterministically({
+    ...structuredClone(base),
+    fit_assessment: {
+      matched_requirements: ['TypeScript/Node.js backend APIs', 'React/Next.js', 'PostgreSQL', 'Redis caching', 'RBAC/JWT security', 'async/background jobs', 'testing CI/CD', 'Docker/AWS deployments', 'scalable system architecture', 'AWS/GCP cloud platform production depth'],
+      missing_requirements: ['system design depth', 'algorithms', 'cloud breadth'],
+      risks_or_gaps: ['System design and scale depth remains a calibration gap', 'Cloud breadth not fully shown'],
+    },
+    matchedSkills: ['TypeScript/Node.js backend APIs', 'React/Next.js', 'PostgreSQL', 'Redis caching', 'RBAC/JWT security', 'async/background jobs', 'testing CI/CD', 'Docker/AWS deployments', 'scalable system architecture', 'AWS/GCP cloud platform production depth'],
+    missingSkills: ['algorithms'],
+  }, context)
+
+  assert.ok(previousDocx.final_score >= 87 && previousDocx.final_score <= 92)
+  assert.ok(richerMixedDocx.final_score >= 75 && richerMixedDocx.final_score <= 92)
+  assert.ok(richerMixedDocx.final_score - previousDocx.final_score <= 5)
+})
+
 test('structured positive evidence covers repeated narrative missing buckets without raw text diagnostics', () => {
   const input = candidate()
   input.years_experience = 5
@@ -920,6 +962,66 @@ test('Vikram-like rich structured basics do not cancel production depth gaps or 
   assert.equal(result.scoring_breakdown.experience_alignment.resolved_experience_years, 1.6)
   assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
   assert.ok(result.final_score < 55)
+})
+
+test('Vikram-like high-potential junior wording and basics remain below Neha-like moderate fit', () => {
+  const context = { ...sdeJdContext(), required_min_years: 2, required_max_years: 5 }
+  const vikram = scoreCandidateDeterministically({
+    summary: 'High-potential junior with 1.6 years experience and basics across a modern stack.',
+    recommendation: 'Could grow with mentoring, but below the role minimum and missing production depth.',
+    fit_assessment: {
+      matched_requirements: ['React UI exposure', 'Flask/Express basics', 'location match'],
+      missing_requirements: [
+        'production TypeScript depth',
+        'AWS/GCP/Kubernetes production cloud experience',
+        'integration testing / CI/CD',
+        'auth/RBAC',
+        'queues/background jobs',
+        'system design',
+      ],
+      risks_or_gaps: [
+        'Experience gap: 1.6 years is below minimum for 2-5 years',
+        'No production TypeScript depth',
+        'No AWS/GCP/Kubernetes production cloud evidence',
+        'No integration testing or CI/CD evidence',
+        'No auth/RBAC evidence',
+        'No queues/background jobs evidence',
+        'No system design evidence',
+      ],
+    },
+    matchedSkills: ['React', 'Flask basics', 'Express basics', 'TypeScript basics', 'Docker basics', 'Pytest basics'],
+    missingSkills: ['TypeScript production depth', 'AWS/GCP/Kubernetes', 'integration testing', 'auth/RBAC', 'queues/background jobs', 'system design'],
+    skills_flat: ['TypeScript basics', 'Docker basics', 'Render', 'Railway', 'Pytest basics', 'React', 'Flask', 'Express'],
+    skills_structured: {
+      languages: ['TypeScript basics'],
+      platforms: ['Docker basics', 'Render deployment exposure', 'Railway deployment exposure'],
+      testing: ['Pytest basics', 'manual testing'],
+      frameworks: ['React', 'Flask basics', 'Express basics'],
+    },
+    projects: ['Toy demo app deployed to Render/Railway with Docker basics and manual Pytest checks.'],
+    years_experience: 1.6,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 70,
+  }, context)
+  const nehaModerate = scoreCandidateDeterministically({
+    fit_assessment: {
+      matched_requirements: ['React/Next.js', 'TypeScript frontend', 'some Node.js APIs', 'testing'],
+      missing_requirements: ['backend ownership depth', 'cloud/platform depth', 'system design', 'queues/background jobs'],
+      risks_or_gaps: ['Frontend-leaning profile with limited backend ownership'],
+    },
+    matchedSkills: ['React/Next.js', 'TypeScript frontend', 'Node.js APIs', 'testing'],
+    missingSkills: ['backend ownership depth', 'cloud/platform depth', 'system design', 'queues/background jobs'],
+    skills_flat: ['React', 'Next.js', 'TypeScript', 'Node.js', 'Jest'],
+    years_experience: 4,
+    location: 'Bengaluru, India',
+    confidence: { skills: 0.9, experience: 0.9, fit_assessment: 0.9 },
+    profile_score: 75,
+  }, context)
+
+  assert.ok(vikram.final_score < 50)
+  assert.ok(vikram.final_score < nehaModerate.final_score)
+  assert.ok(nehaModerate.final_score >= 53 && nehaModerate.final_score <= 65)
 })
 
 test('TypeScript basics in structured fields does not cancel TypeScript production depth', () => {
