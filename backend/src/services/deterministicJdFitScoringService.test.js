@@ -891,13 +891,43 @@ test('Vikram-like DOC/DOCX/PDF requirement wording fixtures stay within five fin
   for (const result of results) {
     assert.ok(result.final_score >= 45 && result.final_score <= 53)
     assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
-    assert.ok(
-      result.final_score_cap_reasons.includes('below_minimum_junior_cap')
-        || result.final_score_cap_reasons.includes('below_minimum_role_gap_cap'),
-    )
   }
 })
 
+
+
+test('near-threshold strong candidate is not final-capped by below-minimum evidence alone', () => {
+  const input = candidate()
+  input.summary = 'Candidate has 3.9 years professional software experience, just below the 4-year minimum.'
+  input.years_experience = 3.9
+  input.fit_assessment.rationale = 'Strong backend fit with a small experience shortfall.'
+  input.fit_assessment.matched_requirements = [
+    'Node.js backend APIs',
+    'PostgreSQL',
+    'AWS cloud',
+    'testing CI/CD',
+    'system design',
+    'auth/RBAC',
+    'async queues',
+  ]
+  input.fit_assessment.missing_requirements = ['slightly below minimum experience']
+  input.fit_assessment.risks_or_gaps = []
+  input.matchedSkills = ['Node.js', 'PostgreSQL', 'AWS', 'Jest', 'system design', 'RBAC', 'queues']
+  input.missingSkills = ['slightly below minimum experience']
+  input.skills_flat = input.matchedSkills
+  input.top_skills = ['Backend APIs']
+  input.profile_score = 85
+
+  const result = scoreCandidateDeterministically(input, { ...sdeJdContext(), required_min_years: 4, required_max_years: 7 })
+  const experience = result.scoring_breakdown.experience_alignment
+  assert.equal(experience.resolved_experience_years, 3.9)
+  assert.equal(experience.required_min_years, 4)
+  assert.equal(experience.below_min_experience_evidence_applied, true)
+  assert.ok(experience.role_gap_signal_count <= 1)
+  assert.ok(result.final_score > 55, `near-threshold strong candidate should not be capped to 55: ${result.final_score}`)
+  assert.equal(result.final_score_cap_reasons.includes('below_minimum_junior_cap'), false)
+  assert.equal(result.final_score_cap_reasons.includes('below_minimum_role_gap_cap'), false)
+})
 
 test('severe below-minimum role-gap candidates keep stricter final cap', () => {
   const input = candidate()

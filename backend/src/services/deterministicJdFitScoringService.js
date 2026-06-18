@@ -686,12 +686,7 @@ const finalScoreCapDetails = (breakdown) => {
   ])
 
   const experience = breakdown.experience_alignment ?? {}
-  const resolvedBelowMinimum = experience.resolved_experience_years !== null
-    && experience.resolved_experience_years !== undefined
-    && experience.required_min_years !== null
-    && experience.required_min_years !== undefined
-    && experience.resolved_experience_years < experience.required_min_years
-  const clearJuniorOrBelowThreshold = resolvedBelowMinimum || roleGapCount >= 2
+  const clearJuniorOrBelowThreshold = roleGapCount >= 2
 
   if (experience.below_min_experience_evidence_applied && roleGapCount >= 4) {
     reasons.push('below_minimum_role_gap_cap')
