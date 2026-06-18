@@ -1056,21 +1056,59 @@ test('PDF canonical text scoring experiment sends text/plain only once and reuse
   }
 })
 
-test('buildPromptWithJobDescription includes AI scoring contract v2 only when JD context exists', () => {
-  const withJdPrompt = buildPromptWithJobDescription('Base prompt', {
-    hasContext: true,
-    jobDescriptionId: 'jd-v2',
-    title: 'Software Engineer',
-  })
-  const withoutJdPrompt = buildPromptWithJobDescription('Base prompt', {
-    hasContext: false,
-    missingReason: 'job_description_missing',
-  })
+test('buildPromptWithJobDescription gates AI scoring contract v2 behind shadow flag and JD context', () => {
+  const previousEnabled = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
+  const previousUserAllowlist = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS
+  const previousAnalysisAllowlist = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
 
-  assert.equal(withJdPrompt.includes('AI Scoring Contract v2'), true)
-  assert.equal(withJdPrompt.includes('ai_scoring_contract_v2'), true)
-  assert.equal(withJdPrompt.includes('return all existing candidate fields'), true)
-  assert.equal(withoutJdPrompt.includes('AI Scoring Contract v2'), false)
+  try {
+    delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
+    delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS
+    delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
+
+    const defaultOffPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: true,
+      jobDescriptionId: 'jd-v2',
+      title: 'Software Engineer',
+      __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
+    })
+    assert.equal(defaultOffPrompt.includes('AI Scoring Contract v2'), false)
+
+    process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED = 'true'
+    process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS = '10'
+    process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS = 'analysis-v2'
+
+    const withJdPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: true,
+      jobDescriptionId: 'jd-v2',
+      title: 'Software Engineer',
+      __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
+    })
+    const allowlistMissPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: true,
+      jobDescriptionId: 'jd-v2',
+      title: 'Software Engineer',
+      __aiScoringContractV2ShadowMetadata: { userId: 99, analysisId: 'analysis-v2' },
+    })
+    const withoutJdPrompt = buildPromptWithJobDescription('Base prompt', {
+      hasContext: false,
+      missingReason: 'job_description_missing',
+      __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
+    })
+
+    assert.equal(withJdPrompt.includes('AI Scoring Contract v2'), true)
+    assert.equal(withJdPrompt.includes('ai_scoring_contract_v2'), true)
+    assert.equal(withJdPrompt.includes('return all existing candidate fields'), true)
+    assert.equal(allowlistMissPrompt.includes('AI Scoring Contract v2'), false)
+    assert.equal(withoutJdPrompt.includes('AI Scoring Contract v2'), false)
+  } finally {
+    if (previousEnabled === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
+    else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED = previousEnabled
+    if (previousUserAllowlist === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS
+    else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS = previousUserAllowlist
+    if (previousAnalysisAllowlist === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
+    else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS = previousAnalysisAllowlist
+  }
 })
 
 test('normalizeAiScoringContractV2 returns null for missing object and safely normalizes valid scores', () => {

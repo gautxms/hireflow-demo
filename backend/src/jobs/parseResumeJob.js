@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
-import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields, normalizeAiScoringContractV2 } from '../services/aiResumeAnalysisService.js'
+import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields, isAiScoringContractV2ShadowEnabled, normalizeAiScoringContractV2 } from '../services/aiResumeAnalysisService.js'
 import {
   buildSafeResumeFileDiagnostics,
   logSafeResumeFileDiagnostics,
@@ -344,7 +344,8 @@ function buildSafeDeterministicJdFitApplyDiagnostic({
   }
 }
 
-function logAiScoringContractV2Diagnostic(candidate = {}, metadata = {}, logger = console) {
+function logAiScoringContractV2Diagnostic(candidate = {}, metadata = {}, logger = console, env = process.env) {
+  if (!isAiScoringContractV2ShadowEnabled(metadata, env)) return null
   const contract = candidate?.ai_scoring_contract_v2
   if (!contract || typeof contract !== 'object' || Array.isArray(contract)) return null
   const diagnostic = {
@@ -1399,6 +1400,13 @@ export async function runParse(job) {
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
+  const aiScoringContractV2ShadowMetadata = {
+    userId: job.data.userId ?? null,
+    analysisId: analysisId || null,
+  }
+  if (jobDescriptionContext && typeof jobDescriptionContext === 'object') {
+    jobDescriptionContext.__aiScoringContractV2ShadowMetadata = aiScoringContractV2ShadowMetadata
+  }
 
   const preAiCancellation = await cancelIfAnalysisInactive(job, 'before_ai')
   if (preAiCancellation) return preAiCancellation

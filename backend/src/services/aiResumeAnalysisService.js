@@ -241,8 +241,36 @@ export function normalizeAiScoringContractV2(value) {
   return normalized
 }
 
-function buildAiScoringContractV2PromptSection(hasJobDescription) {
-  if (!hasJobDescription) return ''
+
+function parseAiScoringContractV2Allowlist(rawValue) {
+  return String(rawValue || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function aiScoringContractV2AllowlistMatches(value, allowlist) {
+  if (allowlist.length === 0) return true
+  if (value === null || value === undefined || value === '') return false
+  return allowlist.includes(String(value))
+}
+
+export function isAiScoringContractV2ShadowEnabled({ userId = null, analysisId = null } = {}, env = process.env) {
+  if (String(env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED || '').trim().toLowerCase() !== 'true') return false
+
+  const userAllowlist = parseAiScoringContractV2Allowlist(env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS)
+  const analysisAllowlist = parseAiScoringContractV2Allowlist(env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS)
+  return aiScoringContractV2AllowlistMatches(userId, userAllowlist)
+    && aiScoringContractV2AllowlistMatches(analysisId, analysisAllowlist)
+}
+
+function resolveAiScoringContractV2ShadowMetadata(jobDescriptionContext = null) {
+  const metadata = jobDescriptionContext?.__aiScoringContractV2ShadowMetadata
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {}
+}
+
+function buildAiScoringContractV2PromptSection(hasJobDescription, metadata = {}, env = process.env) {
+  if (!hasJobDescription || !isAiScoringContractV2ShadowEnabled(metadata, env)) return ''
   return [
     'AI Scoring Contract v2 (shadow-only; do not replace existing score fields):',
     'When Job Description context is AVAILABLE, return all existing candidate fields exactly as instructed above and also include optional nested object ai_scoring_contract_v2 per candidate.',
@@ -1154,7 +1182,7 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
 
   const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
-  const aiScoringContractV2Directives = buildAiScoringContractV2PromptSection(hasJobDescription)
+  const aiScoringContractV2Directives = buildAiScoringContractV2PromptSection(hasJobDescription, resolveAiScoringContractV2ShadowMetadata(jdContext))
 
   return `${basePrompt}\n\n${analysisModeDirectives}${aiScoringContractV2Directives ? `\n\n${aiScoringContractV2Directives}` : ''}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
@@ -1859,4 +1887,4 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 export const analyzeResumeWithClaude = analyzeWithAnthropic
 
 
-export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }
+export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, isAiScoringContractV2ShadowEnabled, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }

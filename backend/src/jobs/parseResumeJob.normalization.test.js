@@ -1856,3 +1856,37 @@ test('buildNormalizedCandidates preserves normalized ai_scoring_contract_v2 and 
   assert.equal(candidate.fit_assessment.overall_fit_score, 88)
   assert.equal(candidate.ai_scoring_contract_v2.weighted_total_score_recomputed, 55)
 })
+
+
+test('AI scoring contract v2 diagnostics are gated by shadow flag and allowlists', () => {
+  const logs = []
+  const candidate = {
+    resumeId: 'resume-v2',
+    ai_scoring_contract_v2: {
+      scoring_contract_version: 'ai_jd_fit_rubric_v2',
+      weighted_total_score_recomputed: 82,
+      score_confidence: 'medium',
+      scoring_anomalies: ['weighted_total_mismatch'],
+    },
+  }
+  const logger = { info: (...args) => logs.push(args) }
+
+  assert.equal(__testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2' }, logger, {}), null)
+  assert.equal(logs.length, 0)
+
+  assert.equal(__testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2' }, logger, {
+    AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true',
+    AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '99',
+  }), null)
+  assert.equal(logs.length, 0)
+
+  const diagnostic = __testables.logAiScoringContractV2Diagnostic(candidate, { userId: 7, analysisId: 'analysis-v2', provider: 'openai' }, logger, {
+    AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true',
+    AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7',
+  })
+
+  assert.equal(diagnostic.scoring_contract_version, 'ai_jd_fit_rubric_v2')
+  assert.equal(diagnostic.weighted_total_score_recomputed, 82)
+  assert.deepEqual(diagnostic.scoring_anomalies, ['weighted_total_mismatch'])
+  assert.equal(logs.length, 1)
+})
