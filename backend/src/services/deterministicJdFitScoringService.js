@@ -693,6 +693,10 @@ const finalScoreCapDetails = (breakdown) => {
     && experience.resolved_experience_years < experience.required_min_years
   const clearJuniorOrBelowThreshold = resolvedBelowMinimum || roleGapCount >= 2
 
+  if (experience.below_min_experience_evidence_applied && roleGapCount >= 4) {
+    reasons.push('below_minimum_role_gap_cap')
+    return { cap: 49, reasons: uniqueReasonCodes(reasons) }
+  }
   if (experience.below_min_experience_evidence_applied && clearJuniorOrBelowThreshold) {
     reasons.push('below_minimum_junior_cap')
     return { cap: 55, reasons: uniqueReasonCodes(reasons) }

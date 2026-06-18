@@ -889,10 +889,47 @@ test('Vikram-like DOC/DOCX/PDF requirement wording fixtures stay within five fin
   const finalScores = results.map((result) => result.final_score)
   assert.ok(Math.max(...finalScores) - Math.min(...finalScores) <= 5)
   for (const result of results) {
-    assert.ok(result.final_score <= 55)
+    assert.ok(result.final_score >= 45 && result.final_score <= 53)
     assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
-    assert.ok(result.final_score_cap_reasons.includes('below_minimum_junior_cap'))
+    assert.ok(
+      result.final_score_cap_reasons.includes('below_minimum_junior_cap')
+        || result.final_score_cap_reasons.includes('below_minimum_role_gap_cap'),
+    )
   }
+})
+
+
+test('severe below-minimum role-gap candidates keep stricter final cap', () => {
+  const input = candidate()
+  input.summary = 'Candidate has 1.6 years professional software experience and is below the minimum experience for the role.'
+  input.years_experience = 1.6
+  input.fit_assessment.rationale = 'Early career profile below target for SDE ownership.'
+  input.fit_assessment.matched_requirements = ['Java', 'SQL']
+  input.fit_assessment.missing_requirements = [
+    'minimum 2 years professional experience',
+    'production software development',
+    'backend ownership',
+    'system design',
+    'cloud deployment',
+    'data structures and algorithms',
+  ]
+  input.fit_assessment.risks_or_gaps = [
+    'Experience gap: 1.6 years is below minimum for 2-5 years',
+    'Junior profile for SDE ownership',
+    'Limited backend ownership',
+  ]
+  input.matchedSkills = ['Java', 'SQL']
+  input.missingSkills = input.fit_assessment.missing_requirements
+  input.skills_flat = ['Java', 'SQL']
+  input.top_skills = ['Backend basics']
+  input.profile_score = 70
+
+  const result = scoreCandidateDeterministically(input, { ...sdeJdContext(), required_min_years: 2, required_max_years: 5 })
+  assert.equal(result.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, true)
+  assert.ok(result.scoring_breakdown.experience_alignment.role_gap_signal_count >= 4)
+  assert.ok(result.final_score <= 49, `severe below-minimum role-gap score ${result.final_score} should keep the stricter cap`)
+  assert.ok(result.final_score_cap_reasons.includes('below_minimum_role_gap_cap'))
+  assert.equal(result.final_score_cap_reasons.includes('below_minimum_junior_cap'), false)
 })
 
 test('strong SDE candidate with backend cloud testing and system design scores meaningfully higher', () => {
@@ -1676,13 +1713,15 @@ describe('production SDE deterministic stability calibration', () => {
       aiScore: 52,
       summary: 'Candidate has 1.6 years experience and is below minimum for the role.',
       matched: ['Java', 'SQL', 'backend APIs'],
-      missing: ['minimum 4 years experience', 'system design', 'cloud', 'testing CI/CD', 'auth/RBAC', 'queues/background jobs'],
-      risks: ['Experience gap: 1.6 years is below minimum for 4-7 years', 'Junior profile for SDE ownership'],
+      missing: ['minimum 2 years experience', 'production software development', 'backend ownership', 'system design', 'cloud deployment', 'data structures and algorithms'],
+      risks: ['Experience gap: 1.6 years is below minimum for 2-5 years', 'Junior profile for SDE ownership'],
     }), guardrailContext())
 
     assert.ok(neha.final_score >= 58 && neha.final_score <= 62, `Neha should remain moderate: ${neha.final_score}`)
-    assert.ok(vikram.final_score >= 49 && vikram.final_score <= 55, `Vikram should remain junior/below-threshold: ${vikram.final_score}`)
-    assert.ok(vikram.final_score_cap_reasons.includes('below_minimum_junior_cap'))
+    assert.ok(vikram.final_score <= 49, `Vikram should remain strictly capped for severe below-minimum role gaps: ${vikram.final_score}`)
+    assert.ok(vikram.scoring_breakdown.experience_alignment.role_gap_signal_count >= 4)
+    assert.ok(vikram.final_score_cap_reasons.includes('below_minimum_role_gap_cap'))
+    assert.equal(vikram.final_score_cap_reasons.includes('below_minimum_junior_cap'), false)
     assert.equal(neha.final_score_cap_reasons.includes('below_minimum_junior_cap'), false)
     assert.equal(aisha.final_score_cap_reasons.includes('below_minimum_junior_cap'), false)
     assert.ok(aisha.final_score > neha.final_score)
