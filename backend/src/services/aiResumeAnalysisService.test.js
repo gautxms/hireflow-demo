@@ -1099,6 +1099,7 @@ test('buildPromptWithJobDescription gates AI scoring contract v2 behind shadow f
     assert.equal(withJdPrompt.includes('AI Scoring Contract v2'), true)
     assert.equal(withJdPrompt.includes('ai_scoring_contract_v2'), true)
     assert.equal(withJdPrompt.includes('return all existing candidate fields'), true)
+    assert.equal(withJdPrompt.includes('MUST include nested object ai_scoring_contract_v2 for EVERY candidate'), true)
     assert.equal(allowlistMissPrompt.includes('AI Scoring Contract v2'), false)
     assert.equal(withoutJdPrompt.includes('AI Scoring Contract v2'), false)
   } finally {
@@ -1193,6 +1194,27 @@ test('normalizeAiScoringContractV2 clamps out-of-range scores, nulls non-numeric
   assert.equal(normalized.scoring_anomalies.includes('education_relevance_score_out_of_range_clamped'), true)
   assert.equal(normalized.scoring_anomalies.includes('model_reported_issue'), false)
   assert.deepEqual(normalized.model_reported_anomalies, ['model_reported_issue'])
+})
+
+
+test('normalizeCompactAnalysis adds safe missing v2 contract diagnostic without changing visible scores', () => {
+  const { normalizeCompactAnalysis } = __testables
+  const result = normalizeCompactAnalysis({
+    candidates: [{
+      score: 88,
+      matchScore: { score: 88 },
+      fit_assessment: { overall_fit_score: 88 },
+    }],
+  }, { aiScoringContractV2Expected: true })
+
+  assert.equal(result.candidates[0].score, 88)
+  assert.equal(result.candidates[0].matchScore.score, 88)
+  assert.equal(result.candidates[0].fit_assessment.overall_fit_score, 88)
+  assert.equal(result.candidates[0].ai_scoring_contract_v2.weighted_total_score_from_ai, null)
+  assert.equal(result.candidates[0].ai_scoring_contract_v2.weighted_total_score_recomputed, null)
+  assert.deepEqual(result.candidates[0].ai_scoring_contract_v2.scoring_anomalies, ['v2_missing_contract'])
+  assert.deepEqual(result.candidates[0].ai_scoring_contract_v2.model_reported_anomalies, [])
+  assert.equal(result.candidates[0].ai_scoring_contract_v2.has_job_description_context, true)
 })
 
 test('normalizeCompactAnalysis preserves ai_scoring_contract_v2 without replacing visible score', () => {
