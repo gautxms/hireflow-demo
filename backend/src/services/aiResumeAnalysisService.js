@@ -178,6 +178,7 @@ const AI_SCORING_CONTRACT_V2_SCORE_FIELDS = Object.freeze(Object.keys(AI_SCORING
 const AI_SCORING_CONTRACT_V2_SAFE_ANOMALY_CODES = Object.freeze(new Set([
   'weighted_total_mismatch',
   'scoring_contract_version_mismatch',
+  'v2_missing_contract',
   ...AI_SCORING_CONTRACT_V2_SCORE_FIELDS.flatMap((field) => [
     `${field}_non_numeric`,
     `${field}_out_of_range_clamped`,
@@ -214,6 +215,23 @@ function recomputeAiScoringContractV2Total(normalized = {}) {
   )
 }
 
+
+function buildMissingAiScoringContractV2Diagnostic() {
+  return {
+    scoring_contract_version: AI_SCORING_CONTRACT_V2_VERSION,
+    skills_match_score: null,
+    relevant_experience_score: null,
+    education_relevance_score: null,
+    seniority_progression_score: null,
+    weighted_total_score_from_ai: null,
+    weighted_total_score_recomputed: null,
+    score_confidence: 'low',
+    score_confidence_reason: 'AI scoring contract v2 was requested in shadow mode but omitted by the model.',
+    scoring_anomalies: ['v2_missing_contract'],
+    model_reported_anomalies: [],
+    has_job_description_context: true,
+  }
+}
 
 function normalizeSafeAiScoringContractV2AnomalyCodes(values) {
   if (!Array.isArray(values)) return []
@@ -318,11 +336,11 @@ function buildAiScoringContractV2PromptSection(hasJobDescription, metadata = {},
   if (!hasJobDescription || !isAiScoringContractV2ShadowEnabled(metadata, env)) return ''
   return [
     'AI Scoring Contract v2 (shadow-only; do not replace existing score fields):',
-    'When Job Description context is AVAILABLE, return all existing candidate fields exactly as instructed above and also include optional nested object ai_scoring_contract_v2 per candidate.',
+    'When Job Description context is AVAILABLE, return all existing candidate fields exactly as instructed above and MUST include nested object ai_scoring_contract_v2 for EVERY candidate. Do not omit ai_scoring_contract_v2 for any candidate in the candidates array.',
     'Score candidate against the JD on a 0-100 scale using rubric weights: skills_match_score 40%, relevant_experience_score 30%, education_relevance_score 15%, seniority_progression_score 15%.',
     'Compute weighted_total_score = skills_match_score*0.40 + relevant_experience_score*0.30 + education_relevance_score*0.15 + seniority_progression_score*0.15.',
     'Use 0-100 values only; do not use 0-10 values for these fields.',
-    'ai_scoring_contract_v2 schema: {scoring_contract_version:"ai_jd_fit_rubric_v2",skills_match_score:number,relevant_experience_score:number,education_relevance_score:number,seniority_progression_score:number,weighted_total_score:number,score_confidence:"high"|"medium"|"low",score_confidence_reason:string,scoring_anomalies:string[],has_job_description_context:boolean}.',
+    'ai_scoring_contract_v2 schema: {scoring_contract_version:"ai_jd_fit_rubric_v2",skills_match_score:number,relevant_experience_score:number,education_relevance_score:number,seniority_progression_score:number,weighted_total_score:number,score_confidence:"high"|"medium"|"low",score_confidence_reason:string,scoring_anomalies:string[],has_job_description_context:boolean}. Set has_job_description_context=true.',
   ].join('\n')
 }
 
@@ -378,7 +396,7 @@ function normalizeCandidateMatchScore(value) {
   }
 }
 
-function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {}) {
+function normalizeCompactCandidate(candidate = {}, { minimalMode = false, aiScoringContractV2Expected = false } = {}) {
   const matchedSkills = clampStringArray(
     candidate?.matchedSkills || candidate?.fit_assessment?.matched_requirements || [],
     { maxItems: minimalMode ? 10 : 15, maxItemLength: 80 },
@@ -430,16 +448,17 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false } = {})
     recommendation: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', 160),
     filename: clampString(candidate?.filename || '', 180),
     resumeId: clampString(candidate?.resumeId || candidate?.resume_id || '', 100),
-    ai_scoring_contract_v2: normalizeAiScoringContractV2(candidate?.ai_scoring_contract_v2),
+    ai_scoring_contract_v2: normalizeAiScoringContractV2(candidate?.ai_scoring_contract_v2)
+      || (aiScoringContractV2Expected ? buildMissingAiScoringContractV2Diagnostic() : null),
   }
 }
 
-function normalizeCompactAnalysis(result = {}, { minimalMode = false } = {}) {
+function normalizeCompactAnalysis(result = {}, { minimalMode = false, aiScoringContractV2Expected = false } = {}) {
   const sourceCandidates = result?.candidates
   return {
     ...result,
     candidates: Array.isArray(sourceCandidates)
-      ? sourceCandidates.slice(0, 20).map((candidate) => normalizeCompactCandidate(candidate, { minimalMode }))
+      ? sourceCandidates.slice(0, 20).map((candidate) => normalizeCompactCandidate(candidate, { minimalMode, aiScoringContractV2Expected }))
       : sourceCandidates,
   }
 }
@@ -1396,7 +1415,11 @@ ${requestPrompt}`,
   }
 
   const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
-  result = normalizeCompactAnalysis(result, { minimalMode: compactMode })
+  result = normalizeCompactAnalysis(result, {
+    minimalMode: compactMode,
+    aiScoringContractV2Expected: Boolean(jobDescriptionContext?.hasContext)
+      && isAiScoringContractV2ShadowEnabled(resolveAiScoringContractV2ShadowMetadata(jobDescriptionContext)),
+  })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('Anthropic response is missing candidates array')
   }
@@ -1583,7 +1606,14 @@ ${promptText}`,
   }
 
   logRawAiResponseForLocalDebug('[AI][OpenAI] Raw response before parsing', outputText)
-  const result = normalizeCompactAnalysis(extractJsonWithContext(outputText, { provider: 'openai', model, promptVersion, maxOutputTokens: attemptedMaxOutputTokens, completionStatus: responseStatus || 'completed', stopReason: incompleteReason || null, retryMetadata: { token_budget_attempt_count: attemptedTokenBudgets.length } }), { minimalMode: compactMode })
+  const result = normalizeCompactAnalysis(
+    extractJsonWithContext(outputText, { provider: 'openai', model, promptVersion, maxOutputTokens: attemptedMaxOutputTokens, completionStatus: responseStatus || 'completed', stopReason: incompleteReason || null, retryMetadata: { token_budget_attempt_count: attemptedTokenBudgets.length } }),
+    {
+      minimalMode: compactMode,
+      aiScoringContractV2Expected: Boolean(jobDescriptionContext?.hasContext)
+        && isAiScoringContractV2ShadowEnabled(resolveAiScoringContractV2ShadowMetadata(jobDescriptionContext)),
+    },
+  )
   if (!Array.isArray(result?.candidates)) {
     throw new Error('OpenAI response is missing candidates array')
   }
