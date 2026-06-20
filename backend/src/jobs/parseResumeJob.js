@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
-import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields, isAiScoringContractV2ShadowEnabled, normalizeAiScoringContractV2 } from '../services/aiResumeAnalysisService.js'
+import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields, isAiScoringContractV2ShadowEnabled, normalizeAiScoringContractV2, runAiScoringContractV2ShadowAnalysis } from '../services/aiResumeAnalysisService.js'
 import {
   buildSafeResumeFileDiagnostics,
   logSafeResumeFileDiagnostics,
@@ -34,6 +34,7 @@ let cacheJobResultOverrideForTests = null
 let upsertScoreCacheEntryOverrideForTests = null
 let getScoreCacheEntryOverrideForTests = null
 let scoreCandidateDeterministicallyOverrideForTests = null
+let runAiScoringContractV2ShadowAnalysisOverrideForTests = null
 
 function getAnalyzeResumeWithConfiguredFallback() {
   return analyzeResumeWithConfiguredFallbackOverrideForTests || analyzeResumeWithConfiguredFallback
@@ -55,18 +56,24 @@ function getDeterministicJdFitScorer() {
   return scoreCandidateDeterministicallyOverrideForTests || scoreCandidateDeterministically
 }
 
+function getAiScoringContractV2ShadowRunner() {
+  return runAiScoringContractV2ShadowAnalysisOverrideForTests || runAiScoringContractV2ShadowAnalysis
+}
+
 export function __setParseResumeJobTestOverrides({
   analyzeResumeWithConfiguredFallback: analyzeOverride = null,
   cacheJobResult: cacheOverride = null,
   upsertScoreCacheEntry: upsertScoreCacheEntryOverride = null,
   getScoreCacheEntry: getScoreCacheEntryOverride = null,
   scoreCandidateDeterministically: scoreCandidateDeterministicallyOverride = null,
+  runAiScoringContractV2ShadowAnalysis: runAiScoringContractV2ShadowAnalysisOverride = null,
 } = {}) {
   analyzeResumeWithConfiguredFallbackOverrideForTests = analyzeOverride
   cacheJobResultOverrideForTests = cacheOverride
   upsertScoreCacheEntryOverrideForTests = upsertScoreCacheEntryOverride
   getScoreCacheEntryOverrideForTests = getScoreCacheEntryOverride
   scoreCandidateDeterministicallyOverrideForTests = scoreCandidateDeterministicallyOverride
+  runAiScoringContractV2ShadowAnalysisOverrideForTests = runAiScoringContractV2ShadowAnalysisOverride
 }
 
 export function __resetParseResumeJobTestOverrides() {
@@ -75,6 +82,7 @@ export function __resetParseResumeJobTestOverrides() {
   upsertScoreCacheEntryOverrideForTests = null
   getScoreCacheEntryOverrideForTests = null
   scoreCandidateDeterministicallyOverrideForTests = null
+  runAiScoringContractV2ShadowAnalysisOverrideForTests = null
 }
 
 export function isTerminalJobFailure(job) {
@@ -1417,6 +1425,7 @@ export async function runParse(job) {
   await job.progress(75)
 
   let analysisResult
+  let aiResponse
   let parseMethod = 'anthropic-primary'
   let scoreContractShadowMetadata = { provider: null, model: null, promptVersion: null, mode: null }
   const jobDescriptionContext = await fetchJobDescriptionContext({
@@ -1436,7 +1445,7 @@ export async function runParse(job) {
 
   try {
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    const aiResponse = await getAnalyzeResumeWithConfiguredFallback()(
+    aiResponse = await getAnalyzeResumeWithConfiguredFallback()(
       preparedResumePayload.fileBufferBase64,
       preparedResumePayload.mimeType,
       preparedResumePayload.filename,
@@ -1504,6 +1513,22 @@ export async function runParse(job) {
     resumeId,
     logger: console,
   })
+
+  const v2ShadowResult = await getAiScoringContractV2ShadowRunner()({
+    resumeText: aiResponse?.shadowInput?.resumeText || '',
+    jobDescriptionContext,
+    userId: job.data.userId ?? null,
+    analysisId: analysisId || null,
+    resumeId,
+    candidates: finalCandidates,
+    logger: console,
+  })
+  if (v2ShadowResult?.contract) {
+    for (const candidate of finalCandidates) {
+      candidate.ai_scoring_contract_v2 = v2ShadowResult.contract
+    }
+  }
+
   for (const candidate of finalCandidates) {
     const scoringMetadata = {
       userId: job.data.userId ?? null,
