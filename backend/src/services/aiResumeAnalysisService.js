@@ -327,23 +327,6 @@ export function isAiScoringContractV2ShadowEnabled({ userId = null, analysisId =
     && aiScoringContractV2AllowlistMatches(analysisId, analysisAllowlist)
 }
 
-function resolveAiScoringContractV2ShadowMetadata(jobDescriptionContext = null) {
-  const metadata = jobDescriptionContext?.__aiScoringContractV2ShadowMetadata
-  return metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {}
-}
-
-function buildAiScoringContractV2PromptSection(hasJobDescription, metadata = {}, env = process.env) {
-  if (!hasJobDescription || !isAiScoringContractV2ShadowEnabled(metadata, env)) return ''
-  return [
-    'AI Scoring Contract v2 (shadow-only; do not replace existing score fields):',
-    'When Job Description context is AVAILABLE, return all existing candidate fields exactly as instructed above and MUST include nested object ai_scoring_contract_v2 for EVERY candidate. Do not omit ai_scoring_contract_v2 for any candidate in the candidates array.',
-    'Score candidate against the JD on a 0-100 scale using rubric weights: skills_match_score 40%, relevant_experience_score 30%, education_relevance_score 15%, seniority_progression_score 15%.',
-    'Compute weighted_total_score = skills_match_score*0.40 + relevant_experience_score*0.30 + education_relevance_score*0.15 + seniority_progression_score*0.15.',
-    'Use 0-100 values only; do not use 0-10 values for these fields.',
-    'ai_scoring_contract_v2 schema: {scoring_contract_version:"ai_jd_fit_rubric_v2",skills_match_score:number,relevant_experience_score:number,education_relevance_score:number,seniority_progression_score:number,weighted_total_score:number,score_confidence:"high"|"medium"|"low",score_confidence_reason:string,scoring_anomalies:string[],has_job_description_context:boolean}. Set has_job_description_context=true.',
-  ].join('\n')
-}
-
 function normalizeStructuredSkillsCandidateInput(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const normalized = {
@@ -1246,9 +1229,8 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
 
   const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
-  const aiScoringContractV2Directives = buildAiScoringContractV2PromptSection(hasJobDescription, resolveAiScoringContractV2ShadowMetadata(jdContext))
 
-  return `${basePrompt}\n\n${analysisModeDirectives}${aiScoringContractV2Directives ? `\n\n${aiScoringContractV2Directives}` : ''}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
 
 
@@ -1417,8 +1399,7 @@ ${requestPrompt}`,
   const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
   result = normalizeCompactAnalysis(result, {
     minimalMode: compactMode,
-    aiScoringContractV2Expected: Boolean(jobDescriptionContext?.hasContext)
-      && isAiScoringContractV2ShadowEnabled(resolveAiScoringContractV2ShadowMetadata(jobDescriptionContext)),
+    aiScoringContractV2Expected: false,
   })
   if (!Array.isArray(result?.candidates)) {
     throw new Error('Anthropic response is missing candidates array')
@@ -1610,8 +1591,7 @@ ${promptText}`,
     extractJsonWithContext(outputText, { provider: 'openai', model, promptVersion, maxOutputTokens: attemptedMaxOutputTokens, completionStatus: responseStatus || 'completed', stopReason: incompleteReason || null, retryMetadata: { token_budget_attempt_count: attemptedTokenBudgets.length } }),
     {
       minimalMode: compactMode,
-      aiScoringContractV2Expected: Boolean(jobDescriptionContext?.hasContext)
-        && isAiScoringContractV2ShadowEnabled(resolveAiScoringContractV2ShadowMetadata(jobDescriptionContext)),
+      aiScoringContractV2Expected: false,
     },
   )
   if (!Array.isArray(result?.candidates)) {
@@ -1634,6 +1614,118 @@ ${promptText}`,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
     jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+  }
+}
+
+
+function getAiScoringContractV2ShadowTimeoutMs(env = process.env) {
+  const parsed = Number.parseInt(String(env.AI_SCORING_CONTRACT_V2_SHADOW_TIMEOUT_MS || '15000'), 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15000
+}
+
+function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescriptionContext }) {
+  const jd = jobDescriptionContext && typeof jobDescriptionContext === 'object' ? jobDescriptionContext : {}
+  return [
+    'AI Scoring Contract v2 separate shadow-only analysis.',
+    'Return ONLY valid JSON. Do not return candidate analysis, names, emails, phone numbers, explanations outside the JSON, or markdown.',
+    'Score the resume against the Job Description on a 0-100 scale using these weights: skills_match_score 40%, relevant_experience_score 30%, education_relevance_score 15%, seniority_progression_score 15%.',
+    'Compute weighted_total_score = skills_match_score*0.40 + relevant_experience_score*0.30 + education_relevance_score*0.15 + seniority_progression_score*0.15.',
+    'Use 0-100 values only; do not use 0-10 values.',
+    'JSON schema: {"scoring_contract_version":"ai_jd_fit_rubric_v2","skills_match_score":number,"relevant_experience_score":number,"education_relevance_score":number,"seniority_progression_score":number,"weighted_total_score":number,"score_confidence":"high|medium|low","score_confidence_reason":"string","scoring_anomalies":["safe_internal_codes_only"],"has_job_description_context":true}',
+    '',
+    'Job Description Context:',
+    `Title: ${formatScalar(jd.title) || 'Not provided'}`,
+    `Description: ${formatScalar(jd.description) || 'Not provided'}`,
+    `Requirements: ${formatScalar(jd.requirements) || 'Not provided'}`,
+    `Skills: ${formatArray(jd.skills) || 'Not provided'}`,
+    `Experience Years: ${formatScalar(jd.experienceYears) || 'Not provided'}`,
+    '',
+    'Resume Text:',
+    String(resumeText || '').slice(0, DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT),
+  ].join('\n')
+}
+
+function withAiScoringContractV2Timeout(promise, timeoutMs) {
+  let timeoutHandle
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error('v2_shadow_timeout')), timeoutMs)
+  })
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutHandle))
+}
+
+function normalizeAiScoringContractV2ShadowPayload(payload) {
+  const contract = payload?.ai_scoring_contract_v2 && typeof payload.ai_scoring_contract_v2 === 'object'
+    ? payload.ai_scoring_contract_v2
+    : payload
+  return normalizeAiScoringContractV2(contract)
+}
+
+function logSafeAiScoringContractV2ShadowDiagnostic(logger, message, metadata = {}) {
+  const safeMetadata = {
+    action: metadata.action || 'v2_shadow',
+    analysis_id: metadata.analysisId || null,
+    resume_id: metadata.resumeId || null,
+    user_id: metadata.userId ?? null,
+    provider: metadata.provider || null,
+    model: metadata.model || null,
+    error_code: metadata.errorCode || null,
+  }
+  ;(logger?.warn || console.warn).call(logger || console, message, safeMetadata)
+}
+
+export async function runAiScoringContractV2ShadowAnalysis({
+  resumeText = '',
+  jobDescriptionContext = null,
+  userId = null,
+  analysisId = null,
+  resumeId = null,
+  candidates = [],
+  credentials = null,
+  providerCall = null,
+  env = process.env,
+  logger = console,
+} = {}) {
+  if (!isAiScoringContractV2ShadowEnabled({ userId, analysisId }, env)) return { attempted: false, reason: 'disabled_or_not_allowlisted' }
+  if (!jobDescriptionContext?.hasContext) return { attempted: false, reason: 'missing_jd_context' }
+  if (!Array.isArray(candidates) || candidates.length === 0) return { attempted: false, reason: 'missing_candidates' }
+  if (!String(resumeText || '').trim()) return { attempted: false, reason: 'missing_resume_text' }
+
+  const timeoutMs = getAiScoringContractV2ShadowTimeoutMs(env)
+  const prompt = buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescriptionContext })
+
+  try {
+    const call = providerCall || (async (promptText) => {
+      const activeCredentials = credentials || await getActiveAiProviderCredentials()
+      const entry = buildProviderAttemptPlan(activeCredentials)[0]
+      if (!entry) throw new Error('v2_shadow_no_provider')
+      if (entry.provider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${entry.apiKey}` },
+          body: JSON.stringify({ model: entry.model || 'gpt-4o-mini', max_output_tokens: 800, input: [{ role: 'user', content: [{ type: 'input_text', text: promptText }] }] }),
+        })
+        if (!response.ok) throw new Error(`v2_shadow_openai_status_${response.status}`)
+        const payload = await response.json()
+        return { text: extractOpenAiResponseText(payload), provider: 'openai', model: entry.model || null }
+      }
+      const client = new Anthropic({ apiKey: entry.apiKey })
+      const response = await client.messages.create({ model: entry.model || MODEL, max_tokens: 800, temperature: 0, messages: [{ role: 'user', content: [{ type: 'text', text: promptText }] }] })
+      const text = (response.content || []).find((item) => item.type === 'text')?.text || ''
+      return { text, provider: 'anthropic', model: entry.model || MODEL }
+    })
+
+    const response = await withAiScoringContractV2Timeout(call(prompt), timeoutMs)
+    const rawPayload = typeof response?.text === 'string'
+      ? extractJsonWithContext(response.text, { provider: response.provider || null, model: response.model || null })
+      : response
+    const normalized = normalizeAiScoringContractV2ShadowPayload(rawPayload)
+    if (!normalized) throw new Error('v2_missing_contract')
+    return { attempted: true, contract: normalized, provider: response?.provider || null, model: response?.model || null }
+  } catch (error) {
+    logSafeAiScoringContractV2ShadowDiagnostic(logger, '[AI Parse] AI scoring contract v2 shadow failed open.', {
+      userId, analysisId, resumeId, errorCode: String(error?.message || 'v2_shadow_failed').slice(0, 80),
+    })
+    return { attempted: true, contract: null, errorCode: 'v2_shadow_failed' }
   }
 }
 
@@ -1782,6 +1874,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 
       return {
         ...response,
+        shadowInput: { resumeText: cleanedPayload?.cleanedText || rawExtractedText || '' },
         attempts: [
           ...attemptHistory,
           createAttemptRecord({

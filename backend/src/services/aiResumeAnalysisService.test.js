@@ -6,6 +6,7 @@ import {
   analyzeWithAnthropic,
   analyzeWithOpenAI,
   buildPromptWithJobDescription,
+  runAiScoringContractV2ShadowAnalysis,
   __testables,
   extractJsonWithContext,
   extractOpenAiResponseText,
@@ -1056,7 +1057,7 @@ test('PDF canonical text scoring experiment sends text/plain only once and reuse
   }
 })
 
-test('buildPromptWithJobDescription gates AI scoring contract v2 behind shadow flag and JD context', () => {
+test('buildPromptWithJobDescription keeps AI scoring contract v2 out of production prompt even when shadow is enabled and allowlisted', () => {
   const previousEnabled = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
   const previousUserAllowlist = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS
   const previousAnalysisAllowlist = process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
@@ -1072,36 +1073,27 @@ test('buildPromptWithJobDescription gates AI scoring contract v2 behind shadow f
       title: 'Software Engineer',
       __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
     })
-    assert.equal(defaultOffPrompt.includes('AI Scoring Contract v2'), false)
 
     process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED = 'true'
     process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS = '10'
     process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS = 'analysis-v2'
 
-    const withJdPrompt = buildPromptWithJobDescription('Base prompt', {
+    const enabledAllowlistedPrompt = buildPromptWithJobDescription('Base prompt', {
       hasContext: true,
       jobDescriptionId: 'jd-v2',
       title: 'Software Engineer',
-      __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
-    })
-    const allowlistMissPrompt = buildPromptWithJobDescription('Base prompt', {
-      hasContext: true,
-      jobDescriptionId: 'jd-v2',
-      title: 'Software Engineer',
-      __aiScoringContractV2ShadowMetadata: { userId: 99, analysisId: 'analysis-v2' },
-    })
-    const withoutJdPrompt = buildPromptWithJobDescription('Base prompt', {
-      hasContext: false,
-      missingReason: 'job_description_missing',
       __aiScoringContractV2ShadowMetadata: { userId: 10, analysisId: 'analysis-v2' },
     })
 
-    assert.equal(withJdPrompt.includes('AI Scoring Contract v2'), true)
-    assert.equal(withJdPrompt.includes('ai_scoring_contract_v2'), true)
-    assert.equal(withJdPrompt.includes('return all existing candidate fields'), true)
-    assert.equal(withJdPrompt.includes('MUST include nested object ai_scoring_contract_v2 for EVERY candidate'), true)
-    assert.equal(allowlistMissPrompt.includes('AI Scoring Contract v2'), false)
-    assert.equal(withoutJdPrompt.includes('AI Scoring Contract v2'), false)
+    for (const prompt of [defaultOffPrompt, enabledAllowlistedPrompt]) {
+      assert.equal(prompt.includes('AI Scoring Contract v2'), false)
+      assert.equal(prompt.includes('ai_scoring_contract_v2'), false)
+      assert.equal(prompt.includes('skills_match_score 40%'), false)
+      assert.equal(prompt.includes('relevant_experience_score 30%'), false)
+      assert.equal(prompt.includes('education_relevance_score 15%'), false)
+      assert.equal(prompt.includes('seniority_progression_score 15%'), false)
+    }
+    assert.equal(enabledAllowlistedPrompt, defaultOffPrompt)
   } finally {
     if (previousEnabled === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED
     else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ENABLED = previousEnabled
@@ -1110,6 +1102,78 @@ test('buildPromptWithJobDescription gates AI scoring contract v2 behind shadow f
     if (previousAnalysisAllowlist === undefined) delete process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS
     else process.env.AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_ANALYSIS_IDS = previousAnalysisAllowlist
   }
+})
+
+test('separate shadow AI scoring contract v2 is default-off and allowlist-gated', async () => {
+  let calls = 0
+  const base = {
+    resumeText: 'Node.js API resume text',
+    jobDescriptionContext: { hasContext: true, title: 'Backend Engineer', requirements: 'Node.js' },
+    userId: '7',
+    analysisId: 'analysis-7',
+    resumeId: 'resume-7',
+    candidates: [{ id: 'candidate-1' }],
+    providerCall: async () => { calls += 1; return { skills_match_score: 90 } },
+    logger: { warn: () => {} },
+  }
+
+  assert.equal((await runAiScoringContractV2ShadowAnalysis({ ...base, env: { AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'false' } })).attempted, false)
+  assert.equal(calls, 0)
+  assert.equal((await runAiScoringContractV2ShadowAnalysis({ ...base, env: { AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true', AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '99' } })).attempted, false)
+  assert.equal(calls, 0)
+})
+
+test('separate shadow AI scoring contract v2 attaches normalized contract without changing visible scores', async () => {
+  const candidate = { score: 88, matchScore: { score: 88 }, fit_assessment: { overall_fit_score: 88 } }
+  const result = await runAiScoringContractV2ShadowAnalysis({
+    resumeText: 'Node.js API resume text',
+    jobDescriptionContext: { hasContext: true, title: 'Backend Engineer', requirements: 'Node.js' },
+    userId: '7',
+    analysisId: 'analysis-7',
+    resumeId: 'resume-7',
+    candidates: [candidate],
+    env: { AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true', AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7' },
+    providerCall: async () => ({
+      scoring_contract_version: 'ai_jd_fit_rubric_v2',
+      skills_match_score: 55,
+      relevant_experience_score: 55,
+      education_relevance_score: 55,
+      seniority_progression_score: 55,
+      weighted_total_score: 55,
+      score_confidence: 'medium',
+      score_confidence_reason: 'Sufficient evidence.',
+      scoring_anomalies: [],
+      has_job_description_context: true,
+    }),
+    logger: { warn: () => {} },
+  })
+
+  candidate.ai_scoring_contract_v2 = result.contract
+  assert.equal(candidate.score, 88)
+  assert.equal(candidate.matchScore.score, 88)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 88)
+  assert.equal(candidate.ai_scoring_contract_v2.weighted_total_score_recomputed, 55)
+})
+
+test('separate shadow AI scoring contract v2 fails open with safe diagnostics', async () => {
+  const logs = []
+  const result = await runAiScoringContractV2ShadowAnalysis({
+    resumeText: 'Jane Candidate jane@example.com private resume text',
+    jobDescriptionContext: { hasContext: true, title: 'Backend Engineer', description: 'private JD' },
+    userId: '7',
+    analysisId: 'analysis-7',
+    resumeId: 'resume-7',
+    candidates: [{ score: 88 }],
+    env: { AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true', AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7' },
+    providerCall: async () => { throw new Error('provider_error') },
+    logger: { warn: (...args) => logs.push(args) },
+  })
+
+  assert.equal(result.attempted, true)
+  assert.equal(result.contract, null)
+  assert.equal(JSON.stringify(logs).includes('Jane Candidate'), false)
+  assert.equal(JSON.stringify(logs).includes('jane@example.com'), false)
+  assert.equal(JSON.stringify(logs).includes('private JD'), false)
 })
 
 test('normalizeAiScoringContractV2 returns null for missing object and safely normalizes valid scores', () => {
