@@ -179,6 +179,9 @@ const AI_SCORING_CONTRACT_V2_SAFE_ANOMALY_CODES = Object.freeze(new Set([
   'weighted_total_mismatch',
   'scoring_contract_version_mismatch',
   'v2_missing_contract',
+  'v2_shadow_missing_resume_text',
+  'v2_shadow_skipped_binary_input_without_text',
+  'has_job_description_context_corrected',
   ...AI_SCORING_CONTRACT_V2_SCORE_FIELDS.flatMap((field) => [
     `${field}_non_numeric`,
     `${field}_out_of_range_clamped`,
@@ -216,7 +219,7 @@ function recomputeAiScoringContractV2Total(normalized = {}) {
 }
 
 
-function buildMissingAiScoringContractV2Diagnostic() {
+function buildMissingAiScoringContractV2Diagnostic({ reason = 'v2_missing_contract', scoreConfidenceReason = 'AI scoring contract v2 was requested in shadow mode but omitted by the model.' } = {}) {
   return {
     scoring_contract_version: AI_SCORING_CONTRACT_V2_VERSION,
     skills_match_score: null,
@@ -226,8 +229,8 @@ function buildMissingAiScoringContractV2Diagnostic() {
     weighted_total_score_from_ai: null,
     weighted_total_score_recomputed: null,
     score_confidence: 'low',
-    score_confidence_reason: 'AI scoring contract v2 was requested in shadow mode but omitted by the model.',
-    scoring_anomalies: ['v2_missing_contract'],
+    score_confidence_reason: scoreConfidenceReason,
+    scoring_anomalies: [reason],
     model_reported_anomalies: [],
     has_job_description_context: true,
   }
@@ -250,9 +253,10 @@ function isAlreadyNormalizedAiScoringContractV2(value = {}) {
     || value?.model_reported_anomalies !== undefined
 }
 
-export function normalizeAiScoringContractV2(value) {
+export function normalizeAiScoringContractV2(value, options = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
 
+  const forceHasJobDescriptionContext = options?.hasJobDescriptionContext === true
   const alreadyNormalized = isAlreadyNormalizedAiScoringContractV2(value)
   const anomalies = new Set(alreadyNormalized ? normalizeSafeAiScoringContractV2AnomalyCodes(value?.scoring_anomalies) : [])
   const weightedTotalSource = value?.weighted_total_score !== undefined
@@ -277,7 +281,11 @@ export function normalizeAiScoringContractV2(value) {
     score_confidence_reason: clampString(value?.score_confidence_reason || '', 300),
     scoring_anomalies: [],
     model_reported_anomalies: modelReportedAnomalies,
-    has_job_description_context: Boolean(value?.has_job_description_context),
+    has_job_description_context: forceHasJobDescriptionContext || Boolean(value?.has_job_description_context),
+  }
+
+  if (forceHasJobDescriptionContext && value?.has_job_description_context === false) {
+    anomalies.add('has_job_description_context_corrected')
   }
 
   if (value?.scoring_contract_version && value.scoring_contract_version !== AI_SCORING_CONTRACT_V2_VERSION) {
@@ -1653,11 +1661,18 @@ function withAiScoringContractV2Timeout(promise, timeoutMs) {
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutHandle))
 }
 
-function normalizeAiScoringContractV2ShadowPayload(payload) {
+function normalizeAiScoringContractV2ShadowPayload(payload, options = {}) {
   const contract = payload?.ai_scoring_contract_v2 && typeof payload.ai_scoring_contract_v2 === 'object'
     ? payload.ai_scoring_contract_v2
     : payload
-  return normalizeAiScoringContractV2(contract)
+  return normalizeAiScoringContractV2(contract, options)
+}
+
+function buildSkippedAiScoringContractV2ShadowDiagnostic(reason) {
+  return buildMissingAiScoringContractV2Diagnostic({
+    reason,
+    scoreConfidenceReason: 'v2 shadow skipped because extracted text was unavailable',
+  })
 }
 
 function logSafeAiScoringContractV2ShadowDiagnostic(logger, message, metadata = {}) {
@@ -1684,11 +1699,23 @@ export async function runAiScoringContractV2ShadowAnalysis({
   providerCall = null,
   env = process.env,
   logger = console,
+  inputDiagnostics = null,
 } = {}) {
   if (!isAiScoringContractV2ShadowEnabled({ userId, analysisId }, env)) return { attempted: false, reason: 'disabled_or_not_allowlisted' }
   if (!jobDescriptionContext?.hasContext) return { attempted: false, reason: 'missing_jd_context' }
   if (!Array.isArray(candidates) || candidates.length === 0) return { attempted: false, reason: 'missing_candidates' }
-  if (!String(resumeText || '').trim()) return { attempted: false, reason: 'missing_resume_text' }
+  if (!String(resumeText || '').trim()) {
+    const inputKind = String(inputDiagnostics?.inputKind || '').trim().toLowerCase()
+    const inputMode = String(inputDiagnostics?.inputMode || '').trim().toLowerCase()
+    const normalizedTextCharCount = Number(inputDiagnostics?.normalizedTextCharCount || 0)
+    const reason = (inputKind === 'pdf_binary' || inputMode === 'binary') && normalizedTextCharCount === 0
+      ? 'v2_shadow_skipped_binary_input_without_text'
+      : 'v2_shadow_missing_resume_text'
+    logSafeAiScoringContractV2ShadowDiagnostic(logger, '[AI Parse] AI scoring contract v2 shadow skipped.', {
+      userId, analysisId, resumeId, errorCode: reason,
+    })
+    return { attempted: true, skipped: true, reason, contract: buildSkippedAiScoringContractV2ShadowDiagnostic(reason) }
+  }
 
   const timeoutMs = getAiScoringContractV2ShadowTimeoutMs(env)
   const prompt = buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescriptionContext })
@@ -1718,7 +1745,7 @@ export async function runAiScoringContractV2ShadowAnalysis({
     const rawPayload = typeof response?.text === 'string'
       ? extractJsonWithContext(response.text, { provider: response.provider || null, model: response.model || null })
       : response
-    const normalized = normalizeAiScoringContractV2ShadowPayload(rawPayload)
+    const normalized = normalizeAiScoringContractV2ShadowPayload(rawPayload, { hasJobDescriptionContext: true })
     if (!normalized) throw new Error('v2_missing_contract')
     return { attempted: true, contract: normalized, provider: response?.provider || null, model: response?.model || null }
   } catch (error) {

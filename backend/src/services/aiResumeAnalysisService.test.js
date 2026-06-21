@@ -1155,6 +1155,87 @@ test('separate shadow AI scoring contract v2 attaches normalized contract withou
   assert.equal(candidate.ai_scoring_contract_v2.weighted_total_score_recomputed, 55)
 })
 
+
+test('separate shadow AI scoring contract v2 corrects model JD-context false when app has JD context', async () => {
+  const candidate = { score: 88, matchScore: { score: 88 }, fit_assessment: { overall_fit_score: 88 } }
+  const result = await runAiScoringContractV2ShadowAnalysis({
+    resumeText: 'Node.js API resume text',
+    jobDescriptionContext: { hasContext: true, title: 'Backend Engineer', requirements: 'Node.js' },
+    userId: '7',
+    analysisId: 'analysis-7',
+    resumeId: 'resume-7',
+    candidates: [candidate],
+    env: { AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true', AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7' },
+    providerCall: async () => ({
+      scoring_contract_version: 'ai_jd_fit_rubric_v2',
+      skills_match_score: 45,
+      relevant_experience_score: 45,
+      education_relevance_score: 45,
+      seniority_progression_score: 45,
+      weighted_total_score: 45,
+      score_confidence: 'medium',
+      score_confidence_reason: 'Sufficient evidence.',
+      scoring_anomalies: [],
+      has_job_description_context: false,
+    }),
+    logger: { warn: () => {} },
+  })
+
+  candidate.ai_scoring_contract_v2 = result.contract
+  assert.equal(candidate.score, 88)
+  assert.equal(candidate.matchScore.score, 88)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 88)
+  assert.equal(candidate.ai_scoring_contract_v2.has_job_description_context, true)
+  assert.equal(candidate.ai_scoring_contract_v2.scoring_anomalies.includes('has_job_description_context_corrected'), true)
+})
+
+test('separate shadow AI scoring contract v2 skips missing resume text without provider call', async () => {
+  let providerCalls = 0
+  const candidate = { score: 88, matchScore: { score: 88 }, fit_assessment: { overall_fit_score: 88 } }
+  const result = await runAiScoringContractV2ShadowAnalysis({
+    resumeText: '',
+    jobDescriptionContext: { hasContext: true, title: 'Backend Engineer' },
+    userId: '7',
+    analysisId: 'analysis-7',
+    resumeId: 'resume-7',
+    candidates: [candidate],
+    env: { AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true', AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7' },
+    providerCall: async () => { providerCalls += 1; throw new Error('should_not_call_provider') },
+    logger: { warn: () => {} },
+  })
+
+  assert.equal(result.attempted, true)
+  assert.equal(result.skipped, true)
+  assert.equal(providerCalls, 0)
+  assert.equal(result.contract.scoring_anomalies.includes('v2_shadow_missing_resume_text'), true)
+  assert.equal(result.contract.has_job_description_context, true)
+  assert.equal(candidate.score, 88)
+  assert.equal(candidate.matchScore.score, 88)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 88)
+})
+
+test('separate shadow AI scoring contract v2 diagnoses binary PDF input without text safely', async () => {
+  const logs = []
+  let providerCalls = 0
+  const result = await runAiScoringContractV2ShadowAnalysis({
+    resumeText: '',
+    jobDescriptionContext: { hasContext: true, title: 'Backend Engineer' },
+    userId: '7',
+    analysisId: 'analysis-7',
+    resumeId: 'resume-7',
+    candidates: [{ score: 88, matchScore: { score: 88 }, fit_assessment: { overall_fit_score: 88 } }],
+    inputDiagnostics: { inputKind: 'pdf_binary', inputMode: 'binary', normalizedTextCharCount: 0, extractionMethod: 'pdf_binary_provider_input' },
+    env: { AI_SCORING_CONTRACT_V2_SHADOW_ENABLED: 'true', AI_SCORING_CONTRACT_V2_SHADOW_ALLOWED_USER_IDS: '7' },
+    providerCall: async () => { providerCalls += 1; throw new Error('should_not_call_provider') },
+    logger: { warn: (...args) => logs.push(args) },
+  })
+
+  assert.equal(providerCalls, 0)
+  assert.equal(result.contract.scoring_anomalies.includes('v2_shadow_skipped_binary_input_without_text'), true)
+  assert.equal(JSON.stringify(logs).includes('pdf_binary_provider_input'), false)
+  assert.equal(JSON.stringify(logs).includes('base64'), false)
+})
+
 test('separate shadow AI scoring contract v2 fails open with safe diagnostics', async () => {
   const logs = []
   const result = await runAiScoringContractV2ShadowAnalysis({

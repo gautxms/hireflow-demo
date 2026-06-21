@@ -1522,6 +1522,7 @@ export async function runParse(job) {
     resumeId,
     candidates: finalCandidates,
     logger: console,
+    inputDiagnostics: aiResponse?.attempts?.at?.(-1)?.inputDiagnostics || null,
   })
   if (v2ShadowResult?.contract) {
     for (const candidate of finalCandidates) {
