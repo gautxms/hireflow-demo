@@ -233,6 +233,48 @@ test('v2 visible score experiment skips confidence below configured minimum', ()
   assert.equal(logs[0].payload.skip_reason, 'confidence_below_minimum')
 })
 
+test('v2 visible score experiment skips missing or malformed contract confidence', () => {
+  for (const scoreConfidence of [null, undefined, '', 'unknown', 'HIGH-ish', {}, []]) {
+    const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+      candidate: buildV2VisibleScoreCandidate({
+        ai_scoring_contract_v2: {
+          ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+          score_confidence: scoreConfidence,
+        },
+      }),
+      env: {
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'low',
+      },
+    })
+
+    assert.equal(candidate.score, 78)
+    assert.equal(candidate.v2_visible_score_experiment, undefined)
+    assert.equal(logs[0].payload.applied, false)
+    assert.equal(logs[0].payload.skip_reason, 'confidence_below_minimum')
+  }
+})
+
+test('v2 visible score experiment defaults invalid configured minimum confidence to high', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({
+      ai_scoring_contract_v2: {
+        ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+        score_confidence: 'medium',
+      },
+    }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'definitely-not-valid',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(logs[0].payload.skip_reason, 'confidence_below_minimum')
+})
+
 test('v2 visible score experiment updates ranking inputs by applying visible candidate score', () => {
   const candidateA = buildV2VisibleScoreCandidate({ name: 'A', score: 90, matchScore: { score: 90 }, fit_assessment: { overall_fit_score: 90 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 40 } })
   const candidateB = buildV2VisibleScoreCandidate({ name: 'B', score: 70, matchScore: { score: 70 }, fit_assessment: { overall_fit_score: 70 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 95 } })

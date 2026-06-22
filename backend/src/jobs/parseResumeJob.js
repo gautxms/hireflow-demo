@@ -205,14 +205,22 @@ const AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK = Object.freeze({
   high: 3,
 })
 
-function normalizeV2VisibleApplyConfidence(value) {
+function normalizeConfiguredV2VisibleApplyMinimumConfidence(value) {
   const normalized = String(value || '').trim().toLowerCase()
   return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalized] ? normalized : 'high'
 }
 
+function normalizeV2VisibleApplyContractConfidence(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalized] ? normalized : null
+}
+
 function confidenceMeetsMinimum(confidence, minimumConfidence) {
-  const normalizedConfidence = normalizeV2VisibleApplyConfidence(confidence)
-  const normalizedMinimum = normalizeV2VisibleApplyConfidence(minimumConfidence)
+  const normalizedConfidence = normalizeV2VisibleApplyContractConfidence(confidence)
+  const normalizedMinimum = normalizeConfiguredV2VisibleApplyMinimumConfidence(minimumConfidence)
+
+  if (!normalizedConfidence) return false
+
   return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalizedConfidence] >= AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalizedMinimum]
 }
 
@@ -321,7 +329,7 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
   const enabled = isAiScoringContractV2VisibleApplyEnabled(env)
   const allowlistDiagnostic = buildAiScoringContractV2VisibleApplyAllowlistDiagnostic({ userId, analysisId, env })
   const allowlistMatched = allowlistDiagnostic.allowlist_matched
-  const minimumConfidence = normalizeV2VisibleApplyConfidence(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE || 'high')
+  const minimumConfidence = normalizeConfiguredV2VisibleApplyMinimumConfidence(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE || 'high')
 
   return candidates.map((candidate) => {
     let skipReason = null
