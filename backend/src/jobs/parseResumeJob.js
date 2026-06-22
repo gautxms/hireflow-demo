@@ -654,8 +654,16 @@ function hasDeterministicJdFitAppliedScore(candidate = {}) {
   )
 }
 
+function hasV2VisibleScoreExperimentApplied(candidate = {}) {
+  return Boolean(
+    candidate?.v2_visible_score_experiment
+    && typeof candidate.v2_visible_score_experiment === 'object'
+    && !Array.isArray(candidate.v2_visible_score_experiment),
+  )
+}
+
 function shouldSkipAiScoreCacheShadowForCandidate(candidate = {}) {
-  return hasDeterministicJdFitAppliedScore(candidate)
+  return hasDeterministicJdFitAppliedScore(candidate) || hasV2VisibleScoreExperimentApplied(candidate)
 }
 
 export function applyDeterministicJdFitScoresForRuntimeTest({
@@ -2035,6 +2043,7 @@ export const __testables = {
   applyDeterministicJdFitScoresForRuntimeTest,
   buildSafeDeterministicJdFitApplyDiagnostic,
   hasDeterministicJdFitAppliedScore,
+  hasV2VisibleScoreExperimentApplied,
   shouldSkipAiScoreCacheShadowForCandidate,
   logAiScoringContractV2Diagnostic,
   applyAiScoringContractV2VisibleScoreExperiment,

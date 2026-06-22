@@ -151,6 +151,24 @@ test('v2 visible score experiment applies high-confidence allowlisted score cons
   assert.equal(logs[0].payload.score_delta, 9.7)
 })
 
+test('v2 visible score experiment applies with analysis allowlist when user is not allowlisted', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    userId: 25,
+    analysisId: 'analysis-allowlisted',
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_ANALYSIS_IDS: 'analysis-allowlisted',
+    },
+  })
+
+  assert.equal(candidate.score, 87.7)
+  assert.equal(candidate.matchScore.score, 87.7)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 87.7)
+  assert.equal(logs[0].payload.allowlist_matched, true)
+  assert.equal(logs[0].payload.applied, true)
+})
+
 test('v2 visible score experiment skips when user is not allowlisted', () => {
   const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
     userId: 25,
@@ -2083,7 +2101,7 @@ test('deterministic JD-fit apply replaces analysis-allowlisted JD-backed scores'
   }
 })
 
-test('AI score-cache shadow gate skips deterministic-applied candidates only', () => {
+test('AI score-cache shadow gate skips deterministic and v2 visible-applied candidates only', () => {
   const aiCandidate = deterministicShadowCandidateFixture()
   const deterministicAppliedCandidate = {
     ...deterministicShadowCandidateFixture(),
@@ -2094,11 +2112,21 @@ test('AI score-cache shadow gate skips deterministic-applied candidates only', (
       scoring_mode: 'jd_fit',
     },
   }
+  const { candidate: v2AppliedCandidate } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate(),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
 
   assert.equal(__testables.hasDeterministicJdFitAppliedScore(aiCandidate), false)
   assert.equal(__testables.hasDeterministicJdFitAppliedScore(deterministicAppliedCandidate), true)
+  assert.equal(__testables.hasV2VisibleScoreExperimentApplied(aiCandidate), false)
+  assert.equal(__testables.hasV2VisibleScoreExperimentApplied(v2AppliedCandidate), true)
   assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(aiCandidate), false)
   assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(deterministicAppliedCandidate), true)
+  assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(v2AppliedCandidate), true)
 })
 
 test('deterministic JD-fit apply leaves no-JD and non-finite deterministic scores unchanged', () => {
