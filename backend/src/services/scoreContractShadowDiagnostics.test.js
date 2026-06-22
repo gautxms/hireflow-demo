@@ -2,7 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildAiScoringContractV2ScoreDeltaDiagnostic,
   buildScoreContractShadowDiagnostic,
+  emitAiScoringContractV2ScoreDeltaDiagnostic,
   emitScoreContractShadowDiagnostic,
   isScoreContractShadowEnabled,
 } from './scoreContractShadowDiagnostics.js'
@@ -213,4 +215,134 @@ test('allowlist and sample rate gate shadow diagnostics', () => {
     { SCORING_CONTRACT_V1_SHADOW: 'true', SCORING_CONTRACT_V1_SHADOW_SAMPLE_RATE: '0' },
     () => 0,
   ), false)
+})
+
+
+test('v2 score delta diagnostic flags visible score lower than v2 by at least seven points', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 82,
+      matchScore: { score: 82 },
+      fit_assessment: { overall_fit_score: 82 },
+      ai_scoring_contract_v2: {
+        weighted_total_score_recomputed: 91.6,
+        has_job_description_context: true,
+      },
+    },
+    parseDiagnostics: {
+      extractionMethod: 'legacy_doc_word_extractor_semantic_text_scoring_experiment',
+      normalizedTextCharCount: 3456,
+    },
+    fileExtension: 'doc',
+  })
+
+  assert.equal(diagnostic.visible_score, 82)
+  assert.equal(diagnostic.v2_weighted_total_score_recomputed, 91.6)
+  assert.equal(diagnostic.score_delta, 9.6)
+  assert.equal(diagnostic.absolute_score_delta, 9.6)
+  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_flagged, true)
+  assert.equal(diagnostic.file_extension, 'doc')
+  assert.equal(diagnostic.extraction_method, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
+  assert.equal(diagnostic.normalizedTextCharCount, 3456)
+  assert.equal(diagnostic.has_job_description_context, true)
+  assert.equal(diagnostic.v2_shadow_present, true)
+})
+
+test('v2 score delta diagnostic does not flag Rahul-aligned shadow score', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 82,
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 81.3 },
+    },
+  })
+
+  assert.equal(diagnostic.score_delta, -0.7)
+  assert.equal(diagnostic.absolute_score_delta, 0.7)
+  assert.equal(diagnostic.score_delta_direction, 'visible_higher_than_v2')
+  assert.equal(diagnostic.score_delta_flagged, false)
+})
+
+test('v2 score delta diagnostic does not flag Vikram-aligned shadow score', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 52,
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 49.4 },
+    },
+  })
+
+  assert.equal(diagnostic.score_delta, -2.6)
+  assert.equal(diagnostic.absolute_score_delta, 2.6)
+  assert.equal(diagnostic.score_delta_direction, 'visible_higher_than_v2')
+  assert.equal(diagnostic.score_delta_flagged, false)
+})
+
+test('v2 score delta diagnostic remains backward compatible when v2 is missing', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: { score: 82 },
+  })
+
+  assert.equal(diagnostic.visible_score, 82)
+  assert.equal(diagnostic.v2_weighted_total_score_recomputed, null)
+  assert.equal(diagnostic.score_delta, null)
+  assert.equal(diagnostic.absolute_score_delta, null)
+  assert.equal(diagnostic.score_delta_direction, 'v2_missing')
+  assert.equal(diagnostic.score_delta_flagged, false)
+  assert.equal(diagnostic.v2_shadow_present, false)
+})
+
+test('v2 score delta diagnostic omits PII and free-form model text', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      name: 'Aisha Menon',
+      email: 'aisha@example.com',
+      phone: '555-0199',
+      filename: 'aisha-resume.doc',
+      originalFilename: 'Aisha Menon Resume.doc',
+      reason: 'Free-form model rationale mentioning Acme Corp',
+      model_reported_anomalies: ['Aisha Menon appears in free text'],
+      score: 82,
+      ai_scoring_contract_v2: {
+        weighted_total_score_recomputed: 91.6,
+        model_reported_anomalies: ['Aisha Menon appears in free text'],
+      },
+    },
+    parseDiagnostics: {
+      originalFilename: 'Aisha Menon Resume.doc',
+      extractionMethod: 'legacy_doc_word_extractor_semantic_text_scoring_experiment',
+    },
+    fileExtension: 'doc',
+  })
+
+  const serialized = JSON.stringify(diagnostic)
+  assert.doesNotMatch(serialized, /Aisha Menon|aisha@example\.com|555-0199|aisha-resume|Acme Corp|free text/i)
+})
+
+test('v2 score delta diagnostic logs only flagged safe fields', () => {
+  const logs = []
+  const unflagged = emitAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: { score: 82, ai_scoring_contract_v2: { weighted_total_score_recomputed: 81.3 } },
+    logger: { info: (...args) => logs.push(args) },
+  })
+  assert.equal(unflagged.score_delta_flagged, false)
+  assert.equal(logs.length, 0)
+
+  const flagged = emitAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      name: 'Sensitive Name',
+      email: 'sensitive@example.com',
+      score: 82,
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 91.6, model_reported_anomalies: ['Sensitive Name'] },
+    },
+    parseDiagnostics: { extractionMethod: 'legacy_doc_word_extractor_semantic_text_scoring_experiment', normalizedTextCharCount: 3456 },
+    fileExtension: 'doc',
+    metadata: { analysisId: 'analysis-1', resumeId: 'resume-1', parseJobId: 'job-1', userId: 'user-1', hasJobDescriptionContext: true },
+    logger: { info: (...args) => logs.push(args) },
+  })
+
+  assert.equal(flagged.score_delta_flagged, true)
+  assert.equal(logs.length, 1)
+  assert.equal(logs[0][0], '[AI Scoring Contract V2] score delta diagnostic')
+  assert.deepEqual(logs[0][1], flagged)
+  assert.doesNotMatch(JSON.stringify(logs[0]), /Sensitive Name|sensitive@example\.com|model_reported_anomalies/)
 })

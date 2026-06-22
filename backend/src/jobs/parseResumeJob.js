@@ -17,7 +17,7 @@ import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
-import { emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
+import { emitAiScoringContractV2ScoreDeltaDiagnostic, emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
 import {
   SCORE_CACHE_SCORING_CONTRACT_VERSION,
   buildScoreCacheEligibilityDiagnostic,
@@ -1542,6 +1542,17 @@ export async function runParse(job) {
     }
     emitScoreContractShadowDiagnostic(candidate, scoringMetadata)
     logAiScoringContractV2Diagnostic(candidate, scoringMetadata, console)
+    emitAiScoringContractV2ScoreDeltaDiagnostic({
+      candidate,
+      parseDiagnostics: preparedResumePayload.diagnostics || null,
+      fileExtension: fileExtension || preparedResumePayload.sourceFormat || null,
+      metadata: {
+        ...scoringMetadata,
+        parseJobId: job.id,
+        hasJobDescriptionContext: Boolean(jobDescriptionContext?.hasContext),
+      },
+      logger: console,
+    })
     emitDeterministicJdFitShadowDiagnostic({
       candidate,
       jobDescriptionContext,
