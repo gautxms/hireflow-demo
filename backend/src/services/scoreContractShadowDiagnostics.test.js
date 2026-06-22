@@ -230,7 +230,7 @@ test('v2 score delta diagnostic uses displayed matchScore before stale candidate
   assert.equal(diagnostic.visible_score, 70)
   assert.equal(diagnostic.score_delta, 8)
   assert.equal(diagnostic.absolute_score_delta, 8)
-  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_direction, 'v2_higher')
   assert.equal(diagnostic.score_delta_flagged, true)
 })
 
@@ -246,7 +246,7 @@ test('v2 score delta diagnostic falls back to fit assessment before candidate sc
   assert.equal(diagnostic.visible_score, 75)
   assert.equal(diagnostic.score_delta, 3)
   assert.equal(diagnostic.absolute_score_delta, 3)
-  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_direction, 'v2_higher')
   assert.equal(diagnostic.score_delta_flagged, false)
 })
 
@@ -261,7 +261,7 @@ test('v2 score delta diagnostic uses candidate score as final visible-score fall
   assert.equal(diagnostic.visible_score, 82)
   assert.equal(diagnostic.score_delta, 9.6)
   assert.equal(diagnostic.absolute_score_delta, 9.6)
-  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_direction, 'v2_higher')
   assert.equal(diagnostic.score_delta_flagged, true)
 })
 
@@ -287,7 +287,7 @@ test('v2 score delta diagnostic flags visible score lower than v2 by at least se
   assert.equal(diagnostic.v2_weighted_total_score_recomputed, 91.6)
   assert.equal(diagnostic.score_delta, 9.6)
   assert.equal(diagnostic.absolute_score_delta, 9.6)
-  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_direction, 'v2_higher')
   assert.equal(diagnostic.score_delta_flagged, true)
   assert.equal(diagnostic.file_extension, 'doc')
   assert.equal(diagnostic.extraction_method, 'legacy_doc_word_extractor_semantic_text_scoring_experiment')
@@ -306,7 +306,7 @@ test('v2 score delta diagnostic does not flag Rahul-aligned shadow score', () =>
 
   assert.equal(diagnostic.score_delta, -0.7)
   assert.equal(diagnostic.absolute_score_delta, 0.7)
-  assert.equal(diagnostic.score_delta_direction, 'visible_higher_than_v2')
+  assert.equal(diagnostic.score_delta_direction, 'v2_lower')
   assert.equal(diagnostic.score_delta_flagged, false)
 })
 
@@ -320,7 +320,7 @@ test('v2 score delta diagnostic does not flag Vikram-aligned shadow score', () =
 
   assert.equal(diagnostic.score_delta, -2.6)
   assert.equal(diagnostic.absolute_score_delta, 2.6)
-  assert.equal(diagnostic.score_delta_direction, 'visible_higher_than_v2')
+  assert.equal(diagnostic.score_delta_direction, 'v2_lower')
   assert.equal(diagnostic.score_delta_flagged, false)
 })
 
@@ -333,7 +333,7 @@ test('v2 score delta diagnostic remains backward compatible when v2 is missing',
   assert.equal(diagnostic.v2_weighted_total_score_recomputed, null)
   assert.equal(diagnostic.score_delta, null)
   assert.equal(diagnostic.absolute_score_delta, null)
-  assert.equal(diagnostic.score_delta_direction, 'v2_missing')
+  assert.equal(diagnostic.delta_direction, 'unknown')
   assert.equal(diagnostic.score_delta_flagged, false)
   assert.equal(diagnostic.v2_shadow_present, false)
 })
@@ -372,7 +372,8 @@ test('v2 score delta diagnostic logs only flagged safe fields', () => {
     logger: { info: (...args) => logs.push(args) },
   })
   assert.equal(unflagged.score_delta_flagged, false)
-  assert.equal(logs.length, 0)
+  assert.equal(logs.length, 1)
+  assert.equal(logs[0][0], '[AiScoringContractV2] visible_vs_shadow_score_delta')
 
   const flagged = emitAiScoringContractV2ScoreDeltaDiagnostic({
     candidate: {
@@ -388,8 +389,57 @@ test('v2 score delta diagnostic logs only flagged safe fields', () => {
   })
 
   assert.equal(flagged.score_delta_flagged, true)
-  assert.equal(logs.length, 1)
-  assert.equal(logs[0][0], '[AI Scoring Contract V2] score delta diagnostic')
-  assert.deepEqual(logs[0][1], flagged)
-  assert.doesNotMatch(JSON.stringify(logs[0]), /Sensitive Name|sensitive@example\.com|model_reported_anomalies/)
+  assert.equal(logs.length, 2)
+  assert.equal(logs[1][0], '[AiScoringContractV2] visible_vs_shadow_score_delta')
+  assert.deepEqual(logs[1][1], flagged)
+  assert.doesNotMatch(JSON.stringify(logs[1]), /Sensitive Name|sensitive@example\.com|model_reported_anomalies/)
+})
+
+test('v2 visible-vs-shadow diagnostic emits delta bucket and direction when both scores exist', () => {
+  const logs = []
+  const diagnostic = emitAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      id: 'cand-1',
+      score: 80,
+      matchScore: { score: 80 },
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 84.4, weighted_total_score: 84, score_confidence: 'high', scoring_anomalies: [] },
+    },
+    parseDiagnostics: { normalizedTextFingerprint: 'safe-text-fp', extractionMethod: 'pdf_text' },
+    metadata: { analysisId: 'analysis-1', resumeId: 'resume-1', parseJobId: 'job-1', originalFilename: 'private-name.pdf', provider: 'anthropic-primary', model: 'claude', promptVersion: 7, compactMode: true },
+    fileExtension: 'pdf',
+    logger: { info: (...args) => logs.push(args) },
+  })
+
+  assert.equal(logs[0][0], '[AiScoringContractV2] visible_vs_shadow_score_delta')
+  assert.equal(diagnostic.visible_score, 80)
+  assert.equal(diagnostic.v2_weighted_total_score_recomputed, 84.4)
+  assert.equal(diagnostic.score_delta, 4.4)
+  assert.equal(diagnostic.delta_bucket, '2_to_5')
+  assert.equal(diagnostic.delta_direction, 'v2_higher')
+  assert.match(diagnostic.original_filename_fingerprint, /^[a-f0-9]{16}$/)
+  assert.doesNotMatch(JSON.stringify(diagnostic), /private-name\.pdf/)
+})
+
+test('v2 diagnostic emits safe skip reason when visible score is missing', () => {
+  const logs = []
+  const diagnostic = emitAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: { ai_scoring_contract_v2: { weighted_total_score_recomputed: 84.4 } },
+    logger: { info: (...args) => logs.push(args) },
+  })
+
+  assert.equal(logs[0][0], '[AiScoringContractV2] visible_vs_shadow_score_delta_skipped')
+  assert.equal(diagnostic.skip_reason, 'missing_visible_score')
+  assert.equal(diagnostic.score_delta, null)
+})
+
+test('v2 diagnostic emits safe skip reason when v2 score is missing', () => {
+  const logs = []
+  const diagnostic = emitAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: { score: 84 },
+    logger: { info: (...args) => logs.push(args) },
+  })
+
+  assert.equal(logs[0][0], '[AiScoringContractV2] visible_vs_shadow_score_delta_skipped')
+  assert.equal(diagnostic.skip_reason, 'missing_v2_score')
+  assert.equal(diagnostic.score_delta, null)
 })

@@ -1,4 +1,7 @@
+import crypto from 'node:crypto'
+
 const SCORING_CONTRACT_VERSION = 'shadow_v1'
+const AI_SCORING_CONTRACT_V2_VERSION = 'v2_shadow'
 
 function normalizeOptionalNumber(value) {
   if (value === null || value === undefined) return null
@@ -15,6 +18,12 @@ function normalizeOptionalString(value) {
   if (value === null || value === undefined) return null
   const normalized = String(value).trim()
   return normalized || null
+}
+
+function fingerprint(value) {
+  const normalized = normalizeOptionalString(value)
+  if (!normalized) return null
+  return crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 16)
 }
 
 function resolveMatchScore(candidate = {}) {
@@ -125,17 +134,38 @@ function resolveV2WeightedTotalScore(candidate = {}) {
   return normalizeOptionalNumber(candidate?.ai_scoring_contract_v2?.weighted_total_score_recomputed)
 }
 
+function resolveV2AiWeightedTotalScore(candidate = {}) {
+  return normalizeOptionalNumber(candidate?.ai_scoring_contract_v2?.weighted_total_score)
+}
+
+function resolveVisibleFitScore(candidate = {}) {
+  return normalizeOptionalNumber(candidate?.fit_assessment?.overall_fit_score ?? candidate?.fitAssessment?.overallFitScore)
+}
+
 function normalizeBoolean(value) {
   if (typeof value === 'boolean') return value
   return Boolean(value)
 }
 
 function resolveDeltaDirection({ visibleScore, v2Score, delta }) {
-  if (v2Score === null) return 'v2_missing'
-  if (visibleScore === null) return 'visible_missing'
-  if (delta > 0) return 'visible_lower_than_v2'
-  if (delta < 0) return 'visible_higher_than_v2'
-  return 'aligned'
+  if (v2Score === null || visibleScore === null || delta === null) return 'unknown'
+  if (delta > 0) return 'v2_higher'
+  if (delta < 0) return 'v2_lower'
+  return 'same'
+}
+
+function resolveDeltaBucket(absoluteScoreDelta) {
+  if (absoluteScoreDelta === null) return null
+  if (absoluteScoreDelta <= 2) return '0_to_2'
+  if (absoluteScoreDelta <= 5) return '2_to_5'
+  if (absoluteScoreDelta <= 10) return '5_to_10'
+  return '10_plus'
+}
+
+function buildSkipReason({ visibleScore, v2Score }) {
+  if (visibleScore === null) return 'missing_visible_score'
+  if (v2Score === null) return 'missing_v2_score'
+  return null
 }
 
 export function buildAiScoringContractV2ScoreDeltaDiagnostic({
@@ -145,33 +175,50 @@ export function buildAiScoringContractV2ScoreDeltaDiagnostic({
   metadata = {},
 } = {}) {
   const visibleScore = resolveVisibleScore(candidate)
+  const visibleMatchScore = resolveMatchScore(candidate)
+  const visibleFitScore = resolveVisibleFitScore(candidate)
   const v2Score = resolveV2WeightedTotalScore(candidate)
-  if (visibleScore === null && v2Score === null) return null
-
+  const v2WeightedTotalFromAi = resolveV2AiWeightedTotalScore(candidate)
   const hasBothScores = visibleScore !== null && v2Score !== null
   const scoreDelta = hasBothScores ? roundToOneDecimal(v2Score - visibleScore) : null
   const absoluteScoreDelta = hasBothScores ? roundToOneDecimal(Math.abs(scoreDelta)) : null
+  const contract = candidate?.ai_scoring_contract_v2 && typeof candidate.ai_scoring_contract_v2 === 'object' && !Array.isArray(candidate.ai_scoring_contract_v2)
+    ? candidate.ai_scoring_contract_v2
+    : null
+  const skipReason = buildSkipReason({ visibleScore, v2Score })
 
   return {
+    event_type: skipReason ? 'skip' : 'delta',
+    skip_reason: skipReason,
     analysis_id: normalizeOptionalString(metadata.analysisId ?? metadata.analysis_id),
     resume_id: normalizeOptionalString(metadata.resumeId ?? metadata.resume_id ?? candidate?.resumeId ?? candidate?.resume_id),
     parse_job_id: normalizeOptionalString(metadata.parseJobId ?? metadata.parse_job_id),
-    user_id: normalizeOptionalString(metadata.userId ?? metadata.user_id),
-    visible_score: visibleScore,
-    v2_weighted_total_score_recomputed: v2Score,
-    score_delta: scoreDelta,
-    absolute_score_delta: absoluteScoreDelta,
-    score_delta_direction: resolveDeltaDirection({ visibleScore, v2Score, delta: scoreDelta }),
-    score_delta_flagged: absoluteScoreDelta !== null && absoluteScoreDelta >= 7,
+    candidate_id: normalizeOptionalString(metadata.candidateId ?? metadata.candidate_id ?? candidate?.id ?? candidate?.candidateId ?? candidate?.candidate_id),
+    original_filename_fingerprint: fingerprint(metadata.originalFilename ?? metadata.original_filename ?? parseDiagnostics?.originalFilename ?? parseDiagnostics?.original_filename ?? candidate?.originalFilename ?? candidate?.original_filename ?? candidate?.filename),
     file_extension: normalizeOptionalString(fileExtension ?? parseDiagnostics?.extension ?? parseDiagnostics?.sourceFormat),
     extraction_method: normalizeOptionalString(parseDiagnostics?.extractionMethod ?? parseDiagnostics?.extraction_method),
+    normalized_text_fingerprint: normalizeOptionalString(parseDiagnostics?.normalizedTextFingerprint ?? parseDiagnostics?.normalized_text_fingerprint),
     normalizedTextCharCount: normalizeOptionalNumber(parseDiagnostics?.normalizedTextCharCount),
-    has_job_description_context: normalizeBoolean(
-      candidate?.ai_scoring_contract_v2?.has_job_description_context
-      ?? metadata.hasJobDescriptionContext
-      ?? metadata.has_job_description_context,
-    ),
-    v2_shadow_present: Boolean(candidate?.ai_scoring_contract_v2 && typeof candidate.ai_scoring_contract_v2 === 'object' && !Array.isArray(candidate.ai_scoring_contract_v2)),
+    visible_score: visibleScore,
+    visible_fit_score: visibleFitScore,
+    visible_match_score: visibleMatchScore,
+    v2_weighted_total_score_recomputed: v2Score,
+    v2_weighted_total_score_from_ai: v2WeightedTotalFromAi,
+    score_delta: scoreDelta,
+    absolute_score_delta: absoluteScoreDelta,
+    delta_bucket: resolveDeltaBucket(absoluteScoreDelta),
+    delta_direction: resolveDeltaDirection({ visibleScore, v2Score, delta: scoreDelta }),
+    score_delta_direction: resolveDeltaDirection({ visibleScore, v2Score, delta: scoreDelta }),
+    score_delta_flagged: absoluteScoreDelta !== null && absoluteScoreDelta >= 7,
+    score_confidence: normalizeOptionalString(contract?.score_confidence),
+    scoring_anomalies: Array.isArray(contract?.scoring_anomalies) ? contract.scoring_anomalies.map(normalizeOptionalString).filter(Boolean).slice(0, 10) : [],
+    has_job_description_context: normalizeBoolean(contract?.has_job_description_context ?? metadata.hasJobDescriptionContext ?? metadata.has_job_description_context),
+    scoring_contract_version: normalizeOptionalString(contract?.scoring_contract_version) || AI_SCORING_CONTRACT_V2_VERSION,
+    provider: normalizeOptionalString(metadata.provider ?? candidate?.provider),
+    model: normalizeOptionalString(metadata.model ?? candidate?.model),
+    prompt_version: normalizeOptionalString(metadata.promptVersion ?? metadata.prompt_version ?? candidate?.promptVersion ?? candidate?.prompt_version),
+    compact_mode: metadata.compactMode ?? metadata.compact_mode ?? null,
+    v2_shadow_present: Boolean(contract),
   }
 }
 
@@ -183,11 +230,15 @@ export function emitAiScoringContractV2ScoreDeltaDiagnostic({
   logger = console,
 } = {}) {
   const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate, parseDiagnostics, fileExtension, metadata })
-  if (!diagnostic?.v2_shadow_present || diagnostic.visible_score === null || !diagnostic.score_delta_flagged) {
-    return diagnostic
+  try {
+    if (diagnostic?.skip_reason) {
+      logger.info?.('[AiScoringContractV2] visible_vs_shadow_score_delta_skipped', diagnostic)
+      return diagnostic
+    }
+    logger.info?.('[AiScoringContractV2] visible_vs_shadow_score_delta', diagnostic)
+  } catch (_) {
+    // Diagnostics must never affect analysis completion.
   }
-
-  logger.info?.('[AI Scoring Contract V2] score delta diagnostic', diagnostic)
   return diagnostic
 }
 

@@ -347,6 +347,11 @@ test('extractJsonWithContext logs safe parse diagnostics without raw response or
       retryMetadata: { attempt: 1, fallback: false },
       analysisId: 'analysis-safe-id',
       resumeId: 'resume-safe-id',
+      parseJobId: 'parse-job-safe-id',
+      originalFilenameFingerprint: 'abc123safe456def',
+      fileExtension: 'pdf',
+      extractionMethod: 'pdf_text_extraction',
+      inputKind: 'extracted_text',
     }),
     /response_format_error::/,
   )
@@ -363,6 +368,13 @@ test('extractJsonWithContext logs safe parse diagnostics without raw response or
   assert.equal(diagnostics.parse_error_message, 'invalid_json')
   assert.equal(diagnostics.completion_status, 'end_turn')
   assert.equal(diagnostics.max_output_tokens, 2200)
+  assert.equal(diagnostics.analysis_id, 'analysis-safe-id')
+  assert.equal(diagnostics.resume_id, 'resume-safe-id')
+  assert.equal(diagnostics.parse_job_id, 'parse-job-safe-id')
+  assert.equal(diagnostics.original_filename_fingerprint, 'abc123safe456def')
+  assert.equal(diagnostics.file_extension, 'pdf')
+  assert.equal(diagnostics.extraction_method, 'pdf_text_extraction')
+  assert.equal(diagnostics.input_kind, 'extracted_text')
   assert.match(diagnostics.error_fingerprint, /^[a-f0-9]{16}$/)
 
   const serialized = JSON.stringify(logs)
@@ -378,6 +390,7 @@ test('extractJsonWithContext logs safe parse diagnostics without raw response or
     'Do not log missing raw requirement',
     'Do not log rationale text',
     'Expected double-quoted property name',
+    'resume.pdf',
     'Unexpected token',
   ]) {
     assert.equal(serialized.includes(forbidden), false, `expected logs not to include ${forbidden}`)
