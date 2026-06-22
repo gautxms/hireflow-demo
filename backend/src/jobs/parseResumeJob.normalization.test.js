@@ -680,6 +680,10 @@ test('runParse score delta diagnostics use Anthropic token-ladder retry metadata
   assert.ok(scoreDeltaLog)
   assert.equal(scoreDeltaLog[1].retry_count, 2)
   assert.equal(scoreDeltaLog[1].final_attempt_index, 3)
+  assert.equal(scoreDeltaLog[1].token_budget_attempt_count, 3)
+  assert.equal(scoreDeltaLog[1].token_budget_retry_count, 2)
+  assert.equal(scoreDeltaLog[1].final_token_budget_max_output_tokens, 4200)
+  assert.equal(scoreDeltaLog[1].final_token_budget_mode, 'bare_minimum')
   assert.equal(scoreDeltaLog[1].score_delta, 7.6)
 })
 

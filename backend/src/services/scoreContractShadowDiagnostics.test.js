@@ -237,19 +237,19 @@ test('v2 score delta diagnostic uses displayed matchScore before stale candidate
 test('v2 score delta diagnostic matches results route by using candidate score before fit assessment', () => {
   const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
     candidate: {
-      score: 90,
-      fit_assessment: { overall_fit_score: 75 },
-      ai_scoring_contract_v2: { weighted_total_score_recomputed: 78 },
+      score: 88,
+      fit_assessment: { overall_fit_score: 72 },
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 85.6 },
     },
   })
 
-  assert.equal(diagnostic.visible_score, 90)
-  assert.equal(diagnostic.visible_fit_assessment_score, 75)
+  assert.equal(diagnostic.visible_score, 88)
   assert.equal(diagnostic.visible_score_source, 'candidate.score')
-  assert.equal(diagnostic.score_delta, -12)
-  assert.equal(diagnostic.absolute_score_delta, 12)
+  assert.equal(diagnostic.visible_fit_assessment_score, 72)
+  assert.equal(diagnostic.score_delta, -2.4)
+  assert.equal(diagnostic.absolute_score_delta, 2.4)
   assert.equal(diagnostic.score_delta_direction, 'visible_higher_than_v2')
-  assert.equal(diagnostic.score_delta_flagged, true)
+  assert.equal(diagnostic.score_delta_flagged, false)
 })
 
 test('v2 score delta diagnostic uses candidate score as final visible-score fallback', () => {
@@ -520,6 +520,27 @@ test('v2 score delta diagnostic does not emit main event with null score_delta',
   assert.equal(logs.length, 2)
   assert.equal(logs[0][0], '[AiScoringContractV2] visible_vs_shadow_score_delta_skipped')
   assert.equal(logs[1][0], '[AiScoringContractV2] visible_vs_shadow_score_delta_skipped')
+})
+
+
+test('v2 score delta diagnostic emits safe token-budget retry metadata', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 88,
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 85.6 },
+    },
+    metadata: {
+      tokenBudgetAttemptCount: 2,
+      tokenBudgetRetryCount: 1,
+      finalTokenBudgetMaxOutputTokens: 3600,
+      finalTokenBudgetMode: 'truncation_safe',
+    },
+  })
+
+  assert.equal(diagnostic.token_budget_attempt_count, 2)
+  assert.equal(diagnostic.token_budget_retry_count, 1)
+  assert.equal(diagnostic.final_token_budget_max_output_tokens, 3600)
+  assert.equal(diagnostic.final_token_budget_mode, 'truncation_safe')
 })
 
 test('v2 score delta diagnostic treats Vikram drift examples as expected', () => {
