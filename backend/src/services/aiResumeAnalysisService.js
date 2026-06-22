@@ -22,8 +22,8 @@ const OPENAI_MODEL_CAPABILITIES = {
 const OPENAI_OUTPUT_TOKEN_LADDER = [2000, 4000, 8000]
 const TOKEN_BUDGET_CONFIG = {
   anthropic: {
-    primary: { standard: [2200, 3200, 4096], compact: [1400, 2200, 3200] },
-    escalation: { standard: [3200, 4096, 6400], compact: [2200, 3200, 4096] },
+    primary: { standard: [2600, 3600, 4096], compact: [1800, 2600, 3600] },
+    escalation: { standard: [3600, 4096, 6400], compact: [2600, 3600, 4096] },
     providerMaxOutputTokens: 6400,
   },
   openai: {
@@ -104,6 +104,11 @@ function buildSafeParseDiagnostics(rawResponse, {
   retryMetadata = null,
   analysisId = null,
   resumeId = null,
+  parseJobId = null,
+  originalFilenameFingerprint = null,
+  fileExtension = null,
+  extractionMethod = null,
+  inputKind = null,
 } = {}) {
   const parseErrorType = parseError?.name || 'SyntaxError'
   const parseErrorCode = 'invalid_json'
@@ -124,6 +129,11 @@ function buildSafeParseDiagnostics(rawResponse, {
     retry: retryMetadata || null,
     analysis_id: analysisId || null,
     resume_id: resumeId || null,
+    parse_job_id: parseJobId || null,
+    original_filename_fingerprint: originalFilenameFingerprint || null,
+    file_extension: fileExtension || null,
+    extraction_method: extractionMethod || null,
+    input_kind: inputKind || null,
   }
 }
 
@@ -702,7 +712,7 @@ export function safeParseAIResponse(rawResponse, context = {}) {
   }
 }
 
-export function extractJsonWithContext(text = '', { provider = null, model = null, promptVersion = null, maxOutputTokens = null, completionStatus = null, stopReason = null, retryMetadata = null, analysisId = null, resumeId = null } = {}) {
+export function extractJsonWithContext(text = '', { provider = null, model = null, promptVersion = null, maxOutputTokens = null, completionStatus = null, stopReason = null, retryMetadata = null, analysisId = null, resumeId = null, parseJobId = null, originalFilenameFingerprint = null, fileExtension = null, extractionMethod = null, inputKind = null } = {}) {
   const trimmed = String(text || '').trim()
   if (!trimmed) {
     throw createProviderResponseFormatError({
@@ -749,13 +759,13 @@ export function extractJsonWithContext(text = '', { provider = null, model = nul
   let lastError = null
   for (const candidate of uniqueCandidates) {
     try {
-      return safeParseAIResponse(candidate, { provider, model, promptVersion, maxOutputTokens, completionStatus, stopReason, retryMetadata, analysisId, resumeId })
+      return safeParseAIResponse(candidate, { provider, model, promptVersion, maxOutputTokens, completionStatus, stopReason, retryMetadata, analysisId, resumeId, parseJobId, originalFilenameFingerprint, fileExtension, extractionMethod, inputKind })
     } catch (error) {
       lastError = error
     }
   }
 
-  const diagnostics = lastError?.safeParseDiagnostics || buildSafeParseDiagnostics(trimmed, { provider, model, promptVersion, maxOutputTokens, completionStatus, stopReason, retryMetadata, analysisId, resumeId, parseError: lastError })
+  const diagnostics = lastError?.safeParseDiagnostics || buildSafeParseDiagnostics(trimmed, { provider, model, promptVersion, maxOutputTokens, completionStatus, stopReason, retryMetadata, analysisId, resumeId, parseJobId, originalFilenameFingerprint, fileExtension, extractionMethod, inputKind, parseError: lastError })
   console.warn('[AI Parse] Provider JSON parse failed:', diagnostics)
   logRawAiResponseForLocalDebug('[AI Parse] Raw provider response before parse failure', trimmed)
   throw createProviderResponseFormatError({
@@ -1329,6 +1339,7 @@ export async function analyzeWithAnthropic(
     anthropicClientFactory = null,
     compactMode = false,
     promptTextOverride = null,
+    diagnosticsContext = {},
   } = {},
 ) {
   if (!apiKey) {
@@ -1346,6 +1357,15 @@ export async function analyzeWithAnthropic(
   const systemPromptText = promptTextOverride || buildPromptWithJobDescription(systemPromptConfig?.systemPrompt, jobDescriptionContext)
   const prompt = `${systemPromptText}\n\n${baseOutputInstructions}`
   const promptVersion = systemPromptConfig?.promptVersion || 1
+  const parseContext = {
+    analysisId: diagnosticsContext?.analysisId || null,
+    resumeId: diagnosticsContext?.resumeId || null,
+    parseJobId: diagnosticsContext?.parseJobId || null,
+    originalFilenameFingerprint: diagnosticsContext?.originalFilenameFingerprint || null,
+    fileExtension: diagnosticsContext?.fileExtension || null,
+    extractionMethod: diagnosticsContext?.extractionMethod || null,
+    inputKind: diagnosticsContext?.inputKind || null,
+  }
   const promptIsDefaultFallback = Boolean(systemPromptConfig?.isDefaultFallback)
   const promptMetrics = buildPromptMetrics({
     prompt,
@@ -1431,7 +1451,7 @@ ${requestPrompt}`,
 
     try {
       logRawAiResponseForLocalDebug('[AI][Anthropic] Raw response before parsing', textContent.text)
-      result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model, promptVersion, maxOutputTokens: maxTokens, completionStatus: response?.stop_reason || null, stopReason: response?.stop_reason || null, retryMetadata: { token_budget_attempt_index: index + 1, token_budget_attempt_count: tokenLadder.length } })
+      result = extractJsonWithContext(textContent.text, { provider: 'anthropic', model, promptVersion, maxOutputTokens: maxTokens, completionStatus: response?.stop_reason || null, stopReason: response?.stop_reason || null, retryMetadata: { token_budget_attempt_index: index + 1, token_budget_attempt_count: tokenLadder.length }, ...parseContext })
       break
     } catch (error) {
       const parseFailed = String(error?.message || '').includes('response_format_error::')
@@ -1509,6 +1529,7 @@ export async function analyzeWithOpenAI(
     fetchImpl = fetch,
     compactMode = false,
     promptTextOverride = null,
+    diagnosticsContext = {},
   } = {},
 ) {
   if (!apiKey) {
@@ -1658,7 +1679,7 @@ ${promptText}`,
 
   logRawAiResponseForLocalDebug('[AI][OpenAI] Raw response before parsing', outputText)
   const result = normalizeCompactAnalysis(
-    extractJsonWithContext(outputText, { provider: 'openai', model, promptVersion, maxOutputTokens: attemptedMaxOutputTokens, completionStatus: responseStatus || 'completed', stopReason: incompleteReason || null, retryMetadata: { token_budget_attempt_count: attemptedTokenBudgets.length } }),
+    extractJsonWithContext(outputText, { provider: 'openai', model, promptVersion, maxOutputTokens: attemptedMaxOutputTokens, completionStatus: responseStatus || 'completed', stopReason: incompleteReason || null, retryMetadata: { token_budget_attempt_count: attemptedTokenBudgets.length }, ...diagnosticsContext }),
     {
       minimalMode: compactMode,
       aiScoringContractV2Expected: false,

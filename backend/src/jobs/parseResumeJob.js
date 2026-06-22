@@ -36,6 +36,12 @@ let getScoreCacheEntryOverrideForTests = null
 let scoreCandidateDeterministicallyOverrideForTests = null
 let runAiScoringContractV2ShadowAnalysisOverrideForTests = null
 
+function safeFingerprint(value) {
+  const normalized = String(value || '').trim()
+  if (!normalized) return null
+  return createHash('sha256').update(normalized).digest('hex').slice(0, 16)
+}
+
 function getAnalyzeResumeWithConfiguredFallback() {
   return analyzeResumeWithConfiguredFallbackOverrideForTests || analyzeResumeWithConfiguredFallback
 }
@@ -1461,6 +1467,13 @@ export async function runParse(job) {
           observeOnlyEligibility: preparedResumePayload.diagnostics?.observeOnlyEligibility || null,
           pdfCanonicalExtractionObserveOnly: preparedResumePayload.diagnostics?.pdfCanonicalExtractionObserveOnly || null,
           pdfCanonicalTextScoringExperiment: preparedResumePayload.diagnostics?.pdfCanonicalTextScoringExperiment || null,
+          analysisId: analysisId || null,
+          resumeId,
+          parseJobId: job.id,
+          originalFilenameFingerprint: safeFingerprint(originalFilename || analysisFilename || filename),
+          fileExtension: fileExtension || preparedResumePayload.sourceFormat || null,
+          extractionMethod: preparedResumePayload.diagnostics?.extractionMethod || null,
+          inputKind: preparedResumePayload.inputKind || null,
         },
       },
     )
@@ -1550,6 +1563,11 @@ export async function runParse(job) {
         ...scoringMetadata,
         parseJobId: job.id,
         hasJobDescriptionContext: Boolean(jobDescriptionContext?.hasContext),
+        originalFilename: originalFilename || analysisFilename || filename,
+        provider: scoreContractShadowMetadata.provider,
+        model: scoreContractShadowMetadata.model,
+        promptVersion: scoreContractShadowMetadata.promptVersion,
+        compactMode: scoreContractShadowMetadata.mode === 'minimal',
       },
       logger: console,
     })
