@@ -848,7 +848,43 @@ async function checkBudgetAlert(estimatedCost) {
   }
 }
 
-async function trackTokens(usage = {}, resumeId = 'unknown') {
+function isTrustedInternalResumeId(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim())
+}
+
+function extractSafeFileExtension(value) {
+  const match = String(value || '').toLowerCase().match(/\.([a-z0-9]{1,8})$/)
+  return match ? match[1] : null
+}
+
+function buildSafeTokenLogContext(identifierOrContext = 'unknown') {
+  const context = identifierOrContext && typeof identifierOrContext === 'object'
+    ? identifierOrContext
+    : { resumeIdentifier: identifierOrContext }
+  const candidateResumeId = context.resumeId ?? context.resume_id ?? null
+  const filenameLikeIdentifier = context.resumeIdentifier ?? context.filename ?? null
+  const safeContext = {
+    analysis_id: context.analysisId || context.analysis_id || null,
+    parse_job_id: context.parseJobId || context.parse_job_id || null,
+    original_filename_fingerprint: context.originalFilenameFingerprint || context.original_filename_fingerprint || null,
+    display_filename_fingerprint: context.displayFilenameFingerprint || context.display_filename_fingerprint || null,
+    file_extension: context.fileExtension || context.file_extension || extractSafeFileExtension(filenameLikeIdentifier),
+    provider: context.provider || null,
+    model: context.model || null,
+  }
+
+  if (isTrustedInternalResumeId(candidateResumeId)) {
+    safeContext.resume_id = String(candidateResumeId).trim()
+  } else if (filenameLikeIdentifier) {
+    safeContext.resume_identifier_fingerprint = buildContentFingerprint(filenameLikeIdentifier)
+  } else {
+    safeContext.resume_identifier_fingerprint = buildContentFingerprint('unknown')
+  }
+
+  return safeContext
+}
+
+async function trackTokens(usage = {}, tokenLogContext = 'unknown') {
   claudeTokensUsed.input += usage.input_tokens || 0
   claudeTokensUsed.output += usage.output_tokens || 0
   claudeTokensUsed.totalRequests += 1
@@ -857,9 +893,10 @@ async function trackTokens(usage = {}, resumeId = 'unknown') {
   const outputCost = ((usage.output_tokens || 0) / 1000) * 0.015
   const totalCost = inputCost + outputCost
   const totalCostThisSession = (claudeTokensUsed.input / 1000) * 0.003 + (claudeTokensUsed.output / 1000) * 0.015
+  const safeLogContext = buildSafeTokenLogContext(tokenLogContext)
 
   console.log('[Claude] Tokens:', {
-    resumeId,
+    ...safeLogContext,
     input: usage.input_tokens || 0,
     output: usage.output_tokens || 0,
     estimatedCost: `$${totalCost.toFixed(4)}`,
@@ -867,7 +904,7 @@ async function trackTokens(usage = {}, resumeId = 'unknown') {
   })
 
   await logTelemetryToDatabase('claude.token_usage', {
-    resumeId,
+    ...safeLogContext,
     inputTokens: usage.input_tokens || 0,
     outputTokens: usage.output_tokens || 0,
     estimatedCost: totalCost,
@@ -1444,7 +1481,7 @@ ${requestPrompt}`,
 
     const tokenUsage = normalizeUsageMetrics(response?.usage, 'anthropic')
     if (tokenUsage.usageAvailable) {
-      await trackTokens(response.usage, filename)
+      await trackTokens(response.usage, { ...parseContext, resumeIdentifier: filename, provider: 'anthropic', model })
     }
 
     const textContent = (response.content || []).find((item) => item.type === 'text')
@@ -2183,4 +2220,4 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 export const analyzeResumeWithClaude = analyzeWithAnthropic
 
 
-export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, isAiScoringContractV2ShadowEnabled, buildAiScoringContractV2SeparateShadowPrompt, getJobDescriptionMinimumExperienceYears, getCandidateExperienceYears, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }
+export const __testables = { buildSafeTokenLogContext, trackTokens, normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, isAiScoringContractV2ShadowEnabled, buildAiScoringContractV2SeparateShadowPrompt, getJobDescriptionMinimumExperienceYears, getCandidateExperienceYears, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }
