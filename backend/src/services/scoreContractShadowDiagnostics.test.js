@@ -217,6 +217,53 @@ test('allowlist and sample rate gate shadow diagnostics', () => {
   ), false)
 })
 
+test('v2 score delta diagnostic uses displayed matchScore before stale candidate score', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 90,
+      matchScore: { score: 70 },
+      fit_assessment: { overall_fit_score: 75 },
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 78 },
+    },
+  })
+
+  assert.equal(diagnostic.visible_score, 70)
+  assert.equal(diagnostic.score_delta, 8)
+  assert.equal(diagnostic.absolute_score_delta, 8)
+  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_flagged, true)
+})
+
+test('v2 score delta diagnostic falls back to fit assessment before candidate score', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 90,
+      fit_assessment: { overall_fit_score: 75 },
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 78 },
+    },
+  })
+
+  assert.equal(diagnostic.visible_score, 75)
+  assert.equal(diagnostic.score_delta, 3)
+  assert.equal(diagnostic.absolute_score_delta, 3)
+  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_flagged, false)
+})
+
+test('v2 score delta diagnostic uses candidate score as final visible-score fallback', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 82,
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 91.6 },
+    },
+  })
+
+  assert.equal(diagnostic.visible_score, 82)
+  assert.equal(diagnostic.score_delta, 9.6)
+  assert.equal(diagnostic.absolute_score_delta, 9.6)
+  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
+  assert.equal(diagnostic.score_delta_flagged, true)
+})
 
 test('v2 score delta diagnostic flags visible score lower than v2 by at least seven points', () => {
   const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({

@@ -109,16 +109,16 @@ export function buildScoreContractShadowDiagnostic(candidate = {}, metadata = {}
 }
 
 function resolveVisibleScore(candidate = {}) {
-  const candidateScore = normalizeOptionalNumber(candidate?.score)
-  if (candidateScore !== null) return candidateScore
-
   const matchScore = resolveMatchScore(candidate)
   if (matchScore !== null) return matchScore
 
-  return normalizeOptionalNumber(
+  const fitAssessmentScore = normalizeOptionalNumber(
     candidate?.fit_assessment?.overall_fit_score
     ?? candidate?.fitAssessment?.overallFitScore,
   )
+  if (fitAssessmentScore !== null) return fitAssessmentScore
+
+  return normalizeOptionalNumber(candidate?.score)
 }
 
 function resolveV2WeightedTotalScore(candidate = {}) {
