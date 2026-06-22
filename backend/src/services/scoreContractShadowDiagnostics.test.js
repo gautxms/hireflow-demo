@@ -234,7 +234,7 @@ test('v2 score delta diagnostic uses displayed matchScore before stale candidate
   assert.equal(diagnostic.score_delta_flagged, true)
 })
 
-test('v2 score delta diagnostic falls back to fit assessment before candidate score', () => {
+test('v2 score delta diagnostic matches results route by using candidate score before fit assessment', () => {
   const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
     candidate: {
       score: 90,
@@ -243,11 +243,13 @@ test('v2 score delta diagnostic falls back to fit assessment before candidate sc
     },
   })
 
-  assert.equal(diagnostic.visible_score, 75)
-  assert.equal(diagnostic.score_delta, 3)
-  assert.equal(diagnostic.absolute_score_delta, 3)
-  assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
-  assert.equal(diagnostic.score_delta_flagged, false)
+  assert.equal(diagnostic.visible_score, 90)
+  assert.equal(diagnostic.visible_fit_assessment_score, 75)
+  assert.equal(diagnostic.visible_score_source, 'candidate.score')
+  assert.equal(diagnostic.score_delta, -12)
+  assert.equal(diagnostic.absolute_score_delta, 12)
+  assert.equal(diagnostic.score_delta_direction, 'visible_higher_than_v2')
+  assert.equal(diagnostic.score_delta_flagged, true)
 })
 
 test('v2 score delta diagnostic uses candidate score as final visible-score fallback', () => {

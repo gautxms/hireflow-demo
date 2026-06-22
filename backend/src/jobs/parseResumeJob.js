@@ -1546,6 +1546,15 @@ export async function runParse(job) {
     }
   }
 
+  const finalAiAttempt = aiResponse?.attempts?.at?.(-1) || null
+  const tokenBudgetAttempts = Array.isArray(finalAiAttempt?.tokenBudgetAttempts) ? finalAiAttempt.tokenBudgetAttempts : []
+  const retryCount = tokenBudgetAttempts.length > 0
+    ? Math.max(0, tokenBudgetAttempts.length - 1)
+    : Math.max(0, (aiResponse?.attempts?.length || 1) - 1)
+  const finalAttemptIndex = tokenBudgetAttempts.length > 0
+    ? tokenBudgetAttempts.length
+    : (finalAiAttempt?.attemptNumber ?? aiResponse?.attempts?.length ?? null)
+
   for (const candidate of finalCandidates) {
     const scoringMetadata = {
       userId: job.data.userId ?? null,
@@ -1568,8 +1577,8 @@ export async function runParse(job) {
         model: scoreContractShadowMetadata.model,
         promptVersion: scoreContractShadowMetadata.promptVersion,
         compactMode: scoreContractShadowMetadata.mode === 'minimal',
-        retryCount: Math.max(0, (aiResponse?.attempts?.length || 1) - 1),
-        finalAttemptIndex: aiResponse?.attempts?.at?.(-1)?.attemptNumber ?? aiResponse?.attempts?.length ?? null,
+        retryCount,
+        finalAttemptIndex,
       },
       logger: console,
     })

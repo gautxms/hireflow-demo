@@ -626,6 +626,63 @@ function createParseJob({ id, resumeId, filename, mimeType, originalMimeType, fi
 }
 
 
+test('runParse score delta diagnostics use Anthropic token-ladder retry metadata', async (t) => {
+  const infoLogs = []
+  t.mock.method(console, 'info', (...args) => infoLogs.push(args))
+  t.mock.method(pool, 'query', async (sql) => {
+    if (String(sql).includes('FROM analyses')) {
+      return { rows: [{ id: 'analysis-same-base-multiformat', status: 'processing' }], rowCount: 1 }
+    }
+    if (String(sql).includes('FROM integration_webhooks') || String(sql).includes('FROM job_descriptions')) {
+      return { rows: [], rowCount: 0 }
+    }
+    return { rows: [], rowCount: 1 }
+  })
+
+  __setParseResumeJobTestOverrides({
+    analyzeResumeWithConfiguredFallback: async () => ({
+      result: {
+        candidates: [{
+          id: 'candidate-token-ladder',
+          score: 78,
+          matchScore: { score: 78 },
+          ai_scoring_contract_v2: { weighted_total_score_recomputed: 85.6 },
+        }],
+      },
+      provider: 'anthropic-primary',
+      model: 'mock-model',
+      attempts: [{
+        success: true,
+        provider: 'anthropic-primary',
+        model: 'mock-model',
+        attemptNumber: 1,
+        tokenBudgetAttempts: [
+          { maxTokens: 2200, mode: 'compact' },
+          { maxTokens: 3200, mode: 'truncation_safe' },
+          { maxTokens: 4200, mode: 'bare_minimum' },
+        ],
+      }],
+    }),
+    cacheJobResult: async () => {},
+  })
+
+  await __testables.runParse(createParseJob({
+    id: 'parse-token-ladder-diagnostics',
+    resumeId: 'resume-token-ladder-diagnostics',
+    filename: 'token-ladder.txt',
+    mimeType: 'text/plain',
+    originalMimeType: 'text/plain',
+    fileExtension: 'txt',
+    fileBuffer: Buffer.from('token ladder diagnostic resume'),
+  }))
+
+  const scoreDeltaLog = infoLogs.find(([eventName]) => eventName === '[AiScoringContractV2] visible_vs_shadow_score_delta')
+  assert.ok(scoreDeltaLog)
+  assert.equal(scoreDeltaLog[1].retry_count, 2)
+  assert.equal(scoreDeltaLog[1].final_attempt_index, 3)
+  assert.equal(scoreDeltaLog[1].score_delta, 7.6)
+})
+
 test('runParse skips duplicate PDF observe-only parsing for allowlisted and sampled PDFs', async (t) => {
   for (const scenario of [
     {

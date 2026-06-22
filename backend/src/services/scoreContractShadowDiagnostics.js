@@ -121,12 +121,6 @@ function resolveVisibleScore(candidate = {}) {
   const matchScore = resolveMatchScore(candidate)
   if (matchScore !== null) return { value: matchScore, source: 'matchScore.score' }
 
-  const fitAssessmentScore = normalizeOptionalNumber(
-    candidate?.fit_assessment?.overall_fit_score
-    ?? candidate?.fitAssessment?.overallFitScore,
-  )
-  if (fitAssessmentScore !== null) return { value: fitAssessmentScore, source: 'fit_assessment.overall_fit_score' }
-
   const candidateScore = normalizeOptionalNumber(candidate?.score)
   if (candidateScore !== null) return { value: candidateScore, source: 'candidate.score' }
 
