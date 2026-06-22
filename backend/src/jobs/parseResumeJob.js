@@ -1568,6 +1568,8 @@ export async function runParse(job) {
         model: scoreContractShadowMetadata.model,
         promptVersion: scoreContractShadowMetadata.promptVersion,
         compactMode: scoreContractShadowMetadata.mode === 'minimal',
+        retryCount: Math.max(0, (aiResponse?.attempts?.length || 1) - 1),
+        finalAttemptIndex: aiResponse?.attempts?.at?.(-1)?.attemptNumber ?? aiResponse?.attempts?.length ?? null,
       },
       logger: console,
     })
