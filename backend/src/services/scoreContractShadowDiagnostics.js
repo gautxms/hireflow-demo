@@ -108,6 +108,89 @@ export function buildScoreContractShadowDiagnostic(candidate = {}, metadata = {}
   }
 }
 
+function resolveVisibleScore(candidate = {}) {
+  const matchScore = resolveMatchScore(candidate)
+  if (matchScore !== null) return matchScore
+
+  const fitAssessmentScore = normalizeOptionalNumber(
+    candidate?.fit_assessment?.overall_fit_score
+    ?? candidate?.fitAssessment?.overallFitScore,
+  )
+  if (fitAssessmentScore !== null) return fitAssessmentScore
+
+  return normalizeOptionalNumber(candidate?.score)
+}
+
+function resolveV2WeightedTotalScore(candidate = {}) {
+  return normalizeOptionalNumber(candidate?.ai_scoring_contract_v2?.weighted_total_score_recomputed)
+}
+
+function normalizeBoolean(value) {
+  if (typeof value === 'boolean') return value
+  return Boolean(value)
+}
+
+function resolveDeltaDirection({ visibleScore, v2Score, delta }) {
+  if (v2Score === null) return 'v2_missing'
+  if (visibleScore === null) return 'visible_missing'
+  if (delta > 0) return 'visible_lower_than_v2'
+  if (delta < 0) return 'visible_higher_than_v2'
+  return 'aligned'
+}
+
+export function buildAiScoringContractV2ScoreDeltaDiagnostic({
+  candidate = {},
+  parseDiagnostics = {},
+  fileExtension = null,
+  metadata = {},
+} = {}) {
+  const visibleScore = resolveVisibleScore(candidate)
+  const v2Score = resolveV2WeightedTotalScore(candidate)
+  if (visibleScore === null && v2Score === null) return null
+
+  const hasBothScores = visibleScore !== null && v2Score !== null
+  const scoreDelta = hasBothScores ? roundToOneDecimal(v2Score - visibleScore) : null
+  const absoluteScoreDelta = hasBothScores ? roundToOneDecimal(Math.abs(scoreDelta)) : null
+
+  return {
+    analysis_id: normalizeOptionalString(metadata.analysisId ?? metadata.analysis_id),
+    resume_id: normalizeOptionalString(metadata.resumeId ?? metadata.resume_id ?? candidate?.resumeId ?? candidate?.resume_id),
+    parse_job_id: normalizeOptionalString(metadata.parseJobId ?? metadata.parse_job_id),
+    user_id: normalizeOptionalString(metadata.userId ?? metadata.user_id),
+    visible_score: visibleScore,
+    v2_weighted_total_score_recomputed: v2Score,
+    score_delta: scoreDelta,
+    absolute_score_delta: absoluteScoreDelta,
+    score_delta_direction: resolveDeltaDirection({ visibleScore, v2Score, delta: scoreDelta }),
+    score_delta_flagged: absoluteScoreDelta !== null && absoluteScoreDelta >= 7,
+    file_extension: normalizeOptionalString(fileExtension ?? parseDiagnostics?.extension ?? parseDiagnostics?.sourceFormat),
+    extraction_method: normalizeOptionalString(parseDiagnostics?.extractionMethod ?? parseDiagnostics?.extraction_method),
+    normalizedTextCharCount: normalizeOptionalNumber(parseDiagnostics?.normalizedTextCharCount),
+    has_job_description_context: normalizeBoolean(
+      candidate?.ai_scoring_contract_v2?.has_job_description_context
+      ?? metadata.hasJobDescriptionContext
+      ?? metadata.has_job_description_context,
+    ),
+    v2_shadow_present: Boolean(candidate?.ai_scoring_contract_v2 && typeof candidate.ai_scoring_contract_v2 === 'object' && !Array.isArray(candidate.ai_scoring_contract_v2)),
+  }
+}
+
+export function emitAiScoringContractV2ScoreDeltaDiagnostic({
+  candidate = {},
+  parseDiagnostics = {},
+  fileExtension = null,
+  metadata = {},
+  logger = console,
+} = {}) {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate, parseDiagnostics, fileExtension, metadata })
+  if (!diagnostic?.v2_shadow_present || diagnostic.visible_score === null || !diagnostic.score_delta_flagged) {
+    return diagnostic
+  }
+
+  logger.info?.('[AI Scoring Contract V2] score delta diagnostic', diagnostic)
+  return diagnostic
+}
+
 function parseAllowlist(rawValue) {
   return String(rawValue || '')
     .split(',')
