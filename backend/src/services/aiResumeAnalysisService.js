@@ -188,6 +188,9 @@ const AI_SCORING_CONTRACT_V2_SAFE_ANOMALY_CODES = Object.freeze(new Set([
   ]),
   'weighted_total_score_non_numeric',
   'weighted_total_score_out_of_range_clamped',
+  'below_minimum_experience_relevant_experience_capped',
+  'below_minimum_experience_seniority_capped',
+  'below_minimum_experience_weighted_total_capped',
 ]))
 
 function roundScoringContractScore(value) {
@@ -205,6 +208,43 @@ function normalizeScoringContractScore(value, fieldName, anomalies) {
     anomalies.add(`${fieldName}_out_of_range_clamped`)
   }
   return roundScoringContractScore(Math.max(0, Math.min(100, numeric)))
+}
+
+function extractFirstFiniteNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    const match = String(value).match(/-?\d+(?:\.\d+)?/)
+    if (!match) continue
+    const numeric = Number(match[0])
+    if (Number.isFinite(numeric)) return numeric
+  }
+  return null
+}
+
+function getJobDescriptionMinimumExperienceYears(jobDescriptionContext = null) {
+  const jd = jobDescriptionContext && typeof jobDescriptionContext === 'object' ? jobDescriptionContext : {}
+  return extractFirstFiniteNumber(
+    jd.minExperienceYears,
+    jd.minimumExperienceYears,
+    jd.min_experience_years,
+    jd.minimum_experience_years,
+    jd.experienceMin,
+    jd.minExperience,
+    jd.experienceYears,
+    jd.experience_years,
+  )
+}
+
+function getCandidateExperienceYears(candidate = null) {
+  const value = candidate && typeof candidate === 'object' ? candidate : {}
+  return extractFirstFiniteNumber(
+    value.years_experience,
+    value.experience_years,
+    value.total_experience_years,
+    value.totalYearsExperience,
+    value.total_experience,
+  )
 }
 
 function recomputeAiScoringContractV2Total(normalized = {}) {
@@ -292,7 +332,29 @@ export function normalizeAiScoringContractV2(value, options = {}) {
     anomalies.add('scoring_contract_version_mismatch')
   }
 
+  const candidateExperienceYears = getCandidateExperienceYears(options?.candidate)
+  const minimumExperienceYears = getJobDescriptionMinimumExperienceYears(options?.jobDescriptionContext)
+  const belowMinimumExperience = forceHasJobDescriptionContext
+    && Number.isFinite(candidateExperienceYears)
+    && Number.isFinite(minimumExperienceYears)
+    && candidateExperienceYears < minimumExperienceYears
+
+  if (belowMinimumExperience) {
+    if (normalized.relevant_experience_score !== null && normalized.relevant_experience_score > 45) {
+      normalized.relevant_experience_score = 45
+      anomalies.add('below_minimum_experience_relevant_experience_capped')
+    }
+    if (normalized.seniority_progression_score !== null && normalized.seniority_progression_score > 50) {
+      normalized.seniority_progression_score = 50
+      anomalies.add('below_minimum_experience_seniority_capped')
+    }
+  }
+
   normalized.weighted_total_score_recomputed = recomputeAiScoringContractV2Total(normalized)
+  if (belowMinimumExperience && normalized.weighted_total_score_recomputed !== null && normalized.weighted_total_score_recomputed > 55) {
+    normalized.weighted_total_score_recomputed = 55
+    anomalies.add('below_minimum_experience_weighted_total_capped')
+  }
   if (normalized.weighted_total_score_recomputed === null && value?.weighted_total_score_recomputed !== undefined) {
     normalized.weighted_total_score_recomputed = normalizeScoringContractScore(
       value.weighted_total_score_recomputed,
@@ -1639,6 +1701,8 @@ function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescripti
     'Score the resume against the Job Description on a 0-100 scale using these weights: skills_match_score 40%, relevant_experience_score 30%, education_relevance_score 15%, seniority_progression_score 15%.',
     'Compute weighted_total_score = skills_match_score*0.40 + relevant_experience_score*0.30 + education_relevance_score*0.15 + seniority_progression_score*0.15.',
     'Use 0-100 values only; do not use 0-10 values.',
+    'Experience-floor calibration: relevant_experience_score must strongly reflect the required minimum years in the JD. If the resume shows fewer years than the JD minimum, relevant_experience_score should usually be capped in the 25-45 range depending on evidence, and seniority_progression_score should remain junior-level rather than mid/senior.',
+    'Education relevance must not overcompensate for an experience gap. Skills match alone must not lift weighted_total_score into moderate/strong fit when the candidate fails the JD minimum experience requirement.',
     'JSON schema: {"scoring_contract_version":"ai_jd_fit_rubric_v2","skills_match_score":number,"relevant_experience_score":number,"education_relevance_score":number,"seniority_progression_score":number,"weighted_total_score":number,"score_confidence":"high|medium|low","score_confidence_reason":"string","scoring_anomalies":["safe_internal_codes_only"],"has_job_description_context":true}',
     '',
     'Job Description Context:',
@@ -1745,7 +1809,11 @@ export async function runAiScoringContractV2ShadowAnalysis({
     const rawPayload = typeof response?.text === 'string'
       ? extractJsonWithContext(response.text, { provider: response.provider || null, model: response.model || null })
       : response
-    const normalized = normalizeAiScoringContractV2ShadowPayload(rawPayload, { hasJobDescriptionContext: true })
+    const normalized = normalizeAiScoringContractV2ShadowPayload(rawPayload, {
+      hasJobDescriptionContext: true,
+      jobDescriptionContext,
+      candidate: candidates[0] || null,
+    })
     if (!normalized) throw new Error('v2_missing_contract')
     return { attempted: true, contract: normalized, provider: response?.provider || null, model: response?.model || null }
   } catch (error) {
@@ -2082,4 +2150,4 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 export const analyzeResumeWithClaude = analyzeWithAnthropic
 
 
-export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, isAiScoringContractV2ShadowEnabled, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }
+export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, isAiScoringContractV2ShadowEnabled, buildAiScoringContractV2SeparateShadowPrompt, getJobDescriptionMinimumExperienceYears, getCandidateExperienceYears, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }

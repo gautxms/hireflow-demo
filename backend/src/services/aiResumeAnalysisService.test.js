@@ -1280,6 +1280,124 @@ test('normalizeAiScoringContractV2 returns null for missing object and safely no
   assert.deepEqual(normalized.scoring_anomalies, [])
 })
 
+
+
+test('AI scoring contract v2 shadow prompt contains below-minimum experience calibration instructions', () => {
+  const { buildAiScoringContractV2SeparateShadowPrompt } = __testables
+  const prompt = buildAiScoringContractV2SeparateShadowPrompt({
+    resumeText: 'Synthetic resume with backend projects.',
+    jobDescriptionContext: { hasContext: true, title: 'SDE', experienceYears: '2-5 years' },
+  })
+
+  assert.equal(prompt.includes('Experience-floor calibration'), true)
+  assert.equal(prompt.includes('25-45'), true)
+  assert.equal(prompt.includes('Education relevance must not overcompensate'), true)
+  assert.equal(prompt.includes('Skills match alone must not lift weighted_total_score'), true)
+})
+
+
+
+test('CandidateExperience ignores free-form experience entries and leaves unknown total years uncapped', () => {
+  const { getCandidateExperienceYears, normalizeAiScoringContractV2 } = __testables
+  const candidate = {
+    experience: [
+      'Built 2 APIs in 2024',
+      'Worked on 3 dashboards',
+    ],
+  }
+
+  assert.equal(getCandidateExperienceYears(candidate), null)
+
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 78,
+    relevant_experience_score: 70,
+    education_relevance_score: 82,
+    seniority_progression_score: 68,
+    weighted_total_score: 74,
+    score_confidence: 'medium',
+  }, {
+    hasJobDescriptionContext: true,
+    jobDescriptionContext: { hasContext: true, experienceYears: '2-5 years' },
+    candidate,
+  })
+
+  assert.equal(normalized.relevant_experience_score, 70)
+  assert.equal(normalized.seniority_progression_score, 68)
+  assert.equal(normalized.weighted_total_score_recomputed, 74.7)
+  assert.equal(normalized.scoring_anomalies.some((code) => code.startsWith('below_minimum_experience')), false)
+})
+
+test('normalizeAiScoringContractV2 calibrates below-minimum experience shadow totals without changing visible fields', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const candidate = {
+    score: 52,
+    matchScore: { score: 52 },
+    fit_assessment: { overall_fit_score: 52 },
+    verdict: 'Maybe',
+    years_experience: 1.6,
+  }
+
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 78,
+    relevant_experience_score: 70,
+    education_relevance_score: 82,
+    seniority_progression_score: 68,
+    weighted_total_score: 74,
+    score_confidence: 'medium',
+  }, {
+    hasJobDescriptionContext: true,
+    jobDescriptionContext: { hasContext: true, experienceYears: '2-5 years' },
+    candidate,
+  })
+
+  assert.equal(normalized.relevant_experience_score, 45)
+  assert.equal(normalized.seniority_progression_score, 50)
+  assert.equal(normalized.weighted_total_score_recomputed <= 55, true)
+  assert.equal(normalized.scoring_anomalies.includes('below_minimum_experience_relevant_experience_capped'), true)
+  assert.equal(candidate.score, 52)
+  assert.equal(candidate.matchScore.score, 52)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 52)
+  assert.equal(candidate.verdict, 'Maybe')
+})
+
+test('normalizeAiScoringContractV2 keeps strong aligned above-minimum shadow fixture high', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 93,
+    relevant_experience_score: 91,
+    education_relevance_score: 86,
+    seniority_progression_score: 88,
+    weighted_total_score: 90.6,
+    score_confidence: 'high',
+  }, {
+    hasJobDescriptionContext: true,
+    jobDescriptionContext: { hasContext: true, experienceYears: '2-5 years' },
+    candidate: { years_experience: 4.1 },
+  })
+
+  assert.equal(normalized.weighted_total_score_recomputed, 90.6)
+  assert.equal(normalized.scoring_anomalies.some((code) => code.startsWith('below_minimum_experience')), false)
+})
+
+test('normalizeAiScoringContractV2 keeps frontend-leaning above-minimum shadow fixture moderate', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 68,
+    relevant_experience_score: 55,
+    education_relevance_score: 70,
+    seniority_progression_score: 48,
+    weighted_total_score: 61.4,
+    score_confidence: 'medium',
+  }, {
+    hasJobDescriptionContext: true,
+    jobDescriptionContext: { hasContext: true, experienceYears: '2-5 years' },
+    candidate: { years_experience: 2.8 },
+  })
+
+  assert.equal(normalized.weighted_total_score_recomputed, 61.4)
+  assert.equal(normalized.scoring_anomalies.some((code) => code.startsWith('below_minimum_experience')), false)
+})
+
 test('normalizeAiScoringContractV2 does not silently convert 8.6/10 style values to 86/100', () => {
   const { normalizeAiScoringContractV2 } = __testables
   const normalized = normalizeAiScoringContractV2({
