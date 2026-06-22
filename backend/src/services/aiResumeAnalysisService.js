@@ -244,7 +244,6 @@ function getCandidateExperienceYears(candidate = null) {
     value.total_experience_years,
     value.totalYearsExperience,
     value.total_experience,
-    value.experience,
   )
 }
 

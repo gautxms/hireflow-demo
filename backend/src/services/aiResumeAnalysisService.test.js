@@ -1295,6 +1295,38 @@ test('AI scoring contract v2 shadow prompt contains below-minimum experience cal
   assert.equal(prompt.includes('Skills match alone must not lift weighted_total_score'), true)
 })
 
+
+
+test('CandidateExperience ignores free-form experience entries and leaves unknown total years uncapped', () => {
+  const { getCandidateExperienceYears, normalizeAiScoringContractV2 } = __testables
+  const candidate = {
+    experience: [
+      'Built 2 APIs in 2024',
+      'Worked on 3 dashboards',
+    ],
+  }
+
+  assert.equal(getCandidateExperienceYears(candidate), null)
+
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 78,
+    relevant_experience_score: 70,
+    education_relevance_score: 82,
+    seniority_progression_score: 68,
+    weighted_total_score: 74,
+    score_confidence: 'medium',
+  }, {
+    hasJobDescriptionContext: true,
+    jobDescriptionContext: { hasContext: true, experienceYears: '2-5 years' },
+    candidate,
+  })
+
+  assert.equal(normalized.relevant_experience_score, 70)
+  assert.equal(normalized.seniority_progression_score, 68)
+  assert.equal(normalized.weighted_total_score_recomputed, 74.7)
+  assert.equal(normalized.scoring_anomalies.some((code) => code.startsWith('below_minimum_experience')), false)
+})
+
 test('normalizeAiScoringContractV2 calibrates below-minimum experience shadow totals without changing visible fields', () => {
   const { normalizeAiScoringContractV2 } = __testables
   const candidate = {
