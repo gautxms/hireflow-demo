@@ -22,6 +22,44 @@ after(async () => {
 
 const { buildNormalizedCandidates, isLegacyWordDocument } = __testables
 
+function buildV2VisibleScoreCandidate(overrides = {}) {
+  return {
+    name: 'Sensitive Candidate',
+    email: 'candidate@example.com',
+    phone: '+1 555 0100',
+    score: 78,
+    matchScore: { score: 78, score_out_of_ten: 7.8, reason: 'Original reasoning remains.' },
+    fit_assessment: { overall_fit_score: 78, matched_requirements: ['Node.js'], missing_requirements: ['Kubernetes'] },
+    ai_scoring_contract_v2: {
+      scoring_contract_version: 'ai_jd_fit_rubric_v2',
+      has_job_description_context: true,
+      weighted_total_score_recomputed: 87.7,
+      score_confidence: 'high',
+    },
+    ...overrides,
+  }
+}
+
+function applyV2VisibleScoreExperimentForTest({ candidate = buildV2VisibleScoreCandidate(), env = {}, userId = 24, analysisId = 'analysis-1' } = {}) {
+  const logs = []
+  const candidates = __testables.applyAiScoringContractV2VisibleScoreExperiment({
+    candidates: [candidate],
+    userId,
+    analysisId,
+    resumeId: 'resume-1',
+    parseJobId: 'job-1',
+    parseDiagnostics: {
+      extractionMethod: 'pdf_text',
+      normalizedTextFingerprint: 'abc123safe',
+      normalizedTextCharCount: 1200,
+    },
+    fileExtension: 'pdf',
+    env,
+    logger: { info: (message, payload) => logs.push({ message, payload }) },
+  })
+  return { candidate: candidates[0], logs }
+}
+
 
 function withPdfObserveOnlyEnv(overrides = {}) {
   const keys = [
@@ -68,6 +106,236 @@ test('buildNormalizedCandidates preserves fractional/integer/null years_experien
   assert.equal(fractional.years_experience, 3.5)
   assert.equal(integer.years_experience, 3)
   assert.equal(missing.years_experience, null)
+})
+
+test('v2 visible score experiment leaves scores unchanged when feature flag is off', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest()
+
+  assert.equal(candidate.score, 78)
+  assert.equal(candidate.matchScore.score, 78)
+  assert.equal(candidate.matchScore.score_out_of_ten, 7.8)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 78)
+  assert.equal(candidate.v2_visible_score_experiment, undefined)
+  assert.equal(logs[0].message, '[AiScoringContractV2] visible_score_apply_experiment')
+  assert.equal(logs[0].payload.enabled, false)
+  assert.equal(logs[0].payload.applied, false)
+  assert.equal(logs[0].payload.skip_reason, 'disabled')
+})
+
+test('v2 visible score experiment applies high-confidence allowlisted score consistently and preserves originals', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'high',
+    },
+  })
+
+  assert.equal(candidate.score, 87.7)
+  assert.equal(candidate.matchScore.score, 87.7)
+  assert.equal(candidate.matchScore.score_out_of_ten, 8.8)
+  assert.equal(candidate.matchScore.reason, 'Original reasoning remains.')
+  assert.equal(candidate.fit_assessment.overall_fit_score, 87.7)
+  assert.deepEqual(candidate.fit_assessment.matched_requirements, ['Node.js'])
+  assert.deepEqual(candidate.fit_assessment.missing_requirements, ['Kubernetes'])
+  assert.equal(candidate.v2_visible_score_experiment.original_visible_score, 78)
+  assert.equal(candidate.v2_visible_score_experiment.original_match_score, 78)
+  assert.equal(candidate.v2_visible_score_experiment.original_fit_assessment_score, 78)
+  assert.equal(candidate.v2_visible_score_experiment.applied_score, 87.7)
+  assert.match(candidate.v2_visible_score_experiment.applied_at, /^\d{4}-\d{2}-\d{2}T/)
+  assert.equal(candidate.v2_visible_score_experiment.reason, 'ai_scoring_contract_v2_visible_apply_experiment')
+  assert.equal(candidate.v2_visible_score_experiment.contract_version, 'ai_jd_fit_rubric_v2')
+  assert.equal(logs[0].payload.applied, true)
+  assert.equal(logs[0].payload.original_visible_score, 78)
+  assert.equal(logs[0].payload.applied_visible_score, 87.7)
+  assert.equal(logs[0].payload.score_delta, 9.7)
+})
+
+test('v2 visible score experiment applies with analysis allowlist when user is not allowlisted', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    userId: 25,
+    analysisId: 'analysis-allowlisted',
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_ANALYSIS_IDS: 'analysis-allowlisted',
+    },
+  })
+
+  assert.equal(candidate.score, 87.7)
+  assert.equal(candidate.matchScore.score, 87.7)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 87.7)
+  assert.equal(logs[0].payload.allowlist_matched, true)
+  assert.equal(logs[0].payload.applied, true)
+})
+
+test('v2 visible score experiment skips when user is not allowlisted', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    userId: 25,
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(logs[0].payload.allowlist_matched, false)
+  assert.equal(logs[0].payload.skip_reason, 'allowlist_not_matched')
+})
+
+test('v2 visible score experiment skips when v2 contract is missing', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({ ai_scoring_contract_v2: null }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(logs[0].payload.skip_reason, 'v2_missing')
+})
+
+test('v2 visible score experiment skips without job description context', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({
+      ai_scoring_contract_v2: {
+        ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+        has_job_description_context: false,
+      },
+    }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(logs[0].payload.skip_reason, 'missing_job_description_context')
+})
+
+test('v2 visible score experiment skips invalid out-of-range v2 scores', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({
+      ai_scoring_contract_v2: {
+        ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+        weighted_total_score_recomputed: 101,
+      },
+    }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(logs[0].payload.skip_reason, 'invalid_v2_score')
+})
+
+test('v2 visible score experiment skips confidence below configured minimum', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({
+      ai_scoring_contract_v2: {
+        ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+        score_confidence: 'medium',
+      },
+    }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'high',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(logs[0].payload.skip_reason, 'confidence_below_minimum')
+})
+
+test('v2 visible score experiment skips missing or malformed contract confidence', () => {
+  for (const scoreConfidence of [null, undefined, '', 'unknown', 'HIGH-ish', {}, []]) {
+    const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+      candidate: buildV2VisibleScoreCandidate({
+        ai_scoring_contract_v2: {
+          ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+          score_confidence: scoreConfidence,
+        },
+      }),
+      env: {
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'low',
+      },
+    })
+
+    assert.equal(candidate.score, 78)
+    assert.equal(candidate.v2_visible_score_experiment, undefined)
+    assert.equal(logs[0].payload.applied, false)
+    assert.equal(logs[0].payload.skip_reason, 'confidence_below_minimum')
+  }
+})
+
+test('v2 visible score experiment defaults invalid configured minimum confidence to high', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({
+      ai_scoring_contract_v2: {
+        ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+        score_confidence: 'medium',
+      },
+    }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'definitely-not-valid',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(logs[0].payload.skip_reason, 'confidence_below_minimum')
+})
+
+test('v2 visible score experiment updates ranking inputs by applying visible candidate score', () => {
+  const candidateA = buildV2VisibleScoreCandidate({ name: 'A', score: 90, matchScore: { score: 90 }, fit_assessment: { overall_fit_score: 90 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 40 } })
+  const candidateB = buildV2VisibleScoreCandidate({ name: 'B', score: 70, matchScore: { score: 70 }, fit_assessment: { overall_fit_score: 70 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 95 } })
+
+  const candidates = __testables.applyAiScoringContractV2VisibleScoreExperiment({
+    candidates: [candidateA, candidateB],
+    userId: 24,
+    analysisId: 'analysis-1',
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+    logger: { info: () => {} },
+  })
+  const rankedNames = [...candidates].sort((a, b) => b.score - a.score).map((candidate) => candidate.name)
+
+  assert.deepEqual(rankedNames, ['B', 'A'])
+  assert.equal(candidates[1].matchScore.score, 95)
+  assert.equal(candidates[1].fit_assessment.overall_fit_score, 95)
+})
+
+test('v2 visible score experiment diagnostic omits raw PII, filenames, resume text, JD text, and model output', () => {
+  const { logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({
+      name: 'Jane Secret',
+      email: 'jane.secret@example.com',
+      phone: '555-1212',
+    }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
+
+  const serializedLog = JSON.stringify(logs)
+  assert.doesNotMatch(serializedLog, /Jane Secret/)
+  assert.doesNotMatch(serializedLog, /jane\.secret@example\.com/)
+  assert.doesNotMatch(serializedLog, /555-1212/)
+  assert.doesNotMatch(serializedLog, /resume\.pdf/)
+  assert.doesNotMatch(serializedLog, /raw resume text/i)
+  assert.doesNotMatch(serializedLog, /raw job description/i)
+  assert.doesNotMatch(serializedLog, /full model output/i)
+  assert.match(serializedLog, /abc123safe/)
 })
 
 test('buildNormalizedCandidates preserves structured candidate contract fields', () => {
@@ -1833,7 +2101,7 @@ test('deterministic JD-fit apply replaces analysis-allowlisted JD-backed scores'
   }
 })
 
-test('AI score-cache shadow gate skips deterministic-applied candidates only', () => {
+test('AI score-cache shadow gate skips deterministic and v2 visible-applied candidates only', () => {
   const aiCandidate = deterministicShadowCandidateFixture()
   const deterministicAppliedCandidate = {
     ...deterministicShadowCandidateFixture(),
@@ -1844,11 +2112,21 @@ test('AI score-cache shadow gate skips deterministic-applied candidates only', (
       scoring_mode: 'jd_fit',
     },
   }
+  const { candidate: v2AppliedCandidate } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate(),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
 
   assert.equal(__testables.hasDeterministicJdFitAppliedScore(aiCandidate), false)
   assert.equal(__testables.hasDeterministicJdFitAppliedScore(deterministicAppliedCandidate), true)
+  assert.equal(__testables.hasV2VisibleScoreExperimentApplied(aiCandidate), false)
+  assert.equal(__testables.hasV2VisibleScoreExperimentApplied(v2AppliedCandidate), true)
   assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(aiCandidate), false)
   assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(deterministicAppliedCandidate), true)
+  assert.equal(__testables.shouldSkipAiScoreCacheShadowForCandidate(v2AppliedCandidate), true)
 })
 
 test('deterministic JD-fit apply leaves no-JD and non-finite deterministic scores unchanged', () => {
