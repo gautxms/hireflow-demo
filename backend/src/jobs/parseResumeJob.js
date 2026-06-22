@@ -182,6 +182,193 @@ function runtimeAllowlistMatches(value, allowlist) {
   return allowlist.includes(String(value))
 }
 
+function isAiScoringContractV2VisibleApplyEnabled(env = process.env) {
+  return String(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED || '').trim().toLowerCase() === 'true'
+}
+
+function buildAiScoringContractV2VisibleApplyAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
+  const userAllowlist = parseRuntimeAllowlist(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS)
+  const analysisAllowlist = parseRuntimeAllowlist(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_ANALYSIS_IDS)
+  const allowedByUser = runtimeAllowlistMatches(userId, userAllowlist)
+  const allowedByAnalysis = runtimeAllowlistMatches(analysisId, analysisAllowlist)
+
+  return {
+    allowlist_matched: allowedByUser || allowedByAnalysis,
+    allowed_by_user_allowlist: allowedByUser,
+    allowed_by_analysis_allowlist: allowedByAnalysis,
+  }
+}
+
+const AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK = Object.freeze({
+  low: 1,
+  medium: 2,
+  high: 3,
+})
+
+function normalizeV2VisibleApplyConfidence(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalized] ? normalized : 'high'
+}
+
+function confidenceMeetsMinimum(confidence, minimumConfidence) {
+  const normalizedConfidence = normalizeV2VisibleApplyConfidence(confidence)
+  const normalizedMinimum = normalizeV2VisibleApplyConfidence(minimumConfidence)
+  return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalizedConfidence] >= AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalizedMinimum]
+}
+
+function resolveCandidateMatchScoreValue(candidate = {}) {
+  if (candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore)) {
+    return resolveNumericScore(candidate.matchScore.score)
+  }
+  return resolveNumericScore(candidate?.matchScore)
+}
+
+function roundVisibleScoreOutOfTen(score) {
+  return Math.round((score / 10) * 10) / 10
+}
+
+function buildAiScoringContractV2VisibleScoreApplyDiagnostic({
+  candidate = {},
+  parseDiagnostics = {},
+  fileExtension = null,
+  extractionMethod = null,
+  metadata = {},
+  enabled = false,
+  allowlistMatched = false,
+  applied = false,
+  skipReason = null,
+  originalVisibleScore = null,
+  appliedVisibleScore = null,
+} = {}) {
+  const contract = candidate?.ai_scoring_contract_v2 && typeof candidate.ai_scoring_contract_v2 === 'object' && !Array.isArray(candidate.ai_scoring_contract_v2)
+    ? candidate.ai_scoring_contract_v2
+    : null
+  const hasBothScores = originalVisibleScore !== null && appliedVisibleScore !== null
+  return {
+    analysis_id: metadata.analysisId ?? metadata.analysis_id ?? null,
+    resume_id: metadata.resumeId ?? metadata.resume_id ?? candidate?.resumeId ?? candidate?.resume_id ?? null,
+    parse_job_id: metadata.parseJobId ?? metadata.parse_job_id ?? null,
+    enabled,
+    allowlist_matched: allowlistMatched,
+    applied,
+    skip_reason: skipReason,
+    original_visible_score: originalVisibleScore,
+    applied_visible_score: appliedVisibleScore,
+    score_delta: hasBothScores ? Math.round((appliedVisibleScore - originalVisibleScore) * 10) / 10 : null,
+    score_confidence: contract?.score_confidence || null,
+    file_extension: fileExtension ?? parseDiagnostics?.extension ?? parseDiagnostics?.sourceFormat ?? null,
+    extraction_method: extractionMethod ?? parseDiagnostics?.extractionMethod ?? parseDiagnostics?.extraction_method ?? null,
+    normalizedTextFingerprint: parseDiagnostics?.normalizedTextFingerprint ?? parseDiagnostics?.normalized_text_fingerprint ?? null,
+    normalizedTextCharCount: resolveNumericScore(parseDiagnostics?.normalizedTextCharCount),
+    has_job_description_context: Boolean(contract?.has_job_description_context),
+    scoring_contract_version: contract?.scoring_contract_version || null,
+  }
+}
+
+function logAiScoringContractV2VisibleScoreApplyExperiment(diagnostic, logger = console) {
+  try {
+    logger.info?.('[AiScoringContractV2] visible_score_apply_experiment', diagnostic)
+  } catch (_) {
+    // Diagnostics must never affect analysis completion.
+  }
+}
+
+function applyAiScoringContractV2VisibleScoreToCandidate(candidate, { appliedScore, reason }) {
+  const originalVisibleScore = resolveCurrentAiScore(candidate)
+  const originalMatchScore = resolveCandidateMatchScoreValue(candidate)
+  const originalFitAssessmentScore = resolveNumericScore(candidate?.fit_assessment?.overall_fit_score)
+  const nextCandidate = {
+    ...candidate,
+    score: appliedScore,
+    v2_visible_score_experiment: {
+      original_visible_score: originalVisibleScore,
+      original_match_score: originalMatchScore,
+      original_fit_assessment_score: originalFitAssessmentScore,
+      applied_score: appliedScore,
+      applied_at: new Date().toISOString(),
+      reason,
+      contract_version: candidate?.ai_scoring_contract_v2?.scoring_contract_version || null,
+    },
+  }
+
+  nextCandidate.matchScore = {
+    ...(candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore) ? candidate.matchScore : {}),
+    score: appliedScore,
+    score_out_of_ten: roundVisibleScoreOutOfTen(appliedScore),
+  }
+
+  nextCandidate.fit_assessment = {
+    ...(candidate?.fit_assessment && typeof candidate.fit_assessment === 'object' && !Array.isArray(candidate.fit_assessment) ? candidate.fit_assessment : {}),
+    overall_fit_score: appliedScore,
+  }
+
+  return nextCandidate
+}
+
+export function applyAiScoringContractV2VisibleScoreExperiment({
+  candidates = [],
+  userId = null,
+  analysisId = null,
+  resumeId = null,
+  parseJobId = null,
+  parseDiagnostics = {},
+  fileExtension = null,
+  extractionMethod = null,
+  env = process.env,
+  logger = console,
+} = {}) {
+  if (!Array.isArray(candidates)) return candidates
+  const enabled = isAiScoringContractV2VisibleApplyEnabled(env)
+  const allowlistDiagnostic = buildAiScoringContractV2VisibleApplyAllowlistDiagnostic({ userId, analysisId, env })
+  const allowlistMatched = allowlistDiagnostic.allowlist_matched
+  const minimumConfidence = normalizeV2VisibleApplyConfidence(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE || 'high')
+
+  return candidates.map((candidate) => {
+    let skipReason = null
+    let appliedCandidate = candidate
+    const originalVisibleScore = resolveCurrentAiScore(candidate)
+    const contract = candidate?.ai_scoring_contract_v2 && typeof candidate.ai_scoring_contract_v2 === 'object' && !Array.isArray(candidate.ai_scoring_contract_v2)
+      ? candidate.ai_scoring_contract_v2
+      : null
+    const v2Score = resolveNumericScore(contract?.weighted_total_score_recomputed)
+
+    try {
+      if (!enabled) skipReason = 'disabled'
+      else if (!allowlistMatched) skipReason = 'allowlist_not_matched'
+      else if (!contract) skipReason = 'v2_missing'
+      else if (contract.scoring_contract_version !== 'ai_jd_fit_rubric_v2') skipReason = 'contract_version_mismatch'
+      else if (contract.has_job_description_context !== true) skipReason = 'missing_job_description_context'
+      else if (v2Score === null || v2Score < 0 || v2Score > 100) skipReason = 'invalid_v2_score'
+      else if (!confidenceMeetsMinimum(contract.score_confidence, minimumConfidence)) skipReason = 'confidence_below_minimum'
+      else {
+        appliedCandidate = applyAiScoringContractV2VisibleScoreToCandidate(candidate, {
+          appliedScore: v2Score,
+          reason: 'ai_scoring_contract_v2_visible_apply_experiment',
+        })
+      }
+    } catch (_) {
+      skipReason = 'error'
+      appliedCandidate = candidate
+    }
+
+    logAiScoringContractV2VisibleScoreApplyExperiment(buildAiScoringContractV2VisibleScoreApplyDiagnostic({
+      candidate,
+      parseDiagnostics,
+      fileExtension,
+      extractionMethod,
+      metadata: { analysisId, resumeId, parseJobId },
+      enabled,
+      allowlistMatched,
+      applied: !skipReason,
+      skipReason,
+      originalVisibleScore,
+      appliedVisibleScore: !skipReason ? v2Score : null,
+    }), logger)
+
+    return appliedCandidate
+  })
+}
+
 function buildRuntimeScoreCacheAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
   const userAllowlist = parseRuntimeAllowlist(env.AI_SCORE_CACHE_ALLOWED_USER_IDS)
   const analysisAllowlist = parseRuntimeAllowlist(env.AI_SCORE_CACHE_ALLOWED_ANALYSIS_IDS)
@@ -1521,7 +1708,7 @@ export async function runParse(job) {
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
   const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
-  const finalCandidates = applyDeterministicJdFitScoresForRuntimeTest({
+  let finalCandidates = applyDeterministicJdFitScoresForRuntimeTest({
     candidates: normalizedCandidates,
     jobDescriptionContext,
     userId: job.data.userId ?? null,
@@ -1545,6 +1732,18 @@ export async function runParse(job) {
       candidate.ai_scoring_contract_v2 = v2ShadowResult.contract
     }
   }
+
+  finalCandidates = applyAiScoringContractV2VisibleScoreExperiment({
+    candidates: finalCandidates,
+    userId: job.data.userId ?? null,
+    analysisId: analysisId || null,
+    resumeId,
+    parseJobId: job.id,
+    parseDiagnostics: preparedResumePayload.diagnostics || null,
+    fileExtension: fileExtension || preparedResumePayload.sourceFormat || null,
+    extractionMethod: preparedResumePayload.diagnostics?.extractionMethod || preparedResumePayload.diagnostics?.extraction_method || null,
+    logger: console,
+  })
 
   const finalAiAttempt = aiResponse?.attempts?.at?.(-1) || null
   const tokenBudgetAttempts = aiResponse?.tokenBudgetAttempts || finalAiAttempt?.tokenBudgetAttempts || []
@@ -1830,4 +2029,6 @@ export const __testables = {
   hasDeterministicJdFitAppliedScore,
   shouldSkipAiScoreCacheShadowForCandidate,
   logAiScoringContractV2Diagnostic,
+  applyAiScoringContractV2VisibleScoreExperiment,
+  buildAiScoringContractV2VisibleScoreApplyDiagnostic,
 }
