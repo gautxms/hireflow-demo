@@ -366,6 +366,9 @@ const AI_SCORING_CONTRACT_V2_SAFE_DIAGNOSTIC_ANOMALY_CODES = new Set([
   'education_relevance_score_out_of_range_clamped',
   'seniority_progression_score_out_of_range_clamped',
   'weighted_total_score_out_of_range_clamped',
+  'below_minimum_experience_relevant_experience_capped',
+  'below_minimum_experience_seniority_capped',
+  'below_minimum_experience_weighted_total_capped',
 ])
 
 function normalizeAiScoringContractV2DiagnosticAnomalies(values) {
