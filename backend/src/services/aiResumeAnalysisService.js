@@ -182,6 +182,7 @@ const AI_SCORING_CONTRACT_V2_SAFE_ANOMALY_CODES = Object.freeze(new Set([
   'v2_shadow_missing_resume_text',
   'v2_shadow_skipped_binary_input_without_text',
   'has_job_description_context_corrected',
+  'below_minimum_experience_shadow_cap_applied',
   ...AI_SCORING_CONTRACT_V2_SCORE_FIELDS.flatMap((field) => [
     `${field}_non_numeric`,
     `${field}_out_of_range_clamped`,
@@ -189,6 +190,70 @@ const AI_SCORING_CONTRACT_V2_SAFE_ANOMALY_CODES = Object.freeze(new Set([
   'weighted_total_score_non_numeric',
   'weighted_total_score_out_of_range_clamped',
 ]))
+
+
+const AI_SCORING_CONTRACT_V2_BELOW_MINIMUM_CAPS = Object.freeze({
+  relevant_experience_score: 55,
+  seniority_progression_score: 60,
+  weighted_total_score_from_ai: 60,
+})
+const EXPLICIT_TOTAL_EXPERIENCE_FIELDS = Object.freeze([
+  'years_experience',
+  'experience_years',
+  'total_experience_years',
+  'totalYearsExperience',
+  'total_experience',
+])
+
+function parseExplicitExperienceYears(value) {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? Math.max(0, Math.min(80, value)) : null
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const match = trimmed.match(/^\s*(\d+(?:\.\d+)?)\s*(?:\+?\s*(?:years?|yrs?)\b)?\s*$/i)
+  if (!match) return null
+  const numeric = Number(match[1])
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(80, numeric)) : null
+}
+
+function getCandidateExperienceYears(candidate = {}) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null
+  for (const field of EXPLICIT_TOTAL_EXPERIENCE_FIELDS) {
+    const parsed = parseExplicitExperienceYears(candidate[field])
+    if (parsed !== null) return parsed
+  }
+  return null
+}
+
+function getJobMinimumExperienceYears(jobDescriptionContext = {}) {
+  const raw = jobDescriptionContext?.experienceYears ?? jobDescriptionContext?.experience_years ?? jobDescriptionContext?.years_experience
+  if (raw === null || raw === undefined || raw === '') return null
+  if (typeof raw === 'number') return Number.isFinite(raw) ? Math.max(0, raw) : null
+  if (typeof raw !== 'string') return null
+  const match = raw.match(/\d+(?:\.\d+)?/)
+  if (!match) return null
+  const numeric = Number(match[0])
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : null
+}
+
+function applyBelowMinimumExperienceShadowCaps(normalized, options = {}, anomalies) {
+  const candidateYears = getCandidateExperienceYears(options?.candidate)
+  const minimumYears = getJobMinimumExperienceYears(options?.jobDescriptionContext)
+  if (candidateYears === null || minimumYears === null || candidateYears >= minimumYears) return normalized
+
+  normalized.relevant_experience_score = normalized.relevant_experience_score === null
+    ? null
+    : Math.min(normalized.relevant_experience_score, AI_SCORING_CONTRACT_V2_BELOW_MINIMUM_CAPS.relevant_experience_score)
+  normalized.seniority_progression_score = normalized.seniority_progression_score === null
+    ? null
+    : Math.min(normalized.seniority_progression_score, AI_SCORING_CONTRACT_V2_BELOW_MINIMUM_CAPS.seniority_progression_score)
+  normalized.weighted_total_score_from_ai = normalized.weighted_total_score_from_ai === null
+    ? null
+    : Math.min(normalized.weighted_total_score_from_ai, AI_SCORING_CONTRACT_V2_BELOW_MINIMUM_CAPS.weighted_total_score_from_ai)
+  anomalies.add('below_minimum_experience_shadow_cap_applied')
+  return normalized
+}
 
 function roundScoringContractScore(value) {
   return Math.round(value * 10) / 10
@@ -291,6 +356,8 @@ export function normalizeAiScoringContractV2(value, options = {}) {
   if (value?.scoring_contract_version && value.scoring_contract_version !== AI_SCORING_CONTRACT_V2_VERSION) {
     anomalies.add('scoring_contract_version_mismatch')
   }
+
+  applyBelowMinimumExperienceShadowCaps(normalized, options, anomalies)
 
   normalized.weighted_total_score_recomputed = recomputeAiScoringContractV2Total(normalized)
   if (normalized.weighted_total_score_recomputed === null && value?.weighted_total_score_recomputed !== undefined) {
@@ -2082,4 +2149,4 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 export const analyzeResumeWithClaude = analyzeWithAnthropic
 
 
-export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, isAiScoringContractV2ShadowEnabled, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }
+export const __testables = { normalizeCompactCandidate, normalizeCompactAnalysis, normalizeAiScoringContractV2, getCandidateExperienceYears, isAiScoringContractV2ShadowEnabled, canonicalizeCandidateScoreFields, canonicalizeAnalysisScoreFields, isScoreFieldCanonicalizationEnabled }

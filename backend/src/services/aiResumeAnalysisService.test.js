@@ -1317,6 +1317,75 @@ test('normalizeAiScoringContractV2 is idempotent for normalized weighted totals 
 })
 
 
+
+test('CandidateExperience ignores free-form experience descriptions and unknown years do not apply below-minimum caps', () => {
+  const { getCandidateExperienceYears, normalizeAiScoringContractV2 } = __testables
+  const candidate = {
+    experience: [
+      'Built 2 APIs in 2024',
+      'Worked on 3 dashboards',
+    ],
+  }
+
+  assert.equal(getCandidateExperienceYears(candidate), null)
+
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 90,
+    relevant_experience_score: 85,
+    education_relevance_score: 80,
+    seniority_progression_score: 75,
+    weighted_total_score: 84,
+    score_confidence: 'medium',
+  }, { candidate, jobDescriptionContext: { experienceYears: '2-5 years' } })
+
+  assert.equal(normalized.relevant_experience_score, 85)
+  assert.equal(normalized.seniority_progression_score, 75)
+  assert.equal(normalized.weighted_total_score_from_ai, 84)
+  assert.equal(normalized.scoring_anomalies.includes('below_minimum_experience_shadow_cap_applied'), false)
+})
+
+test('AI scoring contract v2 applies below-minimum caps for explicit candidate years below JD minimum', () => {
+  const { getCandidateExperienceYears, normalizeAiScoringContractV2 } = __testables
+  const candidate = { years_experience: 1.6 }
+
+  assert.equal(getCandidateExperienceYears(candidate), 1.6)
+
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 90,
+    relevant_experience_score: 85,
+    education_relevance_score: 80,
+    seniority_progression_score: 75,
+    weighted_total_score: 84,
+    score_confidence: 'medium',
+  }, { candidate, jobDescriptionContext: { experienceYears: '2-5 years' } })
+
+  assert.equal(normalized.relevant_experience_score, 55)
+  assert.equal(normalized.seniority_progression_score, 60)
+  assert.equal(normalized.weighted_total_score_from_ai, 60)
+  assert.equal(normalized.scoring_anomalies.includes('below_minimum_experience_shadow_cap_applied'), true)
+})
+
+test('AI scoring contract v2 does not apply below-minimum caps for explicit candidate years above JD minimum', () => {
+  const { getCandidateExperienceYears, normalizeAiScoringContractV2 } = __testables
+  const candidate = { years_experience: 4.1 }
+
+  assert.equal(getCandidateExperienceYears(candidate), 4.1)
+
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 90,
+    relevant_experience_score: 85,
+    education_relevance_score: 80,
+    seniority_progression_score: 75,
+    weighted_total_score: 84,
+    score_confidence: 'medium',
+  }, { candidate, jobDescriptionContext: { experienceYears: '2-5 years' } })
+
+  assert.equal(normalized.relevant_experience_score, 85)
+  assert.equal(normalized.seniority_progression_score, 75)
+  assert.equal(normalized.weighted_total_score_from_ai, 84)
+  assert.equal(normalized.scoring_anomalies.includes('below_minimum_experience_shadow_cap_applied'), false)
+})
+
 test('normalizeAiScoringContractV2 clamps out-of-range scores, nulls non-numeric scores, and flags mismatched totals', () => {
   const { normalizeAiScoringContractV2 } = __testables
   const normalized = normalizeAiScoringContractV2({
