@@ -443,3 +443,39 @@ test('v2 diagnostic emits safe skip reason when v2 score is missing', () => {
   assert.equal(diagnostic.skip_reason, 'missing_v2_score')
   assert.equal(diagnostic.score_delta, null)
 })
+
+test('v2 score delta diagnostic uses normalized weighted_total_score_from_ai before legacy weighted_total_score', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      score: 70,
+      ai_scoring_contract_v2: {
+        weighted_total_score_from_ai: 72.3,
+        weighted_total_score: 99.9,
+        weighted_total_score_recomputed: 72.6,
+      },
+    },
+  })
+
+  assert.equal(diagnostic.v2_weighted_total_score_from_ai, 72.3)
+  assert.equal(diagnostic.v2_weighted_total_score_recomputed, 72.6)
+})
+
+test('v2 score delta diagnostic fingerprints provider-controlled candidate ids', () => {
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({
+    candidate: {
+      id: 'aisha.menon@example.com',
+      candidateId: 'Aisha-Menon-Resume',
+      score: 70,
+      ai_scoring_contract_v2: { weighted_total_score_recomputed: 72.6 },
+    },
+    metadata: { candidateId: 'internal-candidate-123', originalFilename: 'Aisha-Menon-Resume.pdf' },
+  })
+
+  assert.equal(diagnostic.trusted_candidate_id, 'internal-candidate-123')
+  assert.match(diagnostic.candidate_id_fingerprint, /^[a-f0-9]{16}$/)
+  assert.match(diagnostic.original_filename_fingerprint, /^[a-f0-9]{16}$/)
+  const serialized = JSON.stringify(diagnostic)
+  assert.doesNotMatch(serialized, /aisha\.menon@example\.com/)
+  assert.doesNotMatch(serialized, /Aisha-Menon-Resume/)
+  assert.doesNotMatch(serialized, /Aisha-Menon-Resume\.pdf/)
+})

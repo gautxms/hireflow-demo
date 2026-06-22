@@ -135,7 +135,14 @@ function resolveV2WeightedTotalScore(candidate = {}) {
 }
 
 function resolveV2AiWeightedTotalScore(candidate = {}) {
-  return normalizeOptionalNumber(candidate?.ai_scoring_contract_v2?.weighted_total_score)
+  return normalizeOptionalNumber(
+    candidate?.ai_scoring_contract_v2?.weighted_total_score_from_ai
+    ?? candidate?.ai_scoring_contract_v2?.weighted_total_score,
+  )
+}
+
+function resolveProviderCandidateIdFingerprint(candidate = {}) {
+  return fingerprint(candidate?.id ?? candidate?.candidateId ?? candidate?.candidate_id)
 }
 
 function resolveVisibleFitScore(candidate = {}) {
@@ -193,7 +200,8 @@ export function buildAiScoringContractV2ScoreDeltaDiagnostic({
     analysis_id: normalizeOptionalString(metadata.analysisId ?? metadata.analysis_id),
     resume_id: normalizeOptionalString(metadata.resumeId ?? metadata.resume_id ?? candidate?.resumeId ?? candidate?.resume_id),
     parse_job_id: normalizeOptionalString(metadata.parseJobId ?? metadata.parse_job_id),
-    candidate_id: normalizeOptionalString(metadata.candidateId ?? metadata.candidate_id ?? candidate?.id ?? candidate?.candidateId ?? candidate?.candidate_id),
+    trusted_candidate_id: normalizeOptionalString(metadata.candidateId ?? metadata.candidate_id),
+    candidate_id_fingerprint: resolveProviderCandidateIdFingerprint(candidate),
     original_filename_fingerprint: fingerprint(metadata.originalFilename ?? metadata.original_filename ?? parseDiagnostics?.originalFilename ?? parseDiagnostics?.original_filename ?? candidate?.originalFilename ?? candidate?.original_filename ?? candidate?.filename),
     file_extension: normalizeOptionalString(fileExtension ?? parseDiagnostics?.extension ?? parseDiagnostics?.sourceFormat),
     extraction_method: normalizeOptionalString(parseDiagnostics?.extractionMethod ?? parseDiagnostics?.extraction_method),
