@@ -352,6 +352,9 @@ test('extractJsonWithContext logs safe parse diagnostics without raw response or
       fileExtension: 'pdf',
       extractionMethod: 'pdf_text_extraction',
       inputKind: 'extracted_text',
+      promptCharCount: 1234,
+      attemptIndex: 2,
+      maxAttempts: 3,
     }),
     /response_format_error::/,
   )
@@ -368,6 +371,9 @@ test('extractJsonWithContext logs safe parse diagnostics without raw response or
   assert.equal(diagnostics.parse_error_message, 'invalid_json')
   assert.equal(diagnostics.completion_status, 'end_turn')
   assert.equal(diagnostics.max_output_tokens, 2200)
+  assert.equal(diagnostics.promptCharCount, 1234)
+  assert.equal(diagnostics.attempt_index, 2)
+  assert.equal(diagnostics.max_attempts, 3)
   assert.equal(diagnostics.analysis_id, 'analysis-safe-id')
   assert.equal(diagnostics.resume_id, 'resume-safe-id')
   assert.equal(diagnostics.parse_job_id, 'parse-job-safe-id')
