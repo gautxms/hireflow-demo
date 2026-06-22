@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   analyzeResumeWithConfiguredFallback,
+  resetClaudeTokenStats,
   analyzeWithAnthropic,
   analyzeWithOpenAI,
   buildPromptWithJobDescription,
@@ -1520,4 +1521,73 @@ test('normalizeCompactAnalysis preserves ai_scoring_contract_v2 without replacin
   assert.equal(result.candidates[0].matchScore.score, 88)
   assert.equal(result.candidates[0].fit_assessment.overall_fit_score, 88)
   assert.equal(result.candidates[0].ai_scoring_contract_v2.weighted_total_score_recomputed, 55)
+})
+
+test('Claude token logs fingerprint raw filename identifiers instead of logging filenames', async (t) => {
+  const originalLog = console.log
+  const logs = []
+  console.log = (...args) => logs.push(args)
+  t.after(() => {
+    console.log = originalLog
+    resetClaudeTokenStats()
+  })
+
+  resetClaudeTokenStats()
+  await __testables.trackTokens(
+    { input_tokens: 1200, output_tokens: 300 },
+    {
+      resumeIdentifier: '01_Aisha_Menon_SDE_Resume.pdf',
+      analysisId: 'analysis-token-safe',
+      parseJobId: 'parse-job-token-safe',
+      originalFilenameFingerprint: 'origfingerprint1234',
+      provider: 'anthropic',
+      model: 'claude-sonnet-4',
+    },
+  )
+
+  assert.equal(logs.length, 1)
+  assert.equal(logs[0][0], '[Claude] Tokens:')
+  const payload = logs[0][1]
+  assert.equal(payload.analysis_id, 'analysis-token-safe')
+  assert.equal(payload.parse_job_id, 'parse-job-token-safe')
+  assert.equal(payload.original_filename_fingerprint, 'origfingerprint1234')
+  assert.equal(payload.file_extension, 'pdf')
+  assert.equal(payload.provider, 'anthropic')
+  assert.equal(payload.model, 'claude-sonnet-4')
+  assert.match(payload.resume_identifier_fingerprint, /^[a-f0-9]{16}$/)
+  assert.equal(payload.input, 1200)
+  assert.equal(payload.output, 300)
+  assert.equal(payload.estimatedCost, '$0.0081')
+  assert.equal(payload.totalCostThisSession, '$0.0081')
+
+  const serialized = JSON.stringify(logs)
+  assert.equal(serialized.includes('01_Aisha_Menon_SDE_Resume.pdf'), false)
+  assert.equal(serialized.includes('Aisha'), false)
+  assert.equal(serialized.includes('resumeId'), false)
+})
+
+test('safe token log context handles doc docx and pdf filename-like values without raw filenames', () => {
+  for (const filename of [
+    '04_Vikram_Rao_Junior_SDE_Resume.doc',
+    '03_Neha_Sharma_Frontend_Leaning_SDE_Resume.docx',
+    '01_Aisha_Menon_SDE_Resume.pdf',
+  ]) {
+    const payload = __testables.buildSafeTokenLogContext({ resumeIdentifier: filename })
+    assert.match(payload.resume_identifier_fingerprint, /^[a-f0-9]{16}$/)
+    assert.equal(payload.file_extension, filename.split('.').pop())
+    const serialized = JSON.stringify(payload)
+    assert.equal(serialized.includes(filename), false)
+    assert.equal(/\.(pdf|doc|docx|txt)"/.test(serialized), false)
+  }
+})
+
+test('safe token log context preserves trusted internal resume UUID', () => {
+  const payload = __testables.buildSafeTokenLogContext({
+    resumeId: '123e4567-e89b-42d3-a456-426614174000',
+    resumeIdentifier: 'Private_Candidate_Resume.docx',
+  })
+
+  assert.equal(payload.resume_id, '123e4567-e89b-42d3-a456-426614174000')
+  assert.equal(Object.hasOwn(payload, 'resume_identifier_fingerprint'), false)
+  assert.equal(JSON.stringify(payload).includes('Private_Candidate_Resume.docx'), false)
 })
