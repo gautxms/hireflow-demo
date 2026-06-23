@@ -81,12 +81,6 @@ async function ensureSchema() {
       ADD COLUMN IF NOT EXISTS experience_min INTEGER,
       ADD COLUMN IF NOT EXISTS experience_max INTEGER;
 
-    UPDATE job_descriptions
-       SET experience_min = COALESCE(experience_min, experience_years),
-           experience_max = COALESCE(experience_max, experience_years)
-     WHERE experience_years IS NOT NULL
-       AND (experience_min IS NULL OR experience_max IS NULL);
-
     ALTER TABLE job_descriptions
       ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS employment_type TEXT NOT NULL DEFAULT 'unspecified',
