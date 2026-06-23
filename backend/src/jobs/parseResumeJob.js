@@ -186,16 +186,24 @@ function isAiScoringContractV2VisibleApplyEnabled(env = process.env) {
   return String(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED || '').trim().toLowerCase() === 'true'
 }
 
+function isAiScoringContractV2VisibleApplyAllUsersEnabled(env = process.env) {
+  return String(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALL_USERS || '').trim().toLowerCase() === 'true'
+}
+
 function buildAiScoringContractV2VisibleApplyAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
   const userAllowlist = parseRuntimeAllowlist(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS)
   const analysisAllowlist = parseRuntimeAllowlist(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_ANALYSIS_IDS)
   const allowedByUser = runtimeAllowlistMatches(userId, userAllowlist)
   const allowedByAnalysis = runtimeAllowlistMatches(analysisId, analysisAllowlist)
+  const allUsersEnabled = isAiScoringContractV2VisibleApplyAllUsersEnabled(env)
+  const allowlistMatched = allowedByUser || allowedByAnalysis
 
   return {
-    allowlist_matched: allowedByUser || allowedByAnalysis,
+    all_users_enabled: allUsersEnabled,
+    allowlist_matched: allowlistMatched,
     allowed_by_user_allowlist: allowedByUser,
     allowed_by_analysis_allowlist: allowedByAnalysis,
+    eligible_for_visible_apply: allUsersEnabled || allowlistMatched,
   }
 }
 
@@ -242,7 +250,10 @@ function buildAiScoringContractV2VisibleScoreApplyDiagnostic({
   extractionMethod = null,
   metadata = {},
   enabled = false,
+  allUsersEnabled = false,
   allowlistMatched = false,
+  allowedByUserAllowlist = false,
+  allowedByAnalysisAllowlist = false,
   applied = false,
   skipReason = null,
   originalVisibleScore = null,
@@ -257,7 +268,10 @@ function buildAiScoringContractV2VisibleScoreApplyDiagnostic({
     resume_id: metadata.resumeId ?? metadata.resume_id ?? candidate?.resumeId ?? candidate?.resume_id ?? null,
     parse_job_id: metadata.parseJobId ?? metadata.parse_job_id ?? null,
     enabled,
+    all_users_enabled: allUsersEnabled,
     allowlist_matched: allowlistMatched,
+    allowed_by_user_allowlist: allowedByUserAllowlist,
+    allowed_by_analysis_allowlist: allowedByAnalysisAllowlist,
     applied,
     skip_reason: skipReason,
     original_visible_score: originalVisibleScore,
@@ -328,7 +342,9 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
   if (!Array.isArray(candidates)) return candidates
   const enabled = isAiScoringContractV2VisibleApplyEnabled(env)
   const allowlistDiagnostic = buildAiScoringContractV2VisibleApplyAllowlistDiagnostic({ userId, analysisId, env })
+  const allUsersEnabled = allowlistDiagnostic.all_users_enabled
   const allowlistMatched = allowlistDiagnostic.allowlist_matched
+  const eligibleForVisibleApply = allowlistDiagnostic.eligible_for_visible_apply
   const minimumConfidence = normalizeConfiguredV2VisibleApplyMinimumConfidence(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE || 'high')
 
   return candidates.map((candidate) => {
@@ -342,7 +358,7 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
 
     try {
       if (!enabled) skipReason = 'disabled'
-      else if (!allowlistMatched) skipReason = 'allowlist_not_matched'
+      else if (!eligibleForVisibleApply) skipReason = 'allowlist_not_matched'
       else if (!contract) skipReason = 'v2_missing'
       else if (contract.scoring_contract_version !== 'ai_jd_fit_rubric_v2') skipReason = 'contract_version_mismatch'
       else if (contract.has_job_description_context !== true) skipReason = 'missing_job_description_context'
@@ -366,7 +382,10 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
       extractionMethod,
       metadata: { analysisId, resumeId, parseJobId },
       enabled,
+      allUsersEnabled,
       allowlistMatched,
+      allowedByUserAllowlist: allowlistDiagnostic.allowed_by_user_allowlist,
+      allowedByAnalysisAllowlist: allowlistDiagnostic.allowed_by_analysis_allowlist,
       applied: !skipReason,
       skipReason,
       originalVisibleScore,
@@ -2048,4 +2067,6 @@ export const __testables = {
   logAiScoringContractV2Diagnostic,
   applyAiScoringContractV2VisibleScoreExperiment,
   buildAiScoringContractV2VisibleScoreApplyDiagnostic,
+  isAiScoringContractV2VisibleApplyAllUsersEnabled,
+  buildAiScoringContractV2VisibleApplyAllowlistDiagnostic,
 }

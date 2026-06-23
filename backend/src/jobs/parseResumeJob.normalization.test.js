@@ -118,8 +118,59 @@ test('v2 visible score experiment leaves scores unchanged when feature flag is o
   assert.equal(candidate.v2_visible_score_experiment, undefined)
   assert.equal(logs[0].message, '[AiScoringContractV2] visible_score_apply_experiment')
   assert.equal(logs[0].payload.enabled, false)
+  assert.equal(logs[0].payload.all_users_enabled, false)
+  assert.equal(logs[0].payload.allowlist_matched, false)
+  assert.equal(logs[0].payload.allowed_by_user_allowlist, false)
+  assert.equal(logs[0].payload.allowed_by_analysis_allowlist, false)
   assert.equal(logs[0].payload.applied, false)
   assert.equal(logs[0].payload.skip_reason, 'disabled')
+})
+
+
+test('v2 visible score experiment with main enabled but no allowlist and all-users false does not apply', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    userId: 25,
+    analysisId: 'analysis-not-allowlisted',
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALL_USERS: 'false',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(candidate.v2_visible_score_experiment, undefined)
+  assert.equal(logs[0].payload.enabled, true)
+  assert.equal(logs[0].payload.all_users_enabled, false)
+  assert.equal(logs[0].payload.allowlist_matched, false)
+  assert.equal(logs[0].payload.allowed_by_user_allowlist, false)
+  assert.equal(logs[0].payload.allowed_by_analysis_allowlist, false)
+  assert.equal(logs[0].payload.applied, false)
+  assert.equal(logs[0].payload.skip_reason, 'allowlist_not_matched')
+})
+
+test('v2 visible score experiment applies for non-allowlisted user when all-users rollout is enabled', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    userId: 25,
+    analysisId: 'analysis-not-allowlisted',
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALL_USERS: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'high',
+    },
+  })
+
+  assert.equal(candidate.score, 87.7)
+  assert.equal(candidate.matchScore.score, 87.7)
+  assert.equal(candidate.matchScore.score_out_of_ten, 8.8)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 87.7)
+  assert.equal(candidate.v2_visible_score_experiment.original_visible_score, 78)
+  assert.equal(logs[0].payload.enabled, true)
+  assert.equal(logs[0].payload.all_users_enabled, true)
+  assert.equal(logs[0].payload.allowlist_matched, false)
+  assert.equal(logs[0].payload.allowed_by_user_allowlist, false)
+  assert.equal(logs[0].payload.allowed_by_analysis_allowlist, false)
+  assert.equal(logs[0].payload.applied, true)
+  assert.equal(logs[0].payload.skip_reason, null)
 })
 
 test('v2 visible score experiment applies high-confidence allowlisted score consistently and preserves originals', () => {
@@ -271,6 +322,58 @@ test('v2 visible score experiment skips missing or malformed contract confidence
     assert.equal(candidate.v2_visible_score_experiment, undefined)
     assert.equal(logs[0].payload.applied, false)
     assert.equal(logs[0].payload.skip_reason, 'confidence_below_minimum')
+  }
+})
+
+
+test('v2 visible score experiment all-users rollout still skips missing confidence, missing JD context, and invalid score', () => {
+  const invalidCases = [
+    {
+      candidate: buildV2VisibleScoreCandidate({
+        ai_scoring_contract_v2: {
+          ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+          score_confidence: null,
+        },
+      }),
+      expectedSkipReason: 'confidence_below_minimum',
+    },
+    {
+      candidate: buildV2VisibleScoreCandidate({
+        ai_scoring_contract_v2: {
+          ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+          has_job_description_context: false,
+        },
+      }),
+      expectedSkipReason: 'missing_job_description_context',
+    },
+    {
+      candidate: buildV2VisibleScoreCandidate({
+        ai_scoring_contract_v2: {
+          ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+          weighted_total_score_recomputed: -0.1,
+        },
+      }),
+      expectedSkipReason: 'invalid_v2_score',
+    },
+  ]
+
+  for (const { candidate: invalidCandidate, expectedSkipReason } of invalidCases) {
+    const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+      candidate: invalidCandidate,
+      userId: 25,
+      env: {
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALL_USERS: 'true',
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'low',
+      },
+    })
+
+    assert.equal(candidate.score, 78)
+    assert.equal(candidate.v2_visible_score_experiment, undefined)
+    assert.equal(logs[0].payload.all_users_enabled, true)
+    assert.equal(logs[0].payload.allowlist_matched, false)
+    assert.equal(logs[0].payload.applied, false)
+    assert.equal(logs[0].payload.skip_reason, expectedSkipReason)
   }
 })
 
@@ -2114,9 +2217,10 @@ test('AI score-cache shadow gate skips deterministic and v2 visible-applied cand
   }
   const { candidate: v2AppliedCandidate } = applyV2VisibleScoreExperimentForTest({
     candidate: buildV2VisibleScoreCandidate(),
+    userId: 999,
     env: {
       AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
-      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALL_USERS: 'true',
     },
   })
 
