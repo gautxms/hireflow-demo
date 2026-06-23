@@ -21,6 +21,7 @@ import {
   toDisplayText,
   buildExpandedCandidateDrawerViewModel,
   buildScoreBreakdownRows,
+  cleanAiTextForDisplay,
 } from './candidateResultsState'
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import { buildShortlistSummary, getShortlistBulkErrorMessage } from './shortlistState'
@@ -347,7 +348,7 @@ function deriveCompactRationale(candidate) {
 }
 
 function resolveMatchScoreReason(candidate) {
-  return String(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason || '').trim()
+  return cleanAiTextForDisplay(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason || '', '')
 }
 
 function activeScore(candidate) {
@@ -1477,8 +1478,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </div>
               </div>
 
-              <div className="rc-rationale" title={compactRationale}>
-                {compactRationale}
+              <div className="rc-rationale" title={cleanAiTextForDisplay(compactRationale, '')}>
+                {cleanAiTextForDisplay(compactRationale, '')}
               </div>
 
               <div className="rc-skills">

@@ -20,10 +20,50 @@ import {
   parseScorePercentage,
   resolveScoreBreakdownMetric,
   buildScoreBreakdownRows,
+  cleanAiTextForDisplay,
   resolveCandidateYears,
   resolveFilterableSkills,
   sortCandidatesForResults,
 } from './candidateResultsState.js'
+
+
+test('cleanAiTextForDisplay preserves complete sentences and technical tokens', () => {
+  assert.equal(
+    cleanAiTextForDisplay('Rahul exceeds the 2-5 year experience requirement with 5 years of production backend work.'),
+    'Rahul exceeds the 2-5 year experience requirement with 5 years of production backend work.',
+  )
+  assert.equal(cleanAiTextForDisplay('Node.js Next.js AWS EC2/S3 B.Tech PostgreSQL 2–5 80.5'), 'Node.js Next.js AWS EC2/S3 B.Tech PostgreSQL 2–5 80.5')
+  assert.equal(cleanAiTextForDisplay('Strong Backend Match'), 'Strong Backend Match')
+})
+
+test('cleanAiTextForDisplay hides obvious dangling AI fragments without inventing text', () => {
+  assert.equal(
+    cleanAiTextForDisplay('Strong React and Next.js expertise with demonstrated ability to build complex recruiter dashboards and form flows with v'),
+    'Strong React and Next.js expertise with demonstrated ability to build complex recruiter dashboards and form flows…',
+  )
+  assert.equal(
+    cleanAiTextForDisplay('No demonstrated experience with system design, data structures, or algorithms pr'),
+    'No demonstrated experience with system design, data structures, or algorithms…',
+  )
+  assert.equal(cleanAiTextForDisplay('Below Threshold – Junior Profi'), 'Below Threshold – Junior…')
+})
+
+
+test('cleanAiTextForDisplay preserves valid availability and long prose without terminal punctuation', () => {
+  assert.equal(cleanAiTextForDisplay('Open to relocate to London'), 'Open to relocate to London')
+  assert.equal(cleanAiTextForDisplay('Currently based in Mumbai'), 'Currently based in Mumbai')
+  assert.equal(cleanAiTextForDisplay('Available to join in July'), 'Available to join in July')
+  assert.equal(
+    cleanAiTextForDisplay('Experienced backend engineer with strong ownership across payments, authentication and observability for production systems'),
+    'Experienced backend engineer with strong ownership across payments, authentication and observability for production systems',
+  )
+})
+
+test('cleanAiTextForDisplay returns safe empty display for missing values', () => {
+  assert.equal(cleanAiTextForDisplay(null), '')
+  assert.equal(cleanAiTextForDisplay(undefined), '')
+  assert.equal(cleanAiTextForDisplay('   '), '')
+})
 
 test('normalizeSortBy whitelists supported values', () => {
   assert.equal(normalizeSortBy('name'), 'name')
