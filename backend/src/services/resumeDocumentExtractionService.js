@@ -372,6 +372,7 @@ function buildPdfScoringExperimentDiagnostics({ eligibility, scoringInputKind = 
     scoringExperimentMasterEnabled: Boolean(eligibility?.masterEnabled),
     scoringExperimentEligible: Boolean(eligibility?.eligible),
     scoringExperimentEligibilityReason: eligibility?.eligibilityReason || 'master_disabled',
+    scoringExperimentAllUsersEnabled: Boolean(eligibility?.allUsersEnabled),
     scoringExperimentAllowlistMatched: Boolean(eligibility?.allowlistMatched),
     scoringExperimentMatchedAllowlistType: eligibility?.matchedAllowlistType || null,
     scoringInputKind,
@@ -1018,6 +1019,7 @@ export async function prepareResumePayloadForAnalysis({ fileBufferBase64, mimeTy
         masterEnabled: false,
         eligible: false,
         eligibilityReason: 'master_disabled',
+        allUsersEnabled: false,
         allowlistMatched: false,
         matchedAllowlistType: null,
       }
