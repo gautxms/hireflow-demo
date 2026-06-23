@@ -20,12 +20,21 @@ const PLAN_DETAILS = {
     label: 'Annual',
     summary: 'You selected the annual subscription.',
   },
+  'test-monthly': {
+    label: 'Monthly',
+    summary: 'You selected the monthly subscription.',
+  },
 }
 
 function getPlanFromQuery() {
   const params = new URLSearchParams(window.location.search)
   const plan = params.get('plan')
-  return plan === 'monthly' || plan === 'annual' ? plan : 'monthly'
+  return plan === 'monthly' || plan === 'annual' || plan === 'test-monthly' ? plan : 'monthly'
+}
+
+function getTestKeyFromQuery() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('testKey') || ''
 }
 
 
@@ -70,6 +79,7 @@ function waitForPaddle(timeoutMs = 5000) {
 export default function Checkout({ onAuthSuccess }) {
   const selectedPlan = getPlanFromQuery()
   const plan = PLAN_DETAILS[selectedPlan]
+  const testKey = selectedPlan === 'test-monthly' ? getTestKeyFromQuery() : ''
   const [status, setStatus] = useState('idle') // idle, loading, ready, opened, action_required, error
   const [reactivateRequested, setReactivateRequested] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -264,15 +274,17 @@ export default function Checkout({ onAuthSuccess }) {
           plan: selectedPlan,
         })
         
+        const checkoutRequestBody = selectedPlan === 'test-monthly'
+          ? { plan: selectedPlan, testKey }
+          : { plan: selectedPlan }
+
         const response = await fetch(checkoutApiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            plan: selectedPlan,
-          }),
+          body: JSON.stringify(checkoutRequestBody),
         })
 
         console.log('[Checkout] BACKEND RESPONSE RECEIVED:', {
@@ -531,7 +543,7 @@ export default function Checkout({ onAuthSuccess }) {
         }
       }
     }
-  }, [onAuthSuccess, reactivateRequested, selectedPlan])
+  }, [onAuthSuccess, reactivateRequested, selectedPlan, testKey])
 
   useEffect(() => {
     if (!checkoutOpen || hasSuccessfulTransaction) {
