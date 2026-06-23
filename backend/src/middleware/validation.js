@@ -62,7 +62,8 @@ export const schemas = {
     password: passwordField,
   }),
   paddleCheckout: Joi.object({
-    plan: Joi.string().valid('monthly', 'annual').required(),
+    plan: Joi.string().valid('monthly', 'annual', 'test-monthly').required(),
+    testKey: Joi.string().trim().max(256).optional(),
   }),
 }
 

@@ -37,3 +37,27 @@ test('resolvePaddleConfig keeps production values in production', () => {
   assert.equal(cfg.priceIdsByPlan.monthly, 'pri_live_m')
   assert.equal(cfg.priceIdsByPlan.annual, 'pri_live_a')
 })
+
+test('resolvePaddleConfig exposes test-monthly price only when hidden checkout is enabled', () => {
+  const disabled = resolvePaddleConfig({
+    PADDLE_ENVIRONMENT: 'production',
+    PADDLE_TEST_MONTHLY_PRICE_ID: 'pri_test_monthly',
+    PADDLE_ENABLE_TEST_CHECKOUT: 'false',
+    PADDLE_TEST_CHECKOUT_KEY: 'secret',
+  })
+
+  assert.equal(disabled.priceIdsByPlan['test-monthly'], undefined)
+  assert.equal(disabled.testCheckout.enabled, false)
+  assert.equal(disabled.testCheckout.key, 'secret')
+
+  const enabled = resolvePaddleConfig({
+    PADDLE_ENVIRONMENT: 'production',
+    PADDLE_TEST_MONTHLY_PRICE_ID: 'pri_test_monthly',
+    PADDLE_ENABLE_TEST_CHECKOUT: 'true',
+    PADDLE_TEST_CHECKOUT_KEY: 'secret',
+  })
+
+  assert.equal(enabled.priceIdsByPlan['test-monthly'], 'pri_test_monthly')
+  assert.equal(enabled.testCheckout.enabled, true)
+  assert.equal(enabled.testCheckout.key, 'secret')
+})

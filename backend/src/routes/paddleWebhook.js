@@ -64,6 +64,17 @@ async function resolveUserFromPayload(payload) {
   return result.rows[0] || null
 }
 
+
+function getStoredSubscriptionPlan(payload) {
+  const plan = payload?.data?.custom_data?.plan || payload?.custom_data?.plan || null
+
+  if (plan === 'test-monthly') {
+    return 'monthly'
+  }
+
+  return plan
+}
+
 function getPaymentAmount(payload) {
   const cents = payload?.data?.details?.totals?.total || payload?.data?.totals?.total || payload?.amount || null
 
@@ -220,7 +231,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
                  paddle_environment = $7,
                  updated_at = NOW()
              WHERE id = $1`,
-            [userId, transactionSubscriptionId, getPaddleCustomerId(payload), payload?.data?.custom_data?.plan || null, payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
+            [userId, transactionSubscriptionId, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload), payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
           )
         }
 
@@ -280,7 +291,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
                updated_at = NOW()
            WHERE id = $1`,
-          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), payload?.data?.custom_data?.plan || null, payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment],
+          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment],
         )
       }
     }

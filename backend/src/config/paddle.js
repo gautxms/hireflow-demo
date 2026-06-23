@@ -21,6 +21,23 @@ export function resolvePaddleConfig(env = process.env) {
     DEFAULT_PADDLE_API_BASE_URL,
   )
 
+  const isTestCheckoutEnabled = env.PADDLE_ENABLE_TEST_CHECKOUT === 'true'
+
+  const priceIdsByPlan = {
+    monthly: firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_MONTHLY_PRICE_ID : env.PADDLE_PRODUCTION_MONTHLY_PRICE_ID,
+      isProduction ? env.PADDLE_MONTHLY_PRICE_ID : undefined,
+    ),
+    annual: firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_ANNUAL_PRICE_ID : env.PADDLE_PRODUCTION_ANNUAL_PRICE_ID,
+      isProduction ? env.PADDLE_ANNUAL_PRICE_ID : undefined,
+    ),
+  }
+
+  if (isTestCheckoutEnabled) {
+    priceIdsByPlan['test-monthly'] = firstDefined(env.PADDLE_TEST_MONTHLY_PRICE_ID)
+  }
+
   return {
     environment,
     apiBaseUrl,
@@ -37,15 +54,10 @@ export function resolvePaddleConfig(env = process.env) {
       isSandbox ? env.PADDLE_SANDBOX_WEBHOOK_SECRET : env.PADDLE_PRODUCTION_WEBHOOK_SECRET,
       isProduction ? env.PADDLE_WEBHOOK_SECRET : undefined,
     ),
-    priceIdsByPlan: {
-      monthly: firstDefined(
-        isSandbox ? env.PADDLE_SANDBOX_MONTHLY_PRICE_ID : env.PADDLE_PRODUCTION_MONTHLY_PRICE_ID,
-        isProduction ? env.PADDLE_MONTHLY_PRICE_ID : undefined,
-      ),
-      annual: firstDefined(
-        isSandbox ? env.PADDLE_SANDBOX_ANNUAL_PRICE_ID : env.PADDLE_PRODUCTION_ANNUAL_PRICE_ID,
-        isProduction ? env.PADDLE_ANNUAL_PRICE_ID : undefined,
-      ),
+    priceIdsByPlan,
+    testCheckout: {
+      enabled: isTestCheckoutEnabled,
+      key: firstDefined(env.PADDLE_TEST_CHECKOUT_KEY),
     },
   }
 }
