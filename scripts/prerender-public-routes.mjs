@@ -39,7 +39,7 @@ const PUBLIC_ROUTES = [
                 <p>Analyze resumes against role requirements and surface structured candidate signals for recruiter review.</p>
               </article>
               <article class="feature-card">
-                <h3>Bias Removal</h3>
+                <h3>Structured Review</h3>
                 <p>Evaluate candidates on merit with a consistent framework designed to reduce manual screening variance.</p>
               </article>
               <article class="feature-card">
@@ -66,7 +66,7 @@ const PUBLIC_ROUTES = [
     body: `
       <main>
         <h1>About HireFlow</h1>
-        <p>We build AI tools that help recruiting teams hire fairly, quickly, and with better confidence.</p>
+        <p>We build AI tools that help recruiting teams review candidates more consistently, quickly, and with clearer context.</p>
       </main>
     `,
   },
