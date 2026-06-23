@@ -48,6 +48,17 @@ test('cleanAiTextForDisplay hides obvious dangling AI fragments without inventin
   assert.equal(cleanAiTextForDisplay('Below Threshold – Junior Profi'), 'Below Threshold – Junior…')
 })
 
+
+test('cleanAiTextForDisplay preserves valid availability and long prose without terminal punctuation', () => {
+  assert.equal(cleanAiTextForDisplay('Open to relocate to London'), 'Open to relocate to London')
+  assert.equal(cleanAiTextForDisplay('Currently based in Mumbai'), 'Currently based in Mumbai')
+  assert.equal(cleanAiTextForDisplay('Available to join in July'), 'Available to join in July')
+  assert.equal(
+    cleanAiTextForDisplay('Experienced backend engineer with strong ownership across payments, authentication and observability for production systems'),
+    'Experienced backend engineer with strong ownership across payments, authentication and observability for production systems',
+  )
+})
+
 test('cleanAiTextForDisplay returns safe empty display for missing values', () => {
   assert.equal(cleanAiTextForDisplay(null), '')
   assert.equal(cleanAiTextForDisplay(undefined), '')

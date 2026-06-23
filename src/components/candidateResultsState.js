@@ -522,20 +522,13 @@ export function cleanAiTextForDisplay(value, fallback = '') {
   const words = text.split(/\s+/).filter(Boolean)
   const lastWord = words[words.length - 1]?.replace(/^[([{"'‘“]+|[),.;:!?\]}'’”]+$/g, '') || ''
   const hasLikelySentenceContext = /[,;:]|\s(?:with|without|because|while|but|although|including|demonstrated|experience|ability|candidate|requirement|requirements)\s/i.test(text)
+  const hasShortVerdictFragment = /[–—-]/.test(text) && /\s+[A-Z][a-z]{3,5}$/.test(text)
 
   if (words.length <= 4 && TECHNICAL_DISPLAY_TOKEN.test(lastWord)) return text
   if (words.length <= 4 && !/[–—-]/.test(text)) return text
 
-  if (TRAILING_FRAGMENT_PATTERN.test(text) && (hasLikelySentenceContext || words.length <= 6 || text.length >= 60)) {
+  if (TRAILING_FRAGMENT_PATTERN.test(text) && (hasLikelySentenceContext || hasShortVerdictFragment || text.length >= 60)) {
     return appendDisplayEllipsis(text.replace(TRAILING_FRAGMENT_PATTERN, '')) || text
-  }
-
-  if (text.length >= 90 || words.length >= 14) {
-    const boundaryIndex = Math.max(text.lastIndexOf('. '), text.lastIndexOf('! '), text.lastIndexOf('? '), text.lastIndexOf('; '), text.lastIndexOf(', '))
-    if (boundaryIndex >= 40) {
-      return appendDisplayEllipsis(text.slice(0, boundaryIndex)) || text
-    }
-    return appendDisplayEllipsis(text) || text
   }
 
   return text
