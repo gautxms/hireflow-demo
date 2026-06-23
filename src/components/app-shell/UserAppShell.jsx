@@ -190,6 +190,7 @@ export default function UserAppShell({ children, pathname, onNavigate, pageTitle
           <div className="user-app-shell__footer-links">
             <button type="button" onClick={() => onNavigate('/privacy')} className="user-app-shell__footer-link">Privacy</button>
             <button type="button" onClick={() => onNavigate('/terms')} className="user-app-shell__footer-link">Terms</button>
+            <button type="button" onClick={() => onNavigate('/ai-disclosure')} className="user-app-shell__footer-link">AI</button>
             <button type="button" onClick={() => onNavigate('/cookie-policy')} className="user-app-shell__footer-link">Cookies</button>
             <button type="button" onClick={openCookiePreferences} className="user-app-shell__footer-link">Cookie preferences</button>
             <button type="button" onClick={() => onNavigate('/help')} className="user-app-shell__footer-link">Help</button>

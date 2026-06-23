@@ -18,6 +18,7 @@ import VerifyEmail from './pages/VerifyEmail'
 import Terms from './pages/Terms'
 import PrivacyPage from './components/PrivacyPage'
 import CookiePolicyPage from './components/CookiePolicyPage'
+import AiDisclosurePage from './components/AiDisclosurePage'
 import RefundPolicy from './pages/RefundPolicy'
 const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
 const BillingCancel = lazy(() => import('./pages/BillingCancel'))
@@ -91,6 +92,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/demo',
   '/privacy',
   '/terms',
+  '/ai-disclosure',
   '/cookie-policy',
   '/refund-policy',
   ...INTENT_PAGE_ORDER,
@@ -477,6 +479,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (resolvedPathname === '/privacy') {
       return <PrivacyPage />
+    }
+
+    if (resolvedPathname === '/ai-disclosure') {
+      return <AiDisclosurePage />
     }
 
     if (resolvedPathname === '/cookie-policy') {

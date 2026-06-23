@@ -22,8 +22,8 @@ const PUBLIC_ROUTES = [
                 <span class="hero-headline-line hero-headline-line--accent">Faster.</span>
               </h1>
               <p>
-                HireFlow automates candidate screening with AI. Reduce hiring time from weeks to days,
-                eliminate bias, and make data-driven decisions. Finally, a recruiting tool built for modern teams.
+                HireFlow supports candidate screening with AI-assisted resume review, structured recommendations,
+                and clearer context for recruiter-led decisions.
               </p>
               <div class="hero-cta">
                 <a class="btn-primary" href="/pricing">View pricing</a>
@@ -36,7 +36,7 @@ const PUBLIC_ROUTES = [
             <div class="features-grid">
               <article class="feature-card">
                 <h3>AI Screening</h3>
-                <p>Automatically analyze and score resumes in seconds. Match candidates with roles using 20+ evaluation dimensions.</p>
+                <p>Analyze resumes against role requirements and surface structured candidate signals for recruiter review.</p>
               </article>
               <article class="feature-card">
                 <h3>Bias Removal</h3>
@@ -117,6 +117,15 @@ const PUBLIC_ROUTES = [
     `,
   },
   {
+    route: '/ai-disclosure',
+    body: `
+      <main>
+        <h1>AI Disclosure</h1>
+        <p>Learn how HireFlow uses AI-assisted resume analysis as decision support, not automated hiring decisions.</p>
+      </main>
+    `,
+  },
+  {
     route: '/refund-policy',
     body: `
       <main>
@@ -130,7 +139,7 @@ const PUBLIC_ROUTES = [
     body: `
       <main>
         <h1>AI Resume Screening Software</h1>
-        <p>Automatically evaluate applicants against role requirements and prioritize top-fit candidates in minutes.</p>
+        <p>Evaluate applicants against role requirements and prioritize review with structured AI-assisted recommendations.</p>
       </main>
     `,
   },
@@ -139,7 +148,7 @@ const PUBLIC_ROUTES = [
     body: `
       <main>
         <h1>Bulk Resume Analysis</h1>
-        <p>Upload and analyze large candidate batches with consistent AI scoring to reduce manual review time.</p>
+        <p>Upload and analyze candidate batches with structured scoring support to reduce manual triage time.</p>
       </main>
     `,
   },
@@ -148,7 +157,7 @@ const PUBLIC_ROUTES = [
     body: `
       <main>
         <h1>Resume Scoring AI</h1>
-        <p>Use transparent, role-aware AI scoring to compare applicants fairly and identify strong interview prospects.</p>
+        <p>Use transparent, role-aware AI scoring to compare applicants consistently and identify candidates for human review.</p>
       </main>
     `,
   },
@@ -157,7 +166,7 @@ const PUBLIC_ROUTES = [
     body: `
       <main>
         <h1>Automated Candidate Shortlisting</h1>
-        <p>Generate shortlist-ready candidate rankings with clear rationale so hiring teams can move faster.</p>
+        <p>Generate candidate rankings with clear rationale so hiring teams can review shortlists with more context.</p>
       </main>
     `,
   },

@@ -18,11 +18,11 @@ export const PUBLIC_PAGE_SEO = {
   },
   '/about': {
     title: 'About HireFlow',
-    description: 'Meet the HireFlow team and learn how we help talent teams hire faster and more consistently with AI.',
+    description: 'Learn how HireFlow is preparing practical AI-assisted resume screening for faster, more structured candidate review.',
   },
   '/contact': {
     title: 'Contact HireFlow',
-    description: 'Contact HireFlow for product help, sales conversations, partnerships, and enterprise onboarding.',
+    description: 'Contact HireFlow for product help, sales conversations, billing, privacy requests, and launch questions.',
   },
   '/help': {
     title: 'HireFlow Help Center',
@@ -42,7 +42,11 @@ export const PUBLIC_PAGE_SEO = {
   },
   '/privacy': {
     title: 'HireFlow Privacy Policy',
-    description: 'Learn how HireFlow collects, uses, and protects personal information processed on our hiring platform.',
+    description: 'Learn how HireFlow processes account data, resumes, job descriptions, AI analysis results, and deletion requests.',
+  },
+  '/ai-disclosure': {
+    title: 'HireFlow AI Disclosure',
+    description: 'Learn how HireFlow uses AI-assisted resume analysis as decision support, not automated hiring decisions.',
   },
   '/cookie-policy': {
     title: 'HireFlow Cookie Policy',
