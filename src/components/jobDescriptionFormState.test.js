@@ -59,3 +59,15 @@ test('serializeJobDescriptionForm persists new job content fields and normalizes
   assert.equal(result.workMode, 'Hybrid')
   assert.equal(result.additionalInfo, 'Sponsor available')
 })
+
+test('serializeJobDescriptionForm keeps distinct experience min and max values', () => {
+  const result = serializeJobDescriptionForm({
+    title: 'Marketing Manager',
+    experienceMin: '4',
+    experienceMax: '7',
+  })
+
+  assert.equal(result.experienceMin, 4)
+  assert.equal(result.experienceMax, 7)
+  assert.equal(result.experienceYears, 4)
+})

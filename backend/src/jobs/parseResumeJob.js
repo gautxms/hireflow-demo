@@ -1239,6 +1239,8 @@ export function buildJobDescriptionContext(row) {
     requirements: normalizeString(row.requirements),
     skills,
     experienceYears: normalizeNullableNumber(row.experience_years),
+    experienceMin: normalizeNullableNumber(row.experience_min ?? row.experience_years),
+    experienceMax: normalizeNullableNumber(row.experience_max ?? row.experience_years),
     location: normalizeString(row.location),
     salaryMin: normalizeNullableNumber(row.salary_min),
     salaryMax: normalizeNullableNumber(row.salary_max),
@@ -1254,7 +1256,9 @@ export function buildJobDescriptionContext(row) {
       || normalized.description
       || normalized.requirements
       || normalized.skills.length > 0
-      || normalized.experienceYears !== null,
+      || normalized.experienceYears !== null
+      || normalized.experienceMin !== null
+      || normalized.experienceMax !== null,
   )
 
   if (!normalized.fileText && !hasManualContext) {
