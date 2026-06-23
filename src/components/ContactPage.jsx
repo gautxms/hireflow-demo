@@ -3,12 +3,6 @@ import API_BASE from '../config/api'
 import { Icon } from './Icon'
 import PublicPageLayout from './public/PublicPageLayout'
 
-const OFFICES = [
-  { city: 'San Francisco', address: '123 Tech Street', state: 'San Francisco, CA 94103', phone: '+1 (555) 123-4567', hours: 'Mon-Fri: 9am-6pm PT' },
-  { city: 'New York', address: '456 Innovation Ave', state: 'New York, NY 10001', phone: '+1 (555) 234-5678', hours: 'Mon-Fri: 9am-6pm ET' },
-  { city: 'London', address: '789 Tech Park', state: 'London, UK EC1A 1AA', phone: '+44 (0) 20 7946 0958', hours: 'Mon-Fri: 9am-6pm GMT' }
-]
-
 export default function ContactPage({ onBack }) {
   const [formData, setFormData] = useState({ name: '', email: '', company: '', subject: '', message: '' })
   const [errors, setErrors] = useState({})
@@ -17,19 +11,17 @@ export default function ContactPage({ onBack }) {
   const [submitError, setSubmitError] = useState('')
 
   const contactMethods = [
-    { icon: 'mail', title: 'Email', description: 'Best for detailed inquiries', value: 'hello@hireflow.dev' },
-    { icon: 'phone', title: 'Phone', description: 'Call us during business hours', value: '+1 (555) 123-4567' },
-    { icon: 'mapPin', title: 'Office', description: 'Visit us in San Francisco', value: '123 Tech Street, SF, CA 94103' },
-    { icon: 'chat', title: 'Live Chat', description: 'Instant support (9am-6pm EST)', value: 'Start Chat' }
+    { icon: 'mail', title: 'Email', description: 'Best for detailed inquiries and deletion requests', value: 'hello@hireflow.dev' },
+    { icon: 'chat', title: 'Contact form', description: 'Share product, billing, privacy, or support questions', value: 'Use the form below' },
+    { icon: 'target', title: 'Demo requests', description: 'Book time to review HireFlow workflows', value: 'Schedule a demo' }
   ]
 
   const faqItems = [
-    { question: 'What are your support hours?', answer: 'We offer support Monday-Friday, 9am-6pm EST. Enterprise customers get 24/7 support.' },
-    { question: 'How quickly will I get a response?', answer: 'We aim to respond to all inquiries within 2 hours during business hours. For urgent matters, call our phone line.' },
-    { question: 'Do you offer phone support?', answer: 'Yes! Pro and Enterprise plans include phone support. Starter plans can upgrade to add phone support.' },
-    { question: 'Can I schedule a call with your team?', answer: 'Absolutely! Visit our Demo Booking page to schedule a time that works best for you.' },
-    { question: 'What if I have billing questions?', answer: 'Billing inquiries can be sent to billing@hireflow.dev or discussed during a scheduled call with our team.' },
-    { question: 'Do you have a privacy policy?', answer: 'Yes, you can review our full privacy policy, terms of service, and security documentation on our Legal page.' }
+    { question: 'How do I contact HireFlow?', answer: 'Use the form on this page or email hello@hireflow.dev. We review messages as quickly as practical during launch preparation.' },
+    { question: 'Can I request data deletion?', answer: 'Yes. Email hello@hireflow.dev with enough detail to identify the account, workspace, job, resume, or candidate record involved.' },
+    { question: 'Can I schedule a call with your team?', answer: 'Yes. Visit the demo page to request a time to review HireFlow workflows.' },
+    { question: 'What if I have billing questions?', answer: 'Send billing questions through this form or to hello@hireflow.dev so we can review your account context.' },
+    { question: 'Do you have privacy and AI processing information?', answer: 'Yes. Review the Privacy Policy, Terms of Service, Cookie Policy, and AI Disclosure linked in the footer.' }
   ]
 
   const handleInputChange = (e) => {
@@ -85,7 +77,7 @@ export default function ContactPage({ onBack }) {
 
       <section className="public-page-hero">
         <h1 className="public-page-title">Get in Touch</h1>
-        <p className="public-page-subtitle">Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.</p>
+        <p className="public-page-subtitle">Have questions about HireFlow, privacy, billing, or launch readiness? Send a message and we’ll review it as soon as practical.</p>
       </section>
 
       <section className="public-section public-section-alt">
@@ -108,7 +100,7 @@ export default function ContactPage({ onBack }) {
         <div className="public-grid-2">
           <div>
             <h2 className="public-section-title">Send us a Message</h2>
-            {submitted && <div className="status-message status-message--success"><strong>Message Sent!</strong> Thank you for reaching out. We'll get back to you within 2 hours.</div>}
+            {submitted && <div className="status-message status-message--success"><strong>Message sent.</strong> Thank you for reaching out. We’ll review your message as soon as practical.</div>}
             {submitError && <div className="status-message status-message--error">{submitError}</div>}
 
             <form onSubmit={handleSubmit} className="public-form public-form-grid">
@@ -157,20 +149,6 @@ export default function ContactPage({ onBack }) {
         </div>
       </section>
 
-      <section className="public-section public-section-alt">
-        <div className="public-page-main">
-          <h2 className="public-section-title center">Our Offices</h2>
-          <div className="public-feature-grid">
-            {OFFICES.map((office) => (
-              <article key={office.city} className="public-card">
-                <h3 className="public-card-title contact-accent-title contact-office-heading"><Icon name="mapPin" size="sm" tone="accent" />{office.city}</h3>
-                <p className="public-card-copy">{office.address}<br />{office.state}</p>
-                <p className="public-card-copy"><strong>Phone:</strong> {office.phone}<br /><strong>Hours:</strong> {office.hours}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
     </PublicPageLayout>
   )
 }

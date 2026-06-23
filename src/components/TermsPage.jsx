@@ -1,25 +1,18 @@
-import usePageSeo from '../hooks/usePageSeo'
-import PublicPageLayout from './public/PublicPageLayout'
+import ContentDocument from './ContentDocument'
 
 export default function TermsPage() {
-  usePageSeo('HireFlow Terms of Service', 'Review the HireFlow Terms of Service for using our resume screening platform and related features.')
-
   return (
-    <PublicPageLayout>
-      <section className="public-section" style={{ maxWidth: 900, margin: '0 auto', lineHeight: 1.7 }}>
-        <h1 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-display)' }}>Terms of Service</h1>
-        <p>By accessing HireFlow, you agree to use the service for lawful hiring operations and internal recruiting workflows only.</p>
-        <h2>Acceptable Use</h2>
-        <p>You are responsible for ensuring uploaded content is accurate, lawful, and that you have permission to process candidate information.</p>
-        <h2>Service Availability</h2>
-        <p>HireFlow may update, improve, or maintain the platform over time. We strive for reliable access but do not guarantee uninterrupted availability.</p>
-        <h2>Intellectual Property</h2>
-        <p>All platform materials, branding, and software remain the property of HireFlow or its licensors. You may not reverse engineer or resell the service.</p>
-        <h2>Limitation of Liability</h2>
-        <p>HireFlow is provided on an "as is" basis to the maximum extent permitted by law. Our aggregate liability is limited to fees paid for the service in the preceding 12 months.</p>
-        <h2>Contact</h2>
-        <p>Questions about these terms can be sent to legal@hireflow.example.</p>
-      </section>
-    </PublicPageLayout>
+    <ContentDocument title="Terms of Service" eyebrow="Legal">
+      <p className="content-document__paragraph"><strong>Last updated: June 23, 2026</strong></p>
+      <p className="content-document__paragraph">By accessing HireFlow, you agree to use the service for lawful hiring operations and internal recruiting workflows only.</p>
+      <h2 className="content-document__heading">Acceptable use</h2>
+      <p className="content-document__paragraph">You are responsible for ensuring uploaded content is lawful and that you have permission or another lawful basis to process candidate information.</p>
+      <h2 className="content-document__heading">AI-assisted output</h2>
+      <p className="content-document__paragraph">HireFlow output is decision support, not a final hiring decision. Recruiters and hiring managers should independently review recommendations before making candidate decisions.</p>
+      <h2 className="content-document__heading">Service availability</h2>
+      <p className="content-document__paragraph">HireFlow may update, improve, or maintain the platform over time. We strive for reliable access but do not guarantee uninterrupted availability.</p>
+      <h2 className="content-document__heading">Contact</h2>
+      <p className="content-document__paragraph">Questions about these terms can be sent to <a className="content-document__link" href="mailto:hello@hireflow.dev">hello@hireflow.dev</a>.</p>
+    </ContentDocument>
   )
 }

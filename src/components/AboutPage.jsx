@@ -10,16 +10,16 @@ export default function AboutPage({ onBack }) {
   ]
   const values = [
     { icon: 'target', title: 'User-Centric', description: 'Everything we build starts with understanding real recruiting pain points.' },
-    { icon: 'microscope', title: 'AI-Powered', description: 'Advanced machine learning that learns and improves with every hire.' },
+    { icon: 'microscope', title: 'AI-Assisted', description: 'Structured analysis that helps teams compare resumes against role requirements with clearer context.' },
     { icon: 'chart', title: 'Transparent', description: 'You always know how we scored candidates and can customize the rules.' },
     { icon: 'rocket', title: 'Fast', description: 'From resume to ranked candidates in minutes, not days.' },
     { icon: 'shield', title: 'Trustworthy', description: 'We handle candidate data with care, provide clear scoring reasoning, and design workflows for responsible hiring decisions.' },
-    { icon: 'sprout', title: 'Bias-Aware', description: 'Built to reduce bias and promote diversity in hiring.' }
+    { icon: 'sprout', title: 'Bias-Aware', description: 'Designed to support more structured review while keeping recruiters responsible for final decisions.' }
   ]
   const improvements = [
     { title: 'Faster first-pass screening', description: 'Speed up initial resume review by surfacing key signals and fit indicators sooner.' },
     { title: 'Clearer candidate comparison', description: 'Evaluate applicants side by side with structured summaries aligned to role needs.' },
-    { title: 'More transparent AI output', description: 'Understand how recommendations are produced so teams can review and trust each decision.' }
+    { title: 'More transparent AI output', description: 'Understand how recommendations are produced so teams can review each recommendation with context.' }
   ]
   const timeline = [
     { year: 'Feb 2026', event: 'HireFlow Started', desc: 'began building structured resume screening' },

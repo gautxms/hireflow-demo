@@ -16,7 +16,7 @@ export default function PublicFooter() {
             Hire<span>Flow</span>
           </a>
           <p className="public-footer__tagline">
-            AI-powered resume screening for faster, fairer hiring decisions.
+            AI-assisted resume screening for faster, more structured candidate review.
           </p>
         </section>
 
@@ -41,6 +41,7 @@ export default function PublicFooter() {
           <ul className="public-footer__list">
             <li><a className="public-footer__link" href="/privacy">Privacy</a></li>
             <li><a className="public-footer__link" href="/terms">Terms</a></li>
+            <li><a className="public-footer__link" href="/ai-disclosure">AI Disclosure</a></li>
             <li><a className="public-footer__link" href="/cookie-policy">Cookie Policy</a></li>
             <li><a className="public-footer__link" href="/refund-policy">Refund Policy</a></li>
           </ul>
