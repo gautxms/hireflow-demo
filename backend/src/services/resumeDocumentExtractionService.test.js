@@ -20,6 +20,7 @@ import {
   __resetPdfJsClientForTests,
   __setPdfJsClientForTests,
   evaluatePdfCanonicalExtractionObserveOnlyEligibility,
+  evaluatePdfCanonicalTextScoringExperimentEligibility,
 } from './pdfCanonicalExtractionService.js'
 import {
   __resetLegacyDocSemanticExtractorForTests,
@@ -81,6 +82,7 @@ function withPdfObserveOnlyEnv(overrides = {}) {
     'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED',
     'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS',
     'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS',
+    'PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS',
     'PDF_CANONICAL_EXTRACTION_MAX_PAGES',
   ]
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
@@ -235,6 +237,37 @@ async function preparePdfForScoringExperiment({ fixture = buildSyntheticPdfResum
 
 
 
+
+test('PDF canonical text scoring experiment all-users flag defaults off and empty allowlists are not global', async () => {
+  assert.deepEqual(evaluatePdfCanonicalTextScoringExperimentEligibility({
+    env: {},
+    userId: '26',
+    analysisId: 'analysis-1',
+  }), {
+    masterEnabled: false,
+    allUsersEnabled: false,
+    eligible: false,
+    eligibilityReason: 'master_disabled',
+    allowlistMatched: false,
+    matchedAllowlistType: null,
+  })
+
+  const enabledWithoutAllowlists = evaluatePdfCanonicalTextScoringExperimentEligibility({
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS: 'false',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS: '',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS: '',
+    },
+    userId: '26',
+    analysisId: 'analysis-1',
+  })
+  assert.equal(enabledWithoutAllowlists.masterEnabled, true)
+  assert.equal(enabledWithoutAllowlists.allUsersEnabled, false)
+  assert.equal(enabledWithoutAllowlists.eligible, false)
+  assert.equal(enabledWithoutAllowlists.eligibilityReason, 'not_allowlisted')
+})
+
 test('PDF canonical text scoring experiment defaults off and preserves binary scoring payload', async () => {
   const run = await preparePdfForScoringExperiment({ diagnosticsContext: { userId: '26', analysisId: 'analysis-1' } })
   assert.equal(run.parserCalls, 0)
@@ -318,6 +351,28 @@ test('PDF canonical text scoring experiment allowlisted analysis ID with usable 
   assert.equal(run.result.preparedMimeType, 'text/plain')
   assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligibilityReason, 'analysis_allowlist')
   assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentMatchedAllowlistType, 'analysis_id')
+})
+
+
+test('PDF canonical text scoring experiment all-users flag selects canonical text without allowlists', async () => {
+  const run = await preparePdfForScoringExperiment({
+    env: {
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED: 'true',
+      PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS: 'true',
+    },
+    diagnosticsContext: { userId: 'non-allowlisted-user', analysisId: 'non-allowlisted-analysis' },
+  })
+  assert.equal(run.parserCalls, 1)
+  assert.equal(run.result.inputKind, 'extracted_text')
+  assert.equal(run.result.diagnostics.inputKind, 'extracted_text')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringInputKind, 'extracted_text')
+  assert.equal(run.result.diagnostics.extractionMethod, 'pdfjs_dist_canonical_text_scoring_experiment')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExtractionMethod, 'pdfjs_dist_canonical_text_scoring_experiment')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringFallbackReason, 'canonical_text_selected')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentEligibilityReason, 'all_users')
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentAllUsersEnabled, true)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentAllowlistMatched, false)
+  assert.equal(run.result.diagnostics.pdfCanonicalTextScoringExperiment.scoringExperimentMatchedAllowlistType, null)
 })
 
 test('PDF canonical text scoring experiment parser failure and malformed PDFs fall back to original binary', async () => {

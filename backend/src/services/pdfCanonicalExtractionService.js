@@ -43,6 +43,7 @@ const SCORING_EXPERIMENT_ELIGIBILITY_REASON = {
   masterDisabled: 'master_disabled',
   userAllowlist: 'user_allowlist',
   analysisAllowlist: 'analysis_allowlist',
+  allUsers: 'all_users',
   notAllowlisted: 'not_allowlisted',
 }
 const MATCHED_ALLOWLIST_TYPE = {
@@ -225,14 +226,20 @@ export function isPdfCanonicalTextScoringExperimentEnabled(env = process.env) {
   return TRUE_VALUES.has(String(env?.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED || '').trim().toLowerCase())
 }
 
+export function isPdfCanonicalTextScoringExperimentAllUsersEnabled(env = process.env) {
+  return TRUE_VALUES.has(String(env?.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS || '').trim().toLowerCase())
+}
+
 export function evaluatePdfCanonicalTextScoringExperimentEligibility({
   env = process.env,
   userId = null,
   analysisId = null,
 } = {}) {
   const masterEnabled = isPdfCanonicalTextScoringExperimentEnabled(env)
+  const allUsersEnabled = isPdfCanonicalTextScoringExperimentAllUsersEnabled(env)
   const base = {
     masterEnabled,
+    allUsersEnabled,
     eligible: false,
     eligibilityReason: SCORING_EXPERIMENT_ELIGIBILITY_REASON.masterDisabled,
     allowlistMatched: false,
@@ -263,6 +270,14 @@ export function evaluatePdfCanonicalTextScoringExperimentEligibility({
       eligibilityReason: SCORING_EXPERIMENT_ELIGIBILITY_REASON.analysisAllowlist,
       allowlistMatched: true,
       matchedAllowlistType: MATCHED_ALLOWLIST_TYPE.analysisId,
+    }
+  }
+
+  if (allUsersEnabled) {
+    return {
+      ...base,
+      eligible: true,
+      eligibilityReason: SCORING_EXPERIMENT_ELIGIBILITY_REASON.allUsers,
     }
   }
 

@@ -33,12 +33,12 @@ If eligibility evaluation or parsing fails, the existing PDF binary analysis flo
 
 ## Allowlist-only PDF canonical-text scoring experiment
 
-The scoring experiment is a separate, fail-closed control for comparing PDF canonical text against existing DOCX/DOC text scoring. It is **not** a global PDF rollout and it has no percentage sampling.
+The scoring experiment is a separate, fail-closed control for comparing PDF canonical text against existing DOCX/DOC text scoring. It remains allowlist-only unless the explicit all-users rollout flag is enabled, and it has no percentage sampling.
 
 A PDF may use canonical extracted text for scoring only when all conditions are true:
 
 1. `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED` is truthy (`1`, `true`, `yes`, `on`, or `enabled`).
-2. The current HireFlow database user ID or analysis ID is explicitly allowlisted.
+2. The current HireFlow database user ID or analysis ID is explicitly allowlisted, or `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=true`.
 3. Local PDF extraction succeeds.
 4. `qualityClassification` is exactly `usable_text_extraction`.
 5. `ocrRequired` is `false`.
@@ -77,11 +77,12 @@ The scoring experiment reuses the same local extraction result as observe-only d
 | `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED` | `false` | Independent scoring experiment kill switch. Missing, empty, invalid, or false means PDF scoring stays on the existing binary provider path. |
 | `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS` | empty | Comma-separated internal user IDs eligible for canonical-text PDF scoring when the scoring master flag is enabled. Empty means no users are eligible. |
 | `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS` | empty | Comma-separated analysis IDs eligible for canonical-text PDF scoring when the scoring master flag is enabled. Empty means no analyses are eligible. |
+| `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS` | `false` | Explicit all-users rollout flag. Only applies when `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED` is truthy. Empty allowlists do not become globally eligible unless this flag is truthy. |
 | `PDF_CANONICAL_EXTRACTION_MAX_BYTES` | `5242880` | Existing parser byte cap. |
 | `PDF_CANONICAL_EXTRACTION_TIMEOUT_MS` | `1500` | Existing parser timeout cap. |
 | `PDF_CANONICAL_EXTRACTION_MAX_PAGES` | `20` | Existing parser page cap. |
 
-Observe-only rollback is setting `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=false`. Scoring-experiment rollback is setting `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED=false`. No DB migration is required for either control.
+Observe-only rollback is setting `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED=false`. All-users scoring rollback is setting `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=false`; full scoring-experiment rollback is setting `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED=false`. No DB migration is required for either control.
 
 ## Eligibility order
 
@@ -101,10 +102,11 @@ When preparing a PDF for scoring:
 1. If `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED` is missing, empty, invalid, or false, the decision is `master_disabled` and the parser does not run for scoring.
 2. If the current user ID matches `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS`, the decision is `user_allowlist`.
 3. Else, if the current analysis ID matches `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS`, the decision is `analysis_allowlist`.
-4. Otherwise the decision is `not_allowlisted` and PDF scoring remains binary.
-5. If allowlisted extraction runs but is failed, unsafe, OCR-required, truncated, page-limited, noisy, low-density, malformed, or empty, scoring falls back to binary.
+4. Else, if `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS` is truthy, the decision is `all_users`.
+5. Otherwise the decision is `not_allowlisted` and PDF scoring remains binary.
+6. If eligible extraction runs but is failed, unsafe, OCR-required, truncated, page-limited, noisy, low-density, malformed, or empty, scoring falls back to binary.
 
-There is intentionally no scoring percentage sampling in this rollout.
+There is intentionally no scoring percentage sampling in this rollout. Empty user and analysis allowlists do not imply all-users eligibility; use only `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=true` for that rollout.
 
 ## Deterministic sampling algorithm
 
@@ -189,6 +191,7 @@ Scoring experiment diagnostics are also safe metadata only:
     "scoringExperimentMasterEnabled": true,
     "scoringExperimentEligible": true,
     "scoringExperimentEligibilityReason": "user_allowlist",
+    "scoringExperimentAllUsersEnabled": false,
     "scoringExperimentAllowlistMatched": true,
     "scoringExperimentMatchedAllowlistType": "user_id",
     "scoringInputKind": "extracted_text",
@@ -200,7 +203,7 @@ Scoring experiment diagnostics are also safe metadata only:
 
 Skipped PDFs use `scoringInputKind: "pdf_binary"`, `scoringExtractionMethod: "pdf_binary_provider_input"`, and a fallback reason such as `master_disabled`, `not_allowlisted`, `extraction_failed`, `unusable_text_extraction`, `ocr_required`, `observation_truncated`, `empty_canonical_text`, or `page_limit_reached`.
 
-Allowed eligibility reasons are `master_disabled`, `user_allowlist`, `analysis_allowlist`, `deterministic_sample`, and `not_selected`. Allowed allowlist match types are `user_id`, `analysis_id`, and `null`.
+Allowed observe-only eligibility reasons are `master_disabled`, `user_allowlist`, `analysis_allowlist`, `deterministic_sample`, and `not_selected`. Scoring experiment eligibility reasons are `master_disabled`, `user_allowlist`, `analysis_allowlist`, `all_users`, and `not_allowlisted`. Allowed allowlist match types are `user_id`, `analysis_id`, and `null`.
 
 Never log raw extracted resume text, candidate names, emails, phone numbers, filenames, or binary content. Ordinary observe-only logs should prefer boolean match fields, reasons, fingerprints, counts, timings, and classifications rather than raw identifiers.
 
@@ -216,7 +219,7 @@ PR 1A uses `pdfjs-dist` as the observe-only parser so diagnostics exercise the l
 | Import target | `pdfjs-dist/legacy/build/pdf.mjs` |
 | Worker configuration | Observe-only extraction passes `disableWorker: true` and uses the legacy ESM build in-process to avoid worker asset deployment/configuration fragility on Railway. |
 | Timeout considerations | The wrapper races PDF.js document/page/text-content promises against `PDF_CANONICAL_EXTRACTION_TIMEOUT_MS`, destroys the loading task on timeout, checks deadlines between pages and text-item layout passes, and returns `parser_timeout` as diagnostics only. |
-| Rollback procedure | Disable `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED` for observe-only parsing or `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED` for canonical-text scoring; no DB migration is required. |
+| Rollback procedure | Set `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=false` to roll back all-users scoring eligibility, disable `PDF_CANONICAL_EXTRACTION_OBSERVE_ONLY_ENABLED` for observe-only parsing, or disable `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED` for all canonical-text scoring; no DB migration is required. |
 
 Native Poppler/PDFium wrappers were rejected for PR 1A because they introduce deployment-specific binaries. `pdf-parse` was rejected because it wraps/abstracts PDF.js with less direct access to layout-position metadata needed for multi-column diagnostics.
 
@@ -276,6 +279,7 @@ Initial deployment must keep the experiment disabled:
 PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED=false
 PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS=
 PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS=
+PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=false
 ```
 
 After verifying deployment health:
@@ -283,11 +287,12 @@ After verifying deployment health:
 1. Set `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED=true`.
 2. Add only the owner's HireFlow database user ID to `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_USER_IDS`.
 3. Keep `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALLOWED_ANALYSIS_IDS=` unless a specific controlled analysis needs to be isolated.
-4. Keep all other users excluded.
-5. Rerun controlled PDF versus DOCX comparisons for the same candidate resumes and same job description.
-6. Compare score, ranking, extracted skills, years of experience, seniority, strengths, and gaps.
-7. Monitor safe diagnostics only: `scoringExperimentMasterEnabled`, `scoringExperimentEligible`, `scoringExperimentEligibilityReason`, `scoringInputKind`, `scoringExtractionMethod`, `scoringFallbackReason`, extraction duration, quality classification, OCR flag, and async completion latency.
-8. Roll back immediately by setting `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED=false` if failures, latency regressions, or unexpected score instability appear.
+4. Keep `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=false` to keep all other users excluded.
+5. To roll out to every user after validation, set `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=true`; existing allowlists can remain in place.
+6. Rerun controlled PDF versus DOCX comparisons for the same candidate resumes and same job description.
+7. Compare score, ranking, extracted skills, years of experience, seniority, strengths, and gaps.
+8. Monitor safe diagnostics only: `scoringExperimentMasterEnabled`, `scoringExperimentEligible`, `scoringExperimentEligibilityReason`, `scoringInputKind`, `scoringExtractionMethod`, `scoringFallbackReason`, extraction duration, quality classification, OCR flag, and async completion latency.
+9. Roll back all-users eligibility immediately by setting `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS=false`, or disable all canonical-text PDF scoring with `PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED=false`, if failures, latency regressions, or unexpected score instability appear.
 
 Observe-only extraction and canonical-text scoring are separate controls. Disabling the scoring experiment restores binary PDF scoring even if observe-only diagnostics remain enabled. Disabling observe-only diagnostics does not by itself enable scoring.
 
