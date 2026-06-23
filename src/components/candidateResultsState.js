@@ -501,9 +501,48 @@ export function toDisplayText(value, fallback = 'N/A') {
 
 
 
+const COMPLETE_AI_TEXT_ENDING = /[.!?…;:)\]}"'’”]$/
+const TECHNICAL_DISPLAY_TOKEN = /^(?:[A-Z]{2,}|[A-Z][a-z]+(?:\.[a-z]+)+|[A-Z]\.[A-Za-z]+|[A-Za-z]+(?:\.[A-Za-z]+)+|[A-Za-z0-9]+(?:[/-][A-Za-z0-9.]+)+|\d+(?:[.–-]\d+)?|\d+(?:\.\d+)?|PostgreSQL)$/
+const TRAILING_FRAGMENT_PATTERN = /(?:\s+(?:with|for|and|or|but|to|of|in|on|at|as|by|from|while|where|that|which|who|when|because)\s+[A-Za-z]{1,8}|\s+[A-Za-z]{1,3}|\s+[A-Z][a-z]{3,5})$/
+
+function appendDisplayEllipsis(text) {
+  const cleaned = String(text || '').trim().replace(/[\s,;:–—-]+$/, '')
+  return cleaned ? `${cleaned}…` : ''
+}
+
+export function cleanAiTextForDisplay(value, fallback = '') {
+  const normalizedFallback = fallback == null ? '' : String(fallback)
+  const text = toDisplayText(value, normalizedFallback)
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!text) return normalizedFallback
+  if (COMPLETE_AI_TEXT_ENDING.test(text)) return text
+
+  const words = text.split(/\s+/).filter(Boolean)
+  const lastWord = words[words.length - 1]?.replace(/^[([{"'‘“]+|[),.;:!?\]}'’”]+$/g, '') || ''
+  const hasLikelySentenceContext = /[,;:]|\s(?:with|without|because|while|but|although|including|demonstrated|experience|ability|candidate|requirement|requirements)\s/i.test(text)
+
+  if (words.length <= 4 && TECHNICAL_DISPLAY_TOKEN.test(lastWord)) return text
+  if (words.length <= 4 && !/[–—-]/.test(text)) return text
+
+  if (TRAILING_FRAGMENT_PATTERN.test(text) && (hasLikelySentenceContext || words.length <= 6 || text.length >= 60)) {
+    return appendDisplayEllipsis(text.replace(TRAILING_FRAGMENT_PATTERN, '')) || text
+  }
+
+  if (text.length >= 90 || words.length >= 14) {
+    const boundaryIndex = Math.max(text.lastIndexOf('. '), text.lastIndexOf('! '), text.lastIndexOf('? '), text.lastIndexOf('; '), text.lastIndexOf(', '))
+    if (boundaryIndex >= 40) {
+      return appendDisplayEllipsis(text.slice(0, boundaryIndex)) || text
+    }
+    return appendDisplayEllipsis(text) || text
+  }
+
+  return text
+}
+
 function normalizeDisplayNarrative(value, fallback = '') {
-  const text = toDisplayText(value, fallback).trim()
-  return text || fallback
+  return cleanAiTextForDisplay(value, fallback)
 }
 
 function normalizeEducationRecord(record) {
@@ -657,6 +696,11 @@ function toStringArray(value) {
   return value.map((entry) => formatCandidateFieldForDisplay(entry, '')).filter(Boolean)
 }
 
+function toAiDisplayArray(value) {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => cleanAiTextForDisplay(entry, '')).filter(Boolean)
+}
+
 function toPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
@@ -684,22 +728,24 @@ export function sanitizeExpandedCandidate(candidate = {}) {
     years_experience: toDisplayText(source.years_experience, ''),
     skills: Array.isArray(source.skills) ? source.skills : (typeof source.skills === 'string' ? source.skills : []),
     top_skills: toStringArray(source.top_skills),
-    strengths: toStringArray(source.strengths),
-    achievements: toStringArray(source.achievements),
-    considerations: toStringArray(source.considerations),
-    mustHaveSkills: toStringArray(source.mustHaveSkills),
-    missingSkills: toStringArray(source.missingSkills),
-    experience: Array.isArray(source.experience) ? source.experience.map((entry) => formatCandidateFieldForDisplay(entry, '', 'experience')).filter(Boolean) : [],
+    strengths: toAiDisplayArray(source.strengths),
+    achievements: toAiDisplayArray(source.achievements),
+    considerations: toAiDisplayArray(source.considerations || source.risks_or_gaps || source.concerns),
+    mustHaveSkills: toAiDisplayArray(source.mustHaveSkills),
+    missingSkills: toAiDisplayArray(source.missingSkills || source.missing_requirements),
+    experience: Array.isArray(source.experience) ? source.experience.map((entry) => cleanAiTextForDisplay(formatCandidateFieldForDisplay(entry, '', 'experience'), '')).filter(Boolean) : [],
     projects: Array.isArray(source.projects) ? source.projects.map((entry) => formatCandidateFieldForDisplay(entry, '', 'projects')).filter(Boolean) : [],
     integrity_checks: Array.isArray(source.integrity_checks) ? source.integrity_checks : [],
     fit_assessment: {
       ...fitAssessment,
-      matched: toStringArray(fitAssessment.matched),
-      missing: toStringArray(fitAssessment.missing),
-      reason: toDisplayText(fitAssessment.reason, ''),
-      risk: toDisplayText(fitAssessment.risk, ''),
+      matched: toAiDisplayArray(fitAssessment.matched || fitAssessment.matched_requirements),
+      missing: toAiDisplayArray(fitAssessment.missing || fitAssessment.missing_requirements),
+      reason: cleanAiTextForDisplay(fitAssessment.reason || fitAssessment.rationale, ''),
+      rationale: cleanAiTextForDisplay(fitAssessment.rationale, ''),
+      risk: cleanAiTextForDisplay(fitAssessment.risk || fitAssessment.risks_or_gaps, ''),
+      risks_or_gaps: toAiDisplayArray(fitAssessment.risks_or_gaps),
       confidence: toDisplayText(fitAssessment.confidence, ''),
-      verdict: toDisplayText(fitAssessment.verdict, ''),
+      verdict: cleanAiTextForDisplay(fitAssessment.verdict, ''),
     },
     skills_structured: {
       ...skillsStructured,
@@ -713,7 +759,7 @@ export function sanitizeExpandedCandidate(candidate = {}) {
       ? source.matchScore
       : {
         ...toPlainObject(source.matchScore),
-        reason: toDisplayText(source?.matchScore?.reason, ''),
+        reason: cleanAiTextForDisplay(source?.matchScore?.reason, ''),
       },
   }
 }
@@ -788,14 +834,14 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
     const strengths = (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || []).map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean).slice(0,3)
     const considerations = (Array.isArray(candidate.considerations) ? candidate.considerations : []).map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
 
-    const matchedSkills = (Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []).map((e)=>toDisplayText(e,'')).filter(Boolean)
-    const missingSkills = [...new Set([...(Array.isArray(candidate?.mustHaveSkills)?candidate.mustHaveSkills:[]), ...(Array.isArray(candidate?.missingSkills)?candidate.missingSkills:[]), ...(Array.isArray(candidate?.fit_assessment?.missing)?candidate.fit_assessment.missing:[])].map((e)=>toDisplayText(e,'')).filter(Boolean))]
+    const matchedSkills = [...new Set([...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []), ...(Array.isArray(candidate?.fit_assessment?.matched) ? candidate.fit_assessment.matched : [])].map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
+    const missingSkills = [...new Set([...(Array.isArray(candidate?.mustHaveSkills)?candidate.mustHaveSkills:[]), ...(Array.isArray(candidate?.missingSkills)?candidate.missingSkills:[]), ...(Array.isArray(candidate?.fit_assessment?.missing)?candidate.fit_assessment.missing:[])].map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
     const allSkills = [...new Set([
       ...(Array.isArray(candidate?.top_skills) ? candidate.top_skills : []),
       ...(Array.isArray(candidate?.skills) ? candidate.skills : []),
       ...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []),
       ...(Array.isArray(candidate?.mustHaveSkills) ? candidate.mustHaveSkills : []),
-    ].map((e)=>toDisplayText(e,'')).filter(Boolean))]
+    ].map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
 
     const initials = toDisplayText(candidate.name, 'NA').split(' ').map((p)=>p[0]||'').join('').slice(0,2).toUpperCase() || 'NA'
     return {
