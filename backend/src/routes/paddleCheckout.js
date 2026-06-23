@@ -7,6 +7,7 @@ import { resolvePaddleConfig } from '../config/paddle.js'
 
 const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
+const TEST_MONTHLY_STORED_PLAN = 'monthly'
 
 function getAppOrigin(req) {
   return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
@@ -14,7 +15,7 @@ function getAppOrigin(req) {
 
 export function validatePaddleCheckoutPlan({ plan, testKey, paddle }) {
   if (plan !== TEST_MONTHLY_PLAN) {
-    return { ok: true, priceId: paddle.priceIdsByPlan[plan] }
+    return { ok: true, priceId: paddle.priceIdsByPlan[plan], storedPlan: plan }
   }
 
   if (!paddle.testCheckout?.enabled || !paddle.priceIdsByPlan[TEST_MONTHLY_PLAN]) {
@@ -25,7 +26,7 @@ export function validatePaddleCheckoutPlan({ plan, testKey, paddle }) {
     return { ok: false, status: 403, error: 'Checkout is unavailable' }
   }
 
-  return { ok: true, priceId: paddle.priceIdsByPlan[TEST_MONTHLY_PLAN] }
+  return { ok: true, priceId: paddle.priceIdsByPlan[TEST_MONTHLY_PLAN], storedPlan: TEST_MONTHLY_STORED_PLAN }
 }
 
 async function createCheckout(req, res, logLabel) {
@@ -57,6 +58,7 @@ async function createCheckout(req, res, logLabel) {
   }
 
   const priceId = planAccess.priceId
+  const storedPlan = planAccess.storedPlan || plan
 
   if (!priceId) {
     return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
@@ -90,7 +92,8 @@ async function createCheckout(req, res, logLabel) {
         custom_data: {
           userId: user.id,
           email: user.email,
-          plan,
+          plan: storedPlan,
+          requestedPlan: plan,
           paddleEnvironment: paddle.environment,
         },
         return_url: successUrl,

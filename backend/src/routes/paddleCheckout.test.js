@@ -20,11 +20,11 @@ function paddle(overrides = {}) {
 test('validatePaddleCheckoutPlan preserves monthly and annual price selection', () => {
   assert.deepEqual(
     validatePaddleCheckoutPlan({ plan: 'monthly', paddle: paddle() }),
-    { ok: true, priceId: 'pri_monthly' },
+    { ok: true, priceId: 'pri_monthly', storedPlan: 'monthly' },
   )
   assert.deepEqual(
     validatePaddleCheckoutPlan({ plan: 'annual', paddle: paddle() }),
-    { ok: true, priceId: 'pri_annual' },
+    { ok: true, priceId: 'pri_annual', storedPlan: 'annual' },
   )
 })
 
@@ -59,6 +59,6 @@ test('validatePaddleCheckoutPlan requires matching key for test-monthly', () => 
   )
   assert.deepEqual(
     validatePaddleCheckoutPlan({ plan: 'test-monthly', testKey: 'secret', paddle: configured }),
-    { ok: true, priceId: 'pri_test' },
+    { ok: true, priceId: 'pri_test', storedPlan: 'monthly' },
   )
 })
