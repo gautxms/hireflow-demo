@@ -43,11 +43,15 @@ test('job description context preserves nullable numeric fields', () => {
     id: 'jd-1',
     title: 'Platform Engineer',
     experience_years: null,
+    experience_min: null,
+    experience_max: null,
     salary_min: null,
     salary_max: null,
   })
 
   assert.equal(normalized.experienceYears, null)
+  assert.equal(normalized.experienceMin, null)
+  assert.equal(normalized.experienceMax, null)
   assert.equal(normalized.salaryMin, null)
   assert.equal(normalized.salaryMax, null)
 })
@@ -60,12 +64,16 @@ test('job description context includes manual JD fields when provided', () => {
     requirements: '5+ years Node.js',
     skills: ['Node.js', 'PostgreSQL'],
     experience_years: 5,
+    experience_min: 4,
+    experience_max: 7,
   })
 
   assert.equal(normalized.hasContext, true)
   assert.equal(normalized.jobDescriptionId, 'jd-42')
   assert.equal(normalized.title, 'Platform Engineer')
   assert.deepEqual(normalized.skills, ['Node.js', 'PostgreSQL'])
+  assert.equal(normalized.experienceMin, 4)
+  assert.equal(normalized.experienceMax, 7)
 })
 
 test('job description context marks missing JD when parse request has no JD row', () => {

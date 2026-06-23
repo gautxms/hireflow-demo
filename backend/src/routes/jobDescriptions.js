@@ -78,6 +78,10 @@ async function ensureSchema() {
       ADD COLUMN IF NOT EXISTS salary_currency TEXT NOT NULL DEFAULT 'USD';
 
     ALTER TABLE job_descriptions
+      ADD COLUMN IF NOT EXISTS experience_min INTEGER,
+      ADD COLUMN IF NOT EXISTS experience_max INTEGER;
+
+    ALTER TABLE job_descriptions
       ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS employment_type TEXT NOT NULL DEFAULT 'unspecified',
       ADD COLUMN IF NOT EXISTS responsibilities TEXT,
@@ -167,6 +171,8 @@ function mapRecord(row, options = {}) {
     skills: Array.isArray(row.skills) ? row.skills : [],
     additionalInfo: row.additional_info || '',
     experienceYears: row.experience_years,
+    experienceMin: row.experience_min ?? row.experience_years,
+    experienceMax: row.experience_max ?? row.experience_years,
     location: row.location,
     salaryMin: row.salary_min,
     salaryMax: row.salary_max,
@@ -319,6 +325,8 @@ router.post('/', (req, res, next) => {
          responsibilities,
          skills,
          experience_years,
+         experience_min,
+         experience_max,
          location,
          salary_min,
          salary_max,
@@ -333,7 +341,7 @@ router.post('/', (req, res, next) => {
          file_url,
          status,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW())
+       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW())
        RETURNING *`,
       [
         req.userId,
@@ -343,6 +351,8 @@ router.post('/', (req, res, next) => {
         req.body.responsibilities || null,
         JSON.stringify(normalizeSkills(req.body.skills)),
         toIntOrNull(req.body.experienceYears),
+        toIntOrNull(req.body.experienceMin),
+        toIntOrNull(req.body.experienceMax),
         req.body.location || null,
         toIntOrNull(req.body.salaryMin),
         toIntOrNull(req.body.salaryMax),
@@ -413,19 +423,21 @@ router.put('/:id', (req, res, next) => {
            responsibilities = $6,
            skills = $7::jsonb,
            experience_years = $8,
-           location = $9,
-           salary_min = $10,
-           salary_max = $11,
-           salary_currency = $12,
-           department = $13,
-           employment_type = $14,
-           additional_info = $15,
-           priority = $16,
-           archived_reason = $17,
-           source_type = $18,
-           version = $19,
-           file_url = $20,
-           status = $21,
+           experience_min = $9,
+           experience_max = $10,
+           location = $11,
+           salary_min = $12,
+           salary_max = $13,
+           salary_currency = $14,
+           department = $15,
+           employment_type = $16,
+           additional_info = $17,
+           priority = $18,
+           archived_reason = $19,
+           source_type = $20,
+           version = $21,
+           file_url = $22,
+           status = $23,
            updated_at = NOW()
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
@@ -438,6 +450,8 @@ router.put('/:id', (req, res, next) => {
         req.body.responsibilities ?? prev.responsibilities,
         JSON.stringify(req.body.skills === undefined ? (Array.isArray(prev.skills) ? prev.skills : []) : normalizeSkills(req.body.skills)),
         req.body.experienceYears === undefined ? prev.experience_years : toIntOrNull(req.body.experienceYears),
+        req.body.experienceMin === undefined ? prev.experience_min : toIntOrNull(req.body.experienceMin),
+        req.body.experienceMax === undefined ? prev.experience_max : toIntOrNull(req.body.experienceMax),
         req.body.location === undefined ? prev.location : req.body.location,
         req.body.salaryMin === undefined ? prev.salary_min : toIntOrNull(req.body.salaryMin),
         req.body.salaryMax === undefined ? prev.salary_max : toIntOrNull(req.body.salaryMax),
