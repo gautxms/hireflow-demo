@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import StatePattern from './components/state/StatePattern'
 import LandingPage from './components/LandingPage'
 const Pricing = lazy(() => loadPublicRouteChunk(() => import('./pages/Pricing'), { route: '/pricing' }))
@@ -1268,12 +1268,64 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
 
+  const clearAuthenticatedSession = useCallback((message = '') => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    localStorage.removeItem('subscription_status')
+    localStorage.removeItem(USER_STORAGE_KEY)
+    clearResumeAnalysisResult()
+    setToken('')
+    setSubscriptionStatus('inactive')
+    setUserProfile(null)
+    if (message) {
+      setAuthPrompt(message)
+    }
+    navigate('/login')
+  }, [])
+
+  const syncAuthenticatedUser = useCallback(async ({ redirectOnUnauthorized = true } = {}) => {
+    const activeToken = getStoredToken()
+
+    if (!activeToken) {
+      return null
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+
+      if (response.status === 401) {
+        if (redirectOnUnauthorized) {
+          clearAuthenticatedSession('Your session expired while you were away. Please log in again.')
+        }
+        return null
+      }
+
+      if (!response.ok) {
+        return null
+      }
+
+      const nextUserProfile = await response.json()
+      const nextSubscriptionStatus = nextUserProfile?.subscription_status || 'inactive'
+
+      localStorage.setItem('subscription_status', nextSubscriptionStatus)
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUserProfile || null))
+      setToken(activeToken)
+      setSubscriptionStatus(nextSubscriptionStatus)
+      setUserProfile(nextUserProfile || null)
+      return nextUserProfile
+    } catch {
+      return null
+    }
+  }, [clearAuthenticatedSession])
+
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
     const onAuthStateRefresh = () => {
       setToken(getStoredToken())
       setSubscriptionStatus(getStoredSubscriptionStatus())
       setUserProfile(getStoredUserProfile())
+      void syncAuthenticatedUser()
     }
     const onStorage = (event) => {
       if (event.key === TOKEN_STORAGE_KEY) {
@@ -1298,7 +1350,7 @@ export default function App() {
       window.removeEventListener('storage', onStorage)
       window.removeEventListener('hireflow-auth-updated', onAuthStateRefresh)
     }
-  }, [])
+  }, [syncAuthenticatedUser])
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
@@ -1317,14 +1369,7 @@ export default function App() {
   }
 
   const logout = async () => {
-    clearResumeAnalysisResult()
-    localStorage.removeItem(TOKEN_STORAGE_KEY)
-    localStorage.removeItem('subscription_status')
-    localStorage.removeItem(USER_STORAGE_KEY)
-    setToken('')
-    setSubscriptionStatus('inactive')
-    setUserProfile(null)
-    navigate('/login')
+    clearAuthenticatedSession()
   }
 
   const requireAuth = (message) => {
@@ -1348,50 +1393,24 @@ export default function App() {
       return undefined
     }
 
-    const verifyUserSession = async () => {
-      const activeToken = getStoredToken()
-
-      if (!activeToken) {
-        return
-      }
-
-      try {
-        const response = await fetch(`${API_BASE}/auth/me`, {
-          headers: { Authorization: `Bearer ${activeToken}` },
-        })
-
-        if (response.status !== 401) {
-          return
-        }
-      } catch {
-        return
-      }
-
-      localStorage.removeItem(TOKEN_STORAGE_KEY)
-      localStorage.removeItem('subscription_status')
-      localStorage.removeItem(USER_STORAGE_KEY)
-      clearResumeAnalysisResult()
-      setToken('')
-      setSubscriptionStatus('inactive')
-      setUserProfile(null)
-      setAuthPrompt('Your session expired while you were away. Please log in again.')
-      navigate('/login')
+    const handleWindowFocus = () => {
+      void syncAuthenticatedUser()
     }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        void verifyUserSession()
+        void syncAuthenticatedUser()
       }
     }
 
-    window.addEventListener('focus', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      window.removeEventListener('focus', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, syncAuthenticatedUser])
 
   useEffect(() => {
     // Authenticated users are intentionally redirected away from auth forms to the home route.
