@@ -63,6 +63,6 @@ test('POST /api/results/export/csv neutralizes candidate-controlled formula cell
   assert.equal(text.split('\n')[0], 'name,email,score,summary,skills,strengths')
   assert.equal(
     text.split('\n')[1],
-    '"\'=HYPERLINK(""https://evil.example"",""click"")",candidate@example.com,88,"\'@SUM(1,2)",[object Object],Delivery',
+    '"\'=HYPERLINK(""https://evil.example"",""click"")",candidate@example.com,88,"\'@SUM(1,2)",React,Delivery',
   )
 })

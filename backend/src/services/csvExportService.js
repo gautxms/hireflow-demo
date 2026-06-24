@@ -37,9 +37,38 @@ export function escapeCsvValue(value) {
   return escaped
 }
 
+const STRUCTURED_LIST_KEYS = [
+  'tools_and_platforms',
+  'methodologies',
+  'domain_expertise',
+  'soft_skills',
+]
+
+function normalizeListItems(value) {
+  return value
+    .map((item) => {
+      if (item === null || item === undefined) {
+        return ''
+      }
+
+      if (typeof item === 'object') {
+        return ''
+      }
+
+      return String(item).trim()
+    })
+    .filter(Boolean)
+}
+
 function normalizeList(value) {
   if (Array.isArray(value)) {
-    return value.join('; ')
+    return normalizeListItems(value).join('; ')
+  }
+
+  if (value && typeof value === 'object') {
+    return STRUCTURED_LIST_KEYS
+      .flatMap((key) => (Array.isArray(value[key]) ? normalizeListItems(value[key]) : []))
+      .join('; ')
   }
 
   return value || ''
