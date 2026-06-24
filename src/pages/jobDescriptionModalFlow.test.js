@@ -28,3 +28,8 @@ test('job list exposes list semantics and selectable title button', () => {
   assert.match(listSource, /className="job-description-list__title-button"/)
   assert.match(listSource, /aria-pressed=\{isSelected\}/)
 })
+
+test('job modal restores trigger focus only after close instead of effect cleanup', () => {
+  assert.match(modalSource, /wasOpenRef\.current && !isOpen/)
+  assert.doesNotMatch(modalSource, /return \(\) => \{ window\.removeEventListener\('keydown', handleKeyDown\); triggerRef\?\.current\?\.focus/)
+})

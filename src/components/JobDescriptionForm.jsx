@@ -74,6 +74,11 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
     })
   }
 
+  const handleNumberWheel = (event) => {
+    if (document.activeElement === event.currentTarget) {
+      event.preventDefault()
+    }
+  }
 
   const openAttachmentInNewTab = useCallback(async () => {
     if (!initialValue?.id || !hasExistingAttachment) {
@@ -140,8 +145,8 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
             <label className="job-form__field" htmlFor="job-status"><span>Status <em>*</em></span><select id="job-status" className="job-form__control" value={formState.status} onChange={handleChange('status')}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></label>
             <label className="job-form__field" htmlFor="job-work-mode"><span>Work mode</span><select id="job-work-mode" className="job-form__control" value={formState.workMode} onChange={handleChange('workMode')}><option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option></select></label>
             <label className="job-form__field" htmlFor="job-location"><span>Location</span><input id="job-location" className="job-form__control" placeholder="San Francisco, CA" value={formState.location} onChange={handleChange('location')} /></label>
-            <label className="job-form__field" htmlFor="job-experience-min"><span>Experience min (years)</span><input id="job-experience-min" type="number" min="0" className="job-form__control" placeholder="4" value={formState.experienceMin} onChange={handleChange('experienceMin')} aria-invalid={Boolean(errors.experienceMin)} /></label>
-            <label className="job-form__field" htmlFor="job-experience-max"><span>Experience max (years)</span><input id="job-experience-max" type="number" min="0" className="job-form__control" placeholder="6" value={formState.experienceMax} onChange={handleChange('experienceMax')} aria-invalid={Boolean(errors.experienceMax)} /></label>
+            <label className="job-form__field" htmlFor="job-experience-min"><span>Experience min (years)</span><input id="job-experience-min" type="number" min="0" className="job-form__control" placeholder="4" value={formState.experienceMin} onChange={handleChange('experienceMin')} onWheel={handleNumberWheel} aria-invalid={Boolean(errors.experienceMin)} /></label>
+            <label className="job-form__field" htmlFor="job-experience-max"><span>Experience max (years)</span><input id="job-experience-max" type="number" min="0" className="job-form__control" placeholder="6" value={formState.experienceMax} onChange={handleChange('experienceMax')} onWheel={handleNumberWheel} aria-invalid={Boolean(errors.experienceMax)} /></label>
           </div>
           {(errors.title || errors.experienceMin || errors.experienceMax) && <p className="job-form__error" role="alert">{errors.title || errors.experienceMin || errors.experienceMax}</p>}
         </section>
