@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { Buffer } from 'node:buffer'
 
 export const PADDLE_WEBHOOK_TOLERANCE_SECONDS = 300
 

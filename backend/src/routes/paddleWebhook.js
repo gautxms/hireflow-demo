@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import express from 'express'
+import { Buffer } from 'node:buffer'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
 import { trackEvent } from '../services/analytics.js'
@@ -137,6 +138,16 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
   const secret = paddle.webhookSecret || ''
   const incomingSignature = req.headers['paddle-signature']
   const signatureHeader = typeof incomingSignature === 'string' ? incomingSignature : req.get('Paddle-Signature')
+  const signatureCheck = verifyPaddleSignature(rawBody, signatureHeader, secret)
+
+  if (!signatureCheck.isValid) {
+    console.warn('[Paddle webhook] rejected event with invalid signature', {
+      hasSignatureHeader: Boolean(signatureHeader),
+      reason: signatureCheck.reason,
+    })
+
+    return res.status(401).json({ error: 'Invalid webhook signature' })
+  }
 
   let payload
 
@@ -147,7 +158,6 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
   }
 
   const eventType = getWebhookEventType(payload)
-  const signatureCheck = verifyPaddleSignature(rawBody, signatureHeader, secret)
   console.info('[Paddle webhook] received event', {
     environment: paddle.environment,
     eventType,
@@ -158,10 +168,6 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     await logWebhookAudit(eventType, payload, signatureCheck.isValid, signatureCheck.reason)
   } catch (error) {
     console.error('[Paddle webhook] failed to write audit log', error)
-  }
-
-  if (!signatureCheck.isValid) {
-    return res.status(401).json({ error: 'Invalid webhook signature' })
   }
 
   try {
