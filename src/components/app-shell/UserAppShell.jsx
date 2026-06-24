@@ -161,7 +161,7 @@ export default function UserAppShell({ children, pathname, onNavigate, pageTitle
         {!isSubscribed && expanded && (
           <div className="app-sb-upgrade">
             <div className="app-sb-upgrade-title">Upgrade plan</div>
-            <div className="app-sb-upgrade-body">800 analyses/month, Reports & API</div>
+            <div className="app-sb-upgrade-body">800 analyses/month with structured hiring reports</div>
             <button className="app-sb-upgrade-btn" onClick={() => onNavigate('/pricing')}>View Plans</button>
           </div>
         )}
