@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   normalizeSalaryCurrency,
   serializeJobDescriptionForm,
@@ -70,4 +71,14 @@ test('serializeJobDescriptionForm keeps distinct experience min and max values',
   assert.equal(result.experienceMin, 4)
   assert.equal(result.experienceMax, 7)
   assert.equal(result.experienceYears, 4)
+})
+
+const formSource = readFileSync(new URL('./JobDescriptionForm.jsx', import.meta.url), 'utf8')
+
+test('job experience number inputs guard against focused mouse wheel changes', () => {
+  assert.match(formSource, /const handleNumberWheel = \(event\) => \{/)
+  assert.match(formSource, /document\.activeElement === event\.currentTarget/)
+  assert.match(formSource, /event\.preventDefault\(\)/)
+  assert.match(formSource, /id="job-experience-min"[\s\S]*onWheel=\{handleNumberWheel\}/)
+  assert.match(formSource, /id="job-experience-max"[\s\S]*onWheel=\{handleNumberWheel\}/)
 })

@@ -5,6 +5,7 @@ import JobDescriptionForm from '../JobDescriptionForm'
 
 export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting, onSubmit, onClose, triggerRef, errorMessage }) {
   const dialogRef = useRef(null)
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -19,8 +20,15 @@ export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting,
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
     }
     window.addEventListener('keydown', handleKeyDown)
-    return () => { window.removeEventListener('keydown', handleKeyDown); triggerRef?.current?.focus?.({ preventScroll: true }) }
-  }, [isOpen, isSubmitting, onClose, triggerRef])
+    return () => { window.removeEventListener('keydown', handleKeyDown) }
+  }, [isOpen, isSubmitting, onClose])
+
+  useEffect(() => {
+    if (wasOpenRef.current && !isOpen) {
+      triggerRef?.current?.focus?.({ preventScroll: true })
+    }
+    wasOpenRef.current = isOpen
+  }, [isOpen, triggerRef])
 
   if (!isOpen) return null
 
