@@ -16,10 +16,20 @@ test('migration runner includes AI score cache migration 035', async () => {
   assert.match(source, /'035-add-ai-score-cache'/)
 })
 
-
 test('migration runner includes Paddle user subscription column safety migration 036', async () => {
   const source = await readRunnerSource()
   assert.match(source, /'036-ensure-paddle-user-subscription-columns'/)
+})
+
+test('migration runner includes Paddle failure status migration 037 after migration 036', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'037-allow-paddle-failure-subscription-statuses'/)
+  assert.ok(
+    source.indexOf("'035-add-ai-score-cache'") < source.indexOf("'036-ensure-paddle-user-subscription-columns'"),
+  )
+  assert.ok(
+    source.indexOf("'036-ensure-paddle-user-subscription-columns'") < source.indexOf("'037-allow-paddle-failure-subscription-statuses'"),
+  )
 })
 
 test('Paddle user subscription column safety migration is idempotent and scoped to Paddle tables', async () => {
@@ -59,4 +69,25 @@ test('Paddle user subscription column safety migration is idempotent and scoped 
 
   const alteredTables = queries.flatMap((sql) => [...sql.matchAll(/ALTER TABLE\s+(\w+)/g)].map((match) => match[1]))
   assert.deepEqual(alteredTables, ['users', 'subscriptions'])
+})
+
+test('Paddle failure status migration safely replaces subscriptions status constraint', async () => {
+  const queries = []
+  const { up } = await import('./037-allow-paddle-failure-subscription-statuses.js')
+
+  await up({
+    query(sql) {
+      queries.push(sql)
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 2)
+  assert.match(queries[0], /ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check/)
+  assert.match(queries[1], /ALTER TABLE subscriptions/)
+  assert.match(queries[1], /ADD CONSTRAINT subscriptions_status_check/)
+
+  for (const status of ['active', 'trialing', 'cancelled', 'paused', 'past_due', 'payment_failed']) {
+    assert.match(queries[1], new RegExp(`'${status}'`))
+  }
 })
