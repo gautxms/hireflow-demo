@@ -178,6 +178,26 @@ test('selectShareCandidatesForUser shares latest server candidates when request 
   assert.equal(selected[0].email, 'owned1@example.com')
 })
 
+
+test('selectShareCandidatesForUser loads candidates for the requested analysis before intersecting identifiers', async () => {
+  const loadCalls = []
+  const selected = await selectShareCandidatesForUser({
+    userId: 'user-1',
+    analysisId: 'analysis-123',
+    requestedCandidates: [
+      { id: 'cand-1', resumeId: 'resume-1' },
+      { id: 'cand-2', resumeId: 'resume-2' },
+    ],
+    loadCandidates: (userId, options) => {
+      loadCalls.push({ userId, options })
+      return Promise.resolve(ownedShareCandidates)
+    },
+  })
+
+  assert.deepEqual(loadCalls, [{ userId: 'user-1', options: { analysisId: 'analysis-123' } }])
+  assert.deepEqual(selected.map((candidate) => candidate.id), ['cand-1', 'cand-2'])
+})
+
 test('selectShareCandidatesForUser rejects arbitrary client-supplied candidate objects without owned identifiers', async () => {
   const selected = await selectShareCandidatesForUser({
     userId: 'user-1',

@@ -1183,7 +1183,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         headers: authHeaders(),
         body: JSON.stringify({
           candidates: filtered,
-          query: Object.fromEntries(buildResultsQueryParams({ searchText, selectedSkills, expRange, sortBy, page, pageSize })),
+          analysisId,
+          query: {
+            ...Object.fromEntries(buildResultsQueryParams({ searchText, selectedSkills, expRange, sortBy, page, pageSize })),
+            ...(analysisId ? { analysisId } : {}),
+          },
         }),
       })
 

@@ -320,6 +320,55 @@ export function sortCandidates(candidates, sortBy = 'score', sortOrder = 'desc')
   return sorted
 }
 
+function parseResultObject(result) {
+  if (result == null) return null
+  if (typeof result === 'string') {
+    try {
+      return parseResultObject(JSON.parse(result))
+    } catch {
+      return null
+    }
+  }
+  return typeof result === 'object' ? result : null
+}
+
+function extractCandidatesFromParseResult(result) {
+  const parsed = parseResultObject(result)
+  if (!parsed) return []
+
+  for (const field of [parsed.candidates, parsed.results, parsed.output]) {
+    if (Array.isArray(field)) return field
+    const nested = parseResultObject(field)
+    if (Array.isArray(nested?.candidates)) return nested.candidates
+  }
+
+  return []
+}
+
+function normalizeShareCandidate(candidate, { userId, analysisId = null, resumeId = null, parseJobId = null } = {}) {
+  const normalized = normalizeCandidate({
+    ...candidate,
+    analysisId: candidate?.analysisId || candidate?.analysis_id || analysisId || undefined,
+    analysis_id: candidate?.analysis_id || candidate?.analysisId || analysisId || undefined,
+    resumeId: candidate?.resumeId || candidate?.resume_id || resumeId || undefined,
+    resume_id: candidate?.resume_id || candidate?.resumeId || resumeId || undefined,
+  })
+  emitScoreContractShadowDiagnostic(normalized, {
+    userId,
+    analysisId,
+    resumeId: normalized.resumeId || resumeId || null,
+    provider: null,
+    model: null,
+    promptVersion: null,
+  })
+  return {
+    ...normalized,
+    analysisId: normalized.analysisId || analysisId || null,
+    analysis_id: normalized.analysis_id || analysisId || null,
+    parseJobId: normalized.parseJobId || parseJobId || null,
+  }
+}
+
 async function getLatestCandidatesForUser(userId) {
   const result = await pool.query(
     `SELECT result
@@ -332,20 +381,38 @@ async function getLatestCandidatesForUser(userId) {
     [userId],
   )
 
-  const latestResult = result.rows[0]?.result
-  const rawCandidates = Array.isArray(latestResult?.candidates) ? latestResult.candidates : []
-  return rawCandidates.map((candidate) => {
-    const normalized = normalizeCandidate(candidate)
-    emitScoreContractShadowDiagnostic(normalized, {
+  const rawCandidates = extractCandidatesFromParseResult(result.rows[0]?.result)
+  return rawCandidates.map((candidate) => normalizeShareCandidate(candidate, { userId }))
+}
+
+async function getAnalysisCandidatesForUser(userId, analysisId) {
+  const normalizedAnalysisId = String(analysisId || '').trim()
+  if (!normalizedAnalysisId) return null
+
+  const result = await pool.query(
+    `SELECT ai.resume_id,
+            ai.parse_job_id,
+            pj.result
+     FROM analyses a
+     INNER JOIN analysis_items ai ON ai.analysis_id = a.id
+     LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
+     WHERE a.id = $1
+       AND a.user_id = $2
+       AND pj.status = 'complete'
+       AND pj.result IS NOT NULL
+     ORDER BY ai.created_at ASC`,
+    [normalizedAnalysisId, userId],
+  )
+
+  if (result.rowCount === 0) return []
+
+  return result.rows.flatMap((row) => extractCandidatesFromParseResult(row.result)
+    .map((candidate) => normalizeShareCandidate(candidate, {
       userId,
-      analysisId: null,
-      resumeId: normalized.resumeId || null,
-      provider: null,
-      model: null,
-      promptVersion: null,
-    })
-    return normalized
-  })
+      analysisId: normalizedAnalysisId,
+      resumeId: row.resume_id ? String(row.resume_id) : null,
+      parseJobId: row.parse_job_id ? String(row.parse_job_id) : null,
+    })))
 }
 
 function collectCandidateIdentifiers(candidate = {}) {
@@ -380,10 +447,12 @@ export async function selectShareCandidatesForUser({
   filters,
   sortBy,
   sortOrder,
+  analysisId,
   loadCandidates = getLatestCandidatesForUser,
 }) {
   const requestedIdentifiers = extractRequestedCandidateIdentifiers(requestedCandidates)
-  const serverCandidates = (await loadCandidates(userId)).map(normalizeCandidate)
+  const loadedCandidates = await loadCandidates(userId, { analysisId })
+  const serverCandidates = loadedCandidates.map(normalizeCandidate)
   let selected = serverCandidates
 
   if (requestedIdentifiers) {
@@ -503,6 +572,11 @@ router.post('/share', requireAuth, async (req, res) => {
       filters,
       sortBy: req.body?.sortBy,
       sortOrder: req.body?.sortOrder,
+      analysisId: req.body?.analysisId || query.analysisId,
+      loadCandidates: async (userId, { analysisId } = {}) => {
+        const analysisCandidates = await getAnalysisCandidatesForUser(userId, analysisId)
+        return analysisCandidates === null ? getLatestCandidatesForUser(userId) : analysisCandidates
+      },
     })
 
     if (candidates.length === 0) {
