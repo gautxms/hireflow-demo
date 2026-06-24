@@ -47,7 +47,6 @@ const app = express()
 
 app.set('trust proxy', 1)
 
-const vercelDomainSuffix = '.vercel.app'
 const defaultAllowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -56,24 +55,41 @@ const defaultAllowedOrigins = [
   'https://api.hireflow.dev',
 ]
 
-const envAllowedOrigins = (process.env.FRONTEND_ORIGIN || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean)
+function parseAllowedOrigins(value) {
+  return String(value || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+}
 
-const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins])
+export function buildAllowedOrigins(env = process.env) {
+  return new Set([
+    ...defaultAllowedOrigins,
+    ...parseAllowedOrigins(env.FRONTEND_ORIGIN),
+    ...parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS),
+  ])
+}
+
+export function isCorsOriginAllowed(origin, allowedOrigins = buildAllowedOrigins()) {
+  if (!origin) {
+    return true
+  }
+
+  return allowedOrigins.has(origin)
+}
+
+const allowedOrigins = buildAllowedOrigins()
 
 const corsOptions = {
   credentials: true,
   origin(origin, callback) {
-    if (!origin) {
+    if (isCorsOriginAllowed(origin, allowedOrigins)) {
       return callback(null, true)
     }
 
-    if (allowedOrigins.has(origin) || origin.endsWith(vercelDomainSuffix)) {
-      return callback(null, true)
-    }
-
+    // Preview deployments must be configured explicitly, for example:
+    // CORS_ALLOWED_ORIGINS=https://hireflow-git-feature-team.vercel.app,https://another-preview.vercel.app
+    // Log only the origin string; never log credentials, cookies, tokens, or request bodies here.
     console.warn('[CORS] Blocked origin:', origin)
     return callback(new Error('CORS not allowed'))
   },

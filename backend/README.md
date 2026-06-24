@@ -22,6 +22,7 @@ Set the following environment variables:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `FRONTEND_ORIGIN`
+- `CORS_ALLOWED_ORIGINS` (optional comma-separated trusted browser origins for preview deployments)
 - `PADDLE_WEBHOOK_SECRET`
 - `PADDLE_API_KEY`
 - `PADDLE_MONTHLY_PRICE_ID`
