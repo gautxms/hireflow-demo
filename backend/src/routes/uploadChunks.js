@@ -2,6 +2,11 @@ import multer from 'multer'
 import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import {
+  enforceUploadLimit,
+  recordUploadUsage,
+  requireActiveSubscription,
+} from '../middleware/subscriptionCheck.js'
+import {
   CHUNK_SIZE_BYTES,
   MAX_FILE_SIZE_BYTES,
   completeChunkUpload,
@@ -20,7 +25,7 @@ const chunkUpload = multer({
   },
 })
 
-router.post('/init', requireAuth, async (req, res) => {
+router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit, async (req, res) => {
   try {
     const { filename, fileSize, mimeType, jobDescriptionId, analysisId, analysisName } = req.body || {}
     console.log(
@@ -52,6 +57,15 @@ router.post('/init', requireAuth, async (req, res) => {
       analysisName: analysisName || null,
     })
 
+    if (session.resumed !== true) {
+      await recordUploadUsage({
+        userId: req.userId,
+        monthStart: req.usageContext.monthStart,
+        ipAddress: req.usageContext.ipAddress,
+        uploadCount: req.usageContext.requestedUploads,
+      })
+    }
+
     return res.json(session)
   } catch (error) {
     console.error('[UploadChunks] init failed:', error)
@@ -74,7 +88,7 @@ router.get('/:uploadId/status', requireAuth, async (req, res) => {
   }
 })
 
-router.post('/:uploadId/chunk', requireAuth, (req, res, next) => {
+router.post('/:uploadId/chunk', requireAuth, requireActiveSubscription, (req, res, next) => {
   chunkUpload.single('chunk')(req, res, (error) => {
     if (!error) {
       return next()
@@ -120,7 +134,7 @@ router.post('/:uploadId/chunk', requireAuth, (req, res, next) => {
   }
 })
 
-router.post('/:uploadId/complete', requireAuth, async (req, res) => {
+router.post('/:uploadId/complete', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const completeResult = await completeChunkUpload({
       userId: req.userId,

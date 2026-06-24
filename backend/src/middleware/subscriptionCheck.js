@@ -112,20 +112,29 @@ export async function enforceUploadLimit(req, res, next) {
   }
 }
 
+export async function recordUploadUsage({ userId, monthStart, ipAddress, uploadCount = 1 }) {
+  const count = Math.max(uploadCount || 1, 1)
+
+  await pool.query(
+    `INSERT INTO usage_log (user_id, ip_address, month_start)
+     SELECT $1, $2, $3
+     FROM generate_series(1, $4)`,
+    [userId, ipAddress, monthStart, count],
+  )
+}
+
 export async function trackUploadUsage(req, _res, next) {
   if (!req.userId || !req.usageContext?.monthStart || !req.usageContext?.ipAddress) {
     return next()
   }
 
   try {
-    const uploadCount = Math.max(req.usageContext.requestedUploads || 1, 1)
-
-    await pool.query(
-      `INSERT INTO usage_log (user_id, ip_address, month_start)
-       SELECT $1, $2, $3
-       FROM generate_series(1, $4)`,
-      [req.userId, req.usageContext.ipAddress, req.usageContext.monthStart, uploadCount],
-    )
+    await recordUploadUsage({
+      userId: req.userId,
+      monthStart: req.usageContext.monthStart,
+      ipAddress: req.usageContext.ipAddress,
+      uploadCount: req.usageContext.requestedUploads,
+    })
   } catch (error) {
     console.error('[Subscription] Failed to track upload usage:', error)
   }
