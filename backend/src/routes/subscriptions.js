@@ -28,6 +28,9 @@ export function containsRawPaymentMethodField(body = {}) {
   return RAW_PAYMENT_METHOD_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field))
 }
 
+const BILLING_PROVIDER_MISSING_ERROR = 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.'
+const PADDLE_PRICE_MISSING_ERROR = 'Subscription cannot be changed because billing configuration is missing. Please contact support.'
+
 const PLAN_CONFIG = {
   monthly: { label: 'Monthly', amountCents: 9900, interval: 'month' },
   annual: { label: 'Annual', amountCents: 99900, interval: 'year' },
@@ -50,7 +53,7 @@ export function isoOrNull(value) {
 async function paddleRequest(path, options = {}) {
   const paddle = resolvePaddleConfig()
   if (!paddle.apiKey) {
-    return { skipped: true, reason: 'PADDLE_API_KEY missing' }
+    throw new Error('Paddle API key is not configured')
   }
 
   const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
@@ -192,38 +195,49 @@ router.post('/change-plan', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'You are already on that plan.' })
     }
 
+    if (!user.paddle_subscription_id) {
+      return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
+    }
+
     const isUpgrade = currentPlan === 'monthly' && targetPlan === 'annual'
     const effectiveAt = isUpgrade ? new Date() : new Date(user.current_period_end || Date.now())
     const proratedCreditCents = isUpgrade ? 1500 : 0
 
-    if (user.paddle_subscription_id) {
-      const paddle = resolvePaddleConfig()
-      const targetPriceId = targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
+    const paddle = resolvePaddleConfig()
+    const targetPriceId = targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
 
-      if (targetPriceId) {
-        await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            items: [{ price_id: targetPriceId, quantity: 1 }],
-            proration_billing_mode: isUpgrade ? 'prorated_immediately' : 'prorated_next_billing_period',
-          }),
-        })
-      }
+    if (!targetPriceId) {
+      return res.status(409).json({ error: PADDLE_PRICE_MISSING_ERROR })
     }
 
-    await pool.query(
-      `UPDATE users
-       SET subscription_plan = $1,
-           updated_at = NOW()
-       WHERE id = $2`,
-      [targetPlan, req.userId],
-    )
+    await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        items: [{ price_id: targetPriceId, quantity: 1 }],
+        proration_billing_mode: isUpgrade ? 'prorated_immediately' : 'prorated_next_billing_period',
+      }),
+    })
 
-    await pool.query(
-      `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [req.userId, currentPlan, targetPlan, isUpgrade ? 'upgrade' : 'downgrade', effectiveAt, proratedCreditCents],
-    )
+    try {
+      await pool.query('BEGIN')
+      await pool.query(
+        `UPDATE users
+         SET subscription_plan = $1,
+             updated_at = NOW()
+         WHERE id = $2`,
+        [targetPlan, req.userId],
+      )
+
+      await pool.query(
+        `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [req.userId, currentPlan, targetPlan, isUpgrade ? 'upgrade' : 'downgrade', effectiveAt, proratedCreditCents],
+      )
+      await pool.query('COMMIT')
+    } catch (error) {
+      await pool.query('ROLLBACK').catch(() => {})
+      throw error
+    }
 
     return res.json({
       status: 'ok',
@@ -261,29 +275,38 @@ router.post('/cancel', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    const effectiveAt = user.current_period_end || new Date()
-
-    if (user.paddle_subscription_id) {
-      await paddleRequest(`/subscriptions/${user.paddle_subscription_id}/cancel`, {
-        method: 'POST',
-      })
+    if (!user.paddle_subscription_id) {
+      return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
     }
 
-    await pool.query(
-      `UPDATE users
-       SET subscription_status = 'cancelled',
-           cancellation_effective_at = $1,
-           cancellation_reason = $2,
-           updated_at = NOW()
-       WHERE id = $3`,
-      [effectiveAt, reason || null, req.userId],
-    )
+    const effectiveAt = user.current_period_end || new Date()
 
-    await pool.query(
-      `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, reason, metadata)
-       VALUES ($1, $2, NULL, 'cancel', $3, $4, $5::jsonb)`,
-      [req.userId, user.subscription_plan || 'monthly', effectiveAt, reason || null, JSON.stringify({ acceptOffer: !!acceptOffer })],
-    )
+    await paddleRequest(`/subscriptions/${user.paddle_subscription_id}/cancel`, {
+      method: 'POST',
+    })
+
+    try {
+      await pool.query('BEGIN')
+      await pool.query(
+        `UPDATE users
+         SET subscription_status = 'cancelled',
+             cancellation_effective_at = $1,
+             cancellation_reason = $2,
+             updated_at = NOW()
+         WHERE id = $3`,
+        [effectiveAt, reason || null, req.userId],
+      )
+
+      await pool.query(
+        `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, reason, metadata)
+         VALUES ($1, $2, NULL, 'cancel', $3, $4, $5::jsonb)`,
+        [req.userId, user.subscription_plan || 'monthly', effectiveAt, reason || null, JSON.stringify({ acceptOffer: !!acceptOffer })],
+      )
+      await pool.query('COMMIT')
+    } catch (error) {
+      await pool.query('ROLLBACK').catch(() => {})
+      throw error
+    }
 
     return res.json({
       status: 'ok',
