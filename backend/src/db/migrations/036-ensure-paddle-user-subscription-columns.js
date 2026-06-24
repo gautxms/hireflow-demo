@@ -8,7 +8,8 @@ export async function up(client) {
       ADD COLUMN IF NOT EXISTS subscription_started_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS paddle_customer_id TEXT,
       ADD COLUMN IF NOT EXISTS paddle_subscription_id TEXT,
-      ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP
+      ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()
   `)
 
   await client.query(`

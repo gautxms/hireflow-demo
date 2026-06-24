@@ -48,6 +48,7 @@ test('Paddle user subscription column safety migration is idempotent and scoped 
     'paddle_customer_id TEXT',
     'paddle_subscription_id TEXT',
     'trial_ends_at TIMESTAMP',
+    'updated_at TIMESTAMP DEFAULT NOW()',
   ]) {
     assert.match(usersSql, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`))
   }
