@@ -81,7 +81,7 @@ router.get('/current', requireAuth, async (req, res) => {
     const userResult = await pool.query(
       `SELECT id, email, subscription_status, subscription_plan, subscription_renewal_date,
               next_billing_date, cancellation_effective_at, current_period_end, subscription_started_at,
-              payment_method_brand, payment_method_last4
+              payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -106,23 +106,27 @@ router.get('/current', requireAuth, async (req, res) => {
       console.warn('[subscriptions.current] No subscription row found in subscriptions table', { userId: req.userId })
     }
 
-    const planKey = user.subscription_plan || 'monthly'
-    const plan = PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly
+    const planKey = user.subscription_plan || null
+    const plan = planKey ? (PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly) : null
+    const hasBillingPortalAccess = Boolean(user.paddle_customer_id && user.paddle_subscription_id)
 
     return res.json({
       subscription: {
         status: user.subscription_status || 'inactive',
         plan: planKey,
         started_date: isoOrNull(user.subscription_started_at),
-        planLabel: plan.label,
-        costCents: plan.amountCents,
-        costFormatted: money(plan.amountCents),
+        planLabel: plan?.label || null,
+        costCents: plan?.amountCents || null,
+        costFormatted: plan ? money(plan.amountCents) : null,
+        paddleCustomerId: user.paddle_customer_id || null,
+        paddleSubscriptionId: user.paddle_subscription_id || null,
+        hasBillingPortalAccess,
         renewalDate: isoOrNull(user.subscription_renewal_date || user.current_period_end),
         nextBillingDate: isoOrNull(user.next_billing_date || user.current_period_end),
         cancellationEffectiveAt: isoOrNull(user.cancellation_effective_at),
         paymentMethod: user.payment_method_last4
           ? `${user.payment_method_brand || 'Card'} •••• ${user.payment_method_last4}`
-          : 'Card on file',
+          : hasBillingPortalAccess ? 'Card on file' : null,
         latestRecordStatus: latestSubscription?.status || null,
         latestRecordCreatedAt: isoOrNull(latestSubscription?.created_at),
       },

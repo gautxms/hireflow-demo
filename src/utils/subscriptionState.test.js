@@ -1,0 +1,51 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { resolveSubscriptionState, hasActiveSubscription, canAccessProductDashboard } from './subscriptionState.js'
+
+test('free users cannot manage billing or access product dashboard', () => {
+  const state = resolveSubscriptionState({ user: { subscription_status: 'inactive' } })
+
+  assert.equal(state.planLabel, 'Free plan')
+  assert.equal(state.statusLabel, 'Free plan / No active subscription')
+  assert.equal(state.canManageBilling, false)
+  assert.equal(state.canAccessProductDashboard, false)
+})
+
+test('active users require Paddle customer and subscription identifiers to manage billing', () => {
+  const missingProviderState = resolveSubscriptionState({ subscription: { status: 'active', plan: 'monthly' } })
+  const providerReadyState = resolveSubscriptionState({
+    subscription: {
+      status: 'active',
+      plan: 'monthly',
+      paddleCustomerId: 'ctm_123',
+      paddleSubscriptionId: 'sub_123',
+    },
+  })
+
+  assert.equal(missingProviderState.canManageBilling, false)
+  assert.equal(providerReadyState.canManageBilling, true)
+  assert.equal(providerReadyState.canAccessProductDashboard, true)
+})
+
+test('trialing users keep product access without being labeled inactive', () => {
+  const state = resolveSubscriptionState({ subscription: { status: 'trialing', plan: 'monthly' } })
+
+  assert.equal(state.statusLabel, 'Trialing')
+  assert.equal(hasActiveSubscription('trialing'), true)
+  assert.equal(canAccessProductDashboard('trialing'), true)
+})
+
+test('past due users are payment issue states, not free states', () => {
+  const state = resolveSubscriptionState({
+    subscription: {
+      status: 'past_due',
+      plan: 'monthly',
+      paddleCustomerId: 'ctm_123',
+      paddleSubscriptionId: 'sub_123',
+    },
+  })
+
+  assert.equal(state.statusLabel, 'Past due')
+  assert.equal(state.canAccessProductDashboard, false)
+  assert.equal(state.canManageBilling, true)
+})

@@ -446,10 +446,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/dashboard') {
-      const canAccessDashboard = guardAuthenticatedRoute({
+      const canAccessDashboard = guardSubscriptionRoute({
         isAuthenticated,
-        promptMessage: 'Please login to view the dashboard.',
+        subscriptionStatus,
         onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
+        authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
         return null
@@ -462,10 +464,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/dashboard/legacy') {
-      const canAccessDashboard = guardAuthenticatedRoute({
+      const canAccessDashboard = guardSubscriptionRoute({
         isAuthenticated,
-        promptMessage: 'Please login to view the dashboard.',
+        subscriptionStatus,
         onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
+        authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
         return null
@@ -536,6 +540,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/billing') {
+      const canAccessBilling = guardAuthenticatedRoute({
+        isAuthenticated,
+        promptMessage: 'Please login or sign up to view your billing settings.',
+        onRequireAuth,
+      })
+      if (!canAccessBilling) {
+        return null
+      }
+
       return <BillingPage />
     }
 
@@ -648,10 +661,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      const canAccessAnalyses = guardAuthenticatedRoute({
+      const canAccessAnalyses = guardSubscriptionRoute({
         isAuthenticated,
-        promptMessage: 'Please login to view analyses.',
+        subscriptionStatus,
         onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=analyses_upgrade_required'),
+        authPromptMessage: 'Please login to view analyses.',
       })
       if (!canAccessAnalyses) {
         return null
@@ -684,10 +699,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      const canAccessCandidates = guardAuthenticatedRoute({
+      const canAccessCandidates = guardSubscriptionRoute({
         isAuthenticated,
-        promptMessage: 'Please login to view candidates.',
+        subscriptionStatus,
         onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=candidates_upgrade_required'),
+        authPromptMessage: 'Please login to view candidates.',
       })
       if (!canAccessCandidates) {
         return null
@@ -702,10 +719,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      const canAccessShortlists = guardAuthenticatedRoute({
+      const canAccessShortlists = guardSubscriptionRoute({
         isAuthenticated,
-        promptMessage: 'Please login to view shortlists.',
+        subscriptionStatus,
         onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=shortlists_upgrade_required'),
+        authPromptMessage: 'Please login to view shortlists.',
       })
       if (!canAccessShortlists) {
         return null

@@ -1,8 +1,6 @@
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing'])
+import { canAccessProductDashboard } from './subscriptionState'
 
-export function hasActiveSubscription(subscriptionStatus = 'inactive') {
-  return ACTIVE_SUBSCRIPTION_STATUSES.has((subscriptionStatus || '').toLowerCase())
-}
+export { hasActiveSubscription, canAccessProductDashboard } from './subscriptionState'
 
 export function guardAuthenticatedRoute({
   isAuthenticated,
@@ -34,7 +32,7 @@ export function guardSubscriptionRoute({
     return false
   }
 
-  if (hasActiveSubscription(subscriptionStatus)) {
+  if (canAccessProductDashboard(subscriptionStatus)) {
     return true
   }
 

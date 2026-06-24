@@ -1,20 +1,7 @@
+import { CreditCard } from 'lucide-react'
+import { resolveSubscriptionState } from '../utils/subscriptionState'
 import './accountCards.css'
 
-const BILLING_STATUS_MAP = {
-  trialing: 'trial',
-  cancelled: 'canceled',
-}
-
-function formatPlan(plan) {
-  if (!plan) return 'N/A'
-  return plan.charAt(0).toUpperCase() + plan.slice(1)
-}
-
-function formatState(status) {
-  if (!status) return 'inactive'
-  const normalized = String(status).toLowerCase()
-  return BILLING_STATUS_MAP[normalized] || normalized
-}
 
 function formatDate(value) {
   if (!value) return 'N/A'
@@ -32,8 +19,7 @@ function formatDate(value) {
 }
 
 export default function BillingCard({ user, subscription }) {
-  const plan = subscription?.plan || user?.subscription_plan || null
-  const state = subscription?.status || user?.subscription_status || 'inactive'
+  const billingState = resolveSubscriptionState({ user, subscription })
   const renewalDate =
     subscription?.next_billed_at ||
     subscription?.current_period_end ||
@@ -41,10 +27,12 @@ export default function BillingCard({ user, subscription }) {
     user?.subscription_renewal_date ||
     null
 
+  const showCycleDate = !billingState.isFree && renewalDate
+
   return (
     <div className="hf-account-card" aria-label="Billing">
       <h2 className="hf-account-card__title">
-        <span className="hf-account-card__icon">💳</span>
+        <CreditCard size={18} strokeWidth={1.5} className="hf-account-card__icon" />
         Billing
       </h2>
 
@@ -52,27 +40,44 @@ export default function BillingCard({ user, subscription }) {
 
       <div className="hf-account-card__section">
         <p className="hf-account-card__label">Current plan</p>
-        <p className="hf-account-card__value">{formatPlan(plan)}</p>
+        <p className="hf-account-card__value">{billingState.planLabel}</p>
       </div>
 
       <div className="hf-account-card__section">
         <p className="hf-account-card__label">Subscription state</p>
-        <p className="hf-account-card__value hf-account-card__value--capitalize">{formatState(state)}</p>
+        <p className="hf-account-card__value">{billingState.statusLabel}</p>
       </div>
 
-      <div className="hf-account-card__section hf-account-card__section--last">
-        <p className="hf-account-card__label">Renewal / cycle date</p>
-        <p className="hf-account-card__value">{formatDate(renewalDate)}</p>
-      </div>
+      {showCycleDate ? (
+        <div className="hf-account-card__section hf-account-card__section--last">
+          <p className="hf-account-card__label">Renewal / cycle date</p>
+          <p className="hf-account-card__value">{formatDate(renewalDate)}</p>
+        </div>
+      ) : (
+        <p className="hf-billing-card__description">You do not have an active paid subscription yet. Upgrade to unlock resume analysis, candidate ranking, shortlists, and hiring reports.</p>
+      )}
 
-      <button
-        onClick={() => {
-          window.location.href = '/billing'
-        }}
-        className="hf-billing-card__button hf-billing-card__button--primary"
-      >
-        Manage billing
-      </button>
+      {billingState.canManageBilling ? (
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = '/billing'
+          }}
+          className="hf-billing-card__button hf-billing-card__button--primary"
+        >
+          Manage billing
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = '/pricing'
+          }}
+          className="hf-billing-card__button hf-billing-card__button--primary"
+        >
+          View plans
+        </button>
+      )}
     </div>
   )
 }
