@@ -1035,7 +1035,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         path: '/reports',
         icon: 'reports',
         isLocked: !dashboardReportsEnabled,
-        badge: !dashboardReportsEnabled ? 'Pro' : '',
+        badge: !dashboardReportsEnabled ? 'Plan' : '',
       },
       { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
     ]

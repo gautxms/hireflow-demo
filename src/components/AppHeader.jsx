@@ -33,9 +33,9 @@ export default function AppHeader({ user, isSubscribed, pageTitle }) {
           </div>
         )}
 
-        {/* Pro badge */}
+        {/* Paid plan badge */}
         {isSubscribed && (
-          <span className="app-header-pro-badge">Pro</span>
+          <span className="app-header-pro-badge">Plan</span>
         )}
 
         {/* Bell */}
