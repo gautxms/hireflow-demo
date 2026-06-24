@@ -191,11 +191,11 @@ export default function DemoBookingPage({ onBack }) {
 
             <div className="demo-lower-content">
               <section className="public-card demo-content-section">
-                <h3 className="public-card-title">What our customers say</h3>
+                <h3 className="public-card-title">Common workflow examples</h3>
                 <div className="public-faq-grid">
-                  <p className="public-copy">&ldquo;Before Hireflow, we spent hours manually sorting resumes for every open role. Now our team starts each week with a ranked shortlist and fewer back-and-forths with hiring managers.&rdquo; — Sarah, HR Manager at a 200-person SaaS company</p>
-                  <p className="public-copy">&ldquo;The biggest win is consistency. We align on role criteria up front, and Hireflow applies that logic to every applicant so our screening decisions are easier to explain.&rdquo; — Marcus, Talent Lead at a multi-location healthcare group</p>
-                  <p className="public-copy">&ldquo;We hire across operations and customer support, and volume can spike fast. Hireflow helps us quickly spot qualified applicants without missing strong candidates buried in the queue.&rdquo; — Priya, People Operations Manager at a logistics company</p>
+                  <p className="public-copy">Before Hireflow-style automation, teams may spend hours manually sorting resumes for every open role. With a structured shortlist, recruiting teams can start each week with clearer priorities and fewer back-and-forths with hiring managers.</p>
+                  <p className="public-copy">A consistency-focused workflow starts by aligning on role criteria up front, then applying that logic to every applicant so screening decisions are easier to explain.</p>
+                  <p className="public-copy">For teams hiring across operations and customer support, volume can spike fast. Hireflow helps reviewers spot qualified applicants faster while keeping humans in control of next steps.</p>
                 </div>
               </section>
 
