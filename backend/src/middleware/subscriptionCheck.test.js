@@ -61,6 +61,30 @@ test('requireActiveSubscription blocks inactive subscribers', async () => {
   }
 })
 
+
+test('requireActiveSubscription blocks Paddle failed payment states', async () => {
+  const originalQuery = pool.query
+
+  try {
+    for (const status of ['past_due', 'payment_failed', 'paused', 'cancelled']) {
+      pool.query = async () => ({ rows: [{ id: 1, subscription_status: status }] })
+      const req = { userId: 1 }
+      const res = createRes()
+      let nextCalled = false
+
+      await requireActiveSubscription(req, res, () => {
+        nextCalled = true
+      })
+
+      assert.equal(nextCalled, false)
+      assert.equal(res.statusCode, 403)
+      assert.equal(res.body.error, 'Subscription inactive')
+    }
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
 test('enforceUploadLimit allows active paid users through the advertised 800-resume allowance', async () => {
   const originalQuery = pool.query
   pool.query = async (sql) => {

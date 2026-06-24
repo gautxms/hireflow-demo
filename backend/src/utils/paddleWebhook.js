@@ -139,6 +139,10 @@ export function mapToSubscriptionStatus(eventType, payload) {
     return 'active'
   }
 
+  if (normalizedEventType === 'transaction.failed' || normalizedEventType === 'transaction.payment_failed') {
+    return 'payment_failed'
+  }
+
   if (normalizedEventType === 'transaction.refunded' || normalizedEventType === 'subscription.paused') {
     return 'paused'
   }

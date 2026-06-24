@@ -28,7 +28,7 @@ function getPaddleCustomerId(payload) {
 
 function getSubscriptionId(payload, eventType = null) {
   const normalizedEvent = String(eventType || '').toLowerCase()
-  if (normalizedEvent === 'transaction.completed') {
+  if (normalizedEvent.startsWith('transaction.')) {
     return getTransactionSubscriptionId(payload)
   }
   return payload?.data?.id || payload?.subscription_id || payload?.subscription?.id || null
@@ -259,6 +259,31 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
+      if (!hasEnvironmentMismatch && user?.id) {
+        await pool.query(
+          `UPDATE users
+           SET subscription_status = $2,
+               paddle_subscription_id = COALESCE($3, paddle_subscription_id),
+               paddle_customer_id = COALESCE($4, paddle_customer_id),
+               subscription_plan = COALESCE($5, subscription_plan),
+               current_period_end = COALESCE($6, current_period_end),
+               next_billing_date = COALESCE($7, next_billing_date),
+               paddle_environment = $8,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [
+            user.id,
+            nextStatus || 'payment_failed',
+            getTransactionSubscriptionId(payload),
+            getPaddleCustomerId(payload),
+            getStoredSubscriptionPlan(payload),
+            payload?.data?.billing_period?.ends_at || payload?.data?.current_billing_period?.ends_at || null,
+            payload?.data?.billing_period?.ends_at || payload?.data?.next_billed_at || null,
+            paddle.environment,
+          ],
+        )
+      }
+
       await recordFailedPaymentAttempt(payload)
 
       await trackEvent({

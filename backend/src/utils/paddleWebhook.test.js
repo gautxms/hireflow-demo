@@ -76,3 +76,12 @@ test('getTransactionSubscriptionId prefers subscription_id and never transaction
   assert.equal(getTransactionSubscriptionId(payload), 'sub_456')
   assert.notEqual(getTransactionSubscriptionId(payload), 'txn_123')
 })
+
+test('mapToSubscriptionStatus maps Paddle transaction failures to payment_failed', () => {
+  assert.equal(mapToSubscriptionStatus('transaction.failed', {}), 'payment_failed')
+  assert.equal(mapToSubscriptionStatus('transaction.payment_failed', {}), 'payment_failed')
+})
+
+test('mapToSubscriptionStatus passes through subscription.updated past_due', () => {
+  assert.equal(mapToSubscriptionStatus('subscription.updated', { data: { status: 'past_due' } }), 'past_due')
+})
