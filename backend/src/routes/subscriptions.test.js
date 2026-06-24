@@ -9,6 +9,7 @@ const BILLING_PROVIDER_MISSING_ERROR = 'Subscription cannot be changed because b
 const PADDLE_PRICE_MISSING_ERROR = 'Subscription cannot be changed because billing configuration is missing. Please contact support.'
 
 const originalQuery = pool.query
+const originalConnect = pool.connect
 const originalFetch = globalThis.fetch
 const originalVerify = jwt.verify
 const originalEnv = { ...process.env }
@@ -16,6 +17,7 @@ const originalConsoleInfo = console.info
 
 after(async () => {
   pool.query = originalQuery
+  pool.connect = originalConnect
   globalThis.fetch = originalFetch
   jwt.verify = originalVerify
   process.env = originalEnv
@@ -76,6 +78,13 @@ async function invokeRoute(path, body = {}) {
 
 function installDbMock(user) {
   const calls = []
+  const connectCalls = []
+
+  pool.connect = async () => {
+    connectCalls.push({ unexpected: true })
+    throw new Error('pool.connect should not be called')
+  }
+
   pool.query = async (sql, params) => {
     calls.push({ sql, params })
 
@@ -85,7 +94,49 @@ function installDbMock(user) {
 
     return { rows: [], rowCount: 1 }
   }
-  return calls
+
+  return { calls, connectCalls }
+}
+
+function installClientMock({ failOn } = {}) {
+  const clientCalls = []
+  const client = {
+    async query(sql, params) {
+      clientCalls.push({ sql, params, client })
+
+      if (failOn && String(sql).includes(failOn)) {
+        throw new Error(`client failure on ${failOn}`)
+      }
+
+      return { rows: [], rowCount: 1 }
+    },
+    release() {
+      clientCalls.push({ sql: 'RELEASE', client })
+    },
+  }
+  const connectCalls = []
+
+  pool.connect = async () => {
+    connectCalls.push(client)
+    return client
+  }
+
+  return { client, clientCalls, connectCalls }
+}
+
+function assertTransactionSequence(clientCalls, updatePattern) {
+  assert.equal(clientCalls.length, 5)
+  assert.equal(clientCalls[0].sql, 'BEGIN')
+  assert.match(String(clientCalls[1].sql), updatePattern)
+  assert.match(String(clientCalls[2].sql), /INSERT INTO subscription_change_events/)
+  assert.equal(clientCalls[3].sql, 'COMMIT')
+  assert.equal(clientCalls[4].sql, 'RELEASE')
+}
+
+function assertRollbackSequence(clientCalls) {
+  assert.equal(clientCalls.at(-2).sql, 'ROLLBACK')
+  assert.equal(clientCalls.at(-1).sql, 'RELEASE')
+  assert.ok(!clientCalls.some(({ sql }) => sql === 'COMMIT'))
 }
 
 function mutationCalls(calls) {
@@ -105,9 +156,9 @@ function mockPaddleResponse({ ok = true, status = 200, payload = { data: { id: '
   return calls
 }
 
-test('POST /api/subscriptions/change-plan rejects missing Paddle subscription ID without local mutation', async () => {
+test('POST /api/subscriptions/change-plan rejects missing Paddle subscription ID without local mutation or client checkout', async () => {
   resetPaddleEnv()
-  const calls = installDbMock({
+  const { calls, connectCalls } = installDbMock({
     id: 123,
     email: 'user@example.com',
     subscription_status: 'active',
@@ -123,12 +174,13 @@ test('POST /api/subscriptions/change-plan rejects missing Paddle subscription ID
   assert.deepEqual(res.payload, { error: BILLING_PROVIDER_MISSING_ERROR })
   assert.equal(paddleCalls.length, 0)
   assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/change-plan rejects missing target Paddle price ID without local mutation', async () => {
+test('POST /api/subscriptions/change-plan rejects missing target Paddle price ID without local mutation or client checkout', async () => {
   resetPaddleEnv()
   delete process.env.PADDLE_ANNUAL_PRICE_ID
-  const calls = installDbMock({
+  const { calls, connectCalls } = installDbMock({
     id: 123,
     email: 'user@example.com',
     subscription_status: 'active',
@@ -144,11 +196,12 @@ test('POST /api/subscriptions/change-plan rejects missing target Paddle price ID
   assert.deepEqual(res.payload, { error: PADDLE_PRICE_MISSING_ERROR })
   assert.equal(paddleCalls.length, 0)
   assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/change-plan does not mutate locally when Paddle PATCH fails', async () => {
+test('POST /api/subscriptions/change-plan does not checkout client or mutate locally when Paddle PATCH fails', async () => {
   resetPaddleEnv()
-  const calls = installDbMock({
+  const { calls, connectCalls } = installDbMock({
     id: 123,
     email: 'user@example.com',
     subscription_status: 'active',
@@ -163,11 +216,12 @@ test('POST /api/subscriptions/change-plan does not mutate locally when Paddle PA
   assert.equal(res.statusCode, 500)
   assert.deepEqual(res.payload, { error: 'Unable to change plan' })
   assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/change-plan mutates locally after Paddle PATCH succeeds and preserves response shape', async () => {
+test('POST /api/subscriptions/change-plan uses one checked-out client after Paddle PATCH succeeds', async () => {
   resetPaddleEnv()
-  const calls = installDbMock({
+  const { calls } = installDbMock({
     id: 123,
     email: 'user@example.com',
     subscription_status: 'active',
@@ -176,6 +230,7 @@ test('POST /api/subscriptions/change-plan mutates locally after Paddle PATCH suc
     current_period_end: '2026-07-01T00:00:00.000Z',
   })
   const paddleCalls = mockPaddleResponse()
+  const { clientCalls, connectCalls } = installClientMock()
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
@@ -185,15 +240,36 @@ test('POST /api/subscriptions/change-plan mutates locally after Paddle PATCH suc
   assert.equal(typeof res.payload.effectiveAt, 'string')
   assert.equal(res.payload.proratedCreditCents, 1500)
   assert.equal(paddleCalls.length, 1)
-  assert.equal(mutationCalls(calls).filter(({ sql }) => String(sql).includes('UPDATE users')).length, 1)
-  assert.equal(mutationCalls(calls).filter(({ sql }) => String(sql).includes('INSERT INTO subscription_change_events')).length, 1)
-  assert.ok(calls.some(({ sql }) => sql === 'BEGIN'))
-  assert.ok(calls.some(({ sql }) => sql === 'COMMIT'))
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 1)
+  assertTransactionSequence(clientCalls, /UPDATE users/)
 })
 
-test('POST /api/subscriptions/cancel rejects missing Paddle subscription ID without local mutation', async () => {
+test('POST /api/subscriptions/change-plan rolls back and releases checked-out client on local DB failure', async () => {
   resetPaddleEnv()
-  const calls = installDbMock({
+  const { calls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  mockPaddleResponse()
+  const { clientCalls, connectCalls } = installClientMock({ failOn: 'INSERT INTO subscription_change_events' })
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 500)
+  assert.deepEqual(res.payload, { error: 'Unable to change plan' })
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 1)
+  assertRollbackSequence(clientCalls)
+})
+
+test('POST /api/subscriptions/cancel rejects missing Paddle subscription ID without local mutation or client checkout', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
     id: 123,
     email: 'user@example.com',
     subscription_status: 'active',
@@ -209,11 +285,12 @@ test('POST /api/subscriptions/cancel rejects missing Paddle subscription ID with
   assert.deepEqual(res.payload, { error: BILLING_PROVIDER_MISSING_ERROR })
   assert.equal(paddleCalls.length, 0)
   assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/cancel does not mutate locally when Paddle cancel fails', async () => {
+test('POST /api/subscriptions/cancel does not checkout client or mutate locally when Paddle cancel fails', async () => {
   resetPaddleEnv()
-  const calls = installDbMock({
+  const { calls, connectCalls } = installDbMock({
     id: 123,
     email: 'user@example.com',
     subscription_status: 'active',
@@ -228,11 +305,12 @@ test('POST /api/subscriptions/cancel does not mutate locally when Paddle cancel 
   assert.equal(res.statusCode, 500)
   assert.deepEqual(res.payload, { error: 'Unable to cancel subscription' })
   assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/cancel mutates locally after Paddle cancel succeeds and preserves response shape', async () => {
+test('POST /api/subscriptions/cancel uses one checked-out client after Paddle cancel succeeds', async () => {
   resetPaddleEnv()
-  const calls = installDbMock({
+  const { calls } = installDbMock({
     id: 123,
     email: 'user@example.com',
     subscription_status: 'active',
@@ -241,6 +319,7 @@ test('POST /api/subscriptions/cancel mutates locally after Paddle cancel succeed
     current_period_end: '2026-07-01T00:00:00.000Z',
   })
   const paddleCalls = mockPaddleResponse()
+  const { clientCalls, connectCalls } = installClientMock()
 
   const res = await invokeRoute('/cancel', { reason: 'too expensive', acceptOffer: false })
 
@@ -249,8 +328,29 @@ test('POST /api/subscriptions/cancel mutates locally after Paddle cancel succeed
   assert.equal(typeof res.payload.message, 'string')
   assert.equal(res.payload.effectiveAt, '2026-07-01T00:00:00.000Z')
   assert.equal(paddleCalls.length, 1)
-  assert.equal(mutationCalls(calls).filter(({ sql }) => String(sql).includes('UPDATE users')).length, 1)
-  assert.equal(mutationCalls(calls).filter(({ sql }) => String(sql).includes('INSERT INTO subscription_change_events')).length, 1)
-  assert.ok(calls.some(({ sql }) => sql === 'BEGIN'))
-  assert.ok(calls.some(({ sql }) => sql === 'COMMIT'))
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 1)
+  assertTransactionSequence(clientCalls, /UPDATE users/)
+})
+
+test('POST /api/subscriptions/cancel rolls back and releases checked-out client on local DB failure', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  mockPaddleResponse()
+  const { clientCalls, connectCalls } = installClientMock({ failOn: 'INSERT INTO subscription_change_events' })
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 500)
+  assert.deepEqual(res.payload, { error: 'Unable to cancel subscription' })
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 1)
+  assertRollbackSequence(clientCalls)
 })

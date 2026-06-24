@@ -218,9 +218,11 @@ router.post('/change-plan', requireAuth, async (req, res) => {
       }),
     })
 
+    const client = await pool.connect()
+
     try {
-      await pool.query('BEGIN')
-      await pool.query(
+      await client.query('BEGIN')
+      await client.query(
         `UPDATE users
          SET subscription_plan = $1,
              updated_at = NOW()
@@ -228,15 +230,17 @@ router.post('/change-plan', requireAuth, async (req, res) => {
         [targetPlan, req.userId],
       )
 
-      await pool.query(
+      await client.query(
         `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [req.userId, currentPlan, targetPlan, isUpgrade ? 'upgrade' : 'downgrade', effectiveAt, proratedCreditCents],
       )
-      await pool.query('COMMIT')
+      await client.query('COMMIT')
     } catch (error) {
-      await pool.query('ROLLBACK').catch(() => {})
+      await client.query('ROLLBACK').catch(() => {})
       throw error
+    } finally {
+      client.release()
     }
 
     return res.json({
@@ -285,9 +289,11 @@ router.post('/cancel', requireAuth, async (req, res) => {
       method: 'POST',
     })
 
+    const client = await pool.connect()
+
     try {
-      await pool.query('BEGIN')
-      await pool.query(
+      await client.query('BEGIN')
+      await client.query(
         `UPDATE users
          SET subscription_status = 'cancelled',
              cancellation_effective_at = $1,
@@ -297,15 +303,17 @@ router.post('/cancel', requireAuth, async (req, res) => {
         [effectiveAt, reason || null, req.userId],
       )
 
-      await pool.query(
+      await client.query(
         `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, reason, metadata)
          VALUES ($1, $2, NULL, 'cancel', $3, $4, $5::jsonb)`,
         [req.userId, user.subscription_plan || 'monthly', effectiveAt, reason || null, JSON.stringify({ acceptOffer: !!acceptOffer })],
       )
-      await pool.query('COMMIT')
+      await client.query('COMMIT')
     } catch (error) {
-      await pool.query('ROLLBACK').catch(() => {})
+      await client.query('ROLLBACK').catch(() => {})
       throw error
+    } finally {
+      client.release()
     }
 
     return res.json({
