@@ -1,28 +1,24 @@
-/* global fetch, process, setImmediate */
-import test from 'node:test'
+/* global process, setImmediate */
+import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
-import express from 'express'
 import jwt from 'jsonwebtoken'
-import adminUxRoutes from './ux.js'
+import app from '../../app.js'
 import { pool } from '../../db/client.js'
-import { adminActionAuditMiddleware, createAdminSession, requireAdminAuth } from '../../middleware/adminAuth.js'
+import { createAdminSession } from '../../middleware/adminAuth.js'
+import { parseQueue } from '../../services/jobQueue.js'
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 
-function buildApp() {
-  const app = express()
-  app.use(express.json())
-  app.use('/api/admin/ux', requireAdminAuth, adminActionAuditMiddleware, adminUxRoutes)
-  return app
-}
+after(async () => {
+  await parseQueue.close().catch(() => {})
+})
 
 async function postAdminUxEvent({ headers } = {}) {
-  const app = buildApp()
   const server = app.listen(0)
   const port = server.address().port
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/api/admin/ux/events`, {
+    const response = await globalThis.fetch(`http://127.0.0.1:${port}/api/admin/ux/events`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -96,17 +92,17 @@ function setupPoolMock(t) {
       return { rowCount: 1, rows: [] }
     }
 
-    throw new Error(`Unexpected SQL in admin ux test: ${sql}`)
+    throw new Error(`Unexpected SQL in admin ux app test: ${sql}`)
   })
 
-  return { sessions, events, adminActions }
+  return { events, adminActions }
 }
 
 function bearerToken(payload) {
   return { Authorization: `Bearer ${jwt.sign(payload, process.env.JWT_SECRET)}` }
 }
 
-test('POST /api/admin/ux/events without a token is rejected before recording an event', async (t) => {
+test('production app rejects POST /api/admin/ux/events without a token before recording an event', async (t) => {
   const { events, adminActions } = setupPoolMock(t)
 
   const { response, payload } = await postAdminUxEvent()
@@ -117,7 +113,7 @@ test('POST /api/admin/ux/events without a token is rejected before recording an 
   assert.equal(adminActions.length, 0)
 })
 
-test('POST /api/admin/ux/events with a valid non-admin user token is forbidden', async (t) => {
+test('production app forbids POST /api/admin/ux/events with a valid non-admin user token', async (t) => {
   const { events, adminActions } = setupPoolMock(t)
 
   const { response, payload } = await postAdminUxEvent({
@@ -130,7 +126,7 @@ test('POST /api/admin/ux/events with a valid non-admin user token is forbidden',
   assert.equal(adminActions.length, 0)
 })
 
-test('POST /api/admin/ux/events with a valid admin token still records the event', async (t) => {
+test('production app accepts POST /api/admin/ux/events with admin auth and audits exactly once', async (t) => {
   const { events, adminActions } = setupPoolMock(t)
   const created = await createAdminSession({
     adminId: 7,
