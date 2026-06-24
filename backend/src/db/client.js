@@ -76,7 +76,7 @@ export async function initializeDatabase() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         paddle_subscription_id TEXT UNIQUE NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('active', 'trialing', 'cancelled')),
+        status TEXT NOT NULL CHECK (status IN ('past_due', 'payment_failed', 'paused', 'cancelled', 'trialing', 'active')),
         latest_event_type TEXT,
         latest_event_payload JSONB,
         created_at TIMESTAMP DEFAULT NOW(),
