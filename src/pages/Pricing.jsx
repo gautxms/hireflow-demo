@@ -5,7 +5,7 @@ import '../styles/pricing.css'
 const PLAN_FEATURES = [
   'AI resume analysis — up to 800 resumes/month',
   'AI-powered candidate screening',
-  'Bias-reduced scoring',
+  'Structured scoring signals',
   'Secure data handling',
   'Email support',
 ]
@@ -38,7 +38,7 @@ const PRICING = {
 const SHARED_PLAN_FEATURES = [
   'Includes up to 800 resume analyses/month.',
   'AI-powered candidate screening to help surface stronger matches faster.',
-  'Bias-reduced scoring signals designed to support more consistent shortlisting decisions.',
+  'Structured scoring signals designed to support more consistent shortlisting decisions.',
   'Bulk resume upload support so teams can process high-volume intake in fewer steps.',
   'Secure data handling built into the platform workflows used for parsing and analysis.',
   'Email support for setup, billing, and day-to-day product questions.',
@@ -47,7 +47,7 @@ const SHARED_PLAN_FEATURES = [
 const PRICING_FAQ = [
   {
     question: 'Can I change my plan later?',
-    answer: 'Yes. You can switch between monthly and annual billing as your hiring needs change. If your team hires in cycles, many customers start monthly and move to annual once usage is predictable. Your access to the product remains the same core experience, and billing updates are applied at the next billing cycle so changes are straightforward and easy to plan around.',
+    answer: 'Yes. You can switch between monthly and annual billing as your hiring needs change. If your team hires in cycles, many teams start monthly and move to annual once usage is predictable. Your access to the product remains the same core experience, and billing updates are applied at the next billing cycle so changes are straightforward and easy to plan around.',
   },
   {
     question: 'Is there a free trial?',
