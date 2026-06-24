@@ -53,6 +53,7 @@ export default function BillingPage() {
 
     try {
       setLoading(true)
+      setError('')
       const subRes = await fetch(`${API_BASE}/subscriptions/current`, { headers: { Authorization: `Bearer ${token}` } })
       const subPayload = await subRes.json().catch(() => ({}))
 
