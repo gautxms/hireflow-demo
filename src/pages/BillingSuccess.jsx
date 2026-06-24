@@ -129,14 +129,17 @@ export default function BillingSuccess() {
 
   const isFinalizing = finalizingStatus === 'polling'
   const isTimedOut = finalizingStatus === 'timed-out'
+  const subtitle = isTimedOut
+    ? 'Payment completed, but we are still finalizing your subscription. Please refresh or contact support.'
+    : isFinalizing
+      ? 'Finalizing subscription...'
+      : message || 'Thank you for your subscription. Your account is now active.'
 
   return (
     <BillingStatusLayout
       status={isTimedOut ? 'warning' : 'success'}
       title={isTimedOut ? 'Subscription still finalizing' : 'Payment successful'}
-      subtitle={isTimedOut
-        ? 'Payment completed, but we are still finalizing your subscription. Please refresh or contact support.'
-        : message || (isFinalizing ? 'Finalizing subscription...' : 'Thank you for your subscription. Your account is now active.')}
+      subtitle={subtitle}
       details={(
         <>
           <div className="billing-shell__summary-row">
