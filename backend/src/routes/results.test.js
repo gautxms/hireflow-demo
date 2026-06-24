@@ -1,8 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { applyCandidateFilters, normalizeCandidate, sortCandidates } from './results.js'
+import { applyCandidateFilters, normalizeCandidate, selectShareCandidatesForUser, shareTokenStore, sortCandidates } from './results.js'
 import { RESULTS_CONTRACT_FIXTURES } from './__fixtures__/resultsContractFixtures.js'
+
+const ownedShareCandidates = [
+  { id: 'cand-1', resumeId: 'resume-1', name: 'Owned One', email: 'owned1@example.com', phone: '111', score: 92, skills: ['React'], location: 'Austin', experience: '6 years' },
+  { id: 'cand-2', resumeId: 'resume-2', name: 'Owned Two', email: 'owned2@example.com', phone: '222', score: 81, skills: ['Python'], location: 'Denver', experience: '3 years' },
+]
+
+function loadOwnedCandidates() {
+  return Promise.resolve(ownedShareCandidates)
+}
 
 function pickScoreContractFields(candidate) {
   return {
@@ -70,7 +79,6 @@ test('normalizeCandidate returns canonical adapter fields for candidate and resu
   assert.equal(normalized.candidateId, 'parsed-2')
   assert.equal(normalized.resumeId, resumeId)
 })
-
 
 test('normalizeCandidate falls back to top-level score when matchScore.score is absent', () => {
   const normalized = normalizeCandidate({
@@ -158,4 +166,124 @@ test('existing result candidate scores remain unchanged when diagnostics are ava
   assert.equal(normalized.score, 82)
   assert.equal(normalized.matchScore.score, 82)
   assert.equal(normalized.profile_score, 91)
+})
+
+test('selectShareCandidatesForUser shares latest server candidates when request omits candidates', async () => {
+  const selected = await selectShareCandidatesForUser({
+    userId: 'user-1',
+    loadCandidates: loadOwnedCandidates,
+  })
+
+  assert.deepEqual(selected.map((candidate) => candidate.id), ['cand-1', 'cand-2'])
+  assert.equal(selected[0].email, 'owned1@example.com')
+})
+
+
+test('selectShareCandidatesForUser loads candidates for the requested analysis before intersecting identifiers', async () => {
+  const loadCalls = []
+  const selected = await selectShareCandidatesForUser({
+    userId: 'user-1',
+    analysisId: 'analysis-123',
+    requestedCandidates: [
+      { id: 'cand-1', resumeId: 'resume-1' },
+      { id: 'cand-2', resumeId: 'resume-2' },
+    ],
+    loadCandidates: (userId, options) => {
+      loadCalls.push({ userId, options })
+      return Promise.resolve(ownedShareCandidates)
+    },
+  })
+
+  assert.deepEqual(loadCalls, [{ userId: 'user-1', options: { analysisId: 'analysis-123' } }])
+  assert.deepEqual(selected.map((candidate) => candidate.id), ['cand-1', 'cand-2'])
+})
+
+test('selectShareCandidatesForUser rejects arbitrary client-supplied candidate objects without owned identifiers', async () => {
+  const selected = await selectShareCandidatesForUser({
+    userId: 'user-1',
+    requestedCandidates: [{ id: 'attacker-candidate', name: 'Injected', email: 'pii@example.com', score: 100 }],
+    loadCandidates: loadOwnedCandidates,
+  })
+
+  assert.deepEqual(selected, [])
+})
+
+test('selectShareCandidatesForUser uses client candidates only as owned identifier selectors', async () => {
+  const selected = await selectShareCandidatesForUser({
+    userId: 'user-1',
+    requestedCandidates: [{ id: 'cand-1', name: 'Injected Name', email: 'attacker@example.com', phone: '999', score: 1 }],
+    loadCandidates: loadOwnedCandidates,
+  })
+
+  assert.equal(selected.length, 1)
+  assert.equal(selected[0].id, 'cand-1')
+  assert.equal(selected[0].name, 'Owned One')
+  assert.equal(selected[0].email, 'owned1@example.com')
+  assert.equal(selected[0].phone, '111')
+  assert.equal(selected[0].score, 92)
+})
+
+test('selectShareCandidatesForUser stores only owned candidates from mixed owned and unowned requests', async () => {
+  const selected = await selectShareCandidatesForUser({
+    userId: 'user-1',
+    requestedCandidates: [
+      { candidateId: 'cand-2', email: 'tampered@example.com' },
+      { id: 'unowned-candidate', email: 'unowned@example.com' },
+    ],
+    loadCandidates: loadOwnedCandidates,
+  })
+
+  assert.deepEqual(selected.map((candidate) => candidate.id), ['cand-2'])
+  assert.equal(selected[0].email, 'owned2@example.com')
+})
+
+test('selectShareCandidatesForUser preserves share filtering, sorting, and caps public payloads', async () => {
+  const manyCandidates = Array.from({ length: 125 }, (_, index) => ({
+    id: `cand-${index}`,
+    name: `Candidate ${String(index).padStart(3, '0')}`,
+    score: index,
+    skills: ['React'],
+    experience: '5 years',
+  }))
+
+  const selected = await selectShareCandidatesForUser({
+    userId: 'user-1',
+    query: { skills: 'React' },
+    filters: { matchMin: '10' },
+    sortBy: 'score',
+    sortOrder: 'desc',
+    loadCandidates: () => Promise.resolve(manyCandidates),
+  })
+
+  assert.equal(selected.length, 100)
+  assert.equal(selected[0].id, 'cand-124')
+  assert.equal(selected.at(-1).id, 'cand-25')
+})
+
+test('public shared payload remains read-only and exposes stored server-derived candidates', () => {
+  const token = 'unit-test-share-token'
+  const expiresAt = Date.now() + 60_000
+  const serverCandidate = normalizeCandidate(ownedShareCandidates[0])
+  shareTokenStore.set(token, {
+    candidates: [serverCandidate],
+    createdAt: Date.now(),
+    expiresAt,
+    ownerUserId: 'user-1',
+    query: { search: 'Owned' },
+  })
+
+  const payload = shareTokenStore.get(token)
+  const publicResponse = {
+    candidates: payload.candidates,
+    readOnly: true,
+    expiresAt: payload.expiresAt,
+    query: payload.query || {},
+  }
+
+  assert.equal(publicResponse.readOnly, true)
+  assert.equal(publicResponse.expiresAt, expiresAt)
+  assert.deepEqual(publicResponse.query, { search: 'Owned' })
+  assert.equal(publicResponse.candidates[0].email, 'owned1@example.com')
+
+  shareTokenStore.delete(token)
 })

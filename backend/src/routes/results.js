@@ -8,7 +8,8 @@ import { emitScoreContractShadowDiagnostic } from '../services/scoreContractShad
 
 const router = Router()
 const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000
-const shareTokenStore = new Map()
+const SHARE_CANDIDATE_LIMIT = 100
+export const shareTokenStore = new Map()
 
 const ALLOWED_SORT_BY = new Set(['score', 'match_score', 'name', 'location', 'seniority', 'experience', 'upload_date', 'uploadDate'])
 const ALLOWED_SORT_ORDER = new Set(['asc', 'desc'])
@@ -319,6 +320,55 @@ export function sortCandidates(candidates, sortBy = 'score', sortOrder = 'desc')
   return sorted
 }
 
+function parseResultObject(result) {
+  if (result == null) return null
+  if (typeof result === 'string') {
+    try {
+      return parseResultObject(JSON.parse(result))
+    } catch {
+      return null
+    }
+  }
+  return typeof result === 'object' ? result : null
+}
+
+function extractCandidatesFromParseResult(result) {
+  const parsed = parseResultObject(result)
+  if (!parsed) return []
+
+  for (const field of [parsed.candidates, parsed.results, parsed.output]) {
+    if (Array.isArray(field)) return field
+    const nested = parseResultObject(field)
+    if (Array.isArray(nested?.candidates)) return nested.candidates
+  }
+
+  return []
+}
+
+function normalizeShareCandidate(candidate, { userId, analysisId = null, resumeId = null, parseJobId = null } = {}) {
+  const normalized = normalizeCandidate({
+    ...candidate,
+    analysisId: candidate?.analysisId || candidate?.analysis_id || analysisId || undefined,
+    analysis_id: candidate?.analysis_id || candidate?.analysisId || analysisId || undefined,
+    resumeId: candidate?.resumeId || candidate?.resume_id || resumeId || undefined,
+    resume_id: candidate?.resume_id || candidate?.resumeId || resumeId || undefined,
+  })
+  emitScoreContractShadowDiagnostic(normalized, {
+    userId,
+    analysisId,
+    resumeId: normalized.resumeId || resumeId || null,
+    provider: null,
+    model: null,
+    promptVersion: null,
+  })
+  return {
+    ...normalized,
+    analysisId: normalized.analysisId || analysisId || null,
+    analysis_id: normalized.analysis_id || analysisId || null,
+    parseJobId: normalized.parseJobId || parseJobId || null,
+  }
+}
+
 async function getLatestCandidatesForUser(userId) {
   const result = await pool.query(
     `SELECT result
@@ -331,20 +381,97 @@ async function getLatestCandidatesForUser(userId) {
     [userId],
   )
 
-  const latestResult = result.rows[0]?.result
-  const rawCandidates = Array.isArray(latestResult?.candidates) ? latestResult.candidates : []
-  return rawCandidates.map((candidate) => {
-    const normalized = normalizeCandidate(candidate)
-    emitScoreContractShadowDiagnostic(normalized, {
+  const rawCandidates = extractCandidatesFromParseResult(result.rows[0]?.result)
+  return rawCandidates.map((candidate) => normalizeShareCandidate(candidate, { userId }))
+}
+
+async function getAnalysisCandidatesForUser(userId, analysisId) {
+  const normalizedAnalysisId = String(analysisId || '').trim()
+  if (!normalizedAnalysisId) return null
+
+  const result = await pool.query(
+    `SELECT ai.resume_id,
+            ai.parse_job_id,
+            pj.result
+     FROM analyses a
+     INNER JOIN analysis_items ai ON ai.analysis_id = a.id
+     LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
+     WHERE a.id = $1
+       AND a.user_id = $2
+       AND pj.status = 'complete'
+       AND pj.result IS NOT NULL
+     ORDER BY ai.created_at ASC`,
+    [normalizedAnalysisId, userId],
+  )
+
+  if (result.rowCount === 0) return []
+
+  return result.rows.flatMap((row) => extractCandidatesFromParseResult(row.result)
+    .map((candidate) => normalizeShareCandidate(candidate, {
       userId,
-      analysisId: null,
-      resumeId: normalized.resumeId || null,
-      provider: null,
-      model: null,
-      promptVersion: null,
-    })
-    return normalized
-  })
+      analysisId: normalizedAnalysisId,
+      resumeId: row.resume_id ? String(row.resume_id) : null,
+      parseJobId: row.parse_job_id ? String(row.parse_job_id) : null,
+    })))
+}
+
+function collectCandidateIdentifiers(candidate = {}) {
+  return [candidate.id, candidate.candidateId, candidate.resumeId]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+}
+
+function extractRequestedCandidateIdentifiers(requestedCandidates) {
+  if (!Array.isArray(requestedCandidates)) {
+    return null
+  }
+
+  return new Set(requestedCandidates.flatMap((candidate) => collectCandidateIdentifiers(candidate)))
+}
+
+function buildShareFilters(query, filters) {
+  const queryFilters = query && typeof query === 'object' ? query : {}
+  const explicitFilters = filters && typeof filters === 'object' ? filters : {}
+
+  return {
+    ...queryFilters,
+    ...(queryFilters.filters && typeof queryFilters.filters === 'object' ? queryFilters.filters : {}),
+    ...explicitFilters,
+  }
+}
+
+export async function selectShareCandidatesForUser({
+  userId,
+  requestedCandidates,
+  query,
+  filters,
+  sortBy,
+  sortOrder,
+  analysisId,
+  loadCandidates = getLatestCandidatesForUser,
+}) {
+  const requestedIdentifiers = extractRequestedCandidateIdentifiers(requestedCandidates)
+  const loadedCandidates = await loadCandidates(userId, { analysisId })
+  const serverCandidates = loadedCandidates.map(normalizeCandidate)
+  let selected = serverCandidates
+
+  if (requestedIdentifiers) {
+    selected = selected.filter((candidate) => collectCandidateIdentifiers(candidate)
+      .some((identifier) => requestedIdentifiers.has(identifier)))
+  }
+
+  if (query || filters) {
+    selected = applyCandidateFilters(selected, buildShareFilters(query, filters))
+  }
+
+  const safeSortBy = sortBy === undefined || sortBy === null || sortBy === '' ? null : sanitizeSortBy(sortBy)
+  const safeSortOrder = safeSortBy ? sanitizeSortOrder(sortOrder, safeSortBy) : null
+
+  if (safeSortBy) {
+    selected = sortCandidates(selected, safeSortBy, safeSortOrder)
+  }
+
+  return selected.slice(0, SHARE_CANDIDATE_LIMIT)
 }
 
 function cleanupExpiredShareTokens() {
@@ -436,13 +563,25 @@ router.post('/share', requireAuth, async (req, res) => {
     cleanupExpiredShareTokens()
 
     const incoming = Array.isArray(req.body?.candidates) ? req.body.candidates : null
-    const candidates = (incoming ? incoming : await getLatestCandidatesForUser(req.userId)).map(normalizeCandidate)
+    const query = req.body?.query && typeof req.body.query === 'object' ? req.body.query : {}
+    const filters = req.body?.filters && typeof req.body.filters === 'object' ? req.body.filters : undefined
+    const candidates = await selectShareCandidatesForUser({
+      userId: req.userId,
+      requestedCandidates: incoming,
+      query,
+      filters,
+      sortBy: req.body?.sortBy,
+      sortOrder: req.body?.sortOrder,
+      analysisId: req.body?.analysisId || query.analysisId,
+      loadCandidates: async (userId, { analysisId } = {}) => {
+        const analysisCandidates = await getAnalysisCandidatesForUser(userId, analysisId)
+        return analysisCandidates === null ? getLatestCandidatesForUser(userId) : analysisCandidates
+      },
+    })
 
     if (candidates.length === 0) {
-      return res.status(400).json({ error: 'No candidates available to share' })
+      return res.status(400).json({ error: incoming ? 'No requested candidates belong to this user or match the requested filters' : 'No candidates available to share' })
     }
-
-    const query = req.body?.query && typeof req.body.query === 'object' ? req.body.query : {}
 
     const shareToken = crypto.randomBytes(24).toString('base64url')
     const createdAt = Date.now()
