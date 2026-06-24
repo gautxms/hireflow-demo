@@ -37,6 +37,7 @@ const migrationFiles = [
   '033-add-shortlist-job-context',
   '034-add-resume-file-metadata',
   '035-add-ai-score-cache',
+  '036-ensure-paddle-user-subscription-columns',
 ]
 
 async function ensureMigrationsTable(client) {
