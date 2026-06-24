@@ -10,4 +10,9 @@ export async function up(client) {
       ADD COLUMN IF NOT EXISTS paddle_subscription_id TEXT,
       ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP
   `)
+
+  await client.query(`
+    ALTER TABLE subscriptions
+      ADD COLUMN IF NOT EXISTS paddle_environment TEXT
+  `)
 }

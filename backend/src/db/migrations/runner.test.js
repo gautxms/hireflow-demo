@@ -22,7 +22,7 @@ test('migration runner includes Paddle user subscription column safety migration
   assert.match(source, /'036-ensure-paddle-user-subscription-columns'/)
 })
 
-test('Paddle user subscription column safety migration is idempotent and scoped to users table', async () => {
+test('Paddle user subscription column safety migration is idempotent and scoped to Paddle tables', async () => {
   const queries = []
   const { up } = await import('./036-ensure-paddle-user-subscription-columns.js')
 
@@ -33,10 +33,11 @@ test('Paddle user subscription column safety migration is idempotent and scoped 
     },
   })
 
-  assert.equal(queries.length, 1)
-  const sql = queries[0]
-  assert.match(sql, /ALTER TABLE users/)
-  assert.equal((sql.match(/ALTER TABLE/g) || []).length, 1)
+  assert.equal(queries.length, 2)
+
+  const usersSql = queries[0]
+  assert.match(usersSql, /ALTER TABLE users/)
+  assert.equal((usersSql.match(/ALTER TABLE/g) || []).length, 1)
 
   for (const column of [
     'subscription_plan TEXT',
@@ -48,6 +49,14 @@ test('Paddle user subscription column safety migration is idempotent and scoped 
     'paddle_subscription_id TEXT',
     'trial_ends_at TIMESTAMP',
   ]) {
-    assert.match(sql, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`))
+    assert.match(usersSql, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`))
   }
+
+  const subscriptionsSql = queries[1]
+  assert.match(subscriptionsSql, /ALTER TABLE subscriptions/)
+  assert.equal((subscriptionsSql.match(/ALTER TABLE/g) || []).length, 1)
+  assert.match(subscriptionsSql, /ADD COLUMN IF NOT EXISTS paddle_environment TEXT/)
+
+  const alteredTables = queries.flatMap((sql) => [...sql.matchAll(/ALTER TABLE\s+(\w+)/g)].map((match) => match[1]))
+  assert.deepEqual(alteredTables, ['users', 'subscriptions'])
 })
