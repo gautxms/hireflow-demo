@@ -20,7 +20,7 @@ test('UserAppShell renders subscribed dashboard view without explicit pageTitleP
     )
 
     assert.match(markup, /Dashboard/)
-    assert.match(markup, /Pro/)
+    assert.match(markup, /Plan/)
   })
 })
 

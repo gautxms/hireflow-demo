@@ -56,8 +56,8 @@ const PUBLIC_ROUTES = [
     route: '/pricing',
     body: `
       <main>
-        <h1>Simple, transparent pricing</h1>
-        <p>Choose a Starter, Pro, or Enterprise plan based on your monthly hiring volume and team size.</p>
+        <h1>Choose your plan</h1>
+        <p>HireFlow offers monthly billing at $99/month or annual billing at $999/year, equivalent to $83.25/month. Both plans include a 7-day free trial and up to 800 resume analyses/month.</p>
       </main>
     `,
   },
