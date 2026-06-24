@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import crypto from 'crypto'
 import {
   DeleteObjectCommand,
@@ -130,12 +132,31 @@ async function ensureAnalysisTables() {
   `)
 }
 
-function buildPrefix(uploadId) {
-  return `uploads/${uploadId}`
+function buildPrefix(userId, uploadId) {
+  return `users/${userId}/uploads/${uploadId}`
 }
 
-function buildChunkKey(uploadId, chunkIndex) {
-  return `${buildPrefix(uploadId)}/chunks/${chunkIndex}`
+function resolveUploadPrefix(rowOrUploadId, fallbackUploadId = null) {
+  if (rowOrUploadId && typeof rowOrUploadId === 'object') {
+    const storedPrefix = String(rowOrUploadId.s3_prefix || '').trim()
+    if (storedPrefix) {
+      return storedPrefix
+    }
+
+    if (rowOrUploadId.user_id && rowOrUploadId.upload_id) {
+      return buildPrefix(rowOrUploadId.user_id, rowOrUploadId.upload_id)
+    }
+  }
+
+  if (fallbackUploadId) {
+    return buildPrefix(rowOrUploadId, fallbackUploadId)
+  }
+
+  throw new Error('Upload S3 prefix is unavailable')
+}
+
+function buildChunkKeyFromPrefix(prefix, chunkIndex) {
+  return `${prefix}/chunks/${chunkIndex}`
 }
 
 export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
@@ -249,7 +270,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   }
 
   const uploadId = crypto.randomUUID()
-  const prefix = buildPrefix(uploadId)
+  const prefix = buildPrefix(userId, uploadId)
 
   await pool.query(
     `INSERT INTO upload_chunks
@@ -272,7 +293,7 @@ export async function storeChunk({ userId, uploadId, chunkIndex, totalChunks, ch
   ensureS3Configured()
 
   const uploadResult = await pool.query(
-    `SELECT upload_id, total_chunks, status
+    `SELECT upload_id, user_id, total_chunks, status, s3_prefix
      FROM upload_chunks
      WHERE upload_id = $1 AND user_id = $2
      LIMIT 1`,
@@ -299,7 +320,7 @@ export async function storeChunk({ userId, uploadId, chunkIndex, totalChunks, ch
 
   await s3Client.send(new PutObjectCommand({
     Bucket: s3Bucket,
-    Key: buildChunkKey(uploadId, chunkIndex),
+    Key: buildChunkKeyFromPrefix(resolveUploadPrefix(uploadRow), chunkIndex),
     Body: chunkBuffer,
     ContentType: 'application/octet-stream',
   }))
@@ -346,7 +367,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
   ensureS3Configured()
 
   const result = await pool.query(
-    `SELECT upload_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id, resume_id, analysis_id
+    `SELECT upload_id, user_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id, resume_id, analysis_id, s3_prefix
      FROM upload_chunks
      WHERE upload_id = $1 AND user_id = $2
      LIMIT 1`,
@@ -375,7 +396,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
   for (let index = 0; index < totalChunks; index += 1) {
     const chunkObject = await s3Client.send(new GetObjectCommand({
       Bucket: s3Bucket,
-      Key: buildChunkKey(uploadId, index),
+      Key: buildChunkKeyFromPrefix(resolveUploadPrefix(row), index),
     }))
 
     chunkBuffers.push(await toBuffer(chunkObject.Body))
@@ -395,7 +416,8 @@ export async function completeChunkUpload({ userId, uploadId }) {
 
   const fileMetadata = normalizeResumeFileMetadata({ originalFilename: row.filename, reportedMimeType: row.mime_type })
   const assembledHash = crypto.createHash('sha256').update(assembledBuffer).digest('hex')
-  const assembledKey = `${buildPrefix(uploadId)}/assembled/${fileMetadata.storageFilename}`
+  const uploadPrefix = resolveUploadPrefix(row)
+  const assembledKey = `${uploadPrefix}/assembled/${fileMetadata.storageFilename}`
   const normalizedMimeType = normalizeMimeType(fileMetadata.storageFilename, fileMetadata.originalMimeType)
 
   await s3Client.send(new PutObjectCommand({
@@ -526,7 +548,7 @@ export async function completeChunkUpload({ userId, uploadId }) {
     )
   }
 
-  await deleteChunkObjects(uploadId, totalChunks)
+  await deleteChunkObjects(uploadPrefix, totalChunks)
 
   return {
     ok: true,
@@ -544,11 +566,11 @@ export async function completeChunkUpload({ userId, uploadId }) {
   }
 }
 
-async function deleteChunkObjects(uploadId, totalChunks) {
+async function deleteChunkObjects(prefix, totalChunks) {
   const toDelete = []
 
   for (let index = 0; index < totalChunks; index += 1) {
-    toDelete.push({ Key: buildChunkKey(uploadId, index) })
+    toDelete.push({ Key: buildChunkKeyFromPrefix(prefix, index) })
   }
 
   if (toDelete.length === 1) {
@@ -606,7 +628,7 @@ export async function cleanupExpiredChunkUploads() {
 
   for (const row of result.rows) {
     try {
-      await deletePrefix(row.s3_prefix || buildPrefix(row.upload_id))
+      await deletePrefix(resolveUploadPrefix(row))
       expiredUploadIds.push(row.upload_id)
     } catch (error) {
       console.error('[ChunkUpload] Cleanup failed for upload', row.upload_id, error)
