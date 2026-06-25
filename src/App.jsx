@@ -414,7 +414,11 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
 
-    if (isRootLandingPath || resolvedPathname === '/ai-resume-screening') {
+    if (INTENT_PAGE_ORDER.includes(resolvedPathname)) {
+      return <IntentLandingPage pathname={resolvedPathname} />
+    }
+
+    if (isRootLandingPath) {
       return (
         <LandingPage
           onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
@@ -497,10 +501,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (resolvedPathname === '/refund-policy') {
       return <RefundPolicy />
-    }
-
-    if (INTENT_PAGE_ORDER.includes(resolvedPathname)) {
-      return <IntentLandingPage pathname={resolvedPathname} />
     }
 
     if (resolvedPathname === '/billing/success') {
