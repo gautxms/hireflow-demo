@@ -172,12 +172,14 @@ test('subscriptions current read safety migration is additive and uses users.id 
     },
   })
 
-  assert.equal(queries.length, 5)
+  assert.equal(queries.length, 6)
   assert.match(queries[0], /SELECT format_type\(a\.atttypid, a\.atttypmod\) AS data_type/)
   assert.match(queries[1], /CREATE EXTENSION IF NOT EXISTS pgcrypto/)
   assert.match(queries[2], /CREATE TABLE IF NOT EXISTS subscriptions/)
   assert.match(queries[2], /user_id bigint REFERENCES users\(id\) ON DELETE SET NULL/)
+  assert.match(queries[2], /paddle_subscription_id TEXT UNIQUE/)
   assert.match(queries[2], /status TEXT NOT NULL DEFAULT 'inactive'/)
+  assert.match(queries[2], /paddle_environment TEXT/)
   assert.match(queries[2], /created_at TIMESTAMP DEFAULT NOW\(\)/)
   assert.match(queries[3], /ALTER TABLE subscriptions/)
 
@@ -187,12 +189,15 @@ test('subscriptions current read safety migration is additive and uses users.id 
     "status TEXT NOT NULL DEFAULT 'inactive'",
     'latest_event_type TEXT',
     'latest_event_payload JSONB',
+    'paddle_environment TEXT',
     'created_at TIMESTAMP DEFAULT NOW\\(\\)',
     'updated_at TIMESTAMP DEFAULT NOW\\(\\)',
   ]) {
     assert.match(queries[3], new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`))
   }
 
-  assert.match(queries[4], /CREATE INDEX IF NOT EXISTS idx_subscriptions_user_created/)
-  assert.match(queries[4], /ON subscriptions \(user_id, created_at DESC\)/)
+  assert.match(queries[4], /CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_paddle_subscription_id_unique/)
+  assert.match(queries[4], /ON subscriptions \(paddle_subscription_id\)/)
+  assert.match(queries[5], /CREATE INDEX IF NOT EXISTS idx_subscriptions_user_created/)
+  assert.match(queries[5], /ON subscriptions \(user_id, created_at DESC\)/)
 })

@@ -38,10 +38,11 @@ export async function up(client) {
     CREATE TABLE IF NOT EXISTS subscriptions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id ${usersIdType} REFERENCES users(id) ON DELETE SET NULL,
-      paddle_subscription_id TEXT,
+      paddle_subscription_id TEXT UNIQUE,
       status TEXT NOT NULL DEFAULT 'inactive',
       latest_event_type TEXT,
       latest_event_payload JSONB,
+      paddle_environment TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -54,8 +55,14 @@ export async function up(client) {
       ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'inactive',
       ADD COLUMN IF NOT EXISTS latest_event_type TEXT,
       ADD COLUMN IF NOT EXISTS latest_event_payload JSONB,
+      ADD COLUMN IF NOT EXISTS paddle_environment TEXT,
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()
+  `)
+
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_paddle_subscription_id_unique
+      ON subscriptions (paddle_subscription_id)
   `)
 
   await client.query(`
