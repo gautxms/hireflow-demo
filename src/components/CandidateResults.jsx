@@ -1555,6 +1555,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const allSkillsVisible = showAllDrawerSkills ? detailVm.allSkills : detailVm.allSkills.slice(0, 12)
   const hasCollapsedSkills = detailVm.allSkills.length > allSkillsVisible.length
   const detailTags = candidateTags[expandedCandidateKey] || []
+  const shouldRenderRecommendedAction = Boolean(detailVm.hasRecommendedAction && detailVm.recommendationText)
 
   return (
     <CandidateDetailErrorBoundary
@@ -1605,7 +1606,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <DrawerSection title="Summary">
               <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`summary-${expandedCandidateKey}`} />
             </DrawerSection>
-            {detailVm.hasRecommendedAction && (
+            {shouldRenderRecommendedAction && (
               <DrawerSection title="Recommended action" className="dd-section-card--compact">
                 <ExpandableText text={detailVm.recommendationText} className="dd-recommended-action" clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`recommendation-${expandedCandidateKey}`} />
               </DrawerSection>

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload.js'
+import { buildExpandedCandidateDrawerViewModel } from './candidateResultsState.js'
 
 const candidateResultsSource = readFileSync(new URL('./CandidateResults.jsx', import.meta.url), 'utf8')
 const candidateResultsStyles = readFileSync(new URL('../styles/candidate-results.css', import.meta.url), 'utf8')
@@ -46,6 +47,26 @@ test('normalizeCandidateResultsPayload handles shared results payload', () => {
   assert.equal(normalized.isInvalid, false)
 })
 
+test('normalized CandidateResults payload still suppresses duplicate recommendation in drawer view-model', () => {
+  const duplicate = 'Siddharth has 6.6 years of B2B SaaS marketing experience and strong sales collaboration skills, meeting the experience requirement. However, his background is heavily events and partnerships-focused, not growth and demand generation. He lacks hands-on paid acquisition (Google Ads, LinkedIn Ads, Meta Ads), funnel optimization, copywriting, and multi-channel campaign execution — all core to this role. Location mismatch (Kolkata vs. Mumbai) is an additional constraint.'
+  const { candidates } = normalizeCandidateResultsPayload({
+    candidates: [{
+      id: 'siddharth-banerjee',
+      name: 'Siddharth Banerjee',
+      recommendationFull: duplicate,
+      matchScore: { score: 66, reason: duplicate },
+      fit_assessment: {
+        rationale: `${duplicate} Recruiter can separately verify Mumbai relocation constraints if the team wants to proceed.`,
+      },
+    }],
+  })
+  const detailVm = buildExpandedCandidateDrawerViewModel(candidates[0])
+
+  assert.equal(detailVm.reasoningText, duplicate)
+  assert.equal(detailVm.hasRecommendedAction, false)
+  assert.equal(detailVm.recommendationText, '')
+})
+
 test('CandidateResults title contract: analysis title does not fall back to job description fields', () => {
   assert.match(candidateResultsSource, /return resolved \|\| 'Analysis Results'/)
   assert.match(
@@ -53,8 +74,6 @@ test('CandidateResults title contract: analysis title does not fall back to job 
     /const candidateFields = \[\s*firstCandidate\?\.analysisName,\s*firstCandidate\?\.analysisTitle,\s*firstCandidate\?\.analysis_name,\s*\]/s,
   )
 })
-
-
 
 test('CandidateResults does not invoke React hooks at module scope for selection helpers', () => {
   assert.doesNotMatch(
@@ -89,7 +108,6 @@ test('click-path regression: crash panel copy is never used for candidate click 
   assert.doesNotMatch(candidateResultsSource, /Please return to Analyses or retry\./)
 })
 
-
 test('candidate drawer includes compact Resume section with icon-only open handler', () => {
   assert.match(candidateResultsSource, /title="Resume"/)
   assert.match(candidateResultsSource, /className="dd-resume-file"/)
@@ -102,7 +120,6 @@ test('candidate drawer includes compact Resume section with icon-only open handl
   assert.doesNotMatch(candidateResultsSource, /Uploaded resume available to open\./)
   assert.doesNotMatch(candidateResultsSource, />Open<\/span>/)
 })
-
 
 test('expanded drawer third-column order keeps resume after considerations and before integrity checks', () => {
   const strengthsIndex = candidateResultsSource.indexOf('title="Strengths"')
@@ -126,6 +143,25 @@ test('expanded drawer renders restored legacy sections for facts, recommendation
   assert.match(candidateResultsSource, /title="All skills"/)
 })
 
+test('rendered drawer path gates Recommended action with view-model flag and text only', () => {
+  assert.match(candidateResultsSource, /const detailVm = buildExpandedCandidateDrawerViewModel\(expandedCandidate\)/)
+  assert.match(candidateResultsSource, /const shouldRenderRecommendedAction = Boolean\(detailVm\.hasRecommendedAction && detailVm\.recommendationText\)/)
+  assert.match(candidateResultsSource, /\{shouldRenderRecommendedAction && \(\s*<DrawerSection title="Recommended action"/s)
+  assert.match(candidateResultsSource, /<ExpandableText text=\{detailVm\.recommendationText\}/)
+})
+
+test('rendered drawer path does not read recommendation fields directly from candidate payload', () => {
+  const drawerStart = candidateResultsSource.indexOf('const detailVm = buildExpandedCandidateDrawerViewModel(expandedCandidate)')
+  const drawerEnd = candidateResultsSource.indexOf('</CandidateDetailErrorBoundary>', drawerStart)
+  const drawerSource = candidateResultsSource.slice(drawerStart, drawerEnd)
+
+  assert.ok(drawerStart >= 0)
+  assert.ok(drawerEnd > drawerStart)
+  assert.doesNotMatch(drawerSource, /candidate\?\.recommendationFull|candidate\.recommendationFull/)
+  assert.doesNotMatch(drawerSource, /candidate\?\.recommendation\b|candidate\.recommendation\b/)
+  assert.doesNotMatch(drawerSource, /expandedCandidate\?\.recommendationFull|expandedCandidate\.recommendationFull/)
+  assert.doesNotMatch(drawerSource, /expandedCandidate\?\.recommendation\b|expandedCandidate\.recommendation\b/)
+})
 
 test('expanded drawer skill gaps heading includes amber count badge when gaps exist', () => {
   assert.match(
@@ -145,14 +181,12 @@ test('skill gap and matched skill pills use distinct classes and warning style c
   assert.doesNotMatch(candidateResultsStyles, /\.dd-top-skill--warn[\s\S]*color:\s*#ffffff/)
 })
 
-
 test('skill gap warning pills resolve to canonical amber status tokens', () => {
   assert.match(designTokens, /--hf-warning:\s*var\(--hf-status-warning\)/)
   assert.match(designTokens, /--hf-score-possible:\s*var\(--hf-status-warning\)/)
   assert.match(candidateResultsStyles, /\.dd-top-skill--warn\s*\{[^}]*color:\s*var\(--hf-warning\)/)
   assert.doesNotMatch(candidateResultsStyles, /\.dd-top-skill--warn\s*\{[^}]*var\(--hf-score-possible\)/)
 })
-
 
 test('expanded drawer first-column section order keeps recommendation before key facts for recruiter scanning', () => {
   const summaryIndex = candidateResultsSource.indexOf('title="Summary"')
@@ -182,7 +216,6 @@ test('drawer uses reusable expansion helpers with preview budgets and show more 
   assert.match(candidateResultsSource, /buttonLabel="Show more"/)
   assert.match(candidateResultsSource, /collapseLabel="Show less"/)
 })
-
 
 test('shortlist add flow supports create-or-select destination inline', () => {
   assert.match(candidateResultsSource, /destinationShortlistId = await createShortlistInAddFlow\(\)/)
