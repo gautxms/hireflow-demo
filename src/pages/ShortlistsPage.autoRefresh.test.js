@@ -55,7 +55,7 @@ test('shortlist manager exposes retry in error state and removes manual refresh 
 test('shortlists page loads jobs and sends selected job when creating shortlist', () => {
   const createShortlistSource = getFunctionSource('createShortlist')
   assert.match(shortlistPageSource, /const \[jobDescriptions, setJobDescriptions\] = useState\(\[\]\)/)
-  assert.match(shortlistPageSource, /fetch\(`\$\{API_BASE\}\/job-descriptions`/)
+  assert.match(shortlistPageSource, /fetch\(`\$\{API_BASE\}\/job-descriptions\?includeArchived=true`/)
   assert.match(createShortlistSource, /jobDescriptionId/)
   assert.match(createShortlistSource, /JSON\.stringify\(\{ name, description, jobDescriptionId \}\)/)
   assert.match(shortlistPageSource, /jobDescriptions=\{jobDescriptions\}/)
@@ -66,6 +66,7 @@ test('shortlist manager create form exposes job dropdown while filters stay shor
   assert.match(shortlistManagerSource, /const \[createJobDescriptionId, setCreateJobDescriptionId\] = useState\(''\)/)
   assert.match(shortlistManagerSource, /Job \(optional\)<select value=\{createJobDescriptionId\}/)
   assert.match(shortlistManagerSource, /onCreateShortlist\(\{ name: name\.trim\(\), description: description\.trim\(\), jobDescriptionId: createJobDescriptionId \|\| null \}\)/)
+  assert.match(shortlistManagerSource, /\(Array\.isArray\(jobDescriptions\) \? jobDescriptions : \[\]\)\.forEach/)
   assert.match(shortlistManagerSource, /shortlists\.forEach\(\(list\) => \{/)
   assert.match(shortlistManagerSource, /const value = String\(list\.job_description_id \|\| label\)\.trim\(\)/)
   assert.match(shortlistManagerSource, /<option key=\{job\.value\} value=\{job\.value\}>\{job\.label\}<\/option>/)
@@ -75,4 +76,17 @@ test('shortlist manager links scored chips back to the producing analysis', () =
   assert.match(shortlistManagerSource, /const canLinkScore = analysisHref && scoreDisplay\.tone !== 'muted'/)
   assert.match(shortlistManagerSource, /<a className=\{scoreClassName\} href=\{analysisHref\}/)
   assert.match(shortlistManagerSource, /View analysis that produced/)
+})
+
+
+test('shortlist manager clarifies unavailable candidate status filter', () => {
+  assert.match(shortlistManagerSource, /Candidate status/)
+  assert.match(shortlistManagerSource, /Candidate status unavailable/)
+  assert.match(shortlistManagerSource, /hasAvailableDecisionStatuses/)
+})
+
+test('shortlists page score sorting requests backend score ordering', () => {
+  assert.match(shortlistPageSource, /rating_desc: 'sortBy=score&sortOrder=desc'/)
+  assert.match(shortlistPageSource, /rating_asc: 'sortBy=score&sortOrder=asc'/)
+  assert.match(shortlistManagerSource, /Score \(High to Low\)/)
 })

@@ -216,6 +216,11 @@
   outline-offset: 3px;
 }
 
+
+.shortlist-manager__input-wrap .shortlist-manager__input:focus-visible {
+  outline: none;
+}
+
 .shortlist-manager__content-grid {
   min-width: 0;
   display: grid;
