@@ -32,6 +32,15 @@ test('migration runner includes Paddle failure status migration 037 after migrat
   )
 })
 
+test('migration runner includes subscription tracking safety migration 038 after migration 037', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'038-ensure-subscription-tracking-columns'/)
+  assert.ok(
+    source.indexOf("'037-allow-paddle-failure-subscription-statuses'") <
+      source.indexOf("'038-ensure-subscription-tracking-columns'"),
+  )
+})
+
 test('Paddle user subscription column safety migration is idempotent and scoped to Paddle tables', async () => {
   const queries = []
   const { up } = await import('./036-ensure-paddle-user-subscription-columns.js')
@@ -90,4 +99,50 @@ test('Paddle failure status migration safely replaces subscriptions status const
   for (const status of ['active', 'trialing', 'cancelled', 'paused', 'past_due', 'payment_failed']) {
     assert.match(queries[1], new RegExp(`'${status}'`))
   }
+})
+
+test('subscription tracking safety migration is additive and uses users.id type for user references', async () => {
+  const queries = []
+  const { up } = await import('./038-ensure-subscription-tracking-columns.js')
+
+  await up({
+    query(sql) {
+      queries.push(sql)
+      if (/format_type\(a\.atttypid, a\.atttypmod\)/.test(sql)) {
+        return Promise.resolve({ rows: [{ data_type: 'uuid' }] })
+      }
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 6)
+  assert.match(queries[0], /SELECT format_type\(a\.atttypid, a\.atttypmod\) AS data_type/)
+
+  const usersSql = queries[1]
+  assert.match(usersSql, /ALTER TABLE users/)
+
+  for (const column of [
+    'subscription_plan TEXT',
+    'subscription_renewal_date TIMESTAMP',
+    'next_billing_date TIMESTAMP',
+    'cancellation_effective_at TIMESTAMP',
+    'cancellation_reason TEXT',
+    'payment_method_brand TEXT',
+    'payment_method_last4 TEXT',
+    'current_period_end TIMESTAMP',
+    'subscription_started_at TIMESTAMP',
+    'paddle_customer_id TEXT',
+    'paddle_subscription_id TEXT',
+    'trial_ends_at TIMESTAMP',
+    'paddle_environment TEXT',
+  ]) {
+    assert.match(usersSql, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`))
+  }
+
+  assert.match(queries[2], /CREATE TABLE IF NOT EXISTS subscription_change_events/)
+  assert.match(queries[2], /user_id uuid NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/)
+  assert.match(queries[3], /CREATE TABLE IF NOT EXISTS billing_invoices/)
+  assert.match(queries[3], /user_id uuid NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/)
+  assert.match(queries[4], /CREATE INDEX IF NOT EXISTS idx_subscription_change_events_user_created/)
+  assert.match(queries[5], /CREATE INDEX IF NOT EXISTS idx_billing_invoices_user_billed/)
 })
