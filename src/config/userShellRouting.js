@@ -1,5 +1,5 @@
-// Account and Billing intentionally remain authenticated workspace-shell routes for
-// non-subscribed users; product routes still apply subscription guards before use.
+// These routes are eligible for the workspace shell only after App-level
+// subscription checks confirm active/trialing product workspace access.
 const USER_SHELL_ROUTE_PATHS = new Set([
   '/dashboard',
   '/dashboard/legacy',

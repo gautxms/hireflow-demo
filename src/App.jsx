@@ -155,8 +155,8 @@ function shouldDisableUserShell(pathname) {
   return isSharedResultsPath(pathname)
 }
 
-function shouldRenderWithinUserShell(pathname, isAuthenticated) {
-  if (!isAuthenticated) {
+function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStatus = 'inactive') {
+  if (!isAuthenticated || !hasActiveSubscription(subscriptionStatus)) {
     return false
   }
 
@@ -1072,10 +1072,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     else if (resolvedPathname === '/' || resolvedPathname === '/ai-resume-screening') matchedBranch = 'public:landing'
     else if (resolvedPathname === '/pricing') matchedBranch = 'public:pricing'
     else if (resolvedPathname.startsWith('/admin')) matchedBranch = 'admin'
-    else if (isAuthenticated && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated)) matchedBranch = 'user-shell'
+    else if (isAuthenticated && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus)) matchedBranch = 'user-shell'
 
     console.debug('[route-diagnostics]', { pathname, resolvedPathname, matchedBranch })
-  }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled])
+  }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled, subscriptionStatus])
 
   const routeRecoveryActions = useMemo(() => {
     const hardRedirect = (path) => {
@@ -1087,7 +1087,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       resolvedPathname === '/uploader'
       || resolvedPathname === '/analyses'
       || resolvedPathname.startsWith('/analyses/')
-      || shouldRenderWithinUserShell(resolvedPathname, isAuthenticated)
+      || shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus)
     )
 
     if (isAuthenticatedAppRoute) {
@@ -1130,7 +1130,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </Suspense>
     </PublicRouteChunkErrorBoundary>
   )
-  const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated)
+  const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus)
 
   useEffect(() => {
     document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
