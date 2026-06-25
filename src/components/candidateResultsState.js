@@ -546,6 +546,85 @@ function firstDisplayNarrative(candidates, fallback = '') {
   return normalizeDisplayNarrative('', fallback)
 }
 
+function normalizeSimilarityText(value) {
+  if (typeof value !== 'string') return ''
+
+  return value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/(?:\.{3}|…)+$/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const SIMILARITY_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'because', 'but', 'by', 'candidate',
+  'did', 'does', 'due', 'for', 'from', 'has', 'have', 'in', 'is', 'it', 'of',
+  'on', 'or', 's', 'strong', 'that', 'the', 'their', 'this', 'to', 'with',
+])
+
+function normalizeSimilarityToken(token) {
+  if (token.length > 5 && token.endsWith('ing')) return token.slice(0, -3)
+  if (token.length > 4 && token.endsWith('ed')) return token.slice(0, -2)
+  if (token.length > 4 && token.endsWith('es')) return token.slice(0, -2)
+  if (token.length > 3 && token.endsWith('s')) return token.slice(0, -1)
+  return token
+}
+
+function similarityTokens(normalizedText) {
+  return normalizedText
+    .split(' ')
+    .map(normalizeSimilarityToken)
+    .filter((token) => token.length > 1 && !SIMILARITY_STOP_WORDS.has(token))
+}
+
+export function isClearlyDuplicativeDisplayText(primaryText, comparisonText) {
+  const primary = normalizeSimilarityText(primaryText)
+  const comparison = normalizeSimilarityText(comparisonText)
+
+  if (!primary || !comparison) return false
+  if (primary === comparison) return true
+
+  const shorter = primary.length <= comparison.length ? primary : comparison
+  const longer = primary.length > comparison.length ? primary : comparison
+  const lengthRatio = shorter.length / longer.length
+
+  if (shorter.length >= 36 && lengthRatio >= 0.6 && longer.includes(shorter)) {
+    return true
+  }
+
+  const shorterWords = shorter.split(' ')
+  const longerWords = longer.split(' ')
+  if (shorterWords.length >= 8 && lengthRatio >= 0.6) {
+    const shorterPhrase = shorterWords.join(' ')
+    if (longerWords.slice(0, shorterWords.length).join(' ') === shorterPhrase) {
+      return true
+    }
+  }
+
+  if (shorter.length < 32 || longer.length < 40) return false
+
+  const primaryTokens = new Set(similarityTokens(primary))
+  const comparisonTokens = new Set(similarityTokens(comparison))
+  const smallerTokenCount = Math.min(primaryTokens.size, comparisonTokens.size)
+  const largerTokenCount = Math.max(primaryTokens.size, comparisonTokens.size)
+
+  if (smallerTokenCount < 5) return false
+
+  let overlap = 0
+  for (const token of primaryTokens) {
+    if (comparisonTokens.has(token)) overlap += 1
+  }
+
+  const union = primaryTokens.size + comparisonTokens.size - overlap
+  const containment = overlap / smallerTokenCount
+  const jaccard = union > 0 ? overlap / union : 0
+
+  return containment >= 0.86 && jaccard >= 0.62 && largerTokenCount - smallerTokenCount <= 5
+}
+
 function firstDisplayArray(candidates) {
   for (const value of candidates) {
     const normalized = toAiDisplayArray(value)
@@ -881,7 +960,9 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
     const seniorityLabel = toDisplayText(candidate.seniority_level, '')
     const summaryText = firstDisplayNarrative([candidate.summaryFull, candidate?.displayText?.summary?.full, candidate?.rawDisplayFields?.summary, candidate.summary], 'No summary available.')
     const reasoningText = firstDisplayNarrative([candidate.reasoningFull, candidate?.displayText?.reasoning?.full, candidate?.rawDisplayFields?.reasoning, candidate?.matchScore?.reasonFull, candidate?.fit_assessment?.reasonFull, candidate?.matchScore?.reason, candidate?.fit_assessment?.reason], 'Reasoning unavailable for this profile.')
-    const recommendationText = firstDisplayNarrative([candidate.recommendationFull, candidate?.displayText?.recommendation?.full, candidate?.rawDisplayFields?.recommendation, candidate?.recommendation, candidate?.fit_assessment?.rationale], '')
+    const resolvedRecommendationText = firstDisplayNarrative([candidate.recommendationFull, candidate?.displayText?.recommendation?.full, candidate?.rawDisplayFields?.recommendation, candidate?.recommendation, candidate?.fit_assessment?.rationale], '')
+    const hasRecommendedAction = Boolean(resolvedRecommendationText && !isClearlyDuplicativeDisplayText(resolvedRecommendationText, reasoningText))
+    const recommendationText = hasRecommendedAction ? resolvedRecommendationText : ''
 
     const strengths = firstDisplayArray([candidate.strengthsFull, candidate?.displayText?.strengths?.full, candidate?.rawDisplayFields?.strengths, (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || [])])
       .map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
@@ -929,6 +1010,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       confidenceLabel: resolveDrawerConfidenceLabel(candidate, hasDisplayScore),
       summaryText,
       reasoningText,
+      hasRecommendedAction,
       recommendationText,
       candidateStrengths: strengths,
       candidateConsiderations: considerations,
@@ -961,6 +1043,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       confidenceLabel: '',
       summaryText: 'Candidate details unavailable',
       reasoningText: 'Candidate details unavailable',
+      hasRecommendedAction: false,
       recommendationText: '',
       candidateStrengths: [],
       candidateConsiderations: [],

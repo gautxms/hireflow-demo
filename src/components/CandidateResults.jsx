@@ -1605,7 +1605,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <DrawerSection title="Summary">
               <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`summary-${expandedCandidateKey}`} />
             </DrawerSection>
-            {detailVm.recommendationText && (
+            {detailVm.hasRecommendedAction && (
               <DrawerSection title="Recommended action" className="dd-section-card--compact">
                 <ExpandableText text={detailVm.recommendationText} className="dd-recommended-action" clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`recommendation-${expandedCandidateKey}`} />
               </DrawerSection>

@@ -448,6 +448,86 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
   assert.deepEqual(vm.allSkills, ['React', 'Node.js', 'TypeScript', 'System Design'])
 })
 
+test('buildExpandedCandidateDrawerViewModel hides recommendation when identical to AI reasoning', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const duplicate = 'Strong fit because the candidate matches the role requirements and has relevant experience.'
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: duplicate,
+    reasoningFull: duplicate,
+  })
+
+  assert.equal(vm.reasoningText, duplicate)
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel hides recommendation when it is a duplicative reasoning substring', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Candidate has strong paid social, analytics, and lifecycle marketing experience.',
+    reasoningFull: 'Candidate has strong paid social, analytics, and lifecycle marketing experience, with clear alignment to the growth marketing role.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+  assert.match(vm.reasoningText, /clear alignment/)
+})
+
+test('buildExpandedCandidateDrawerViewModel hides near-identical recommendation with small wording changes', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Strong fit because the candidate has SQL, AWS, stakeholder management, and data platform experience.',
+    reasoningFull: 'Strong fit due to candidate having SQL, AWS, stakeholder management, and data platform experiences.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel shows meaningful distinct recommended action', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Shortlist for interview; confirm relocation and Meta Ads exposure.',
+    reasoningFull: 'The candidate scored highly due to strong B2B growth marketing experience, lifecycle analytics, and recent paid acquisition ownership.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, true)
+  assert.equal(vm.recommendationText, 'Shortlist for interview; confirm relocation and Meta Ads exposure.')
+})
+
+test('buildExpandedCandidateDrawerViewModel keeps AI reasoning when recommendation is missing', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    reasoningFull: 'Candidate aligns with the role due to Python, data modeling, and team leadership experience.',
+  })
+
+  assert.equal(vm.reasoningText, 'Candidate aligns with the role due to Python, data modeling, and team leadership experience.')
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel preserves older recommendation-only analyses', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendation: 'Proceed to recruiter screen and verify compensation expectations.',
+  })
+
+  assert.equal(vm.reasoningText, 'Reasoning unavailable for this profile.')
+  assert.equal(vm.hasRecommendedAction, true)
+  assert.equal(vm.recommendationText, 'Proceed to recruiter screen and verify compensation expectations.')
+})
+
+test('buildExpandedCandidateDrawerViewModel handles malformed recommendation and reasoning values safely', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: { label: null, value: null },
+    reasoningFull: { nested: { value: 'not displayable' } },
+  })
+
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+  assert.equal(typeof vm.reasoningText, 'string')
+})
 
 test('buildExpandedCandidateDrawerViewModel preserves narrative text without appending synthetic ellipses', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
