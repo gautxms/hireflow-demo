@@ -101,20 +101,24 @@ test('Paddle failure status migration safely replaces subscriptions status const
   }
 })
 
-test('subscription tracking safety migration is additive and uses integer user references', async () => {
+test('subscription tracking safety migration is additive and uses users.id type for user references', async () => {
   const queries = []
   const { up } = await import('./038-ensure-subscription-tracking-columns.js')
 
   await up({
     query(sql) {
       queries.push(sql)
+      if (/format_type\(a\.atttypid, a\.atttypmod\)/.test(sql)) {
+        return Promise.resolve({ rows: [{ data_type: 'uuid' }] })
+      }
       return Promise.resolve({ rows: [] })
     },
   })
 
-  assert.equal(queries.length, 5)
+  assert.equal(queries.length, 6)
+  assert.match(queries[0], /SELECT format_type\(a\.atttypid, a\.atttypmod\) AS data_type/)
 
-  const usersSql = queries[0]
+  const usersSql = queries[1]
   assert.match(usersSql, /ALTER TABLE users/)
 
   for (const column of [
@@ -135,10 +139,10 @@ test('subscription tracking safety migration is additive and uses integer user r
     assert.match(usersSql, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`))
   }
 
-  assert.match(queries[1], /CREATE TABLE IF NOT EXISTS subscription_change_events/)
-  assert.match(queries[1], /user_id INTEGER NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/)
-  assert.match(queries[2], /CREATE TABLE IF NOT EXISTS billing_invoices/)
-  assert.match(queries[2], /user_id INTEGER NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/)
-  assert.match(queries[3], /CREATE INDEX IF NOT EXISTS idx_subscription_change_events_user_created/)
-  assert.match(queries[4], /CREATE INDEX IF NOT EXISTS idx_billing_invoices_user_billed/)
+  assert.match(queries[2], /CREATE TABLE IF NOT EXISTS subscription_change_events/)
+  assert.match(queries[2], /user_id uuid NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/)
+  assert.match(queries[3], /CREATE TABLE IF NOT EXISTS billing_invoices/)
+  assert.match(queries[3], /user_id uuid NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/)
+  assert.match(queries[4], /CREATE INDEX IF NOT EXISTS idx_subscription_change_events_user_created/)
+  assert.match(queries[5], /CREATE INDEX IF NOT EXISTS idx_billing_invoices_user_billed/)
 })
