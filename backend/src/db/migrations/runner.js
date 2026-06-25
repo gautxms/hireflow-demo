@@ -40,6 +40,7 @@ const migrationFiles = [
   '036-ensure-paddle-user-subscription-columns',
   '037-allow-paddle-failure-subscription-statuses',
   '038-ensure-subscription-tracking-columns',
+  '039-ensure-subscriptions-current-read-schema',
 ]
 
 async function ensureMigrationsTable(client) {

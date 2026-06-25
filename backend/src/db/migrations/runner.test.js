@@ -41,6 +41,16 @@ test('migration runner includes subscription tracking safety migration 038 after
   )
 })
 
+
+test('migration runner includes subscriptions current read safety migration 039 after migration 038', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'039-ensure-subscriptions-current-read-schema'/)
+  assert.ok(
+    source.indexOf("'038-ensure-subscription-tracking-columns'") <
+      source.indexOf("'039-ensure-subscriptions-current-read-schema'"),
+  )
+})
+
 test('Paddle user subscription column safety migration is idempotent and scoped to Paddle tables', async () => {
   const queries = []
   const { up } = await import('./036-ensure-paddle-user-subscription-columns.js')
@@ -145,4 +155,44 @@ test('subscription tracking safety migration is additive and uses users.id type 
   assert.match(queries[3], /user_id uuid NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/)
   assert.match(queries[4], /CREATE INDEX IF NOT EXISTS idx_subscription_change_events_user_created/)
   assert.match(queries[5], /CREATE INDEX IF NOT EXISTS idx_billing_invoices_user_billed/)
+})
+
+
+test('subscriptions current read safety migration is additive and uses users.id type', async () => {
+  const queries = []
+  const { up } = await import('./039-ensure-subscriptions-current-read-schema.js')
+
+  await up({
+    query(sql) {
+      queries.push(sql)
+      if (/format_type\(a\.atttypid, a\.atttypmod\)/.test(sql)) {
+        return Promise.resolve({ rows: [{ data_type: 'bigint' }] })
+      }
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 5)
+  assert.match(queries[0], /SELECT format_type\(a\.atttypid, a\.atttypmod\) AS data_type/)
+  assert.match(queries[1], /CREATE EXTENSION IF NOT EXISTS pgcrypto/)
+  assert.match(queries[2], /CREATE TABLE IF NOT EXISTS subscriptions/)
+  assert.match(queries[2], /user_id bigint REFERENCES users\(id\) ON DELETE SET NULL/)
+  assert.match(queries[2], /status TEXT NOT NULL DEFAULT 'inactive'/)
+  assert.match(queries[2], /created_at TIMESTAMP DEFAULT NOW\(\)/)
+  assert.match(queries[3], /ALTER TABLE subscriptions/)
+
+  for (const column of [
+    'user_id bigint REFERENCES users\\(id\\) ON DELETE SET NULL',
+    'paddle_subscription_id TEXT',
+    "status TEXT NOT NULL DEFAULT 'inactive'",
+    'latest_event_type TEXT',
+    'latest_event_payload JSONB',
+    'created_at TIMESTAMP DEFAULT NOW\\(\\)',
+    'updated_at TIMESTAMP DEFAULT NOW\\(\\)',
+  ]) {
+    assert.match(queries[3], new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`))
+  }
+
+  assert.match(queries[4], /CREATE INDEX IF NOT EXISTS idx_subscriptions_user_created/)
+  assert.match(queries[4], /ON subscriptions \(user_id, created_at DESC\)/)
 })
