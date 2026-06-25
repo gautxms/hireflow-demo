@@ -168,6 +168,19 @@ export function normalizeCandidate(candidate = {}) {
   const structuredExperience = Array.isArray(candidate?.experience)
     ? candidate.experience
     : (normalizeText(candidate?.experience) ? [{ title: normalizeText(candidate.experience) }] : [])
+  const summaryPreview = sentenceSafeClamp(candidate.summary || 'Summary not provided in this analysis.', 320)
+  const reasoningPreview = sentenceSafeClamp(candidate?.matchScore?.reason || reasoningFallback)
+  const fitReasonPreview = sentenceSafeClamp(fitAssessment.reason || candidate?.matchScore?.reason || reasoningFallback)
+  const summaryFull = normalizeText(candidate.summary)
+  const reasoningFull = normalizeText(candidate?.matchScore?.reason || fitAssessment.reason)
+  const recommendationFull = normalizeText(candidate.recommendation || fitAssessment.rationale)
+  const rawDisplayFields = {
+    ...(summaryFull && summaryFull !== summaryPreview ? { summary: summaryFull } : {}),
+    ...(reasoningFull && reasoningFull !== reasoningPreview && reasoningFull !== fitReasonPreview ? { reasoning: reasoningFull } : {}),
+    ...(recommendationFull ? { recommendation: recommendationFull } : {}),
+    ...(Array.isArray(candidate.strengths) && candidate.strengths.length > 0 ? { strengths: candidate.strengths } : {}),
+    ...(Array.isArray(candidate.considerations) && candidate.considerations.length > 0 ? { considerations: candidate.considerations } : {}),
+  }
 
   return {
     id,
@@ -179,9 +192,13 @@ export function normalizeCandidate(candidate = {}) {
     score: safeScore,
     matchScore: {
       score: safeScore,
-      reason: sentenceSafeClamp(candidate?.matchScore?.reason || reasoningFallback),
+      reason: reasoningPreview,
     },
-    summary: sentenceSafeClamp(candidate.summary || 'Summary not provided in this analysis.', 320),
+    summary: summaryPreview,
+    ...(summaryFull && summaryFull !== summaryPreview ? { summaryFull } : {}),
+    ...(reasoningFull && reasoningFull !== reasoningPreview && reasoningFull !== fitReasonPreview ? { reasoningFull } : {}),
+    ...(recommendationFull ? { recommendationFull } : {}),
+    ...(Object.keys(rawDisplayFields).length > 0 ? { rawDisplayFields } : {}),
     skills: normalizedSkillsObject,
     skills_flat: Array.isArray(candidate.skills_flat) ? candidate.skills_flat : parseSkills(candidate.skills),
     skills_structured: normalizedSkillsObject,
@@ -207,7 +224,7 @@ export function normalizeCandidate(candidate = {}) {
       missing: Array.isArray(fitAssessment.missing) ? fitAssessment.missing : Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : [],
       risk: normalizeText(fitAssessment.risk || fitAssessment.risks || ''),
       uncertainty: normalizeText(fitAssessment.uncertainty || ''),
-      reason: sentenceSafeClamp(fitAssessment.reason || candidate?.matchScore?.reason || reasoningFallback),
+      reason: fitReasonPreview,
     },
     tier: candidate.tier || 'consider',
     certifications: Array.isArray(candidate.certifications) ? candidate.certifications : [],

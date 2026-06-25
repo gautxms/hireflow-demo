@@ -538,6 +538,22 @@ function normalizeDisplayNarrative(value, fallback = '') {
   return cleanAiTextForDisplay(value, fallback)
 }
 
+function firstDisplayNarrative(candidates, fallback = '') {
+  for (const value of candidates) {
+    const normalized = normalizeDisplayNarrative(value, '')
+    if (normalized) return normalized
+  }
+  return normalizeDisplayNarrative('', fallback)
+}
+
+function firstDisplayArray(candidates) {
+  for (const value of candidates) {
+    const normalized = toAiDisplayArray(value)
+    if (normalized.length > 0) return normalized
+  }
+  return []
+}
+
 function normalizeEducationRecord(record) {
   if (record == null) return null
 
@@ -820,16 +836,37 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
     const experienceYearsLabel = yearsNumber != null ? `${yearsNumber} years` : '0 years'
     const locationLabel = toDisplayText(candidate.location, 'Location unavailable')
     const seniorityLabel = toDisplayText(candidate.seniority_level, '')
-    const summaryText = normalizeDisplayNarrative(candidate.summary, 'No summary available.')
-    const reasoningText = normalizeDisplayNarrative(candidate?.matchScore?.reason || candidate?.fit_assessment?.reason, 'Reasoning unavailable for this profile.')
-    const recommendationText = normalizeDisplayNarrative(candidate?.recommendation || candidate?.fit_assessment?.rationale, '')
+    const summaryText = firstDisplayNarrative([candidate.summaryFull, candidate?.displayText?.summary?.full, candidate?.rawDisplayFields?.summary, candidate.summary], 'No summary available.')
+    const reasoningText = firstDisplayNarrative([candidate.reasoningFull, candidate?.displayText?.reasoning?.full, candidate?.rawDisplayFields?.reasoning, candidate?.matchScore?.reasonFull, candidate?.fit_assessment?.reasonFull, candidate?.matchScore?.reason, candidate?.fit_assessment?.reason], 'Reasoning unavailable for this profile.')
+    const recommendationText = firstDisplayNarrative([candidate.recommendationFull, candidate?.displayText?.recommendation?.full, candidate?.rawDisplayFields?.recommendation, candidate?.recommendation, candidate?.fit_assessment?.rationale], '')
 
-    const strengths = (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || []).map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean).slice(0,3)
-    const considerations = (Array.isArray(candidate.considerations) ? candidate.considerations : []).map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
+    const strengths = firstDisplayArray([candidate.strengthsFull, candidate?.displayText?.strengths?.full, candidate?.rawDisplayFields?.strengths, (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || [])])
+      .map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
+    const considerations = firstDisplayArray([candidate.considerationsFull, candidate?.displayText?.considerations?.full, candidate?.rawDisplayFields?.considerations, candidate.considerations])
+      .map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
 
-    const matchedSkills = [...new Set([...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []), ...(Array.isArray(candidate?.fit_assessment?.matched) ? candidate.fit_assessment.matched : [])].map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
-    const missingSkills = [...new Set([...(Array.isArray(candidate?.mustHaveSkills)?candidate.mustHaveSkills:[]), ...(Array.isArray(candidate?.missingSkills)?candidate.missingSkills:[]), ...(Array.isArray(candidate?.fit_assessment?.missing)?candidate.fit_assessment.missing:[])].map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
+    const matchedSkillSources = [
+      ...(Array.isArray(candidate?.matchedSkillsFull) ? candidate.matchedSkillsFull : []),
+      ...(Array.isArray(candidate?.displayText?.matchedSkills?.full) ? candidate.displayText.matchedSkills.full : []),
+      ...(Array.isArray(candidate?.rawDisplayFields?.matchedSkills) ? candidate.rawDisplayFields.matchedSkills : []),
+      ...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []),
+      ...(Array.isArray(candidate?.fit_assessment?.matched) ? candidate.fit_assessment.matched : []),
+    ]
+    const missingSkillSources = [
+      ...(Array.isArray(candidate?.mustHaveSkillsFull) ? candidate.mustHaveSkillsFull : []),
+      ...(Array.isArray(candidate?.missingSkillsFull) ? candidate.missingSkillsFull : []),
+      ...(Array.isArray(candidate?.displayText?.missingSkills?.full) ? candidate.displayText.missingSkills.full : []),
+      ...(Array.isArray(candidate?.rawDisplayFields?.missingSkills) ? candidate.rawDisplayFields.missingSkills : []),
+      ...(Array.isArray(candidate?.mustHaveSkills) ? candidate.mustHaveSkills : []),
+      ...(Array.isArray(candidate?.missingSkills) ? candidate.missingSkills : []),
+      ...(Array.isArray(candidate?.fit_assessment?.missing) ? candidate.fit_assessment.missing : []),
+    ]
+    const matchedSkills = [...new Set(matchedSkillSources.map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
+    const missingSkills = [...new Set(missingSkillSources.map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
     const allSkills = [...new Set([
+      ...(Array.isArray(candidate?.allSkillsFull) ? candidate.allSkillsFull : []),
+      ...(Array.isArray(candidate?.displayText?.allSkills?.full) ? candidate.displayText.allSkills.full : []),
+      ...(Array.isArray(candidate?.rawDisplayFields?.allSkills) ? candidate.rawDisplayFields.allSkills : []),
       ...(Array.isArray(candidate?.top_skills) ? candidate.top_skills : []),
       ...(Array.isArray(candidate?.skills) ? candidate.skills : []),
       ...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []),
