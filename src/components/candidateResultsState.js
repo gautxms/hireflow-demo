@@ -546,6 +546,124 @@ function firstDisplayNarrative(candidates, fallback = '') {
   return normalizeDisplayNarrative('', fallback)
 }
 
+function normalizeSimilarityText(value) {
+  if (typeof value !== 'string') return ''
+
+  return value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/(?:\.{3}|…)+$/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const SIMILARITY_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'because', 'but', 'by', 'candidate',
+  'did', 'does', 'due', 'for', 'from', 'has', 'have', 'in', 'is', 'it', 'of',
+  'on', 'or', 's', 'strong', 'that', 'the', 'their', 'this', 'to', 'with',
+])
+
+const RECOMMENDATION_ACTION_TERMS = new Set([
+  'ask',
+  'assess',
+  'check',
+  'clarify',
+  'confirm',
+  'interview',
+  'probe',
+  'screen',
+  'shortlist',
+  'validate',
+  'verify',
+])
+
+function normalizeSimilarityToken(token) {
+  if (token.length > 5 && token.endsWith('ing')) return token.slice(0, -3)
+  if (token.length > 4 && token.endsWith('ed')) return token.slice(0, -2)
+  if (token.length > 4 && token.endsWith('es')) return token.slice(0, -2)
+  if (token.length > 3 && token.endsWith('s')) return token.slice(0, -1)
+  return token
+}
+
+function similarityTokens(normalizedText) {
+  return normalizedText
+    .split(' ')
+    .map(normalizeSimilarityToken)
+    .filter((token) => token.length > 1 && !SIMILARITY_STOP_WORDS.has(token))
+}
+
+function hasActionGuidanceTail(recommendation, reasoning) {
+  if (recommendation.length <= reasoning.length) return false
+
+  const extraText = recommendation.includes(reasoning)
+    ? recommendation.replace(reasoning, ' ')
+    : recommendation
+
+  if (/\bfollow\s+up\b/.test(extraText)) return true
+
+  return extraText
+    .split(' ')
+    .map(normalizeSimilarityToken)
+    .some((token) => RECOMMENDATION_ACTION_TERMS.has(token))
+}
+
+export function isClearlyDuplicativeDisplayText(recommendationText, reasoningText) {
+  const recommendation = normalizeSimilarityText(recommendationText)
+  const reasoning = normalizeSimilarityText(reasoningText)
+
+  if (!recommendation || !reasoning) return false
+  if (recommendation === reasoning) return true
+
+  const recommendationToReasoningRatio = recommendation.length / reasoning.length
+
+  if (recommendation.length >= 36 && recommendationToReasoningRatio <= 1 && recommendationToReasoningRatio >= 0.6 && reasoning.includes(recommendation)) {
+    return true
+  }
+
+  const recommendationWords = recommendation.split(' ')
+  const reasoningWords = reasoning.split(' ')
+  if (recommendationWords.length >= 8 && recommendationToReasoningRatio <= 1 && recommendationToReasoningRatio >= 0.6) {
+    const recommendationPhrase = recommendationWords.join(' ')
+    if (reasoningWords.slice(0, recommendationWords.length).join(' ') === recommendationPhrase) {
+      return true
+    }
+  }
+
+  const shorter = recommendation.length <= reasoning.length ? recommendation : reasoning
+  const longer = recommendation.length > reasoning.length ? recommendation : reasoning
+
+  if (shorter.length < 32 || longer.length < 40) return false
+
+  const recommendationTokens = new Set(similarityTokens(recommendation))
+  const reasoningTokens = new Set(similarityTokens(reasoning))
+  const smallerTokenCount = Math.min(recommendationTokens.size, reasoningTokens.size)
+  const largerTokenCount = Math.max(recommendationTokens.size, reasoningTokens.size)
+
+  if (smallerTokenCount < 5) return false
+
+  let overlap = 0
+  for (const token of recommendationTokens) {
+    if (reasoningTokens.has(token)) overlap += 1
+  }
+
+  const union = recommendationTokens.size + reasoningTokens.size - overlap
+  const containment = overlap / smallerTokenCount
+  const jaccard = union > 0 ? overlap / union : 0
+  const recommendationTokenSurplus = recommendationTokens.size - reasoningTokens.size
+
+  if (recommendationTokenSurplus > 0 && hasActionGuidanceTail(recommendation, reasoning)) {
+    return false
+  }
+
+  if (recommendationTokenSurplus > 2) {
+    return false
+  }
+
+  return containment >= 0.86 && jaccard >= 0.62 && largerTokenCount - smallerTokenCount <= 5
+}
+
 function firstDisplayArray(candidates) {
   for (const value of candidates) {
     const normalized = toAiDisplayArray(value)
@@ -881,7 +999,9 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
     const seniorityLabel = toDisplayText(candidate.seniority_level, '')
     const summaryText = firstDisplayNarrative([candidate.summaryFull, candidate?.displayText?.summary?.full, candidate?.rawDisplayFields?.summary, candidate.summary], 'No summary available.')
     const reasoningText = firstDisplayNarrative([candidate.reasoningFull, candidate?.displayText?.reasoning?.full, candidate?.rawDisplayFields?.reasoning, candidate?.matchScore?.reasonFull, candidate?.fit_assessment?.reasonFull, candidate?.matchScore?.reason, candidate?.fit_assessment?.reason], 'Reasoning unavailable for this profile.')
-    const recommendationText = firstDisplayNarrative([candidate.recommendationFull, candidate?.displayText?.recommendation?.full, candidate?.rawDisplayFields?.recommendation, candidate?.recommendation, candidate?.fit_assessment?.rationale], '')
+    const resolvedRecommendationText = firstDisplayNarrative([candidate.recommendationFull, candidate?.displayText?.recommendation?.full, candidate?.rawDisplayFields?.recommendation, candidate?.recommendation, candidate?.fit_assessment?.rationale], '')
+    const hasRecommendedAction = Boolean(resolvedRecommendationText && !isClearlyDuplicativeDisplayText(resolvedRecommendationText, reasoningText))
+    const recommendationText = hasRecommendedAction ? resolvedRecommendationText : ''
 
     const strengths = firstDisplayArray([candidate.strengthsFull, candidate?.displayText?.strengths?.full, candidate?.rawDisplayFields?.strengths, (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || [])])
       .map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
@@ -929,6 +1049,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       confidenceLabel: resolveDrawerConfidenceLabel(candidate, hasDisplayScore),
       summaryText,
       reasoningText,
+      hasRecommendedAction,
       recommendationText,
       candidateStrengths: strengths,
       candidateConsiderations: considerations,
@@ -961,6 +1082,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       confidenceLabel: '',
       summaryText: 'Candidate details unavailable',
       reasoningText: 'Candidate details unavailable',
+      hasRecommendedAction: false,
       recommendationText: '',
       candidateStrengths: [],
       candidateConsiderations: [],
