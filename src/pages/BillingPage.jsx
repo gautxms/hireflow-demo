@@ -3,6 +3,7 @@ import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
+import { resolveSubscriptionState } from '../utils/subscriptionState'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -52,26 +53,33 @@ export default function BillingPage() {
 
     try {
       setLoading(true)
-      const [subRes, historyRes] = await Promise.all([
-        fetch(`${API_BASE}/subscriptions/current`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/subscriptions/history`, { headers: { Authorization: `Bearer ${token}` } }),
-      ])
-
-      const subPayload = await subRes.json()
-      const historyPayload = await historyRes.json()
+      setError('')
+      const subRes = await fetch(`${API_BASE}/subscriptions/current`, { headers: { Authorization: `Bearer ${token}` } })
+      const subPayload = await subRes.json().catch(() => ({}))
 
       if (!subRes.ok) {
         throw new Error(subPayload.error || 'Failed to load current subscription')
       }
 
+      const nextSubscription = subPayload.subscription || null
+      setSubscription(nextSubscription)
+
+      const subscriptionState = resolveSubscriptionState({ subscription: nextSubscription })
+      if (!subscriptionState.canManageBilling) {
+        setHistory([])
+        return
+      }
+
+      const historyRes = await fetch(`${API_BASE}/subscriptions/history`, { headers: { Authorization: `Bearer ${token}` } })
+      const historyPayload = await historyRes.json().catch(() => ({}))
+
       if (!historyRes.ok) {
         throw new Error(historyPayload.error || 'Failed to load invoice history')
       }
 
-      setSubscription(subPayload.subscription)
       setHistory(historyPayload.invoices || [])
-    } catch (fetchError) {
-      setError(fetchError.message || 'Unable to load billing details')
+    } catch {
+      setError('We could not open billing management right now. Please try again or contact support if this continues.')
     } finally {
       setLoading(false)
     }
@@ -81,6 +89,8 @@ export default function BillingPage() {
     loadBilling()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const subscriptionState = resolveSubscriptionState({ subscription })
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -162,16 +172,29 @@ export default function BillingPage() {
     <main className="billing-page">
       <section className="billing-page__section">
         <BackButton />
-        <h1 className="billing-page__title">Subscription Management</h1>
-        <p className="billing-page__subtitle">View plans, upcoming charges, and invoice history.</p>
+        <h1 className="billing-page__title">Account & Plan</h1>
+        <p className="billing-page__subtitle">View your subscription, billing access, and plan options.</p>
 
-        {error ? <StatePattern kind="error" compact title="Billing data unavailable" description={error} /> : null}
+        {error ? <StatePattern kind="error" compact title="We could not open billing management right now" description={error} action={(<button type="button" className="route-state-card__action" onClick={loadBilling}>Retry</button>)} /> : null}
 
-        {subscription ? (
+        {!error && subscription && !subscriptionState.canManageBilling ? (
+          <article className="billing-page__card billing-page__card--empty">
+            <h2 className="billing-page__plan-title">Subscription</h2>
+            <p className="billing-page__line"><strong>{subscriptionState.statusLabel}</strong></p>
+            <p className="billing-page__meta">You do not have an active paid subscription yet.</p>
+            <p className="billing-page__meta">Choose a plan to unlock resume analysis, candidate ranking, shortlists, and reports.</p>
+            <div className="billing-page__actions">
+              <button type="button" className="hf-btn hf-btn--primary" onClick={() => { window.location.href = '/pricing' }}>View plans</button>
+              <button type="button" className="hf-btn hf-btn--secondary" onClick={() => { window.location.href = '/account' }}>Back to account</button>
+            </div>
+          </article>
+        ) : null}
+
+        {!error && subscription && subscriptionState.canManageBilling ? (
           <>
             <article className="billing-page__card">
               <h2 className="billing-page__plan-title">Current Plan</h2>
-              <p className="billing-page__line"><strong>{subscription.planLabel}</strong> — {subscription.costFormatted}</p>
+              <p className="billing-page__line"><strong>{subscription.planLabel || subscriptionState.planLabel}</strong>{subscription.costFormatted ? ` — ${subscription.costFormatted}` : ''}</p>
               <p className="billing-page__meta">Renewal date: {subscription.renewalDate ? new Date(subscription.renewalDate).toLocaleDateString() : '—'}</p>
               <p className="billing-page__meta">Next billing: {subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toLocaleDateString() : '—'}</p>
               <p className="billing-page__meta">Payment method: {subscription.paymentMethod}</p>

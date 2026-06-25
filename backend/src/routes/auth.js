@@ -412,7 +412,9 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, company, phone, subscription_status, created_at, deleted_at, deletion_scheduled_for
+      `SELECT id, email, company, phone, subscription_status, subscription_plan, subscription_started_at,
+              subscription_renewal_date, current_period_end, next_billing_date, paddle_customer_id,
+              paddle_subscription_id, created_at, deleted_at, deletion_scheduled_for
        FROM users
        WHERE id = $1`,
       [req.userId],

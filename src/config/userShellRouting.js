@@ -1,3 +1,5 @@
+// These routes are eligible for the workspace shell only after App-level
+// subscription checks confirm active/trialing product workspace access.
 const USER_SHELL_ROUTE_PATHS = new Set([
   '/dashboard',
   '/dashboard/legacy',
