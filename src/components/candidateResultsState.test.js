@@ -484,6 +484,35 @@ test('buildExpandedCandidateDrawerViewModel hides near-identical recommendation 
   assert.equal(vm.recommendationText, '')
 })
 
+test('buildExpandedCandidateDrawerViewModel hides Siddharth-style duplicate recommendation while preserving AI reasoning', async () => {
+  const { buildExpandedCandidateDrawerViewModel, isClearlyDuplicativeDisplayText } = await import('./candidateResultsState.js')
+  const duplicate = 'Siddharth has 6.6 years of B2B SaaS marketing experience and strong sales collaboration skills, meeting the experience requirement. However, his background is heavily events and partnerships-focused, not growth and demand generation. He lacks hands-on paid acquisition (Google Ads, LinkedIn Ads, Meta Ads), funnel optimization, copywriting, and multi-channel campaign execution — all core to this role. Location mismatch (Kolkata vs. Mumbai) is an additional constraint.'
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: duplicate,
+    matchScore: { reason: duplicate },
+  })
+
+  assert.equal(isClearlyDuplicativeDisplayText(duplicate, duplicate), true)
+  assert.equal(vm.reasoningText, duplicate)
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel hides recommendation duplicated against displayed matchScore reason even with different fit rationale', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const duplicate = 'Siddharth has 6.6 years of B2B SaaS marketing experience and strong sales collaboration skills, meeting the experience requirement. However, his background is heavily events and partnerships-focused, not growth and demand generation. He lacks hands-on paid acquisition (Google Ads, LinkedIn Ads, Meta Ads), funnel optimization, copywriting, and multi-channel campaign execution — all core to this role. Location mismatch (Kolkata vs. Mumbai) is an additional constraint.'
+  const longerRationale = `${duplicate} Interview should also validate budget ownership, recent campaign metrics, and relocation feasibility before proceeding.`
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: duplicate,
+    matchScore: { reason: duplicate },
+    fit_assessment: { rationale: longerRationale },
+  })
+
+  assert.equal(vm.reasoningText, duplicate)
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
 test('buildExpandedCandidateDrawerViewModel shows meaningful distinct recommended action', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
