@@ -39,6 +39,7 @@ const migrationFiles = [
   '035-add-ai-score-cache',
   '036-ensure-paddle-user-subscription-columns',
   '037-allow-paddle-failure-subscription-statuses',
+  '038-ensure-subscription-tracking-columns',
 ]
 
 async function ensureMigrationsTable(client) {
