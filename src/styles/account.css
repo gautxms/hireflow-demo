@@ -37,6 +37,10 @@
   color: var(--color-text-secondary);
 }
 
+.account-page__warning {
+  margin-bottom: var(--spacing-lg);
+}
+
 .account-page__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
