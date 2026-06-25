@@ -102,6 +102,12 @@ export default function ShortlistManager(props) {
   const shortlistJobOptions = useMemo(() => {
     const map = new Map()
     let hasGeneralOnly = false
+    ;(Array.isArray(jobDescriptions) ? jobDescriptions : []).forEach((job) => {
+      const value = String(job?.id || '').trim()
+      const label = String(job?.title || job?.name || '').trim() || (value ? `Job ${value}` : '')
+      if (value && label) map.set(value, { value, label })
+    })
+
     shortlists.forEach((list) => {
       if (hasShortlistLinkedJob(list)) {
         const label = getShortlistJobLabel(list)
@@ -117,7 +123,7 @@ export default function ShortlistManager(props) {
       options.push({ value: 'general', label: 'General / no linked job' })
     }
     return options
-  }, [shortlists])
+  }, [jobDescriptions, shortlists])
 
   const createJobOptions = useMemo(() => {
     return (Array.isArray(jobDescriptions) ? jobDescriptions : [])
@@ -141,9 +147,13 @@ export default function ShortlistManager(props) {
     })
   }, [jobFilter, query, shortlists])
 
-  const filterOptions = useMemo(() => ({
-    decisionStatuses: [...new Set(allCandidates.map((candidate) => getDecisionStatus(candidate)))].sort(),
-  }), [allCandidates])
+  const filterOptions = useMemo(() => {
+    const decisionStatuses = [...new Set(allCandidates.map((candidate) => getDecisionStatus(candidate)))].sort()
+    return {
+      decisionStatuses,
+      hasAvailableDecisionStatuses: decisionStatuses.some((status) => status !== 'Unspecified'),
+    }
+  }, [allCandidates])
 
   const filteredCandidates = useMemo(() => {
     const byDecision = filterShortlistCandidates(allCandidates, filters)
@@ -213,11 +223,11 @@ export default function ShortlistManager(props) {
           <label className="shortlist-manager__filter-label">Job
             <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)} className="shortlist-manager__select"><option value="all">All jobs</option>{shortlistJobOptions.map((job) => <option key={job.value} value={job.value}>{job.label}</option>)}</select>
           </label>
-          <label className="shortlist-manager__filter-label">Status
-            <select className="shortlist-manager__select" value={filters.decisionStatus} onChange={(e) => { setCurrentPage(1); setFilters((current) => ({ ...current, decisionStatus: e.target.value })) }}><option value="all">All statuses</option>{filterOptions.decisionStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+          <label className="shortlist-manager__filter-label">Candidate status
+            <select className="shortlist-manager__select" value={filters.decisionStatus} disabled={!filterOptions.hasAvailableDecisionStatuses} onChange={(e) => { setCurrentPage(1); setFilters((current) => ({ ...current, decisionStatus: e.target.value })) }}><option value="all">{filterOptions.hasAvailableDecisionStatuses ? 'All candidate statuses' : 'Candidate status unavailable'}</option>{filterOptions.decisionStatuses.filter((s) => s !== 'Unspecified').map((s) => <option key={s} value={s}>{s}</option>)}</select>
           </label>
           <label className="shortlist-manager__filter-label">Sort
-            <select value={currentSort} onChange={(e) => onChangeSort(e.target.value)} className="shortlist-manager__select"><option value="rating_desc">Rating (High to Low)</option><option value="rating_asc">Rating (Low to High)</option><option value="added_desc">Recently Added</option><option value="added_asc">Oldest Added</option></select>
+            <select value={currentSort} onChange={(e) => onChangeSort(e.target.value)} className="shortlist-manager__select"><option value="rating_desc">Score (High to Low)</option><option value="rating_asc">Score (Low to High)</option><option value="added_desc">Recently Added</option><option value="added_asc">Oldest Added</option></select>
           </label>
         </div>
         <div className="shortlist-manager__filter-actions">

@@ -76,8 +76,8 @@ export default function ShortlistsPage() {
     }
 
     const sortMap = {
-      rating_desc: 'sortBy=rating&sortOrder=desc',
-      rating_asc: 'sortBy=rating&sortOrder=asc',
+      rating_desc: 'sortBy=score&sortOrder=desc',
+      rating_asc: 'sortBy=score&sortOrder=asc',
       added_desc: 'sortBy=added_at&sortOrder=desc',
       added_asc: 'sortBy=added_at&sortOrder=asc',
     }
@@ -102,7 +102,7 @@ export default function ShortlistsPage() {
 
   const loadJobDescriptions = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/job-descriptions`, {
+      const response = await fetch(`${API_BASE}/job-descriptions?includeArchived=true`, {
         headers: authHeaders(),
       })
       const payload = await response.json().catch(() => ({}))
