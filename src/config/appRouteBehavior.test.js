@@ -7,7 +7,7 @@ const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 test('authenticated root route stays route-driven and does not alias to dashboard', () => {
   assert.match(appSource, /const isRootLandingPath = pathname === '\/'/)
   assert.match(appSource, /const resolvedPathname = isRootLandingPath \? pathname : resolveUserSectionPath\(pathname\)/)
-  assert.match(appSource, /if \(isRootLandingPath \|\| resolvedPathname === '\/ai-resume-screening'\) \{[\s\S]*<LandingPage/)
+  assert.match(appSource, /if \(isRootLandingPath\) \{[\s\S]*<LandingPage/)
 })
 
 test('dashboard route renders inside UserAppShell and bypasses public chrome', () => {
