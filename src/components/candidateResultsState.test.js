@@ -564,3 +564,21 @@ test('sortCandidatesForResults ranks only completed/renderable candidates suppli
   const sorted = sortCandidatesForResults(completedCandidates, 'match_score')
   assert.deepEqual(sorted.map((candidate) => candidate.filename), ['resume.docx', 'resume.pdf'])
 })
+
+test('buildExpandedCandidateDrawerViewModel prefers fuller fit assessment fields over compact result fields', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    matchedSkills: ['TypeScript backend services with event'],
+    missingSkills: ['Kubernetes production'],
+    considerations: ['Cloud breadth needs follow'],
+    fit_assessment: {
+      matched_requirements: ['TypeScript backend services with event-driven architecture and queue ownership.'],
+      missing_requirements: ['Kubernetes production operations experience is not clearly evidenced.'],
+      risks_or_gaps: ['Cloud breadth needs follow-up, especially multi-region deployment ownership.'],
+    },
+  })
+
+  assert.deepEqual(vm.matchedSkills, ['TypeScript backend services with event-driven architecture and queue ownership.'])
+  assert.deepEqual(vm.missingSkills, ['Kubernetes production operations experience is not clearly evidenced.'])
+  assert.deepEqual(vm.candidateConsiderations, ['Cloud breadth needs follow-up, especially multi-region deployment ownership.'])
+})

@@ -101,6 +101,17 @@ function sentenceSafeClamp(value, maxLength = 240) {
   return `${(wordBreak >= 40 ? sliced.slice(0, wordBreak) : sliced).trim()}…`
 }
 
+
+function textArrayLength(value) {
+  return Array.isArray(value) ? value.map((entry) => normalizeText(entry)).filter(Boolean).join(' ').length : 0
+}
+
+function preferFullerArray(primary, fallback) {
+  const primaryArray = Array.isArray(primary) ? primary : []
+  const fallbackArray = Array.isArray(fallback) ? fallback : []
+  return textArrayLength(primaryArray) >= textArrayLength(fallbackArray) ? primaryArray : fallbackArray
+}
+
 function parseSkillsFilter(rawSkills) {
   if (Array.isArray(rawSkills)) {
     return rawSkills
@@ -174,12 +185,18 @@ export function normalizeCandidate(candidate = {}) {
   const summaryFull = normalizeText(candidate.summary)
   const reasoningFull = normalizeText(candidate?.matchScore?.reason || fitAssessment.reason)
   const recommendationFull = normalizeText(candidate.recommendation || fitAssessment.rationale)
+  const matchedRequirementsFull = Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : []
+  const missingRequirementsFull = Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : []
+  const risksOrGapsFull = Array.isArray(fitAssessment.risks_or_gaps) ? fitAssessment.risks_or_gaps : []
   const rawDisplayFields = {
     ...(summaryFull && summaryFull !== summaryPreview ? { summary: summaryFull } : {}),
     ...(reasoningFull && reasoningFull !== reasoningPreview && reasoningFull !== fitReasonPreview ? { reasoning: reasoningFull } : {}),
     ...(recommendationFull ? { recommendation: recommendationFull } : {}),
     ...(Array.isArray(candidate.strengths) && candidate.strengths.length > 0 ? { strengths: candidate.strengths } : {}),
     ...(Array.isArray(candidate.considerations) && candidate.considerations.length > 0 ? { considerations: candidate.considerations } : {}),
+    ...(matchedRequirementsFull.length > 0 ? { matchedRequirements: matchedRequirementsFull } : {}),
+    ...(missingRequirementsFull.length > 0 ? { missingRequirements: missingRequirementsFull } : {}),
+    ...(risksOrGapsFull.length > 0 ? { risksOrGaps: risksOrGapsFull } : {}),
   }
 
   return {
@@ -198,6 +215,9 @@ export function normalizeCandidate(candidate = {}) {
     ...(summaryFull && summaryFull !== summaryPreview ? { summaryFull } : {}),
     ...(reasoningFull && reasoningFull !== reasoningPreview && reasoningFull !== fitReasonPreview ? { reasoningFull } : {}),
     ...(recommendationFull ? { recommendationFull } : {}),
+    ...(matchedRequirementsFull.length > 0 ? { matchedRequirementsFull } : {}),
+    ...(missingRequirementsFull.length > 0 ? { missingRequirementsFull } : {}),
+    ...(risksOrGapsFull.length > 0 ? { risksOrGapsFull } : {}),
     ...(Object.keys(rawDisplayFields).length > 0 ? { rawDisplayFields } : {}),
     skills: normalizedSkillsObject,
     skills_flat: Array.isArray(candidate.skills_flat) ? candidate.skills_flat : parseSkills(candidate.skills),
@@ -220,9 +240,9 @@ export function normalizeCandidate(candidate = {}) {
     fit: candidate.fit || '',
     fit_assessment: {
       ...fitAssessment,
-      matched: Array.isArray(fitAssessment.matched) ? fitAssessment.matched : Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : [],
-      missing: Array.isArray(fitAssessment.missing) ? fitAssessment.missing : Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : [],
-      risk: normalizeText(fitAssessment.risk || fitAssessment.risks || ''),
+      matched: preferFullerArray(fitAssessment.matched_requirements, fitAssessment.matched),
+      missing: preferFullerArray(fitAssessment.missing_requirements, fitAssessment.missing),
+      risk: normalizeText(fitAssessment.risk || fitAssessment.risks || (risksOrGapsFull.length ? risksOrGapsFull.join(' ') : '')),
       uncertainty: normalizeText(fitAssessment.uncertainty || ''),
       reason: fitReasonPreview,
     },

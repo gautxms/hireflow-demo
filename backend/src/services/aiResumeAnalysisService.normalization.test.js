@@ -274,3 +274,25 @@ test('canonicalizeCandidateScoreFields does not coerce null blank or non-numeric
     assert.equal(output.canonical_score_context, 'profile_only')
   }
 })
+
+test('normalizeCompactAnalysis uses word-safe compact clamps and preserves fuller fit fields', () => {
+  const longMatched = 'TypeScript backend services with event-driven architecture, durable queues, and production incident ownership across multiple services.'
+  const result = normalizeCompactAnalysis({
+    candidates: [{
+      summary: 'Senior backend engineer with repeated ownership of distributed TypeScript systems and platform reliability improvements across several business-critical services, including architecture reviews, migration planning, incident retrospectives, mentoring, stakeholder alignment, and delivery risk management.',
+      matchedSkills: [longMatched],
+      fit_assessment: {
+        matched_requirements: [longMatched],
+        missing_requirements: ['Kubernetes production operations experience is not clearly evidenced in the resume narrative.'],
+        risks_or_gaps: ['Cloud breadth needs follow-up, especially multi-region deployment ownership and infrastructure-as-code depth.'],
+      },
+    }],
+  })
+
+  const candidate = result.candidates[0]
+  assert.match(candidate.summary, /…$/)
+  assert.doesNotMatch(candidate.summary, /busines…$/)
+  assert.match(candidate.matchedSkills[0], /…$/)
+  assert.doesNotMatch(candidate.matchedSkills[0], /produc…$/)
+  assert.deepEqual(candidate.matchedRequirementsFull, [longMatched])
+})
