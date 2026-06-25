@@ -565,6 +565,20 @@ const SIMILARITY_STOP_WORDS = new Set([
   'on', 'or', 's', 'strong', 'that', 'the', 'their', 'this', 'to', 'with',
 ])
 
+const RECOMMENDATION_ACTION_TERMS = new Set([
+  'ask',
+  'assess',
+  'check',
+  'clarify',
+  'confirm',
+  'interview',
+  'probe',
+  'screen',
+  'shortlist',
+  'validate',
+  'verify',
+])
+
 function normalizeSimilarityToken(token) {
   if (token.length > 5 && token.endsWith('ing')) return token.slice(0, -3)
   if (token.length > 4 && token.endsWith('ed')) return token.slice(0, -2)
@@ -578,6 +592,21 @@ function similarityTokens(normalizedText) {
     .split(' ')
     .map(normalizeSimilarityToken)
     .filter((token) => token.length > 1 && !SIMILARITY_STOP_WORDS.has(token))
+}
+
+function hasActionGuidanceTail(recommendation, reasoning) {
+  if (recommendation.length <= reasoning.length) return false
+
+  const extraText = recommendation.includes(reasoning)
+    ? recommendation.replace(reasoning, ' ')
+    : recommendation
+
+  if (/\bfollow\s+up\b/.test(extraText)) return true
+
+  return extraText
+    .split(' ')
+    .map(normalizeSimilarityToken)
+    .some((token) => RECOMMENDATION_ACTION_TERMS.has(token))
 }
 
 export function isClearlyDuplicativeDisplayText(recommendationText, reasoningText) {
@@ -622,6 +651,15 @@ export function isClearlyDuplicativeDisplayText(recommendationText, reasoningTex
   const union = recommendationTokens.size + reasoningTokens.size - overlap
   const containment = overlap / smallerTokenCount
   const jaccard = union > 0 ? overlap / union : 0
+  const recommendationTokenSurplus = recommendationTokens.size - reasoningTokens.size
+
+  if (recommendationTokenSurplus > 0 && hasActionGuidanceTail(recommendation, reasoning)) {
+    return false
+  }
+
+  if (recommendationTokenSurplus > 2) {
+    return false
+  }
 
   return containment >= 0.86 && jaccard >= 0.62 && largerTokenCount - smallerTokenCount <= 5
 }

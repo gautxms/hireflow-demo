@@ -506,6 +506,17 @@ test('buildExpandedCandidateDrawerViewModel shows recommendation when it contain
   assert.equal(vm.recommendationText, 'Strong B2B growth marketing experience, lifecycle analytics, and paid acquisition ownership. Shortlist for interview and confirm relocation plus Meta Ads exposure.')
 })
 
+test('buildExpandedCandidateDrawerViewModel preserves short appended action guidance despite high token overlap', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    reasoningFull: 'Strong B2B growth marketing experience, HubSpot, GA4, and sales collaboration.',
+    recommendationFull: 'Strong B2B growth marketing experience, HubSpot, GA4, and sales collaboration. Shortlist for interview.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, true)
+  assert.equal(vm.recommendationText, 'Strong B2B growth marketing experience, HubSpot, GA4, and sales collaboration. Shortlist for interview.')
+})
+
 test('buildExpandedCandidateDrawerViewModel keeps AI reasoning when recommendation is missing', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
