@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Plus, Search, RefreshCw, Briefcase, CalendarDays, Trash2, FileText } from 'lucide-react'
 import {
-  filterShortlistCandidates,
-  getDecisionStatus,
   getShortlistJobLabel,
   hasShortlistLinkedJob,
   formatShortlistCandidateScore,
@@ -82,7 +80,6 @@ export default function ShortlistManager(props) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [filters, setFilters] = useState({ decisionStatus: 'all' })
   const [query, setQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [createError, setCreateError] = useState('')
@@ -90,12 +87,10 @@ export default function ShortlistManager(props) {
   const [createJobDescriptionId, setCreateJobDescriptionId] = useState('')
 
   const selectedShortlist = useMemo(() => shortlists.find((item) => item.id === selectedShortlistId) || null, [shortlists, selectedShortlistId])
-  const allCandidates = useMemo(() => shortlistDetails?.candidates || [], [shortlistDetails?.candidates])
 
   const resetFilters = () => {
     setCurrentPage(1)
     setQuery('')
-    setFilters({ decisionStatus: 'all' })
     setJobFilter('all')
   }
 
@@ -147,26 +142,20 @@ export default function ShortlistManager(props) {
     })
   }, [jobFilter, query, shortlists])
 
-  const filterOptions = useMemo(() => {
-    const decisionStatuses = [...new Set(allCandidates.map((candidate) => getDecisionStatus(candidate)))].sort()
-    return {
-      decisionStatuses,
-      hasAvailableDecisionStatuses: decisionStatuses.some((status) => status !== 'Unspecified'),
-    }
-  }, [allCandidates])
+  const selectedShortlistIsVisible = Boolean(selectedShortlist && visibleShortlists.some((list) => list.id === selectedShortlist.id))
+  const allCandidates = useMemo(() => (selectedShortlistIsVisible ? shortlistDetails?.candidates || [] : []), [selectedShortlistIsVisible, shortlistDetails?.candidates])
 
   const filteredCandidates = useMemo(() => {
-    const byDecision = filterShortlistCandidates(allCandidates, filters)
     const q = query.trim().toLowerCase()
-    if (!q) return byDecision
-    return byDecision.filter((candidate) => `${getCandidateDisplayName(candidate)} ${getCandidateFileLabel(candidate)} ${candidate.resume_id || ''} ${candidate.notes || ''}`.toLowerCase().includes(q))
-  }, [allCandidates, filters, query])
+    if (!q) return allCandidates
+    return allCandidates.filter((candidate) => `${getCandidateDisplayName(candidate)} ${getCandidateFileLabel(candidate)} ${candidate.resume_id || ''} ${candidate.notes || ''}`.toLowerCase().includes(q))
+  }, [allCandidates, query])
 
   const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE))
   const paginatedCandidates = filteredCandidates.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const hasShortlists = shortlists.length > 0
-  const hasSelectedShortlist = Boolean(selectedShortlist)
+  const hasSelectedShortlist = selectedShortlistIsVisible
 
   const stats = {
     totalShortlists: shortlists.length,
@@ -223,9 +212,6 @@ export default function ShortlistManager(props) {
           <label className="shortlist-manager__filter-label">Job
             <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)} className="shortlist-manager__select"><option value="all">All jobs</option>{shortlistJobOptions.map((job) => <option key={job.value} value={job.value}>{job.label}</option>)}</select>
           </label>
-          <label className="shortlist-manager__filter-label">Candidate status
-            <select className="shortlist-manager__select" value={filters.decisionStatus} disabled={!filterOptions.hasAvailableDecisionStatuses} onChange={(e) => { setCurrentPage(1); setFilters((current) => ({ ...current, decisionStatus: e.target.value })) }}><option value="all">{filterOptions.hasAvailableDecisionStatuses ? 'All candidate statuses' : 'Candidate status unavailable'}</option>{filterOptions.decisionStatuses.filter((s) => s !== 'Unspecified').map((s) => <option key={s} value={s}>{s}</option>)}</select>
-          </label>
           <label className="shortlist-manager__filter-label">Sort
             <select value={currentSort} onChange={(e) => onChangeSort(e.target.value)} className="shortlist-manager__select"><option value="rating_desc">Score (High to Low)</option><option value="rating_asc">Score (Low to High)</option><option value="added_desc">Recently Added</option><option value="added_asc">Oldest Added</option></select>
           </label>
@@ -260,9 +246,9 @@ export default function ShortlistManager(props) {
           </aside>
 
           <div>
-            {selectedShortlist && <div className="shortlist-manager__panel-header"><div className="shortlist-manager__panel-title-row"><h3>{selectedShortlist.name}</h3><p className="shortlist-manager__panel-job"><Briefcase size={18} strokeWidth={1.5} aria-hidden="true" />{getShortlistJobLabel(selectedShortlist)}</p><p className="shortlist-manager__panel-count" role="status" aria-live="polite">{allCandidates.length} candidate(s)</p></div>{selectedShortlist.description ? <p className="shortlist-manager__muted-text shortlist-manager__panel-description">{selectedShortlist.description}</p> : null}</div>}
+            {hasSelectedShortlist && <div className="shortlist-manager__panel-header"><div className="shortlist-manager__panel-title-row"><h3>{selectedShortlist.name}</h3><p className="shortlist-manager__panel-job"><Briefcase size={18} strokeWidth={1.5} aria-hidden="true" />{getShortlistJobLabel(selectedShortlist)}</p><p className="shortlist-manager__panel-count" role="status" aria-live="polite">{allCandidates.length} candidate(s)</p></div>{selectedShortlist.description ? <p className="shortlist-manager__muted-text shortlist-manager__panel-description">{selectedShortlist.description}</p> : null}</div>}
             {hasSelectedShortlist && loadingDetails ? <div className="shortlist-manager__skeleton-list" role="status" aria-label="Loading shortlist details"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
-            {selectedShortlist && !loadingDetails && paginatedCandidates.length > 0 ? <div className="shortlist-manager__candidate-list">{paginatedCandidates.map((candidate) => {
+            {hasSelectedShortlist && !loadingDetails && paginatedCandidates.length > 0 ? <div className="shortlist-manager__candidate-list">{paginatedCandidates.map((candidate) => {
               const scoreDisplay = formatShortlistCandidateScore(candidate)
               const candidateName = getCandidateDisplayName(candidate)
               const fileLabel = getCandidateFileLabel(candidate)
@@ -280,8 +266,8 @@ export default function ShortlistManager(props) {
                 await onRemoveCandidate(candidate.resume_id)
               }} className="shortlist-manager__button shortlist-manager__button--danger shortlist-manager__icon-button" aria-label={`Remove ${candidateName} from shortlist`}><Trash2 size={16} strokeWidth={1.5} aria-hidden="true" /></button></div></article>
             })}</div> : null}
-            {selectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates in this shortlist yet.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates directory to continue reviewing.</p><a className="shortlist-manager__button shortlist-manager__button--accent shortlist-manager__link-button" href="/candidates">Go to Candidates</a></div> : null}
-            {selectedShortlist && !loadingDetails && filteredCandidates.length > PAGE_SIZE ? <nav className="shortlist-manager__pagination" aria-label="Candidate pagination"><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button><span aria-live="polite">Page {currentPage} of {totalPages}</span><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button></nav> : null}
+            {hasSelectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates in this shortlist yet.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates directory to continue reviewing.</p><a className="shortlist-manager__button shortlist-manager__button--accent shortlist-manager__link-button" href="/candidates">Go to Candidates</a></div> : null}
+            {hasSelectedShortlist && !loadingDetails && filteredCandidates.length > PAGE_SIZE ? <nav className="shortlist-manager__pagination" aria-label="Candidate pagination"><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button><span aria-live="polite">Page {currentPage} of {totalPages}</span><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button></nav> : null}
             {showNoMatches ? <div className="shortlist-manager__empty"><p>No candidates match your current filters.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={resetFilters}>Clear filters</button></div> : null}
           </div>
         </div> : null}

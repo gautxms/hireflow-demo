@@ -79,10 +79,16 @@ test('shortlist manager links scored chips back to the producing analysis', () =
 })
 
 
-test('shortlist manager clarifies unavailable candidate status filter', () => {
-  assert.match(shortlistManagerSource, /Candidate status/)
-  assert.match(shortlistManagerSource, /Candidate status unavailable/)
-  assert.match(shortlistManagerSource, /hasAvailableDecisionStatuses/)
+test('shortlist manager removes candidate status filter from toolbar', () => {
+  assert.doesNotMatch(shortlistManagerSource, /Candidate status/)
+  assert.doesNotMatch(shortlistManagerSource, /Candidate status unavailable/)
+  assert.doesNotMatch(shortlistManagerSource, /hasAvailableDecisionStatuses/)
+})
+
+test('shortlist manager hides selected candidates when shortlist is filtered out', () => {
+  assert.match(shortlistManagerSource, /const selectedShortlistIsVisible = Boolean/)
+  assert.match(shortlistManagerSource, /selectedShortlistIsVisible \? shortlistDetails\?\.candidates \|\| \[\] : \[\]/)
+  assert.match(shortlistManagerSource, /const hasSelectedShortlist = selectedShortlistIsVisible/)
 })
 
 test('shortlists page score sorting requests backend score ordering', () => {
