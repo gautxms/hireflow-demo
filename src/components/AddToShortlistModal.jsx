@@ -66,6 +66,7 @@ export default function AddToShortlistModal({
 }) {
   const dialogRef = useRef(null)
   const closeRef = useRef(null)
+  const wasOpenRef = useRef(false)
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [newShortlistName, setNewShortlistName] = useState('')
@@ -75,7 +76,9 @@ export default function AddToShortlistModal({
   const [summary, setSummary] = useState(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
 
-  const canConfirm = Boolean(selectedShortlistId) && !isSubmitting && !isLoading
+  const hasSelectedCandidates = candidates.length > 0
+  const selectedShortlistExists = shortlists.some((item) => String(item?.id || '') === selectedShortlistId)
+  const canConfirm = hasSelectedCandidates && selectedShortlistExists && !isSubmitting && !isLoading
 
   const headers = () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -86,14 +89,57 @@ export default function AddToShortlistModal({
     if (!isOpen) return
     closeRef.current?.focus()
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && !isSubmitting) onClose()
+      if (event.key === 'Escape' && !isSubmitting) {
+        onClose()
+        return
+      }
+
+      if (event.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+
+      const focusable = Array.from(dialog.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.offsetParent !== null)
+
+      if (focusable.length === 0) {
+        event.preventDefault()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [isOpen, isSubmitting, onClose])
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      if (wasOpenRef.current) {
+        setSelectedShortlistId('')
+        setNewShortlistName('')
+        setIsCreateOpen(false)
+        setError('')
+        setSummary(null)
+      }
+      wasOpenRef.current = false
+      return
+    }
+
+    wasOpenRef.current = true
+    const remembered = sessionStorage.getItem(SHORTLIST_SESSION_KEY) || ''
+    setSelectedShortlistId((current) => current || remembered)
+
+    let ignore = false
     ;(async () => {
       setIsLoading(true); setError(''); setSummary(null)
       try {
@@ -101,13 +147,21 @@ export default function AddToShortlistModal({
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(payload.error || 'Unable to load shortlists')
         const active = (Array.isArray(payload.shortlists) ? payload.shortlists : []).filter((item) => item.status !== 'archived')
+        if (ignore) return
         setShortlists(active)
-        setIsCreateOpen(false)
-        setNewShortlistName('')
-        const remembered = sessionStorage.getItem(SHORTLIST_SESSION_KEY) || ''
-        setSelectedShortlistId(active.some((item) => item.id === remembered) ? remembered : '')
-      } catch (e) { setError(e.message || 'Unable to load shortlists. Please retry.') } finally { setIsLoading(false) }
+        setSelectedShortlistId((current) => {
+          const currentId = String(current || '')
+          if (currentId && active.some((item) => String(item.id) === currentId)) return currentId
+          if (remembered && active.some((item) => String(item.id) === remembered)) return remembered
+          return ''
+        })
+      } catch (e) {
+        if (!ignore) setError(e.message || 'Unable to load shortlists. Please retry.')
+      } finally {
+        if (!ignore) setIsLoading(false)
+      }
     })()
+    return () => { ignore = true }
   }, [isOpen])
 
   if (!isOpen) return null
@@ -121,15 +175,18 @@ export default function AddToShortlistModal({
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Unable to create shortlist. Please retry.')
       const created = payload.shortlist
-      setShortlists((current) => [created, ...current.filter((item) => item.id !== created.id)])
-      setSelectedShortlistId(created.id)
+      const createdId = String(created?.id || '')
+      if (!createdId) throw new Error('Shortlist was created but no destination was returned. Please refresh and retry.')
+      setShortlists((current) => [created, ...current.filter((item) => String(item.id) !== createdId)])
+      setSelectedShortlistId(createdId)
+      sessionStorage.setItem(SHORTLIST_SESSION_KEY, createdId)
       setNewShortlistName('')
       setIsCreateOpen(false)
     } catch (e) { setError(e.message || 'Unable to create shortlist. Please retry.') } finally { setIsSubmitting(false) }
   }
 
   const confirmAdd = async () => {
-    if (!selectedShortlistId) return
+    if (!canConfirm) return
     setIsSubmitting(true); setError(''); setSummary(null)
     try {
       if (!shortlistV2Enabled) {
@@ -147,7 +204,8 @@ export default function AddToShortlistModal({
         const legacyPayload = { summary: { added, failed, updated: 0, invalid: 0 } }
         setSummary({ text: buildShortlistSummary(legacyPayload.summary, 'add'), failed: failed > 0 })
         sessionStorage.setItem(SHORTLIST_SESSION_KEY, selectedShortlistId)
-        onCompleted?.(legacyPayload, selectedShortlistId)
+        await onCompleted?.(legacyPayload, selectedShortlistId)
+        onClose()
         return
       }
 
@@ -179,12 +237,21 @@ export default function AddToShortlistModal({
       const next = payload?.summary || {}
       setSummary({ text: buildShortlistSummary(next, 'add'), failed: Number(next.failed || 0) > 0 })
       sessionStorage.setItem(SHORTLIST_SESSION_KEY, selectedShortlistId)
-      onCompleted?.(payload, selectedShortlistId)
+      await onCompleted?.(payload, selectedShortlistId)
+      onClose()
     } catch (e) { setError(e.message || 'Unable to add candidates. Please retry.') } finally { setIsSubmitting(false) }
   }
 
+  const handleCreateKeyDown = (event) => {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    if (!isSubmitting && !isLoading && newShortlistName.trim()) {
+      createInlineShortlist()
+    }
+  }
+
   return <div className="ui-modal" role="dialog" aria-modal="true" aria-labelledby="atsm-title" aria-describedby="atsm-selection-status" onMouseDown={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose() }}>
-    <div className="ui-modal__dialog atsm" ref={dialogRef}>
+    <div className="ui-modal__dialog atsm" ref={dialogRef} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
       <header className="atsm__header">
         <div className="atsm__title-block">
           <h2 id="atsm-title">Add to shortlist</h2>
@@ -197,7 +264,7 @@ export default function AddToShortlistModal({
       <div className="atsm__field-group">
         <label className="atsm__label" htmlFor="atsm-destination">Select shortlist</label>
         <div className="atsm__select-row">
-          <select id="atsm-destination" className="atsm__input" value={selectedShortlistId} onChange={(e) => setSelectedShortlistId(e.target.value)} disabled={isLoading}>
+          <select id="atsm-destination" className="atsm__input" value={selectedShortlistId} onChange={(e) => setSelectedShortlistId(e.target.value)} disabled={isLoading || isSubmitting}>
             <option value="">{isLoading ? 'Loading shortlists…' : 'Select shortlist'}</option>{shortlists.map((s) => {
               const candidateCount = Number(s?.candidate_count || 0)
               const jobLabel = String(s?.job_label || '').trim() || 'General shortlist'
@@ -210,7 +277,7 @@ export default function AddToShortlistModal({
       {isCreateOpen ? <div className="atsm__create-panel" id="atsm-create-panel">
         <label className="atsm__label" htmlFor="atsm-new-shortlist">Create shortlist</label>
         <div className="atsm__inline">
-          <input id="atsm-new-shortlist" className="atsm__input" value={newShortlistName} onChange={(e) => setNewShortlistName(e.target.value)} placeholder="e.g. Final interview" autoFocus />
+          <input id="atsm-new-shortlist" className="atsm__input" value={newShortlistName} onChange={(e) => setNewShortlistName(e.target.value)} onKeyDown={handleCreateKeyDown} placeholder="e.g. Final interview" autoFocus />
           <button type="button" className="hf-btn hf-btn--primary atsm__create-button" onClick={createInlineShortlist} disabled={isSubmitting || isLoading || !newShortlistName.trim()}>{isSubmitting ? 'Creating…' : 'Create'}</button>
         </div>
       </div> : null}
