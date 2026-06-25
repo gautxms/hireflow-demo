@@ -580,45 +580,46 @@ function similarityTokens(normalizedText) {
     .filter((token) => token.length > 1 && !SIMILARITY_STOP_WORDS.has(token))
 }
 
-export function isClearlyDuplicativeDisplayText(primaryText, comparisonText) {
-  const primary = normalizeSimilarityText(primaryText)
-  const comparison = normalizeSimilarityText(comparisonText)
+export function isClearlyDuplicativeDisplayText(recommendationText, reasoningText) {
+  const recommendation = normalizeSimilarityText(recommendationText)
+  const reasoning = normalizeSimilarityText(reasoningText)
 
-  if (!primary || !comparison) return false
-  if (primary === comparison) return true
+  if (!recommendation || !reasoning) return false
+  if (recommendation === reasoning) return true
 
-  const shorter = primary.length <= comparison.length ? primary : comparison
-  const longer = primary.length > comparison.length ? primary : comparison
-  const lengthRatio = shorter.length / longer.length
+  const recommendationToReasoningRatio = recommendation.length / reasoning.length
 
-  if (shorter.length >= 36 && lengthRatio >= 0.6 && longer.includes(shorter)) {
+  if (recommendation.length >= 36 && recommendationToReasoningRatio <= 1 && recommendationToReasoningRatio >= 0.6 && reasoning.includes(recommendation)) {
     return true
   }
 
-  const shorterWords = shorter.split(' ')
-  const longerWords = longer.split(' ')
-  if (shorterWords.length >= 8 && lengthRatio >= 0.6) {
-    const shorterPhrase = shorterWords.join(' ')
-    if (longerWords.slice(0, shorterWords.length).join(' ') === shorterPhrase) {
+  const recommendationWords = recommendation.split(' ')
+  const reasoningWords = reasoning.split(' ')
+  if (recommendationWords.length >= 8 && recommendationToReasoningRatio <= 1 && recommendationToReasoningRatio >= 0.6) {
+    const recommendationPhrase = recommendationWords.join(' ')
+    if (reasoningWords.slice(0, recommendationWords.length).join(' ') === recommendationPhrase) {
       return true
     }
   }
 
+  const shorter = recommendation.length <= reasoning.length ? recommendation : reasoning
+  const longer = recommendation.length > reasoning.length ? recommendation : reasoning
+
   if (shorter.length < 32 || longer.length < 40) return false
 
-  const primaryTokens = new Set(similarityTokens(primary))
-  const comparisonTokens = new Set(similarityTokens(comparison))
-  const smallerTokenCount = Math.min(primaryTokens.size, comparisonTokens.size)
-  const largerTokenCount = Math.max(primaryTokens.size, comparisonTokens.size)
+  const recommendationTokens = new Set(similarityTokens(recommendation))
+  const reasoningTokens = new Set(similarityTokens(reasoning))
+  const smallerTokenCount = Math.min(recommendationTokens.size, reasoningTokens.size)
+  const largerTokenCount = Math.max(recommendationTokens.size, reasoningTokens.size)
 
   if (smallerTokenCount < 5) return false
 
   let overlap = 0
-  for (const token of primaryTokens) {
-    if (comparisonTokens.has(token)) overlap += 1
+  for (const token of recommendationTokens) {
+    if (reasoningTokens.has(token)) overlap += 1
   }
 
-  const union = primaryTokens.size + comparisonTokens.size - overlap
+  const union = recommendationTokens.size + reasoningTokens.size - overlap
   const containment = overlap / smallerTokenCount
   const jaccard = union > 0 ? overlap / union : 0
 

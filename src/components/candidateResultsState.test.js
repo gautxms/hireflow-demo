@@ -495,6 +495,17 @@ test('buildExpandedCandidateDrawerViewModel shows meaningful distinct recommende
   assert.equal(vm.recommendationText, 'Shortlist for interview; confirm relocation and Meta Ads exposure.')
 })
 
+test('buildExpandedCandidateDrawerViewModel shows recommendation when it contains reasoning plus meaningful action text', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Strong B2B growth marketing experience, lifecycle analytics, and paid acquisition ownership. Shortlist for interview and confirm relocation plus Meta Ads exposure.',
+    reasoningFull: 'Strong B2B growth marketing experience, lifecycle analytics, and paid acquisition ownership.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, true)
+  assert.equal(vm.recommendationText, 'Strong B2B growth marketing experience, lifecycle analytics, and paid acquisition ownership. Shortlist for interview and confirm relocation plus Meta Ads exposure.')
+})
+
 test('buildExpandedCandidateDrawerViewModel keeps AI reasoning when recommendation is missing', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
