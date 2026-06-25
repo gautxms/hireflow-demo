@@ -128,7 +128,10 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
       return
     }
 
-    setUserData((currentUserData) => currentUserData || currentUser)
+    setUserData(currentUser)
+    setSubscriptionData(null)
+    setFatalError('')
+    setRefreshWarning('')
     fetchUserData({ isInitialLoad: true })
   }, [fetchUserData, stableUserKey, token])
 
