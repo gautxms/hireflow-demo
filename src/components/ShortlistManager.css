@@ -72,7 +72,7 @@
 }
 
 .shortlist-manager__filter-grid {
-  grid-template-columns: minmax(260px, 1.6fr) repeat(3, minmax(170px, 1fr));
+  grid-template-columns: minmax(260px, 1.6fr) minmax(170px, 1fr) minmax(170px, 1fr);
   align-items: end;
 }
 
@@ -214,6 +214,11 @@
 .shortlist-manager__input-wrap:focus-within {
   outline: 2px solid var(--hf-lime, #c8ff00);
   outline-offset: 3px;
+}
+
+
+.shortlist-manager__input-wrap .shortlist-manager__input:focus-visible {
+  outline: none;
 }
 
 .shortlist-manager__content-grid {

@@ -217,8 +217,10 @@ router.get('/:id', async (req, res) => {
   const sortBy = String(req.query.sortBy || 'added_at')
   const sortOrder = String(req.query.sortOrder || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC'
 
+  const scoreOrderExpression = `COALESCE(${profileMatchScoreExpression}, ${profileScoreExpression}, r.profile_score) ${sortOrder} NULLS LAST, sc.added_at DESC`
   const orderByMap = {
-    rating: `sc.rating ${sortOrder} NULLS LAST, sc.added_at DESC`,
+    rating: scoreOrderExpression,
+    score: scoreOrderExpression,
     added_at: `sc.added_at ${sortOrder}`,
   }
 
