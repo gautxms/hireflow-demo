@@ -287,3 +287,93 @@ test('public shared payload remains read-only and exposes stored server-derived 
 
   shareTokenStore.delete(token)
 })
+
+test('normalizeCandidate passes through preserved full display fields before compact fields', () => {
+  const normalized = normalizeCandidate({
+    name: 'Full Field Candidate',
+    summary: 'Compact summary',
+    summaryFull: 'Full summary from AI normalizer with complete context.',
+    recommendation: 'Compact recommendation',
+    recommendationFull: 'Full recommendation from AI normalizer with next-step context.',
+    strengths: ['Compact strength'],
+    strengthsFull: ['Full strength from preserved analysis payload.'],
+    considerations: ['Compact consideration'],
+    risksOrGapsFull: ['Full risk or gap from preserved analysis payload.'],
+    matchedSkills: ['Compact matched skill'],
+    missingSkills: ['Compact missing skill'],
+    matchedRequirementsFull: ['Full matched requirement from preserved analysis payload.'],
+    missingRequirementsFull: ['Full missing requirement from preserved analysis payload.'],
+    matchScore: {
+      score: 84,
+      reason: 'Compact match reason',
+      reasonFull: 'Full match reasoning from score details.',
+    },
+    fit_assessment: {
+      reason: 'Compact fit reason',
+      rationale: 'Fit rationale fallback',
+      matched_requirements: ['Fit matched requirement fallback'],
+      missing_requirements: ['Fit missing requirement fallback'],
+      risks_or_gaps: ['Fit risk fallback'],
+    },
+  })
+
+  assert.equal(normalized.summary, 'Compact summary')
+  assert.equal(normalized.matchScore.reason, 'Compact match reason')
+  assert.equal(normalized.summaryFull, 'Full summary from AI normalizer with complete context.')
+  assert.equal(normalized.reasoningFull, 'Full match reasoning from score details.')
+  assert.equal(normalized.recommendationFull, 'Full recommendation from AI normalizer with next-step context.')
+  assert.deepEqual(normalized.strengthsFull, ['Full strength from preserved analysis payload.'])
+  assert.deepEqual(normalized.considerationsFull, ['Full risk or gap from preserved analysis payload.'])
+  assert.deepEqual(normalized.risksOrGapsFull, ['Full risk or gap from preserved analysis payload.'])
+  assert.deepEqual(normalized.matchedRequirementsFull, ['Full matched requirement from preserved analysis payload.'])
+  assert.deepEqual(normalized.missingRequirementsFull, ['Full missing requirement from preserved analysis payload.'])
+  assert.deepEqual(normalized.rawDisplayFields, {
+    summary: 'Full summary from AI normalizer with complete context.',
+    reasoning: 'Full match reasoning from score details.',
+    recommendation: 'Full recommendation from AI normalizer with next-step context.',
+    strengths: ['Full strength from preserved analysis payload.'],
+    considerations: ['Full risk or gap from preserved analysis payload.'],
+    matchedRequirements: ['Full matched requirement from preserved analysis payload.'],
+    missingRequirements: ['Full missing requirement from preserved analysis payload.'],
+    risksOrGaps: ['Full risk or gap from preserved analysis payload.'],
+  })
+})
+
+test('normalizeCandidate preserves displayText and rawDisplayFields full values with safe fallback order', () => {
+  const normalized = normalizeCandidate({
+    summary: 'Compact summary',
+    recommendation: 'Compact recommendation',
+    displayText: {
+      summary: { full: 'DisplayText summary wins.' },
+      recommendation: { full: 'DisplayText recommendation wins.' },
+      matchedRequirements: { full: ['DisplayText matched requirement wins.'] },
+      missingRequirements: { full: ['DisplayText missing requirement wins.'] },
+      risksOrGaps: { full: ['DisplayText risk wins.'] },
+      strengths: { full: ['DisplayText strength wins.'] },
+    },
+    rawDisplayFields: {
+      summary: 'Raw summary fallback',
+      reasoning: 'Raw reasoning fallback wins over compact reason.',
+      recommendation: 'Raw recommendation fallback',
+      matchedRequirements: ['Raw matched fallback'],
+      missingRequirements: ['Raw missing fallback'],
+      risksOrGaps: ['Raw risk fallback'],
+      strengths: ['Raw strength fallback'],
+    },
+    matchScore: { score: 77, reason: 'Compact reason' },
+    fit_assessment: {
+      reason: 'Fit reason',
+      matched_requirements: ['Fit matched fallback'],
+      missing_requirements: ['Fit missing fallback'],
+      risks_or_gaps: ['Fit risk fallback'],
+    },
+  })
+
+  assert.equal(normalized.summaryFull, 'DisplayText summary wins.')
+  assert.equal(normalized.reasoningFull, 'Raw reasoning fallback wins over compact reason.')
+  assert.equal(normalized.recommendationFull, 'DisplayText recommendation wins.')
+  assert.deepEqual(normalized.strengthsFull, ['DisplayText strength wins.'])
+  assert.deepEqual(normalized.matchedRequirementsFull, ['DisplayText matched requirement wins.'])
+  assert.deepEqual(normalized.missingRequirementsFull, ['DisplayText missing requirement wins.'])
+  assert.deepEqual(normalized.risksOrGapsFull, ['DisplayText risk wins.'])
+})

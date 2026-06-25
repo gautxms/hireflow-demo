@@ -710,6 +710,49 @@ function toAiDisplayArray(value) {
   return value.map((entry) => cleanAiTextForDisplay(entry, '')).filter(Boolean)
 }
 
+
+function pickFullerArrayValue(...values) {
+  let best = []
+  let bestScore = 0
+  for (const value of values) {
+    const normalized = toAiDisplayArray(value)
+    if (!normalized.length) continue
+    const score = normalized.reduce((total, entry) => total + entry.length, 0)
+    if (score > bestScore) {
+      best = normalized
+      bestScore = score
+    }
+  }
+  return best
+}
+
+function mergeUniqueDisplayArrays(...arrays) {
+  const output = []
+  const seen = new Set()
+  for (const array of arrays) {
+    for (const entry of Array.isArray(array) ? array : []) {
+      const cleaned = cleanAiTextForDisplay(entry, '')
+      if (!cleaned) continue
+      const key = cleaned.toLowerCase().replace(/…$/u, '').trim()
+      const duplicateIndex = output.findIndex((existing) => {
+        const existingKey = existing.toLowerCase().replace(/…$/u, '').trim()
+        return existingKey === key || existingKey.startsWith(key) || key.startsWith(existingKey)
+      })
+      if (duplicateIndex >= 0) {
+        if (cleaned.length > output[duplicateIndex].length) {
+          seen.delete(output[duplicateIndex].toLowerCase())
+          output[duplicateIndex] = cleaned
+          seen.add(key)
+        }
+        continue
+      }
+      seen.add(key)
+      output.push(cleaned)
+    }
+  }
+  return output
+}
+
 function toPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
@@ -747,8 +790,8 @@ export function sanitizeExpandedCandidate(candidate = {}) {
     integrity_checks: Array.isArray(source.integrity_checks) ? source.integrity_checks : [],
     fit_assessment: {
       ...fitAssessment,
-      matched: toAiDisplayArray(fitAssessment.matched || fitAssessment.matched_requirements),
-      missing: toAiDisplayArray(fitAssessment.missing || fitAssessment.missing_requirements),
+      matched: pickFullerArrayValue(fitAssessment.matched_requirements, fitAssessment.matched),
+      missing: pickFullerArrayValue(fitAssessment.missing_requirements, fitAssessment.missing),
       reason: cleanAiTextForDisplay(fitAssessment.reason || fitAssessment.rationale, ''),
       rationale: cleanAiTextForDisplay(fitAssessment.rationale, ''),
       risk: cleanAiTextForDisplay(fitAssessment.risk || fitAssessment.risks_or_gaps, ''),
@@ -842,27 +885,19 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
 
     const strengths = firstDisplayArray([candidate.strengthsFull, candidate?.displayText?.strengths?.full, candidate?.rawDisplayFields?.strengths, (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || [])])
       .map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
-    const considerations = firstDisplayArray([candidate.considerationsFull, candidate?.displayText?.considerations?.full, candidate?.rawDisplayFields?.considerations, candidate.considerations])
-      .map((e)=>normalizeDisplayNarrative(e,'')).filter(Boolean)
+    const fitRisks = pickFullerArrayValue(candidate?.risksOrGapsFull, candidate?.displayText?.risksOrGaps?.full, candidate?.rawDisplayFields?.risksOrGaps, candidate?.fit_assessment?.risks_or_gaps)
+    const considerationFallbacks = firstDisplayArray([candidate.considerationsFull, candidate?.displayText?.considerations?.full, candidate?.rawDisplayFields?.considerations, candidate.considerations])
+    const considerations = mergeUniqueDisplayArrays(fitRisks.length ? fitRisks : considerationFallbacks)
 
-    const matchedSkillSources = [
-      ...(Array.isArray(candidate?.matchedSkillsFull) ? candidate.matchedSkillsFull : []),
-      ...(Array.isArray(candidate?.displayText?.matchedSkills?.full) ? candidate.displayText.matchedSkills.full : []),
-      ...(Array.isArray(candidate?.rawDisplayFields?.matchedSkills) ? candidate.rawDisplayFields.matchedSkills : []),
-      ...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []),
-      ...(Array.isArray(candidate?.fit_assessment?.matched) ? candidate.fit_assessment.matched : []),
-    ]
-    const missingSkillSources = [
-      ...(Array.isArray(candidate?.mustHaveSkillsFull) ? candidate.mustHaveSkillsFull : []),
-      ...(Array.isArray(candidate?.missingSkillsFull) ? candidate.missingSkillsFull : []),
-      ...(Array.isArray(candidate?.displayText?.missingSkills?.full) ? candidate.displayText.missingSkills.full : []),
-      ...(Array.isArray(candidate?.rawDisplayFields?.missingSkills) ? candidate.rawDisplayFields.missingSkills : []),
-      ...(Array.isArray(candidate?.mustHaveSkills) ? candidate.mustHaveSkills : []),
-      ...(Array.isArray(candidate?.missingSkills) ? candidate.missingSkills : []),
-      ...(Array.isArray(candidate?.fit_assessment?.missing) ? candidate.fit_assessment.missing : []),
-    ]
-    const matchedSkills = [...new Set(matchedSkillSources.map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
-    const missingSkills = [...new Set(missingSkillSources.map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
+    const matchedSkills = mergeUniqueDisplayArrays(
+      pickFullerArrayValue(candidate?.matchedRequirementsFull, candidate?.matchedSkillsFull, candidate?.displayText?.matchedRequirements?.full, candidate?.displayText?.matchedSkills?.full, candidate?.rawDisplayFields?.matchedRequirements, candidate?.rawDisplayFields?.matchedSkills, candidate?.fit_assessment?.matched, candidate?.matchedSkills),
+      candidate?.matchedSkills,
+    )
+    const missingSkills = mergeUniqueDisplayArrays(
+      candidate?.mustHaveSkills,
+      candidate?.missingSkills,
+      pickFullerArrayValue(candidate?.missingRequirementsFull, candidate?.mustHaveSkillsFull, candidate?.missingSkillsFull, candidate?.displayText?.missingRequirements?.full, candidate?.displayText?.missingSkills?.full, candidate?.rawDisplayFields?.missingRequirements, candidate?.rawDisplayFields?.missingSkills, candidate?.fit_assessment?.missing, candidate?.mustHaveSkills, candidate?.missingSkills),
+    )
     const allSkills = [...new Set([
       ...(Array.isArray(candidate?.allSkillsFull) ? candidate.allSkillsFull : []),
       ...(Array.isArray(candidate?.displayText?.allSkills?.full) ? candidate.displayText.allSkills.full : []),

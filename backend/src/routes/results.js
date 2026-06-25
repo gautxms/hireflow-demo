@@ -101,6 +101,46 @@ function sentenceSafeClamp(value, maxLength = 240) {
   return `${(wordBreak >= 40 ? sliced.slice(0, wordBreak) : sliced).trim()}…`
 }
 
+
+function normalizeFullTextValue(value) {
+  if (value === null || value === undefined || typeof value === 'object') return ''
+  const normalized = String(value).replace(/\s+/g, ' ').trim()
+  return /^\[object\s+object\]$/i.test(normalized) ? '' : normalized
+}
+
+function firstFullText(...values) {
+  for (const value of values) {
+    const normalized = normalizeFullTextValue(value)
+    if (normalized) return normalized
+  }
+  return ''
+}
+
+function normalizeFullArrayValue(value) {
+  const values = Array.isArray(value) ? value : (normalizeFullTextValue(value) ? [value] : [])
+  return values
+    .map((entry) => normalizeFullTextValue(entry))
+    .filter(Boolean)
+}
+
+function firstFullArray(...values) {
+  for (const value of values) {
+    const normalized = normalizeFullArrayValue(value)
+    if (normalized.length > 0) return normalized
+  }
+  return []
+}
+
+function textArrayLength(value) {
+  return Array.isArray(value) ? value.map((entry) => normalizeFullTextValue(entry)).filter(Boolean).join(' ').length : 0
+}
+
+function preferFullerArray(primary, fallback) {
+  const primaryArray = normalizeFullArrayValue(primary)
+  const fallbackArray = normalizeFullArrayValue(fallback)
+  return textArrayLength(primaryArray) >= textArrayLength(fallbackArray) ? primaryArray : fallbackArray
+}
+
 function parseSkillsFilter(rawSkills) {
   if (Array.isArray(rawSkills)) {
     return rawSkills
@@ -171,15 +211,69 @@ export function normalizeCandidate(candidate = {}) {
   const summaryPreview = sentenceSafeClamp(candidate.summary || 'Summary not provided in this analysis.', 320)
   const reasoningPreview = sentenceSafeClamp(candidate?.matchScore?.reason || reasoningFallback)
   const fitReasonPreview = sentenceSafeClamp(fitAssessment.reason || candidate?.matchScore?.reason || reasoningFallback)
-  const summaryFull = normalizeText(candidate.summary)
-  const reasoningFull = normalizeText(candidate?.matchScore?.reason || fitAssessment.reason)
-  const recommendationFull = normalizeText(candidate.recommendation || fitAssessment.rationale)
+  const summaryFull = firstFullText(
+    candidate.summaryFull,
+    candidate?.displayText?.summary?.full,
+    candidate?.rawDisplayFields?.summary,
+    candidate.summary,
+  )
+  const reasoningFull = firstFullText(
+    candidate.reasoningFull,
+    candidate?.displayText?.reasoning?.full,
+    candidate?.rawDisplayFields?.reasoning,
+    candidate?.matchScore?.reasonFull,
+    fitAssessment.reasonFull,
+    candidate?.matchScore?.reason,
+    fitAssessment.reason,
+  )
+  const recommendationFull = firstFullText(
+    candidate.recommendationFull,
+    candidate?.displayText?.recommendation?.full,
+    candidate?.rawDisplayFields?.recommendation,
+    candidate.recommendation,
+    fitAssessment.rationale,
+    candidate?.matchScore?.reason,
+  )
+  const strengthsFull = firstFullArray(
+    candidate.strengthsFull,
+    candidate?.displayText?.strengths?.full,
+    candidate?.rawDisplayFields?.strengths,
+    candidate.strengths,
+  )
+  const risksOrGapsFull = firstFullArray(
+    candidate.risksOrGapsFull,
+    candidate?.displayText?.risksOrGaps?.full,
+    candidate?.rawDisplayFields?.risksOrGaps,
+    fitAssessment.risks_or_gaps,
+  )
+  const considerationsFull = firstFullArray(
+    candidate.considerationsFull,
+    candidate?.displayText?.considerations?.full,
+    candidate?.rawDisplayFields?.considerations,
+    risksOrGapsFull,
+    candidate.considerations,
+  )
+  const matchedRequirementsFull = firstFullArray(
+    candidate.matchedRequirementsFull,
+    candidate?.displayText?.matchedRequirements?.full,
+    candidate?.rawDisplayFields?.matchedRequirements,
+    fitAssessment.matched_requirements,
+  )
+  const missingRequirementsFull = firstFullArray(
+    candidate.missingRequirementsFull,
+    candidate?.displayText?.missingRequirements?.full,
+    candidate?.rawDisplayFields?.missingRequirements,
+    fitAssessment.missing_requirements,
+  )
   const rawDisplayFields = {
     ...(summaryFull && summaryFull !== summaryPreview ? { summary: summaryFull } : {}),
     ...(reasoningFull && reasoningFull !== reasoningPreview && reasoningFull !== fitReasonPreview ? { reasoning: reasoningFull } : {}),
     ...(recommendationFull ? { recommendation: recommendationFull } : {}),
-    ...(Array.isArray(candidate.strengths) && candidate.strengths.length > 0 ? { strengths: candidate.strengths } : {}),
-    ...(Array.isArray(candidate.considerations) && candidate.considerations.length > 0 ? { considerations: candidate.considerations } : {}),
+    ...(strengthsFull.length > 0 ? { strengths: strengthsFull } : {}),
+    ...(considerationsFull.length > 0 ? { considerations: considerationsFull } : {}),
+    ...(matchedRequirementsFull.length > 0 ? { matchedRequirements: matchedRequirementsFull } : {}),
+    ...(missingRequirementsFull.length > 0 ? { missingRequirements: missingRequirementsFull } : {}),
+    ...(risksOrGapsFull.length > 0 ? { risksOrGaps: risksOrGapsFull } : {}),
   }
 
   return {
@@ -198,6 +292,11 @@ export function normalizeCandidate(candidate = {}) {
     ...(summaryFull && summaryFull !== summaryPreview ? { summaryFull } : {}),
     ...(reasoningFull && reasoningFull !== reasoningPreview && reasoningFull !== fitReasonPreview ? { reasoningFull } : {}),
     ...(recommendationFull ? { recommendationFull } : {}),
+    ...(strengthsFull.length > 0 ? { strengthsFull } : {}),
+    ...(considerationsFull.length > 0 ? { considerationsFull } : {}),
+    ...(matchedRequirementsFull.length > 0 ? { matchedRequirementsFull } : {}),
+    ...(missingRequirementsFull.length > 0 ? { missingRequirementsFull } : {}),
+    ...(risksOrGapsFull.length > 0 ? { risksOrGapsFull } : {}),
     ...(Object.keys(rawDisplayFields).length > 0 ? { rawDisplayFields } : {}),
     skills: normalizedSkillsObject,
     skills_flat: Array.isArray(candidate.skills_flat) ? candidate.skills_flat : parseSkills(candidate.skills),
@@ -220,9 +319,9 @@ export function normalizeCandidate(candidate = {}) {
     fit: candidate.fit || '',
     fit_assessment: {
       ...fitAssessment,
-      matched: Array.isArray(fitAssessment.matched) ? fitAssessment.matched : Array.isArray(fitAssessment.matched_requirements) ? fitAssessment.matched_requirements : [],
-      missing: Array.isArray(fitAssessment.missing) ? fitAssessment.missing : Array.isArray(fitAssessment.missing_requirements) ? fitAssessment.missing_requirements : [],
-      risk: normalizeText(fitAssessment.risk || fitAssessment.risks || ''),
+      matched: preferFullerArray(fitAssessment.matched_requirements, fitAssessment.matched),
+      missing: preferFullerArray(fitAssessment.missing_requirements, fitAssessment.missing),
+      risk: normalizeText(fitAssessment.risk || fitAssessment.risks || (risksOrGapsFull.length ? risksOrGapsFull.join(' ') : '')),
       uncertainty: normalizeText(fitAssessment.uncertainty || ''),
       reason: fitReasonPreview,
     },

@@ -177,8 +177,25 @@ function clampString(value, maxLength) {
   return normalized.slice(0, maxLength)
 }
 
+function clampDisplayString(value, maxLength) {
+  const normalized = clampString(value, Number.POSITIVE_INFINITY)
+  if (!normalized || normalized.length <= maxLength) return normalized
+  const sliced = normalized.slice(0, maxLength)
+  const sentenceBreak = Math.max(sliced.lastIndexOf('. '), sliced.lastIndexOf('! '), sliced.lastIndexOf('? '))
+  if (sentenceBreak >= 40) return sliced.slice(0, sentenceBreak + 1).trim()
+  const wordBreak = sliced.lastIndexOf(' ')
+  const safe = (wordBreak >= 24 ? sliced.slice(0, wordBreak) : sliced).trim().replace(/[\s,;:–—-]+$/g, '')
+  return safe ? `${safe}…` : ''
+}
+
 function clampStringArray(values, { maxItems, maxItemLength, fieldName = '' }) {
   return normalizeCandidateFieldArray(values, { fieldName, maxItems, maxItemLength })
+}
+
+function clampDisplayStringArray(values, { maxItems, maxItemLength, fieldName = '' }) {
+  return normalizeCandidateFieldArray(values, { fieldName, maxItems, maxItemLength: 10000 })
+    .map((entry) => clampDisplayString(entry, maxItemLength))
+    .filter(Boolean)
 }
 
 
@@ -442,11 +459,11 @@ function normalizeCandidateFitAssessment(value) {
   const normalized = {
     has_job_description_context: Boolean(value?.has_job_description_context),
     overall_fit_score: Number.isFinite(Number(value?.overall_fit_score)) ? Math.max(0, Math.min(100, Number(value.overall_fit_score))) : null,
-    matched_requirements: clampStringArray(value?.matched_requirements || [], { maxItems: 25, maxItemLength: 120 }),
-    missing_requirements: clampStringArray(value?.missing_requirements || [], { maxItems: 25, maxItemLength: 120 }),
-    risks_or_gaps: clampStringArray(value?.risks_or_gaps || [], { maxItems: 15, maxItemLength: 180 }),
-    rationale: clampString(value?.rationale || '', 500),
-    notes: clampStringArray(value?.notes || [], { maxItems: 10, maxItemLength: 180 }),
+    matched_requirements: clampDisplayStringArray(value?.matched_requirements || [], { maxItems: 25, maxItemLength: 120 }),
+    missing_requirements: clampDisplayStringArray(value?.missing_requirements || [], { maxItems: 25, maxItemLength: 120 }),
+    risks_or_gaps: clampDisplayStringArray(value?.risks_or_gaps || [], { maxItems: 15, maxItemLength: 180 }),
+    rationale: clampDisplayString(value?.rationale || '', 500),
+    notes: clampDisplayStringArray(value?.notes || [], { maxItems: 10, maxItemLength: 180 }),
   }
   return normalized
 }
@@ -460,17 +477,17 @@ function normalizeCandidateMatchScore(value) {
     score: Number.isFinite(Number(value?.score)) ? Math.max(0, Math.min(100, Number(value.score))) : null,
     score_out_of_ten: Number.isFinite(Number(value?.score_out_of_ten)) ? Math.max(0, Math.min(10, Number(value.score_out_of_ten))) : null,
     fit: clampString(value?.fit || '', 80),
-    reason: clampString(value?.reason || '', 500),
+    reason: clampDisplayString(value?.reason || '', 500),
     breakdown,
   }
 }
 
 function normalizeCompactCandidate(candidate = {}, { minimalMode = false, aiScoringContractV2Expected = false } = {}) {
-  const matchedSkills = clampStringArray(
+  const matchedSkills = clampDisplayStringArray(
     candidate?.matchedSkills || candidate?.fit_assessment?.matched_requirements || [],
     { maxItems: minimalMode ? 10 : 15, maxItemLength: 80 },
   )
-  const missingSkills = clampStringArray(
+  const missingSkills = clampDisplayStringArray(
     candidate?.missingSkills || candidate?.fit_assessment?.missing_requirements || [],
     { maxItems: minimalMode ? 5 : 10, maxItemLength: 80 },
   )
@@ -484,10 +501,12 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false, aiScor
       ? Math.max(0, Math.min(100, Number(candidate.score)))
       : Math.max(0, Math.min(100, Number(candidate?.matchScore?.score || 0))),
     verdict: clampString(candidate?.verdict || candidate?.matchScore?.fit || 'review', 30),
-    summary: clampString(candidate?.summary || candidate?.profile_summary || '', 250),
-    strengths: clampStringArray(candidate?.strengths || [], { maxItems: 3, maxItemLength: 120 }),
-    considerations: clampStringArray(candidate?.considerations || candidate?.concerns || [], { maxItems: 3, maxItemLength: 120 }),
-    concerns: clampStringArray(
+    summary: clampDisplayString(candidate?.summary || candidate?.profile_summary || '', 250),
+    ...(clampString(candidate?.summary || candidate?.profile_summary || '', 5000).length > 250 ? { summaryFull: clampString(candidate?.summary || candidate?.profile_summary || '', 5000) } : {}),
+    strengths: clampDisplayStringArray(candidate?.strengths || [], { maxItems: 3, maxItemLength: 120 }),
+    ...(Array.isArray(candidate?.strengths) && candidate.strengths.some((entry) => clampString(entry, 5000).length > 120) ? { strengthsFull: candidate.strengths.map((entry) => clampString(entry, 5000)).filter(Boolean) } : {}),
+    considerations: clampDisplayStringArray(candidate?.considerations || candidate?.concerns || [], { maxItems: 3, maxItemLength: 120 }),
+    concerns: clampDisplayStringArray(
       candidate?.concerns || candidate?.fit_assessment?.risks_or_gaps || [],
       { maxItems: 3, maxItemLength: 120 },
     ),
@@ -501,20 +520,24 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false, aiScor
     years_experience: Number.isFinite(Number(candidate?.years_experience)) ? Math.max(0, Math.min(80, Number(candidate.years_experience))) : null,
     profile_score: Number.isFinite(Number(candidate?.profile_score)) ? Math.max(0, Math.min(100, Number(candidate.profile_score))) : null,
     seniority_level: clampString(candidate?.seniority_level || '', 80),
-    experienceHighlights: minimalMode ? [] : clampStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
+    experienceHighlights: minimalMode ? [] : clampDisplayStringArray(candidate?.experienceHighlights || candidate?.experience_highlights || [], { maxItems: 3, maxItemLength: 150 }),
     education: minimalMode ? [] : normalizeCandidateEducation(candidate?.education, { maxItems: 20, maxItemLength: 200 }),
-    experience: minimalMode ? [] : clampStringArray(candidate?.experience || [], { fieldName: 'experience', maxItems: 30, maxItemLength: 220 }),
+    experience: minimalMode ? [] : clampDisplayStringArray(candidate?.experience || [], { fieldName: 'experience', maxItems: 30, maxItemLength: 220 }),
     certifications: minimalMode ? [] : clampStringArray(candidate?.certifications || [], { maxItems: 20, maxItemLength: 160 }),
     languages: clampStringArray(candidate?.languages || [], { maxItems: 20, maxItemLength: 80 }),
-    projects: minimalMode ? [] : clampStringArray(candidate?.projects || [], { fieldName: 'projects', maxItems: 20, maxItemLength: 200 }),
-    achievements: minimalMode ? [] : clampStringArray(candidate?.achievements || [], { maxItems: 20, maxItemLength: 200 }),
+    projects: minimalMode ? [] : clampDisplayStringArray(candidate?.projects || [], { fieldName: 'projects', maxItems: 20, maxItemLength: 200 }),
+    achievements: minimalMode ? [] : clampDisplayStringArray(candidate?.achievements || [], { maxItems: 20, maxItemLength: 200 }),
     location: clampString(candidate?.location || '', 120),
     fit_assessment: minimalMode ? normalizeCandidateFitAssessment(candidate?.fit_assessment) : normalizeCandidateFitAssessment(candidate?.fit_assessment),
     matchScore: normalizeCandidateMatchScore(candidate?.matchScore),
     confidence: normalizeCandidateConfidence(candidate?.confidence),
     confidenceScores: normalizeCandidateConfidence(candidate?.confidenceScores),
     evidenceSnippets: [],
-    recommendation: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', 160),
+    recommendation: clampDisplayString(candidate?.recommendation || candidate?.matchScore?.reason || '', 160),
+    ...(clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', 5000).length > 160 ? { recommendationFull: clampString(candidate?.recommendation || candidate?.matchScore?.reason || '', 5000) } : {}),
+    ...(Array.isArray(candidate?.fit_assessment?.matched_requirements) ? { matchedRequirementsFull: candidate.fit_assessment.matched_requirements.map((entry) => clampString(entry, 5000)).filter(Boolean) } : {}),
+    ...(Array.isArray(candidate?.fit_assessment?.missing_requirements) ? { missingRequirementsFull: candidate.fit_assessment.missing_requirements.map((entry) => clampString(entry, 5000)).filter(Boolean) } : {}),
+    ...(Array.isArray(candidate?.fit_assessment?.risks_or_gaps) ? { risksOrGapsFull: candidate.fit_assessment.risks_or_gaps.map((entry) => clampString(entry, 5000)).filter(Boolean) } : {}),
     filename: clampString(candidate?.filename || '', 180),
     resumeId: clampString(candidate?.resumeId || candidate?.resume_id || '', 100),
     ai_scoring_contract_v2: normalizeAiScoringContractV2(candidate?.ai_scoring_contract_v2)
