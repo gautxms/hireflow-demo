@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveSubscriptionState, hasActiveSubscription, canAccessProductDashboard } from './subscriptionState.js'
+import { resolveSubscriptionState, hasActiveSubscription, canAccessProductDashboard, canRenderBillingPage } from './subscriptionState.js'
 
 test('free users cannot manage billing or access product dashboard', () => {
   const state = resolveSubscriptionState({ user: { subscription_status: 'inactive' } })
@@ -8,6 +8,7 @@ test('free users cannot manage billing or access product dashboard', () => {
   assert.equal(state.planLabel, 'Free plan')
   assert.equal(state.statusLabel, 'Free plan / No active subscription')
   assert.equal(state.canManageBilling, false)
+  assert.equal(canRenderBillingPage(state), false)
   assert.equal(state.canAccessProductDashboard, false)
 })
 
@@ -24,6 +25,7 @@ test('active users require Paddle customer and subscription identifiers to manag
 
   assert.equal(missingProviderState.canManageBilling, false)
   assert.equal(providerReadyState.canManageBilling, true)
+  assert.equal(canRenderBillingPage(providerReadyState), true)
   assert.equal(providerReadyState.canAccessProductDashboard, true)
 })
 
@@ -48,4 +50,16 @@ test('past due users are payment issue states, not free states', () => {
   assert.equal(state.statusLabel, 'Past due')
   assert.equal(state.canAccessProductDashboard, false)
   assert.equal(state.canManageBilling, true)
+})
+
+test('billing page rendering requires management access or valid Paddle billing state', () => {
+  const freeWithCustomerOnly = resolveSubscriptionState({
+    subscription: { status: 'inactive', paddleCustomerId: 'ctm_123' },
+  })
+  const canceledProviderState = resolveSubscriptionState({
+    subscription: { status: 'canceled', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' },
+  })
+
+  assert.equal(canRenderBillingPage(freeWithCustomerOnly), false)
+  assert.equal(canRenderBillingPage(canceledProviderState), true)
 })

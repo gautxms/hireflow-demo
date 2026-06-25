@@ -23,6 +23,10 @@ export function canAccessProductDashboard(status) {
   return hasActiveSubscription(status)
 }
 
+export function canRenderBillingPage(subscriptionState) {
+  return Boolean(subscriptionState?.canManageBilling || (subscriptionState?.hasProviderCustomer && subscriptionState?.hasProviderSubscription && !subscriptionState?.isFree))
+}
+
 export function resolveSubscriptionState({ user = null, subscription = null } = {}) {
   const rawStatus = normalizeSubscriptionStatus(subscription?.status || user?.subscription_status)
   const hasProviderCustomer = Boolean(subscription?.paddleCustomerId || subscription?.paddle_customer_id || user?.paddleCustomerId || user?.paddle_customer_id)
