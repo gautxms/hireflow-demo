@@ -75,6 +75,7 @@ import { resolveUserSectionPath } from './config/userNavigation'
 import { isUserShellRoutePath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
+import { resolveSubscriptionState } from './utils/subscriptionState'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -369,6 +370,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus })
   const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus })
   const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
+  const profileBillingState = resolveSubscriptionState({ user: userProfile })
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
   const isRootLandingPath = pathname === '/'
@@ -1237,16 +1239,18 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                     >
                       Account
                     </button>
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        navigate('/billing')
-                      }}
-                      className="site-profile-menu__item"
-                    >
-                      Billing
-                    </button>
+                    {profileBillingState.canManageBilling ? (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false)
+                          navigate('/billing')
+                        }}
+                        className="site-profile-menu__item"
+                      >
+                        Billing
+                      </button>
+                    ) : null}
                     <div className="site-profile-menu__divider" />
                     <button
                       role="menuitem"

@@ -3,7 +3,7 @@ import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
-import { resolveSubscriptionState } from '../utils/subscriptionState'
+import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -65,6 +65,11 @@ export default function BillingPage() {
       setSubscription(nextSubscription)
 
       const subscriptionState = resolveSubscriptionState({ subscription: nextSubscription })
+      if (!canRenderBillingPage(subscriptionState)) {
+        window.location.replace('/account?section=billing')
+        return
+      }
+
       if (!subscriptionState.canManageBilling) {
         setHistory([])
         return
@@ -91,6 +96,7 @@ export default function BillingPage() {
   }, [])
 
   const subscriptionState = resolveSubscriptionState({ subscription })
+  const canShowBillingPage = canRenderBillingPage(subscriptionState)
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -168,6 +174,10 @@ export default function BillingPage() {
     )
   }
 
+  if (!error && !loading && !canShowBillingPage) {
+    return null
+  }
+
   return (
     <main className="billing-page">
       <section className="billing-page__section">
@@ -177,20 +187,7 @@ export default function BillingPage() {
 
         {error ? <StatePattern kind="error" compact title="We could not open billing management right now" description={error} action={(<button type="button" className="route-state-card__action" onClick={loadBilling}>Retry</button>)} /> : null}
 
-        {!error && subscription && !subscriptionState.canManageBilling ? (
-          <article className="billing-page__card billing-page__card--empty">
-            <h2 className="billing-page__plan-title">Subscription</h2>
-            <p className="billing-page__line"><strong>{subscriptionState.statusLabel}</strong></p>
-            <p className="billing-page__meta">You do not have an active paid subscription yet.</p>
-            <p className="billing-page__meta">Choose a plan to unlock resume analysis, candidate ranking, shortlists, and reports.</p>
-            <div className="billing-page__actions">
-              <button type="button" className="hf-btn hf-btn--primary" onClick={() => { window.location.href = '/pricing' }}>View plans</button>
-              <button type="button" className="hf-btn hf-btn--secondary" onClick={() => { window.location.href = '/account' }}>Back to account</button>
-            </div>
-          </article>
-        ) : null}
-
-        {!error && subscription && subscriptionState.canManageBilling ? (
+        {!error && subscription && canShowBillingPage ? (
           <>
             <article className="billing-page__card">
               <h2 className="billing-page__plan-title">Current Plan</h2>
@@ -200,14 +197,16 @@ export default function BillingPage() {
               <p className="billing-page__meta">Payment method: {subscription.paymentMethod}</p>
               <p className="billing-page__meta">Status: {subscription.status}</p>
 
-              <div className="billing-page__actions">
-                <button type="button" className="hf-btn hf-btn--primary" onClick={() => { setTargetPlan(subscription.plan === 'monthly' ? 'annual' : 'monthly'); setPlanModalOpen(true) }}>
-                  {subscription.plan === 'monthly' ? 'Upgrade to annual' : 'Downgrade to monthly'}
-                </button>
-                <button type="button" className="hf-btn hf-btn--destructive" onClick={() => setCancelModalOpen(true)} disabled={subscription.status === 'cancelled'}>
-                  Cancel subscription
-                </button>
-              </div>
+              {subscriptionState.canManageBilling ? (
+                <div className="billing-page__actions">
+                  <button type="button" className="hf-btn hf-btn--primary" onClick={() => { setTargetPlan(subscription.plan === 'monthly' ? 'annual' : 'monthly'); setPlanModalOpen(true) }}>
+                    {subscription.plan === 'monthly' ? 'Upgrade to annual' : 'Downgrade to monthly'}
+                  </button>
+                  <button type="button" className="hf-btn hf-btn--destructive" onClick={() => setCancelModalOpen(true)} disabled={subscription.status === 'cancelled'}>
+                    Cancel subscription
+                  </button>
+                </div>
+              ) : null}
             </article>
 
             <article className="billing-page__card">
