@@ -1605,7 +1605,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             {detailVm.confidenceLabel && <div className="dd-confidence">{detailVm.confidenceLabel}</div>}
           </div>
           <div className="dd-header-actions">
-            <button className="hf-btn hf-btn--primary dd-btn-primary" type="button" disabled title="Interview scheduling is coming soon" aria-disabled="true">Schedule interview · Coming soon</button>
             <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openAddToShortlistModal([candidate])}>Add to shortlist</button>
             <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }}>
               <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
@@ -1618,6 +1617,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="dd-col">
             <DrawerSection title="Summary">
               <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`summary-${expandedCandidateKey}`} />
+            </DrawerSection>
+            <DrawerSection title="Score breakdown">
+              {hasResolvableBreakdownMetrics ? (
+                <div className="dd-analysis-box dd-breakdown">
+                  {resolvableScoreBreakdownRows.map((row) => (
+                    <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
+                      <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="dd-summary">Score breakdown unavailable</p>}
             </DrawerSection>
             {shouldRenderRecommendedAction && (
               <DrawerSection title="Recommended action" className="dd-section-card--compact">
@@ -1672,17 +1682,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             )}
           </div>
           <div className="dd-col">
-            <DrawerSection title="Score breakdown">
-              {hasResolvableBreakdownMetrics ? (
-                <div className="dd-analysis-box dd-breakdown">
-                  {resolvableScoreBreakdownRows.map((row) => (
-                    <div className="dd-breakdown-row" key={`${expandedCandidateKey}-breakdown-${row.label}`}>
-                      <span>{row.label}</span><span className="dd-breakdown-track"><span className={`dd-breakdown-fill ${row.value >= 75 ? 'dd-breakdown-fill--strong' : row.value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'}`} style={{ width: `${row.value}%` }} /></span><span>{row.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="dd-summary">Score breakdown unavailable</p>}
-            </DrawerSection>
             <DrawerSection title="Strengths">
               <div className="dd-analysis-box dd-analysis-box--green">
                 {detailVm.candidateStrengths.length > 0

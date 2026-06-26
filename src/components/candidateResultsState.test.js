@@ -463,6 +463,18 @@ test('buildExpandedCandidateDrawerViewModel returns compact unavailable state on
 })
 
 
+test('buildExpandedCandidateDrawerViewModel preserves strong match tier from score logic', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    id: 'strong-match-candidate',
+    name: 'Strong Match',
+    matchScore: { score: 86, reason: 'Strong relevant experience.' },
+  })
+
+  assert.equal(vm.scoreTier, 'strong')
+  assert.equal(vm.verdictLabel, 'Strong match')
+})
+
 test('buildExpandedCandidateDrawerViewModel derives high confidence from numeric confidenceScores.fit_assessment', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
