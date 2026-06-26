@@ -565,35 +565,19 @@ const SIMILARITY_STOP_WORDS = new Set([
   'on', 'or', 's', 'strong', 'that', 'the', 'their', 'this', 'to', 'with',
 ])
 
-const RECOMMENDATION_ACTION_TERMS = new Set([
-  'ask',
-  'assess',
-  'check',
-  'clarify',
-  'confirm',
-  'follow',
-  'hold',
-  'interview',
-  'probe',
-  'proceed',
-  'reject',
-  'screen',
-  'shortlist',
-  'validate',
-  'verify',
-])
-
 const ACTION_ORIENTED_RECOMMENDATION_PATTERNS = [
-  /\b(?:do\s+not\s+)?shortlist\b/,
-  /\b(?:schedule|proceed\s+to|move\s+forward(?:\s+with)?|advance\s+to)\b/,
-  /\b(?:recruiter|phone)\s+screen\b/,
-  /\binterview\b/,
-  /\breject\b/,
-  /\bhold\b/,
-  /\bfollow\s+up\b/,
-  /\b(?:confirm|verify|validate|clarify|probe|assess|check)\b/,
-  /\bask\s+(?:about|for|whether|if|the|her|him|them|candidate)\b/,
-  /\bconsider\s+(?:her\s+|him\s+|them\s+|the\s+candidate\s+)?for\b/,
+  /\b(?:do\s+not\s+)?shortlist(?:\s+for\b|\s+to\b|\b)/,
+  /\bschedule\s+(?:an?\s+)?(?:interview|recruiter\s+screen|phone\s+screen|screen)\b/,
+  /\bproceed\s+to\s+(?:interview|recruiter\s+screen|phone\s+screen|screen|next\s+step|next\s+round)\b/,
+  /\badvance\s+to\s+(?:interview|recruiter\s+screen|phone\s+screen|screen|next\s+step|next\s+round)\b/,
+  /\bmove\s+forward\s+with\s+(?:interview|recruiter\s+screen|phone\s+screen|screen|candidate|application)\b/,
+  /\bput\s+(?:the\s+candidate\s+|her\s+|him\s+|them\s+)?on\s+hold\b/,
+  /\bhold\s+(?:for|until)\b/,
+  /\breject\s+(?:for|from)\b/,
+  /\bfollow\s+up\s+(?:with|on|about|to)\b/,
+  /\b(?:confirm|verify|validate|clarify|probe|assess|check)\s+\w+/,
+  /\bask\s+(?:about|for|whether|if)\s+\w+/,
+  /\bconsider\s+(?:her\s+|him\s+|them\s+|the\s+candidate\s+)?for\s+\w+/,
 ]
 
 function normalizeSimilarityToken(token) {
@@ -625,12 +609,7 @@ function hasActionGuidanceTail(recommendation, reasoning) {
     ? recommendation.replace(reasoning, ' ')
     : recommendation
 
-  if (/\bfollow\s+up\b/.test(extraText)) return true
-
-  return extraText
-    .split(' ')
-    .map(normalizeSimilarityToken)
-    .some((token) => RECOMMENDATION_ACTION_TERMS.has(token))
+  return isActionOrientedRecommendation(extraText)
 }
 
 export function isClearlyDuplicativeDisplayText(recommendationText, reasoningText) {
