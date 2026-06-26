@@ -571,13 +571,30 @@ const RECOMMENDATION_ACTION_TERMS = new Set([
   'check',
   'clarify',
   'confirm',
+  'follow',
+  'hold',
   'interview',
   'probe',
+  'proceed',
+  'reject',
   'screen',
   'shortlist',
   'validate',
   'verify',
 ])
+
+const ACTION_ORIENTED_RECOMMENDATION_PATTERNS = [
+  /\b(?:do\s+not\s+)?shortlist\b/,
+  /\b(?:schedule|proceed\s+to|move\s+forward(?:\s+with)?|advance\s+to)\b/,
+  /\b(?:recruiter|phone)\s+screen\b/,
+  /\binterview\b/,
+  /\breject\b/,
+  /\bhold\b/,
+  /\bfollow\s+up\b/,
+  /\b(?:confirm|verify|validate|clarify|probe|assess|check)\b/,
+  /\bask\s+(?:about|for|whether|if|the|her|him|them|candidate)\b/,
+  /\bconsider\s+(?:her\s+|him\s+|them\s+|the\s+candidate\s+)?for\b/,
+]
 
 function normalizeSimilarityToken(token) {
   if (token.length > 5 && token.endsWith('ing')) return token.slice(0, -3)
@@ -592,6 +609,13 @@ function similarityTokens(normalizedText) {
     .split(' ')
     .map(normalizeSimilarityToken)
     .filter((token) => token.length > 1 && !SIMILARITY_STOP_WORDS.has(token))
+}
+
+export function isActionOrientedRecommendation(text) {
+  const recommendation = normalizeSimilarityText(text)
+  if (!recommendation) return false
+
+  return ACTION_ORIENTED_RECOMMENDATION_PATTERNS.some((pattern) => pattern.test(recommendation))
 }
 
 function hasActionGuidanceTail(recommendation, reasoning) {
@@ -1000,7 +1024,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
     const summaryText = firstDisplayNarrative([candidate.summaryFull, candidate?.displayText?.summary?.full, candidate?.rawDisplayFields?.summary, candidate.summary], 'No summary available.')
     const reasoningText = firstDisplayNarrative([candidate.reasoningFull, candidate?.displayText?.reasoning?.full, candidate?.rawDisplayFields?.reasoning, candidate?.matchScore?.reasonFull, candidate?.fit_assessment?.reasonFull, candidate?.matchScore?.reason, candidate?.fit_assessment?.reason], 'Reasoning unavailable for this profile.')
     const resolvedRecommendationText = firstDisplayNarrative([candidate.recommendationFull, candidate?.displayText?.recommendation?.full, candidate?.rawDisplayFields?.recommendation, candidate?.recommendation, candidate?.fit_assessment?.rationale], '')
-    const hasRecommendedAction = Boolean(resolvedRecommendationText && !isClearlyDuplicativeDisplayText(resolvedRecommendationText, reasoningText))
+    const hasRecommendedAction = Boolean(resolvedRecommendationText && isActionOrientedRecommendation(resolvedRecommendationText) && !isClearlyDuplicativeDisplayText(resolvedRecommendationText, reasoningText))
     const recommendationText = hasRecommendedAction ? resolvedRecommendationText : ''
 
     const strengths = firstDisplayArray([candidate.strengthsFull, candidate?.displayText?.strengths?.full, candidate?.rawDisplayFields?.strengths, (Array.isArray(candidate.strengths) && candidate.strengths.length ? candidate.strengths : candidate.achievements || [])])
