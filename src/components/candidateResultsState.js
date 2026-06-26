@@ -757,25 +757,29 @@ export function toSafeScore(value, fallback = 0) {
 export function parseScorePercentage(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     if (value >= 0 && value <= 1) return Math.round(value * 100)
-    if (value >= 0 && value <= 100) return Math.round(value)
-    return null
+    return Math.round(Math.max(0, Math.min(100, value)))
   }
 
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   if (!trimmed) return null
 
-  const percentMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*%/)
+  const percentMatch = trimmed.match(/^\(?\s*(\d+(?:\.\d+)?)\s*%\s*\)?$/)
   if (percentMatch) {
     const numeric = Number(percentMatch[1])
-    return Number.isFinite(numeric) && numeric >= 0 && numeric <= 100 ? Math.round(numeric) : null
+    return Number.isFinite(numeric) ? Math.round(Math.max(0, Math.min(100, numeric))) : null
+  }
+
+  const scoreFormatMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*\/\s*100(?:\s*(?:[-–—:]|\().*)?$/)
+  if (scoreFormatMatch) {
+    const numeric = Number(scoreFormatMatch[1])
+    return Number.isFinite(numeric) ? Math.round(Math.max(0, Math.min(100, numeric))) : null
   }
 
   const numeric = Number(trimmed)
   if (!Number.isFinite(numeric)) return null
   if (numeric >= 0 && numeric <= 1) return Math.round(numeric * 100)
-  if (numeric >= 0 && numeric <= 100) return Math.round(numeric)
-  return null
+  return Math.round(Math.max(0, Math.min(100, numeric)))
 }
 
 export function resolveScoreBreakdownMetric(matchBreakdown, keys = [], fallback = null) {
@@ -788,14 +792,68 @@ export function resolveScoreBreakdownMetric(matchBreakdown, keys = [], fallback 
   return parseScorePercentage(fallback)
 }
 
+function buildRowsFromBreakdownSource(source, rowDefinitions) {
+  if (!source || typeof source !== 'object') return []
+  return rowDefinitions
+    .map(({ label, keys }) => ({
+      label,
+      value: resolveScoreBreakdownMetric(source, keys),
+    }))
+    .filter((row) => Number.isFinite(row.value))
+}
+
+function buildRowsFromBreakdownSources(sources, rowDefinitions) {
+  for (const source of sources) {
+    const rows = buildRowsFromBreakdownSource(source, rowDefinitions)
+    if (rows.length > 0) return rows
+  }
+  return []
+}
+
+const SCORE_BREAKDOWN_ROW_DEFINITIONS = [
+  {
+    label: 'Skills match',
+    keys: ['technical_skills', 'skills_match', 'skills', 'technicalSkills', 'skill_match_score', 'skills_match_score'],
+  },
+  {
+    label: 'Relevant experience',
+    keys: ['experience_years', 'experience', 'years_experience', 'experienceYears', 'experience_match_score', 'relevant_experience_score'],
+  },
+  {
+    label: 'Education relevance',
+    keys: ['education', 'education_match', 'academic_background', 'educationMatch', 'education_match_score', 'education_relevance_score'],
+  },
+]
+
+const AI_SCORING_CONTRACT_BREAKDOWN_ROW_DEFINITIONS = [
+  { label: 'Skills match', keys: ['skills_match_score'] },
+  { label: 'Relevant experience', keys: ['relevant_experience_score'] },
+  { label: 'Education relevance', keys: ['education_relevance_score'] },
+  { label: 'Seniority / progression', keys: ['seniority_progression_score'] },
+]
+
 export function buildScoreBreakdownRows(candidate = {}) {
-  const matchBreakdown = candidate?.matchScore?.breakdown
-    || candidate?.match_score?.breakdown
-    || candidate?.scoreBreakdown
-    || candidate?.score_breakdown
+  const explicitBreakdownRows = buildRowsFromBreakdownSources(
+    [candidate?.scoreBreakdown, candidate?.score_breakdown],
+    SCORE_BREAKDOWN_ROW_DEFINITIONS,
+  )
+  if (explicitBreakdownRows.length > 0) return explicitBreakdownRows
+
+  const matchBreakdownRows = buildRowsFromBreakdownSources(
+    [candidate?.matchScore?.breakdown, candidate?.match_score?.breakdown],
+    SCORE_BREAKDOWN_ROW_DEFINITIONS,
+  )
+  if (matchBreakdownRows.length > 0) return matchBreakdownRows
+
+  const aiScoringContractRows = buildRowsFromBreakdownSource(
+    candidate?.ai_scoring_contract_v2,
+    AI_SCORING_CONTRACT_BREAKDOWN_ROW_DEFINITIONS,
+  )
+  if (aiScoringContractRows.length > 0) return aiScoringContractRows
+
   const roleAlignmentValue = resolveScoreBreakdownMetric(
-    matchBreakdown,
-    ['role_alignment', 'roleAlignment', 'role_fit', 'roleFit', 'job_alignment'],
+    null,
+    [],
     candidate?.fit_assessment?.role_alignment
       ?? candidate?.fit_assessment?.roleAlignment
       ?? candidate?.fit_assessment?.role_fit
@@ -806,16 +864,16 @@ export function buildScoreBreakdownRows(candidate = {}) {
 
   return [
     {
-      label: 'Skill Match',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['technical_skills', 'skills_match', 'skills', 'technicalSkills', 'skill_match_score'], candidate?.fit_assessment?.skill_match_score ?? null),
+      label: 'Skills match',
+      value: resolveScoreBreakdownMetric(null, [], candidate?.fit_assessment?.skill_match_score ?? null),
     },
     {
-      label: 'Experience',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['experience_years', 'experience', 'years_experience', 'experienceYears', 'experience_match_score'], candidate?.fit_assessment?.experience_match_score ?? null),
+      label: 'Relevant experience',
+      value: resolveScoreBreakdownMetric(null, [], candidate?.fit_assessment?.experience_match_score ?? null),
     },
     {
-      label: 'Education',
-      value: resolveScoreBreakdownMetric(matchBreakdown, ['education', 'education_match', 'academic_background', 'educationMatch', 'education_match_score'], candidate?.fit_assessment?.education_match_score ?? null),
+      label: 'Education relevance',
+      value: resolveScoreBreakdownMetric(null, [], candidate?.fit_assessment?.education_match_score ?? null),
     },
     ...(Number.isFinite(roleAlignmentValue) ? [{ label: 'Role Alignment', value: roleAlignmentValue }] : []),
   ].filter((row) => Number.isFinite(row.value))
