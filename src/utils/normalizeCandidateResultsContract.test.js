@@ -32,6 +32,12 @@ test('normalization preserves score breakdown and modern fit assessment score fi
         technical_skills: 90,
       },
     },
+    ai_scoring_contract_v2: {
+      skills_match_score: 85,
+      education_relevance_score: 79,
+      relevant_experience_score: 88,
+      seniority_progression_score: 72,
+    },
     fit_assessment: {
       overall_fit_score: 86,
       skill_match_score: 90,
@@ -43,6 +49,10 @@ test('normalization preserves score breakdown and modern fit assessment score fi
 
   assert.equal(normalized.matchScore.breakdown.technical_skills, 90)
   assert.equal(normalized.scoreBreakdown.overall, 86)
+  assert.equal(normalized.ai_scoring_contract_v2.skills_match_score, 85)
+  assert.equal(normalized.ai_scoring_contract_v2.education_relevance_score, 79)
+  assert.equal(normalized.ai_scoring_contract_v2.relevant_experience_score, 88)
+  assert.equal(normalized.ai_scoring_contract_v2.seniority_progression_score, 72)
   assert.equal(normalized.fit_assessment.overall_fit_score, 86)
   assert.equal(normalized.fit_assessment.skill_match_score, 90)
   assert.equal(normalized.fit_assessment.experience_match_score, 84)

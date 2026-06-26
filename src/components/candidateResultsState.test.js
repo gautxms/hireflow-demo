@@ -201,6 +201,9 @@ test('parseScorePercentage supports numeric, decimal, percent string, and legacy
   assert.equal(parseScorePercentage(0.86), 86)
   assert.equal(parseScorePercentage('86%'), 86)
   assert.equal(parseScorePercentage('(86%)'), 86)
+  assert.equal(parseScorePercentage('85/100 - Strong channel fit'), 85)
+  assert.equal(parseScorePercentage('70 / 100'), 70)
+  assert.equal(parseScorePercentage('Strong 85% alignment'), null)
 })
 
 test('resolveScoreBreakdownMetric reads modern and legacy score fields safely', () => {
@@ -226,9 +229,9 @@ test('buildScoreBreakdownRows includes rows when any valid scores exist and pars
   })
 
   assert.deepEqual(rows, [
-    { label: 'Skill Match', value: 86 },
-    { label: 'Experience', value: 73 },
-    { label: 'Education', value: 65 },
+    { label: 'Skills match', value: 86 },
+    { label: 'Relevant experience', value: 73 },
+    { label: 'Education relevance', value: 65 },
   ])
 })
 
@@ -245,9 +248,9 @@ test('buildScoreBreakdownRows supports snake_case breakdown payload fields', () 
   })
 
   assert.deepEqual(rows, [
-    { label: 'Skill Match', value: 88 },
-    { label: 'Experience', value: 74 },
-    { label: 'Education', value: 61 },
+    { label: 'Skills match', value: 88 },
+    { label: 'Relevant experience', value: 74 },
+    { label: 'Education relevance', value: 61 },
   ])
 })
 
@@ -256,12 +259,71 @@ test('buildScoreBreakdownRows only includes Role Alignment when real numeric fie
     fit_assessment: { skill_match_score: 81 },
     scoreBreakdown: { methodologies: 92 },
   })
-  assert.deepEqual(withoutRoleAlignment, [{ label: 'Skill Match', value: 81 }])
+  assert.deepEqual(withoutRoleAlignment, [{ label: 'Skills match', value: 81 }])
 
   const withRoleAlignment = buildScoreBreakdownRows({
     fit_assessment: { role_alignment: '77%' },
   })
   assert.deepEqual(withRoleAlignment, [{ label: 'Role Alignment', value: 77 }])
+})
+
+
+test('buildScoreBreakdownRows falls back to ai_scoring_contract_v2 numeric category fields without mutating score', () => {
+  const candidate = {
+    score: 91,
+    matchScore: { score: 91, breakdown: { skills_match: 'Strong', experience: 'Critical — no hands-on paid acquisition' } },
+    ai_scoring_contract_v2: {
+      skills_match_score: 85,
+      relevant_experience_score: '72.5',
+      education_relevance_score: '90%',
+      seniority_progression_score: '85/100 - Strong progression',
+      weighted_total_score_recomputed: 83,
+      weighted_total_score_from_ai: 82,
+    },
+  }
+
+  const rows = buildScoreBreakdownRows(candidate)
+
+  assert.deepEqual(rows, [
+    { label: 'Skills match', value: 85 },
+    { label: 'Relevant experience', value: 73 },
+    { label: 'Education relevance', value: 90 },
+    { label: 'Seniority / progression', value: 85 },
+  ])
+  assert.equal(candidate.score, 91)
+  assert.equal(candidate.matchScore.score, 91)
+})
+
+test('buildScoreBreakdownRows rejects qualitative prose-only breakdown values', () => {
+  const rows = buildScoreBreakdownRows({
+    matchScore: {
+      breakdown: {
+        skills_match: 'Strong',
+        experience: 'Moderate',
+        education: 'Weak',
+        role_alignment: 'Poor',
+        relevant_experience_score: 'Critical — no hands-on paid acquisition',
+      },
+    },
+  })
+
+  assert.deepEqual(rows, [])
+})
+
+test('buildScoreBreakdownRows accepts clearly formatted score strings from breakdown sources', () => {
+  const rows = buildScoreBreakdownRows({
+    matchScore: {
+      breakdown: {
+        skills_match: '85/100 - Strong channel fit',
+        experience: '70 / 100',
+      },
+    },
+  })
+
+  assert.deepEqual(rows, [
+    { label: 'Skills match', value: 85 },
+    { label: 'Relevant experience', value: 70 },
+  ])
 })
 
 test('hasRenderableCandidates allows mixed-validity arrays when at least one candidate is valid', () => {
