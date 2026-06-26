@@ -484,6 +484,65 @@ test('buildExpandedCandidateDrawerViewModel hides near-identical recommendation 
   assert.equal(vm.recommendationText, '')
 })
 
+test('buildExpandedCandidateDrawerViewModel hides similar but non-identical reasoning recommendation', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Candidate demonstrates mastery of lifecycle analytics and B2B acquisition channels, with some risk around enterprise ABM depth.',
+    reasoningFull: 'The candidate is a strong fit because she shows mastery of B2B acquisition channels and lifecycle analytics, though enterprise ABM depth remains a risk.',
+  })
+
+  assert.equal(vm.reasoningText, 'The candidate is a strong fit because she shows mastery of B2B acquisition channels and lifecycle analytics, though enterprise ABM depth remains a risk.')
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel hides Aanya-style explanatory recommendation while preserving AI reasoning', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const recommendation = 'Aanya exceeds the 4-7 year requirement with 6.4 years of direct B2B SaaS demand generation experience. She demonstrates mastery of required channels including paid acquisition, lifecycle marketing, and funnel analytics. Primary risk is location mismatch because she is based outside Mumbai.'
+  const reasoning = 'Aanya is ranked highly because her 6.4 years of B2B SaaS demand generation experience aligns with the role. She has strong paid acquisition, lifecycle marketing, and funnel analytics experience, while the primary risk is location mismatch.'
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: recommendation,
+    reasoningFull: reasoning,
+  })
+
+  assert.equal(vm.reasoningText, reasoning)
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel hides bare interview wording without recruiter action context', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Candidate has limited interview experience.',
+    reasoningFull: 'The candidate has relevant skills but limited interview experience for stakeholder-facing roles.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel hides bare hold wording without recruiter action context', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Candidate does not hold the required certification.',
+    reasoningFull: 'The candidate is missing the required certification.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
+test('buildExpandedCandidateDrawerViewModel hides rejected wording without recruiter decision context', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Previous role rejected campaign ideas.',
+    reasoningFull: 'The candidate previously worked in a role where campaign ideas were rejected.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
+})
+
 test('buildExpandedCandidateDrawerViewModel hides Siddharth-style duplicate recommendation while preserving AI reasoning', async () => {
   const { buildExpandedCandidateDrawerViewModel, isClearlyDuplicativeDisplayText } = await import('./candidateResultsState.js')
   const duplicate = 'Siddharth has 6.6 years of B2B SaaS marketing experience and strong sales collaboration skills, meeting the experience requirement. However, his background is heavily events and partnerships-focused, not growth and demand generation. He lacks hands-on paid acquisition (Google Ads, LinkedIn Ads, Meta Ads), funnel optimization, copywriting, and multi-channel campaign execution — all core to this role. Location mismatch (Kolkata vs. Mumbai) is an additional constraint.'
@@ -513,15 +572,48 @@ test('buildExpandedCandidateDrawerViewModel hides recommendation duplicated agai
   assert.equal(vm.recommendationText, '')
 })
 
-test('buildExpandedCandidateDrawerViewModel shows meaningful distinct recommended action', async () => {
+test('buildExpandedCandidateDrawerViewModel shows real shortlist recruiter-screen action', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
-    recommendationFull: 'Shortlist for interview; confirm relocation and Meta Ads exposure.',
+    recommendationFull: 'Shortlist for recruiter screen; confirm Mumbai relocation and Salesforce exposure.',
     reasoningFull: 'The candidate scored highly due to strong B2B growth marketing experience, lifecycle analytics, and recent paid acquisition ownership.',
   })
 
   assert.equal(vm.hasRecommendedAction, true)
-  assert.equal(vm.recommendationText, 'Shortlist for interview; confirm relocation and Meta Ads exposure.')
+  assert.equal(vm.recommendationText, 'Shortlist for recruiter screen; confirm Mumbai relocation and Salesforce exposure.')
+})
+
+test('buildExpandedCandidateDrawerViewModel shows put-on-hold action', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Put on hold until relocation status is confirmed.',
+    reasoningFull: 'The candidate may be viable if relocation is resolved.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, true)
+  assert.equal(vm.recommendationText, 'Put on hold until relocation status is confirmed.')
+})
+
+test('buildExpandedCandidateDrawerViewModel shows rejection and alternate-role action', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Reject for this role; consider for content marketing instead.',
+    reasoningFull: 'The candidate is stronger in organic content marketing than demand generation.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, true)
+  assert.equal(vm.recommendationText, 'Reject for this role; consider for content marketing instead.')
+})
+
+test('buildExpandedCandidateDrawerViewModel shows do-not-shortlist action', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendationFull: 'Do not shortlist for this role; consider for content marketing instead.',
+    reasoningFull: 'The candidate is stronger in organic content marketing than demand generation.',
+  })
+
+  assert.equal(vm.hasRecommendedAction, true)
+  assert.equal(vm.recommendationText, 'Do not shortlist for this role; consider for content marketing instead.')
 })
 
 test('buildExpandedCandidateDrawerViewModel shows recommendation when it contains reasoning plus meaningful action text', async () => {
@@ -557,7 +649,7 @@ test('buildExpandedCandidateDrawerViewModel keeps AI reasoning when recommendati
   assert.equal(vm.recommendationText, '')
 })
 
-test('buildExpandedCandidateDrawerViewModel preserves older recommendation-only analyses', async () => {
+test('buildExpandedCandidateDrawerViewModel preserves older action-oriented recommendation-only analyses', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
     recommendation: 'Proceed to recruiter screen and verify compensation expectations.',
@@ -566,6 +658,17 @@ test('buildExpandedCandidateDrawerViewModel preserves older recommendation-only 
   assert.equal(vm.reasoningText, 'Reasoning unavailable for this profile.')
   assert.equal(vm.hasRecommendedAction, true)
   assert.equal(vm.recommendationText, 'Proceed to recruiter screen and verify compensation expectations.')
+})
+
+test('buildExpandedCandidateDrawerViewModel hides older reasoning-like recommendation-only analyses', async () => {
+  const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
+  const vm = buildExpandedCandidateDrawerViewModel({
+    recommendation: 'Candidate has 6.4 years of B2B SaaS demand generation experience and demonstrates mastery of required channels.',
+  })
+
+  assert.equal(vm.reasoningText, 'Reasoning unavailable for this profile.')
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
 })
 
 test('buildExpandedCandidateDrawerViewModel handles malformed recommendation and reasoning values safely', async () => {
@@ -588,7 +691,8 @@ test('buildExpandedCandidateDrawerViewModel preserves narrative text without app
     considerations: ['Can relocate to NY'],
   })
 
-  assert.equal(vm.recommendationText, 'Strong fit for SQL')
+  assert.equal(vm.hasRecommendedAction, false)
+  assert.equal(vm.recommendationText, '')
   assert.deepEqual(vm.candidateStrengths, ['Hands-on AWS'])
   assert.deepEqual(vm.candidateConsiderations, ['Can relocate to NY'])
 })

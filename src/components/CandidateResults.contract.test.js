@@ -67,6 +67,40 @@ test('normalized CandidateResults payload still suppresses duplicate recommendat
   assert.equal(detailVm.recommendationText, '')
 })
 
+test('normalized CandidateResults payload suppresses non-duplicate reasoning-like recommendation in drawer view-model', () => {
+  const recommendation = 'Aanya exceeds the 4-7 year requirement with 6.4 years of direct B2B SaaS demand generation experience. She demonstrates mastery of required channels including paid acquisition, lifecycle marketing, and funnel analytics. Primary risk is location mismatch because she is based outside Mumbai.'
+  const reasoning = 'Aanya is ranked highly because her 6.4 years of B2B SaaS demand generation experience aligns with the role. She has strong paid acquisition, lifecycle marketing, and funnel analytics experience, while the primary risk is location mismatch.'
+  const { candidates } = normalizeCandidateResultsPayload({
+    candidates: [{
+      id: 'aanya-example',
+      name: 'Aanya Example',
+      recommendationFull: recommendation,
+      matchScore: { score: 86, reason: reasoning },
+    }],
+  })
+  const detailVm = buildExpandedCandidateDrawerViewModel(candidates[0])
+
+  assert.equal(detailVm.reasoningText, reasoning)
+  assert.equal(detailVm.hasRecommendedAction, false)
+  assert.equal(detailVm.recommendationText, '')
+})
+
+test('normalized CandidateResults payload keeps clear action-oriented recommendation in drawer view-model', () => {
+  const action = 'Shortlist for recruiter screen; confirm Mumbai relocation and Salesforce exposure.'
+  const { candidates } = normalizeCandidateResultsPayload({
+    candidates: [{
+      id: 'action-example',
+      name: 'Action Example',
+      recommendationFull: action,
+      matchScore: { score: 86, reason: 'Candidate ranks highly because of relevant B2B demand generation experience.' },
+    }],
+  })
+  const detailVm = buildExpandedCandidateDrawerViewModel(candidates[0])
+
+  assert.equal(detailVm.hasRecommendedAction, true)
+  assert.equal(detailVm.recommendationText, action)
+})
+
 test('CandidateResults title contract: analysis title does not fall back to job description fields', () => {
   assert.match(candidateResultsSource, /return resolved \|\| 'Analysis Results'/)
   assert.match(
