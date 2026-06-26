@@ -225,6 +225,33 @@ test('shortlist add flow supports create-or-select destination inline', () => {
   assert.match(candidateResultsSource, /isCreatingShortlistInAddFlow/)
 })
 
+
+test('drawer add to shortlist opens reusable modal with exactly one candidate and no preselected shortlist requirement', () => {
+  assert.match(candidateResultsSource, /const \[addModalCandidates, setAddModalCandidates\] = useState\(\[\]\)/)
+  assert.match(candidateResultsSource, /const openAddToShortlistModal = useCallback\(\(candidatesToAdd\) => \{\s*const nextCandidates = Array\.isArray\(candidatesToAdd\) \? candidatesToAdd\.filter\(Boolean\) : \[\]\s*setAddModalCandidates\(nextCandidates\)\s*setIsAddModalOpen\(nextCandidates\.length > 0\)/s)
+  assert.match(candidateResultsSource, /onClick=\{\(\) => openAddToShortlistModal\(\[candidate\]\)\}>Add to shortlist/)
+  assert.doesNotMatch(candidateResultsSource, /onClick=\{\(\) => addCandidateToShortlist\(candidate\)\}>Add to shortlist/)
+})
+
+test('bulk add to shortlist continues to use the same modal with selected candidates', () => {
+  assert.match(candidateResultsSource, /onClick=\{\(\) => openAddToShortlistModal\(selectedCandidates\)\}/)
+  assert.match(candidateResultsSource, /<AddToShortlistModal[\s\S]*candidates=\{addModalCandidates\}/)
+  assert.match(candidateResultsSource, /setSelectedIds\(\[\]\)/)
+})
+
+test('shortlist modal candidate snapshots preserve candidate and resume identity fields', () => {
+  assert.match(candidateResultsSource, /resolveCandidateKey/)
+  assert.match(candidateResultsSource, /resolveCandidateResumeUuid\(candidate\)/)
+  assert.match(candidateResultsSource, /candidate\?\.resumeId \|\| candidate\?\.resume_id \|\| candidate\?\.id/)
+  assert.match(candidateResultsSource, /candidate\?\.name \|\| candidate\?\.filename \|\| candidate\?\.resumeName/)
+})
+
+test('schedule interview drawer action is disabled with coming soon copy instead of a dead active button', () => {
+  assert.match(candidateResultsSource, /<button className="hf-btn hf-btn--primary dd-btn-primary" type="button" disabled title="Interview scheduling is coming soon" aria-disabled="true">Schedule interview · Coming soon<\/button>/)
+  assert.match(candidateResultsStyles, /\.dd-btn-primary/)
+  assert.match(candidateResultsSource, /className="hf-btn hf-btn--primary dd-btn-primary"/)
+})
+
 test('legacy shortlist add path still invokes single-candidate flow when shortlist id exists', () => {
   assert.match(candidateResultsSource, /if \(!shortlistV2Enabled\) \{\s*let fallbackSuccessCount = 0\s*for \(const candidate of selected\) \{\s*\/\/ Preserve legacy single-candidate shortlist flow when v2 is disabled\.\s*const ok = await addCandidateToShortlist\(candidate(?:, destinationShortlistId)?\)/s)
 })

@@ -622,6 +622,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [shortlistError, setShortlistError] = useState('')
   const [shortlistNotice, setShortlistNotice] = useState('')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [addModalCandidates, setAddModalCandidates] = useState([])
   const [tagDraft, setTagDraft] = useState('')
   const [candidateTags, setCandidateTags] = useState({})
   const [selectedTagFilters, setSelectedTagFilters] = useState([])
@@ -812,6 +813,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     setIsCreatingShortlistInAddFlow(false)
     return ''
   }, [selectedShortlistId])
+
+  const openAddToShortlistModal = useCallback((candidatesToAdd) => {
+    const nextCandidates = Array.isArray(candidatesToAdd) ? candidatesToAdd.filter(Boolean) : []
+    setAddModalCandidates(nextCandidates)
+    setIsAddModalOpen(nextCandidates.length > 0)
+  }, [])
+
+  const closeAddToShortlistModal = useCallback(() => {
+    setIsAddModalOpen(false)
+    setAddModalCandidates([])
+  }, [])
 
   const addSelectedCandidatesToShortlist = useCallback(async (selected) => {
     let destinationShortlistId = selectedShortlistId
@@ -1365,7 +1377,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         <BulkActions selectedCount={selectedCandidates.length}>
           <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button"><Upload size={18} strokeWidth={1.5} aria-hidden="true" />Export CSV</button>
           <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
-          <button className="touch-target bulk-btn" onClick={() => setIsAddModalOpen(true)} type="button"><Star size={18} strokeWidth={1.5} aria-hidden="true" />Add to shortlist</button>
+          <button className="touch-target bulk-btn" onClick={() => openAddToShortlistModal(selectedCandidates)} type="button"><Star size={18} strokeWidth={1.5} aria-hidden="true" />Add to shortlist</button>
           <button className="touch-target bulk-btn" onClick={() => sendFeedbackForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Send Feedback</button>
           <button className="touch-target bulk-btn" onClick={createShareLink} type="button"><Share2 size={18} strokeWidth={1.5} aria-hidden="true" />Share View</button>
           <input
@@ -1385,8 +1397,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
       <AddToShortlistModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        candidates={selectedCandidates}
+        onClose={closeAddToShortlistModal}
+        candidates={addModalCandidates}
         jobContext={{ jobDescriptionId: parseMeta?.jobDescriptionId || null, jobTitle: analysisTitle, analysisId }}
         shortlistV2Enabled={shortlistV2Enabled}
         addCandidateToShortlistLegacy={addCandidateToShortlist}
@@ -1400,6 +1412,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           setSelectedShortlistId(destinationShortlistId)
           await Promise.all([loadShortlists(), loadShortlistDetails(destinationShortlistId)])
           setSelectedIds([])
+          setAddModalCandidates([])
         }}
       />
 
@@ -1592,8 +1605,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             {detailVm.confidenceLabel && <div className="dd-confidence">{detailVm.confidenceLabel}</div>}
           </div>
           <div className="dd-header-actions">
-            <button className="hf-btn hf-btn--primary dd-btn-primary" type="button">Schedule interview</button>
-            <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => addCandidateToShortlist(candidate)}>Add to shortlist</button>
+            <button className="hf-btn hf-btn--primary dd-btn-primary" type="button" disabled title="Interview scheduling is coming soon" aria-disabled="true">Schedule interview · Coming soon</button>
+            <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openAddToShortlistModal([candidate])}>Add to shortlist</button>
             <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }}>
               <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
             </button>
