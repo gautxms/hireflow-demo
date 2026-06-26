@@ -1451,7 +1451,7 @@
   color: var(--color-text-muted);
 }
 
-.dd-score-panel--strong .dd-score, .dd-fit--strong { color: var(--hf-score-strong, #c8ff00); }
+.dd-score-panel--strong .dd-score, .dd-fit--strong { color: var(--color-success); }
 .dd-score-panel--possible .dd-score, .dd-fit--possible { color: var(--hf-score-possible, #f59e0b); }
 .dd-score-panel--low .dd-score, .dd-fit--low { color: var(--hf-score-low, #ef4444); }
 .dd-score-panel--unscored .dd-score, .dd-fit--unscored { color: var(--color-text-muted); }
@@ -2138,7 +2138,8 @@
 .dd-analysis-item,
 .dd-list-item span { overflow-wrap: anywhere; }
 
-.rc-fit--strong, .dd-fit--strong { color: var(--hf-score-strong); }
+.rc-fit--strong { color: var(--hf-score-strong, var(--hf-lime)); }
+.dd-fit--strong { color: var(--color-success); }
 .rc-fit--possible, .dd-fit--possible { color: var(--hf-score-possible); }
 .rc-fit--low, .dd-fit--low { color: var(--hf-score-low); }
 

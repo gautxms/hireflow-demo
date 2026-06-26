@@ -222,19 +222,25 @@ test('skill gap warning pills resolve to canonical amber status tokens', () => {
   assert.doesNotMatch(candidateResultsStyles, /\.dd-top-skill--warn\s*\{[^}]*var\(--hf-score-possible\)/)
 })
 
-test('expanded drawer first-column section order keeps recommendation before key facts for recruiter scanning', () => {
+test('expanded drawer first-column section order keeps score breakdown after summary and before key facts', () => {
   const summaryIndex = candidateResultsSource.indexOf('title="Summary"')
+  const scoreBreakdownIndex = candidateResultsSource.indexOf('title="Score breakdown"')
   const recommendationIndex = candidateResultsSource.indexOf('title="Recommended action"')
   const keyFactsIndex = candidateResultsSource.indexOf('title="Key facts"')
   const reasoningIndex = candidateResultsSource.indexOf('title="AI reasoning"')
+  const secondColumnIndex = candidateResultsSource.indexOf('title="Matched skills"')
 
   assert.ok(summaryIndex !== -1)
+  assert.ok(scoreBreakdownIndex !== -1)
   assert.ok(recommendationIndex !== -1)
   assert.ok(keyFactsIndex !== -1)
   assert.ok(reasoningIndex !== -1)
-  assert.ok(summaryIndex < recommendationIndex)
+  assert.ok(secondColumnIndex !== -1)
+  assert.ok(summaryIndex < scoreBreakdownIndex)
+  assert.ok(scoreBreakdownIndex < recommendationIndex)
   assert.ok(recommendationIndex < keyFactsIndex)
   assert.ok(keyFactsIndex < reasoningIndex)
+  assert.ok(scoreBreakdownIndex < secondColumnIndex)
 })
 
 test('score breakdown rows include Skill Match, Experience, Education, and conditional Role Alignment', () => {
@@ -280,10 +286,19 @@ test('shortlist modal candidate snapshots preserve candidate and resume identity
   assert.match(candidateResultsSource, /candidate\?\.name \|\| candidate\?\.filename \|\| candidate\?\.resumeName/)
 })
 
-test('schedule interview drawer action is disabled with coming soon copy instead of a dead active button', () => {
-  assert.match(candidateResultsSource, /<button className="hf-btn hf-btn--primary dd-btn-primary" type="button" disabled title="Interview scheduling is coming soon" aria-disabled="true">Schedule interview · Coming soon<\/button>/)
-  assert.match(candidateResultsStyles, /\.dd-btn-primary/)
-  assert.match(candidateResultsSource, /className="hf-btn hf-btn--primary dd-btn-primary"/)
+test('drawer header removes schedule interview while preserving shortlist and resume actions', () => {
+  assert.doesNotMatch(candidateResultsSource, /Schedule interview|Interview scheduling is coming soon/)
+  assert.match(candidateResultsSource, /onClick=\{\(\) => openAddToShortlistModal\(\[candidate\]\)\}>Add to shortlist/)
+  assert.match(candidateResultsSource, /openCandidateResumeInNewTab\(candidate\)/)
+  assert.match(candidateResultsSource, /aria-label="Close candidate details"/)
+})
+
+test('strong drawer match styling uses success token while possible and low remain status colors', () => {
+  assert.match(candidateResultsSource, /dd-fit-label dd-fit--\$\{detailVm\.scoreTier\}/)
+  assert.match(candidateResultsStyles, /\.dd-score-panel--strong \.dd-score, \.dd-fit--strong \{ color:\s*var\(--color-success\); \}/)
+  assert.match(candidateResultsStyles, /\.dd-score-panel--possible \.dd-score, \.dd-fit--possible \{ color:\s*var\(--hf-score-possible/)
+  assert.match(candidateResultsStyles, /\.dd-score-panel--low \.dd-score, \.dd-fit--low \{ color:\s*var\(--hf-score-low/)
+  assert.match(designTokens, /--color-success:\s*var\(--hf-status-success\)/)
 })
 
 test('legacy shortlist add path still invokes single-candidate flow when shortlist id exists', () => {
