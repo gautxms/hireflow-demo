@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import './AuthPage.css'
 import BackButton from './BackButton'
 import API_BASE from '../config/api'
@@ -17,6 +18,7 @@ async function parseResponsePayload(response) {
 export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPassword, promptMessage, onNavigateToVerifyEmail }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [emailNotVerified, setEmailNotVerified] = useState(false)
@@ -119,7 +121,20 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
           <input className="auth-input" id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
           <label className="auth-label" htmlFor="login-password">Password</label>
-          <input className="auth-input" id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <div className="auth-input-with-action">
+            <input className="auth-input" id="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+            <button
+              className="auth-input-action"
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              title={showPassword ? 'Hide password' : 'Show password'}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => setShowPassword((visible) => !visible)}
+            >
+              {showPassword ? <EyeOff size={18} strokeWidth={1.5} /> : <Eye size={18} strokeWidth={1.5} />}
+            </button>
+          </div>
 
           <p className="auth-row auth-row--right">
             <button className="auth-link" type="button" onClick={onForgotPassword}>Forgot password?</button>
