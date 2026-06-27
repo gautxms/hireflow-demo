@@ -1,4 +1,4 @@
-export const ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL = 'Analyze without Job Description'
+export const ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL = 'No job selected (no ranking)'
 
 export function toOptionalJobDescriptionId(selectedJobDescriptionId) {
   const normalized = String(selectedJobDescriptionId || '').trim()
