@@ -31,6 +31,7 @@ export default function CandidateFilters({
   shortlistOpen = false,
   onToggleShortlist,
   shortlistEnabled = true,
+  hideMatchSort = false,
 }) {
   const [skillSearch, setSkillSearch] = useState('')
   const [showAllSkills, setShowAllSkills] = useState(false)
@@ -153,10 +154,10 @@ export default function CandidateFilters({
         <select
           className="touch-target filter-sort-select"
           aria-label="Sort candidates"
-          value={sortBy}
+          value={hideMatchSort && normalizeSortBy(sortBy) === 'match_score' ? 'upload_date' : sortBy}
           onChange={(event) => onSort?.(normalizeSortBy(event.target.value))}
         >
-          <option value="match_score">Best match</option>
+          {!hideMatchSort && <option value="match_score">Best match</option>}
           <option value="name">Name A–Z</option>
           <option value="experience">Most experienced</option>
           <option value="upload_date">Recently added</option>

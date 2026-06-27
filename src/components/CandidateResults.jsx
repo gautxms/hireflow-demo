@@ -517,9 +517,26 @@ function hasMeaningfulJobSignal(value) {
   return Boolean(value)
 }
 
+function hasExplicitNoJobMarker(candidate) {
+  if (!candidate || typeof candidate !== 'object') return false
+  const missingReasonMarkers = [
+    candidate?.matchScoreReason,
+    candidate?.match_score_reason,
+    candidate?.missingReason,
+    candidate?.missing_reason,
+    candidate?.jobDescriptionMissingReason,
+    candidate?.job_description_missing_reason,
+  ]
+
+  return candidate?.fit_assessment?.has_job_description_context === false
+    || candidate?.fitAssessment?.hasJobDescriptionContext === false
+    || candidate?.hasJobDescription === false
+    || candidate?.has_job_description === false
+    || missingReasonMarkers.some((value) => String(value || '').trim().toLowerCase() === 'job_description_missing')
+}
+
 function detectHasSelectedJob(parseMeta = {}, candidates = []) {
-  const firstCandidate = Array.isArray(candidates) && candidates.length > 0 ? candidates[0] : null
-  const explicitNoJob = parseMeta?.hasJobDescription === false
+  const candidateList = Array.isArray(candidates) ? candidates : []
   const jobSignals = [
     parseMeta?.jobDescriptionId,
     parseMeta?.jobId,
@@ -528,15 +545,19 @@ function detectHasSelectedJob(parseMeta = {}, candidates = []) {
     parseMeta?.jobDescriptionTitle,
     parseMeta?.jobTitle,
     parseMeta?.hasJobDescription,
-    firstCandidate?.jobDescriptionId,
-    firstCandidate?.jobId,
-    firstCandidate?.jobDescription,
-    firstCandidate?.jobDescriptionTitle,
-    firstCandidate?.job_title,
+    ...candidateList.flatMap((candidate) => [
+      candidate?.jobDescriptionId,
+      candidate?.jobId,
+      candidate?.jobDescription,
+      candidate?.jobDescriptionTitle,
+      candidate?.job_title,
+    ]),
   ]
 
   if (jobSignals.some(hasMeaningfulJobSignal)) return true
-  return explicitNoJob ? false : true
+  if (parseMeta?.hasJobDescription === false) return false
+  if (candidateList.some(hasExplicitNoJobMarker)) return false
+  return true
 }
 
 function ResumeOnlyRankingBanner({ onDismiss }) {
@@ -1372,7 +1393,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         searchText={searchText}
         selectedSkills={selectedSkills}
         expRange={expRange}
-        sortBy={sortBy}
+        sortBy={isResumeOnlyAnalysis && normalizeSortBy(sortBy) === 'match_score' ? 'upload_date' : sortBy}
+        hideMatchSort={isResumeOnlyAnalysis}
         onSearch={setSearchText}
         onSkillsFilter={setSelectedSkills}
         onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 50 }))}
