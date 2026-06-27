@@ -1672,20 +1672,22 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
             </div>
           </div>
-          {hasSelectedJob && <div className={`dd-score-panel dd-score-panel--${detailVm.scoreTier}`}>
-            <div className="dd-score">
-              {detailVm.hasDisplayScore ? detailVm.displayScore : '—'}<span>{detailVm.hasDisplayScore ? '/10' : ''}</span>
-            </div>
-            <div className={`dd-fit-label dd-fit--${detailVm.scoreTier}`}>{detailVm.verdictLabel}</div>
-            {detailVm.confidenceLabel && <div className="dd-confidence">{detailVm.confidenceLabel}</div>}
-          </div>}
+          <div className="dd-header-middle" aria-hidden={!hasSelectedJob ? 'true' : undefined}>
+            {hasSelectedJob && <div className={`dd-score-panel dd-score-panel--${detailVm.scoreTier}`}>
+              <div className="dd-score">
+                {detailVm.hasDisplayScore ? detailVm.displayScore : '—'}<span>{detailVm.hasDisplayScore ? '/10' : ''}</span>
+              </div>
+              <div className={`dd-fit-label dd-fit--${detailVm.scoreTier}`}>{detailVm.verdictLabel}</div>
+              {detailVm.confidenceLabel && <div className="dd-confidence">{detailVm.confidenceLabel}</div>}
+            </div>}
+          </div>
           <div className="dd-header-actions">
             <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openAddToShortlistModal([candidate])}>Add to shortlist</button>
-            <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }}>
+            <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }} aria-label="Open resume" title="Open resume">
               <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
             </button>
+            <button className="hf-btn hf-btn--ghost hf-btn--icon dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
           </div>
-          <button className="hf-btn hf-btn--ghost hf-btn--icon dd-close" type="button" onClick={() => setExpandedId(null)} aria-label="Close candidate details"><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
         </div>
 
         <div className="dd-body">

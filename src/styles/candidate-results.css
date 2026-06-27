@@ -1374,9 +1374,9 @@
 
  .dd-header {
   display: grid;
-  grid-template-columns: minmax(260px, 1.25fr) auto minmax(250px, auto) auto;
+  grid-template-columns: minmax(320px, 1fr) minmax(220px, auto) auto;
   align-items: center;
-  gap: 14px;
+  gap: 18px;
   margin-bottom: 14px;
   padding: 4px 0 18px;
   border-bottom: 1px solid var(--color-border);
@@ -1436,6 +1436,12 @@
   color: var(--color-text-secondary);
 }
 
+.dd-header-middle {
+  display: flex;
+  justify-content: center;
+  min-width: 220px;
+}
+
 .dd-score-panel { text-align: center; min-width: 140px; }
 
 .dd-score {
@@ -1468,7 +1474,14 @@
   margin-top: 2px;
 }
 
-.dd-header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.dd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  justify-self: end;
+}
 
 .dd-btn-primary,
 .dd-btn-ghost {
@@ -1537,20 +1550,17 @@
     align-items: flex-start;
   }
 
-  .dd-score-panel,
-  .dd-header-actions {
+  .dd-header-middle,
+  .dd-score-panel {
+    min-width: 0;
     text-align: left;
     justify-content: flex-start;
   }
 
   .dd-header-actions {
-    width: 100%;
+    justify-self: start;
+    justify-content: flex-start;
     gap: 6px;
-  }
-
-  .dd-header-actions .hf-btn {
-    flex: 1 1 160px;
-    min-width: 0;
   }
 
   .dd-name {
@@ -2149,8 +2159,8 @@
 @media (max-width: 900px) {
   .dd-header { gap: 12px; }
   .dd-header-actions { width: 100%; flex-wrap: wrap; }
-  .dd-header-actions .hf-btn { flex: 1 1 180px; }
-  .dd-close { margin-left: auto; }
+  .dd-header-actions .hf-btn { flex: 0 1 auto; }
+  .dd-header-actions .dd-btn-ghost:not(.hf-btn--icon) { flex: 1 1 180px; }
 }
 
 .candidate-results-page__tag-filter {
