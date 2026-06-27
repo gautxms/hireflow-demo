@@ -9,6 +9,10 @@ import '../styles/checkout.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString() : '—'
+}
+
 const CANCEL_REASONS = [
   'Too expensive',
   'Missing key feature',
@@ -16,13 +20,13 @@ const CANCEL_REASONS = [
   'Switching to competitor',
 ]
 
-function Modal({ title, children, onClose }) {
+function Modal({ title, children, onClose, isPending = false }) {
   return (
-    <div className="billing-modal">
-      <div className="billing-modal__card">
+    <div className="billing-modal" role="presentation">
+      <div className="billing-modal__card" role="dialog" aria-modal="true" aria-labelledby="billing-modal-title">
         <div className="billing-modal__header">
-          <h3 className="billing-modal__title">{title}</h3>
-          <button type="button" onClick={onClose} className="billing-modal__close hf-btn hf-btn--secondary">✕</button>
+          <h3 id="billing-modal-title" className="billing-modal__title">{title}</h3>
+          <button type="button" onClick={onClose} className="billing-modal__close hf-btn hf-btn--secondary" disabled={isPending}>Close</button>
         </div>
         <div className="billing-modal__body">{children}</div>
       </div>
@@ -39,6 +43,9 @@ export default function BillingPage() {
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [targetPlan, setTargetPlan] = useState('monthly')
   const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0])
+  const [actionFeedback, setActionFeedback] = useState({ type: '', message: '' })
+  const [isChangingPlan, setIsChangingPlan] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
 
   usePageSeo('Billing & Subscription', 'Manage your subscription, invoices, and billing settings.')
 
@@ -104,43 +111,65 @@ export default function BillingPage() {
   }, [subscription, targetPlan])
 
   async function changePlan() {
-    const response = await fetch(`${API_BASE}/subscriptions/change-plan`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ targetPlan }),
-    })
+    if (isChangingPlan) return
 
-    const payload = await response.json()
+    try {
+      setIsChangingPlan(true)
+      setActionFeedback({ type: '', message: '' })
+      const response = await fetch(`${API_BASE}/subscriptions/change-plan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ targetPlan }),
+      })
 
-    if (!response.ok) {
-      throw new Error(payload.error || 'Unable to update plan')
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to update plan')
+      }
+
+      setPlanModalOpen(false)
+      setActionFeedback({ type: 'success', message: payload.message || 'Plan updated successfully.' })
+      await loadBilling()
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Unable to update plan' })
+    } finally {
+      setIsChangingPlan(false)
     }
-
-    setPlanModalOpen(false)
-    await loadBilling()
   }
 
   async function cancelSubscription() {
-    const response = await fetch(`${API_BASE}/subscriptions/cancel`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ reason: cancelReason, acceptOffer: false }),
-    })
+    if (isCancelling) return
 
-    const payload = await response.json()
+    try {
+      setIsCancelling(true)
+      setActionFeedback({ type: '', message: '' })
+      const response = await fetch(`${API_BASE}/subscriptions/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: cancelReason, acceptOffer: false }),
+      })
 
-    if (!response.ok) {
-      throw new Error(payload.error || 'Unable to cancel subscription')
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to cancel subscription')
+      }
+
+      setCancelModalOpen(false)
+      setActionFeedback({ type: 'success', message: payload.message || 'Subscription cancellation confirmed.' })
+      await loadBilling()
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Unable to cancel subscription' })
+    } finally {
+      setIsCancelling(false)
     }
-
-    setCancelModalOpen(false)
-    await loadBilling()
   }
 
   async function downloadInvoice(invoiceId) {
@@ -190,19 +219,28 @@ export default function BillingPage() {
         {!error && subscription && canShowBillingPage ? (
           <>
             <article className="billing-page__card">
-              <h2 className="billing-page__plan-title">Current Plan</h2>
-              <p className="billing-page__line"><strong>{subscription.planLabel || subscriptionState.planLabel}</strong>{subscription.costFormatted ? ` — ${subscription.costFormatted}` : ''}</p>
-              <p className="billing-page__meta">Renewal date: {subscription.renewalDate ? new Date(subscription.renewalDate).toLocaleDateString() : '—'}</p>
-              <p className="billing-page__meta">Next billing: {subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toLocaleDateString() : '—'}</p>
-              <p className="billing-page__meta">Payment method: {subscription.paymentMethod}</p>
-              <p className="billing-page__meta">Status: {subscription.status}</p>
+              <div className="billing-page__card-header">
+                <div>
+                  <p className="billing-page__eyebrow">Current Plan</p>
+                  <h2 className="billing-page__plan-title">{subscription.planLabel || subscriptionState.planLabel}</h2>
+                </div>
+                <span className="billing-page__status-badge">{subscriptionState.statusLabel}</span>
+              </div>
+              <p className="billing-page__line">{subscription.costFormatted || '—'} <span>{subscription.plan ? `per ${subscription.plan === 'annual' ? 'year' : 'month'}` : ''}</span></p>
+              <div className="billing-page__meta-grid">
+                <p className="billing-page__meta"><span>Renewal date</span>{formatDate(subscription.renewalDate)}</p>
+                <p className="billing-page__meta"><span>Next billing</span>{formatDate(subscription.nextBillingDate)}</p>
+                <p className="billing-page__meta"><span>Payment method</span>{subscription.paymentMethod || 'Managed securely in Paddle'}</p>
+                <p className="billing-page__meta"><span>Cancellation effective</span>{formatDate(subscription.cancellationEffectiveAt)}</p>
+              </div>
+              {actionFeedback.message ? <p className={`billing-page__feedback billing-page__feedback--${actionFeedback.type}`} role={actionFeedback.type === 'error' ? 'alert' : 'status'}>{actionFeedback.message}</p> : null}
 
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
-                  <button type="button" className="hf-btn hf-btn--primary" onClick={() => { setTargetPlan(subscription.plan === 'monthly' ? 'annual' : 'monthly'); setPlanModalOpen(true) }}>
+                  <button type="button" className="hf-btn hf-btn--primary" onClick={() => { setActionFeedback({ type: '', message: '' }); setTargetPlan(subscription.plan === 'monthly' ? 'annual' : 'monthly'); setPlanModalOpen(true) }}>
                     {subscription.plan === 'monthly' ? 'Upgrade to annual' : 'Downgrade to monthly'}
                   </button>
-                  <button type="button" className="hf-btn hf-btn--destructive" onClick={() => setCancelModalOpen(true)} disabled={subscription.status === 'cancelled'}>
+                  <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }} disabled={subscriptionState.isCanceled}>
                     Cancel subscription
                   </button>
                 </div>
@@ -225,10 +263,10 @@ export default function BillingPage() {
                     <tr><td colSpan={4} className="billing-page__table-cell--empty"><StatePattern kind="empty" compact title="No invoices yet" description="Invoices will appear after your first successful billing cycle." /></td></tr>
                   ) : history.map((row) => (
                     <tr key={row.id}>
-                      <td className="billing-page__table-cell--pad">{new Date(row.date).toLocaleDateString()}</td>
-                      <td>{row.amountFormatted}</td>
-                      <td>{row.status}</td>
-                      <td>
+                      <td className="billing-page__table-cell--pad" data-label="Date">{formatDate(row.date)}</td>
+                      <td className="billing-page__table-cell--pad" data-label="Amount">{row.amountFormatted}</td>
+                      <td className="billing-page__table-cell--pad" data-label="Status"><span className="billing-page__invoice-status">{row.status}</span></td>
+                      <td className="billing-page__table-cell--pad" data-label="Invoice">
                         <button type="button" className="hf-btn hf-btn--secondary" onClick={() => downloadInvoice(row.id)} disabled={!row.canDownload}>Download PDF</button>
                       </td>
                     </tr>
@@ -241,27 +279,27 @@ export default function BillingPage() {
       </section>
 
       {planModalOpen ? (
-        <Modal title="Confirm plan change" onClose={() => setPlanModalOpen(false)}>
+        <Modal title="Confirm plan change" onClose={() => setPlanModalOpen(false)} isPending={isChangingPlan}>
           <p>{switchingLabel}</p>
           <p className="billing-modal__muted">
             Upgrades apply prorated credits immediately. Downgrades take effect at the next billing date.
           </p>
           <div className="billing-modal__actions">
-            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan}>Confirm</button>
+            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan} disabled={isChangingPlan}>{isChangingPlan ? 'Updating plan…' : 'Confirm'}</button>
           </div>
         </Modal>
       ) : null}
 
       {cancelModalOpen ? (
-        <Modal title="Cancel subscription" onClose={() => setCancelModalOpen(false)}>
+        <Modal title="Cancel subscription" onClose={() => setCancelModalOpen(false)} isPending={isCancelling}>
           <p>If you cancel, access remains active through the end of your current billing period.</p>
           <p className="billing-modal__muted">Before you go: Contact support for a retention discount.</p>
           <label htmlFor="cancel-reason">Reason</label>
-          <select id="cancel-reason" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="billing-modal__select">
+          <select id="cancel-reason" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="billing-modal__select" disabled={isCancelling}>
             {CANCEL_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
           </select>
           <div className="billing-modal__actions">
-            <button type="button" className="hf-btn hf-btn--destructive" onClick={cancelSubscription}>Confirm cancellation</button>
+            <button type="button" className="hf-btn hf-btn--destructive" onClick={cancelSubscription} disabled={isCancelling}>{isCancelling ? 'Cancelling…' : 'Confirm cancellation'}</button>
           </div>
         </Modal>
       ) : null}

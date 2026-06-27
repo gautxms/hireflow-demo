@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import API_BASE from '../config/api'
 import { openCookiePreferences } from '../privacy/cookieConsent'
+import { resolveSubscriptionState } from '../utils/subscriptionState'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -46,6 +47,8 @@ export default function AccountSettingsPage() {
 
   const token = useMemo(() => localStorage.getItem(TOKEN_STORAGE_KEY), [])
   const isProfileDirty = Boolean(profile) && (company !== (profile.company || '') || phone !== (profile.phone || ''))
+  const subscriptionState = useMemo(() => resolveSubscriptionState({ user: profile }), [profile])
+  const billingPrimaryHref = subscriptionState.isFree ? '/pricing' : '/billing'
 
   const pushToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -301,7 +304,11 @@ export default function AccountSettingsPage() {
           </label>
 
           <div className="type-small account-settings-note account-settings-note--readonly">
-            To change subscription, visit <a href="/pricing">Billing</a>.
+            {subscriptionState.isFree ? (
+              <>To start a subscription, visit <a href="/pricing">Pricing</a>.</>
+            ) : (
+              <>To manage your subscription, visit <a href="/billing">Billing &amp; Plans</a>.</>
+            )}
           </div>
 
           {isProfileDirty && (
@@ -367,8 +374,12 @@ export default function AccountSettingsPage() {
         <h2 className="type-h2 account-settings-card-title">Billing</h2>
         <p className="type-body account-settings-card-helper">Manage plan, invoices, and renewal details from Billing &amp; Plans.</p>
         <div className="account-settings-actions">
-          <a className="type-button account-settings-button" href="/billing">Open Billing &amp; Plans</a>
-          <a className="type-button account-settings-button" href="/pricing">View plan options</a>
+          <a className="type-button account-settings-button" href={billingPrimaryHref}>
+            {subscriptionState.isFree ? 'View pricing' : 'Open Billing &amp; Plans'}
+          </a>
+          <a className="type-button account-settings-button" href={subscriptionState.isFree ? '/pricing' : '/billing'}>
+            {subscriptionState.isFree ? 'Compare plan options' : 'Manage plan'}
+          </a>
         </div>
       </section>
 
