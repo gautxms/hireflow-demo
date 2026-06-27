@@ -319,6 +319,26 @@ test('drawer header removes schedule interview while preserving shortlist and re
   assert.match(candidateResultsSource, /aria-label="Close candidate details"/)
 })
 
+test('drawer header keeps shortlist, resume, and close controls in one right action cluster', () => {
+  const headerStart = candidateResultsSource.indexOf('<div className="dd-header">')
+  const headerEnd = candidateResultsSource.indexOf('<div className="dd-body">', headerStart)
+  const headerSource = candidateResultsSource.slice(headerStart, headerEnd)
+  const actionsStart = headerSource.indexOf('<div className="dd-header-actions">')
+  const actionsEnd = headerSource.indexOf('</div>', actionsStart)
+  const actionsSource = headerSource.slice(actionsStart, actionsEnd)
+
+  assert.ok(headerStart >= 0)
+  assert.ok(headerEnd > headerStart)
+  assert.match(headerSource, /className="dd-header-left"/)
+  assert.match(headerSource, /className="dd-header-middle"/)
+  assert.match(headerSource, /className="dd-header-actions"/)
+  assert.match(actionsSource, /openAddToShortlistModal\(\[candidate\]\)/)
+  assert.match(actionsSource, /openCandidateResumeInNewTab\(candidate\)/)
+  assert.match(actionsSource, /aria-label="Close candidate details"/)
+  assert.match(candidateResultsStyles, /grid-template-columns:\s*minmax\(320px, 1fr\) minmax\(220px, auto\) auto/)
+  assert.match(candidateResultsStyles, /\.dd-header-actions\s*\{[^}]*flex-wrap:\s*nowrap/s)
+})
+
 test('strong drawer match styling uses success token while possible and low remain status colors', () => {
   assert.match(candidateResultsSource, /dd-fit-label dd-fit--\$\{detailVm\.scoreTier\}/)
   assert.match(candidateResultsStyles, /\.dd-score-panel--strong \.dd-score, \.dd-fit--strong \{ color:\s*var\(--color-success\); \}/)
