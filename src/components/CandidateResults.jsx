@@ -504,6 +504,76 @@ function deriveResumeIntegrityChecks(candidate, hasDisplayScore) {
   return deduped
 }
 
+
+function hasMeaningfulJobSignal(value) {
+  if (value == null) return false
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return Boolean(normalized) && !['null', 'undefined', 'none', 'no job description'].includes(normalized)
+  }
+  if (typeof value === 'object') return hasRenderableContent(value)
+  return Boolean(value)
+}
+
+function hasExplicitNoJobMarker(candidate) {
+  if (!candidate || typeof candidate !== 'object') return false
+  const missingReasonMarkers = [
+    candidate?.matchScoreReason,
+    candidate?.match_score_reason,
+    candidate?.missingReason,
+    candidate?.missing_reason,
+    candidate?.jobDescriptionMissingReason,
+    candidate?.job_description_missing_reason,
+  ]
+
+  return candidate?.fit_assessment?.has_job_description_context === false
+    || candidate?.fitAssessment?.hasJobDescriptionContext === false
+    || candidate?.hasJobDescription === false
+    || candidate?.has_job_description === false
+    || missingReasonMarkers.some((value) => String(value || '').trim().toLowerCase() === 'job_description_missing')
+}
+
+function detectHasSelectedJob(parseMeta = {}, candidates = []) {
+  const candidateList = Array.isArray(candidates) ? candidates : []
+  const jobSignals = [
+    parseMeta?.jobDescriptionId,
+    parseMeta?.jobId,
+    parseMeta?.selectedJobId,
+    parseMeta?.jobDescription,
+    parseMeta?.jobDescriptionTitle,
+    parseMeta?.jobTitle,
+    parseMeta?.hasJobDescription,
+    ...candidateList.flatMap((candidate) => [
+      candidate?.jobDescriptionId,
+      candidate?.jobId,
+      candidate?.jobDescription,
+      candidate?.jobDescriptionTitle,
+      candidate?.job_title,
+    ]),
+  ]
+
+  if (jobSignals.some(hasMeaningfulJobSignal)) return true
+  if (parseMeta?.hasJobDescription === false) return false
+  if (candidateList.some(hasExplicitNoJobMarker)) return false
+  return true
+}
+
+function ResumeOnlyRankingBanner({ onDismiss }) {
+  return (
+    <div className="candidate-results-page__resume-only-banner" role="status">
+      <div className="candidate-results-page__resume-only-copy">
+        <div className="candidate-results-page__resume-only-title">Ranking unavailable</div>
+        <p>No job was selected for this analysis, so HireFlow is showing resume-based candidate insights only. Select a job when creating an analysis to generate rankings.</p>
+      </div>
+      <button type="button" className="touch-target candidate-results-page__resume-only-close" onClick={onDismiss} aria-label="Dismiss ranking unavailable message">
+        <X size={18} strokeWidth={1.5} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
 function resolveAnalysisTitle(parseMeta, candidates) {
   const parseMetaCandidates = [
     parseMeta?.analysisName,
@@ -631,16 +701,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
   const { candidates: rawCandidates, parseMeta, isInvalid: hasInvalidPayload } = normalizedPayload
-  const [hasJobDescription, setHasJobDescription] = useState(Boolean(parseMeta?.hasJobDescription))
+  const [isResumeOnlyBannerDismissed, setIsResumeOnlyBannerDismissed] = useState(false)
 
   const [liveCandidates, setLiveCandidates] = useState(rawCandidates)
 
   useEffect(() => {
     setLiveCandidates(rawCandidates)
   }, [rawCandidates])
-  useEffect(() => {
-    setHasJobDescription(Boolean(parseMeta?.hasJobDescription))
-  }, [parseMeta])
 
   useEffect(() => {
     if (hasInvalidPayload) {
@@ -651,6 +718,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const displayCandidates = Array.isArray(liveCandidates) ? liveCandidates : []
   const analysisTitle = useMemo(() => resolveAnalysisTitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
   const jobDescriptionSubtitle = useMemo(() => resolveJobDescriptionSubtitle(parseMeta, liveCandidates), [liveCandidates, parseMeta])
+  const hasSelectedJob = useMemo(() => detectHasSelectedJob(parseMeta, liveCandidates), [liveCandidates, parseMeta])
+  const isResumeOnlyAnalysis = !hasSelectedJob
+  const shouldShowResumeOnlyBanner = isResumeOnlyAnalysis && !isResumeOnlyBannerDismissed
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -1001,11 +1071,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       searchText,
       selectedSkills,
       expRange,
-      sortBy: normalizeSortBy(sortBy),
+      sortBy: isResumeOnlyAnalysis && normalizeSortBy(sortBy) === 'match_score' ? 'upload_date' : normalizeSortBy(sortBy),
       selectedTags: selectedTagFilters,
       tagMap: candidateTags,
     })
-  }, [candidateRows, candidateTags, expRange, hasCandidatesToRender, searchText, selectedSkills, selectedTagFilters, sortBy])
+  }, [candidateRows, candidateTags, expRange, hasCandidatesToRender, isResumeOnlyAnalysis, searchText, selectedSkills, selectedTagFilters, sortBy])
 
   const { rows: visibleCandidates, pagination } = useMemo(() => paginateCandidates(filtered, page, pageSize), [filtered, page, pageSize])
 
@@ -1062,7 +1132,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         headers: authHeaders(),
         body: JSON.stringify({
           candidates: effectiveRows,
-          sortBy: normalizeSortBy(sortBy),
+          sortBy: isResumeOnlyAnalysis && normalizeSortBy(sortBy) === 'match_score' ? 'upload_date' : normalizeSortBy(sortBy),
           sortOrder: normalizeSortBy(sortBy) === 'name' ? 'asc' : 'desc',
           filters: {
             search: searchText,
@@ -1251,6 +1321,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             We are processing resumes. This can take 1-5 minutes.
           </p>
           <p className="candidate-results-page__progress">Progress: {Math.max(0, Math.min(100, Number(loadingProgress || 0)))}%</p>
+          {shouldShowResumeOnlyBanner && <ResumeOnlyRankingBanner onDismiss={() => setIsResumeOnlyBannerDismissed(true)} />}
 
           <div className="candidate-results-page__skeleton-grid">
             {skeletonCards.map((skeletonCard) => (
@@ -1305,14 +1376,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             {analysisTitle}
           </h1>
           <p className="candidate-results-page__state-copy">
-            {jobDescriptionSubtitle || (hasJobDescription ? 'Job description' : 'No job description')}
+            {jobDescriptionSubtitle || (hasSelectedJob ? 'Job description' : 'No job description')}
           </p>
           <p className="candidate-results-page__state-copy">
-            {hasJobDescription ? `${pagination.total} ranked candidates` : `${pagination.total} analyzed candidates`}
+            {hasSelectedJob ? `${pagination.total} ranked candidates` : `${pagination.total} analyzed candidates`}
           </p>
         </div>
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
+
+      {shouldShowResumeOnlyBanner && <ResumeOnlyRankingBanner onDismiss={() => setIsResumeOnlyBannerDismissed(true)} />}
 
       <CandidateFilters
         shortlistEnabled={shortlistV2Enabled}
@@ -1320,7 +1393,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         searchText={searchText}
         selectedSkills={selectedSkills}
         expRange={expRange}
-        sortBy={sortBy}
+        sortBy={isResumeOnlyAnalysis && normalizeSortBy(sortBy) === 'match_score' ? 'upload_date' : sortBy}
+        hideMatchSort={isResumeOnlyAnalysis}
         onSearch={setSearchText}
         onSkillsFilter={setSelectedSkills}
         onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 50 }))}
@@ -1416,7 +1490,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         }}
       />
 
-      <div className="ranking-stats">
+      {hasSelectedJob && <div className="ranking-stats">
         <div className="ranking-stat">
           <div className="ranking-stat-num">{filtered.length}</div>
           <div className="ranking-stat-label">Analysed</div>
@@ -1429,7 +1503,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           <div className="ranking-stat-num">{(avgScore / 10).toFixed(1)}</div>
           <div className="ranking-stat-label">Avg score /10</div>
         </div>
-      </div>
+      </div>}
 
       <div className="results-select-all">
         <label className="results-select-all__label">
@@ -1468,7 +1542,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               className={`result-card result-card--${tier}${isExpanded ? ' result-card--open' : ''}`}
               onClick={() => handleCardClick(candidateKey)}
             >
-              <div className="rc-rank">#{index + 1}</div>
+              {hasSelectedJob && <div className="rc-rank">#{index + 1}</div>}
 
               <div className="rc-top">
                 <div className="rc-avatar">{initials || 'NA'}</div>
@@ -1478,7 +1552,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                     {[candidate.current_title, candidate.location].filter(Boolean).join(' · ')}
                   </div>
                 </div>
-                <div className="rc-score-block">
+                {hasSelectedJob && <div className="rc-score-block">
                   {displayScore != null ? (
                     <>
                       <div className="rc-score-num">
@@ -1492,7 +1566,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   ) : (
                     <div className="rc-score-empty">N/A</div>
                   )}
-                </div>
+                </div>}
               </div>
 
               <div className="rc-rationale" title={cleanAiTextForDisplay(resolveMatchScoreReason(candidate) || compactRationale, '')} tabIndex={0}>
@@ -1568,6 +1642,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const allSkillsVisible = showAllDrawerSkills ? detailVm.allSkills : detailVm.allSkills.slice(0, 12)
   const hasCollapsedSkills = detailVm.allSkills.length > allSkillsVisible.length
   const detailTags = candidateTags[expandedCandidateKey] || []
+  if (!hasSelectedJob) detailVm.hasRecommendedAction = false
   const shouldRenderRecommendedAction = Boolean(detailVm.hasRecommendedAction && detailVm.recommendationText)
 
   return (
@@ -1597,13 +1672,13 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
               </div>
             </div>
           </div>
-          <div className={`dd-score-panel dd-score-panel--${detailVm.scoreTier}`}>
+          {hasSelectedJob && <div className={`dd-score-panel dd-score-panel--${detailVm.scoreTier}`}>
             <div className="dd-score">
               {detailVm.hasDisplayScore ? detailVm.displayScore : '—'}<span>{detailVm.hasDisplayScore ? '/10' : ''}</span>
             </div>
             <div className={`dd-fit-label dd-fit--${detailVm.scoreTier}`}>{detailVm.verdictLabel}</div>
             {detailVm.confidenceLabel && <div className="dd-confidence">{detailVm.confidenceLabel}</div>}
-          </div>
+          </div>}
           <div className="dd-header-actions">
             <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openAddToShortlistModal([candidate])}>Add to shortlist</button>
             <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }}>
@@ -1618,7 +1693,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             <DrawerSection title="Summary">
               <ExpandableText text={detailVm.summaryText} clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`summary-${expandedCandidateKey}`} />
             </DrawerSection>
-            <DrawerSection title="Score breakdown">
+            {hasSelectedJob && <DrawerSection title="Score breakdown">
               {hasResolvableBreakdownMetrics ? (
                 <div className="dd-analysis-box dd-breakdown">
                   {resolvableScoreBreakdownRows.map((row) => (
@@ -1628,7 +1703,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   ))}
                 </div>
               ) : <p className="dd-summary">Score breakdown unavailable</p>}
-            </DrawerSection>
+            </DrawerSection>}
             {shouldRenderRecommendedAction && (
               <DrawerSection title="Recommended action" className="dd-section-card--compact">
                 <ExpandableText text={detailVm.recommendationText} className="dd-recommended-action" clampClassName="dd-summary--clamp-5" buttonLabel="Show more" collapseLabel="Show less" lineLimit={5} resetKey={expandedCandidateKey} controlsId={`recommendation-${expandedCandidateKey}`} />
@@ -1656,16 +1731,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             </DrawerSection>
           </div>
           <div className="dd-col">
-            <DrawerSection title="Matched skills" className="dd-section-card--compact" badge={<span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span>}>
+            {hasSelectedJob && <DrawerSection title="Matched skills" className="dd-section-card--compact" badge={<span className="dd-count-badge dd-count-badge--lime">✓ {detailVm.matchedSkills.length} of {detailVm.totalSkills} required</span>}>
               <ExpandableList items={detailVm.matchedSkills} previewCount={5} resetKey={expandedCandidateKey} controlsId={`matched-skills-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (<span className="dd-top-skill dd-top-skill--matched" key={`${expandedCandidateKey}-matched-${skill}`} title={skill} tabIndex={0}>{skill}</span>)} />
-            </DrawerSection>
-            <DrawerSection title="Skill gaps" className="dd-section-card--compact" badge={detailVm.missingSkills.length > 0 ? <span className="dd-count-badge dd-count-badge--amber">{detailVm.missingSkills.length} gaps identified</span> : null}>
+            </DrawerSection>}
+            {hasSelectedJob && <DrawerSection title="Skill gaps" className="dd-section-card--compact" badge={detailVm.missingSkills.length > 0 ? <span className="dd-count-badge dd-count-badge--amber">{detailVm.missingSkills.length} gaps identified</span> : null}>
               {detailVm.missingSkills.length > 0 ? (
                 <ExpandableList items={detailVm.missingSkills} previewCount={3} resetKey={expandedCandidateKey} controlsId={`skill-gaps-${expandedCandidateKey}`} listClassName="dd-top-skills" renderItem={(skill) => (
                   <span className="dd-top-skill dd-top-skill--warn" key={`${expandedCandidateKey}-gap-${skill}`} title={skill} tabIndex={0}>{skill}</span>
                 )} />
               ) : <p className="dd-summary">No explicit skill gaps identified.</p>}
-            </DrawerSection>
+            </DrawerSection>}
             {detailVm.allSkills.length > 0 && (
               <DrawerSection title="All skills" className="dd-section-card--compact">
                 <div id={`all-skills-${expandedCandidateKey}`} className="dd-top-skills dd-top-skills--all">

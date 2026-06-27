@@ -6,6 +6,7 @@ import { buildExpandedCandidateDrawerViewModel } from './candidateResultsState.j
 
 const candidateResultsSource = readFileSync(new URL('./CandidateResults.jsx', import.meta.url), 'utf8')
 const candidateResultsStyles = readFileSync(new URL('../styles/candidate-results.css', import.meta.url), 'utf8')
+const candidateFiltersSource = readFileSync(new URL('./CandidateFilters.jsx', import.meta.url), 'utf8')
 const designTokens = readFileSync(new URL('../styles/variables.css', import.meta.url), 'utf8')
 
 test('normalizeCandidateResultsPayload handles empty payload', () => {
@@ -99,6 +100,31 @@ test('normalized CandidateResults payload keeps clear action-oriented recommenda
 
   assert.equal(detailVm.hasRecommendedAction, true)
   assert.equal(detailVm.recommendationText, action)
+})
+
+
+test('CandidateResults detects explicit no-JD markers before conservative default', () => {
+  assert.match(candidateResultsSource, /function hasExplicitNoJobMarker\(candidate\)/)
+  assert.match(candidateResultsSource, /candidate\?\.fit_assessment\?\.has_job_description_context === false/)
+  assert.match(candidateResultsSource, /candidate\?\.fitAssessment\?\.hasJobDescriptionContext === false/)
+  assert.match(candidateResultsSource, /candidate\?\.hasJobDescription === false/)
+  assert.match(candidateResultsSource, /candidate\?\.has_job_description === false/)
+  assert.match(candidateResultsSource, /candidate\?\.matchScoreReason/)
+  assert.match(candidateResultsSource, /candidate\?\.match_score_reason/)
+  assert.match(candidateResultsSource, /String\(value \|\| ''\)\.trim\(\)\.toLowerCase\(\) === 'job_description_missing'/)
+  assert.match(candidateResultsSource, /if \(jobSignals\.some\(hasMeaningfulJobSignal\)\) return true/)
+  assert.match(candidateResultsSource, /if \(parseMeta\?\.hasJobDescription === false\) return false/)
+  assert.match(candidateResultsSource, /if \(candidateList\.some\(hasExplicitNoJobMarker\)\) return false/)
+  assert.match(candidateResultsSource, /return true/)
+})
+
+test('CandidateFilters hides Best match and shows safe sort value for resume-only analyses', () => {
+  assert.match(candidateResultsSource, /hideMatchSort=\{isResumeOnlyAnalysis\}/)
+  assert.match(candidateResultsSource, /sortBy=\{isResumeOnlyAnalysis && normalizeSortBy\(sortBy\) === 'match_score' \? 'upload_date' : sortBy\}/)
+  assert.match(candidateFiltersSource, /hideMatchSort = false/)
+  assert.match(candidateFiltersSource, /value=\{hideMatchSort && normalizeSortBy\(sortBy\) === 'match_score' \? 'upload_date' : sortBy\}/)
+  assert.match(candidateFiltersSource, /\{!hideMatchSort && <option value="match_score">Best match<\/option>\}/)
+  assert.match(candidateFiltersSource, /<option value="upload_date">Recently added<\/option>/)
 })
 
 test('CandidateResults title contract: analysis title does not fall back to job description fields', () => {

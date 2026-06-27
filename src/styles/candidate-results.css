@@ -2172,3 +2172,65 @@
 .candidate-results-page__tag-chip--active { border-color: #84cc16; color: #d9f99d; }
 .rc-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .rc-tag-pill { border: 1px solid #2a2a2a; border-radius: 999px; padding: 2px 8px; font-size: 11px; color: #e2e8f0; }
+
+.candidate-results-page__resume-only-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(200, 255, 0, 0.18);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(200, 255, 0, 0.08), rgba(17, 17, 17, 0.92));
+  color: var(--color-text-primary);
+}
+
+.candidate-results-page__resume-only-copy {
+  min-width: 0;
+}
+
+.candidate-results-page__resume-only-title {
+  color: var(--color-text-primary);
+  font-family: var(--font-heading, 'Syne', sans-serif);
+  font-size: 0.98rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.25;
+  margin-bottom: 0.25rem;
+}
+
+.candidate-results-page__resume-only-copy p {
+  color: var(--color-text-secondary);
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  font-size: var(--type-small-size);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.candidate-results-page__resume-only-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.candidate-results-page__resume-only-close:hover,
+.candidate-results-page__resume-only-close:focus-visible {
+  border-color: rgba(200, 255, 0, 0.32);
+  color: var(--color-text-primary);
+  background: rgba(200, 255, 0, 0.08);
+}
+
+@media (max-width: 520px) {
+  .candidate-results-page__resume-only-banner {
+    align-items: flex-start;
+    padding: 0.8rem;
+  }
+}
