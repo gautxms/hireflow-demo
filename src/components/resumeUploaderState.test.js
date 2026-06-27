@@ -7,8 +7,8 @@ import {
   toOptionalJobDescriptionId,
 } from './resumeUploaderState.js'
 
-test('dropdown label exposes Analyze without Job Description option', () => {
-  assert.equal(ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, 'Analyze without Job Description')
+test('dropdown label exposes No job selected option', () => {
+  assert.equal(ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, 'No job selected (no ranking)')
 })
 
 test('selected JD remains empty when nothing is selected', () => {
