@@ -241,13 +241,14 @@
 
 .analyses-modal__form {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  max-height: calc(100vh - 10rem);
   min-height: 0;
 }
 
 .analyses-modal__scrollable {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--spacing-md);
   min-height: 0;
@@ -272,6 +273,7 @@
 
 .analyses-modal__header {
   display: flex;
+  flex: 0 0 auto;
   justify-content: space-between;
   gap: var(--spacing-md);
   align-items: flex-start;
@@ -422,9 +424,8 @@
 }
 
 .analyses-modal__actions {
-  position: sticky;
-  bottom: 0;
   display: flex;
+  flex: 0 0 auto;
   justify-content: flex-end;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
@@ -438,6 +439,9 @@
 }
 
 .analyses-create-modal__dialog {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: min(760px, calc(100vw - (var(--spacing-xl) * 2)));
   max-height: calc(100vh - (var(--spacing-xl) * 2));
   overflow: hidden;
