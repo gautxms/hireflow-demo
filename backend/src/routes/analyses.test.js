@@ -44,10 +44,119 @@ test('GET /analyses returns authenticated user scoped items with frontend fields
   assert.equal(payload.items[0].summary.pending, 0)
   assert.equal(payload.items[0].fileCount, 3)
   assert.deepEqual(payload.items[0].filesPreview, [])
-  assert.equal(queryMock.mock.callCount(), 3)
+  assert.equal(queryMock.mock.callCount(), 4)
 })
 
 
+
+
+test('GET /analyses includes orphan upload_chunks as processing files', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: 'a-1', created_at: '2026-05-01T00:00:00.000Z', status: 'pending', name: 'Fresh upload', job_description_title: 'Engineer', total_count: '0', complete_count: '0', failed_count: '0', processing_count: '0' }] }
+    }
+    if (sql.includes('FROM upload_chunks uc')) {
+      return { rows: [{ analysis_id: 'a-1', upload_id: 'u-1', filename: 'resume.pdf', mime_type: 'application/pdf', status: 'uploading', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() }] }
+    }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses`, { headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.items[0].fileCount, 1)
+  assert.equal(payload.items[0].liveStatus, 'processing')
+  assert.equal(payload.items[0].summary.total, 1)
+  assert.equal(payload.items[0].summary.processing, 1)
+  assert.equal(payload.items[0].summary.pending, 0)
+  assert.deepEqual(payload.items[0].filesPreview, [{
+    name: 'resume.pdf',
+    filename: 'resume.pdf',
+    originalFilename: 'resume.pdf',
+    fileExtension: null,
+    mimeType: 'application/pdf',
+    originalMimeType: 'application/pdf',
+    status: 'processing',
+    source: 'upload_chunk',
+  }])
+})
+
+test('GET /analyses maps failed orphan upload_chunks as failed', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) return { rows: [{ id: 'a-fail', created_at: '2026-05-01T00:00:00.000Z', status: 'pending', total_count: '0', complete_count: '0', failed_count: '0', processing_count: '0' }] }
+    if (sql.includes('FROM upload_chunks uc')) return { rows: [{ analysis_id: 'a-fail', upload_id: 'u-fail', filename: 'bad.pdf', mime_type: 'application/pdf', status: 'rejected', created_at: '2026-05-01T00:00:01.000Z', updated_at: '2026-05-01T00:00:02.000Z' }] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses`, { headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.items[0].liveStatus, 'failed')
+  assert.equal(payload.items[0].summary.failed, 1)
+  assert.equal(payload.items[0].filesPreview[0].status, 'failed')
+})
+
+test('GET /analyses/:id includes orphan upload_chunks placeholders and excludes candidates', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(parseQueue, 'getJob', async () => null)
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) return { rows: [{ id: 'a-2', user_id: 9, status: 'pending', name: 'Uploading', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: null, job_description_title: null }] }
+    if (sql.includes('FROM upload_chunks uc')) return { rows: [{ upload_id: 'u-2', filename: 'upload.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', status: 'completed', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: '2026-05-01T00:00:02.000Z' }] }
+    if (sql.includes('FROM analysis_items ai')) return { rows: [] }
+    if (sql.includes('UPDATE analyses')) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/a-2`, { headers: authHeader(9) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.liveStatus, 'processing')
+  assert.equal(payload.summary.total, 1)
+  assert.equal(payload.summary.processing, 1)
+  assert.equal(payload.items[0].source, 'upload_chunk')
+  assert.equal(payload.items[0].status, 'processing')
+  assert.equal(payload.items[0].result, null)
+  assert.deepEqual(payload.items[0].normalizedCandidates, [])
+})
+
+test('GET /analyses does not double count upload_chunks matching analysis_items', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) return { rows: [{ id: 'a-3', created_at: '2026-05-01T00:00:00.000Z', status: 'complete', total_count: '1', complete_count: '1', failed_count: '0', processing_count: '0' }] }
+    if (sql.includes('COALESCE(pj.status, r.parse_status, \'queued\')')) return { rows: [{ analysis_id: 'a-3', filename: 'done.pdf', original_filename: 'done.pdf', status: 'complete' }] }
+    if (sql.includes('FROM upload_chunks uc')) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses`, { headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.items[0].fileCount, 1)
+  assert.equal(payload.items[0].summary.total, 1)
+  assert.equal(payload.items[0].filesPreview.length, 1)
+})
 
 test('GET /analyses failedItems omits raw error text', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
