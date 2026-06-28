@@ -201,3 +201,41 @@ test('subscriptions current read safety migration is additive and uses users.id 
   assert.match(queries[5], /CREATE INDEX IF NOT EXISTS idx_subscriptions_user_created/)
   assert.match(queries[5], /ON subscriptions \(user_id, created_at DESC\)/)
 })
+
+test('migration runner includes shortlist batch-add safety migration 040 after migration 039', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'040-ensure-shortlist-batch-add-schema'/)
+  assert.ok(
+    source.indexOf("'039-ensure-subscriptions-current-read-schema'") <
+      source.indexOf("'040-ensure-shortlist-batch-add-schema'"),
+  )
+})
+
+test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
+  const queries = []
+  const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')
+
+  await up({
+    query(sql) {
+      queries.push(sql)
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 4)
+  assert.match(queries[0], /ALTER TABLE shortlist_candidates/)
+  for (const column of [
+    'analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL',
+    'candidate_snapshot JSONB',
+    'decision_status TEXT',
+    'created_at TIMESTAMP DEFAULT NOW()',
+    'updated_at TIMESTAMP DEFAULT NOW()',
+    'source_context JSONB',
+  ]) {
+    assert.ok(queries[0].includes(`ADD COLUMN IF NOT EXISTS ${column}`))
+  }
+  assert.match(queries[1], /UPDATE shortlist_candidates/)
+  assert.match(queries[2], /ALTER COLUMN created_at SET NOT NULL/)
+  assert.match(queries[2], /ALTER COLUMN updated_at SET NOT NULL/)
+  assert.match(queries[3], /CREATE INDEX IF NOT EXISTS idx_shortlist_candidates_analysis_id/)
+})

@@ -41,7 +41,7 @@ import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/admin
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
 import { pool } from './db/client.js'
-import { verifyYearsExperienceDecimalSchema } from './db/schemaPrerequisites.js'
+import { verifyYearsExperienceDecimalSchema, verifyShortlistBatchAddSchema } from './db/schemaPrerequisites.js'
 
 const app = express()
 
@@ -143,6 +143,15 @@ app.get('/health', async (_req, res) => {
         table: 'resumes',
         column: 'years_experience',
         message: `Expected NUMERIC(5,2), found ${JSON.stringify(yearsExperienceSchema.actual || {})}`,
+      })
+    }
+
+    const shortlistBatchSchema = await verifyShortlistBatchAddSchema()
+    if (!shortlistBatchSchema.ok) {
+      schemaWarnings.push({
+        type: 'invalid_shortlist_batch_add_schema',
+        table: 'shortlist_candidates',
+        message: `Expected shortlist batch-add metadata columns, found ${JSON.stringify(shortlistBatchSchema.issues)}`,
       })
     }
   } catch (error) {
