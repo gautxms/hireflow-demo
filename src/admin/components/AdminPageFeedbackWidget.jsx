@@ -50,7 +50,7 @@ export default function AdminPageFeedbackWidget({ routeContext }) {
         <textarea
           className="ui-input admin-feedback__comment"
           rows={3}
-          placeholder="Optional: what was confusing or missing?"
+          placeholder="What was confusing or missing?"
           value={comment}
           onChange={(event) => setComment(event.target.value)}
         />

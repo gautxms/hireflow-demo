@@ -197,8 +197,8 @@ export default function ShortlistManager(props) {
       {showCreateForm ? <section className="shortlist-manager__filters-card" aria-label="Create shortlist">
         <form onSubmit={handleCreate} className="shortlist-manager__create-form">
           <label className="shortlist-manager__filter-label">Shortlist name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter shortlist name" className="shortlist-manager__input" /></label>
-          <label className="shortlist-manager__filter-label">Description (optional)<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Role, stage, or hiring notes" className="shortlist-manager__input" /></label>
-          <label className="shortlist-manager__filter-label">Job (optional)<select value={createJobDescriptionId} onChange={(e) => setCreateJobDescriptionId(e.target.value)} className="shortlist-manager__select"><option value="">General / no linked job</option>{createJobOptions.map((job) => <option key={job.id} value={job.id}>{job.label}</option>)}</select></label>
+          <label className="shortlist-manager__filter-label">Description<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Role, stage, or hiring notes" className="shortlist-manager__input" /></label>
+          <label className="shortlist-manager__filter-label">Job<select value={createJobDescriptionId} onChange={(e) => setCreateJobDescriptionId(e.target.value)} className="shortlist-manager__select"><option value="">General / no linked job</option>{createJobOptions.map((job) => <option key={job.id} value={job.id}>{job.label}</option>)}</select></label>
           <button type="submit" disabled={loadingList || loadingDetails} className="shortlist-manager__button shortlist-manager__button--accent">Save shortlist</button>
         </form>
         {createError ? <p className="shortlist-manager__inline-error" role="alert">Couldn’t create shortlist. {createError} Try again.</p> : null}

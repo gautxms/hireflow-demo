@@ -64,7 +64,7 @@ test('shortlists page loads jobs and sends selected job when creating shortlist'
 test('shortlist manager create form exposes job dropdown while filters stay shortlist scoped', () => {
   assert.match(shortlistManagerSource, /jobDescriptions = \[\]/)
   assert.match(shortlistManagerSource, /const \[createJobDescriptionId, setCreateJobDescriptionId\] = useState\(''\)/)
-  assert.match(shortlistManagerSource, /Job \(optional\)<select value=\{createJobDescriptionId\}/)
+  assert.match(shortlistManagerSource, /Job<select value=\{createJobDescriptionId\}/)
   assert.match(shortlistManagerSource, /onCreateShortlist\(\{ name: name\.trim\(\), description: description\.trim\(\), jobDescriptionId: createJobDescriptionId \|\| null \}\)/)
   assert.match(shortlistManagerSource, /\(Array\.isArray\(jobDescriptions\) \? jobDescriptions : \[\]\)\.forEach/)
   assert.match(shortlistManagerSource, /shortlists\.forEach\(\(list\) => \{/)

@@ -445,13 +445,13 @@ export default function AccountSettingsPage() {
               You are scheduling this account for deletion. After the grace period, your login and retained account data will be permanently removed.
             </p>
             <p className="type-small account-settings-note">
-              Optional: type <strong>DELETE</strong> to add an extra confirmation step.
+              Type <strong>DELETE</strong> to add an extra confirmation step.
             </p>
             <input
               className="account-settings-input"
               value={deleteConfirmText}
               onChange={(event) => setDeleteConfirmText(event.target.value)}
-              placeholder="Type DELETE (optional)"
+              placeholder="Type DELETE"
             />
             <div className="account-settings-actions">
               <button

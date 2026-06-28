@@ -178,7 +178,7 @@ export default function DemoBookingPage({ onBack }) {
                   </div>
 
                   <div className="public-form-field">
-                    <label htmlFor="message">Additional Notes (Optional)</label>
+                    <label htmlFor="message">Additional notes</label>
                     <textarea id="message" name="message" rows="4" value={formData.message} onChange={handleInputChange} placeholder="Tell us about your hiring challenges..." />
                   </div>
                 </form>
