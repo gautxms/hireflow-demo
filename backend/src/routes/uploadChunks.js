@@ -27,7 +27,7 @@ const chunkUpload = multer({
 
 router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit, async (req, res) => {
   try {
-    const { filename, fileSize, mimeType, jobDescriptionId, analysisId, analysisName } = req.body || {}
+    const { filename, fileSize, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize } = req.body || {}
     console.log(
       '[HireFlow] JD received at endpoint:',
       jobDescriptionId ? `${String(jobDescriptionId).slice(0, 80)}...` : 'NONE',
@@ -55,6 +55,7 @@ router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit,
       jobDescriptionId: jobDescriptionId || null,
       analysisId: analysisId || null,
       analysisName: analysisName || null,
+      clientChunkSize,
     })
 
     if (session.resumed !== true) {
@@ -69,7 +70,9 @@ router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit,
     return res.json(session)
   } catch (error) {
     console.error('[UploadChunks] init failed:', error)
-    return res.status(500).json({ error: error.message || 'Unable to initialize chunk upload' })
+    const message = error.message || 'Unable to initialize chunk upload'
+    const statusCode = message.startsWith('clientChunkSize ') ? 400 : 500
+    return res.status(statusCode).json({ error: message })
   }
 })
 

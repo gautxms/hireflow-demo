@@ -55,6 +55,24 @@ function normalizeMimeType(filename, mimeType) {
   return resolveEffectiveMimeType(normalizedMimeType, filename)
 }
 
+function resolveClientChunkSize(clientChunkSize) {
+  if (clientChunkSize === undefined || clientChunkSize === null || clientChunkSize === '') {
+    return CHUNK_SIZE_BYTES
+  }
+
+  const parsedChunkSize = Number(clientChunkSize)
+
+  if (!Number.isFinite(parsedChunkSize) || !Number.isInteger(parsedChunkSize) || parsedChunkSize <= 0) {
+    throw new Error('clientChunkSize must be a positive integer')
+  }
+
+  if (parsedChunkSize > CHUNK_SIZE_BYTES) {
+    throw new Error('clientChunkSize exceeds 5MB limit')
+  }
+
+  return parsedChunkSize
+}
+
 async function ensureUploadChunkTables() {
   if (uploadTablesReady) {
     return
@@ -182,7 +200,7 @@ export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
   return true
 }
 
-export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null }) {
+export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null, clientChunkSize = undefined }) {
   ensureS3Configured()
   await ensureUploadChunkTables()
   await ensureAnalysisTables()
@@ -195,7 +213,8 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     throw new Error('File exceeds 100MB limit')
   }
 
-  const totalChunks = Math.ceil(fileSize / CHUNK_SIZE_BYTES)
+  const effectiveChunkSize = resolveClientChunkSize(clientChunkSize)
+  const totalChunks = Math.ceil(fileSize / effectiveChunkSize)
   const fileMetadata = normalizeResumeFileMetadata({ originalFilename: filename, reportedMimeType: mimeType })
   const originalFilename = fileMetadata.originalFilename
   const safeFilename = fileMetadata.storageFilename

@@ -131,6 +131,58 @@ test('POST /api/uploads/chunks/init records exactly one usage row for a new sess
   assert.equal(usageWrites[0].params[3], 1)
 })
 
+test('POST /api/uploads/chunks/init passes clientChunkSize through to session creation', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('SELECT COUNT(*)::INT AS usage_count')) return { rows: [{ usage_count: 0 }] }
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('INSERT INTO analyses')) return { rows: [{ id: '00000000-0000-4000-8000-000000000601' }] }
+    if (sql.includes('FROM upload_chunks') && sql.includes("status = 'uploading'")) return { rows: [] }
+    if (sql.includes('INSERT INTO upload_chunks')) return { rows: [] }
+    if (sql.includes('INSERT INTO usage_log')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/init', {
+    headers: authHeader(),
+    body: {
+      filename: 'large.pdf',
+      fileSize: 100 * 1024 * 1024,
+      mimeType: 'application/pdf',
+      clientChunkSize: 4 * 1024 * 1024,
+    },
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.totalChunks, 25)
+  const insert = queries.find(({ sql }) => sql.includes('INSERT INTO upload_chunks'))
+  assert.equal(insert.params[5], 25)
+})
+
+test('POST /api/uploads/chunks/init rejects clientChunkSize above backend chunk size limit', async (t) => {
+  mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('SELECT COUNT(*)::INT AS usage_count')) return { rows: [{ usage_count: 0 }] }
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/init', {
+    headers: authHeader(),
+    body: {
+      filename: 'large.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      clientChunkSize: (5 * 1024 * 1024) + 1,
+    },
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal(payload.error, 'clientChunkSize exceeds 5MB limit')
+})
+
 test('POST /api/uploads/chunks/init does not record usage for a resumed session', async (t) => {
   const queries = mockChunkUploadQueries(t, (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
