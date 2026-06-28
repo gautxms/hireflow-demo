@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import { createHash } from 'node:crypto'
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { pool } from '../db/client.js'
 import { cacheJobResult, parseQueue } from '../services/jobQueue.js'
 import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields, isAiScoringContractV2ShadowEnabled, normalizeAiScoringContractV2, runAiScoringContractV2ShadowAnalysis } from '../services/aiResumeAnalysisService.js'
@@ -95,10 +97,86 @@ export function isTerminalJobFailure(job) {
   return job.attemptsMade + 1 >= (job.opts.attempts || 1)
 }
 
+function toBuffer(streamOrBuffer) {
+  if (Buffer.isBuffer(streamOrBuffer)) return Promise.resolve(streamOrBuffer)
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    streamOrBuffer.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    streamOrBuffer.on('end', () => resolve(Buffer.concat(chunks)))
+    streamOrBuffer.on('error', reject)
+  })
+}
+
+function createParseTimeoutError(stage, timeoutMs) {
+  const error = new Error(`Parse ${stage} timed out after ${Math.round(timeoutMs / 1000)} seconds`)
+  error.category = 'parse_stage_timeout'
+  error.nonRetriable = true
+  return error
+}
+
+async function withParseStageTimeout(promise, { stage, timeoutMs }) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise
+  let timeoutId
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(createParseTimeoutError(stage, timeoutMs)), timeoutMs)
+      }),
+    ])
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function loadFileBufferBase64ForParseJob(jobData, { logger = console } = {}) {
+  if (jobData?.fileBufferBase64) {
+    return { fileBufferBase64: jobData.fileBufferBase64, source: 'inline_base64' }
+  }
+  const assembledS3Key = String(jobData?.assembledS3Key || '').trim()
+  if (!assembledS3Key) {
+    throw new Error('Resume payload is empty')
+  }
+  const bucket = process.env.AWS_S3_BUCKET || s3Bucket
+  if (!bucket) {
+    throw new Error('AWS_S3_BUCKET is required to load assembled resume uploads')
+  }
+  logger?.info?.('[Parse] Loading assembled resume upload from S3 reference', {
+    resumeId: jobData?.resumeId || null,
+    analysisId: jobData?.analysisId || null,
+    parseJobId: jobData?.jobId || null,
+    fileSize: jobData?.fileSize || null,
+    hasSha256: Boolean(jobData?.assembledSha256),
+  })
+  const object = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: assembledS3Key }))
+  const fileBuffer = await toBuffer(object.Body)
+  const actualSha256 = createHash('sha256').update(fileBuffer).digest('hex')
+  if (jobData?.assembledSha256 && actualSha256 !== jobData.assembledSha256) {
+    const error = new Error('assembled_s3_sha256_mismatch::Uploaded resume checksum mismatch before parsing')
+    error.category = 'assembled_s3_sha256_mismatch'
+    error.nonRetriable = true
+    throw error
+  }
+  return { fileBufferBase64: fileBuffer.toString('base64'), source: 'assembled_s3' }
+}
+
 function normalizeUnavailableReason(reason) {
   const raw = String(reason || '').trim()
   return raw ? raw.slice(0, 180) : 'unknown'
 }
+
+const PARSE_STAGE_TIMEOUT_MS = Number.parseInt(process.env.PARSE_STAGE_TIMEOUT_MS || String(8 * 60 * 1000), 10)
+const AI_ANALYSIS_TIMEOUT_MS = Number.parseInt(process.env.AI_ANALYSIS_TIMEOUT_MS || String(8 * 60 * 1000), 10)
+const s3Bucket = process.env.AWS_S3_BUCKET
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+    ? {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      }
+    : undefined,
+})
 
 const PRE_PROVIDER_LOCAL_EXTRACTION_FAILURE_CATEGORIES = new Set([
   'docx_empty_extraction',
@@ -1617,7 +1695,7 @@ export function applyJobDescriptionScoringMode(candidates = [], jobDescriptionCo
 }
 
 export async function runParse(job) {
-  const { resumeId, filename, originalFilename, originalMimeType, fileExtension, mimeType, fileSize, fileBufferBase64, analysisId } = job.data
+  const { resumeId, filename, originalFilename, originalMimeType, fileExtension, mimeType, fileSize, analysisId } = job.data
   const analysisFilename = originalFilename || filename
   const displayFilename = filename && filename !== analysisFilename ? filename : null
   const startedAt = Date.now()
@@ -1630,8 +1708,13 @@ export async function runParse(job) {
 
   await job.progress(10)
 
-  const preparedResumePayload = await prepareResumePayloadForAnalysis({
-    fileBufferBase64,
+  const loadedResumePayload = await withParseStageTimeout(
+    loadFileBufferBase64ForParseJob({ ...job.data, jobId: job.id }, { logger: console }),
+    { stage: 'document_load', timeoutMs: PARSE_STAGE_TIMEOUT_MS },
+  )
+
+  const preparedResumePayload = await withParseStageTimeout(prepareResumePayloadForAnalysis({
+    fileBufferBase64: loadedResumePayload.fileBufferBase64,
     mimeType,
     originalMimeType,
     filename: analysisFilename,
@@ -1644,8 +1727,9 @@ export async function runParse(job) {
       analysisId: analysisId || null,
       parseJobId: job.id,
       fileExtension,
+      fileTransport: loadedResumePayload.source,
     },
-  })
+  }), { stage: 'document_extraction', timeoutMs: PARSE_STAGE_TIMEOUT_MS })
 
   if (preparedResumePayload.diagnostics) {
     logSafeResumeFileDiagnostics(console, 'prepared_payload', preparedResumePayload.diagnostics)
@@ -1680,7 +1764,7 @@ export async function runParse(job) {
 
   try {
     console.log('[Parse] Attempting AI analysis with primary/fallback keys...')
-    aiResponse = await getAnalyzeResumeWithConfiguredFallback()(
+    aiResponse = await withParseStageTimeout(getAnalyzeResumeWithConfiguredFallback()(
       preparedResumePayload.fileBufferBase64,
       preparedResumePayload.mimeType,
       preparedResumePayload.filename,
@@ -1702,7 +1786,7 @@ export async function runParse(job) {
           inputKind: preparedResumePayload.inputKind || null,
         },
       },
-    )
+    ), { stage: 'ai_analysis', timeoutMs: AI_ANALYSIS_TIMEOUT_MS })
     const aiResult = aiResponse?.result || {}
     await persistAiSuccessTokenUsage({
       aiResponse,
@@ -2052,6 +2136,8 @@ export const __testables = {
   normalizeStructuredSkills,
   buildNormalizedCandidates,
   runParse,
+  loadFileBufferBase64ForParseJob,
+  withParseStageTimeout,
   isLegacyWordDocument,
   isAnalysisActiveForJob,
   isPreProviderLocalExtractionFailure,
