@@ -31,6 +31,22 @@ function isTerminalAnalysis(analysis) {
   return status === 'complete' || status === 'completed' || status === 'failed' || status === 'partial'
 }
 
+function getServerFileCount(analysis) {
+  const summaryTotal = Number(analysis?.summary?.total || 0)
+  const fileCount = Number(analysis?.fileCount || 0)
+  return Math.max(summaryTotal, fileCount, 0)
+}
+
+export function hasServerCaughtUpToOverlay(analysis, overlay) {
+  const expectedFileCount = Math.max(Number(overlay?.expectedFileCount || 0), 0)
+  if (expectedFileCount <= 0) return true
+  return getServerFileCount(analysis) >= expectedFileCount
+}
+
+export function shouldRemoveInFlightOverlay(analysis, overlay) {
+  return Boolean(overlay) && isTerminalAnalysis(analysis) && hasServerCaughtUpToOverlay(analysis, overlay)
+}
+
 function getFileIdentityKey(file) {
   return String(buildResumeFileIdentity(file).filename || file?.name || '').trim().toLowerCase()
 }
@@ -52,7 +68,7 @@ function clampCount(value, max) {
 }
 
 export function mergeInFlightAnalysis(analysis, overlay) {
-  if (!overlay || isTerminalAnalysis(analysis)) return analysis
+  if (!overlay || shouldRemoveInFlightOverlay(analysis, overlay)) return analysis
 
   const expectedFileCount = Math.max(Number(overlay.expectedFileCount || 0), 0)
   const serverSummary = analysis?.summary || {}

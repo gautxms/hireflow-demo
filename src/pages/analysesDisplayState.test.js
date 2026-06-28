@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { deriveDisplayStatus, mergeInFlightAnalyses, mergeInFlightAnalysis } from './analysesDisplayState.js'
+import { deriveDisplayStatus, mergeInFlightAnalyses, mergeInFlightAnalysis, shouldRemoveInFlightOverlay } from './analysesDisplayState.js'
 
 const overlay = (expectedFileCount = 2) => ({
   analysisId: 'analysis-1',
@@ -26,6 +26,25 @@ test('in-flight overlay preserves expected count when server returns partial upl
   assert.equal(merged.fileCount, 2)
   assert.equal(merged.summary.total, 2)
   assert.equal(merged.filesPreview.length, 2)
+  assert.equal(deriveDisplayStatus(merged), 'processing')
+})
+
+
+test('premature terminal server row remains in-flight until expected files are known', () => {
+  const merged = mergeInFlightAnalysis({
+    id: 'analysis-1',
+    status: 'complete',
+    liveStatus: 'complete',
+    fileCount: 1,
+    summary: { total: 1, complete: 1, failed: 0, processing: 0, pending: 0 },
+    files: [{ filename: 'resume-1.pdf', status: 'complete' }],
+    filesPreview: [{ filename: 'resume-1.pdf', status: 'complete' }],
+  }, overlay(2))
+
+  assert.equal(merged.fileCount, 2)
+  assert.equal(merged.summary.total, 2)
+  assert.equal(merged.summary.complete, 1)
+  assert.equal(merged.summary.processing, 1)
   assert.equal(deriveDisplayStatus(merged), 'processing')
 })
 
@@ -103,4 +122,35 @@ test('deleted in-flight analysis does not reappear when overlay is removed', () 
   const merged = mergeInFlightAnalyses([], {})
 
   assert.deepEqual(merged, [])
+})
+
+
+test('terminal complete removes overlay only after server count catches up', () => {
+  assert.equal(shouldRemoveInFlightOverlay({
+    id: 'analysis-1',
+    status: 'complete',
+    liveStatus: 'complete',
+    fileCount: 2,
+    summary: { total: 2, complete: 2, failed: 0, processing: 0, pending: 0 },
+  }, overlay(2)), true)
+})
+
+test('terminal failed removes overlay only after server count catches up', () => {
+  assert.equal(shouldRemoveInFlightOverlay({
+    id: 'analysis-1',
+    status: 'failed',
+    liveStatus: 'failed',
+    fileCount: 2,
+    summary: { total: 2, complete: 0, failed: 2, processing: 0, pending: 0 },
+  }, overlay(2)), true)
+})
+
+test('terminal-looking server row does not remove overlay before count catches up', () => {
+  assert.equal(shouldRemoveInFlightOverlay({
+    id: 'analysis-1',
+    status: 'complete',
+    liveStatus: 'complete',
+    fileCount: 1,
+    summary: { total: 1, complete: 1, failed: 0, processing: 0, pending: 0 },
+  }, overlay(2)), false)
 })
