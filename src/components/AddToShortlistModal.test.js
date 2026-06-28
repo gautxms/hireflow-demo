@@ -12,7 +12,7 @@ test('add to shortlist modal keeps selected destination stable while shortlists 
 test('add to shortlist modal separates create input changes from destination selection', () => {
   assert.match(source, /const \[selectedShortlistId, setSelectedShortlistId\] = useState\(''\)/)
   assert.match(source, /const \[newShortlistName, setNewShortlistName\] = useState\(''\)/)
-  assert.match(source, /onChange=\{\(e\) => setNewShortlistName\(e\.target\.value\)\}/)
+  assert.match(source, /setNewShortlistName\(e\.target\.value\)/)
   assert.doesNotMatch(source, /onChange=\{\(e\) => \{\s*setNewShortlistName\(e\.target\.value\)[\s\S]*setSelectedShortlistId\(''\)/)
 })
 
@@ -28,4 +28,19 @@ test('add to shortlist modal protects backdrop and keyboard interactions', () =>
   assert.match(source, /event\.key === 'Escape' && !isSubmitting/)
   assert.match(source, /event\.key !== 'Tab'/)
   assert.match(source, /event\.key !== 'Enter'/)
+})
+
+test('add to shortlist modal uses structured backend errors and clears them on destination changes', () => {
+  assert.match(source, /function buildApiErrorMessage\(payload, fallback\)/)
+  assert.match(source, /getShortlistBulkErrorMessage\(payload\)/)
+  assert.match(source, /payload\?\.retryGuidance/)
+  assert.match(source, /onChange=\{\(e\) => \{ setSelectedShortlistId\(e\.target\.value\); setError\(''\) \}\}/)
+  assert.match(source, /\{isSubmitting \? 'Adding…' : 'Confirm add'\}/)
+})
+
+test('candidates directory styles do not broadly override modal controls', () => {
+  const css = readFileSync(new URL('../styles/candidates-directory.css', import.meta.url), 'utf8')
+  assert.doesNotMatch(css, /\.candidates-directory\s+:is\(input, select, button\)/)
+  assert.doesNotMatch(css, /\.candidates-directory\s+button\s*\{/)
+  assert.match(css, /\.candidates-directory__toolbar :is\(input, select, button\)/)
 })

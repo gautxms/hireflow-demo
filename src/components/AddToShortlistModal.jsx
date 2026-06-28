@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Plus, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Plus, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { buildShortlistSummary, getShortlistBulkErrorMessage } from './shortlistState'
 import '../styles/add-to-shortlist-modal.css'
@@ -34,6 +34,13 @@ function resolveCandidateAnalysisId(candidate = {}, jobContext = null) {
 
 function resolveCandidateResumeId(candidate = {}) {
   return String(candidate?.resumeId || candidate?.resume_id || candidate?.id || '').trim()
+}
+
+function buildApiErrorMessage(payload, fallback) {
+  const parts = [getShortlistBulkErrorMessage(payload)]
+  if (payload?.retryGuidance) parts.push(String(payload.retryGuidance).trim())
+  const message = parts.filter(Boolean).join(' ')
+  return message || fallback
 }
 
 function buildCandidateSnapshot(candidate = {}, jobContext = null) {
@@ -145,7 +152,7 @@ export default function AddToShortlistModal({
       try {
         const response = await fetch(`${API_BASE}/shortlists`, { headers: headers() })
         const payload = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(payload.error || 'Unable to load shortlists')
+        if (!response.ok) throw new Error(buildApiErrorMessage(payload, 'Unable to load shortlists'))
         const active = (Array.isArray(payload.shortlists) ? payload.shortlists : []).filter((item) => item.status !== 'archived')
         if (ignore) return
         setShortlists(active)
@@ -173,7 +180,7 @@ export default function AddToShortlistModal({
     try {
       const response = await fetch(`${API_BASE}/shortlists`, { method: 'POST', headers: headers(), body: JSON.stringify({ name, jobDescriptionId: jobContext?.jobDescriptionId || null }) })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload.error || 'Unable to create shortlist. Please retry.')
+      if (!response.ok) throw new Error(buildApiErrorMessage(payload, 'Unable to create shortlist. Please retry.'))
       const created = payload.shortlist
       const createdId = String(created?.id || '')
       if (!createdId) throw new Error('Shortlist was created but no destination was returned. Please refresh and retry.')
@@ -233,7 +240,7 @@ export default function AddToShortlistModal({
         method: 'POST', headers: headers(), body: JSON.stringify({ resumeIds, candidateSnapshotByResumeId, sourceContextByResumeId }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(getShortlistBulkErrorMessage(payload) || 'Unable to add candidates. Please retry.')
+      if (!response.ok) throw new Error(buildApiErrorMessage(payload, 'Unable to add candidates. Please retry.'))
       const next = payload?.summary || {}
       setSummary({ text: buildShortlistSummary(next, 'add'), failed: Number(next.failed || 0) > 0 })
       sessionStorage.setItem(SHORTLIST_SESSION_KEY, selectedShortlistId)
@@ -264,20 +271,23 @@ export default function AddToShortlistModal({
       <div className="atsm__field-group">
         <label className="atsm__label" htmlFor="atsm-destination">Select shortlist</label>
         <div className="atsm__select-row">
-          <select id="atsm-destination" className="atsm__input" value={selectedShortlistId} onChange={(e) => setSelectedShortlistId(e.target.value)} disabled={isLoading || isSubmitting}>
+          <div className="atsm__select-wrap">
+            <select id="atsm-destination" className="atsm__input atsm__select" value={selectedShortlistId} onChange={(e) => { setSelectedShortlistId(e.target.value); setError('') }} disabled={isLoading || isSubmitting}>
             <option value="">{isLoading ? 'Loading shortlists…' : 'Select shortlist'}</option>{shortlists.map((s) => {
               const candidateCount = Number(s?.candidate_count || 0)
               const jobLabel = String(s?.job_label || '').trim() || 'General shortlist'
               return <option key={s.id} value={s.id}>{`${s.name} · ${candidateCount} candidate${candidateCount === 1 ? '' : 's'} · ${jobLabel}`}</option>
             })}
           </select>
-          <button type="button" className="hf-btn hf-btn--secondary atsm__add-toggle" onClick={() => setIsCreateOpen((value) => !value)} aria-expanded={isCreateOpen} aria-controls="atsm-create-panel" aria-label="Create a new shortlist" disabled={isSubmitting || isLoading}><Plus size={18} strokeWidth={1.8} aria-hidden="true" /></button>
+            <ChevronDown className="atsm__select-icon" size={18} strokeWidth={1.5} aria-hidden="true" />
+          </div>
+          <button type="button" className="hf-btn hf-btn--secondary atsm__add-toggle" onClick={() => { setError(''); setIsCreateOpen((value) => !value) }} aria-expanded={isCreateOpen} aria-controls="atsm-create-panel" aria-label="Create a new shortlist" disabled={isSubmitting || isLoading}><Plus size={18} strokeWidth={1.8} aria-hidden="true" /></button>
         </div>
       </div>
       {isCreateOpen ? <div className="atsm__create-panel" id="atsm-create-panel">
         <label className="atsm__label" htmlFor="atsm-new-shortlist">Create shortlist</label>
         <div className="atsm__inline">
-          <input id="atsm-new-shortlist" className="atsm__input" value={newShortlistName} onChange={(e) => setNewShortlistName(e.target.value)} onKeyDown={handleCreateKeyDown} placeholder="e.g. Final interview" autoFocus />
+          <input id="atsm-new-shortlist" className="atsm__input" value={newShortlistName} onChange={(e) => { setNewShortlistName(e.target.value); setError('') }} onKeyDown={handleCreateKeyDown} placeholder="e.g. Final interview" autoFocus />
           <button type="button" className="hf-btn hf-btn--primary atsm__create-button" onClick={createInlineShortlist} disabled={isSubmitting || isLoading || !newShortlistName.trim()}>{isSubmitting ? 'Creating…' : 'Create'}</button>
         </div>
       </div> : null}
