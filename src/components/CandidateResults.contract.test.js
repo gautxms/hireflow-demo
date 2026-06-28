@@ -355,3 +355,15 @@ test('shortlist selector panel can render regardless of shortlistV2 flag', () =>
   assert.match(candidateResultsSource, /\{shortlistOpen && \(/)
   assert.doesNotMatch(candidateResultsSource, /\{shortlistV2Enabled && shortlistOpen && \(/)
 })
+
+test('CandidateResults suppresses noisy resume parsing integrity warning', () => {
+  assert.match(
+    candidateResultsSource,
+    /const SUPPRESSED_RESUME_INTEGRITY_LABELS = new Set\(\[\s*'resume parsing was incomplete or failed\.',\s*\]\)/s,
+  )
+  assert.match(candidateResultsSource, /if \(normalized\.includes\('parse'\)\) return ''/)
+  assert.match(candidateResultsSource, /SUPPRESSED_RESUME_INTEGRITY_LABELS\.has\(normalizedLabel\)/)
+  assert.doesNotMatch(candidateResultsSource, /mentionsOcrOrParseFailure/)
+  assert.doesNotMatch(candidateResultsSource, /asTextBlob\.includes\('ocr'\) \|\| asTextBlob\.includes\('parse'\)/)
+  assert.doesNotMatch(candidateResultsSource, /checks\.push\(\{ status: 'issue', label: 'Resume parsing was incomplete or failed\.' \}\)/)
+})
