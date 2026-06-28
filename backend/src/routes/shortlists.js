@@ -20,7 +20,7 @@ export function normalizeBatchResumeIds(input) {
     const resolved = resolveCandidateResumeUuid(trimmed)
 
     if (resolved) {
-      unique.add(resolved)
+      unique.add(resolved.toLowerCase())
     } else if (trimmed) {
       invalid.push(trimmed)
     }
@@ -49,6 +49,39 @@ export function resolveBatchAnalysisId(resumeId, sourceContextByResumeId = {}, c
     || resolveCandidateResumeUuid(candidateSnapshot.analysisId)
     || resolveCandidateResumeUuid(candidateSnapshot.analysis_id)
     || null
+}
+
+
+export function buildBatchRemoveResponse({ shortlistId, resumeIds = [], malformedIds = [], removedIds = [] }) {
+  const removed = new Set(removedIds)
+  const outcomes = [
+    ...malformedIds.map((resumeId) => ({
+      resumeId,
+      ok: false,
+      code: 'invalid_resume_id',
+      message: 'Invalid resume ID format',
+    })),
+    ...resumeIds.map((resumeId) => ({
+      resumeId,
+      ok: true,
+      code: removed.has(resumeId) ? 'removed' : 'not_present',
+    })),
+  ]
+  const removedCount = outcomes.filter((item) => item.code === 'removed').length
+  const invalidCount = malformedIds.length
+
+  return {
+    shortlistId,
+    ok: invalidCount === 0,
+    partialFailure: invalidCount > 0,
+    summary: {
+      requested: outcomes.length,
+      removed: removedCount,
+      notPresent: resumeIds.length - removedCount,
+      invalid: invalidCount,
+    },
+    outcomes,
+  }
 }
 
 function buildNumericJsonExpression(expression) {
@@ -607,26 +640,12 @@ router.post('/:id/candidates/batch-remove', async (req, res) => {
        RETURNING resume_id`,
       [req.params.id, resumeIds],
     )
-    const removed = new Set(deletedResult.rows.map((row) => row.resume_id))
-
-    const outcomes = resumeIds.map((resumeId) => ({
-      resumeId,
-      ok: true,
-      code: removed.has(resumeId) ? 'removed' : 'not_present',
-    }))
-    const removedCount = outcomes.filter((item) => item.code === 'removed').length
-
-    return res.json({
+    return res.json(buildBatchRemoveResponse({
       shortlistId: req.params.id,
-      ok: true,
-      partialFailure: false,
-      summary: {
-        requested: resumeIds.length + malformedIds.length,
-        removed: removedCount,
-        notPresent: resumeIds.length - removedCount,
-      },
-      outcomes,
-    })
+      resumeIds,
+      malformedIds,
+      removedIds: deletedResult.rows.map((row) => row.resume_id),
+    }))
   } catch (error) {
     console.error('[Shortlists] Failed to batch remove candidates:', error)
     return res.status(500).json({ error: 'Unable to batch remove candidates from shortlist' })
