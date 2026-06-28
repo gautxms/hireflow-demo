@@ -46,3 +46,10 @@ test('dashboard filter controls use an accessible custom dark listbox instead of
   assert.match(dashboardStyles, /\.new-dashboard__select-menu \{[\s\S]*background: var\(--dashboard-select-menu-bg\);/)
   assert.match(dashboardStyles, /\.new-dashboard__select-option--selected \{[\s\S]*background:/)
 })
+
+
+test('dashboard renders resumes analyzed KPI and monthly usage helper from API payload', () => {
+  assert.match(dashboardSource, /\['Resumes Analyzed', kpis\.resumesAnalyzedCount, 'users'/)
+  assert.match(dashboardSource, /Monthly usage: \$\{formatCompactNumber\(usage\.monthlyResumeAnalysisCount\)\} \/ \$\{formatCompactNumber\(usage\.monthlyResumeAnalysisLimit\)\}/)
+  assert.match(dashboardSource, /className="new-dashboard__kpi-helper"/)
+})

@@ -385,10 +385,15 @@ export default function NewDashboard() {
 
   const kpis = dashboardData?.kpis || {
     analysesRunCount: 0,
+    resumesAnalyzedCount: 0,
     completionRate: 0,
     avgScore: null,
     scoredCount: 0,
     shortlistedRate: 0,
+  }
+  const usage = dashboardData?.usage || {
+    monthlyResumeAnalysisCount: 0,
+    monthlyResumeAnalysisLimit: 800,
   }
 
   const analysesTrend = useMemo(() => dashboardData?.charts?.analysesTrend || [], [dashboardData])
@@ -464,16 +469,20 @@ export default function NewDashboard() {
       <section className="new-dashboard__kpis">
         {[
           ['Analyses Run', kpis.analysesRunCount, 'file'],
+          ['Resumes Analyzed', kpis.resumesAnalyzedCount, 'users', `Monthly usage: ${formatCompactNumber(usage.monthlyResumeAnalysisCount)} / ${formatCompactNumber(usage.monthlyResumeAnalysisLimit)}`],
           ['Completion Rate', formatPercent(kpis.completionRate), 'target'],
           ['Average Score', formatScore(kpis.avgScore), 'chart'],
           ['Shortlisted Rate', formatPercent(kpis.shortlistedRate), 'users'],
-        ].map(([label, value, iconName]) => (
+        ].map(([label, value, iconName, helperText]) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
             <div className="new-dashboard__kpi-top-row">
               <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
               <span className="new-dashboard__kpi-icon" aria-hidden="true"><Icon name={iconName} size="sm" tone="muted" /></span>
             </div>
-            <p className="new-dashboard__kpi-value kpi-card-value">{value}</p>
+            <div>
+              <p className="new-dashboard__kpi-value kpi-card-value">{value}</p>
+              {helperText ? <p className="new-dashboard__kpi-helper">{helperText}</p> : null}
+            </div>
           </article>
         ))}
       </section>
