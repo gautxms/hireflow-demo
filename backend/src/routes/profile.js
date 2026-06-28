@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
+import { PAID_MONTHLY_RESUME_ANALYSIS_LIMIT } from '../config/resumeAnalysisQuota.js'
 
 const router = Router()
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
@@ -8,6 +9,8 @@ const GRACE_PERIOD_DAYS = 30
 const KPI_SCHEMA_VERSION = '2026-05-08.v2'
 const MAX_DASHBOARD_RANGE_DAYS = 180
 const DEFAULT_DASHBOARD_RANGE_DAYS = 30
+const DASHBOARD_MONTHLY_RESUME_ANALYSIS_LIMIT = PAID_MONTHLY_RESUME_ANALYSIS_LIMIT
+
 const DASHBOARD_ERROR_CODE = {
   INVALID_RANGE: 'DASHBOARD_INVALID_RANGE',
   DB_QUERY_FAILED: 'DASHBOARD_QUERY_FAILED',
@@ -140,7 +143,7 @@ router.get('/dashboard/kpis', async (req, res) => {
       }
     }
 
-    const [summaryResult, timeSeriesResult, topJobsResult, jobOptionsResult] = await Promise.all([
+    const [summaryResult, timeSeriesResult, topJobsResult, jobOptionsResult, monthlyUsageResult] = await Promise.all([
       runSegmentQuery(
         'summary',
         `WITH analysis_window AS (
@@ -324,6 +327,16 @@ router.get('/dashboard/kpis', async (req, res) => {
          ORDER BY created_at DESC`,
         [filters.userId],
       ),
+      runSegmentQuery(
+        'monthlyUsage',
+        `SELECT COUNT(*)::int AS monthly_resume_analysis_count
+         FROM analysis_items ai
+         INNER JOIN analyses a ON a.id = ai.analysis_id
+         WHERE a.user_id = $1
+           AND a.created_at >= date_trunc('month', NOW())
+           AND a.created_at < date_trunc('month', NOW()) + interval '1 month'`,
+        [filters.userId],
+      ),
     ])
 
     const summary = summaryResult.rows[0] || {}
@@ -333,9 +346,15 @@ router.get('/dashboard/kpis', async (req, res) => {
     const resumesCount = Number(summary.resumes_count || 0)
     const shortlistedCount = Number(summary.shortlisted_count || 0)
     const scoredCount = Number(summary.scored_count || 0)
+    const monthlyUsageSummary = monthlyUsageResult.rows[0] || {}
+    const monthlyResumeAnalysisCount = Number(monthlyUsageSummary.monthly_resume_analysis_count || 0)
+    const monthlyResumeAnalysisLimit = DASHBOARD_MONTHLY_RESUME_ANALYSIS_LIMIT
+    const monthlyResumeAnalysisRemaining = Math.max(monthlyResumeAnalysisLimit - monthlyResumeAnalysisCount, 0)
+    const monthlyResumeAnalysisUsageRate = formatRate(monthlyResumeAnalysisCount, monthlyResumeAnalysisLimit)
 
     const kpis = {
       analysesRunCount,
+      resumesAnalyzedCount: resumesCount,
       completionRate: formatRate(analysesCompletedCount, analysesRunCount),
       analysesFailedCount,
       avgScore: summary.avg_score === null || summary.avg_score === undefined ? null : Number(summary.avg_score),
@@ -414,6 +433,12 @@ router.get('/dashboard/kpis', async (req, res) => {
         hasScoreData,
       },
       kpis,
+      usage: {
+        monthlyResumeAnalysisLimit,
+        monthlyResumeAnalysisCount,
+        monthlyResumeAnalysisRemaining,
+        monthlyResumeAnalysisUsageRate,
+      },
       charts: {
         analysesTrend,
         averageScoreTrend,
@@ -439,6 +464,11 @@ router.get('/dashboard/kpis', async (req, res) => {
       ]
       const summaryRows = [
         ['analyses_run_count', payload.kpis.analysesRunCount],
+        ['resumes_analyzed_count', payload.kpis.resumesAnalyzedCount],
+        ['monthly_resume_analysis_count', payload.usage.monthlyResumeAnalysisCount],
+        ['monthly_resume_analysis_limit', payload.usage.monthlyResumeAnalysisLimit],
+        ['monthly_resume_analysis_remaining', payload.usage.monthlyResumeAnalysisRemaining],
+        ['monthly_resume_analysis_usage_rate', payload.usage.monthlyResumeAnalysisUsageRate],
         ['completion_rate', payload.kpis.completionRate],
         ['avg_score', payload.kpis.avgScore],
         ['scored_count', payload.kpis.scoredCount],
