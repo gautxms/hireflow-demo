@@ -10,7 +10,8 @@ import { buildResumeFileIdentity } from '../utils/resumeFileIdentity.js'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const MAX_FILE_SIZE = 100 * 1024 * 1024
 const MAX_FILE_COUNT = 20
-const CHUNK_SIZE = 5 * 1024 * 1024
+// Keep client chunks below the backend 5 MiB limit to avoid exact-boundary multipart failures.
+const CHUNK_SIZE = 4 * 1024 * 1024
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
   'application/msword',
