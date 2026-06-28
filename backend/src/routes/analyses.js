@@ -430,10 +430,13 @@ router.get('/', requireAuth, async (req, res) => {
          AND NOT EXISTS (
            SELECT 1
            FROM analysis_items ai
+           LEFT JOIN resumes r ON r.id = ai.resume_id
            WHERE ai.analysis_id = uc.analysis_id
              AND (
                (uc.resume_id IS NOT NULL AND ai.resume_id = uc.resume_id)
                OR (uc.parse_job_id IS NOT NULL AND ai.parse_job_id = uc.parse_job_id)
+               OR (LOWER(TRIM(COALESCE(uc.filename, ''))) <> ''
+                   AND LOWER(TRIM(COALESCE(r.original_filename, r.filename, ''))) = LOWER(TRIM(uc.filename)))
              )
          )
        ORDER BY uc.analysis_id ASC, uc.created_at ASC`,

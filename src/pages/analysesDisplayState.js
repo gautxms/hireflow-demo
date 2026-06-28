@@ -31,31 +31,38 @@ function isTerminalAnalysis(analysis) {
   return status === 'complete' || status === 'completed' || status === 'failed' || status === 'partial'
 }
 
+function getFileIdentityKey(file) {
+  return String(buildResumeFileIdentity(file).filename || file?.name || '').trim().toLowerCase()
+}
+
 function mergeExpectedFiles(serverFiles, expectedFiles) {
-  const merged = Array.isArray(serverFiles) ? [...serverFiles] : []
-  const seen = new Set(merged.map((file) => String(buildResumeFileIdentity(file).filename || file?.name || '').trim()).filter(Boolean))
-  expectedFiles.forEach((file) => {
-    const filename = String(file.filename || file.name || '').trim()
-    if (filename && !seen.has(filename)) {
-      merged.push(file)
-      seen.add(filename)
-    }
+  const merged = []
+  const seen = new Set()
+  ;[...(Array.isArray(serverFiles) ? serverFiles : []), ...(Array.isArray(expectedFiles) ? expectedFiles : [])].forEach((file) => {
+    const filename = getFileIdentityKey(file)
+    if (!filename || seen.has(filename)) return
+    merged.push(file)
+    seen.add(filename)
   })
   return merged
+}
+
+function clampCount(value, max) {
+  return Math.min(Math.max(Number(value || 0), 0), max)
 }
 
 export function mergeInFlightAnalysis(analysis, overlay) {
   if (!overlay || isTerminalAnalysis(analysis)) return analysis
 
-  const expectedFileCount = Number(overlay.expectedFileCount || 0)
+  const expectedFileCount = Math.max(Number(overlay.expectedFileCount || 0), 0)
   const serverSummary = analysis?.summary || {}
-  const serverFileCount = Number(analysis?.fileCount ?? serverSummary.total ?? 0)
-  const complete = Number(serverSummary.complete || 0)
-  const failed = Number(serverSummary.failed || 0)
-  const unresolved = Math.max(expectedFileCount - complete - failed, 0)
-  const total = Math.max(Number(serverSummary.total || 0), serverFileCount, expectedFileCount)
-  const processing = Math.max(Number(serverSummary.processing || 0), unresolved)
-  const pending = Math.max(Number(serverSummary.pending || 0), total - complete - failed - processing, 0)
+  const complete = clampCount(serverSummary.complete, expectedFileCount)
+  const failed = clampCount(serverSummary.failed, Math.max(expectedFileCount - complete, 0))
+  const resolved = complete + failed
+  const unresolved = Math.max(expectedFileCount - resolved, 0)
+  const serverProcessing = clampCount(serverSummary.processing, unresolved)
+  const processing = unresolved > 0 ? Math.max(serverProcessing, 1) : 0
+  const pending = Math.max(expectedFileCount - resolved - processing, 0)
   const files = mergeExpectedFiles(analysis?.files, overlay.expectedFiles || [])
   const filesPreview = mergeExpectedFiles(analysis?.filesPreview, overlay.expectedFiles || [])
 
@@ -66,10 +73,10 @@ export function mergeInFlightAnalysis(analysis, overlay) {
     jobDescriptionId: analysis?.jobDescriptionId || overlay.jobDescriptionId,
     liveStatus: 'processing',
     status: normalizeStatus(analysis?.status) === 'pending' ? 'processing' : analysis?.status,
-    fileCount: Math.max(serverFileCount, expectedFileCount),
+    fileCount: expectedFileCount,
     summary: {
       ...serverSummary,
-      total,
+      total: expectedFileCount,
       complete,
       failed,
       processing,
