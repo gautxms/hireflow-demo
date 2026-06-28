@@ -335,3 +335,71 @@ test('cleanupExpiredChunkUploads deletes objects using stored prefixes without a
   assert.equal(commands[0].input.Prefix, prefix)
   assert.deepEqual(commands[1].input.Delete.Objects.map((object) => object.Key), [`${prefix}/chunks/0`, `${prefix}/assembled/resume.pdf`])
 })
+
+test('completeChunkUpload leaves analysis item visible and marks upload/resume failed when enqueueParseJob fails after resume creation', async (t) => {
+  const uploadId = '00000000-0000-4000-8000-000000000601'
+  const resumeId = '00000000-0000-4000-8000-000000000602'
+  const analysisId = '00000000-0000-4000-8000-000000000603'
+  const prefix = `uploads/${uploadId}`
+
+  const queries = mockServiceQueries(t, (sql) => {
+    if (sql.includes('SELECT upload_id, user_id, filename') && sql.includes('s3_prefix')) {
+      return { rows: [{
+        upload_id: uploadId,
+        user_id: 7,
+        filename: 'resume.pdf',
+        mime_type: 'application/pdf',
+        file_size: 3,
+        total_chunks: 1,
+        uploaded_chunks: [0],
+        status: 'uploading',
+        job_description_id: null,
+        resume_id: null,
+        analysis_id: analysisId,
+        s3_prefix: prefix,
+      }] }
+    }
+    if (sql.includes('INSERT INTO analysis_items')) return { rows: [] }
+    if (sql.includes('SELECT job_id')) return { rows: [] }
+    if (sql.includes('UPDATE upload_chunks')) return { rows: [] }
+    if (sql.includes('UPDATE resumes')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  t.mock.method(pool, 'connect', async () => ({
+    query: async (sql) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] }
+      if (sql.includes('SELECT status, resume_id, parse_job_id')) return { rows: [{ status: 'uploading', resume_id: null, parse_job_id: null }] }
+      if (sql.includes('INSERT INTO resumes')) return { rows: [{ id: resumeId }] }
+      if (sql.includes('UPDATE upload_chunks')) return { rows: [] }
+      throw new Error(`Unexpected transaction query: ${sql}`)
+    },
+    release: () => {},
+  }))
+
+  t.mock.method(parseQueue, 'getJob', async () => null)
+  t.mock.method(parseQueue, 'add', async () => {
+    throw new Error('queue unavailable')
+  })
+
+  mockS3(t, (command) => {
+    if (command.constructor.name === 'GetObjectCommand') return { Body: Buffer.from('abc') }
+    return {}
+  })
+
+  await assert.rejects(
+    service.completeChunkUpload({ userId: 7, uploadId }),
+    /queue unavailable/,
+  )
+
+  const analysisItemInsertIndex = queries.findIndex(({ sql }) => sql.includes('INSERT INTO analysis_items'))
+  const failedUploadUpdateIndex = queries.findIndex(({ sql }) => sql.includes('UPDATE upload_chunks') && sql.includes("SET status = 'failed'"))
+  const failedResumeUpdateIndex = queries.findIndex(({ sql }) => sql.includes('UPDATE resumes') && sql.includes("parse_status = 'failed'"))
+
+  assert.notEqual(analysisItemInsertIndex, -1)
+  assert.notEqual(failedUploadUpdateIndex, -1)
+  assert.notEqual(failedResumeUpdateIndex, -1)
+  assert.ok(analysisItemInsertIndex < failedUploadUpdateIndex)
+  assert.equal(queries[failedResumeUpdateIndex].params[0], resumeId)
+  assert.equal(queries[failedResumeUpdateIndex].params[1], 'queue unavailable')
+})

@@ -376,3 +376,66 @@ test('GET /analyses/:id includes upload_chunks rows missing analysis_items', asy
   assert.equal(payload.items[0].source, 'upload_chunks')
   assert.equal(payload.items[0].filename, 'large.docx')
 })
+
+test('GET /analyses/:id counts two complete items plus one orphan upload for production 100MB scenario', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(parseQueue, 'getJob', async () => null)
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: 'prod-analysis', user_id: 9, status: 'processing', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: null, job_description_title: null }] }
+    }
+    if (sql.includes('FROM analysis_items ai')) {
+      return { rows: [
+        { id: 'ai-1', resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'small-1.docx', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: { candidates: [] } },
+        { id: 'ai-2', resume_id: 'r-2', parse_job_id: 'p-2', created_at: '2026-05-01T00:00:11.000Z', filename: 'small-2.docx', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:01.000Z', parse_result: { candidates: [] } },
+      ] }
+    }
+    if (sql.includes('FROM upload_chunks uc')) {
+      return { rows: [{ upload_id: 'u-100mb', filename: 'exact-100mb.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', upload_status: 'failed', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:12.000Z', updated_at: '2026-05-01T00:00:30.000Z' }] }
+    }
+    if (sql.includes('UPDATE analyses')) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/prod-analysis`, { headers: authHeader(9) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.summary.total, 3)
+  assert.equal(payload.summary.complete, 2)
+  assert.equal(payload.summary.failed, 1)
+  assert.equal(payload.items.some((item) => item.filename === 'exact-100mb.docx' && item.source === 'upload_chunks'), true)
+})
+
+test('GET /analyses/:id does not duplicate matching analysis_items and upload_chunks rows', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(parseQueue, 'getJob', async () => null)
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: 'dedupe-analysis', user_id: 9, status: 'complete', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: null, job_description_title: null }] }
+    }
+    if (sql.includes('FROM analysis_items ai')) {
+      return { rows: [{ id: 'ai-1', resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:10.000Z', filename: 'resume.docx', resume_parse_status: 'complete', parse_error: null, parse_job_status: 'complete', progress: 100, error_message: null, parse_job_updated_at: '2026-05-01T00:01:00.000Z', parse_result: { candidates: [] } }] }
+    }
+    if (sql.includes('FROM upload_chunks uc')) return { rows: [] }
+    if (sql.includes('UPDATE analyses')) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/dedupe-analysis`, { headers: authHeader(9) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.summary.total, 1)
+  assert.equal(payload.summary.complete, 1)
+  assert.equal(payload.items.length, 1)
+  assert.equal(payload.items[0].filename, 'resume.docx')
+})

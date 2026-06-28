@@ -85,3 +85,11 @@ test('analyses list links complete and partial rows while leaving pending and pr
   assert.match(analysesPageSource, /href=\{`\/analyses\/\$\{analysis\.id\}`\}/)
   assert.match(analysesPageSource, /analysis\.name \|\| 'Untitled analysis'/)
 })
+
+test('create-analysis upload loop surfaces partial failures without discarding successful files', () => {
+  assert.match(analysesPageSource, /const failedUploads = \[\]/)
+  assert.match(analysesPageSource, /for \(const file of selectedFiles\) \{[\s\S]*try \{/)
+  assert.match(analysesPageSource, /failedUploads\.push\(`\$\{file\.name\}: \$\{fileFailure\.message \|\| 'upload failed'\}`\)/)
+  assert.match(analysesPageSource, /const nextItems = await loadAnalyses\(\)/)
+  assert.match(analysesPageSource, /Analysis created with \$\{selectedFiles\.length - failedUploads\.length\} of \$\{selectedFiles\.length\} file\(s\) uploaded\./)
+})
