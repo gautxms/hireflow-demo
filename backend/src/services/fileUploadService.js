@@ -16,6 +16,7 @@ import { isScanResultSafe, scanFileBuffer } from './virusScanService.js'
 import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileMime.js'
 
 export const CHUNK_SIZE_BYTES = 5 * 1024 * 1024
+export const CLIENT_CHUNK_SIZE_BYTES = 4 * 1024 * 1024
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 let uploadTablesReady = false
@@ -53,6 +54,24 @@ function ensureS3Configured() {
 function normalizeMimeType(filename, mimeType) {
   const normalizedMimeType = String(mimeType || '').trim().toLowerCase()
   return resolveEffectiveMimeType(normalizedMimeType, filename)
+}
+
+function resolveClientChunkSize(clientChunkSize) {
+  if (clientChunkSize === undefined || clientChunkSize === null || clientChunkSize === '') {
+    return CHUNK_SIZE_BYTES
+  }
+
+  const parsedChunkSize = Number(clientChunkSize)
+
+  if (!Number.isFinite(parsedChunkSize) || !Number.isInteger(parsedChunkSize) || parsedChunkSize <= 0) {
+    throw new Error('clientChunkSize must be a positive integer')
+  }
+
+  if (parsedChunkSize !== CLIENT_CHUNK_SIZE_BYTES && parsedChunkSize !== CHUNK_SIZE_BYTES) {
+    throw new Error('clientChunkSize must be 4MB or 5MB')
+  }
+
+  return parsedChunkSize
 }
 
 async function ensureUploadChunkTables() {
@@ -182,7 +201,7 @@ export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
   return true
 }
 
-export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null }) {
+export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null, clientChunkSize = undefined }) {
   ensureS3Configured()
   await ensureUploadChunkTables()
   await ensureAnalysisTables()
@@ -195,7 +214,8 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     throw new Error('File exceeds 100MB limit')
   }
 
-  const totalChunks = Math.ceil(fileSize / CHUNK_SIZE_BYTES)
+  const effectiveChunkSize = resolveClientChunkSize(clientChunkSize)
+  const totalChunks = Math.ceil(fileSize / effectiveChunkSize)
   const fileMetadata = normalizeResumeFileMetadata({ originalFilename: filename, reportedMimeType: mimeType })
   const originalFilename = fileMetadata.originalFilename
   const safeFilename = fileMetadata.storageFilename

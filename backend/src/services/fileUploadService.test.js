@@ -58,6 +58,147 @@ test('initChunkUpload stores a tenant-namespaced S3 prefix for new sessions with
   assert.equal(insert.params[7], `users/42/uploads/${result.uploadId}`)
 })
 
+test('initChunkUpload uses clientChunkSize to calculate 100 MiB uploads with 4 MiB chunks', async (t) => {
+  const fileSize = 100 * 1024 * 1024
+  const clientChunkSize = 4 * 1024 * 1024
+  const queries = mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('INSERT INTO analyses')) return { rows: [{ id: '00000000-0000-4000-8000-000000000501' }] }
+    if (sql.includes('FROM upload_chunks') && sql.includes("status = 'uploading'")) return { rows: [] }
+    if (sql.includes('INSERT INTO upload_chunks')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const result = await service.initChunkUpload({
+    userId: 42,
+    filename: 'large.pdf',
+    fileSize,
+    mimeType: 'application/pdf',
+    clientChunkSize,
+  })
+
+  assert.equal(result.totalChunks, 25)
+  const insert = queries.find(({ sql }) => sql.includes('INSERT INTO upload_chunks'))
+  assert.equal(insert.params[5], 25)
+})
+
+test('initChunkUpload defaults to backend chunk size when clientChunkSize is omitted', async (t) => {
+  const fileSize = 100 * 1024 * 1024
+  const queries = mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('INSERT INTO analyses')) return { rows: [{ id: '00000000-0000-4000-8000-000000000502' }] }
+    if (sql.includes('FROM upload_chunks') && sql.includes("status = 'uploading'")) return { rows: [] }
+    if (sql.includes('INSERT INTO upload_chunks')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const result = await service.initChunkUpload({
+    userId: 42,
+    filename: 'legacy.pdf',
+    fileSize,
+    mimeType: 'application/pdf',
+  })
+
+  assert.equal(result.totalChunks, 20)
+  const insert = queries.find(({ sql }) => sql.includes('INSERT INTO upload_chunks'))
+  assert.equal(insert.params[5], 20)
+})
+
+
+test('initChunkUpload accepts explicit backend chunk size clientChunkSize', async (t) => {
+  const fileSize = 100 * 1024 * 1024
+  const queries = mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('INSERT INTO analyses')) return { rows: [{ id: '00000000-0000-4000-8000-000000000504' }] }
+    if (sql.includes('FROM upload_chunks') && sql.includes("status = 'uploading'")) return { rows: [] }
+    if (sql.includes('INSERT INTO upload_chunks')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const result = await service.initChunkUpload({
+    userId: 42,
+    filename: 'explicit-backend-chunk.pdf',
+    fileSize,
+    mimeType: 'application/pdf',
+    clientChunkSize: 5 * 1024 * 1024,
+  })
+
+  assert.equal(result.totalChunks, 20)
+  const insert = queries.find(({ sql }) => sql.includes('INSERT INTO upload_chunks'))
+  assert.equal(insert.params[5], 20)
+})
+
+test('initChunkUpload rejects unsupported tiny clientChunkSize values', async (t) => {
+  mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  await assert.rejects(
+    service.initChunkUpload({
+      userId: 42,
+      filename: 'tiny-chunk.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      clientChunkSize: 1,
+    }),
+    /clientChunkSize must be 4MB or 5MB/,
+  )
+})
+
+test('initChunkUpload rejects clientChunkSize over the backend chunk size limit', async (t) => {
+  mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  await assert.rejects(
+    service.initChunkUpload({
+      userId: 42,
+      filename: 'too-large-chunk.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      clientChunkSize: (5 * 1024 * 1024) + 1,
+    }),
+    /clientChunkSize must be 4MB or 5MB/,
+  )
+})
+
+test('initChunkUpload rejects files over 100 MiB even with clientChunkSize', async (t) => {
+  mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  await assert.rejects(
+    service.initChunkUpload({
+      userId: 42,
+      filename: 'too-large.pdf',
+      fileSize: (101 * 1024 * 1024),
+      mimeType: 'application/pdf',
+      clientChunkSize: 4 * 1024 * 1024,
+    }),
+    /File exceeds 100MB limit/,
+  )
+})
+
+test('storeChunk accepts totalChunks from sessions initialized with 4 MiB client chunks', async (t) => {
+  const uploadId = '00000000-0000-4000-8000-000000000503'
+  const prefix = `users/1/uploads/${uploadId}`
+  mockServiceQueries(t, (sql) => {
+    if (sql.includes('SELECT upload_id, user_id, total_chunks, status, s3_prefix')) {
+      return { rows: [{ upload_id: uploadId, user_id: 1, total_chunks: 25, status: 'uploading', s3_prefix: prefix }] }
+    }
+    if (sql.includes('UPDATE upload_chunks')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+  const commands = mockS3(t, () => ({}))
+
+  await service.storeChunk({ userId: 1, uploadId, chunkIndex: 24, totalChunks: 25, chunkBuffer: Buffer.from('z') })
+
+  assert.equal(commands[0].input.Key, `${prefix}/chunks/24`)
+})
+
 test('storeChunk writes new tenant-prefixed chunk keys from persisted s3_prefix', async (t) => {
   const uploadId = '00000000-0000-4000-8000-000000000201'
   const prefix = `users/1/uploads/${uploadId}`

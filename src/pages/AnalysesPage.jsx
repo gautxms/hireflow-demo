@@ -289,6 +289,7 @@ export default function AnalysesPage() {
             filename: file.name,
             fileSize: file.size,
             mimeType: inferResumeMimeType(file),
+            clientChunkSize: CHUNK_SIZE,
             ...(toOptionalJobDescriptionId(selectedJobDescriptionId) ? { jobDescriptionId: selectedJobDescriptionId } : {}),
             ...(analysisId ? { analysisId } : {}),
             ...(analysisName.trim() ? { analysisName: analysisName.trim() } : {}),
