@@ -56,7 +56,7 @@ test('GET /analyses includes orphan upload_chunks as processing files', async (t
     if (sql.includes('FROM analyses a')) {
       return { rows: [{ id: 'a-1', created_at: '2026-05-01T00:00:00.000Z', status: 'pending', name: 'Fresh upload', job_description_title: 'Engineer', total_count: '0', complete_count: '0', failed_count: '0', processing_count: '0' }] }
     }
-    if (sql.includes('FROM upload_chunks uc')) {
+    if (sql.includes('upload_chunks uc')) {
       return { rows: [{ analysis_id: 'a-1', upload_id: 'u-1', filename: 'resume.pdf', mime_type: 'application/pdf', status: 'uploading', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() }] }
     }
     return { rows: [] }
@@ -91,7 +91,7 @@ test('GET /analyses maps failed orphan upload_chunks as failed', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('FROM analyses a')) return { rows: [{ id: 'a-fail', created_at: '2026-05-01T00:00:00.000Z', status: 'pending', total_count: '0', complete_count: '0', failed_count: '0', processing_count: '0' }] }
-    if (sql.includes('FROM upload_chunks uc')) return { rows: [{ analysis_id: 'a-fail', upload_id: 'u-fail', filename: 'bad.pdf', mime_type: 'application/pdf', status: 'rejected', created_at: '2026-05-01T00:00:01.000Z', updated_at: '2026-05-01T00:00:02.000Z' }] }
+    if (sql.includes('upload_chunks uc')) return { rows: [{ analysis_id: 'a-fail', upload_id: 'u-fail', filename: 'bad.pdf', mime_type: 'application/pdf', status: 'rejected', created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() }] }
     return { rows: [] }
   })
 
@@ -113,7 +113,7 @@ test('GET /analyses/:id includes orphan upload_chunks placeholders and excludes 
   t.mock.method(parseQueue, 'getJob', async () => null)
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('FROM analyses a')) return { rows: [{ id: 'a-2', user_id: 9, status: 'pending', name: 'Uploading', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: null, job_description_title: null }] }
-    if (sql.includes('FROM upload_chunks uc')) return { rows: [{ upload_id: 'u-2', filename: 'upload.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', status: 'completed', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: '2026-05-01T00:00:02.000Z' }] }
+    if (sql.includes('upload_chunks uc')) return { rows: [{ upload_id: 'u-2', filename: 'upload.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', status: 'completed', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() }] }
     if (sql.includes('FROM analysis_items ai')) return { rows: [] }
     if (sql.includes('UPDATE analyses')) return { rows: [] }
     return { rows: [] }
@@ -141,7 +141,7 @@ test('GET /analyses does not double count upload_chunks matching analysis_items'
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('FROM analyses a')) return { rows: [{ id: 'a-3', created_at: '2026-05-01T00:00:00.000Z', status: 'complete', total_count: '1', complete_count: '1', failed_count: '0', processing_count: '0' }] }
     if (sql.includes('COALESCE(pj.status, r.parse_status, \'queued\')')) return { rows: [{ analysis_id: 'a-3', filename: 'done.pdf', original_filename: 'done.pdf', status: 'complete' }] }
-    if (sql.includes('FROM upload_chunks uc')) return { rows: [] }
+    if (sql.includes('upload_chunks uc')) return { rows: [] }
     return { rows: [] }
   })
 
@@ -455,4 +455,89 @@ test('DELETE /analyses/:id attempts queued parse job cancellation and tolerates 
     true,
   )
   assert.equal(client.query.mock.calls.at(-1).arguments[0], 'COMMIT')
+})
+
+async function fetchAnalysesWithRows(t, { analysisRows, fileRows = [], uploadRows = [] }) {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('COALESCE(pj.status, r.parse_status, \'queued\')')) return { rows: fileRows }
+    if (sql.includes('upload_chunks uc')) return { rows: uploadRows }
+    if (sql.includes('FROM analyses a') && sql.includes('GROUP BY a.id')) return { rows: analysisRows }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses`, { headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+  assert.equal(response.status, 200)
+  return payload.items[0]
+}
+
+test('GET /analyses aggregation counts two upload_chunks with no analysis_items as two files', async (t) => {
+  const item = await fetchAnalysesWithRows(t, {
+    analysisRows: [{ id: 'a-transition', created_at: '2026-05-01T00:00:00.000Z', status: 'pending', total_count: '0', complete_count: '0', failed_count: '0', processing_count: '0' }],
+    uploadRows: [
+      { analysis_id: 'a-transition', upload_id: 'u-1', filename: 'one.pdf', mime_type: 'application/pdf', status: 'uploading', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() },
+      { analysis_id: 'a-transition', upload_id: 'u-2', filename: 'two.pdf', mime_type: 'application/pdf', status: 'uploading', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:02.000Z', updated_at: new Date().toISOString() },
+    ],
+  })
+
+  assert.equal(item.fileCount, 2)
+  assert.equal(item.summary.processing, 2)
+})
+
+test('GET /analyses aggregation counts matching analysis_item and upload_chunk same resume once', async (t) => {
+  const item = await fetchAnalysesWithRows(t, {
+    analysisRows: [{ id: 'a-transition', created_at: '2026-05-01T00:00:00.000Z', status: 'processing', total_count: '1', complete_count: '0', failed_count: '0', processing_count: '1' }],
+    fileRows: [{ analysis_id: 'a-transition', resume_id: 'r-1', parse_job_id: 'p-1', filename: 'one.pdf', original_filename: 'one.pdf', status: 'processing' }],
+    uploadRows: [{ analysis_id: 'a-transition', upload_id: 'u-1', filename: 'one.pdf', mime_type: 'application/pdf', status: 'completed', resume_id: 'r-1', parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() }],
+  })
+
+  assert.equal(item.fileCount, 1)
+  assert.equal(item.filesPreview.length, 1)
+})
+
+test('GET /analyses aggregation counts one analysis_item plus one distinct upload_chunk as two files', async (t) => {
+  const item = await fetchAnalysesWithRows(t, {
+    analysisRows: [{ id: 'a-transition', created_at: '2026-05-01T00:00:00.000Z', status: 'processing', total_count: '1', complete_count: '0', failed_count: '0', processing_count: '1' }],
+    fileRows: [{ analysis_id: 'a-transition', resume_id: 'r-1', parse_job_id: 'p-1', filename: 'one.pdf', original_filename: 'one.pdf', status: 'processing' }],
+    uploadRows: [{ analysis_id: 'a-transition', upload_id: 'u-2', filename: 'two.pdf', mime_type: 'application/pdf', status: 'uploading', resume_id: 'r-2', parse_job_id: null, created_at: '2026-05-01T00:00:02.000Z', updated_at: new Date().toISOString() }],
+  })
+
+  assert.equal(item.fileCount, 2)
+  assert.equal(item.summary.processing, 2)
+})
+
+test('GET /analyses aggregation counts two matching analysis_items and upload_chunks as two files, not four', async (t) => {
+  const item = await fetchAnalysesWithRows(t, {
+    analysisRows: [{ id: 'a-transition', created_at: '2026-05-01T00:00:00.000Z', status: 'processing', total_count: '2', complete_count: '0', failed_count: '0', processing_count: '2' }],
+    fileRows: [
+      { analysis_id: 'a-transition', resume_id: 'r-1', parse_job_id: 'p-1', filename: 'one.pdf', original_filename: 'one.pdf', status: 'processing' },
+      { analysis_id: 'a-transition', resume_id: 'r-2', parse_job_id: 'p-2', filename: 'two.pdf', original_filename: 'two.pdf', status: 'processing' },
+    ],
+    uploadRows: [
+      { analysis_id: 'a-transition', upload_id: 'u-1', filename: 'one.pdf', mime_type: 'application/pdf', status: 'completed', resume_id: 'r-1', parse_job_id: 'p-1', created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() },
+      { analysis_id: 'a-transition', upload_id: 'u-2', filename: 'two.pdf', mime_type: 'application/pdf', status: 'completed', resume_id: 'r-2', parse_job_id: 'p-2', created_at: '2026-05-01T00:00:02.000Z', updated_at: new Date().toISOString() },
+    ],
+  })
+
+  assert.equal(item.fileCount, 2)
+  assert.equal(item.filesPreview.length, 2)
+})
+
+test('GET /analyses aggregation mixed completed and uploading upload_chunks do not inflate a two-file analysis to three', async (t) => {
+  const item = await fetchAnalysesWithRows(t, {
+    analysisRows: [{ id: 'a-transition', created_at: '2026-05-01T00:00:00.000Z', status: 'processing', total_count: '1', complete_count: '0', failed_count: '0', processing_count: '1' }],
+    fileRows: [{ analysis_id: 'a-transition', resume_id: 'r-1', parse_job_id: null, filename: 'one.pdf', original_filename: 'one.pdf', status: 'processing' }],
+    uploadRows: [
+      { analysis_id: 'a-transition', upload_id: 'u-1', filename: 'one.pdf', mime_type: 'application/pdf', status: 'completed', resume_id: 'r-1', parse_job_id: null, created_at: '2026-05-01T00:00:01.000Z', updated_at: new Date().toISOString() },
+      { analysis_id: 'a-transition', upload_id: 'u-2', filename: 'two.pdf', mime_type: 'application/pdf', status: 'uploading', resume_id: 'r-2', parse_job_id: null, created_at: '2026-05-01T00:00:02.000Z', updated_at: new Date().toISOString() },
+    ],
+  })
+
+  assert.equal(item.fileCount, 2)
+  assert.notEqual(item.fileCount, 3)
 })

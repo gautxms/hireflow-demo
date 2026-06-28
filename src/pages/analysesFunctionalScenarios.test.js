@@ -86,3 +86,26 @@ test('analyses list links complete and partial rows while leaving pending and pr
   assert.match(analysesPageSource, /href=\{`\/analyses\/\$\{analysis\.id\}`\}/)
   assert.match(analysesPageSource, /analysis\.name \|\| 'Untitled analysis'/)
 })
+
+test('create-analysis initializes every selected upload session before background chunk upload', () => {
+  assert.match(analysesPageSource, /const remainingUploadSessions = await Promise\.all\(filesSnapshot\.slice\(1\)\.map/)
+  assert.match(analysesPageSource, /const uploadSessions = \[firstInit, \.\.\.remainingUploadSessions\]/)
+  assert.match(analysesPageSource, /resetModal\(\)[\s\S]*runBackgroundUpload\(\{/)
+  assert.match(analysesPageSource, /const uploadId = uploadSessions\[fileIndex\]\?\.uploadId/)
+  assert.doesNotMatch(analysesPageSource, /if \(fileIndex > 0\) \{[\s\S]*initChunkUpload/)
+})
+
+test('background refreshes use latest overlay refs and do not trigger full-page loading', () => {
+  assert.match(analysesPageSource, /const inFlightAnalysesRef = useRef\(\{\}\)/)
+  assert.match(analysesPageSource, /const refreshAnalysesList = async \(overlays = inFlightAnalysesRef\.current\)/)
+  assert.match(analysesPageSource, /await refreshAnalysesList\(overlay \? \{ \.\.\.inFlightAnalysesRef\.current, \[overlay\.analysisId\]: overlay \}/)
+  assert.doesNotMatch(analysesPageSource, /const refreshAnalysesList = async[\s\S]*setLoading\(true\)/)
+})
+
+test('initial load and polling are decoupled from overlay/item churn', () => {
+  assert.match(analysesPageSource, /const itemsRef = useRef\(\[\]\)/)
+  assert.match(analysesPageSource, /itemsRef\.current\.some/)
+  assert.match(analysesPageSource, /}, \[removeTerminalOverlays\]\)/)
+  assert.doesNotMatch(analysesPageSource, /}, \[inFlightAnalyses, items, removeTerminalOverlays\]\)/)
+  assert.doesNotMatch(analysesPageSource, /}, \[inFlightAnalyses, removeTerminalOverlays\]\)/)
+})
