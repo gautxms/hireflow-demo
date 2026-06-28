@@ -536,20 +536,51 @@ export async function completeChunkUpload({ userId, uploadId }) {
     client.release()
   }
 
-  const parseJob = await enqueueParseJob({
-    resumeId: finalizedUpload.resumeId,
-    userId,
-    filename: row.filename,
-    originalFilename: row.filename,
-    originalMimeType: row.mime_type || null,
-    fileExtension: fileMetadata.fileExtension || null,
-    mimeType: normalizedMimeType,
-    fileSize: row.file_size,
-    assembledS3Key: assembledKey,
-    assembledSha256: assembledHash,
-    analysisId: row.analysis_id || null,
-    jobDescriptionId: row.job_description_id,
-  })
+  if (row.analysis_id) {
+    await pool.query(
+      `INSERT INTO analysis_items (analysis_id, resume_id, parse_job_id)
+       VALUES ($1, $2, NULL)
+       ON CONFLICT (analysis_id, resume_id)
+       DO NOTHING`,
+      [row.analysis_id, finalizedUpload.resumeId],
+    )
+  }
+
+  let parseJob
+  try {
+    parseJob = await enqueueParseJob({
+      resumeId: finalizedUpload.resumeId,
+      userId,
+      filename: row.filename,
+      originalFilename: row.filename,
+      originalMimeType: row.mime_type || null,
+      fileExtension: fileMetadata.fileExtension || null,
+      mimeType: normalizedMimeType,
+      fileSize: row.file_size,
+      assembledS3Key: assembledKey,
+      assembledSha256: assembledHash,
+      analysisId: row.analysis_id || null,
+      jobDescriptionId: row.job_description_id,
+    })
+  } catch (error) {
+    const enqueueError = error?.message || 'Unable to enqueue resume parse job after upload completion'
+    await pool.query(
+      `UPDATE upload_chunks
+       SET status = 'failed',
+           updated_at = NOW()
+       WHERE upload_id = $1`,
+      [uploadId],
+    )
+    await pool.query(
+      `UPDATE resumes
+       SET parse_status = 'failed',
+           parse_error = $2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [finalizedUpload.resumeId, enqueueError],
+    )
+    throw error
+  }
 
   await pool.query(
     `UPDATE upload_chunks

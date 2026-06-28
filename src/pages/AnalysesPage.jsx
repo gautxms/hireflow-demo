@@ -278,58 +278,71 @@ export default function AnalysesPage() {
     setIsSubmitting(true)
     setSubmitError('')
 
-    try {
-      let analysisId = ''
-      for (const file of selectedFiles) {
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            fileSize: file.size,
-            mimeType: inferResumeMimeType(file),
-            clientChunkSize: CHUNK_SIZE,
-            ...(toOptionalJobDescriptionId(selectedJobDescriptionId) ? { jobDescriptionId: selectedJobDescriptionId } : {}),
-            ...(analysisId ? { analysisId } : {}),
-            ...(analysisName.trim() ? { analysisName: analysisName.trim() } : {}),
-          }),
-        })
-        const initPayload = await initResponse.json().catch(() => ({}))
-        if (!initResponse.ok) throw new Error(initPayload.error || `Failed to start chunk upload for ${file.name}`)
-        analysisId = analysisId || String(initPayload.analysisId || '').trim()
-        const uploadId = initPayload.uploadId
+    let analysisId = ''
+    const failedUploads = []
 
-        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
-          const start = chunkIndex * CHUNK_SIZE
-          const end = Math.min(start + CHUNK_SIZE, file.size)
-          const chunk = file.slice(start, end)
-          const formData = new FormData()
-          formData.append('chunk', chunk)
-          formData.append('chunkIndex', String(chunkIndex))
-          formData.append('totalChunks', String(totalChunks))
-          const chunkResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
+    try {
+      for (const file of selectedFiles) {
+        try {
+          const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+          const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              fileSize: file.size,
+              mimeType: inferResumeMimeType(file),
+              clientChunkSize: CHUNK_SIZE,
+              ...(toOptionalJobDescriptionId(selectedJobDescriptionId) ? { jobDescriptionId: selectedJobDescriptionId } : {}),
+              ...(analysisId ? { analysisId } : {}),
+              ...(analysisName.trim() ? { analysisName: analysisName.trim() } : {}),
+            }),
+          })
+          const initPayload = await initResponse.json().catch(() => ({}))
+          if (!initResponse.ok) throw new Error(initPayload.error || `Failed to start chunk upload for ${file.name}`)
+          analysisId = analysisId || String(initPayload.analysisId || '').trim()
+          const uploadId = initPayload.uploadId
+
+          for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+            const start = chunkIndex * CHUNK_SIZE
+            const end = Math.min(start + CHUNK_SIZE, file.size)
+            const chunk = file.slice(start, end)
+            const formData = new FormData()
+            formData.append('chunk', chunk)
+            formData.append('chunkIndex', String(chunkIndex))
+            formData.append('totalChunks', String(totalChunks))
+            const chunkResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+              body: formData,
+            })
+            if (!chunkResponse.ok) {
+              const chunkPayload = await chunkResponse.json().catch(() => ({}))
+              throw new Error(chunkPayload.error || `Failed to upload chunk for ${file.name}`)
+            }
+          }
+
+          const completeResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
-            body: formData,
           })
-          if (!chunkResponse.ok) {
-            const chunkPayload = await chunkResponse.json().catch(() => ({}))
-            throw new Error(chunkPayload.error || `Failed to upload chunk for ${file.name}`)
-          }
+          const completePayload = await completeResponse.json().catch(() => ({}))
+          if (!completeResponse.ok) throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
+          analysisId = analysisId || String(completePayload.analysisId || '').trim()
+        } catch (fileFailure) {
+          failedUploads.push(`${file.name}: ${fileFailure.message || 'upload failed'}`)
         }
-
-        const completeResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const completePayload = await completeResponse.json().catch(() => ({}))
-        if (!completeResponse.ok) throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
-        analysisId = analysisId || String(completePayload.analysisId || '').trim()
       }
 
       const nextItems = await loadAnalyses()
       setItems(nextItems)
+
+      if (failedUploads.length > 0) {
+        setSubmitError(`Analysis created with ${selectedFiles.length - failedUploads.length} of ${selectedFiles.length} file(s) uploaded. Failed: ${failedUploads.join(' ')}`)
+        setIsSubmitting(false)
+        return
+      }
+
       resetModal()
     } catch (submitFailure) {
       setSubmitError(submitFailure.message || 'Unable to analyze resumes')

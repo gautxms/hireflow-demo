@@ -44,7 +44,7 @@ test('GET /analyses returns authenticated user scoped items with frontend fields
   assert.equal(payload.items[0].summary.pending, 0)
   assert.equal(payload.items[0].fileCount, 3)
   assert.deepEqual(payload.items[0].filesPreview, [])
-  assert.equal(queryMock.mock.callCount(), 3)
+  assert.equal(queryMock.mock.callCount(), 4)
 })
 
 
@@ -346,4 +346,33 @@ test('DELETE /analyses/:id attempts queued parse job cancellation and tolerates 
     true,
   )
   assert.equal(client.query.mock.calls.at(-1).arguments[0], 'COMMIT')
+})
+
+test('GET /analyses/:id includes upload_chunks rows missing analysis_items', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(parseQueue, 'getJob', async () => null)
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: '53', user_id: 9, status: 'processing', created_at: '2026-05-01T00:00:00.000Z', completed_at: null, error_summary: null, job_description_id: null, job_description_title: null }] }
+    }
+    if (sql.includes('FROM analysis_items ai')) return { rows: [] }
+    if (sql.includes('FROM upload_chunks uc')) {
+      return { rows: [{ upload_id: 'u-1', filename: 'large.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', upload_status: 'failed', resume_id: null, parse_job_id: null, created_at: '2026-05-01T00:00:10.000Z', updated_at: '2026-05-01T00:00:20.000Z' }] }
+    }
+    if (sql.includes('UPDATE analyses')) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/53`, { headers: authHeader(9) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.summary.total, 1)
+  assert.equal(payload.summary.failed, 1)
+  assert.equal(payload.items[0].source, 'upload_chunks')
+  assert.equal(payload.items[0].filename, 'large.docx')
 })

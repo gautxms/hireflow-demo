@@ -9,6 +9,54 @@ const router = Router()
 
 const TERMINAL_STATUSES = new Set(['complete', 'failed'])
 
+const STALE_UPLOAD_MS = 30 * 60 * 1000
+
+function isUploadStale(updatedAt) {
+  const timestamp = new Date(updatedAt || 0).getTime()
+  return Number.isFinite(timestamp) && timestamp > 0 && Date.now() - timestamp > STALE_UPLOAD_MS
+}
+
+function mapUploadChunkStatus(row) {
+  const status = String(row?.upload_status || row?.status || '').toLowerCase()
+  if (status === 'failed' || status === 'rejected' || status === 'expired') return 'failed'
+  if (status === 'uploading') return isUploadStale(row?.updated_at) ? 'failed' : 'processing'
+  if (status === 'completed') return row?.parse_job_id ? 'processing' : (isUploadStale(row?.updated_at) ? 'failed' : 'processing')
+  return 'processing'
+}
+
+function buildUploadChunkFailureMessage(row) {
+  const status = String(row?.upload_status || row?.status || '').toLowerCase()
+  if (status === 'rejected') return 'Upload rejected during file scan'
+  if (status === 'expired') return 'Upload expired before analysis could start'
+  if (status === 'failed') return 'Upload failed before analysis could start'
+  if (isUploadStale(row?.updated_at)) return 'Upload did not finish before the analysis timeout window'
+  return null
+}
+
+function buildUploadChunkAnalysisItem(row) {
+  const status = mapUploadChunkStatus(row)
+  return {
+    id: `upload:${String(row.upload_id)}`,
+    itemId: `upload:${String(row.upload_id)}`,
+    uploadId: String(row.upload_id),
+    resumeId: row.resume_id ? String(row.resume_id) : '',
+    parseJobId: row.parse_job_id ? String(row.parse_job_id) : null,
+    filename: row.filename || 'Unknown file',
+    originalFilename: row.filename || null,
+    fileExtension: null,
+    mimeType: row.mime_type || null,
+    originalMimeType: row.mime_type || null,
+    status,
+    progress: status === 'failed' ? 100 : 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+    error: buildUploadChunkFailureMessage(row),
+    result: null,
+    normalizedCandidates: [],
+    source: 'upload_chunks',
+  }
+}
+
 function safeParseResult(result) {
   if (result == null) return null
   if (typeof result === 'string') {
@@ -203,6 +251,50 @@ async function loadAnalysisStatus(analysisId, userId) {
     })
   }
 
+  const uploadRowsResult = await pool.query(
+    `SELECT uc.upload_id,
+            uc.filename,
+            uc.mime_type,
+            uc.status AS upload_status,
+            uc.resume_id,
+            uc.parse_job_id,
+            uc.created_at,
+            uc.updated_at
+       FROM upload_chunks uc
+      WHERE uc.analysis_id = $1
+        AND NOT EXISTS (
+          SELECT 1
+            FROM analysis_items existing_items
+           WHERE existing_items.analysis_id = uc.analysis_id
+             AND (
+               (uc.resume_id IS NOT NULL AND existing_items.resume_id = uc.resume_id)
+               OR (uc.parse_job_id IS NOT NULL AND existing_items.parse_job_id = uc.parse_job_id)
+             )
+        )
+      ORDER BY uc.created_at ASC`,
+    [analysisId],
+  )
+
+  for (const row of uploadRowsResult.rows) {
+    const uploadItem = buildUploadChunkAnalysisItem(row)
+    counts[uploadItem.status] = (counts[uploadItem.status] || 0) + 1
+    if (uploadItem.status === 'failed') {
+      failures.push({
+        resumeId: uploadItem.resumeId,
+        parseJobId: uploadItem.parseJobId,
+        filename: uploadItem.filename,
+        originalFilename: uploadItem.originalFilename,
+        fileExtension: uploadItem.fileExtension,
+        mimeType: uploadItem.mimeType,
+        originalMimeType: uploadItem.originalMimeType,
+        status: uploadItem.status,
+        error: uploadItem.error || 'Upload failed before analysis could start',
+      })
+    }
+    extractionDiagnostics.totalItems += 1
+    items.push(uploadItem)
+  }
+
   const totalItems = items.length
   const completedItems = counts.complete + counts.failed
   const aggregateStatus = deriveAggregateStatus(counts, totalItems)
@@ -331,12 +423,65 @@ router.get('/', requireAuth, async (req, res) => {
       filesByAnalysis.set(analysisId, existingItems)
     }
 
+    const orphanUploadsResult = await pool.query(
+      `SELECT uc.analysis_id,
+              uc.upload_id,
+              uc.filename,
+              uc.mime_type,
+              uc.status AS upload_status,
+              uc.resume_id,
+              uc.parse_job_id,
+              uc.created_at,
+              uc.updated_at
+         FROM upload_chunks uc
+         INNER JOIN analyses owner_analysis ON owner_analysis.id = uc.analysis_id
+        WHERE owner_analysis.user_id = $1
+          AND NOT EXISTS (
+            SELECT 1
+              FROM analysis_items existing_items
+             WHERE existing_items.analysis_id = uc.analysis_id
+               AND (
+                 (uc.resume_id IS NOT NULL AND existing_items.resume_id = uc.resume_id)
+                 OR (uc.parse_job_id IS NOT NULL AND existing_items.parse_job_id = uc.parse_job_id)
+               )
+          )
+        ORDER BY uc.analysis_id ASC, uc.created_at ASC`,
+      [req.userId],
+    )
+
+    const orphanCountsByAnalysis = new Map()
+    for (const row of orphanUploadsResult.rows) {
+      const analysisId = String(row.analysis_id || '')
+      if (!analysisId) continue
+      const status = mapUploadChunkStatus(row)
+      const countsForAnalysis = orphanCountsByAnalysis.get(analysisId) || { total: 0, complete: 0, failed: 0, processing: 0 }
+      countsForAnalysis.total += 1
+      if (status === 'failed') countsForAnalysis.failed += 1
+      else countsForAnalysis.processing += 1
+      orphanCountsByAnalysis.set(analysisId, countsForAnalysis)
+
+      const fileEntry = {
+        name: row.filename || 'Unknown file',
+        filename: row.filename || null,
+        originalFilename: row.filename || null,
+        fileExtension: null,
+        mimeType: row.mime_type || null,
+        originalMimeType: row.mime_type || null,
+        status,
+      }
+      filesByAnalysis.set(analysisId, [...(filesByAnalysis.get(analysisId) || []), fileEntry])
+      if (status === 'failed') {
+        failedItemsByAnalysis.set(analysisId, [...(failedItemsByAnalysis.get(analysisId) || []), fileEntry].slice(0, 5))
+      }
+    }
+
     const items = result.rows.map((row) => {
+      const orphanCounts = orphanCountsByAnalysis.get(String(row.id)) || { total: 0, complete: 0, failed: 0, processing: 0 }
       const summary = {
-        total: Number(row.total_count || 0),
-        complete: Number(row.complete_count || 0),
-        failed: Number(row.failed_count || 0),
-        processing: Number(row.processing_count || 0),
+        total: Number(row.total_count || 0) + orphanCounts.total,
+        complete: Number(row.complete_count || 0) + orphanCounts.complete,
+        failed: Number(row.failed_count || 0) + orphanCounts.failed,
+        processing: Number(row.processing_count || 0) + orphanCounts.processing,
       }
       return {
         id: String(row.id),
