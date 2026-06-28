@@ -12,7 +12,7 @@ import { ensureWebhookTables } from './services/webhookService.js'
 import { ensureNotificationTables } from './services/notificationService.js'
 import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
 import { alignAdminAiUserReferenceColumns, verifyAdminAiUserReferenceCompatibility } from './services/adminAiSchemaCompatibility.js'
-import { verifyYearsExperienceDecimalSchema } from './db/schemaPrerequisites.js'
+import { verifyYearsExperienceDecimalSchema, verifyShortlistBatchAddSchema } from './db/schemaPrerequisites.js'
 
 const port = process.env.PORT || 4000
 const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
@@ -79,6 +79,13 @@ async function start() {
       )
     }
     console.log('[Startup] Migration prerequisite confirmed: resumes.years_experience NUMERIC(5,2)')
+    const shortlistBatchSchema = await verifyShortlistBatchAddSchema()
+    if (!shortlistBatchSchema.ok) {
+      throw new Error(
+        `[Startup] Missing migration prerequisite: shortlist_candidates batch-add columns invalid: ${JSON.stringify(shortlistBatchSchema.issues)}`,
+      )
+    }
+    console.log('[Startup] Migration prerequisite confirmed: shortlist_candidates batch-add metadata columns')
     await initializeJobQueue()
 
     logEmailConfigStatus()

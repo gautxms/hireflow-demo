@@ -418,6 +418,143 @@ router.post('/:id/candidates', async (req, res) => {
   }
 })
 
+
+function buildSafeDbErrorLog(error, context = {}) {
+  const safe = {
+    ...context,
+    errorName: error?.name,
+    errorCode: error?.code,
+    errorConstraint: error?.constraint,
+    errorTable: error?.table,
+    errorColumn: error?.column,
+    errorMessage: error?.message,
+  }
+  const detail = String(error?.detail || '')
+  if (detail && !(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(detail))) {
+    safe.errorDetail = detail
+  }
+  return safe
+}
+
+export async function batchAddShortlistCandidates({ db = pool, shortlistId, userId, resumeIds, malformedIds = [], notes = null, rating = null, hasRating = false, sourceContext = null, sourceContextByResumeId = {}, candidateSnapshotByResumeId = {} }) {
+  let stage = 'owner_check'
+  try {
+    const ownerCheck = await db.query(
+      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 AND status = 'active' LIMIT 1`,
+      [shortlistId, userId],
+    )
+    if (!ownerCheck.rows[0]) {
+      return {
+        status: 404,
+        body: {
+          error: 'This shortlist is no longer available. Select another shortlist or create a new one to continue.',
+          errorCode: 'missing_shortlist',
+          retryGuidance: 'Choose a different shortlist or create a new shortlist, then retry.',
+        },
+      }
+    }
+
+    stage = 'visible_resumes_check'
+    const visibleResumesResult = await db.query(
+      `SELECT id
+       FROM resumes
+       WHERE user_id = $1
+         AND id = ANY($2::uuid[])`,
+      [userId, resumeIds],
+    )
+    const visibleResumeIds = new Set(visibleResumesResult.rows.map((row) => row.id))
+    const invalidIds = [...malformedIds, ...resumeIds.filter((resumeId) => !visibleResumeIds.has(resumeId))]
+
+    let existingIds = new Set()
+    if (visibleResumeIds.size > 0) {
+      stage = 'existing_shortlist_candidates_check'
+      const existingResult = await db.query(
+        `SELECT resume_id
+         FROM shortlist_candidates
+         WHERE shortlist_id = $1
+           AND resume_id = ANY($2::uuid[])`,
+        [shortlistId, [...visibleResumeIds]],
+      )
+      existingIds = new Set(existingResult.rows.map((row) => row.resume_id))
+
+      const requestedAnalysisIds = [...new Set([...visibleResumeIds]
+        .map((resumeId) => resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext))
+        .filter(Boolean))]
+      let allowedAnalysisIds = new Set()
+      if (requestedAnalysisIds.length > 0) {
+        stage = 'allowed_analysis_ids_check'
+        const analysisResult = await db.query(
+          `SELECT id FROM analyses WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+          [userId, requestedAnalysisIds],
+        )
+        allowedAnalysisIds = new Set(analysisResult.rows.map((row) => row.id))
+      }
+
+      const sourceContextRows = [...visibleResumeIds].map((resumeId) => {
+        const analysisId = resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext)
+        return {
+          resume_id: resumeId,
+          analysis_id: analysisId && allowedAnalysisIds.has(analysisId) ? analysisId : null,
+          source_context: sourceContextByResumeId[resumeId] || sourceContext || null,
+          candidate_snapshot: candidateSnapshotByResumeId[resumeId] || null,
+        }
+      })
+      stage = 'insert_shortlist_candidates'
+      await db.query(
+        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, analysis_id, source_context, candidate_snapshot)
+         SELECT $1, x.resume_id::uuid, $3, $4, NULLIF(x.analysis_id, '')::uuid, x.source_context::jsonb, x.candidate_snapshot::jsonb
+         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, analysis_id text, source_context jsonb, candidate_snapshot jsonb)
+         ON CONFLICT (shortlist_id, resume_id)
+         DO UPDATE SET notes = EXCLUDED.notes,
+                       rating = CASE
+                         WHEN $5::boolean THEN EXCLUDED.rating
+                         ELSE shortlist_candidates.rating
+                       END,
+                       analysis_id = COALESCE(EXCLUDED.analysis_id, shortlist_candidates.analysis_id),
+                       source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context),
+                       candidate_snapshot = COALESCE(EXCLUDED.candidate_snapshot, shortlist_candidates.candidate_snapshot),
+                       updated_at = NOW()`,
+        [shortlistId, [...visibleResumeIds], notes, rating, hasRating, JSON.stringify(sourceContextRows)],
+      )
+    }
+
+    const outcomes = [
+      ...malformedIds.map((resumeId) => ({ resumeId, ok: false, code: 'invalid_resume_id', message: 'Invalid resume ID format' })),
+      ...resumeIds.map((resumeId) => {
+        if (!visibleResumeIds.has(resumeId)) {
+          return { resumeId, ok: false, code: 'invalid/missing', message: 'Resume not found for this user' }
+        }
+        return { resumeId, ok: true, code: existingIds.has(resumeId) ? 'updated/already-present' : 'added' }
+      }),
+    ]
+    const successCount = outcomes.filter((item) => item.ok).length
+    const failureCount = outcomes.length - successCount
+
+    return {
+      status: 200,
+      body: {
+        shortlistId,
+        ok: failureCount === 0,
+        partialFailure: failureCount > 0,
+        summary: {
+          requested: resumeIds.length + malformedIds.length,
+          succeeded: successCount,
+          failed: failureCount,
+          added: outcomes.filter((item) => item.code === 'added').length,
+          updated: outcomes.filter((item) => item.code === 'updated/already-present').length,
+          invalid: invalidIds.length,
+        },
+        errorCode: failureCount > 0 ? 'partial_failure' : null,
+        retryGuidance: failureCount > 0 ? 'Retry failed or invalid/missing items after refreshing selection.' : null,
+        outcomes,
+      },
+    }
+  } catch (error) {
+    error.shortlistBatchStage = stage
+    throw error
+  }
+}
+
 router.post('/:id/candidates/batch', async (req, res) => {
   const normalizedResumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
   const resumeIds = normalizedResumeIds.valid
@@ -447,128 +584,27 @@ router.post('/:id/candidates/batch', async (req, res) => {
   const candidateSnapshotByResumeId = req.body?.candidateSnapshotByResumeId && typeof req.body.candidateSnapshotByResumeId === 'object' ? req.body.candidateSnapshotByResumeId : {}
 
   try {
-    const ownerCheck = await pool.query(
-      `SELECT id FROM shortlists WHERE id = $1 AND user_id = $2 AND status = 'active' LIMIT 1`,
-      [req.params.id, req.userId],
-    )
-    if (!ownerCheck.rows[0]) {
-      return res.status(404).json({
-        error: 'This shortlist is no longer available. Select another shortlist or create a new one to continue.',
-        errorCode: 'missing_shortlist',
-        retryGuidance: 'Choose a different shortlist or create a new shortlist, then retry.',
-      })
-    }
-
-    const visibleResumesResult = await pool.query(
-      `SELECT id
-       FROM resumes
-       WHERE user_id = $1
-         AND id = ANY($2::uuid[])`,
-      [req.userId, resumeIds],
-    )
-    const visibleResumeIds = new Set(visibleResumesResult.rows.map((row) => row.id))
-    const invalidIds = [...malformedIds, ...resumeIds.filter((resumeId) => !visibleResumeIds.has(resumeId))]
-
-    let existingIds = new Set()
-    if (visibleResumeIds.size > 0) {
-      const existingResult = await pool.query(
-        `SELECT resume_id
-         FROM shortlist_candidates
-         WHERE shortlist_id = $1
-           AND resume_id = ANY($2::uuid[])`,
-        [req.params.id, [...visibleResumeIds]],
-      )
-      existingIds = new Set(existingResult.rows.map((row) => row.resume_id))
-
-      const requestedAnalysisIds = [...new Set([...visibleResumeIds]
-        .map((resumeId) => resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext))
-        .filter(Boolean))]
-      let allowedAnalysisIds = new Set()
-      if (requestedAnalysisIds.length > 0) {
-        const analysisResult = await pool.query(
-          `SELECT id FROM analyses WHERE user_id = $1 AND id = ANY($2::uuid[])`,
-          [req.userId, requestedAnalysisIds],
-        )
-        allowedAnalysisIds = new Set(analysisResult.rows.map((row) => row.id))
-      }
-
-      const sourceContextRows = [...visibleResumeIds].map((resumeId) => {
-        const analysisId = resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext)
-        return {
-          resume_id: resumeId,
-          analysis_id: analysisId && allowedAnalysisIds.has(analysisId) ? analysisId : null,
-          source_context: sourceContextByResumeId[resumeId] || sourceContext || null,
-          candidate_snapshot: candidateSnapshotByResumeId[resumeId] || null,
-        }
-      })
-      await pool.query(
-        `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, analysis_id, source_context, candidate_snapshot)
-         SELECT $1, x.resume_id::uuid, $3, $4, x.analysis_id::uuid, x.source_context::jsonb, x.candidate_snapshot::jsonb
-         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, analysis_id text, source_context jsonb, candidate_snapshot jsonb)
-         ON CONFLICT (shortlist_id, resume_id)
-         DO UPDATE SET notes = EXCLUDED.notes,
-                       rating = CASE
-                         WHEN $5::boolean THEN EXCLUDED.rating
-                         ELSE shortlist_candidates.rating
-                       END,
-                       analysis_id = COALESCE(EXCLUDED.analysis_id, shortlist_candidates.analysis_id),
-                       source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context),
-                       candidate_snapshot = COALESCE(EXCLUDED.candidate_snapshot, shortlist_candidates.candidate_snapshot)`,
-        [req.params.id, [...visibleResumeIds], notes, rating, hasRating, JSON.stringify(sourceContextRows)],
-      )
-    }
-
-    const outcomes = [
-      ...malformedIds.map((resumeId) => ({
-        resumeId,
-        ok: false,
-        code: 'invalid_resume_id',
-        message: 'Invalid resume ID format',
-      })),
-      ...resumeIds.map((resumeId) => {
-        if (!visibleResumeIds.has(resumeId)) {
-          return {
-            resumeId,
-            ok: false,
-            code: 'invalid/missing',
-            message: 'Resume not found for this user',
-          }
-        }
-        return {
-          resumeId,
-          ok: true,
-          code: existingIds.has(resumeId) ? 'updated/already-present' : 'added',
-        }
-      }),
-    ]
-
-    const successCount = outcomes.filter((item) => item.ok).length
-    const failureCount = outcomes.length - successCount
-
-    return res.json({
+    const result = await batchAddShortlistCandidates({
       shortlistId: req.params.id,
-      ok: failureCount === 0,
-      partialFailure: failureCount > 0,
-      summary: {
-        requested: resumeIds.length + malformedIds.length,
-        succeeded: successCount,
-        failed: failureCount,
-        added: outcomes.filter((item) => item.code === 'added').length,
-        updated: outcomes.filter((item) => item.code === 'updated/already-present').length,
-        invalid: invalidIds.length,
-      },
-      errorCode: failureCount > 0 ? 'partial_failure' : null,
-      retryGuidance: failureCount > 0 ? 'Retry failed or invalid/missing items after refreshing selection.' : null,
-      outcomes,
+      userId: req.userId,
+      resumeIds,
+      malformedIds,
+      notes,
+      rating,
+      hasRating,
+      sourceContext,
+      sourceContextByResumeId,
+      candidateSnapshotByResumeId,
     })
+    return res.status(result.status).json(result.body)
   } catch (error) {
-    console.error('[Shortlists] Failed to batch add candidates:', {
+    console.error('[Shortlists] Failed to batch add candidates:', buildSafeDbErrorLog(error, {
+      stage: error?.shortlistBatchStage || 'unknown',
       shortlistId: req.params.id,
       userId: req.userId,
       requestedCount: Array.isArray(req.body?.resumeIds) ? req.body.resumeIds.length : 0,
       errorCode: 'batch_add_failed',
-      errorMessage: error?.message,
-    })
+    }))
     return res.status(500).json({
       error: 'Unable to batch add candidates to shortlist. Please retry, or refresh Candidates if the selection is stale.',
       errorCode: 'batch_add_failed',
