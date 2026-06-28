@@ -7,22 +7,26 @@ const router = Router()
 
 router.use(requireAuth)
 
-function normalizeBatchResumeIds(input) {
+export function normalizeBatchResumeIds(input) {
   const list = Array.isArray(input) ? input : []
   const unique = new Set()
+  const invalid = []
 
   for (const value of list) {
-    const resolved = resolveCandidateResumeUuid(value)
-      || resolveCandidateResumeUuid(value?.resumeId)
-      || resolveCandidateResumeUuid(value?.candidateId)
-      || String(value || '').trim()
+    const raw = value && typeof value === 'object'
+      ? (value.resumeId || value.resume_id || value.candidateId || value.candidate_id || value.id)
+      : value
+    const trimmed = String(raw || '').trim()
+    const resolved = resolveCandidateResumeUuid(trimmed)
 
     if (resolved) {
-      unique.add(resolved)
+      unique.add(resolved.toLowerCase())
+    } else if (trimmed) {
+      invalid.push(trimmed)
     }
   }
 
-  return [...unique]
+  return { valid: [...unique], invalid }
 }
 
 function normalizeJobDescriptionId(input) {
@@ -34,7 +38,7 @@ function normalizeJobDescriptionId(input) {
 }
 
 
-function resolveBatchAnalysisId(resumeId, sourceContextByResumeId = {}, candidateSnapshotByResumeId = {}, sharedSourceContext = null) {
+export function resolveBatchAnalysisId(resumeId, sourceContextByResumeId = {}, candidateSnapshotByResumeId = {}, sharedSourceContext = null) {
   const sourceContext = sourceContextByResumeId[resumeId] && typeof sourceContextByResumeId[resumeId] === 'object'
     ? sourceContextByResumeId[resumeId]
     : (sharedSourceContext && typeof sharedSourceContext === 'object' ? sharedSourceContext : {})
@@ -45,6 +49,39 @@ function resolveBatchAnalysisId(resumeId, sourceContextByResumeId = {}, candidat
     || resolveCandidateResumeUuid(candidateSnapshot.analysisId)
     || resolveCandidateResumeUuid(candidateSnapshot.analysis_id)
     || null
+}
+
+
+export function buildBatchRemoveResponse({ shortlistId, resumeIds = [], malformedIds = [], removedIds = [] }) {
+  const removed = new Set(removedIds)
+  const outcomes = [
+    ...malformedIds.map((resumeId) => ({
+      resumeId,
+      ok: false,
+      code: 'invalid_resume_id',
+      message: 'Invalid resume ID format',
+    })),
+    ...resumeIds.map((resumeId) => ({
+      resumeId,
+      ok: true,
+      code: removed.has(resumeId) ? 'removed' : 'not_present',
+    })),
+  ]
+  const removedCount = outcomes.filter((item) => item.code === 'removed').length
+  const invalidCount = malformedIds.length
+
+  return {
+    shortlistId,
+    ok: invalidCount === 0,
+    partialFailure: invalidCount > 0,
+    summary: {
+      requested: outcomes.length,
+      removed: removedCount,
+      notPresent: resumeIds.length - removedCount,
+      invalid: invalidCount,
+    },
+    outcomes,
+  }
 }
 
 function buildNumericJsonExpression(expression) {
@@ -382,10 +419,19 @@ router.post('/:id/candidates', async (req, res) => {
 })
 
 router.post('/:id/candidates/batch', async (req, res) => {
-  const resumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
+  const normalizedResumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
+  const resumeIds = normalizedResumeIds.valid
+  const malformedIds = normalizedResumeIds.invalid
 
   if (resumeIds.length === 0) {
-    return res.status(400).json({ error: 'resumeIds must include at least one resume ID' })
+    return res.status(400).json({
+      error: malformedIds.length > 0
+        ? 'No valid resume IDs were selected. Refresh the candidates list and try again.'
+        : 'resumeIds must include at least one resume ID',
+      errorCode: 'invalid_resume_ids',
+      retryGuidance: 'Refresh the Candidates Directory, reselect candidates, and try again.',
+      summary: { requested: Array.isArray(req.body?.resumeIds) ? req.body.resumeIds.length : 0, succeeded: 0, failed: malformedIds.length, invalid: malformedIds.length },
+    })
   }
 
   const hasRating = Object.prototype.hasOwnProperty.call(req.body || {}, 'rating')
@@ -421,7 +467,7 @@ router.post('/:id/candidates/batch', async (req, res) => {
       [req.userId, resumeIds],
     )
     const visibleResumeIds = new Set(visibleResumesResult.rows.map((row) => row.id))
-    const invalidIds = resumeIds.filter((resumeId) => !visibleResumeIds.has(resumeId))
+    const invalidIds = [...malformedIds, ...resumeIds.filter((resumeId) => !visibleResumeIds.has(resumeId))]
 
     let existingIds = new Set()
     if (visibleResumeIds.size > 0) {
@@ -434,12 +480,27 @@ router.post('/:id/candidates/batch', async (req, res) => {
       )
       existingIds = new Set(existingResult.rows.map((row) => row.resume_id))
 
-      const sourceContextRows = [...visibleResumeIds].map((resumeId) => ({
-        resume_id: resumeId,
-        analysis_id: resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext),
-        source_context: sourceContextByResumeId[resumeId] || sourceContext || null,
-        candidate_snapshot: candidateSnapshotByResumeId[resumeId] || null,
-      }))
+      const requestedAnalysisIds = [...new Set([...visibleResumeIds]
+        .map((resumeId) => resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext))
+        .filter(Boolean))]
+      let allowedAnalysisIds = new Set()
+      if (requestedAnalysisIds.length > 0) {
+        const analysisResult = await pool.query(
+          `SELECT id FROM analyses WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+          [req.userId, requestedAnalysisIds],
+        )
+        allowedAnalysisIds = new Set(analysisResult.rows.map((row) => row.id))
+      }
+
+      const sourceContextRows = [...visibleResumeIds].map((resumeId) => {
+        const analysisId = resolveBatchAnalysisId(resumeId, sourceContextByResumeId, candidateSnapshotByResumeId, sourceContext)
+        return {
+          resume_id: resumeId,
+          analysis_id: analysisId && allowedAnalysisIds.has(analysisId) ? analysisId : null,
+          source_context: sourceContextByResumeId[resumeId] || sourceContext || null,
+          candidate_snapshot: candidateSnapshotByResumeId[resumeId] || null,
+        }
+      })
       await pool.query(
         `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, analysis_id, source_context, candidate_snapshot)
          SELECT $1, x.resume_id::uuid, $3, $4, x.analysis_id::uuid, x.source_context::jsonb, x.candidate_snapshot::jsonb
@@ -457,21 +518,29 @@ router.post('/:id/candidates/batch', async (req, res) => {
       )
     }
 
-    const outcomes = resumeIds.map((resumeId) => {
-      if (!visibleResumeIds.has(resumeId)) {
+    const outcomes = [
+      ...malformedIds.map((resumeId) => ({
+        resumeId,
+        ok: false,
+        code: 'invalid_resume_id',
+        message: 'Invalid resume ID format',
+      })),
+      ...resumeIds.map((resumeId) => {
+        if (!visibleResumeIds.has(resumeId)) {
+          return {
+            resumeId,
+            ok: false,
+            code: 'invalid/missing',
+            message: 'Resume not found for this user',
+          }
+        }
         return {
           resumeId,
-          ok: false,
-          code: 'invalid/missing',
-          message: 'Resume not found for this user',
+          ok: true,
+          code: existingIds.has(resumeId) ? 'updated/already-present' : 'added',
         }
-      }
-      return {
-        resumeId,
-        ok: true,
-        code: existingIds.has(resumeId) ? 'updated/already-present' : 'added',
-      }
-    })
+      }),
+    ]
 
     const successCount = outcomes.filter((item) => item.ok).length
     const failureCount = outcomes.length - successCount
@@ -481,7 +550,7 @@ router.post('/:id/candidates/batch', async (req, res) => {
       ok: failureCount === 0,
       partialFailure: failureCount > 0,
       summary: {
-        requested: resumeIds.length,
+        requested: resumeIds.length + malformedIds.length,
         succeeded: successCount,
         failed: failureCount,
         added: outcomes.filter((item) => item.code === 'added').length,
@@ -493,8 +562,18 @@ router.post('/:id/candidates/batch', async (req, res) => {
       outcomes,
     })
   } catch (error) {
-    console.error('[Shortlists] Failed to batch add candidates:', error)
-    return res.status(500).json({ error: 'Unable to batch add candidates to shortlist' })
+    console.error('[Shortlists] Failed to batch add candidates:', {
+      shortlistId: req.params.id,
+      userId: req.userId,
+      requestedCount: Array.isArray(req.body?.resumeIds) ? req.body.resumeIds.length : 0,
+      errorCode: 'batch_add_failed',
+      errorMessage: error?.message,
+    })
+    return res.status(500).json({
+      error: 'Unable to batch add candidates to shortlist. Please retry, or refresh Candidates if the selection is stale.',
+      errorCode: 'batch_add_failed',
+      retryGuidance: 'Refresh the Candidates Directory and try again. If the issue persists, contact support.',
+    })
   }
 })
 
@@ -529,10 +608,19 @@ router.delete('/:id/candidates/:resumeId', async (req, res) => {
 })
 
 router.post('/:id/candidates/batch-remove', async (req, res) => {
-  const resumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
+  const normalizedResumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
+  const resumeIds = normalizedResumeIds.valid
+  const malformedIds = normalizedResumeIds.invalid
 
   if (resumeIds.length === 0) {
-    return res.status(400).json({ error: 'resumeIds must include at least one resume ID' })
+    return res.status(400).json({
+      error: malformedIds.length > 0
+        ? 'No valid resume IDs were selected. Refresh the candidates list and try again.'
+        : 'resumeIds must include at least one resume ID',
+      errorCode: 'invalid_resume_ids',
+      retryGuidance: 'Refresh the Candidates Directory, reselect candidates, and try again.',
+      summary: { requested: Array.isArray(req.body?.resumeIds) ? req.body.resumeIds.length : 0, succeeded: 0, failed: malformedIds.length, invalid: malformedIds.length },
+    })
   }
 
   try {
@@ -552,26 +640,12 @@ router.post('/:id/candidates/batch-remove', async (req, res) => {
        RETURNING resume_id`,
       [req.params.id, resumeIds],
     )
-    const removed = new Set(deletedResult.rows.map((row) => row.resume_id))
-
-    const outcomes = resumeIds.map((resumeId) => ({
-      resumeId,
-      ok: true,
-      code: removed.has(resumeId) ? 'removed' : 'not_present',
-    }))
-    const removedCount = outcomes.filter((item) => item.code === 'removed').length
-
-    return res.json({
+    return res.json(buildBatchRemoveResponse({
       shortlistId: req.params.id,
-      ok: true,
-      partialFailure: false,
-      summary: {
-        requested: resumeIds.length,
-        removed: removedCount,
-        notPresent: resumeIds.length - removedCount,
-      },
-      outcomes,
-    })
+      resumeIds,
+      malformedIds,
+      removedIds: deletedResult.rows.map((row) => row.resume_id),
+    }))
   } catch (error) {
     console.error('[Shortlists] Failed to batch remove candidates:', error)
     return res.status(500).json({ error: 'Unable to batch remove candidates from shortlist' })

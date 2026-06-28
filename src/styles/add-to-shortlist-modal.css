@@ -1,5 +1,5 @@
 .atsm {
-  background: var(--hf-bg-secondary, #111111);
+  background: var(--hf-surface, #111111);
   border: 1px solid var(--hf-border-subtle, #1e1e1e);
   border-radius: 20px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.56), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
@@ -8,6 +8,7 @@
   font-family: var(--hf-font-ui, 'DM Sans', sans-serif);
   gap: 18px;
   max-width: 560px;
+  min-width: 0;
   padding: 24px;
 }
 
@@ -21,6 +22,7 @@
 .atsm__title-block {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .atsm__header h2 {
@@ -91,16 +93,38 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.atsm__select-wrap {
+  min-width: 0;
+  position: relative;
+}
+
+.atsm__select-icon {
+  color: var(--hf-text-3, #888888);
+  pointer-events: none;
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .atsm__input {
-  background: var(--hf-bg-primary, #0a0a0a);
+  background: var(--hf-bg, #0a0a0a);
   border: 1px solid var(--hf-border-muted, #555555);
   border-radius: 12px;
   color: var(--hf-text-primary, #ffffff);
-  font: 600 14px/1.2 var(--hf-font-ui, 'DM Sans', sans-serif);
+  font: 600 14px/1.35 var(--hf-font-ui, 'DM Sans', sans-serif);
   min-height: 48px;
+  overflow: hidden;
   padding: 12px 14px;
+  text-overflow: ellipsis;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   width: 100%;
+}
+
+.atsm__select {
+  appearance: none;
+  padding-right: 44px;
+  white-space: nowrap;
 }
 
 .atsm__input:hover:not(:disabled) {
@@ -114,9 +138,14 @@
 }
 
 .atsm__add-toggle {
+  align-items: center;
   border-radius: 12px;
+  display: inline-flex;
+  height: 48px;
+  justify-content: center;
   min-width: 48px;
   padding: 0;
+  width: 48px;
 }
 
 .atsm__add-toggle[aria-expanded='true'] {
@@ -194,6 +223,7 @@
     width: min(100%, calc(100vw - 32px));
   }
 
+  .atsm__select-row,
   .atsm__inline,
   .atsm__actions {
     grid-template-columns: 1fr;
@@ -202,5 +232,9 @@
   .atsm__actions,
   .atsm__inline {
     display: grid;
+  }
+
+  .atsm__add-toggle {
+    width: 100%;
   }
 }

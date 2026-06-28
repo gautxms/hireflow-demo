@@ -179,6 +179,14 @@ export function getShortlistBulkErrorMessage(errorPayload = {}) {
     return 'Your selection is out of date. Refresh the list, review highlighted candidates, and submit again.'
   }
 
+  if (errorCode === 'invalid_resume_ids') {
+    return 'Your selection contains invalid or stale candidates. Refresh the candidates list, reselect candidates, and try again.'
+  }
+
+  if (errorCode === 'batch_add_failed') {
+    return 'Candidates could not be added right now. Refresh Candidates and retry.'
+  }
+
   if (errorCode === 'partial_failure') {
     return 'Some candidates could not be processed. Retry failed items.'
   }

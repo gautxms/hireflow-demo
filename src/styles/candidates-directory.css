@@ -32,7 +32,10 @@
   margin: .8rem 0;
 }
 
-.candidates-directory :is(input, select, button) {
+.candidates-directory__toolbar :is(input, select, button),
+.candidates-directory__advanced-grid :is(input, select),
+.candidates-directory__bulk > button,
+.candidates-directory__error > button {
   width: 100%;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
@@ -41,13 +44,17 @@
   padding: 0.6rem 0.75rem;
 }
 
-.candidates-directory button {
+.candidates-directory__toolbar button,
+.candidates-directory__bulk > button,
+.candidates-directory__error > button {
   background: linear-gradient(135deg, var(--color-bg-elevated), var(--color-bg-secondary));
   border-color: var(--color-accent-alpha-15);
   cursor: pointer;
 }
 
-.candidates-directory button:disabled {
+.candidates-directory__toolbar button:disabled,
+.candidates-directory__bulk > button:disabled,
+.candidates-directory__error > button:disabled {
   cursor: not-allowed;
   opacity: .6;
 }
