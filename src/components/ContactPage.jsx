@@ -107,7 +107,7 @@ export default function ContactPage({ onBack }) {
               {[
                 ['name', 'Full Name *', 'text', 'John Smith'],
                 ['email', 'Email Address *', 'email', 'john@company.com'],
-                ['company', 'Company (Optional)', 'text', 'TechCorp Inc']
+                ['company', 'Company', 'text', 'TechCorp Inc']
               ].map(([name, label, type, placeholder]) => (
                 <div key={name} className={`public-form-field ${errors[name] ? 'has-error' : ''}`}>
                   <label htmlFor={name}>{label}</label>

@@ -151,7 +151,7 @@ export default function CandidateCard({ candidate, rank }) {
               ))}
             </div>
             <label className="mt-3 block text-sm text-[var(--color-text-secondary)]">
-              Optional comment
+              Comment
               <textarea
                 value={comment}
                 onChange={(event) => setComment(event.target.value.slice(0, 1000))}
