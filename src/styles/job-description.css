@@ -156,10 +156,7 @@
 .job-modal__error { margin: 0.75rem 1.25rem 0; color: var(--color-error); font-family: var(--font-family-ui); }
 
 .job-form { display: flex; flex-direction: column; max-height: calc(100vh - 10rem); }
-.job-form__scrollable { overflow-y: auto; padding: 0.75rem 1rem; display: grid; gap: 0.7rem; scrollbar-color: #3a3a3a #151515; }
-.job-form__scrollable::-webkit-scrollbar { width: 10px; }
-.job-form__scrollable::-webkit-scrollbar-track { background: #151515; }
-.job-form__scrollable::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 999px; border: 2px solid #151515; }
+.job-form__scrollable { overflow-y: auto; padding: 0.75rem 1rem; display: grid; gap: 0.7rem; }
 .job-form__section { border: 1px solid #252525; border-radius: 8px; padding: 0.7rem 0.75rem; background: #121212; }
 .job-form__section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; font-family: var(--font-family-heading); }
 .job-form__grid { display: grid; gap: 0.6rem; }
