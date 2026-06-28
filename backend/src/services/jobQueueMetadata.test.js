@@ -53,3 +53,32 @@ test('enqueueParseJob preserves distinct filename, extension, and MIME metadata 
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ])
 })
+
+
+test('enqueueParseJob preserves assembled S3 reference metadata without requiring inline base64', async (t) => {
+  const addedJobs = []
+  t.mock.method(pool, 'query', async (sql) => {
+    if (String(sql).includes('SELECT job_id')) return { rows: [] }
+    return { rows: [] }
+  })
+  t.mock.method(parseQueue, 'add', async (data, options) => {
+    addedJobs.push({ data, options })
+    return { id: options.jobId, jobId: options.jobId }
+  })
+
+  await enqueueParseJob({
+    resumeId: '00000000-0000-0000-0000-000000000101',
+    userId: 42,
+    filename: 'large.pdf',
+    mimeType: 'application/pdf',
+    fileExtension: 'pdf',
+    fileSize: 100 * 1024 * 1024,
+    assembledS3Key: 'uploads/session/assembled/large.pdf',
+    assembledSha256: 'abc123',
+  })
+
+  assert.equal(addedJobs[0].data.assembledS3Key, 'uploads/session/assembled/large.pdf')
+  assert.equal(addedJobs[0].data.assembledSha256, 'abc123')
+  assert.equal(addedJobs[0].data.fileBufferBase64, null)
+  assert.equal(addedJobs[0].data.fileSize, 100 * 1024 * 1024)
+})

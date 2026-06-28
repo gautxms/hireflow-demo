@@ -233,7 +233,7 @@ test('storeChunk preserves old uploads/<uploadId> chunk keys from persisted s3_p
   assert.equal(commands[0].input.Key, `${prefix}/chunks/0`)
 })
 
-test('completeChunkUpload uses persisted s3_prefix for reading chunks, assembling, and cleanup while preserving parse job payload shape', async (t) => {
+test('completeChunkUpload uses persisted s3_prefix for reading chunks, assembling, and cleanup while enqueuing an S3 reference instead of an inline base64 payload', async (t) => {
   const uploadId = '00000000-0000-4000-8000-000000000301'
   const resumeId = '00000000-0000-4000-8000-000000000302'
   const analysisId = '00000000-0000-4000-8000-000000000303'
@@ -295,6 +295,8 @@ test('completeChunkUpload uses persisted s3_prefix for reading chunks, assemblin
   assert.deepEqual(commands[3].input.Delete.Objects.map((object) => object.Key), [`${prefix}/chunks/0`, `${prefix}/chunks/1`])
   assert.deepEqual(Object.keys(sentPayloads[0]).sort(), [
     'analysisId',
+    'assembledS3Key',
+    'assembledSha256',
     'fileBufferBase64',
     'fileExtension',
     'fileSize',
@@ -306,6 +308,9 @@ test('completeChunkUpload uses persisted s3_prefix for reading chunks, assemblin
     'resumeId',
     'userId',
   ].sort())
+  assert.equal(sentPayloads[0].assembledS3Key, `${prefix}/assembled/resume.pdf`)
+  assert.equal(sentPayloads[0].assembledSha256, 'bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721')
+  assert.equal(sentPayloads[0].fileBufferBase64, null)
 })
 
 test('cleanupExpiredChunkUploads deletes objects using stored prefixes without assuming tenant namespace', async (t) => {

@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import JSZip from 'jszip'
+import { S3Client } from '@aws-sdk/client-s3'
 
 import {
   __resetParseResumeJobTestOverrides,
@@ -2386,4 +2387,59 @@ test('AI scoring contract v2 diagnostics log generated safe internal anomaly cod
 
   assert.deepEqual(diagnostic.scoring_anomalies, ['skills_match_score_non_numeric'])
   assert.equal(JSON.stringify(logs).includes('skills_match_score_non_numeric'), true)
+})
+
+
+test('loadFileBufferBase64ForParseJob returns existing inline base64 payload unchanged', async () => {
+  const inline = Buffer.from('resume text').toString('base64')
+  const result = await __testables.loadFileBufferBase64ForParseJob({ fileBufferBase64: inline })
+  assert.deepEqual(result, { fileBufferBase64: inline, source: 'inline_base64' })
+})
+
+test('loadFileBufferBase64ForParseJob loads assembled upload bytes from S3 reference', async (t) => {
+  process.env.AWS_S3_BUCKET = 'test-bucket'
+  const body = Buffer.from('large resume bytes')
+  const expectedSha = await import('node:crypto').then(({ createHash }) => createHash('sha256').update(body).digest('hex'))
+  const commands = []
+  t.mock.method(S3Client.prototype, 'send', async (command) => {
+    commands.push(command)
+    return { Body: body }
+  })
+
+  const result = await __testables.loadFileBufferBase64ForParseJob({
+    resumeId: 'resume-s3',
+    assembledS3Key: 'uploads/session/assembled/resume.pdf',
+    assembledSha256: expectedSha,
+    fileSize: body.length,
+  }, { logger: { info() {} } })
+
+  assert.equal(commands[0].input.Bucket, 'test-bucket')
+  assert.equal(commands[0].input.Key, 'uploads/session/assembled/resume.pdf')
+  assert.equal(Buffer.from(result.fileBufferBase64, 'base64').toString('utf8'), 'large resume bytes')
+  assert.equal(result.source, 'assembled_s3')
+})
+
+test('handleParseJobFailure marks timeout errors terminally failed for parse job and resume', async (t) => {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql: String(sql), params })
+    return { rows: [], rowCount: 1 }
+  })
+  const job = {
+    id: 'parse-job-timeout',
+    attemptsMade: 0,
+    opts: { attempts: 3 },
+    data: { resumeId: 'resume-timeout', fileBufferBase64: null, jobDescriptionId: null },
+    progress: () => 45,
+    discard() {},
+  }
+  const timeoutError = new Error('Parse document_extraction timed out after 480 seconds')
+  timeoutError.category = 'parse_stage_timeout'
+  timeoutError.nonRetriable = true
+
+  const result = await __testables.handleParseJobFailure(job, timeoutError, { cacheFailureResult: async () => {} })
+
+  assert.equal(result.isTerminalFailure, true)
+  assert.equal(queries.some(({ sql, params }) => sql.includes('UPDATE resumes') && params?.[0] === 'resume-timeout' && params?.[1].includes('timed out')), true)
+  assert.equal(queries.some(({ sql, params }) => sql.includes('UPDATE parse_jobs') && params?.includes('failed') && params?.includes(100)), true)
 })
