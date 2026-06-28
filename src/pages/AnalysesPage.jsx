@@ -89,7 +89,21 @@ export default function AnalysesPage() {
   const [uploadFeedback, setUploadFeedback] = useState({ type: '', message: '' })
   const [inFlightAnalyses, setInFlightAnalyses] = useState({})
 
-  const mergeLoadedAnalyses = useCallback((nextItems, overlays = inFlightAnalyses) => mergeInFlightAnalyses(nextItems, overlays), [inFlightAnalyses])
+  const removeTerminalOverlays = useCallback((nextItems, overlays = inFlightAnalyses) => {
+    const activeOverlays = { ...(overlays || {}) }
+    let changed = false
+    ;(Array.isArray(nextItems) ? nextItems : []).forEach((analysis) => {
+      const analysisId = String(analysis.id || '')
+      if (!activeOverlays[analysisId]) return
+      const status = deriveDisplayStatus(analysis)
+      if (status === 'complete' || status === 'completed' || status === 'failed' || status === 'partial') {
+        delete activeOverlays[analysisId]
+        changed = true
+      }
+    })
+    return changed ? activeOverlays : overlays
+  }, [inFlightAnalyses])
+
 
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -107,7 +121,9 @@ export default function AnalysesPage() {
         setLoading(true)
         setError('')
         const nextItems = await loadAnalyses({ signal: controller.signal })
-        setItems(mergeLoadedAnalyses(nextItems))
+        const activeOverlays = removeTerminalOverlays(nextItems)
+        if (activeOverlays !== inFlightAnalyses) setInFlightAnalyses(activeOverlays)
+        setItems(mergeInFlightAnalyses(nextItems, activeOverlays))
       } catch (loadError) {
         if (loadError.name !== 'AbortError') setError(loadError.message || 'Unable to load analyses')
       } finally {
@@ -116,7 +132,7 @@ export default function AnalysesPage() {
     }
     run()
     return () => controller.abort()
-  }, [mergeLoadedAnalyses])
+  }, [inFlightAnalyses, removeTerminalOverlays])
 
   useEffect(() => {
     const hasActiveAnalyses = items.some((analysis) => {
@@ -128,14 +144,16 @@ export default function AnalysesPage() {
     const intervalId = window.setInterval(async () => {
       try {
         const nextItems = await loadAnalyses()
-        setItems(mergeLoadedAnalyses(nextItems))
+        const activeOverlays = removeTerminalOverlays(nextItems)
+        if (activeOverlays !== inFlightAnalyses) setInFlightAnalyses(activeOverlays)
+        setItems(mergeInFlightAnalyses(nextItems, activeOverlays))
       } catch {
         // keep existing data if polling request fails
       }
     }, 5000)
 
     return () => window.clearInterval(intervalId)
-  }, [items, mergeLoadedAnalyses])
+  }, [inFlightAnalyses, items, removeTerminalOverlays])
 
   useEffect(() => {
     if (!isCreateModalOpen) return
@@ -251,7 +269,9 @@ export default function AnalysesPage() {
 
   const refreshAnalysesList = async (overlays = inFlightAnalyses) => {
     const nextItems = await loadAnalyses()
-    setItems(mergeInFlightAnalyses(nextItems, overlays))
+    const activeOverlays = removeTerminalOverlays(nextItems, overlays)
+    if (activeOverlays !== overlays) setInFlightAnalyses(activeOverlays)
+    setItems(mergeInFlightAnalyses(nextItems, activeOverlays))
   }
 
   const initChunkUpload = async ({ file, token, analysisId, nameValue, jobDescriptionId }) => {
@@ -441,8 +461,11 @@ export default function AnalysesPage() {
       if (!response.ok) throw new Error(payload.error || 'Unable to delete analysis')
 
       setDeleteFeedback({ type: 'success', message: 'Analysis deleted successfully.' })
+      const nextInFlightAnalyses = { ...inFlightAnalyses }
+      delete nextInFlightAnalyses[String(analysisId)]
+      setInFlightAnalyses(nextInFlightAnalyses)
       const refreshedItems = await loadAnalyses()
-      setItems(mergeLoadedAnalyses(refreshedItems))
+      setItems(mergeInFlightAnalyses(refreshedItems.filter((entry) => String(entry.id) !== String(analysisId)), nextInFlightAnalyses))
     } catch (deleteError) {
       setItems(previousItems)
       setDeleteFeedback({ type: 'error', message: deleteError.message || 'Unable to delete analysis' })
