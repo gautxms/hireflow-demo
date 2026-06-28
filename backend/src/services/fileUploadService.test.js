@@ -104,6 +104,48 @@ test('initChunkUpload defaults to backend chunk size when clientChunkSize is omi
   assert.equal(insert.params[5], 20)
 })
 
+
+test('initChunkUpload accepts explicit backend chunk size clientChunkSize', async (t) => {
+  const fileSize = 100 * 1024 * 1024
+  const queries = mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('INSERT INTO analyses')) return { rows: [{ id: '00000000-0000-4000-8000-000000000504' }] }
+    if (sql.includes('FROM upload_chunks') && sql.includes("status = 'uploading'")) return { rows: [] }
+    if (sql.includes('INSERT INTO upload_chunks')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const result = await service.initChunkUpload({
+    userId: 42,
+    filename: 'explicit-backend-chunk.pdf',
+    fileSize,
+    mimeType: 'application/pdf',
+    clientChunkSize: 5 * 1024 * 1024,
+  })
+
+  assert.equal(result.totalChunks, 20)
+  const insert = queries.find(({ sql }) => sql.includes('INSERT INTO upload_chunks'))
+  assert.equal(insert.params[5], 20)
+})
+
+test('initChunkUpload rejects unsupported tiny clientChunkSize values', async (t) => {
+  mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  await assert.rejects(
+    service.initChunkUpload({
+      userId: 42,
+      filename: 'tiny-chunk.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      clientChunkSize: 1,
+    }),
+    /clientChunkSize must be 4MB or 5MB/,
+  )
+})
+
 test('initChunkUpload rejects clientChunkSize over the backend chunk size limit', async (t) => {
   mockServiceQueries(t, (sql) => {
     if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
@@ -118,7 +160,7 @@ test('initChunkUpload rejects clientChunkSize over the backend chunk size limit'
       mimeType: 'application/pdf',
       clientChunkSize: (5 * 1024 * 1024) + 1,
     }),
-    /clientChunkSize exceeds 5MB limit/,
+    /clientChunkSize must be 4MB or 5MB/,
   )
 })
 

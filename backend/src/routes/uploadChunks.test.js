@@ -160,6 +160,30 @@ test('POST /api/uploads/chunks/init passes clientChunkSize through to session cr
   assert.equal(insert.params[5], 25)
 })
 
+
+test('POST /api/uploads/chunks/init rejects unsupported tiny clientChunkSize values', async (t) => {
+  mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('SELECT COUNT(*)::INT AS usage_count')) return { rows: [{ usage_count: 0 }] }
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/init', {
+    headers: authHeader(),
+    body: {
+      filename: 'tiny-chunk.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      clientChunkSize: 1,
+    },
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal(payload.error, 'clientChunkSize must be 4MB or 5MB')
+})
+
 test('POST /api/uploads/chunks/init rejects clientChunkSize above backend chunk size limit', async (t) => {
   mockChunkUploadQueries(t, (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
@@ -180,7 +204,7 @@ test('POST /api/uploads/chunks/init rejects clientChunkSize above backend chunk 
   })
 
   assert.equal(response.status, 400)
-  assert.equal(payload.error, 'clientChunkSize exceeds 5MB limit')
+  assert.equal(payload.error, 'clientChunkSize must be 4MB or 5MB')
 })
 
 test('POST /api/uploads/chunks/init does not record usage for a resumed session', async (t) => {

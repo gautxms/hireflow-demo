@@ -16,6 +16,7 @@ import { isScanResultSafe, scanFileBuffer } from './virusScanService.js'
 import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileMime.js'
 
 export const CHUNK_SIZE_BYTES = 5 * 1024 * 1024
+export const CLIENT_CHUNK_SIZE_BYTES = 4 * 1024 * 1024
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 let uploadTablesReady = false
@@ -66,8 +67,8 @@ function resolveClientChunkSize(clientChunkSize) {
     throw new Error('clientChunkSize must be a positive integer')
   }
 
-  if (parsedChunkSize > CHUNK_SIZE_BYTES) {
-    throw new Error('clientChunkSize exceeds 5MB limit')
+  if (parsedChunkSize !== CLIENT_CHUNK_SIZE_BYTES && parsedChunkSize !== CHUNK_SIZE_BYTES) {
+    throw new Error('clientChunkSize must be 4MB or 5MB')
   }
 
   return parsedChunkSize
