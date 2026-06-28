@@ -383,7 +383,7 @@ export default function NewDashboard() {
     ? `${dashboardData.range.startDate} → ${dashboardData.range.endDate}`
     : `${toIsoDate(new Date(Date.now() - 29 * 86400000))} → ${toIsoDate(new Date())}`
 
-  const kpis = dashboardData?.kpis || {
+  const defaultKpis = {
     analysesRunCount: 0,
     resumesAnalyzedCount: 0,
     completionRate: 0,
@@ -391,10 +391,13 @@ export default function NewDashboard() {
     scoredCount: 0,
     shortlistedRate: 0,
   }
-  const usage = dashboardData?.usage || {
-    monthlyResumeAnalysisCount: 0,
-    monthlyResumeAnalysisLimit: 800,
-  }
+  const kpis = { ...defaultKpis, ...(dashboardData?.kpis || {}) }
+  const usage = dashboardData?.usage
+  const hasMonthlyResumeAnalysisUsage = Number.isFinite(Number(usage?.monthlyResumeAnalysisCount))
+    && Number.isFinite(Number(usage?.monthlyResumeAnalysisLimit))
+  const monthlyResumeAnalysisHelper = hasMonthlyResumeAnalysisUsage
+    ? `Monthly usage: ${formatCompactNumber(usage.monthlyResumeAnalysisCount)} / ${formatCompactNumber(usage.monthlyResumeAnalysisLimit)}`
+    : 'Monthly usage unavailable'
 
   const analysesTrend = useMemo(() => dashboardData?.charts?.analysesTrend || [], [dashboardData])
   const averageScoreTrend = useMemo(() => dashboardData?.charts?.averageScoreTrend || [], [dashboardData])
@@ -469,7 +472,7 @@ export default function NewDashboard() {
       <section className="new-dashboard__kpis">
         {[
           ['Analyses Run', kpis.analysesRunCount, 'file'],
-          ['Resumes Analyzed', kpis.resumesAnalyzedCount, 'users', `Monthly usage: ${formatCompactNumber(usage.monthlyResumeAnalysisCount)} / ${formatCompactNumber(usage.monthlyResumeAnalysisLimit)}`],
+          ['Resumes Analyzed', formatCompactNumber(kpis.resumesAnalyzedCount), 'users', monthlyResumeAnalysisHelper],
           ['Completion Rate', formatPercent(kpis.completionRate), 'target'],
           ['Average Score', formatScore(kpis.avgScore), 'chart'],
           ['Shortlisted Rate', formatPercent(kpis.shortlistedRate), 'users'],
