@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const analysesPageSource = readFileSync(new URL('./AnalysesPage.jsx', import.meta.url), 'utf8')
 const analysisDetailSource = readFileSync(new URL('./AnalysisDetailPage.jsx', import.meta.url), 'utf8')
+const analysesDisplayStateSource = readFileSync(new URL('./analysesDisplayState.js', import.meta.url), 'utf8')
 
 test('create-analysis modal supports open, close, submit, and validation states', () => {
   assert.match(analysesPageSource, /setIsCreateModalOpen\(true\)/)
@@ -60,8 +61,8 @@ test('analysis detail page renders normalization drop warning only for non-produ
 })
 
 test('status alias mapping stays consistent across analyses list and detail views', () => {
-  assert.match(analysesPageSource, /queued:\s*'pending'/)
-  assert.match(analysesPageSource, /retrying:\s*'processing'/)
+  assert.match(analysesDisplayStateSource, /queued:\s*'pending'/)
+  assert.match(analysesDisplayStateSource, /retrying:\s*'processing'/)
   assert.match(analysisDetailSource, /queued:\s*'pending'/)
   assert.match(analysisDetailSource, /retrying:\s*'processing'/)
 })

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Info, Trash2, Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analysesPaginationState'
+import { deriveDisplayStatus, mergeInFlightAnalyses } from './analysesDisplayState.js'
 import '../styles/analyses.css'
 import { buildResumeFileIdentity } from '../utils/resumeFileIdentity.js'
 
@@ -28,35 +29,20 @@ function formatDate(value) {
   return date.toLocaleString()
 }
 
-function normalizeStatus(status) {
-  const normalizedStatus = String(status || 'pending').trim().toLowerCase()
-  const STATUS_ALIAS_MAP = {
-    queued: 'pending',
-    retrying: 'processing',
-  }
-  return STATUS_ALIAS_MAP[normalizedStatus] || normalizedStatus
-}
-
 
 function getFileKey(file) {
   return `${file.name}-${file.size}-${file.lastModified}`
 }
 
-function deriveDisplayStatus(analysis) {
-  const summary = analysis?.summary || {}
-  const total = Number(summary.total || 0)
-  const complete = Number(summary.complete || 0)
-  const failed = Number(summary.failed || 0)
-  const processing = Number(summary.processing || 0)
-  const pending = Number(summary.pending || 0)
-
-  if (processing > 0) return 'processing'
-  if (pending > 0 && complete < total) return 'pending'
-  if (total > 0 && complete === total && failed === 0) return 'complete'
-  if (total > 0 && failed === total) return 'failed'
-  if (total > 0 && complete > 0 && failed > 0 && pending === 0 && processing === 0) return 'partial'
-
-  return normalizeStatus(analysis?.liveStatus || analysis?.status)
+function toExpectedFileEntry(file) {
+  return {
+    filename: file.name,
+    name: file.name,
+    originalName: file.name,
+    mimeType: inferResumeMimeType(file),
+    type: inferResumeMimeType(file),
+    status: 'processing',
+  }
 }
 
 function formatPartialSummary(analysis) {
@@ -101,6 +87,9 @@ export default function AnalysesPage() {
   const [deletingAnalysisId, setDeletingAnalysisId] = useState('')
   const [deleteFeedback, setDeleteFeedback] = useState({ type: '', message: '' })
   const [uploadFeedback, setUploadFeedback] = useState({ type: '', message: '' })
+  const [inFlightAnalyses, setInFlightAnalyses] = useState({})
+
+  const mergeLoadedAnalyses = useCallback((nextItems, overlays = inFlightAnalyses) => mergeInFlightAnalyses(nextItems, overlays), [inFlightAnalyses])
 
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -118,7 +107,7 @@ export default function AnalysesPage() {
         setLoading(true)
         setError('')
         const nextItems = await loadAnalyses({ signal: controller.signal })
-        setItems(nextItems)
+        setItems(mergeLoadedAnalyses(nextItems))
       } catch (loadError) {
         if (loadError.name !== 'AbortError') setError(loadError.message || 'Unable to load analyses')
       } finally {
@@ -127,7 +116,7 @@ export default function AnalysesPage() {
     }
     run()
     return () => controller.abort()
-  }, [])
+  }, [mergeLoadedAnalyses])
 
   useEffect(() => {
     const hasActiveAnalyses = items.some((analysis) => {
@@ -139,14 +128,14 @@ export default function AnalysesPage() {
     const intervalId = window.setInterval(async () => {
       try {
         const nextItems = await loadAnalyses()
-        setItems(nextItems)
+        setItems(mergeLoadedAnalyses(nextItems))
       } catch {
         // keep existing data if polling request fails
       }
     }, 5000)
 
     return () => window.clearInterval(intervalId)
-  }, [items])
+  }, [items, mergeLoadedAnalyses])
 
   useEffect(() => {
     if (!isCreateModalOpen) return
@@ -260,9 +249,9 @@ export default function AnalysesPage() {
     setSelectedFiles((currentFiles) => currentFiles.filter((file) => getFileKey(file) !== fileKey))
   }
 
-  const refreshAnalysesList = async () => {
+  const refreshAnalysesList = async (overlays = inFlightAnalyses) => {
     const nextItems = await loadAnalyses()
-    setItems(nextItems)
+    setItems(mergeInFlightAnalyses(nextItems, overlays))
   }
 
   const initChunkUpload = async ({ file, token, analysisId, nameValue, jobDescriptionId }) => {
@@ -395,8 +384,20 @@ export default function AnalysesPage() {
       })
       if (!firstInit.analysisId) throw new Error('Upload started but no analysis ID was returned.')
 
+      const overlay = {
+        analysisId: firstInit.analysisId,
+        expectedFileCount: filesSnapshot.length,
+        expectedFiles: filesSnapshot.map(toExpectedFileEntry),
+        name: nameValue,
+        jobDescriptionId: jobDescriptionIdSnapshot,
+        createdAt: new Date().toISOString(),
+      }
+      const nextInFlightAnalyses = { ...inFlightAnalyses, [firstInit.analysisId]: overlay }
+      setInFlightAnalyses(nextInFlightAnalyses)
+      setItems((currentItems) => mergeInFlightAnalyses(currentItems, nextInFlightAnalyses))
+
       resetModal()
-      refreshAnalysesList().catch(() => {
+      refreshAnalysesList(nextInFlightAnalyses).catch(() => {
         setUploadFeedback({ type: 'error', message: 'Analysis started, but the list could not be refreshed yet.' })
       })
       runBackgroundUpload({
@@ -441,7 +442,7 @@ export default function AnalysesPage() {
 
       setDeleteFeedback({ type: 'success', message: 'Analysis deleted successfully.' })
       const refreshedItems = await loadAnalyses()
-      setItems(refreshedItems)
+      setItems(mergeLoadedAnalyses(refreshedItems))
     } catch (deleteError) {
       setItems(previousItems)
       setDeleteFeedback({ type: 'error', message: deleteError.message || 'Unable to delete analysis' })
