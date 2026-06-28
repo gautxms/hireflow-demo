@@ -4,7 +4,7 @@ import { Info, Trash2, Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analysesPaginationState'
-import { deriveDisplayStatus, mergeInFlightAnalyses } from './analysesDisplayState.js'
+import { deriveDisplayStatus, mergeInFlightAnalyses, shouldRemoveInFlightOverlay } from './analysesDisplayState.js'
 import '../styles/analyses.css'
 import { buildResumeFileIdentity } from '../utils/resumeFileIdentity.js'
 
@@ -95,8 +95,7 @@ export default function AnalysesPage() {
     ;(Array.isArray(nextItems) ? nextItems : []).forEach((analysis) => {
       const analysisId = String(analysis.id || '')
       if (!activeOverlays[analysisId]) return
-      const status = deriveDisplayStatus(analysis)
-      if (status === 'complete' || status === 'completed' || status === 'failed' || status === 'partial') {
+      if (shouldRemoveInFlightOverlay(analysis, activeOverlays[analysisId])) {
         delete activeOverlays[analysisId]
         changed = true
       }
