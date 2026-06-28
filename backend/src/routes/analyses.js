@@ -9,6 +9,62 @@ const router = Router()
 
 const TERMINAL_STATUSES = new Set(['complete', 'failed'])
 
+const FAILED_UPLOAD_STATUSES = new Set(['failed', 'rejected', 'expired'])
+const STALE_UPLOAD_TIMEOUT_MINUTES = 30
+
+function mapUploadChunkStatus(row) {
+  const status = String(row?.status || '').toLowerCase()
+  if (FAILED_UPLOAD_STATUSES.has(status)) return 'failed'
+  if (status === 'uploading') {
+    const updatedAt = row?.updated_at ? new Date(row.updated_at) : null
+    if (updatedAt && !Number.isNaN(updatedAt.getTime())) {
+      const ageMs = Date.now() - updatedAt.getTime()
+      if (ageMs > STALE_UPLOAD_TIMEOUT_MINUTES * 60 * 1000) return 'failed'
+    }
+    return 'processing'
+  }
+  if (status === 'completed') return 'processing'
+  return 'processing'
+}
+
+function buildUploadChunkFile(row) {
+  const filename = row.filename || 'Unknown file'
+  return {
+    name: filename,
+    filename,
+    originalFilename: filename,
+    fileExtension: null,
+    mimeType: row.mime_type || null,
+    originalMimeType: row.mime_type || null,
+    status: mapUploadChunkStatus(row),
+    source: 'upload_chunk',
+  }
+}
+
+function buildUploadChunkItem(row) {
+  const status = mapUploadChunkStatus(row)
+  return {
+    id: `upload:${String(row.upload_id)}`,
+    itemId: `upload:${String(row.upload_id)}`,
+    uploadId: String(row.upload_id),
+    resumeId: '',
+    parseJobId: row.parse_job_id ? String(row.parse_job_id) : null,
+    filename: row.filename || 'Unknown file',
+    originalFilename: row.filename || null,
+    fileExtension: null,
+    mimeType: row.mime_type || null,
+    originalMimeType: row.mime_type || null,
+    status,
+    source: 'upload_chunk',
+    progress: status === 'failed' ? 100 : 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+    error: status === 'failed' ? `Upload ${row.status || 'failed'}` : null,
+    result: null,
+    normalizedCandidates: [],
+  }
+}
+
 function safeParseResult(result) {
   if (result == null) return null
   if (typeof result === 'string') {
@@ -203,6 +259,50 @@ async function loadAnalysisStatus(analysisId, userId) {
     })
   }
 
+  const uploadChunksResult = await pool.query(
+    `SELECT uc.upload_id,
+            uc.filename,
+            uc.mime_type,
+            uc.status,
+            uc.resume_id,
+            uc.parse_job_id,
+            uc.created_at,
+            uc.updated_at
+     FROM upload_chunks uc
+     WHERE uc.analysis_id = $1
+       AND NOT EXISTS (
+         SELECT 1
+         FROM analysis_items ai
+         WHERE ai.analysis_id = uc.analysis_id
+           AND (
+             (uc.resume_id IS NOT NULL AND ai.resume_id = uc.resume_id)
+             OR (uc.parse_job_id IS NOT NULL AND ai.parse_job_id = uc.parse_job_id)
+           )
+       )
+     ORDER BY uc.created_at ASC`,
+    [analysisId],
+  )
+
+  for (const row of uploadChunksResult.rows) {
+    const placeholder = buildUploadChunkItem(row)
+    counts[placeholder.status] = (counts[placeholder.status] || 0) + 1
+    if (placeholder.status === 'failed') {
+      failures.push({
+        resumeId: '',
+        parseJobId: placeholder.parseJobId,
+        uploadId: placeholder.uploadId,
+        filename: placeholder.filename,
+        originalFilename: placeholder.originalFilename,
+        fileExtension: null,
+        mimeType: placeholder.mimeType,
+        originalMimeType: placeholder.originalMimeType,
+        status: 'failed',
+        error: placeholder.error || 'Upload failed',
+      })
+    }
+    items.push(placeholder)
+  }
+
   const totalItems = items.length
   const completedItems = counts.complete + counts.failed
   const aggregateStatus = deriveAggregateStatus(counts, totalItems)
@@ -314,6 +414,44 @@ router.get('/', requireAuth, async (req, res) => {
       [req.userId],
     )
 
+    const uploadFilesResult = await pool.query(
+      `SELECT uc.analysis_id,
+              uc.upload_id,
+              uc.filename,
+              uc.mime_type,
+              uc.status,
+              uc.resume_id,
+              uc.parse_job_id,
+              uc.created_at,
+              uc.updated_at
+       FROM upload_chunks uc
+       INNER JOIN analyses a ON a.id = uc.analysis_id
+       WHERE a.user_id = $1
+         AND NOT EXISTS (
+           SELECT 1
+           FROM analysis_items ai
+           WHERE ai.analysis_id = uc.analysis_id
+             AND (
+               (uc.resume_id IS NOT NULL AND ai.resume_id = uc.resume_id)
+               OR (uc.parse_job_id IS NOT NULL AND ai.parse_job_id = uc.parse_job_id)
+             )
+         )
+       ORDER BY uc.analysis_id ASC, uc.created_at ASC`,
+      [req.userId],
+    )
+
+    const uploadSummariesByAnalysis = new Map()
+    for (const row of uploadFilesResult.rows) {
+      const analysisId = String(row.analysis_id || '')
+      if (!analysisId) continue
+      const existingSummary = uploadSummariesByAnalysis.get(analysisId) || { total: 0, failed: 0, processing: 0 }
+      const uploadStatus = mapUploadChunkStatus(row)
+      existingSummary.total += 1
+      if (uploadStatus === 'failed') existingSummary.failed += 1
+      else existingSummary.processing += 1
+      uploadSummariesByAnalysis.set(analysisId, existingSummary)
+    }
+
     const filesByAnalysis = new Map()
     for (const row of filesByAnalysisResult.rows) {
       const analysisId = String(row.analysis_id || '')
@@ -331,12 +469,21 @@ router.get('/', requireAuth, async (req, res) => {
       filesByAnalysis.set(analysisId, existingItems)
     }
 
+    for (const row of uploadFilesResult.rows) {
+      const analysisId = String(row.analysis_id || '')
+      if (!analysisId) continue
+      const existingItems = filesByAnalysis.get(analysisId) || []
+      existingItems.push(buildUploadChunkFile(row))
+      filesByAnalysis.set(analysisId, existingItems)
+    }
+
     const items = result.rows.map((row) => {
+      const uploadSummary = uploadSummariesByAnalysis.get(String(row.id)) || { total: 0, failed: 0, processing: 0 }
       const summary = {
-        total: Number(row.total_count || 0),
+        total: Number(row.total_count || 0) + uploadSummary.total,
         complete: Number(row.complete_count || 0),
-        failed: Number(row.failed_count || 0),
-        processing: Number(row.processing_count || 0),
+        failed: Number(row.failed_count || 0) + uploadSummary.failed,
+        processing: Number(row.processing_count || 0) + uploadSummary.processing,
       }
       return {
         id: String(row.id),
@@ -344,12 +491,12 @@ router.get('/', requireAuth, async (req, res) => {
         name: row.name || null,
         status: row.status || 'queued',
         liveStatus: deriveAggregateStatus({
-          queued: Math.max(0, Number(row.total_count || 0) - Number(row.complete_count || 0) - Number(row.failed_count || 0) - Number(row.processing_count || 0)),
-          processing: Number(row.processing_count || 0),
+          queued: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing),
+          processing: summary.processing,
           retrying: 0,
-          complete: Number(row.complete_count || 0),
-          failed: Number(row.failed_count || 0),
-        }, Number(row.total_count || 0)),
+          complete: summary.complete,
+          failed: summary.failed,
+        }, summary.total),
         summary: { ...summary, pending: Math.max(0, summary.total - summary.complete - summary.failed - summary.processing) },
         failedItems: failedItemsByAnalysis.get(String(row.id)) || [],
         fileCount: summary.total,
