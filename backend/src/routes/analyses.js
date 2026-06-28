@@ -41,6 +41,39 @@ function buildUploadChunkFile(row) {
   }
 }
 
+
+function normalizeAnalysisFileKey(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function buildAnalysisItemIdentitySet(rows) {
+  const identities = new Set()
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const analysisId = normalizeAnalysisFileKey(row.analysis_id)
+    if (!analysisId) continue
+    const resumeId = normalizeAnalysisFileKey(row.resume_id)
+    const parseJobId = normalizeAnalysisFileKey(row.parse_job_id)
+    const filename = normalizeAnalysisFileKey(row.original_filename || row.filename)
+    if (resumeId) identities.add(`${analysisId}:resume:${resumeId}`)
+    if (parseJobId) identities.add(`${analysisId}:parse:${parseJobId}`)
+    if (filename) identities.add(`${analysisId}:file:${filename}`)
+  }
+  return identities
+}
+
+function isUploadChunkAlreadyRepresented(row, analysisItemIdentities) {
+  const analysisId = normalizeAnalysisFileKey(row?.analysis_id)
+  if (!analysisId) return false
+  const resumeId = normalizeAnalysisFileKey(row?.resume_id)
+  const parseJobId = normalizeAnalysisFileKey(row?.parse_job_id)
+  const filename = normalizeAnalysisFileKey(row?.filename)
+  return Boolean(
+    (resumeId && analysisItemIdentities.has(`${analysisId}:resume:${resumeId}`))
+    || (parseJobId && analysisItemIdentities.has(`${analysisId}:parse:${parseJobId}`))
+    || (filename && analysisItemIdentities.has(`${analysisId}:file:${filename}`)),
+  )
+}
+
 function buildUploadChunkItem(row) {
   const status = mapUploadChunkStatus(row)
   return {
@@ -364,6 +397,8 @@ router.get('/', requireAuth, async (req, res) => {
 
     const failedItemsResult = await pool.query(
       `SELECT ai.analysis_id,
+              ai.resume_id,
+              ai.parse_job_id,
               r.filename,
               r.original_filename,
               r.file_extension,
@@ -401,6 +436,8 @@ router.get('/', requireAuth, async (req, res) => {
 
     const filesByAnalysisResult = await pool.query(
       `SELECT ai.analysis_id,
+              ai.resume_id,
+              ai.parse_job_id,
               r.filename,
               r.original_filename,
               r.file_extension,
@@ -446,8 +483,11 @@ router.get('/', requireAuth, async (req, res) => {
       [req.userId],
     )
 
+    const analysisItemIdentities = buildAnalysisItemIdentitySet(filesByAnalysisResult.rows)
+    const orphanUploadRows = uploadFilesResult.rows.filter((row) => !isUploadChunkAlreadyRepresented(row, analysisItemIdentities))
+
     const uploadSummariesByAnalysis = new Map()
-    for (const row of uploadFilesResult.rows) {
+    for (const row of orphanUploadRows) {
       const analysisId = String(row.analysis_id || '')
       if (!analysisId) continue
       const existingSummary = uploadSummariesByAnalysis.get(analysisId) || { total: 0, failed: 0, processing: 0 }
@@ -475,7 +515,7 @@ router.get('/', requireAuth, async (req, res) => {
       filesByAnalysis.set(analysisId, existingItems)
     }
 
-    for (const row of uploadFilesResult.rows) {
+    for (const row of orphanUploadRows) {
       const analysisId = String(row.analysis_id || '')
       if (!analysisId) continue
       const existingItems = filesByAnalysis.get(analysisId) || []

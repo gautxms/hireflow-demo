@@ -88,8 +88,18 @@ export default function AnalysesPage() {
   const [deleteFeedback, setDeleteFeedback] = useState({ type: '', message: '' })
   const [uploadFeedback, setUploadFeedback] = useState({ type: '', message: '' })
   const [inFlightAnalyses, setInFlightAnalyses] = useState({})
+  const inFlightAnalysesRef = useRef({})
+  const itemsRef = useRef([])
 
-  const removeTerminalOverlays = useCallback((nextItems, overlays = inFlightAnalyses) => {
+  useEffect(() => {
+    inFlightAnalysesRef.current = inFlightAnalyses
+  }, [inFlightAnalyses])
+
+  useEffect(() => {
+    itemsRef.current = items
+  }, [items])
+
+  const removeTerminalOverlays = useCallback((nextItems, overlays = inFlightAnalysesRef.current) => {
     const activeOverlays = { ...(overlays || {}) }
     let changed = false
     ;(Array.isArray(nextItems) ? nextItems : []).forEach((analysis) => {
@@ -101,7 +111,7 @@ export default function AnalysesPage() {
       }
     })
     return changed ? activeOverlays : overlays
-  }, [inFlightAnalyses])
+  }, [])
 
 
   const loadAnalyses = async ({ signal } = {}) => {
@@ -120,8 +130,8 @@ export default function AnalysesPage() {
         setLoading(true)
         setError('')
         const nextItems = await loadAnalyses({ signal: controller.signal })
-        const activeOverlays = removeTerminalOverlays(nextItems)
-        if (activeOverlays !== inFlightAnalyses) setInFlightAnalyses(activeOverlays)
+        const activeOverlays = removeTerminalOverlays(nextItems, inFlightAnalysesRef.current)
+        if (activeOverlays !== inFlightAnalysesRef.current) setInFlightAnalyses(activeOverlays)
         setItems(mergeInFlightAnalyses(nextItems, activeOverlays))
       } catch (loadError) {
         if (loadError.name !== 'AbortError') setError(loadError.message || 'Unable to load analyses')
@@ -131,20 +141,21 @@ export default function AnalysesPage() {
     }
     run()
     return () => controller.abort()
-  }, [inFlightAnalyses, removeTerminalOverlays])
+  }, [removeTerminalOverlays])
 
   useEffect(() => {
-    const hasActiveAnalyses = items.some((analysis) => {
-      const status = deriveDisplayStatus(analysis)
-      return status === 'pending' || status === 'processing'
-    })
-    if (!hasActiveAnalyses) return undefined
-
     const intervalId = window.setInterval(async () => {
+      const hasActiveAnalyses = itemsRef.current.some((analysis) => {
+        const status = deriveDisplayStatus(analysis)
+        return status === 'pending' || status === 'processing'
+      })
+      if (!hasActiveAnalyses) return
+
       try {
+        const overlays = inFlightAnalysesRef.current
         const nextItems = await loadAnalyses()
-        const activeOverlays = removeTerminalOverlays(nextItems)
-        if (activeOverlays !== inFlightAnalyses) setInFlightAnalyses(activeOverlays)
+        const activeOverlays = removeTerminalOverlays(nextItems, overlays)
+        if (activeOverlays !== overlays) setInFlightAnalyses(activeOverlays)
         setItems(mergeInFlightAnalyses(nextItems, activeOverlays))
       } catch {
         // keep existing data if polling request fails
@@ -152,7 +163,7 @@ export default function AnalysesPage() {
     }, 5000)
 
     return () => window.clearInterval(intervalId)
-  }, [inFlightAnalyses, items, removeTerminalOverlays])
+  }, [removeTerminalOverlays])
 
   useEffect(() => {
     if (!isCreateModalOpen) return
@@ -266,7 +277,7 @@ export default function AnalysesPage() {
     setSelectedFiles((currentFiles) => currentFiles.filter((file) => getFileKey(file) !== fileKey))
   }
 
-  const refreshAnalysesList = async (overlays = inFlightAnalyses) => {
+  const refreshAnalysesList = async (overlays = inFlightAnalysesRef.current) => {
     const nextItems = await loadAnalyses()
     const activeOverlays = removeTerminalOverlays(nextItems, overlays)
     if (activeOverlays !== overlays) setInFlightAnalyses(activeOverlays)
@@ -332,27 +343,23 @@ export default function AnalysesPage() {
     return completeChunkUpload({ file, token, uploadId })
   }
 
-  const runBackgroundUpload = async ({ files, token, initialAnalysisId, initialUploadId, nameValue, jobDescriptionId }) => {
+  const runBackgroundUpload = async ({ files, token, analysisId: initialAnalysisId, uploadSessions, overlay }) => {
     let analysisId = initialAnalysisId
     const failedFiles = []
 
     for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
       const file = files[fileIndex]
       try {
-        let uploadId = initialUploadId
-        if (fileIndex > 0) {
-          const initPayload = await initChunkUpload({ file, token, analysisId, nameValue, jobDescriptionId })
-          analysisId = initPayload.analysisId || analysisId
-          uploadId = initPayload.uploadId
-        }
+        const uploadId = uploadSessions[fileIndex]?.uploadId
+        if (!uploadId) throw new Error(`Upload session was not initialized for ${file.name}`)
         const completePayload = await uploadAndCompleteFile({ file, token, uploadId })
         analysisId = String(completePayload.analysisId || analysisId || '').trim()
-        await refreshAnalysesList()
+        await refreshAnalysesList(overlay ? { ...inFlightAnalysesRef.current, [overlay.analysisId]: overlay } : inFlightAnalysesRef.current)
       } catch (uploadError) {
         failedFiles.push(file.name)
         setUploadFeedback({ type: 'error', message: uploadError.message || `Unable to upload ${file.name}` })
         try {
-          await refreshAnalysesList()
+          await refreshAnalysesList(overlay ? { ...inFlightAnalysesRef.current, [overlay.analysisId]: overlay } : inFlightAnalysesRef.current)
         } catch {
           // Keep the upload failure visible even if the follow-up refresh fails.
         }
@@ -364,7 +371,7 @@ export default function AnalysesPage() {
       return
     }
 
-    await refreshAnalysesList()
+    await refreshAnalysesList(overlay ? { ...inFlightAnalysesRef.current, [overlay.analysisId]: overlay } : inFlightAnalysesRef.current)
   }
 
   const handleSubmit = async (event) => {
@@ -402,6 +409,17 @@ export default function AnalysesPage() {
       })
       if (!firstInit.analysisId) throw new Error('Upload started but no analysis ID was returned.')
 
+      const remainingUploadSessions = await Promise.all(filesSnapshot.slice(1).map((file) => (
+        initChunkUpload({
+          file,
+          token,
+          analysisId: firstInit.analysisId,
+          nameValue,
+          jobDescriptionId: jobDescriptionIdSnapshot,
+        })
+      )))
+      const uploadSessions = [firstInit, ...remainingUploadSessions]
+
       const overlay = {
         analysisId: firstInit.analysisId,
         expectedFileCount: filesSnapshot.length,
@@ -421,13 +439,12 @@ export default function AnalysesPage() {
       runBackgroundUpload({
         files: filesSnapshot,
         token,
-        initialAnalysisId: firstInit.analysisId,
-        initialUploadId: firstInit.uploadId,
-        nameValue,
-        jobDescriptionId: jobDescriptionIdSnapshot,
+        analysisId: firstInit.analysisId,
+        uploadSessions,
+        overlay,
       }).catch((uploadError) => {
         setUploadFeedback({ type: 'error', message: uploadError.message || 'Resume upload failed after analysis creation started.' })
-        refreshAnalysesList().catch(() => {})
+        refreshAnalysesList({ ...inFlightAnalysesRef.current, [overlay.analysisId]: overlay }).catch(() => {})
       })
     } catch (submitFailure) {
       setSubmitError(submitFailure.message || 'Unable to analyze resumes')
