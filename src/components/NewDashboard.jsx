@@ -393,11 +393,10 @@ export default function NewDashboard() {
   }
   const kpis = { ...defaultKpis, ...(dashboardData?.kpis || {}) }
   const usage = dashboardData?.usage
-  const hasMonthlyResumeAnalysisUsage = Number.isFinite(Number(usage?.monthlyResumeAnalysisCount))
-    && Number.isFinite(Number(usage?.monthlyResumeAnalysisLimit))
-  const monthlyResumeAnalysisHelper = hasMonthlyResumeAnalysisUsage
-    ? `Monthly usage: ${formatCompactNumber(usage.monthlyResumeAnalysisCount)} / ${formatCompactNumber(usage.monthlyResumeAnalysisLimit)}`
-    : 'Monthly usage unavailable'
+  const hasMonthlyResumeAnalysisLimit = Number.isFinite(Number(usage?.monthlyResumeAnalysisLimit))
+  const monthlyResumeAnalysisLimit = hasMonthlyResumeAnalysisLimit
+    ? formatCompactNumber(usage.monthlyResumeAnalysisLimit)
+    : null
 
   const analysesTrend = useMemo(() => dashboardData?.charts?.analysesTrend || [], [dashboardData])
   const averageScoreTrend = useMemo(() => dashboardData?.charts?.averageScoreTrend || [], [dashboardData])
@@ -471,20 +470,27 @@ export default function NewDashboard() {
 
       <section className="new-dashboard__kpis">
         {[
-          ['Analyses Run', kpis.analysesRunCount, 'file'],
-          ['Resumes Analyzed', formatCompactNumber(kpis.resumesAnalyzedCount), 'users', monthlyResumeAnalysisHelper],
-          ['Completion Rate', formatPercent(kpis.completionRate), 'target'],
-          ['Average Score', formatScore(kpis.avgScore), 'chart'],
-          ['Shortlisted Rate', formatPercent(kpis.shortlistedRate), 'users'],
-        ].map(([label, value, iconName, helperText]) => (
+          { label: 'Analyses Run', value: kpis.analysesRunCount, iconName: 'file' },
+          {
+            label: 'Resumes Analyzed',
+            value: formatCompactNumber(kpis.resumesAnalyzedCount),
+            iconName: 'users',
+            inlineMeta: monthlyResumeAnalysisLimit ? `/ ${monthlyResumeAnalysisLimit}` : null,
+          },
+          { label: 'Completion Rate', value: formatPercent(kpis.completionRate), iconName: 'target' },
+          { label: 'Average Score', value: formatScore(kpis.avgScore), iconName: 'chart' },
+          { label: 'Shortlisted Rate', value: formatPercent(kpis.shortlistedRate), iconName: 'users' },
+        ].map(({ label, value, iconName, inlineMeta }) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
             <div className="new-dashboard__kpi-top-row">
               <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
               <span className="new-dashboard__kpi-icon" aria-hidden="true"><Icon name={iconName} size="sm" tone="muted" /></span>
             </div>
             <div>
-              <p className="new-dashboard__kpi-value kpi-card-value">{value}</p>
-              {helperText ? <p className="new-dashboard__kpi-helper">{helperText}</p> : null}
+              <p className="new-dashboard__kpi-value kpi-card-value">
+                {value}
+                {inlineMeta ? <span className="new-dashboard__kpi-inline-meta">{inlineMeta}</span> : null}
+              </p>
             </div>
           </article>
         ))}
