@@ -365,7 +365,6 @@ export default function AnalysesPage() {
       return
     }
 
-    setUploadFeedback({ type: 'success', message: 'Resume upload finished. Analysis processing will continue automatically.' })
     await refreshAnalysesList()
   }
 
