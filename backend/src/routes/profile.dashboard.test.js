@@ -21,6 +21,7 @@ test('dashboard score trend preserves missing score buckets as null instead of z
 
 test('dashboard KPI payload exposes filtered resume analysis count', () => {
   assert.match(profileRouteSource, /const resumesCount = Number\(summary\.resumes_count \|\| 0\)/)
+  assert.match(profileRouteSource, /\(SELECT COUNT\(\*\)::int FROM analysis_window\) AS resumes_count/)
   assert.match(profileRouteSource, /resumesAnalyzedCount: resumesCount/)
 })
 
@@ -35,6 +36,7 @@ test('dashboard monthly resume usage counts analysis items for current calendar 
 
 test('dashboard monthly resume usage uses one analysis item as one resume analysis unit', () => {
   assert.match(profileRouteSource, /SELECT COUNT\(\*\)::int AS monthly_resume_analysis_count\s+FROM analysis_items ai/)
+  assert.match(profileRouteSource, /\(SELECT COUNT\(\*\)::int FROM analysis_window\) AS resumes_count/)
   assert.doesNotMatch(profileRouteSource, /monthly_resume_analysis_count[\s\S]*COUNT\(DISTINCT a\.id\)/)
 })
 

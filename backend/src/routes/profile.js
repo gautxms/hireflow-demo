@@ -192,7 +192,9 @@ router.get('/dashboard/kpis', async (req, res) => {
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status IN ('failed', 'partial')) AS analyses_failed_count,
            (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM completed_scored_resume_window) AS avg_score,
            (SELECT COUNT(*)::int FROM completed_scored_resume_window) AS scored_count,
-           (SELECT COUNT(*)::int FROM resume_window) AS resumes_count,
+           -- Count analysis_items rows as resume analysis units so existing multi-resume analyses contribute one unit per resume.
+           -- Older analyses without analysis_items cannot be safely attributed to resume units and remain excluded.
+           (SELECT COUNT(*)::int FROM analysis_window) AS resumes_count,
            (SELECT COUNT(*)::int FROM shortlist_window) AS shortlisted_count`,
         [filters.userId, filters.startDate, filters.endDateExclusive, filters.jobDescriptionId],
       ),
