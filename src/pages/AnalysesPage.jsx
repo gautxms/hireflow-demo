@@ -100,6 +100,7 @@ export default function AnalysesPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [deletingAnalysisId, setDeletingAnalysisId] = useState('')
   const [deleteFeedback, setDeleteFeedback] = useState({ type: '', message: '' })
+  const [uploadFeedback, setUploadFeedback] = useState({ type: '', message: '' })
 
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -259,12 +260,116 @@ export default function AnalysesPage() {
     setSelectedFiles((currentFiles) => currentFiles.filter((file) => getFileKey(file) !== fileKey))
   }
 
+  const refreshAnalysesList = async () => {
+    const nextItems = await loadAnalyses()
+    setItems(nextItems)
+  }
+
+  const initChunkUpload = async ({ file, token, analysisId, nameValue, jobDescriptionId }) => {
+    const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: file.name,
+        fileSize: file.size,
+        mimeType: inferResumeMimeType(file),
+        clientChunkSize: CHUNK_SIZE,
+        ...(toOptionalJobDescriptionId(jobDescriptionId) ? { jobDescriptionId } : {}),
+        ...(analysisId ? { analysisId } : {}),
+        ...(nameValue ? { analysisName: nameValue } : {}),
+      }),
+    })
+    const initPayload = await initResponse.json().catch(() => ({}))
+    if (!initResponse.ok) throw new Error(initPayload.error || `Failed to start chunk upload for ${file.name}`)
+    return {
+      analysisId: String(initPayload.analysisId || analysisId || '').trim(),
+      uploadId: initPayload.uploadId,
+    }
+  }
+
+  const uploadFileChunks = async ({ file, token, uploadId }) => {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      const start = chunkIndex * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, file.size)
+      const chunk = file.slice(start, end)
+      const formData = new FormData()
+      formData.append('chunk', chunk)
+      formData.append('chunkIndex', String(chunkIndex))
+      formData.append('totalChunks', String(totalChunks))
+      const chunkResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      if (!chunkResponse.ok) {
+        const chunkPayload = await chunkResponse.json().catch(() => ({}))
+        throw new Error(chunkPayload.error || `Failed to upload chunk for ${file.name}`)
+      }
+    }
+  }
+
+  const completeChunkUpload = async ({ file, token, uploadId }) => {
+    const completeResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const completePayload = await completeResponse.json().catch(() => ({}))
+    if (!completeResponse.ok) throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
+    return completePayload
+  }
+
+  const uploadAndCompleteFile = async ({ file, token, uploadId }) => {
+    await uploadFileChunks({ file, token, uploadId })
+    return completeChunkUpload({ file, token, uploadId })
+  }
+
+  const runBackgroundUpload = async ({ files, token, initialAnalysisId, initialUploadId, nameValue, jobDescriptionId }) => {
+    let analysisId = initialAnalysisId
+    const failedFiles = []
+
+    for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+      const file = files[fileIndex]
+      try {
+        let uploadId = initialUploadId
+        if (fileIndex > 0) {
+          const initPayload = await initChunkUpload({ file, token, analysisId, nameValue, jobDescriptionId })
+          analysisId = initPayload.analysisId || analysisId
+          uploadId = initPayload.uploadId
+        }
+        const completePayload = await uploadAndCompleteFile({ file, token, uploadId })
+        analysisId = String(completePayload.analysisId || analysisId || '').trim()
+        await refreshAnalysesList()
+      } catch (uploadError) {
+        failedFiles.push(file.name)
+        setUploadFeedback({ type: 'error', message: uploadError.message || `Unable to upload ${file.name}` })
+        try {
+          await refreshAnalysesList()
+        } catch {
+          // Keep the upload failure visible even if the follow-up refresh fails.
+        }
+      }
+    }
+
+    if (failedFiles.length > 0) {
+      setUploadFeedback({ type: 'error', message: `Upload failed for ${failedFiles.join(', ')}. Refreshing analysis status with the latest available data.` })
+      return
+    }
+
+    setUploadFeedback({ type: 'success', message: 'Resume upload finished. Analysis processing will continue automatically.' })
+    await refreshAnalysesList()
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isSubmitting) return
+
     const nameValue = analysisName.trim()
+    const filesSnapshot = [...selectedFiles]
+    const jobDescriptionIdSnapshot = selectedJobDescriptionId
     const nextValidationErrors = {
       name: nameValue ? '' : 'Give this analysis a name so you can find it later.',
-      files: selectedFiles.length > 0 ? '' : 'Add at least one resume file to continue.',
+      files: filesSnapshot.length > 0 ? '' : 'Add at least one resume file to continue.',
     }
     setValidationErrors(nextValidationErrors)
     if (nextValidationErrors.name || nextValidationErrors.files) return
@@ -277,60 +382,34 @@ export default function AnalysesPage() {
 
     setIsSubmitting(true)
     setSubmitError('')
+    setUploadFeedback({ type: '', message: '' })
 
     try {
-      let analysisId = ''
-      for (const file of selectedFiles) {
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            fileSize: file.size,
-            mimeType: inferResumeMimeType(file),
-            clientChunkSize: CHUNK_SIZE,
-            ...(toOptionalJobDescriptionId(selectedJobDescriptionId) ? { jobDescriptionId: selectedJobDescriptionId } : {}),
-            ...(analysisId ? { analysisId } : {}),
-            ...(analysisName.trim() ? { analysisName: analysisName.trim() } : {}),
-          }),
-        })
-        const initPayload = await initResponse.json().catch(() => ({}))
-        if (!initResponse.ok) throw new Error(initPayload.error || `Failed to start chunk upload for ${file.name}`)
-        analysisId = analysisId || String(initPayload.analysisId || '').trim()
-        const uploadId = initPayload.uploadId
+      const firstFile = filesSnapshot[0]
+      const firstInit = await initChunkUpload({
+        file: firstFile,
+        token,
+        analysisId: '',
+        nameValue,
+        jobDescriptionId: jobDescriptionIdSnapshot,
+      })
+      if (!firstInit.analysisId) throw new Error('Upload started but no analysis ID was returned.')
 
-        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
-          const start = chunkIndex * CHUNK_SIZE
-          const end = Math.min(start + CHUNK_SIZE, file.size)
-          const chunk = file.slice(start, end)
-          const formData = new FormData()
-          formData.append('chunk', chunk)
-          formData.append('chunkIndex', String(chunkIndex))
-          formData.append('totalChunks', String(totalChunks))
-          const chunkResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData,
-          })
-          if (!chunkResponse.ok) {
-            const chunkPayload = await chunkResponse.json().catch(() => ({}))
-            throw new Error(chunkPayload.error || `Failed to upload chunk for ${file.name}`)
-          }
-        }
-
-        const completeResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const completePayload = await completeResponse.json().catch(() => ({}))
-        if (!completeResponse.ok) throw new Error(completePayload.error || `Failed to finalize upload for ${file.name}`)
-        analysisId = analysisId || String(completePayload.analysisId || '').trim()
-      }
-
-      const nextItems = await loadAnalyses()
-      setItems(nextItems)
       resetModal()
+      refreshAnalysesList().catch(() => {
+        setUploadFeedback({ type: 'error', message: 'Analysis started, but the list could not be refreshed yet.' })
+      })
+      runBackgroundUpload({
+        files: filesSnapshot,
+        token,
+        initialAnalysisId: firstInit.analysisId,
+        initialUploadId: firstInit.uploadId,
+        nameValue,
+        jobDescriptionId: jobDescriptionIdSnapshot,
+      }).catch((uploadError) => {
+        setUploadFeedback({ type: 'error', message: uploadError.message || 'Resume upload failed after analysis creation started.' })
+        refreshAnalysesList().catch(() => {})
+      })
     } catch (submitFailure) {
       setSubmitError(submitFailure.message || 'Unable to analyze resumes')
       setIsSubmitting(false)
@@ -378,6 +457,7 @@ export default function AnalysesPage() {
         <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} ref={createButtonRef}>Create analysis</button></div>
 
         {deleteFeedback.message && <p role="status" className={`analyses-layout__state ${deleteFeedback.type === 'error' ? 'analyses-layout__state--error' : 'analyses-layout__state--success'}`}>{deleteFeedback.message}</p>}
+        {uploadFeedback.message && <p role={uploadFeedback.type === 'error' ? 'alert' : 'status'} className={`analyses-layout__state ${uploadFeedback.type === 'error' ? 'analyses-layout__state--error' : 'analyses-layout__state--success'}`}>{uploadFeedback.message}</p>}
 
         <div className="analyses-layout__table-shell">
           {loading && <p className="analyses-layout__state analyses-layout__state--loading">Loading analyses…</p>}
