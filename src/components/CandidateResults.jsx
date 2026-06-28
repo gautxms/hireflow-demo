@@ -39,6 +39,9 @@ import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
 import { logResultsRenderError } from '../pages/resultsErrorBoundaryTelemetry'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const SUPPRESSED_RESUME_INTEGRITY_LABELS = new Set([
+  'resume parsing was incomplete or failed.',
+])
 
 
 class CandidateDetailErrorBoundary extends React.Component {
@@ -442,7 +445,7 @@ function toHumanIssueLabel(value) {
   const normalized = raw.toLowerCase()
   if (normalized.includes('ocr') || normalized.includes('optical character recognition')) return 'OCR could not recover readable resume content.'
   if (normalized.includes('pdf') && (normalized.includes('unextract') || normalized.includes('extract'))) return 'PDF content was not extractable from this file.'
-  if (normalized.includes('parse')) return 'Resume parsing was incomplete or failed.'
+  if (normalized.includes('parse')) return ''
   if (normalized.includes('unable to score') || normalized.includes('cannot score') || normalized.includes('low confidence')) return 'Candidate could not be scored confidently from available resume content.'
   if (normalized.includes('corrupt') || normalized.includes('invalid pdf')) return 'Resume file appears corrupted or unreadable.'
   return raw
@@ -481,13 +484,9 @@ function deriveResumeIntegrityChecks(candidate, hasDisplayScore) {
 
   const asTextBlob = safeSerialize(candidate).toLowerCase()
   const mentionsUnextractable = asTextBlob.includes('unextractable') || asTextBlob.includes('not extractable')
-  const mentionsOcrOrParseFailure = asTextBlob.includes('ocr') || asTextBlob.includes('parse')
 
   if (mentionsUnextractable && !checks.some((check) => check.label.toLowerCase().includes('extractable'))) {
     checks.push({ status: 'issue', label: 'PDF content was not extractable from this file.' })
-  }
-  if (mentionsOcrOrParseFailure && !checks.some((check) => check.label.toLowerCase().includes('pars') || check.label.toLowerCase().includes('ocr'))) {
-    checks.push({ status: 'issue', label: 'Resume parsing was incomplete or failed.' })
   }
   if (!hasDisplayScore) {
     checks.push({ status: 'issue', label: 'Low confidence — candidate could not be scored from available content.' })
@@ -496,8 +495,9 @@ function deriveResumeIntegrityChecks(candidate, hasDisplayScore) {
   const deduped = []
   const seen = new Set()
   checks.forEach((check) => {
-    const key = `${check.status}:${String(check.label || '').toLowerCase().trim()}`
-    if (!check.label || seen.has(key)) return
+    const normalizedLabel = String(check.label || '').toLowerCase().trim()
+    const key = `${check.status}:${normalizedLabel}`
+    if (!check.label || SUPPRESSED_RESUME_INTEGRITY_LABELS.has(normalizedLabel) || seen.has(key)) return
     seen.add(key)
     deduped.push(check)
   })
