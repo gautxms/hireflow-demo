@@ -148,16 +148,39 @@ test('POST /api/uploads/chunks/init passes clientChunkSize through to session cr
     headers: authHeader(),
     body: {
       filename: 'large.pdf',
-      fileSize: 100 * 1024 * 1024,
+      fileSize: 25 * 1024 * 1024,
       mimeType: 'application/pdf',
       clientChunkSize: 4 * 1024 * 1024,
     },
   })
 
   assert.equal(response.status, 200)
-  assert.equal(payload.totalChunks, 25)
+  assert.equal(payload.totalChunks, 7)
   const insert = queries.find(({ sql }) => sql.includes('INSERT INTO upload_chunks'))
-  assert.equal(insert.params[5], 25)
+  assert.equal(insert.params[5], 7)
+})
+
+test('POST /api/uploads/chunks/init rejects files above the 25 MiB resume limit', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('SELECT COUNT(*)::INT AS usage_count')) return { rows: [{ usage_count: 0 }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/init', {
+    headers: authHeader(),
+    body: {
+      filename: 'too-large.pdf',
+      fileSize: (25 * 1024 * 1024) + 1,
+      mimeType: 'application/pdf',
+      clientChunkSize: 4 * 1024 * 1024,
+    },
+  })
+
+  assert.equal(response.status, 400)
+  assert.match(payload.error, /Files above 25MB are not supported yet/)
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
 })
 
 

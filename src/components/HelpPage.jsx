@@ -44,7 +44,7 @@ const HELP_ARTICLES = {
       desc: 'Exactly what upload accepts today',
       content: [
         'HireFlow currently accepts PDF and DOCX resumes only.',
-        'Each file must be 100MB or smaller.',
+        'Each resume file must be 25MB or smaller.',
         'If a file type is rejected, convert it to PDF or DOCX and upload again.',
       ],
     },
@@ -149,7 +149,7 @@ const HELP_FAQS = [
   },
   {
     q: 'Is there a file size limit?',
-    a: 'Yes. Each resume file must be 100MB or less.',
+    a: 'Yes. Each resume file must be 25MB or less.',
   },
   {
     q: 'Can I upload resumes in bulk?',

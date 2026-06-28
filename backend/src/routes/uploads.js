@@ -18,7 +18,7 @@ import {
 
 const router = Router()
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024
+const MAX_FILE_SIZE = 25 * 1024 * 1024
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -121,7 +121,7 @@ router.post(
       console.warn('[Uploads] Validation failed', { message: error.message, ip: req.ip })
 
       if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: 'Each file must be 50MB or smaller' })
+        return res.status(400).json({ error: 'Files above 25MB are not supported yet. Please compress the resume or upload a smaller PDF, DOC, or DOCX file.' })
       }
 
       return res.status(400).json({ error: error.message || 'Invalid file upload request' })

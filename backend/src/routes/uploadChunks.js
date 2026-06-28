@@ -44,7 +44,7 @@ router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit,
     }
 
     if (parsedSize > MAX_FILE_SIZE_BYTES) {
-      return res.status(400).json({ error: 'Files over 100MB are not supported' })
+      return res.status(400).json({ error: 'Files above 25MB are not supported yet. Please compress the resume or upload a smaller PDF, DOC, or DOCX file.' })
     }
 
     const session = await initChunkUpload({

@@ -17,7 +17,7 @@ import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileM
 
 export const CHUNK_SIZE_BYTES = 5 * 1024 * 1024
 export const CLIENT_CHUNK_SIZE_BYTES = 4 * 1024 * 1024
-export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
+export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 let uploadTablesReady = false
 const s3Bucket = process.env.AWS_S3_BUCKET
@@ -211,7 +211,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   }
 
   if (fileSize > MAX_FILE_SIZE_BYTES) {
-    throw new Error('File exceeds 100MB limit')
+    throw new Error('Files above 25MB are not supported yet. Please compress the resume or upload a smaller PDF, DOC, or DOCX file.')
   }
 
   const effectiveChunkSize = resolveClientChunkSize(clientChunkSize)

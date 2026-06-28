@@ -26,7 +26,7 @@ import '../styles/resume-uploader.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
-const MAX_FILE_SIZE = 100 * 1024 * 1024
+const MAX_FILE_SIZE = 25 * 1024 * 1024
 const MAX_FILE_COUNT = 20
 const CHUNK_SIZE = 5 * 1024 * 1024
 const MAX_CHUNK_RETRIES = 3
@@ -278,7 +278,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       }
 
       if (!isAllowedSize) {
-        rejected.push(`${file.name}: exceeds 100MB file size limit.`)
+        rejected.push(`${file.name}: Files above 25MB are not supported yet. Please compress the resume or upload a smaller PDF, DOC, or DOCX file.`)
         return
       }
 
@@ -1016,7 +1016,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             Drop resumes here
           </h3>
           <p className="resume-drop-zone-subtitle">
-            or click to select files (recommended: PDF or DOCX; .txt supported, up to 100MB each)
+            or click to select files (recommended: PDF or DOCX; .txt supported, max 25MB per file)
           </p>
           <input
             ref={fileInputRef}
