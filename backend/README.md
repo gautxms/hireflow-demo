@@ -99,3 +99,57 @@ Reconciliation output includes:
 - failed rows (row-level insert/upsert failures).
 
 These backfills do **not** delete or mutate legacy parse data in `parse_jobs` or `resumes`; they only insert/upsert into `analyses`, `analysis_items`, and `candidate_profiles`.
+
+
+## Candidate Directory profile snapshot recovery
+
+`GET /candidates/directory` is a read path by default. Leave
+`CANDIDATE_DIRECTORY_SYNC_ON_READ=false` (or unset) for normal operation so the
+route reads existing `candidate_profiles` rows only and does not perform the
+legacy user-wide sync/write work on page load.
+
+Async parse completion still treats the candidate profile snapshot upsert as
+non-blocking. If that best-effort upsert fails, the analysis can complete while
+the directory snapshot is missing. Recover missing or legacy snapshots with the
+existing candidate profile backfill instead of relying on expensive sync-on-read
+as normal behavior.
+
+Recommended recovery flow:
+
+1. Estimate missing completed-resume snapshots without writing data:
+   ```sql
+   SELECT r.user_id, COUNT(*) AS completed_resumes_missing_candidate_profiles
+   FROM resumes r
+   LEFT JOIN candidate_profiles cp
+     ON cp.user_id = r.user_id
+    AND cp.resume_id = r.id
+   WHERE COALESCE(r.parse_status, 'complete') = 'complete'
+     AND cp.resume_id IS NULL
+   GROUP BY r.user_id
+   ORDER BY completed_resumes_missing_candidate_profiles DESC;
+   ```
+2. Dry-run the candidate profile backfill:
+   ```bash
+   npm --prefix backend run backfill:candidate-profiles
+   ```
+3. Execute the candidate profile backfill:
+   ```bash
+   npm --prefix backend run backfill:candidate-profiles:execute
+   ```
+
+Optional user-scoped recovery:
+
+```bash
+npm --prefix backend run backfill:candidate-profiles -- --user-id <USER_ID>
+npm --prefix backend run backfill:candidate-profiles:execute -- --user-id <USER_ID>
+```
+
+Emergency rollback only:
+
+```bash
+CANDIDATE_DIRECTORY_SYNC_ON_READ=true
+```
+
+Use the rollback flag only temporarily if candidate visibility regresses during
+incident response. After visibility is restored, run/verify the backfill and turn
+`CANDIDATE_DIRECTORY_SYNC_ON_READ` back off so directory reads remain cheap.

@@ -112,6 +112,18 @@ function normalizeNumberFilter(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+
+function isCandidateDirectorySyncOnReadEnabled() {
+  return String(process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ || '').trim().toLowerCase() === 'true'
+}
+
+function countAppliedFilters(filters) {
+  return Object.values(filters).filter((value) => {
+    if (Array.isArray(value)) return value.length > 0
+    return value !== null && value !== undefined && value !== ''
+  }).length
+}
+
 const sortComparators = {
   name: (entry) => String(entry.name || '').toLowerCase(),
   profileScore: (entry) => entry.profileScore ?? Number.NEGATIVE_INFINITY,
@@ -123,6 +135,8 @@ export function normalizeResumeTagLookupInput(inputResumeIds) {
   if (!Array.isArray(inputResumeIds)) return null
   return [...new Set(inputResumeIds.map((value) => resolveCandidateResumeUuid(value)).filter(Boolean))]
 }
+
+export { isCandidateDirectorySyncOnReadEnabled }
 
 export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
   const normalizedQuery = normalizeCandidateDirectoryQuery(query)
@@ -369,8 +383,16 @@ router.get('/profiles', requireAuth, async (req, res) => {
 })
 
 router.get('/directory', requireAuth, async (req, res) => {
+  const routeStartedAt = Date.now()
+  const syncOnReadEnabled = isCandidateDirectorySyncOnReadEnabled()
+
   try {
-    await syncCandidateProfilesForUser(req.userId)
+    let syncDurationMs = null
+    if (syncOnReadEnabled) {
+      const syncStartedAt = Date.now()
+      await syncCandidateProfilesForUser(req.userId)
+      syncDurationMs = Date.now() - syncStartedAt
+    }
 
     const normalizedQuery = normalizeCandidateDirectoryQuery(req.query)
     const filters = {
@@ -537,7 +559,22 @@ router.get('/directory', requireAuth, async (req, res) => {
       sourceAnalysisId: filters.sourceAnalysisId || null,
     }
 
-    return res.json(buildDirectoryResponse(profiles, filtersApplied, req.query))
+    const response = buildDirectoryResponse(profiles, filtersApplied, req.query)
+
+    console.info('[Candidates] Directory request completed', {
+      route_total_duration_ms: Date.now() - routeStartedAt,
+      sync_on_read_enabled: syncOnReadEnabled,
+      ...(syncDurationMs !== null ? { sync_duration_ms: syncDurationMs } : {}),
+      candidate_profiles_rows_loaded: result.rows.length,
+      candidate_profiles_rows_returned: response.candidates.length,
+      page: response.page,
+      page_size: response.pageSize,
+      sort_by: response.sortBy,
+      sort_direction: response.sortDirection,
+      filters_count: countAppliedFilters(filtersApplied),
+    })
+
+    return res.json(response)
   } catch (error) {
     console.error('[Candidates] Failed to fetch candidates directory:', error)
     return res.status(500).json({ error: 'Unable to fetch candidates directory' })
