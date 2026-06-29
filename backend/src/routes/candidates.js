@@ -117,6 +117,10 @@ function isCandidateDirectorySyncOnReadEnabled() {
   return String(process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ || '').trim().toLowerCase() === 'true'
 }
 
+function isCandidateDirectorySqlPaginationEnabled() {
+  return String(process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION || '').trim().toLowerCase() === 'true'
+}
+
 function countAppliedFilters(filters) {
   return Object.values(filters).filter((value) => {
     if (Array.isArray(value)) return value.length > 0
@@ -285,7 +289,7 @@ export function normalizeResumeTagLookupInput(inputResumeIds) {
   return [...new Set(inputResumeIds.map((value) => resolveCandidateResumeUuid(value)).filter(Boolean))]
 }
 
-export { isCandidateDirectorySyncOnReadEnabled }
+export { isCandidateDirectorySyncOnReadEnabled, isCandidateDirectorySqlPaginationEnabled }
 
 export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
   const normalizedQuery = normalizeCandidateDirectoryQuery(query)
@@ -317,6 +321,130 @@ export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
     sortDirection,
     filtersApplied,
   }
+}
+
+
+function mapCandidateDirectoryRow(row) {
+  const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
+  const persistedProfileScore = normalizeNullableNumber(profile.profile_score)
+  const persistedYearsExperience = normalizeNullableNumber(profile.years_experience)
+  const fallbackProfileScore = normalizeNullableNumber(row.profile_score)
+  const fallbackYearsExperience = normalizeNullableNumber(row.years_experience)
+  const profileScore = persistedProfileScore ?? fallbackProfileScore
+  const yearsExperience = persistedYearsExperience ?? fallbackYearsExperience
+  const normalizedSkills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
+  const skills = normalizedSkills
+  const nullableSkills = normalizedSkills.length > 0 ? normalizedSkills : null
+  const tags = normalizeStringArray(row.tags)
+
+  return {
+    resumeId: String(row.resume_id),
+    profile,
+    name: normalizeString(profile.name) || normalizeString(profile.full_name) || getDisplayFilename(row) || 'Candidate',
+    skills,
+    profileScore,
+    yearsExperience,
+    normalized: {
+      profileScore,
+      yearsExperience,
+      skills: nullableSkills,
+    },
+    parseHints: {
+      scoreSource: persistedProfileScore !== null ? 'candidate_profile' : (fallbackProfileScore !== null ? 'resume_fallback' : 'missing'),
+      experienceSource: persistedYearsExperience !== null ? 'candidate_profile' : (fallbackYearsExperience !== null ? 'resume_fallback' : 'missing'),
+      skillsSource: nullableSkills ? 'candidate_profile' : 'missing',
+      scoreNullable: profileScore === null,
+      experienceNullable: yearsExperience === null,
+      skillsNullable: nullableSkills === null,
+    },
+    provenanceHints: {
+      sourceAnalysisId: row.source_parse_job_id || null,
+      sourceUpdatedAt: row.source_updated_at,
+      sourceJobId: row.job_description_id ? String(row.job_description_id) : null,
+    },
+    tags,
+    sourceParseJobId: row.source_parse_job_id || null,
+    sourceUpdatedAt: row.source_updated_at,
+    associatedJob: row.job_description_id
+      ? {
+          id: String(row.job_description_id),
+          title: normalizeString(row.job_title) || 'Untitled job',
+        }
+      : null,
+    parseStatus: normalizeString(row.parse_status) || 'complete',
+  }
+}
+
+function filterCandidateDirectoryEntries(entries, filters) {
+  return entries.filter((entry) => {
+    if (filters.search) {
+      const search = filters.search.toLowerCase()
+      const inName = entry.name.toLowerCase().includes(search)
+      const inSkills = entry.skills.some((skill) => skill.toLowerCase().includes(search))
+      const inTags = entry.tags.some((tag) => tag.toLowerCase().includes(search))
+      if (!inName && !inSkills && !inTags) return false
+    }
+
+    if (filters.job) {
+      const jobText = `${entry.associatedJob?.id || ''} ${entry.associatedJob?.title || ''}`.toLowerCase()
+      if (!jobText.includes(filters.job.toLowerCase())) return false
+    }
+
+    if (filters.parseStatus && entry.parseStatus.toLowerCase() !== filters.parseStatus) return false
+
+    if (filters.skills.length > 0) {
+      const candidateSkills = entry.skills.map((skill) => skill.toLowerCase())
+      if (!filters.skills.some((skill) => candidateSkills.includes(skill))) return false
+    }
+
+    if (filters.tags.length > 0) {
+      const candidateTags = entry.tags.map((tag) => tag.toLowerCase())
+      if (!filters.tags.some((tag) => candidateTags.includes(tag))) return false
+    }
+
+    if (filters.experienceMin !== null && (entry.yearsExperience ?? -Infinity) < filters.experienceMin) return false
+    if (filters.experienceMax !== null && (entry.yearsExperience ?? Infinity) > filters.experienceMax) return false
+    if (filters.scoreMin !== null && (entry.profileScore ?? -Infinity) < filters.scoreMin) return false
+    if (filters.scoreMax !== null && (entry.profileScore ?? Infinity) > filters.scoreMax) return false
+    if (filters.sourceJobId && entry.associatedJob?.id !== filters.sourceJobId) return false
+    if (filters.sourceAnalysisId && entry.sourceParseJobId !== filters.sourceAnalysisId) return false
+
+    return true
+  })
+}
+
+async function fetchCandidateDirectoryRowsForJsPath(userId) {
+  const result = await pool.query(
+    `SELECT cp.resume_id,
+            cp.profile,
+            cp.source_parse_job_id,
+            cp.source_updated_at,
+            cp.updated_at,
+            r.filename,
+            r.original_filename,
+            r.file_extension,
+            r.file_type,
+            r.profile_score,
+            r.years_experience,
+            COALESCE(r.parse_status, 'complete') AS parse_status,
+            r.job_description_id,
+            jd.title AS job_title,
+            COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
+     FROM candidate_profiles cp
+     INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
+     LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
+     LEFT JOIN LATERAL (
+       SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
+       FROM candidate_tags ct
+       WHERE ct.user_id = cp.user_id
+         AND ct.resume_id = cp.resume_id
+     ) tag_agg ON TRUE
+     WHERE cp.user_id = $1
+     ORDER BY cp.source_updated_at DESC, cp.updated_at DESC`,
+    [userId],
+  )
+
+  return result.rows
 }
 
 function normalizeCandidateFromAnalysis(candidate, resumeId, fallbackName = 'resume') {
@@ -558,79 +686,42 @@ router.get('/directory', requireAuth, async (req, res) => {
       parseStatus: normalizedQuery.parseStatus,
     }
 
-    const countQuery = buildCandidateDirectorySql({ userId: req.userId, filters, normalizedQuery, countOnly: true })
-    const countResult = await pool.query(countQuery.sql, countQuery.params)
-    const totalCount = Number(countResult.rows?.[0]?.total_count || 0)
-    const totalPages = Math.max(1, Math.ceil(totalCount / normalizedQuery.pageSize))
-    const clampedPage = Math.min(normalizedQuery.page, totalPages)
-    const pageQuery = buildCandidateDirectorySql({ userId: req.userId, filters, normalizedQuery, page: clampedPage })
-    const result = await pool.query(pageQuery.sql, pageQuery.params)
-
-    const profiles = result.rows
-      .map((row) => {
-        const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
-        const persistedProfileScore = normalizeNullableNumber(profile.profile_score)
-        const persistedYearsExperience = normalizeNullableNumber(profile.years_experience)
-        const fallbackProfileScore = normalizeNullableNumber(row.profile_score)
-        const fallbackYearsExperience = normalizeNullableNumber(row.years_experience)
-        const profileScore = persistedProfileScore ?? fallbackProfileScore
-        const yearsExperience = persistedYearsExperience ?? fallbackYearsExperience
-        const normalizedSkills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
-        const skills = normalizedSkills
-        const nullableSkills = normalizedSkills.length > 0 ? normalizedSkills : null
-        const tags = normalizeStringArray(row.tags)
-
-        return {
-          resumeId: String(row.resume_id),
-          profile,
-          name: normalizeString(profile.name) || normalizeString(profile.full_name) || getDisplayFilename(row) || 'Candidate',
-          skills,
-          profileScore,
-          yearsExperience,
-          normalized: {
-            profileScore,
-            yearsExperience,
-            skills: nullableSkills,
-          },
-          parseHints: {
-            scoreSource: persistedProfileScore !== null ? 'candidate_profile' : (fallbackProfileScore !== null ? 'resume_fallback' : 'missing'),
-            experienceSource: persistedYearsExperience !== null ? 'candidate_profile' : (fallbackYearsExperience !== null ? 'resume_fallback' : 'missing'),
-            skillsSource: nullableSkills ? 'candidate_profile' : 'missing',
-            scoreNullable: profileScore === null,
-            experienceNullable: yearsExperience === null,
-            skillsNullable: nullableSkills === null,
-          },
-          provenanceHints: {
-            sourceAnalysisId: row.source_parse_job_id || null,
-            sourceUpdatedAt: row.source_updated_at,
-            sourceJobId: row.job_description_id ? String(row.job_description_id) : null,
-          },
-          tags,
-          sourceParseJobId: row.source_parse_job_id || null,
-          sourceUpdatedAt: row.source_updated_at,
-          associatedJob: row.job_description_id
-            ? {
-                id: String(row.job_description_id),
-                title: normalizeString(row.job_title) || 'Untitled job',
-              }
-            : null,
-          parseStatus: normalizeString(row.parse_status) || 'complete',
-        }
-      })
-
+    const sqlPaginationEnabled = isCandidateDirectorySqlPaginationEnabled()
     const filtersApplied = {
       ...filters,
       sourceJobId: filters.sourceJobId || null,
       sourceAnalysisId: filters.sourceAnalysisId || null,
     }
 
-    const response = buildDirectoryPagedResponse(profiles, totalCount, filtersApplied, normalizedQuery, clampedPage)
+    let rowsLoaded = 0
+    let response
+
+    if (sqlPaginationEnabled) {
+      const countQuery = buildCandidateDirectorySql({ userId: req.userId, filters, normalizedQuery, countOnly: true })
+      const countResult = await pool.query(countQuery.sql, countQuery.params)
+      const totalCount = Number(countResult.rows?.[0]?.total_count || 0)
+      const totalPages = Math.max(1, Math.ceil(totalCount / normalizedQuery.pageSize))
+      const clampedPage = Math.min(normalizedQuery.page, totalPages)
+      const pageQuery = buildCandidateDirectorySql({ userId: req.userId, filters, normalizedQuery, page: clampedPage })
+      const result = await pool.query(pageQuery.sql, pageQuery.params)
+      const profiles = result.rows.map(mapCandidateDirectoryRow)
+
+      rowsLoaded = result.rows.length
+      response = buildDirectoryPagedResponse(profiles, totalCount, filtersApplied, normalizedQuery, clampedPage)
+    } else {
+      const rows = await fetchCandidateDirectoryRowsForJsPath(req.userId)
+      const profiles = filterCandidateDirectoryEntries(rows.map(mapCandidateDirectoryRow), filters)
+
+      rowsLoaded = rows.length
+      response = buildDirectoryResponse(profiles, filtersApplied, req.query)
+    }
 
     console.info('[Candidates] Directory request completed', {
       route_total_duration_ms: Date.now() - routeStartedAt,
       sync_on_read_enabled: syncOnReadEnabled,
+      sql_pagination_enabled: sqlPaginationEnabled,
       ...(syncDurationMs !== null ? { sync_duration_ms: syncDurationMs } : {}),
-      candidate_profiles_rows_loaded: result.rows.length,
+      candidate_profiles_rows_loaded: rowsLoaded,
       candidate_profiles_rows_returned: response.candidates.length,
       page: response.page,
       page_size: response.pageSize,

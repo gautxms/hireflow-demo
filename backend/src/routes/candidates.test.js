@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import express from 'express'
 import jwt from 'jsonwebtoken'
-import candidatesRouter, { buildDirectoryResponse, closeCandidateRouteResourcesForTests, isCandidateDirectorySyncOnReadEnabled, normalizeResumeTagLookupInput } from './candidates.js'
+import candidatesRouter, { buildDirectoryResponse, closeCandidateRouteResourcesForTests, isCandidateDirectorySqlPaginationEnabled, isCandidateDirectorySyncOnReadEnabled, normalizeResumeTagLookupInput } from './candidates.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
 
@@ -136,6 +136,16 @@ function mockDirectoryQueries(t, rows = candidateProfileRows(), totalCount = row
   return queries
 }
 
+
+function mockDirectoryJsQuery(t, rows = candidateProfileRows()) {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql: String(sql), params })
+    return { rows }
+  })
+  return queries
+}
+
 async function getJson(app, path) {
   const server = app.listen(0)
   try {
@@ -158,28 +168,42 @@ test('candidate directory sync-on-read feature flag defaults off', () => {
   }
 })
 
-test('GET /candidates/directory does not sync profiles by default and returns existing profiles', async (t) => {
+
+test('candidate directory SQL pagination feature flag defaults off', () => {
+  const previous = process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION
+  delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION
+  try {
+    assert.equal(isCandidateDirectorySqlPaginationEnabled(), false)
+  } finally {
+    if (previous === undefined) delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION
+    else process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = previous
+  }
+})
+
+test('GET /candidates/directory uses JS path by default and returns existing profiles', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
-  t.mock.method(console, 'info', () => {})
-  const queries = mockDirectoryQueries(t)
+  const logs = []
+  t.mock.method(console, 'info', (...args) => logs.push(args))
+  const queries = mockDirectoryJsQuery(t)
 
   const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
 
   assert.equal(status, 200)
-  assert.equal(queries.length, 2)
-  assert.match(queries[1].sql, /LIMIT \$\d+ OFFSET \$\d+/)
-  assert.deepEqual(queries[1].params.slice(-2), [15, 0])
+  assert.equal(queries.length, 1)
+  assert.doesNotMatch(queries[0].sql, /COUNT\(\*\)::integer AS total_count/)
+  assert.doesNotMatch(queries[0].sql, /LIMIT \$\d+ OFFSET \$\d+/)
   assert.equal(body.total, 2)
   assert.equal(body.totalCount, 2)
   assert.equal(body.candidates.length, 2)
   assert.equal(body.candidates[0].resumeId, '11111111-1111-4111-8111-111111111111')
   assert.equal(body.candidates[0].name, 'Ada Lovelace')
+  assert.equal(logs[0][1].sql_pagination_enabled, false)
 })
 
 test('GET /candidates/directory returns a valid empty response when candidate_profiles is empty', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})
-  mockDirectoryQueries(t, [], 0)
+  mockDirectoryJsQuery(t, [])
 
   const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
 
@@ -191,8 +215,10 @@ test('GET /candidates/directory returns a valid empty response when candidate_pr
   assert.equal(body.totalPages, 1)
 })
 
-test('GET /candidates/directory preserves existing JS filter, sort, and page behavior', async (t) => {
+test('GET /candidates/directory uses SQL path when enabled and preserves filter, sort, and page behavior', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
   t.mock.method(console, 'info', () => {})
   mockDirectoryQueries(t, candidateProfileRows().slice(0, 1), 1)
 
@@ -212,9 +238,10 @@ test('GET /candidates/directory preserves existing JS filter, sort, and page beh
   assert.deepEqual(body.filtersApplied.skills, ['react'])
 })
 
-
 test('GET /candidates/directory builds parameterized SQL filters without logging raw search text', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
   const logs = []
   t.mock.method(console, 'info', (...args) => logs.push(args))
   const queries = mockDirectoryQueries(t, candidateProfileRows().slice(0, 1), 1)
@@ -237,6 +264,8 @@ test('GET /candidates/directory builds parameterized SQL filters without logging
 
 test('GET /candidates/directory clamps out-of-range pages before fetching', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
   t.mock.method(console, 'info', () => {})
   const queries = mockDirectoryQueries(t, candidateProfileRows().slice(1), 2)
 
@@ -250,6 +279,8 @@ test('GET /candidates/directory clamps out-of-range pages before fetching', asyn
 
 test('GET /candidates/directory falls back to safe sort defaults for invalid sort params', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
   t.mock.method(console, 'info', () => {})
   const queries = mockDirectoryQueries(t)
 
@@ -284,7 +315,7 @@ test('GET /candidates/directory calls sync when CANDIDATE_DIRECTORY_SYNC_ON_READ
 test('GET /candidates/directory candidate shape remains shortlist-compatible', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})
-  mockDirectoryQueries(t, candidateProfileRows().slice(0, 1), 1)
+  mockDirectoryJsQuery(t, candidateProfileRows().slice(0, 1))
 
   const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
   const candidate = body.candidates[0]
