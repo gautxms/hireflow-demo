@@ -117,11 +117,167 @@ function isCandidateDirectorySyncOnReadEnabled() {
   return String(process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ || '').trim().toLowerCase() === 'true'
 }
 
+function isCandidateDirectorySqlPaginationEnabled() {
+  return String(process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION || '').trim().toLowerCase() === 'true'
+}
+
 function countAppliedFilters(filters) {
   return Object.values(filters).filter((value) => {
     if (Array.isArray(value)) return value.length > 0
     return value !== null && value !== undefined && value !== ''
   }).length
+}
+
+const SAFE_PROFILE_SCORE_SQL = `CASE
+  WHEN NULLIF(BTRIM(cp.profile->>'profile_score'), '') ~ '^-?\\d+(\\.\\d+)?$'
+    THEN (cp.profile->>'profile_score')::numeric
+  ELSE NULL
+END`
+
+const SAFE_YEARS_EXPERIENCE_SQL = `CASE
+  WHEN NULLIF(BTRIM(cp.profile->>'years_experience'), '') ~ '^-?\\d+(\\.\\d+)?$'
+    THEN (cp.profile->>'years_experience')::numeric
+  ELSE NULL
+END`
+
+const DIRECTORY_SORT_SQL = {
+  name: 'LOWER(candidate_name)',
+  profileScore: 'effective_profile_score',
+  yearsExperience: 'effective_years_experience',
+  sourceUpdatedAt: 'cp.source_updated_at',
+}
+
+const NUMERIC_DIRECTORY_SORT_FIELDS = new Set(['profileScore', 'yearsExperience'])
+
+function appendSqlParam(params, value) {
+  params.push(value)
+  return `$${params.length}`
+}
+
+function buildCandidateDirectorySql({ userId, filters, normalizedQuery, countOnly = false, page = normalizedQuery.page }) {
+  const params = [userId]
+  const where = ['cp.user_id = $1']
+
+  if (filters.search) {
+    const placeholder = appendSqlParam(params, `%${filters.search.toLowerCase()}%`)
+    where.push(`(
+      LOWER(candidate_name) LIKE ${placeholder}
+      OR EXISTS (SELECT 1 FROM unnest(skills_flat) AS skill WHERE LOWER(skill) LIKE ${placeholder})
+      OR EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE LOWER(tag) LIKE ${placeholder})
+    )`)
+  }
+
+  if (filters.job) {
+    const placeholder = appendSqlParam(params, `%${filters.job.toLowerCase()}%`)
+    where.push(`LOWER(CONCAT_WS(' ', job_description_id::text, job_title)) LIKE ${placeholder}`)
+  }
+
+  if (filters.parseStatus) {
+    where.push(`LOWER(parse_status) = ${appendSqlParam(params, filters.parseStatus)}`)
+  }
+
+  if (filters.skills.length > 0) {
+    const placeholder = appendSqlParam(params, filters.skills)
+    where.push(`EXISTS (
+      SELECT 1
+      FROM unnest(skills_flat) AS skill
+      WHERE LOWER(skill) = ANY(${placeholder}::text[])
+    )`)
+  }
+
+  if (filters.tags.length > 0) {
+    const placeholder = appendSqlParam(params, filters.tags)
+    where.push(`EXISTS (
+      SELECT 1
+      FROM unnest(tags) AS tag
+      WHERE LOWER(tag) = ANY(${placeholder}::text[])
+    )`)
+  }
+
+  if (filters.experienceMin !== null) where.push(`effective_years_experience >= ${appendSqlParam(params, filters.experienceMin)}`)
+  if (filters.experienceMax !== null) where.push(`effective_years_experience <= ${appendSqlParam(params, filters.experienceMax)}`)
+  if (filters.scoreMin !== null) where.push(`effective_profile_score >= ${appendSqlParam(params, filters.scoreMin)}`)
+  if (filters.scoreMax !== null) where.push(`effective_profile_score <= ${appendSqlParam(params, filters.scoreMax)}`)
+  if (filters.sourceJobId) where.push(`job_description_id::text = ${appendSqlParam(params, filters.sourceJobId)}`)
+  if (filters.sourceAnalysisId) where.push(`source_parse_job_id = ${appendSqlParam(params, filters.sourceAnalysisId)}`)
+
+  const baseSql = `WITH directory_rows AS (
+    SELECT cp.user_id,
+           cp.resume_id,
+           cp.profile,
+           cp.source_parse_job_id,
+           cp.source_updated_at,
+           cp.updated_at,
+           r.filename,
+           r.original_filename,
+           r.file_extension,
+           r.file_type,
+           r.profile_score,
+           r.years_experience,
+           COALESCE(r.parse_status, 'complete') AS parse_status,
+           r.job_description_id,
+           jd.title AS job_title,
+           COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags,
+           COALESCE(${SAFE_PROFILE_SCORE_SQL}, r.profile_score::numeric) AS effective_profile_score,
+           COALESCE(${SAFE_YEARS_EXPERIENCE_SQL}, r.years_experience::numeric) AS effective_years_experience,
+           COALESCE(NULLIF(BTRIM(cp.profile->>'name'), ''), NULLIF(BTRIM(cp.profile->>'full_name'), ''), NULLIF(BTRIM(r.original_filename), ''), NULLIF(BTRIM(r.filename), ''), 'Candidate') AS candidate_name,
+           COALESCE(skills_agg.skills_flat, ARRAY[]::text[]) AS skills_flat
+    FROM candidate_profiles cp
+    INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
+    LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
+    LEFT JOIN LATERAL (
+      SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
+      FROM candidate_tags ct
+      WHERE ct.user_id = cp.user_id
+        AND ct.resume_id = cp.resume_id
+    ) tag_agg ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT array_agg(DISTINCT BTRIM(skill_value)) FILTER (WHERE NULLIF(BTRIM(skill_value), '') IS NOT NULL) AS skills_flat
+      FROM (
+        SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(cp.profile->'skills') = 'array' THEN cp.profile->'skills' ELSE '[]'::jsonb END) AS skill_value
+        UNION ALL SELECT unnest(string_to_array(CASE WHEN jsonb_typeof(cp.profile->'skills') = 'string' THEN cp.profile->>'skills' ELSE '' END, ',')) AS skill_value
+        UNION ALL SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(cp.profile->'skills'->'tools_and_platforms') = 'array' THEN cp.profile->'skills'->'tools_and_platforms' ELSE '[]'::jsonb END) AS skill_value
+        UNION ALL SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(cp.profile->'skills'->'methodologies') = 'array' THEN cp.profile->'skills'->'methodologies' ELSE '[]'::jsonb END) AS skill_value
+        UNION ALL SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(cp.profile->'skills'->'domain_expertise') = 'array' THEN cp.profile->'skills'->'domain_expertise' ELSE '[]'::jsonb END) AS skill_value
+        UNION ALL SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(cp.profile->'skills'->'soft_skills') = 'array' THEN cp.profile->'skills'->'soft_skills' ELSE '[]'::jsonb END) AS skill_value
+      ) skill_values
+    ) skills_agg ON TRUE
+  )
+  SELECT ${countOnly ? 'COUNT(*)::integer AS total_count' : '*'}
+  FROM directory_rows cp
+  WHERE ${where.join('\n    AND ')}`
+
+  if (countOnly) return { sql: baseSql, params }
+
+  const sortExpression = DIRECTORY_SORT_SQL[normalizedQuery.sortBy] || DIRECTORY_SORT_SQL.sourceUpdatedAt
+  const sortDirection = normalizedQuery.sortDirection === 'asc' ? 'ASC' : 'DESC'
+  const nullsOrdering = NUMERIC_DIRECTORY_SORT_FIELDS.has(normalizedQuery.sortBy) && sortDirection === 'ASC' ? 'NULLS FIRST' : 'NULLS LAST'
+  params.push(normalizedQuery.pageSize)
+  const limitPlaceholder = `$${params.length}`
+  params.push((page - 1) * normalizedQuery.pageSize)
+  const offsetPlaceholder = `$${params.length}`
+
+  return {
+    sql: `${baseSql}
+  ORDER BY ${sortExpression} ${sortDirection} ${nullsOrdering}, cp.source_updated_at DESC NULLS LAST, cp.updated_at DESC NULLS LAST, cp.resume_id ASC
+  LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
+    params,
+  }
+}
+
+function buildDirectoryPagedResponse(candidates, totalCount, filtersApplied, normalizedQuery, page) {
+  const totalPages = Math.max(1, Math.ceil(totalCount / normalizedQuery.pageSize))
+  return {
+    candidates,
+    total: totalCount,
+    totalCount,
+    page,
+    pageSize: normalizedQuery.pageSize,
+    totalPages,
+    sortBy: normalizedQuery.sortBy,
+    sortDirection: normalizedQuery.sortDirection,
+    filtersApplied,
+  }
 }
 
 const sortComparators = {
@@ -136,7 +292,7 @@ export function normalizeResumeTagLookupInput(inputResumeIds) {
   return [...new Set(inputResumeIds.map((value) => resolveCandidateResumeUuid(value)).filter(Boolean))]
 }
 
-export { isCandidateDirectorySyncOnReadEnabled }
+export { isCandidateDirectorySyncOnReadEnabled, isCandidateDirectorySqlPaginationEnabled }
 
 export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
   const normalizedQuery = normalizeCandidateDirectoryQuery(query)
@@ -168,6 +324,130 @@ export function buildDirectoryResponse(profiles, filtersApplied, query = {}) {
     sortDirection,
     filtersApplied,
   }
+}
+
+
+function mapCandidateDirectoryRow(row) {
+  const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
+  const persistedProfileScore = normalizeNullableNumber(profile.profile_score)
+  const persistedYearsExperience = normalizeNullableNumber(profile.years_experience)
+  const fallbackProfileScore = normalizeNullableNumber(row.profile_score)
+  const fallbackYearsExperience = normalizeNullableNumber(row.years_experience)
+  const profileScore = persistedProfileScore ?? fallbackProfileScore
+  const yearsExperience = persistedYearsExperience ?? fallbackYearsExperience
+  const normalizedSkills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
+  const skills = normalizedSkills
+  const nullableSkills = normalizedSkills.length > 0 ? normalizedSkills : null
+  const tags = normalizeStringArray(row.tags)
+
+  return {
+    resumeId: String(row.resume_id),
+    profile,
+    name: normalizeString(profile.name) || normalizeString(profile.full_name) || getDisplayFilename(row) || 'Candidate',
+    skills,
+    profileScore,
+    yearsExperience,
+    normalized: {
+      profileScore,
+      yearsExperience,
+      skills: nullableSkills,
+    },
+    parseHints: {
+      scoreSource: persistedProfileScore !== null ? 'candidate_profile' : (fallbackProfileScore !== null ? 'resume_fallback' : 'missing'),
+      experienceSource: persistedYearsExperience !== null ? 'candidate_profile' : (fallbackYearsExperience !== null ? 'resume_fallback' : 'missing'),
+      skillsSource: nullableSkills ? 'candidate_profile' : 'missing',
+      scoreNullable: profileScore === null,
+      experienceNullable: yearsExperience === null,
+      skillsNullable: nullableSkills === null,
+    },
+    provenanceHints: {
+      sourceAnalysisId: row.source_parse_job_id || null,
+      sourceUpdatedAt: row.source_updated_at,
+      sourceJobId: row.job_description_id ? String(row.job_description_id) : null,
+    },
+    tags,
+    sourceParseJobId: row.source_parse_job_id || null,
+    sourceUpdatedAt: row.source_updated_at,
+    associatedJob: row.job_description_id
+      ? {
+          id: String(row.job_description_id),
+          title: normalizeString(row.job_title) || 'Untitled job',
+        }
+      : null,
+    parseStatus: normalizeString(row.parse_status) || 'complete',
+  }
+}
+
+function filterCandidateDirectoryEntries(entries, filters) {
+  return entries.filter((entry) => {
+    if (filters.search) {
+      const search = filters.search.toLowerCase()
+      const inName = entry.name.toLowerCase().includes(search)
+      const inSkills = entry.skills.some((skill) => skill.toLowerCase().includes(search))
+      const inTags = entry.tags.some((tag) => tag.toLowerCase().includes(search))
+      if (!inName && !inSkills && !inTags) return false
+    }
+
+    if (filters.job) {
+      const jobText = `${entry.associatedJob?.id || ''} ${entry.associatedJob?.title || ''}`.toLowerCase()
+      if (!jobText.includes(filters.job.toLowerCase())) return false
+    }
+
+    if (filters.parseStatus && entry.parseStatus.toLowerCase() !== filters.parseStatus) return false
+
+    if (filters.skills.length > 0) {
+      const candidateSkills = entry.skills.map((skill) => skill.toLowerCase())
+      if (!filters.skills.some((skill) => candidateSkills.includes(skill))) return false
+    }
+
+    if (filters.tags.length > 0) {
+      const candidateTags = entry.tags.map((tag) => tag.toLowerCase())
+      if (!filters.tags.some((tag) => candidateTags.includes(tag))) return false
+    }
+
+    if (filters.experienceMin !== null && (entry.yearsExperience ?? -Infinity) < filters.experienceMin) return false
+    if (filters.experienceMax !== null && (entry.yearsExperience ?? Infinity) > filters.experienceMax) return false
+    if (filters.scoreMin !== null && (entry.profileScore ?? -Infinity) < filters.scoreMin) return false
+    if (filters.scoreMax !== null && (entry.profileScore ?? Infinity) > filters.scoreMax) return false
+    if (filters.sourceJobId && entry.associatedJob?.id !== filters.sourceJobId) return false
+    if (filters.sourceAnalysisId && entry.sourceParseJobId !== filters.sourceAnalysisId) return false
+
+    return true
+  })
+}
+
+async function fetchCandidateDirectoryRowsForJsPath(userId) {
+  const result = await pool.query(
+    `SELECT cp.resume_id,
+            cp.profile,
+            cp.source_parse_job_id,
+            cp.source_updated_at,
+            cp.updated_at,
+            r.filename,
+            r.original_filename,
+            r.file_extension,
+            r.file_type,
+            r.profile_score,
+            r.years_experience,
+            COALESCE(r.parse_status, 'complete') AS parse_status,
+            r.job_description_id,
+            jd.title AS job_title,
+            COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
+     FROM candidate_profiles cp
+     INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
+     LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
+     LEFT JOIN LATERAL (
+       SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
+       FROM candidate_tags ct
+       WHERE ct.user_id = cp.user_id
+         AND ct.resume_id = cp.resume_id
+     ) tag_agg ON TRUE
+     WHERE cp.user_id = $1
+     ORDER BY cp.source_updated_at DESC, cp.updated_at DESC`,
+    [userId],
+  )
+
+  return result.rows
 }
 
 function normalizeCandidateFromAnalysis(candidate, resumeId, fallbackName = 'resume') {
@@ -409,163 +689,42 @@ router.get('/directory', requireAuth, async (req, res) => {
       parseStatus: normalizedQuery.parseStatus,
     }
 
-    const result = await pool.query(
-      `SELECT cp.resume_id,
-              cp.profile,
-              cp.source_parse_job_id,
-              cp.source_updated_at,
-              cp.updated_at,
-              r.filename,
-              r.original_filename,
-              r.file_extension,
-              r.file_type,
-              r.profile_score,
-              r.years_experience,
-              COALESCE(r.parse_status, 'complete') AS parse_status,
-              r.job_description_id,
-              jd.title AS job_title,
-              COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags
-       FROM candidate_profiles cp
-       INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
-       LEFT JOIN job_descriptions jd ON jd.id = r.job_description_id
-       LEFT JOIN LATERAL (
-         SELECT array_agg(ct.tag ORDER BY ct.tag) AS tags
-         FROM candidate_tags ct
-         WHERE ct.user_id = cp.user_id
-           AND ct.resume_id = cp.resume_id
-       ) tag_agg ON TRUE
-       WHERE cp.user_id = $1
-       ORDER BY cp.source_updated_at DESC, cp.updated_at DESC`,
-      [req.userId],
-    )
-
-    const profiles = result.rows
-      .map((row) => {
-        const profile = row.profile && typeof row.profile === 'object' ? row.profile : {}
-        const persistedProfileScore = normalizeNullableNumber(profile.profile_score)
-        const persistedYearsExperience = normalizeNullableNumber(profile.years_experience)
-        const fallbackProfileScore = normalizeNullableNumber(row.profile_score)
-        const fallbackYearsExperience = normalizeNullableNumber(row.years_experience)
-        const profileScore = persistedProfileScore ?? fallbackProfileScore
-        const yearsExperience = persistedYearsExperience ?? fallbackYearsExperience
-        const normalizedSkills = flattenStructuredSkills(normalizeStructuredSkills(profile.skills))
-        const skills = normalizedSkills
-        const nullableSkills = normalizedSkills.length > 0 ? normalizedSkills : null
-        const tags = normalizeStringArray(row.tags)
-
-        return {
-          resumeId: String(row.resume_id),
-          profile,
-          name: normalizeString(profile.name) || normalizeString(profile.full_name) || getDisplayFilename(row) || 'Candidate',
-          skills,
-          profileScore,
-          yearsExperience,
-          normalized: {
-            profileScore,
-            yearsExperience,
-            skills: nullableSkills,
-          },
-          parseHints: {
-            scoreSource: persistedProfileScore !== null ? 'candidate_profile' : (fallbackProfileScore !== null ? 'resume_fallback' : 'missing'),
-            experienceSource: persistedYearsExperience !== null ? 'candidate_profile' : (fallbackYearsExperience !== null ? 'resume_fallback' : 'missing'),
-            skillsSource: nullableSkills ? 'candidate_profile' : 'missing',
-            scoreNullable: profileScore === null,
-            experienceNullable: yearsExperience === null,
-            skillsNullable: nullableSkills === null,
-          },
-          provenanceHints: {
-            sourceAnalysisId: row.source_parse_job_id || null,
-            sourceUpdatedAt: row.source_updated_at,
-            sourceJobId: row.job_description_id ? String(row.job_description_id) : null,
-          },
-          tags,
-          sourceParseJobId: row.source_parse_job_id || null,
-          sourceUpdatedAt: row.source_updated_at,
-          associatedJob: row.job_description_id
-            ? {
-                id: String(row.job_description_id),
-                title: normalizeString(row.job_title) || 'Untitled job',
-              }
-            : null,
-          parseStatus: normalizeString(row.parse_status) || 'complete',
-        }
-      })
-      .filter((entry) => {
-        if (filters.search) {
-          const search = filters.search.toLowerCase()
-          const inName = entry.name.toLowerCase().includes(search)
-          const inSkills = entry.skills.some((skill) => skill.toLowerCase().includes(search))
-          const inTags = entry.tags.some((tag) => tag.toLowerCase().includes(search))
-          if (!inName && !inSkills && !inTags) {
-            return false
-          }
-        }
-
-        if (filters.job) {
-          const jobText = `${entry.associatedJob?.id || ''} ${entry.associatedJob?.title || ''}`.toLowerCase()
-          if (!jobText.includes(filters.job.toLowerCase())) {
-            return false
-          }
-        }
-
-        if (filters.parseStatus && entry.parseStatus.toLowerCase() !== filters.parseStatus) {
-          return false
-        }
-
-        if (filters.skills.length > 0) {
-          const candidateSkills = entry.skills.map((skill) => skill.toLowerCase())
-          if (!filters.skills.some((skill) => candidateSkills.includes(skill))) {
-            return false
-          }
-        }
-
-        if (filters.tags.length > 0) {
-          const candidateTags = entry.tags.map((tag) => tag.toLowerCase())
-          if (!filters.tags.some((tag) => candidateTags.includes(tag))) {
-            return false
-          }
-        }
-
-        if (filters.experienceMin !== null && (entry.yearsExperience ?? -Infinity) < filters.experienceMin) {
-          return false
-        }
-
-        if (filters.experienceMax !== null && (entry.yearsExperience ?? Infinity) > filters.experienceMax) {
-          return false
-        }
-
-        if (filters.scoreMin !== null && (entry.profileScore ?? -Infinity) < filters.scoreMin) {
-          return false
-        }
-
-        if (filters.scoreMax !== null && (entry.profileScore ?? Infinity) > filters.scoreMax) {
-          return false
-        }
-
-        if (filters.sourceJobId && entry.associatedJob?.id !== filters.sourceJobId) {
-          return false
-        }
-
-        if (filters.sourceAnalysisId && entry.sourceParseJobId !== filters.sourceAnalysisId) {
-          return false
-        }
-
-        return true
-      })
-
+    const sqlPaginationEnabled = isCandidateDirectorySqlPaginationEnabled()
     const filtersApplied = {
       ...filters,
       sourceJobId: filters.sourceJobId || null,
       sourceAnalysisId: filters.sourceAnalysisId || null,
     }
 
-    const response = buildDirectoryResponse(profiles, filtersApplied, req.query)
+    let rowsLoaded = 0
+    let response
+
+    if (sqlPaginationEnabled) {
+      const countQuery = buildCandidateDirectorySql({ userId: req.userId, filters, normalizedQuery, countOnly: true })
+      const countResult = await pool.query(countQuery.sql, countQuery.params)
+      const totalCount = Number(countResult.rows?.[0]?.total_count || 0)
+      const totalPages = Math.max(1, Math.ceil(totalCount / normalizedQuery.pageSize))
+      const clampedPage = Math.min(normalizedQuery.page, totalPages)
+      const pageQuery = buildCandidateDirectorySql({ userId: req.userId, filters, normalizedQuery, page: clampedPage })
+      const result = await pool.query(pageQuery.sql, pageQuery.params)
+      const profiles = result.rows.map(mapCandidateDirectoryRow)
+
+      rowsLoaded = result.rows.length
+      response = buildDirectoryPagedResponse(profiles, totalCount, filtersApplied, normalizedQuery, clampedPage)
+    } else {
+      const rows = await fetchCandidateDirectoryRowsForJsPath(req.userId)
+      const profiles = filterCandidateDirectoryEntries(rows.map(mapCandidateDirectoryRow), filters)
+
+      rowsLoaded = rows.length
+      response = buildDirectoryResponse(profiles, filtersApplied, req.query)
+    }
 
     console.info('[Candidates] Directory request completed', {
       route_total_duration_ms: Date.now() - routeStartedAt,
       sync_on_read_enabled: syncOnReadEnabled,
+      sql_pagination_enabled: sqlPaginationEnabled,
       ...(syncDurationMs !== null ? { sync_duration_ms: syncDurationMs } : {}),
-      candidate_profiles_rows_loaded: result.rows.length,
+      candidate_profiles_rows_loaded: rowsLoaded,
       candidate_profiles_rows_returned: response.candidates.length,
       page: response.page,
       page_size: response.pageSize,
