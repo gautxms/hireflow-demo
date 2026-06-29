@@ -84,7 +84,7 @@ function createBatchAddDb({ visibleIds = [], existingIds = [], allowedAnalysisId
       }
       if (/INSERT INTO shortlist_candidates/.test(sql)) {
         if (failOnStage === 'insert_shortlist_candidates') throw Object.assign(new Error('column "source_context" of relation "shortlist_candidates" does not exist'), { code: '42703', table: 'shortlist_candidates', column: 'source_context' })
-        return { rows: [], rowCount: JSON.parse(params[5]).length }
+        return { rows: [], rowCount: JSON.parse(params[4]).length }
       }
       throw new Error(`Unexpected SQL in mock: ${sql}`)
     },
@@ -101,6 +101,20 @@ test('batchAddShortlistCandidates inserts multiple valid resume IDs successfully
   assert.equal(result.body.summary.succeeded, 2)
   assert.equal(result.body.summary.added, 2)
   assert.equal(result.body.summary.updated, 0)
+})
+
+test('batchAddShortlistCandidates insert SQL uses contiguous typed parameters', async () => {
+  const db = createBatchAddDb({ visibleIds: [uuidA, uuidB] })
+  await batchAddShortlistCandidates({ db, shortlistId: uuidA, userId: 7, resumeIds: [uuidA, uuidB] })
+
+  const insertCall = db.calls.find((call) => /INSERT INTO shortlist_candidates/.test(call.sql))
+  assert.equal(insertCall.params.length, 5)
+  assert.doesNotMatch(insertCall.sql, /\$6\b/)
+  assert.match(insertCall.sql, /\$1::uuid/)
+  assert.match(insertCall.sql, /\$2::text/)
+  assert.match(insertCall.sql, /\$3::integer/)
+  assert.match(insertCall.sql, /\$4::boolean/)
+  assert.match(insertCall.sql, /\$5::jsonb/)
 })
 
 test('batchAddShortlistCandidates updates candidates already in the shortlist', async () => {
@@ -132,7 +146,7 @@ test('batchAddShortlistCandidates supports null analysis_id, source_context, and
 
   assert.equal(result.body.ok, true)
   const insertCall = db.calls.find((call) => /INSERT INTO shortlist_candidates/.test(call.sql))
-  const rows = JSON.parse(insertCall.params[5])
+  const rows = JSON.parse(insertCall.params[4])
   assert.deepEqual(rows, [{ resume_id: uuidA, analysis_id: null, source_context: null, candidate_snapshot: null }])
 })
 
@@ -148,7 +162,7 @@ test('batchAddShortlistCandidates stores null for optional analysis_id that does
 
   assert.equal(result.body.ok, true)
   const insertCall = db.calls.find((call) => /INSERT INTO shortlist_candidates/.test(call.sql))
-  const rows = JSON.parse(insertCall.params[5])
+  const rows = JSON.parse(insertCall.params[4])
   assert.equal(rows[0].analysis_id, null)
   assert.deepEqual(rows[0].source_context, { analysisId: uuidB, parseJobId: 'parse-job-safe' })
 })
