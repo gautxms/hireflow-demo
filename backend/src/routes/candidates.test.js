@@ -277,6 +277,93 @@ test('GET /candidates/directory clamps out-of-range pages before fetching', asyn
   assert.deepEqual(queries[1].params.slice(-2), [1, 1])
 })
 
+
+test('GET /candidates/directory SQL path trims legacy comma-separated skills for exact filtering', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
+  t.mock.method(console, 'info', () => {})
+  const row = {
+    ...candidateProfileRows()[0],
+    profile: { ...candidateProfileRows()[0].profile, skills: 'React, Node' },
+  }
+  const queries = mockDirectoryQueries(t, [row], 1)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?skills=Node')
+
+  assert.equal(status, 200)
+  assert.match(queries[1].sql, /array_agg\(DISTINCT BTRIM\(skill_value\)\)/)
+  assert.deepEqual(queries[1].params.find((param) => Array.isArray(param)), ['node'])
+  assert.equal(body.candidates.length, 1)
+  assert.equal(body.candidates[0].name, 'Ada Lovelace')
+})
+
+test('GET /candidates/directory SQL path uses trimmed skills for search without logging raw search text', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
+  const logs = []
+  t.mock.method(console, 'info', (...args) => logs.push(args))
+  const row = {
+    ...candidateProfileRows()[0],
+    profile: { ...candidateProfileRows()[0].profile, skills: { tools_and_platforms: [' React ', ' Node '] } },
+  }
+  const queries = mockDirectoryQueries(t, [row], 1)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?search=NodeSecret')
+
+  assert.equal(status, 200)
+  assert.match(queries[1].sql, /array_agg\(DISTINCT BTRIM\(skill_value\)\)/)
+  assert.match(queries[1].sql, /unnest\(skills_flat\)/)
+  assert.equal(queries[1].sql.includes('NodeSecret'), false)
+  assert.equal(JSON.stringify(logs).includes('NodeSecret'), false)
+  assert.equal(body.candidates.length, 1)
+})
+
+test('GET /candidates/directory SQL numeric ascending sorts put missing values first', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
+  t.mock.method(console, 'info', () => {})
+  let queries = mockDirectoryQueries(t)
+
+  let response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=profileScore&sortDirection=asc')
+
+  assert.equal(response.status, 200)
+  assert.match(queries[1].sql, /ORDER BY effective_profile_score ASC NULLS FIRST/)
+
+  t.mock.restoreAll()
+  t.mock.method(console, 'info', () => {})
+  queries = mockDirectoryQueries(t)
+
+  response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=yearsExperience&sortDirection=asc')
+
+  assert.equal(response.status, 200)
+  assert.match(queries[1].sql, /ORDER BY effective_years_experience ASC NULLS FIRST/)
+})
+
+test('GET /candidates/directory SQL numeric descending sorts put missing values last', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
+  t.mock.method(console, 'info', () => {})
+  let queries = mockDirectoryQueries(t)
+
+  let response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=profileScore&sortDirection=desc')
+
+  assert.equal(response.status, 200)
+  assert.match(queries[1].sql, /ORDER BY effective_profile_score DESC NULLS LAST/)
+
+  t.mock.restoreAll()
+  t.mock.method(console, 'info', () => {})
+  queries = mockDirectoryQueries(t)
+
+  response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=yearsExperience&sortDirection=desc')
+
+  assert.equal(response.status, 200)
+  assert.match(queries[1].sql, /ORDER BY effective_years_experience DESC NULLS LAST/)
+})
+
 test('GET /candidates/directory falls back to safe sort defaults for invalid sort params', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'

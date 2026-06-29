@@ -147,6 +147,8 @@ const DIRECTORY_SORT_SQL = {
   sourceUpdatedAt: 'cp.source_updated_at',
 }
 
+const NUMERIC_DIRECTORY_SORT_FIELDS = new Set(['profileScore', 'yearsExperience'])
+
 function appendSqlParam(params, value) {
   params.push(value)
   return `$${params.length}`
@@ -230,7 +232,7 @@ function buildCandidateDirectorySql({ userId, filters, normalizedQuery, countOnl
         AND ct.resume_id = cp.resume_id
     ) tag_agg ON TRUE
     LEFT JOIN LATERAL (
-      SELECT array_agg(DISTINCT skill_value) FILTER (WHERE NULLIF(BTRIM(skill_value), '') IS NOT NULL) AS skills_flat
+      SELECT array_agg(DISTINCT BTRIM(skill_value)) FILTER (WHERE NULLIF(BTRIM(skill_value), '') IS NOT NULL) AS skills_flat
       FROM (
         SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(cp.profile->'skills') = 'array' THEN cp.profile->'skills' ELSE '[]'::jsonb END) AS skill_value
         UNION ALL SELECT unnest(string_to_array(CASE WHEN jsonb_typeof(cp.profile->'skills') = 'string' THEN cp.profile->>'skills' ELSE '' END, ',')) AS skill_value
@@ -249,6 +251,7 @@ function buildCandidateDirectorySql({ userId, filters, normalizedQuery, countOnl
 
   const sortExpression = DIRECTORY_SORT_SQL[normalizedQuery.sortBy] || DIRECTORY_SORT_SQL.sourceUpdatedAt
   const sortDirection = normalizedQuery.sortDirection === 'asc' ? 'ASC' : 'DESC'
+  const nullsOrdering = NUMERIC_DIRECTORY_SORT_FIELDS.has(normalizedQuery.sortBy) && sortDirection === 'ASC' ? 'NULLS FIRST' : 'NULLS LAST'
   params.push(normalizedQuery.pageSize)
   const limitPlaceholder = `$${params.length}`
   params.push((page - 1) * normalizedQuery.pageSize)
@@ -256,7 +259,7 @@ function buildCandidateDirectorySql({ userId, filters, normalizedQuery, countOnl
 
   return {
     sql: `${baseSql}
-  ORDER BY ${sortExpression} ${sortDirection} NULLS LAST, cp.source_updated_at DESC NULLS LAST, cp.updated_at DESC NULLS LAST, cp.resume_id ASC
+  ORDER BY ${sortExpression} ${sortDirection} ${nullsOrdering}, cp.source_updated_at DESC NULLS LAST, cp.updated_at DESC NULLS LAST, cp.resume_id ASC
   LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
     params,
   }
