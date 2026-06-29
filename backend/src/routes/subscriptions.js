@@ -28,8 +28,18 @@ export function containsRawPaymentMethodField(body = {}) {
   return RAW_PAYMENT_METHOD_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field))
 }
 
-const BILLING_PROVIDER_MISSING_ERROR = 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.'
-const PADDLE_PRICE_MISSING_ERROR = 'Subscription cannot be changed because billing configuration is missing. Please contact support.'
+const ERROR_RESPONSES = {
+  BILLING_CONFIG_MISSING: { status: 409, message: 'Subscription cannot be changed because billing configuration is missing. Please contact support.' },
+  BILLING_PROVIDER_MISSING: { status: 409, message: 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.' },
+  PAYMENT_FAILED_OR_ACTION_REQUIRED: { status: 402, message: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' },
+  PADDLE_SUBSCRIPTION_UPDATE_FAILED: { status: 502, message: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' },
+  PLAN_ALREADY_ACTIVE: { status: 400, message: 'You are already on that plan.' },
+  PLAN_CHANGE_NOT_ALLOWED: { status: 403, message: 'This plan change is not available for your subscription. Please contact support.' },
+  UNKNOWN: { status: 500, message: 'Unable to change plan' },
+}
+
+const BILLING_PROVIDER_MISSING_ERROR = ERROR_RESPONSES.BILLING_PROVIDER_MISSING.message
+const PADDLE_PRICE_MISSING_ERROR = ERROR_RESPONSES.BILLING_CONFIG_MISSING.message
 
 const PLAN_CONFIG = {
   monthly: { label: 'Monthly', amountCents: 9900, interval: 'month' },
@@ -50,10 +60,22 @@ export function isoOrNull(value) {
   return new Date(value).toISOString()
 }
 
+class BillingError extends Error {
+  constructor(code, details = {}) {
+    super(ERROR_RESPONSES[code]?.message || ERROR_RESPONSES.UNKNOWN.message)
+    this.code = code
+    this.details = details
+  }
+}
+
+function getPaddleRequestId(response) {
+  return response.headers?.get?.('request-id') || response.headers?.get?.('paddle-request-id') || response.headers?.get?.('x-request-id') || null
+}
+
 async function paddleRequest(path, options = {}) {
   const paddle = resolvePaddleConfig()
   if (!paddle.apiKey) {
-    throw new Error('Paddle API key is not configured')
+    throw new BillingError('BILLING_CONFIG_MISSING', { reason: 'missing_api_key' })
   }
 
   const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
@@ -69,10 +91,69 @@ async function paddleRequest(path, options = {}) {
   const payload = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    throw new Error(`Paddle API error (${response.status}): ${JSON.stringify(payload)}`)
+    const category = response.status === 402 || response.status === 422
+      ? 'PAYMENT_FAILED_OR_ACTION_REQUIRED'
+      : 'PADDLE_SUBSCRIPTION_UPDATE_FAILED'
+    throw new BillingError(category, {
+      paddleStatus: response.status,
+      paddleRequestId: getPaddleRequestId(response),
+      paddleErrorCode: payload?.error?.code || payload?.error_code || null,
+    })
   }
 
   return payload
+}
+
+function planFromPriceId(priceId, paddle = resolvePaddleConfig()) {
+  if (!priceId) return null
+  if (priceId === paddle.priceIdsByPlan.monthly) return 'monthly'
+  if (priceId === paddle.priceIdsByPlan.annual) return 'annual'
+  return null
+}
+
+function getSubscriptionItems(subscriptionPayload) {
+  return subscriptionPayload?.data?.items || subscriptionPayload?.items || []
+}
+
+function buildPlanChangeItems(existingItems, targetPriceId, paddle = resolvePaddleConfig()) {
+  let replaced = false
+  const items = existingItems.map((item) => {
+    const currentPriceId = item?.price?.id || item?.price_id
+    const existingPlan = planFromPriceId(currentPriceId, paddle)
+    if (!replaced && existingPlan) {
+      replaced = true
+      return { price_id: targetPriceId, quantity: item.quantity || 1 }
+    }
+    return { price_id: currentPriceId, quantity: item.quantity || 1 }
+  }).filter((item) => item.price_id)
+
+  return replaced ? items : [{ price_id: targetPriceId, quantity: 1 }, ...items]
+}
+
+function extractBillingDates(paddlePayload = {}) {
+  const data = paddlePayload.data || paddlePayload
+  return {
+    currentPeriodEnd: data?.current_billing_period?.ends_at || data?.billing_period?.ends_at || null,
+    nextBillingDate: data?.next_billed_at || data?.current_billing_period?.ends_at || null,
+    status: data?.status || null,
+    providerSubscriptionId: data?.id || null,
+  }
+}
+
+function previewDetails(payload = {}) {
+  const data = payload.data || payload
+  return {
+    immediateTransaction: data.immediate_transaction || data.immediateTransaction || null,
+    nextTransaction: data.next_transaction || data.nextTransaction || null,
+    recurringTransactionDetails: data.recurring_transaction_details || data.recurringTransactionDetails || null,
+    updateSummary: data.update_summary || data.updateSummary || null,
+  }
+}
+
+function sendBillingError(res, error) {
+  const code = error instanceof BillingError ? error.code : 'UNKNOWN'
+  const response = ERROR_RESPONSES[code] || ERROR_RESPONSES.UNKNOWN
+  return res.status(response.status).json({ code, error: response.message })
 }
 
 router.get('/current', requireAuth, async (req, res) => {
@@ -166,61 +247,115 @@ router.get('/history', requireAuth, async (req, res) => {
   }
 })
 
-router.post('/change-plan', requireAuth, async (req, res) => {
-  const { targetPlan } = req.body || {}
-
+async function loadPlanChangeContext(userId, targetPlan) {
   if (!PLAN_CONFIG[targetPlan]) {
-    return res.status(400).json({ error: 'targetPlan must be monthly or annual' })
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'invalid_target_plan' })
   }
 
+  const userResult = await pool.query(
+    `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end
+     FROM users
+     WHERE id = $1`,
+    [userId],
+  )
+
+  const user = userResult.rows[0]
+
+  if (!user) {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'user_not_found' })
+  }
+
+  if (user.subscription_status === 'cancelled') {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'cancelled_subscription' })
+  }
+
+  const currentPlan = user.subscription_plan || 'monthly'
+
+  if (currentPlan === targetPlan) {
+    throw new BillingError('PLAN_ALREADY_ACTIVE')
+  }
+
+  if (!user.paddle_subscription_id) {
+    throw new BillingError('BILLING_PROVIDER_MISSING')
+  }
+
+  const paddle = resolvePaddleConfig()
+  const targetPriceId = targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
+
+  if (!targetPriceId) {
+    throw new BillingError('BILLING_CONFIG_MISSING', { reason: 'missing_target_price_id' })
+  }
+
+  const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`)
+  const items = buildPlanChangeItems(getSubscriptionItems(subscriptionPayload), targetPriceId, paddle)
+  const isUpgrade = currentPlan === 'monthly' && targetPlan === 'annual'
+
+  return {
+    user,
+    currentPlan,
+    targetPlan,
+    isUpgrade,
+    prorationBillingMode: isUpgrade ? 'prorated_immediately' : 'prorated_next_billing_period',
+    items,
+    subscriptionPayload,
+  }
+}
+
+router.post('/change-plan-preview', requireAuth, async (req, res) => {
+  const { targetPlan } = req.body || {}
+
   try {
-    const userResult = await pool.query(
-      `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end
-       FROM users
-       WHERE id = $1`,
-      [req.userId],
-    )
-
-    const user = userResult.rows[0]
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' })
-    }
-
-    if (user.subscription_status === 'cancelled') {
-      return res.status(403).json({
-        error: 'Re-subscribing to a cancelled plan is disabled. Please contact support.',
-      })
-    }
-
-    const currentPlan = user.subscription_plan || 'monthly'
-
-    if (currentPlan === targetPlan) {
-      return res.status(400).json({ error: 'You are already on that plan.' })
-    }
-
-    if (!user.paddle_subscription_id) {
-      return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
-    }
-
-    const isUpgrade = currentPlan === 'monthly' && targetPlan === 'annual'
-    const effectiveAt = isUpgrade ? new Date() : new Date(user.current_period_end || Date.now())
-    const proratedCreditCents = isUpgrade ? 1500 : 0
-
-    const paddle = resolvePaddleConfig()
-    const targetPriceId = targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
-
-    if (!targetPriceId) {
-      return res.status(409).json({ error: PADDLE_PRICE_MISSING_ERROR })
-    }
-
-    await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
+    const context = await loadPlanChangeContext(req.userId, targetPlan)
+    const preview = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}/preview`, {
       method: 'PATCH',
       body: JSON.stringify({
-        items: [{ price_id: targetPriceId, quantity: 1 }],
-        proration_billing_mode: isUpgrade ? 'prorated_immediately' : 'prorated_next_billing_period',
+        items: context.items,
+        proration_billing_mode: context.prorationBillingMode,
+        on_payment_failure: 'prevent_change',
       }),
     })
+
+    return res.json({
+      status: 'ok',
+      currentPlan: context.currentPlan,
+      targetPlan: context.targetPlan,
+      paymentMethod: 'Card on file',
+      ...previewDetails(preview),
+    })
+  } catch (error) {
+    await logErrorToDatabase('subscriptions.change-plan-preview.failed', error, {
+      userId: req.userId,
+      targetPlan,
+      code: error.code || 'UNKNOWN',
+      ...error.details,
+    })
+    return sendBillingError(res, error)
+  }
+})
+
+router.post('/change-plan', requireAuth, async (req, res) => {
+  const { targetPlan } = req.body || {}
+  let currentPlan = null
+
+  try {
+    const context = await loadPlanChangeContext(req.userId, targetPlan)
+    currentPlan = context.currentPlan
+    const paddleUpdate = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        items: context.items,
+        proration_billing_mode: context.prorationBillingMode,
+        on_payment_failure: 'prevent_change',
+        custom_data: {
+          ...(context.subscriptionPayload?.data?.custom_data || {}),
+          plan: targetPlan,
+        },
+      }),
+    })
+
+    const dates = extractBillingDates(paddleUpdate)
+    const effectiveAt = context.isUpgrade ? new Date() : new Date(context.user.current_period_end || dates.currentPeriodEnd || Date.now())
+    const visiblePlan = context.isUpgrade ? targetPlan : currentPlan
 
     const client = await pool.connect()
 
@@ -229,15 +364,24 @@ router.post('/change-plan', requireAuth, async (req, res) => {
       await client.query(
         `UPDATE users
          SET subscription_plan = $1,
+             subscription_status = COALESCE($2, subscription_status),
+             paddle_subscription_id = COALESCE($3, paddle_subscription_id),
+             current_period_end = COALESCE($4, current_period_end),
+             next_billing_date = COALESCE($5, next_billing_date),
              updated_at = NOW()
-         WHERE id = $2`,
-        [targetPlan, req.userId],
+         WHERE id = $6`,
+        [visiblePlan, dates.status, dates.providerSubscriptionId, dates.currentPeriodEnd, dates.nextBillingDate, req.userId],
       )
 
       await client.query(
-        `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [req.userId, currentPlan, targetPlan, isUpgrade ? 'upgrade' : 'downgrade', effectiveAt, proratedCreditCents],
+        `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents, metadata)
+         VALUES ($1, $2, $3, $4, $5, NULL, $6::jsonb)`,
+        [req.userId, currentPlan, targetPlan, context.isUpgrade ? 'upgrade' : 'downgrade', effectiveAt, JSON.stringify({
+          source: 'billing_page',
+          paddle_subscription_id: dates.providerSubscriptionId || context.user.paddle_subscription_id,
+          proration_billing_mode: context.prorationBillingMode,
+          immediate: context.isUpgrade,
+        })],
       )
       await client.query('COMMIT')
     } catch (error) {
@@ -249,19 +393,21 @@ router.post('/change-plan', requireAuth, async (req, res) => {
 
     return res.json({
       status: 'ok',
-      message: isUpgrade
-        ? 'Plan upgraded. Prorated credit will be applied to your next billing.'
-        : 'Plan downgrade scheduled for your next billing period.',
+      message: context.isUpgrade
+        ? 'Plan upgraded successfully. Your billing details have been updated from Paddle.'
+        : 'Plan downgrade scheduled for your next billing period. Your current plan stays active until then.',
       effectiveAt: effectiveAt.toISOString(),
-      proratedCreditCents,
-      proratedCreditFormatted: money(proratedCreditCents),
+      pendingPlan: context.isUpgrade ? null : targetPlan,
     })
   } catch (error) {
     await logErrorToDatabase('subscriptions.change-plan.failed', error, {
       userId: req.userId,
       targetPlan,
+      currentPlan,
+      code: error.code || 'UNKNOWN',
+      ...error.details,
     })
-    return res.status(500).json({ error: 'Unable to change plan' })
+    return sendBillingError(res, error)
   }
 })
 

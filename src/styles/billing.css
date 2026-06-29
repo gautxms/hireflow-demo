@@ -45,19 +45,21 @@
 .billing-modal {
   position: fixed;
   inset: 0;
-  z-index: 70;
-  background: color-mix(in srgb, #08122f 58%, transparent);
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.72);
   display: grid;
   place-items: center;
   padding: 24px;
 }
 
 .billing-modal__card {
-  width: min(520px, 100%);
-  background: var(--hf-surface);
-  border: 1px solid var(--hf-border);
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: auto;
+  background: var(--hf-surface, #111111);
+  border: 1px solid var(--hf-border, #1e1e1e);
   border-radius: 12px;
-  box-shadow: 0 24px 56px rgba(8, 18, 47, 0.32);
+  box-shadow: var(--hf-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.6));
 }
 
 .billing-modal__header,
@@ -67,6 +69,10 @@
 }
 
 .billing-modal__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--hf-surface, #111111);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -76,12 +82,15 @@
   border-bottom: 1px solid var(--hf-border);
 }
 
-.billing-modal__title { margin: 0; font-size: 18px; }
+.billing-modal__title { margin: 0; font-size: 20px; line-height: 1.3; }
 .billing-modal__close { min-width: 40px; }
 .billing-modal__body { padding-top: 16px; padding-bottom: 20px; display: grid; gap: 12px; }
 .billing-modal__actions { display: flex; justify-content: flex-end; gap: 10px; padding-bottom: 4px; }
-.billing-modal__muted { color: var(--hf-text-3); margin: 0; }
+.billing-modal__muted { color: var(--hf-text-3, #888888); margin: 0; line-height: 1.6; }
 .billing-modal__select { width: 100%; }
+.billing-modal__summary { display: grid; gap: 10px; padding: 12px; background: var(--hf-surface-2, #0d0d0d); border: 1px solid var(--hf-border, #1e1e1e); border-radius: var(--hf-r-lg, 8px); }
+.billing-modal__summary p { display: flex; justify-content: space-between; gap: 16px; margin: 0; color: var(--hf-text, #ffffff); font: 600 14px/1.45 var(--hf-font-ui, 'DM Sans', sans-serif); }
+.billing-modal__summary span { color: var(--hf-text-4, #666666); font-weight: 500; }
 
 .billing-page__section {
   width: min(1040px, 100%);

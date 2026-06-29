@@ -66,14 +66,31 @@ async function resolveUserFromPayload(payload) {
 }
 
 
+function planFromPriceId(priceId) {
+  const paddleConfig = resolvePaddleConfig()
+  if (!priceId) return null
+  if (priceId === paddleConfig.priceIdsByPlan.monthly) return 'monthly'
+  if (priceId === paddleConfig.priceIdsByPlan.annual) return 'annual'
+  return null
+}
+
 function getStoredSubscriptionPlan(payload) {
+  const items = payload?.data?.items || payload?.items || []
+  const planFromItems = items
+    .map((item) => planFromPriceId(item?.price?.id || item?.price_id))
+    .find(Boolean)
+
+  if (planFromItems) {
+    return planFromItems
+  }
+
   const plan = payload?.data?.custom_data?.plan || payload?.custom_data?.plan || null
 
   if (plan === 'test-monthly') {
     return 'monthly'
   }
 
-  return plan
+  return plan === 'monthly' || plan === 'annual' ? plan : null
 }
 
 function getPaymentAmount(payload) {

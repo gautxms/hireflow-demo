@@ -13,6 +13,30 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : '—'
 }
 
+function formatPreviewAmount(value, currency = 'USD') {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return '—'
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount / 100)
+}
+
+function getPreviewTotal(transaction) {
+  return transaction?.details?.totals?.total || transaction?.totals?.total || transaction?.items?.[0]?.totals?.total || null
+}
+
+function getSafeBillingMessage(payload, fallback = 'Unable to update plan') {
+  const messages = {
+    BILLING_CONFIG_MISSING: 'Billing is not configured for this plan change yet. Please contact support and mention missing Paddle price configuration.',
+    BILLING_PROVIDER_MISSING: 'We could not find a Paddle subscription for your account. Please contact support so we can update your plan safely.',
+    PAYMENT_FAILED_OR_ACTION_REQUIRED: 'Paddle could not apply this change because payment failed or needs action. Please update your payment method or contact support.',
+    PADDLE_SUBSCRIPTION_UPDATE_FAILED: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.',
+    PLAN_ALREADY_ACTIVE: 'You are already on that plan.',
+    PLAN_CHANGE_NOT_ALLOWED: 'This plan change is not available for your subscription. Please contact support.',
+  }
+  return messages[payload?.code] || payload?.error || fallback
+}
+
+const PLAN_CONFIG_LABELS = { monthly: 'Monthly', annual: 'Annual' }
+
 const CANCEL_REASONS = [
   'Too expensive',
   'Missing key feature',
@@ -21,12 +45,20 @@ const CANCEL_REASONS = [
 ]
 
 function Modal({ title, children, onClose, isPending = false }) {
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === 'Escape' && !isPending) onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isPending, onClose])
+
   return (
-    <div className="billing-modal" role="presentation">
+    <div className="billing-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isPending) onClose() }}>
       <div className="billing-modal__card" role="dialog" aria-modal="true" aria-labelledby="billing-modal-title">
         <div className="billing-modal__header">
           <h3 id="billing-modal-title" className="billing-modal__title">{title}</h3>
-          <button type="button" onClick={onClose} className="billing-modal__close hf-btn hf-btn--secondary" disabled={isPending}>Close</button>
+          <button type="button" onClick={onClose} className="billing-modal__close hf-btn hf-btn--secondary" aria-label="Close dialog" disabled={isPending}>Close</button>
         </div>
         <div className="billing-modal__body">{children}</div>
       </div>
@@ -45,6 +77,9 @@ export default function BillingPage() {
   const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0])
   const [actionFeedback, setActionFeedback] = useState({ type: '', message: '' })
   const [isChangingPlan, setIsChangingPlan] = useState(false)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+  const [planPreview, setPlanPreview] = useState(null)
+  const [previewError, setPreviewError] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
 
   usePageSeo('Billing & Subscription', 'Manage your subscription, invoices, and billing settings.')
@@ -110,6 +145,33 @@ export default function BillingPage() {
     return targetPlan === 'annual' ? 'Upgrade to annual (prorated)' : 'Downgrade to monthly'
   }, [subscription, targetPlan])
 
+  async function openPlanModal(nextPlan) {
+    setActionFeedback({ type: '', message: '' })
+    setTargetPlan(nextPlan)
+    setPlanModalOpen(true)
+    setPlanPreview(null)
+    setPreviewError('')
+    setIsLoadingPreview(true)
+
+    try {
+      const response = await fetch(`${API_BASE}/subscriptions/change-plan-preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ targetPlan: nextPlan }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(getSafeBillingMessage(payload, 'Unable to load plan change preview'))
+      setPlanPreview(payload)
+    } catch (err) {
+      setPreviewError(err.message || 'Unable to load plan change preview')
+    } finally {
+      setIsLoadingPreview(false)
+    }
+  }
+
   async function changePlan() {
     if (isChangingPlan) return
 
@@ -125,10 +187,10 @@ export default function BillingPage() {
         body: JSON.stringify({ targetPlan }),
       })
 
-      const payload = await response.json()
+      const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new Error(payload.error || 'Unable to update plan')
+        throw new Error(getSafeBillingMessage(payload))
       }
 
       setPlanModalOpen(false)
@@ -237,7 +299,7 @@ export default function BillingPage() {
 
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
-                  <button type="button" className="hf-btn hf-btn--primary" onClick={() => { setActionFeedback({ type: '', message: '' }); setTargetPlan(subscription.plan === 'monthly' ? 'annual' : 'monthly'); setPlanModalOpen(true) }}>
+                  <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(subscription.plan === 'monthly' ? 'annual' : 'monthly')}>
                     {subscription.plan === 'monthly' ? 'Upgrade to annual' : 'Downgrade to monthly'}
                   </button>
                   <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }} disabled={subscriptionState.isCanceled}>
@@ -281,11 +343,21 @@ export default function BillingPage() {
       {planModalOpen ? (
         <Modal title="Confirm plan change" onClose={() => setPlanModalOpen(false)} isPending={isChangingPlan}>
           <p>{switchingLabel}</p>
+          <div className="billing-modal__summary">
+            <p><span>Current plan</span>{subscription?.planLabel || subscriptionState.planLabel}</p>
+            <p><span>New plan</span>{PLAN_CONFIG_LABELS[targetPlan] || targetPlan}</p>
+            <p><span>Immediate charge / credit</span>{isLoadingPreview ? 'Loading…' : formatPreviewAmount(getPreviewTotal(planPreview?.immediateTransaction), planPreview?.immediateTransaction?.currency_code || 'USD')}</p>
+            <p><span>Next billing</span>{isLoadingPreview ? 'Loading…' : `${formatPreviewAmount(getPreviewTotal(planPreview?.nextTransaction), planPreview?.nextTransaction?.currency_code || 'USD')} on ${formatDate(planPreview?.nextTransaction?.billing_period?.starts_at || subscription?.nextBillingDate)}`}</p>
+            <p><span>Payment method</span>{subscription?.paymentMethod || planPreview?.paymentMethod || 'Card on file'}</p>
+          </div>
           <p className="billing-modal__muted">
-            Upgrades apply prorated credits immediately. Downgrades take effect at the next billing date.
+            Upgrades apply immediately with Paddle proration. Downgrades are scheduled for the next billing period, so your current plan remains visible until then.
           </p>
+          {previewError ? <p className="billing-page__feedback billing-page__feedback--error" role="alert">{previewError}</p> : null}
+          {actionFeedback.type === 'error' && actionFeedback.message ? <p className="billing-page__feedback billing-page__feedback--error" role="alert">{actionFeedback.message}</p> : null}
           <div className="billing-modal__actions">
-            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan} disabled={isChangingPlan}>{isChangingPlan ? 'Updating plan…' : 'Confirm'}</button>
+            <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPlanModalOpen(false)} disabled={isChangingPlan}>Close</button>
+            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan} disabled={isChangingPlan || isLoadingPreview || Boolean(previewError)}>{isChangingPlan ? 'Updating plan…' : 'Confirm'}</button>
           </div>
         </Modal>
       ) : null}

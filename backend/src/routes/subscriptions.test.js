@@ -171,7 +171,7 @@ test('POST /api/subscriptions/change-plan rejects missing Paddle subscription ID
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 409)
-  assert.deepEqual(res.payload, { error: BILLING_PROVIDER_MISSING_ERROR })
+  assert.deepEqual(res.payload, { code: 'BILLING_PROVIDER_MISSING', error: BILLING_PROVIDER_MISSING_ERROR })
   assert.equal(paddleCalls.length, 0)
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
@@ -193,7 +193,7 @@ test('POST /api/subscriptions/change-plan rejects missing target Paddle price ID
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 409)
-  assert.deepEqual(res.payload, { error: PADDLE_PRICE_MISSING_ERROR })
+  assert.deepEqual(res.payload, { code: 'BILLING_CONFIG_MISSING', error: PADDLE_PRICE_MISSING_ERROR })
   assert.equal(paddleCalls.length, 0)
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
@@ -213,8 +213,8 @@ test('POST /api/subscriptions/change-plan does not checkout client or mutate loc
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
-  assert.equal(res.statusCode, 500)
-  assert.deepEqual(res.payload, { error: 'Unable to change plan' })
+  assert.equal(res.statusCode, 502)
+  assert.deepEqual(res.payload, { code: 'PADDLE_SUBSCRIPTION_UPDATE_FAILED', error: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' })
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
 })
@@ -238,11 +238,43 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
   assert.equal(res.payload.status, 'ok')
   assert.equal(typeof res.payload.message, 'string')
   assert.equal(typeof res.payload.effectiveAt, 'string')
-  assert.equal(res.payload.proratedCreditCents, 1500)
-  assert.equal(paddleCalls.length, 1)
+  assert.equal(res.payload.pendingPlan, null)
+  assert.equal(paddleCalls.length, 2)
+  assert.match(paddleCalls[0].url, /\/subscriptions\/sub_123$/)
+  assert.match(paddleCalls[1].url, /\/subscriptions\/sub_123$/)
+  assert.equal(JSON.parse(paddleCalls[1].options.body).on_payment_failure, 'prevent_change')
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
   assertTransactionSequence(clientCalls, /UPDATE users/)
+})
+
+
+test('POST /api/subscriptions/change-plan preserves unrelated Paddle items and quantity', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleResponse({ payload: { data: { id: 'sub_123', items: [
+    { price: { id: 'pri_monthly' }, quantity: 3 },
+    { price: { id: 'pri_addon' }, quantity: 2 },
+  ] } } })
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  const patchBody = JSON.parse(paddleCalls[1].options.body)
+  assert.deepEqual(patchBody.items, [
+    { price_id: 'pri_annual', quantity: 3 },
+    { price_id: 'pri_addon', quantity: 2 },
+  ])
+  assert.equal(patchBody.proration_billing_mode, 'prorated_immediately')
+  assert.equal(patchBody.on_payment_failure, 'prevent_change')
 })
 
 test('POST /api/subscriptions/change-plan rolls back and releases checked-out client on local DB failure', async () => {
@@ -261,7 +293,7 @@ test('POST /api/subscriptions/change-plan rolls back and releases checked-out cl
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 500)
-  assert.deepEqual(res.payload, { error: 'Unable to change plan' })
+  assert.deepEqual(res.payload, { code: 'UNKNOWN', error: 'Unable to change plan' })
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
   assertRollbackSequence(clientCalls)
