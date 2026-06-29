@@ -124,6 +124,18 @@ function candidateProfileRows() {
   ]
 }
 
+
+function mockDirectoryQueries(t, rows = candidateProfileRows(), totalCount = rows.length) {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params })
+    if (/COUNT\(\*\)::integer AS total_count/.test(text)) return { rows: [{ total_count: totalCount }] }
+    return { rows }
+  })
+  return queries
+}
+
 async function getJson(app, path) {
   const server = app.listen(0)
   try {
@@ -149,17 +161,14 @@ test('candidate directory sync-on-read feature flag defaults off', () => {
 test('GET /candidates/directory does not sync profiles by default and returns existing profiles', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})
-  const queries = []
-  t.mock.method(pool, 'query', async (sql, params) => {
-    queries.push({ sql: String(sql), params })
-    assert.doesNotMatch(String(sql), /FROM resumes r\s+LEFT JOIN LATERAL/)
-    return { rows: candidateProfileRows() }
-  })
+  const queries = mockDirectoryQueries(t)
 
   const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
 
   assert.equal(status, 200)
-  assert.equal(queries.length, 1)
+  assert.equal(queries.length, 2)
+  assert.match(queries[1].sql, /LIMIT \$\d+ OFFSET \$\d+/)
+  assert.deepEqual(queries[1].params.slice(-2), [15, 0])
   assert.equal(body.total, 2)
   assert.equal(body.totalCount, 2)
   assert.equal(body.candidates.length, 2)
@@ -170,7 +179,7 @@ test('GET /candidates/directory does not sync profiles by default and returns ex
 test('GET /candidates/directory returns a valid empty response when candidate_profiles is empty', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})
-  t.mock.method(pool, 'query', async () => ({ rows: [] }))
+  mockDirectoryQueries(t, [], 0)
 
   const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
 
@@ -185,7 +194,7 @@ test('GET /candidates/directory returns a valid empty response when candidate_pr
 test('GET /candidates/directory preserves existing JS filter, sort, and page behavior', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})
-  t.mock.method(pool, 'query', async () => ({ rows: candidateProfileRows() }))
+  mockDirectoryQueries(t, candidateProfileRows().slice(0, 1), 1)
 
   const { status, body } = await getJson(
     createCandidateDirectoryApp(),
@@ -203,6 +212,55 @@ test('GET /candidates/directory preserves existing JS filter, sort, and page beh
   assert.deepEqual(body.filtersApplied.skills, ['react'])
 })
 
+
+test('GET /candidates/directory builds parameterized SQL filters without logging raw search text', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  const logs = []
+  t.mock.method(console, 'info', (...args) => logs.push(args))
+  const queries = mockDirectoryQueries(t, candidateProfileRows().slice(0, 1), 1)
+
+  const { status } = await getJson(
+    createCandidateDirectoryApp(),
+    '/candidates/directory?search=AdaSecret&job=Frontend&parseStatus=complete&skills=React&tags=Priority&experienceMin=5&experienceMax=10&scoreMin=80&scoreMax=100&sourceJobId=22222222-2222-4222-8222-222222222222&sourceAnalysisId=parse-job-1&sortBy=profileScore&sortDirection=desc&pageSize=15',
+  )
+
+  assert.equal(status, 200)
+  assert.equal(queries.length, 2)
+  assert.match(queries[1].sql, /LOWER\(candidate_name\) LIKE \$2/)
+  assert.match(queries[1].sql, /effective_profile_score >= \$\d+/)
+  assert.match(queries[1].sql, /ORDER BY effective_profile_score DESC NULLS LAST/)
+  assert.match(queries[1].sql, /LIMIT \$\d+ OFFSET \$\d+/)
+  assert.equal(queries[1].sql.includes('AdaSecret'), false)
+  assert.equal(queries[1].params.includes('%adasecret%'), true)
+  assert.equal(JSON.stringify(logs).includes('AdaSecret'), false)
+})
+
+test('GET /candidates/directory clamps out-of-range pages before fetching', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  const queries = mockDirectoryQueries(t, candidateProfileRows().slice(1), 2)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?page=99&pageSize=1')
+
+  assert.equal(status, 200)
+  assert.equal(body.page, 2)
+  assert.equal(body.totalPages, 2)
+  assert.deepEqual(queries[1].params.slice(-2), [1, 1])
+})
+
+test('GET /candidates/directory falls back to safe sort defaults for invalid sort params', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  const queries = mockDirectoryQueries(t)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=unsafe_sql&sortDirection=sideways')
+
+  assert.equal(status, 200)
+  assert.equal(body.sortBy, 'sourceUpdatedAt')
+  assert.equal(body.sortDirection, 'desc')
+  assert.match(queries[1].sql, /ORDER BY cp\.source_updated_at DESC NULLS LAST/)
+})
+
 test('GET /candidates/directory calls sync when CANDIDATE_DIRECTORY_SYNC_ON_READ=true', async (t) => {
   process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ = 'true'
   t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ })
@@ -212,6 +270,7 @@ test('GET /candidates/directory calls sync when CANDIDATE_DIRECTORY_SYNC_ON_READ
     const text = String(sql)
     queries.push(text)
     if (/FROM resumes r\s+LEFT JOIN LATERAL/.test(text)) return { rows: [] }
+    if (/COUNT\(\*\)::integer AS total_count/.test(text)) return { rows: [{ total_count: 0 }] }
     return { rows: [] }
   })
 
@@ -225,7 +284,7 @@ test('GET /candidates/directory calls sync when CANDIDATE_DIRECTORY_SYNC_ON_READ
 test('GET /candidates/directory candidate shape remains shortlist-compatible', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})
-  t.mock.method(pool, 'query', async () => ({ rows: candidateProfileRows().slice(0, 1) }))
+  mockDirectoryQueries(t, candidateProfileRows().slice(0, 1), 1)
 
   const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
   const candidate = body.candidates[0]
