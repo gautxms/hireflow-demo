@@ -23,6 +23,10 @@ function getPreviewTotal(transaction) {
   return transaction?.details?.totals?.total || transaction?.totals?.total || transaction?.items?.[0]?.totals?.total || null
 }
 
+function isRetryablePreviewError(code) {
+  return code === 'PADDLE_SUBSCRIPTION_UPDATE_FAILED' || code === 'UNKNOWN'
+}
+
 function getSafeBillingMessage(payload, fallback = 'Unable to update plan') {
   const messages = {
     BILLING_CONFIG_MISSING: 'Billing is not configured for this plan change yet. Please contact support and mention missing Paddle price configuration.',
@@ -80,6 +84,7 @@ export default function BillingPage() {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [planPreview, setPlanPreview] = useState(null)
   const [previewError, setPreviewError] = useState('')
+  const [previewErrorCode, setPreviewErrorCode] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
 
   usePageSeo('Billing & Subscription', 'Manage your subscription, invoices, and billing settings.')
@@ -145,12 +150,10 @@ export default function BillingPage() {
     return targetPlan === 'annual' ? 'Upgrade to annual (prorated)' : 'Downgrade to monthly'
   }, [subscription, targetPlan])
 
-  async function openPlanModal(nextPlan) {
-    setActionFeedback({ type: '', message: '' })
-    setTargetPlan(nextPlan)
-    setPlanModalOpen(true)
+  async function loadPlanPreview(nextPlan = targetPlan) {
     setPlanPreview(null)
     setPreviewError('')
+    setPreviewErrorCode('')
     setIsLoadingPreview(true)
 
     try {
@@ -163,13 +166,24 @@ export default function BillingPage() {
         body: JSON.stringify({ targetPlan: nextPlan }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(getSafeBillingMessage(payload, 'Unable to load plan change preview'))
+      if (!response.ok) {
+        setPreviewErrorCode(payload?.code || 'UNKNOWN')
+        throw new Error(getSafeBillingMessage(payload, 'Unable to load plan change preview'))
+      }
       setPlanPreview(payload)
     } catch (err) {
       setPreviewError(err.message || 'Unable to load plan change preview')
+      setPreviewErrorCode((currentCode) => currentCode || 'UNKNOWN')
     } finally {
       setIsLoadingPreview(false)
     }
+  }
+
+  async function openPlanModal(nextPlan) {
+    setActionFeedback({ type: '', message: '' })
+    setTargetPlan(nextPlan)
+    setPlanModalOpen(true)
+    await loadPlanPreview(nextPlan)
   }
 
   async function changePlan() {
@@ -353,7 +367,16 @@ export default function BillingPage() {
           <p className="billing-modal__muted">
             Upgrades apply immediately with Paddle proration. Downgrades are scheduled for the next billing period, so your current plan remains visible until then.
           </p>
-          {previewError ? <p className="billing-page__feedback billing-page__feedback--error" role="alert">{previewError}</p> : null}
+          {previewError ? (
+            <div className="billing-modal__preview-error">
+              <p className="billing-page__feedback billing-page__feedback--error" role="alert">{previewError}</p>
+              {isRetryablePreviewError(previewErrorCode) ? (
+                <button type="button" className="hf-btn hf-btn--secondary" onClick={() => loadPlanPreview(targetPlan)} disabled={isLoadingPreview || isChangingPlan}>
+                  {isLoadingPreview ? 'Retrying preview…' : 'Retry preview'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {actionFeedback.type === 'error' && actionFeedback.message ? <p className="billing-page__feedback billing-page__feedback--error" role="alert">{actionFeedback.message}</p> : null}
           <div className="billing-modal__actions">
             <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPlanModalOpen(false)} disabled={isChangingPlan}>Close</button>

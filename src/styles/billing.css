@@ -91,6 +91,8 @@
 .billing-modal__summary { display: grid; gap: 10px; padding: 12px; background: var(--hf-surface-2, #0d0d0d); border: 1px solid var(--hf-border, #1e1e1e); border-radius: var(--hf-r-lg, 8px); }
 .billing-modal__summary p { display: flex; justify-content: space-between; gap: 16px; margin: 0; color: var(--hf-text, #ffffff); font: 600 14px/1.45 var(--hf-font-ui, 'DM Sans', sans-serif); }
 .billing-modal__summary span { color: var(--hf-text-4, #666666); font-weight: 500; }
+.billing-modal__preview-error { display: grid; gap: 10px; }
+.billing-modal__preview-error .hf-btn { width: max-content; }
 
 .billing-page__section {
   width: min(1040px, 100%);

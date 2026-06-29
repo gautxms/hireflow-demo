@@ -72,6 +72,42 @@ function getPaddleRequestId(response) {
   return response.headers?.get?.('request-id') || response.headers?.get?.('paddle-request-id') || response.headers?.get?.('x-request-id') || null
 }
 
+function getPaddleErrorCode(payload = {}) {
+  return payload?.error?.code || payload?.error_code || payload?.code || null
+}
+
+function classifyPaddleFailure(status, payload = {}) {
+  const errorCode = String(getPaddleErrorCode(payload) || '').toLowerCase()
+  const hasPaymentActionCode = [
+    'payment_required',
+    'payment_failed',
+    'payment_method_required',
+    'payment_method_action_required',
+    'payment_action_required',
+    'transaction_payment_failed',
+    'card_declined',
+    'authentication_required',
+  ].some((code) => errorCode.includes(code))
+  const hasConfigCode = [
+    'authentication_failed',
+    'authorization_failed',
+    'invalid_api_key',
+    'api_key_invalid',
+    'price_not_found',
+    'price_id_invalid',
+  ].some((code) => errorCode.includes(code))
+
+  if (status === 402 || hasPaymentActionCode) {
+    return 'PAYMENT_FAILED_OR_ACTION_REQUIRED'
+  }
+
+  if (status === 401 || status === 403 || hasConfigCode) {
+    return 'BILLING_CONFIG_MISSING'
+  }
+
+  return 'PADDLE_SUBSCRIPTION_UPDATE_FAILED'
+}
+
 async function paddleRequest(path, options = {}) {
   const paddle = resolvePaddleConfig()
   if (!paddle.apiKey) {
@@ -91,13 +127,10 @@ async function paddleRequest(path, options = {}) {
   const payload = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    const category = response.status === 402 || response.status === 422
-      ? 'PAYMENT_FAILED_OR_ACTION_REQUIRED'
-      : 'PADDLE_SUBSCRIPTION_UPDATE_FAILED'
-    throw new BillingError(category, {
+    throw new BillingError(classifyPaddleFailure(response.status, payload), {
       paddleStatus: response.status,
       paddleRequestId: getPaddleRequestId(response),
-      paddleErrorCode: payload?.error?.code || payload?.error_code || null,
+      paddleErrorCode: getPaddleErrorCode(payload),
     })
   }
 
