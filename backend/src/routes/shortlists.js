@@ -502,19 +502,25 @@ export async function batchAddShortlistCandidates({ db = pool, shortlistId, user
       stage = 'insert_shortlist_candidates'
       await db.query(
         `INSERT INTO shortlist_candidates (shortlist_id, resume_id, notes, rating, analysis_id, source_context, candidate_snapshot)
-         SELECT $1, x.resume_id::uuid, $3, $4, NULLIF(x.analysis_id, '')::uuid, x.source_context::jsonb, x.candidate_snapshot::jsonb
-         FROM jsonb_to_recordset($6::jsonb) AS x(resume_id text, analysis_id text, source_context jsonb, candidate_snapshot jsonb)
+         SELECT $1::uuid,
+                x.resume_id::uuid,
+                $2::text,
+                $3::integer,
+                NULLIF(x.analysis_id, '')::uuid,
+                x.source_context::jsonb,
+                x.candidate_snapshot::jsonb
+         FROM jsonb_to_recordset($5::jsonb) AS x(resume_id text, analysis_id text, source_context jsonb, candidate_snapshot jsonb)
          ON CONFLICT (shortlist_id, resume_id)
          DO UPDATE SET notes = EXCLUDED.notes,
                        rating = CASE
-                         WHEN $5::boolean THEN EXCLUDED.rating
+                         WHEN $4::boolean THEN EXCLUDED.rating
                          ELSE shortlist_candidates.rating
                        END,
                        analysis_id = COALESCE(EXCLUDED.analysis_id, shortlist_candidates.analysis_id),
                        source_context = COALESCE(EXCLUDED.source_context, shortlist_candidates.source_context),
                        candidate_snapshot = COALESCE(EXCLUDED.candidate_snapshot, shortlist_candidates.candidate_snapshot),
                        updated_at = NOW()`,
-        [shortlistId, [...visibleResumeIds], notes, rating, hasRating, JSON.stringify(sourceContextRows)],
+        [shortlistId, notes, rating, hasRating, JSON.stringify(sourceContextRows)],
       )
     }
 
