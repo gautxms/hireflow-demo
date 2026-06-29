@@ -252,3 +252,14 @@ test('reanalysis path continues to sync profiles after mutating completed parse 
   assert.match(reanalyseRoute, /UPDATE parse_jobs[\s\S]*SET result = \$2::jsonb/)
   assert.match(reanalyseRoute, /await syncCandidateProfilesForUser\(req\.userId\)/)
 })
+
+test('backend docs include candidate profile recovery runbook without making sync-on-read normal operation', () => {
+  const docs = fs.readFileSync(new URL('../../README.md', import.meta.url), 'utf8')
+
+  assert.match(docs, /GET \/candidates\/directory` is a read path by default/)
+  assert.match(docs, /CANDIDATE_DIRECTORY_SYNC_ON_READ=false/)
+  assert.match(docs, /npm --prefix backend run backfill:candidate-profiles\n/)
+  assert.match(docs, /npm --prefix backend run backfill:candidate-profiles:execute/)
+  assert.match(docs, /npm --prefix backend run backfill:candidate-profiles -- --user-id <USER_ID>/)
+  assert.match(docs, /Use the rollback flag only temporarily/)
+})
