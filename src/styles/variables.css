@@ -3,11 +3,33 @@
   --hf-bg-primary: #0a0a0a;
   --hf-bg-secondary: #111111;
   --hf-bg-elevated: #121212;
+  --hf-bg: var(--hf-bg-primary);
+  --hf-surface: var(--hf-bg-secondary);
+  --hf-surface-2: #0d0d0d;
+  --hf-border: #1e1e1e;
+  --hf-lime-hover: #b8ec00;
+  --hf-mint: #39ff9f;
+  --hf-lime-dim: rgba(200, 255, 0, 0.10);
+  --hf-lime-border: rgba(200, 255, 0, 0.20);
+  --hf-r-sm: 4px;
+  --hf-r-md: 6px;
+  --hf-r-lg: 8px;
+  --hf-r-xl: 12px;
+  --hf-r-2xl: 16px;
+  --hf-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --hf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --hf-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
   --hf-bg-overlay-80: rgba(10, 10, 10, 0.8);
 
   --hf-text-primary: #ffffff;
   --hf-text-secondary: #aaaaaa;
   --hf-text-muted: #888888;
+  --hf-text: var(--hf-text-primary);
+  --hf-text-2: var(--hf-text-secondary);
+  --hf-text-3: var(--hf-text-muted);
+  --hf-text-4: #666666;
+  --hf-text-5: #444444;
+  --hf-text-6: #2a2a2a;
   --hf-text-inverse: #000000;
   --hf-text-nav: var(--hf-text-muted);
 
@@ -22,6 +44,7 @@
   --hf-border-2: var(--hf-border-muted);
 
   --hf-status-success: #10b981;
+  --hf-success: #10b981;
   --hf-status-success-text: #86efac;
   --hf-status-error: #ef4444;
   --hf-status-warning: #fcd34d;

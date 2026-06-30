@@ -66,14 +66,75 @@ async function resolveUserFromPayload(payload) {
 }
 
 
+function planFromPriceId(priceId) {
+  const paddleConfig = resolvePaddleConfig()
+  if (!priceId) return null
+  if (priceId === paddleConfig.priceIdsByPlan.monthly) return 'monthly'
+  if (priceId === paddleConfig.priceIdsByPlan.annual) return 'annual'
+  return null
+}
+
+function getItemPriceId(item = {}) {
+  return item?.price?.id || item?.price_id || item?.priceId || null
+}
+
+function numericOrNull(value) {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function getItemTotal(item = {}) {
+  return numericOrNull(
+    item?.totals?.total ??
+    item?.details?.totals?.total ??
+    item?.amount ??
+    item?.unit_totals?.total ??
+    item?.price?.unit_price?.amount,
+  )
+}
+
+function isCreditOrRemovalItem(item = {}) {
+  const quantity = numericOrNull(item?.quantity)
+  const total = getItemTotal(item)
+  const text = [item?.type, item?.status, item?.description, item?.name, item?.price?.description, item?.price?.name]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return (
+    (quantity !== null && quantity < 0) ||
+    (total !== null && total < 0) ||
+    text.includes('credit') ||
+    text.includes('refund') ||
+    text.includes('reversal') ||
+    text.includes('removed') ||
+    text.includes('removal')
+  )
+}
+
 function getStoredSubscriptionPlan(payload) {
+  const items = payload?.data?.items || payload?.items || []
+  const activePlanFromItems = items
+    .filter((item) => !isCreditOrRemovalItem(item))
+    .map((item) => planFromPriceId(getItemPriceId(item)))
+    .find(Boolean)
+
+  if (activePlanFromItems) {
+    return activePlanFromItems
+  }
+
+  if (items.length > 0) {
+    return null
+  }
+
   const plan = payload?.data?.custom_data?.plan || payload?.custom_data?.plan || null
 
   if (plan === 'test-monthly') {
     return 'monthly'
   }
 
-  return plan
+  return plan === 'monthly' || plan === 'annual' ? plan : null
 }
 
 function getPaymentAmount(payload) {

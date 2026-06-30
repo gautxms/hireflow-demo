@@ -150,11 +150,166 @@ function mockPaddleResponse({ ok = true, status = 200, payload = { data: { id: '
     return {
       ok,
       status,
+      headers: { get: () => null },
       json: async () => payload,
     }
   }
   return calls
 }
+
+function mockPaddleSequence(responses) {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options })
+    const response = responses[Math.min(calls.length - 1, responses.length - 1)] || {}
+    return {
+      ok: response.ok ?? true,
+      status: response.status ?? 200,
+      headers: { get: (name) => response.headers?.[name] || null },
+      json: async () => response.payload ?? { data: { id: 'sub_123' } },
+    }
+  }
+  return calls
+}
+
+function errorLogCalls(calls) {
+  return calls.filter(({ sql }) => String(sql).includes('INSERT INTO error_logs'))
+}
+
+
+test('POST /api/subscriptions/change-plan-preview returns Paddle preview without local mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const previewPayload = {
+    data: {
+      id: 'sub_123',
+      immediate_transaction: { id: 'txn_now', details: { totals: { total: '2500' } } },
+      next_transaction: { id: 'txn_next', details: { totals: { total: '99900' } } },
+    },
+  }
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { payload: previewPayload },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.status, 'ok')
+  assert.equal(res.payload.currentPlan, 'monthly')
+  assert.equal(res.payload.targetPlan, 'annual')
+  assert.deepEqual(res.payload.immediateTransaction, previewPayload.data.immediate_transaction)
+  assert.deepEqual(res.payload.nextTransaction, previewPayload.data.next_transaction)
+  assert.equal(paddleCalls.length, 2)
+  assert.match(paddleCalls[1].url, /\/subscriptions\/sub_123\/preview$/)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan-preview rejects missing Paddle subscription ID without Paddle or mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: null,
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleResponse()
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 409)
+  assert.deepEqual(res.payload, { code: 'BILLING_PROVIDER_MISSING', error: BILLING_PROVIDER_MISSING_ERROR })
+  assert.equal(paddleCalls.length, 0)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan-preview rejects missing target Paddle price ID without preview or mutation', async () => {
+  resetPaddleEnv()
+  delete process.env.PADDLE_ANNUAL_PRICE_ID
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleResponse()
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 409)
+  assert.deepEqual(res.payload, { code: 'BILLING_CONFIG_MISSING', error: PADDLE_PRICE_MISSING_ERROR })
+  assert.equal(paddleCalls.length, 0)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan-preview classifies Paddle validation failure safely and logs context', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { ok: false, status: 422, headers: { 'request-id': 'req_validation' }, payload: { error: { code: 'validation_error' } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 502)
+  assert.deepEqual(res.payload, { code: 'PADDLE_SUBSCRIPTION_UPDATE_FAILED', error: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' })
+  assert.equal(paddleCalls.length, 2)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+  const [logCall] = errorLogCalls(calls)
+  assert.ok(logCall)
+  assert.equal(logCall.params[0], 'subscriptions.change-plan-preview.failed')
+  const context = JSON.parse(logCall.params[3])
+  assert.equal(context.code, 'PADDLE_SUBSCRIPTION_UPDATE_FAILED')
+  assert.equal(context.paddleStatus, 422)
+  assert.equal(context.paddleRequestId, 'req_validation')
+  assert.equal(context.paddleErrorCode, 'validation_error')
+  assert.equal(context.targetPlan, 'annual')
+  assert.equal(context.userId, 123)
+})
+
+test('POST /api/subscriptions/change-plan-preview rejects invalid targetPlan without Paddle or mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleResponse()
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'weekly' })
+
+  assert.equal(res.statusCode, 403)
+  assert.deepEqual(res.payload, { code: 'PLAN_CHANGE_NOT_ALLOWED', error: 'This plan change is not available for your subscription. Please contact support.' })
+  assert.equal(paddleCalls.length, 0)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
 
 test('POST /api/subscriptions/change-plan rejects missing Paddle subscription ID without local mutation or client checkout', async () => {
   resetPaddleEnv()
@@ -171,7 +326,7 @@ test('POST /api/subscriptions/change-plan rejects missing Paddle subscription ID
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 409)
-  assert.deepEqual(res.payload, { error: BILLING_PROVIDER_MISSING_ERROR })
+  assert.deepEqual(res.payload, { code: 'BILLING_PROVIDER_MISSING', error: BILLING_PROVIDER_MISSING_ERROR })
   assert.equal(paddleCalls.length, 0)
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
@@ -193,7 +348,7 @@ test('POST /api/subscriptions/change-plan rejects missing target Paddle price ID
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 409)
-  assert.deepEqual(res.payload, { error: PADDLE_PRICE_MISSING_ERROR })
+  assert.deepEqual(res.payload, { code: 'BILLING_CONFIG_MISSING', error: PADDLE_PRICE_MISSING_ERROR })
   assert.equal(paddleCalls.length, 0)
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
@@ -213,10 +368,83 @@ test('POST /api/subscriptions/change-plan does not checkout client or mutate loc
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
-  assert.equal(res.statusCode, 500)
-  assert.deepEqual(res.payload, { error: 'Unable to change plan' })
+  assert.equal(res.statusCode, 502)
+  assert.deepEqual(res.payload, { code: 'PADDLE_SUBSCRIPTION_UPDATE_FAILED', error: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' })
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
+})
+
+
+test('POST /api/subscriptions/change-plan maps 402 Paddle failure to payment action error', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { ok: false, status: 402, payload: { error: { code: 'payment_required' } } },
+  ])
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 402)
+  assert.deepEqual(res.payload, { code: 'PAYMENT_FAILED_OR_ACTION_REQUIRED', error: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' })
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan maps known payment action Paddle code to payment action error', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { ok: false, status: 422, payload: { error: { code: 'payment_method_action_required' } } },
+  ])
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 402)
+  assert.deepEqual(res.payload, { code: 'PAYMENT_FAILED_OR_ACTION_REQUIRED', error: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' })
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan keeps downgrade visible plan current and marks pendingPlan in response', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'annual',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [{ price: { id: 'pri_annual' }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', current_billing_period: { ends_at: '2026-07-01T00:00:00.000Z' } } } },
+  ])
+  const { clientCalls } = installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'monthly' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.pendingPlan, 'monthly')
+  assert.match(res.payload.message, /current plan stays active/i)
+  assert.equal(JSON.parse(paddleCalls[1].options.body).proration_billing_mode, 'prorated_next_billing_period')
+  assert.deepEqual(clientCalls[1].params, ['annual', 'active', 'sub_123', '2026-07-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z', 123])
+  assert.equal(mutationCalls(calls).length, 0)
 })
 
 test('POST /api/subscriptions/change-plan uses one checked-out client after Paddle PATCH succeeds', async () => {
@@ -238,11 +466,127 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
   assert.equal(res.payload.status, 'ok')
   assert.equal(typeof res.payload.message, 'string')
   assert.equal(typeof res.payload.effectiveAt, 'string')
-  assert.equal(res.payload.proratedCreditCents, 1500)
-  assert.equal(paddleCalls.length, 1)
+  assert.equal(res.payload.pendingPlan, null)
+  assert.equal(paddleCalls.length, 2)
+  assert.match(paddleCalls[0].url, /\/subscriptions\/sub_123$/)
+  assert.match(paddleCalls[1].url, /\/subscriptions\/sub_123$/)
+  assert.equal(JSON.parse(paddleCalls[1].options.body).on_payment_failure, 'prevent_change')
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
   assertTransactionSequence(clientCalls, /UPDATE users/)
+})
+
+
+
+test('POST /api/subscriptions/change-plan-preview blocks mixed-interval recurring add-on without Paddle preview or mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [
+      { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_monthly_addon', billing_cycle: { interval: 'month' } }, quantity: 2 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'UNSUPPORTED_BILLING_ITEMS')
+  assert.match(res.payload.error, /recurring add-ons/i)
+  assert.equal(paddleCalls.length, 1)
+  assert.doesNotMatch(paddleCalls[0].url, /preview$/)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan blocks mixed-interval recurring add-on without Paddle update or mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [
+      { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_monthly_addon', billing_cycle: { interval: 'month' } }, quantity: 2 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'UNSUPPORTED_BILLING_ITEMS')
+  assert.equal(paddleCalls.length, 1)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan preserves non-recurring unrelated item safely', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [
+      { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_setup_fee' }, quantity: 1 },
+    ] } } },
+    { payload: { data: { id: 'sub_123' } } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  const patchBody = JSON.parse(paddleCalls[1].options.body)
+  assert.deepEqual(patchBody.items, [
+    { price_id: 'pri_annual', quantity: 1 },
+    { price_id: 'pri_setup_fee', quantity: 1 },
+  ])
+})
+
+test('POST /api/subscriptions/change-plan preserves unrelated Paddle items and quantity', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleResponse({ payload: { data: { id: 'sub_123', items: [
+    { price: { id: 'pri_monthly' }, quantity: 3 },
+    { price: { id: 'pri_addon' }, quantity: 2 },
+  ] } } })
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  const patchBody = JSON.parse(paddleCalls[1].options.body)
+  assert.deepEqual(patchBody.items, [
+    { price_id: 'pri_annual', quantity: 3 },
+    { price_id: 'pri_addon', quantity: 2 },
+  ])
+  assert.equal(patchBody.proration_billing_mode, 'prorated_immediately')
+  assert.equal(patchBody.on_payment_failure, 'prevent_change')
 })
 
 test('POST /api/subscriptions/change-plan rolls back and releases checked-out client on local DB failure', async () => {
@@ -261,7 +605,7 @@ test('POST /api/subscriptions/change-plan rolls back and releases checked-out cl
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 500)
-  assert.deepEqual(res.payload, { error: 'Unable to change plan' })
+  assert.deepEqual(res.payload, { code: 'UNKNOWN', error: 'Unable to change plan' })
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
   assertRollbackSequence(clientCalls)
