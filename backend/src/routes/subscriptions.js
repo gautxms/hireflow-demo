@@ -35,6 +35,7 @@ const ERROR_RESPONSES = {
   PADDLE_SUBSCRIPTION_UPDATE_FAILED: { status: 502, message: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' },
   PLAN_ALREADY_ACTIVE: { status: 400, message: 'You are already on that plan.' },
   PLAN_CHANGE_NOT_ALLOWED: { status: 403, message: 'This plan change is not available for your subscription. Please contact support.' },
+  UNSUPPORTED_BILLING_ITEMS: { status: 409, message: 'Your subscription has recurring add-ons that need support-assisted plan changes. Please contact support so we can update your plan safely.' },
   UNKNOWN: { status: 500, message: 'Unable to change plan' },
 }
 
@@ -148,10 +149,42 @@ function getSubscriptionItems(subscriptionPayload) {
   return subscriptionPayload?.data?.items || subscriptionPayload?.items || []
 }
 
-function buildPlanChangeItems(existingItems, targetPriceId, paddle = resolvePaddleConfig()) {
+function getItemPriceId(item = {}) {
+  return item?.price?.id || item?.price_id || item?.priceId || null
+}
+
+function getItemInterval(item = {}) {
+  return item?.price?.billing_cycle?.interval || item?.price?.billingCycle?.interval || item?.billing_cycle?.interval || null
+}
+
+function isRecurringNonPlanItem(item, paddle = resolvePaddleConfig()) {
+  const priceId = getItemPriceId(item)
+  return Boolean(priceId && getItemInterval(item) && !planFromPriceId(priceId, paddle))
+}
+
+function assertSupportedRecurringItems(existingItems, targetPlan, paddle = resolvePaddleConfig()) {
+  const targetInterval = PLAN_CONFIG[targetPlan]?.interval
+  const unsupportedItems = existingItems.filter((item) => {
+    if (!isRecurringNonPlanItem(item, paddle)) return false
+    const interval = getItemInterval(item)
+    return interval && targetInterval && interval !== targetInterval
+  })
+
+  if (unsupportedItems.length > 0) {
+    throw new BillingError('UNSUPPORTED_BILLING_ITEMS', {
+      recurringAddOnCount: unsupportedItems.length,
+      targetPlan,
+      targetInterval,
+    })
+  }
+}
+
+function buildPlanChangeItems(existingItems, targetPriceId, targetPlan, paddle = resolvePaddleConfig()) {
+  assertSupportedRecurringItems(existingItems, targetPlan, paddle)
+
   let replaced = false
   const items = existingItems.map((item) => {
-    const currentPriceId = item?.price?.id || item?.price_id
+    const currentPriceId = getItemPriceId(item)
     const existingPlan = planFromPriceId(currentPriceId, paddle)
     if (!replaced && existingPlan) {
       replaced = true
@@ -320,7 +353,7 @@ async function loadPlanChangeContext(userId, targetPlan) {
   }
 
   const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`)
-  const items = buildPlanChangeItems(getSubscriptionItems(subscriptionPayload), targetPriceId, paddle)
+  const items = buildPlanChangeItems(getSubscriptionItems(subscriptionPayload), targetPriceId, targetPlan, paddle)
   const isUpgrade = currentPlan === 'monthly' && targetPlan === 'annual'
 
   return {

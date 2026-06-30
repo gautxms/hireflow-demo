@@ -477,6 +477,90 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
 })
 
 
+
+test('POST /api/subscriptions/change-plan-preview blocks mixed-interval recurring add-on without Paddle preview or mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [
+      { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_monthly_addon', billing_cycle: { interval: 'month' } }, quantity: 2 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'UNSUPPORTED_BILLING_ITEMS')
+  assert.match(res.payload.error, /recurring add-ons/i)
+  assert.equal(paddleCalls.length, 1)
+  assert.doesNotMatch(paddleCalls[0].url, /preview$/)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan blocks mixed-interval recurring add-on without Paddle update or mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [
+      { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_monthly_addon', billing_cycle: { interval: 'month' } }, quantity: 2 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'UNSUPPORTED_BILLING_ITEMS')
+  assert.equal(paddleCalls.length, 1)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan preserves non-recurring unrelated item safely', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [
+      { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_setup_fee' }, quantity: 1 },
+    ] } } },
+    { payload: { data: { id: 'sub_123' } } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  const patchBody = JSON.parse(paddleCalls[1].options.body)
+  assert.deepEqual(patchBody.items, [
+    { price_id: 'pri_annual', quantity: 1 },
+    { price_id: 'pri_setup_fee', quantity: 1 },
+  ])
+})
+
 test('POST /api/subscriptions/change-plan preserves unrelated Paddle items and quantity', async () => {
   resetPaddleEnv()
   installDbMock({

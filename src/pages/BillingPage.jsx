@@ -35,6 +35,7 @@ function getSafeBillingMessage(payload, fallback = 'Unable to update plan') {
     PADDLE_SUBSCRIPTION_UPDATE_FAILED: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.',
     PLAN_ALREADY_ACTIVE: 'You are already on that plan.',
     PLAN_CHANGE_NOT_ALLOWED: 'This plan change is not available for your subscription. Please contact support.',
+    UNSUPPORTED_BILLING_ITEMS: 'Your subscription has recurring add-ons that need support-assisted plan changes. Please contact support so we can update your plan safely.',
   }
   return messages[payload?.code] || payload?.error || fallback
 }
