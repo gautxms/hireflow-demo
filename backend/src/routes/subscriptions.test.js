@@ -457,7 +457,10 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
     paddle_subscription_id: 'sub_123',
     current_period_end: '2026-07-01T00:00:00.000Z',
   })
-  const paddleCalls = mockPaddleResponse()
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active' } } },
+  ])
   const { clientCalls, connectCalls } = installClientMock()
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
@@ -599,7 +602,10 @@ test('POST /api/subscriptions/change-plan rolls back and releases checked-out cl
     paddle_subscription_id: 'sub_123',
     current_period_end: '2026-07-01T00:00:00.000Z',
   })
-  mockPaddleResponse()
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active' } } },
+  ])
   const { clientCalls, connectCalls } = installClientMock({ failOn: 'INSERT INTO subscription_change_events' })
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
@@ -697,4 +703,150 @@ test('POST /api/subscriptions/cancel rolls back and releases checked-out client 
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
   assertRollbackSequence(clientCalls)
+})
+
+test('POST /api/subscriptions/change-plan-preview treats single legacy monthly recurring item as base plan', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_legacy_monthly', billing_cycle: { interval: 'month' } }, quantity: 4 }] } } },
+    { payload: { data: { id: 'sub_123', immediate_transaction: { details: { totals: { total: '2500' } } } } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(paddleCalls.length, 2)
+  assert.match(paddleCalls[1].url, /\/subscriptions\/sub_123\/preview$/)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_annual', quantity: 4 }])
+  assert.notEqual(res.payload.code, 'UNSUPPORTED_BILLING_ITEMS')
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan canonical monthly preview still replaces base plan', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123' } } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_annual', quantity: 1 }])
+})
+
+test('POST /api/subscriptions/change-plan recognizes single legacy annual recurring item as base plan for downgrade', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'annual',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_legacy_annual', billing_cycle: { interval: 'year' } }, quantity: 2 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', current_billing_period: { ends_at: '2026-07-01T00:00:00.000Z' } } } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'monthly' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_monthly', quantity: 2 }])
+})
+
+test('POST /api/subscriptions/change-plan-preview blocks legacy monthly base plus true recurring monthly add-on', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_true_addon', billing_cycle: { interval: 'month' } }, quantity: 1 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'UNSUPPORTED_BILLING_ITEMS')
+  assert.equal(paddleCalls.length, 1)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan-preview preserves non-recurring item with legacy monthly base', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_legacy_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
+      { price: { id: 'pri_setup_fee' }, quantity: 1 },
+    ] } } },
+    { payload: { data: { id: 'sub_123' } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [
+    { price_id: 'pri_annual', quantity: 1 },
+    { price_id: 'pri_setup_fee', quantity: 1 },
+  ])
+})
+
+test('POST /api/subscriptions/change-plan-preview blocks past_due Paddle subscription before preview and mutation', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'past_due', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 402)
+  assert.equal(res.payload.code, 'PAYMENT_FAILED_OR_ACTION_REQUIRED')
+  assert.equal(paddleCalls.length, 1)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
 })

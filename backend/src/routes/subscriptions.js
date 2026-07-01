@@ -142,6 +142,8 @@ function planFromPriceId(priceId, paddle = resolvePaddleConfig()) {
   if (!priceId) return null
   if (priceId === paddle.priceIdsByPlan.monthly) return 'monthly'
   if (priceId === paddle.priceIdsByPlan.annual) return 'annual'
+  if (paddle.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
+  if (paddle.legacyPriceIdsByPlan?.annual?.includes(priceId)) return 'annual'
   return null
 }
 
@@ -157,15 +159,46 @@ function getItemInterval(item = {}) {
   return item?.price?.billing_cycle?.interval || item?.price?.billingCycle?.interval || item?.billing_cycle?.interval || null
 }
 
-function isRecurringNonPlanItem(item, paddle = resolvePaddleConfig()) {
-  const priceId = getItemPriceId(item)
-  return Boolean(priceId && getItemInterval(item) && !planFromPriceId(priceId, paddle))
+function isActiveRecurringItem(item = {}) {
+  const status = item.status || item.price?.status || 'active'
+  return getItemInterval(item) && status !== 'deleted' && status !== 'canceled' && status !== 'cancelled'
 }
 
-function assertSupportedRecurringItems(existingItems, targetPlan, paddle = resolvePaddleConfig()) {
+function maskPriceId(priceId = '') {
+  if (!priceId) return null
+  return priceId.length <= 12 ? `${priceId.slice(0, 4)}…${priceId.slice(-3)}` : `${priceId.slice(0, 8)}…${priceId.slice(-4)}`
+}
+
+function findBasePlanItemIndex(existingItems, currentPlan, targetPlan, context = {}, paddle = resolvePaddleConfig()) {
+  const currentInterval = PLAN_CONFIG[currentPlan]?.interval
+  const knownIndex = existingItems.findIndex((item) => planFromPriceId(getItemPriceId(item), paddle) === currentPlan)
+
+  if (knownIndex >= 0) return knownIndex
+
+  const intervalMatches = existingItems
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isActiveRecurringItem(item) && getItemInterval(item) === currentInterval)
+
+  if (intervalMatches.length === 1) {
+    const [{ item, index }] = intervalMatches
+    console.info('[subscriptions.change-plan] Treating unrecognized recurring item as current base plan', {
+      userId: context.userId,
+      paddleSubscriptionId: context.paddleSubscriptionId,
+      currentPlan,
+      targetPlan,
+      itemInterval: getItemInterval(item),
+      priceId: maskPriceId(getItemPriceId(item)),
+    })
+    return index
+  }
+
+  return -1
+}
+
+function assertSupportedRecurringItems(existingItems, basePlanItemIndex, targetPlan) {
   const targetInterval = PLAN_CONFIG[targetPlan]?.interval
-  const unsupportedItems = existingItems.filter((item) => {
-    if (!isRecurringNonPlanItem(item, paddle)) return false
+  const unsupportedItems = existingItems.filter((item, index) => {
+    if (index === basePlanItemIndex || !isActiveRecurringItem(item)) return false
     const interval = getItemInterval(item)
     return interval && targetInterval && interval !== targetInterval
   })
@@ -179,21 +212,22 @@ function assertSupportedRecurringItems(existingItems, targetPlan, paddle = resol
   }
 }
 
-function buildPlanChangeItems(existingItems, targetPriceId, targetPlan, paddle = resolvePaddleConfig()) {
-  assertSupportedRecurringItems(existingItems, targetPlan, paddle)
+function buildPlanChangeItems(existingItems, targetPriceId, targetPlan, currentPlan, context = {}, paddle = resolvePaddleConfig()) {
+  const basePlanItemIndex = findBasePlanItemIndex(existingItems, currentPlan, targetPlan, context, paddle)
 
-  let replaced = false
-  const items = existingItems.map((item) => {
+  if (basePlanItemIndex < 0) {
+    throw new BillingError('UNSUPPORTED_BILLING_ITEMS', { reason: 'base_plan_item_not_found', targetPlan, currentPlan })
+  }
+
+  assertSupportedRecurringItems(existingItems, basePlanItemIndex, targetPlan)
+
+  return existingItems.map((item, index) => {
     const currentPriceId = getItemPriceId(item)
-    const existingPlan = planFromPriceId(currentPriceId, paddle)
-    if (!replaced && existingPlan) {
-      replaced = true
+    if (index === basePlanItemIndex) {
       return { price_id: targetPriceId, quantity: item.quantity || 1 }
     }
     return { price_id: currentPriceId, quantity: item.quantity || 1 }
   }).filter((item) => item.price_id)
-
-  return replaced ? items : [{ price_id: targetPriceId, quantity: 1 }, ...items]
 }
 
 function extractBillingDates(paddlePayload = {}) {
@@ -353,7 +387,16 @@ async function loadPlanChangeContext(userId, targetPlan) {
   }
 
   const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`)
-  const items = buildPlanChangeItems(getSubscriptionItems(subscriptionPayload), targetPriceId, targetPlan, paddle)
+  const subscriptionStatus = subscriptionPayload?.data?.status || subscriptionPayload?.status || null
+
+  if (subscriptionStatus === 'past_due') {
+    throw new BillingError('PAYMENT_FAILED_OR_ACTION_REQUIRED', { reason: 'paddle_subscription_past_due' })
+  }
+
+  const items = buildPlanChangeItems(getSubscriptionItems(subscriptionPayload), targetPriceId, targetPlan, currentPlan, {
+    userId,
+    paddleSubscriptionId: user.paddle_subscription_id,
+  }, paddle)
   const isUpgrade = currentPlan === 'monthly' && targetPlan === 'annual'
 
   return {

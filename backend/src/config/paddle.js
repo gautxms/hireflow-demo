@@ -10,6 +10,11 @@ function firstDefined(...values) {
   return values.find((value) => typeof value === 'string' && value.trim().length > 0)
 }
 
+function parseCommaSeparatedIds(value) {
+  if (typeof value !== 'string') return []
+  return value.split(',').map((item) => item.trim()).filter(Boolean)
+}
+
 export function resolvePaddleConfig(env = process.env) {
   const environment = normalizeEnvironment(env.PADDLE_ENVIRONMENT)
   const isSandbox = environment === 'sandbox'
@@ -38,6 +43,15 @@ export function resolvePaddleConfig(env = process.env) {
     priceIdsByPlan['test-monthly'] = firstDefined(env.PADDLE_TEST_MONTHLY_PRICE_ID)
   }
 
+  const legacyPriceIdsByPlan = {
+    monthly: parseCommaSeparatedIds(firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS : env.PADDLE_PRODUCTION_MONTHLY_LEGACY_PRICE_IDS,
+    )),
+    annual: parseCommaSeparatedIds(firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_ANNUAL_LEGACY_PRICE_IDS : env.PADDLE_PRODUCTION_ANNUAL_LEGACY_PRICE_IDS,
+    )),
+  }
+
   return {
     environment,
     apiBaseUrl,
@@ -55,6 +69,7 @@ export function resolvePaddleConfig(env = process.env) {
       isProduction ? env.PADDLE_WEBHOOK_SECRET : undefined,
     ),
     priceIdsByPlan,
+    legacyPriceIdsByPlan,
     testCheckout: {
       enabled: isTestCheckoutEnabled,
       key: firstDefined(env.PADDLE_TEST_CHECKOUT_KEY),

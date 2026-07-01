@@ -14,6 +14,7 @@ function formatDate(value) {
 }
 
 function formatPreviewAmount(value, currency = 'USD') {
+  if (value === null || value === undefined || value === '') return '—'
   const amount = Number(value)
   if (!Number.isFinite(amount)) return '—'
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount / 100)
