@@ -191,6 +191,12 @@
   color: var(--hf-text-3);
 }
 
+.billing-page__cost-helper {
+  margin: -8px 0 0;
+  font: 500 12px/1.5 var(--hf-font-ui, 'DM Sans', sans-serif);
+  color: var(--hf-text-4);
+}
+
 .billing-page__meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
