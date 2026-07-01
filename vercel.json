@@ -19,6 +19,22 @@
       "destination": "/index.html"
     },
     {
+      "source": "/(dashboard|uploader|create-analysis|reports|shortlists|jobs|results)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/dashboard/legacy",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/account/(dashboard|results|analyses|candidates|shortlists|job-descriptions|billing|settings|reports)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cookie-policy",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(billing|checkout|account|settings|job-descriptions)",
       "destination": "/index.html"
     },
