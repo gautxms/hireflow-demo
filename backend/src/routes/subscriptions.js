@@ -317,16 +317,32 @@ function isNumericMinorUnit(value) {
   return typeof value === 'string' ? /^-?\d+$/.test(value.trim()) : Number.isInteger(value)
 }
 
-function formatMinorUnits(value, currencyCode) {
-  if (!isNumericMinorUnit(value) || !currencyCode) return null
-  const amount = Number(value)
-  if (!Number.isSafeInteger(amount)) return null
+function getCurrencyFractionDigits(currencyCode) {
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currencyCode,
-      minimumFractionDigits: 2,
-    }).format(amount / 100)
+    }).resolvedOptions().maximumFractionDigits
+  } catch {
+    return null
+  }
+}
+
+function formatMinorUnits(value, currencyCode) {
+  if (!isNumericMinorUnit(value) || !currencyCode) return null
+  const amount = Number(value)
+  if (!Number.isSafeInteger(amount)) return null
+
+  const fractionDigits = getCurrencyFractionDigits(currencyCode)
+  if (!Number.isInteger(fractionDigits) || fractionDigits < 0) return null
+
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(amount / (10 ** fractionDigits))
   } catch {
     return null
   }
