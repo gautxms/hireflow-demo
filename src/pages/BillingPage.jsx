@@ -13,17 +13,6 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : '—'
 }
 
-function formatPreviewAmount(value, currency = 'USD') {
-  if (value === null || value === undefined || value === '') return '—'
-  const amount = Number(value)
-  if (!Number.isFinite(amount)) return '—'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount / 100)
-}
-
-function getPreviewTotal(transaction) {
-  return transaction?.details?.totals?.total || transaction?.totals?.total || transaction?.items?.[0]?.totals?.total || null
-}
-
 function isRetryablePreviewError(code) {
   return code === 'PADDLE_SUBSCRIPTION_UPDATE_FAILED' || code === 'UNKNOWN'
 }
@@ -146,6 +135,8 @@ export default function BillingPage() {
 
   const subscriptionState = resolveSubscriptionState({ subscription })
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
+  const hasVerifiedPreviewAmounts = planPreview?.hasVerifiedPreviewAmounts === true
+  const canConfirmPlanChange = !isChangingPlan && !isLoadingPreview && !previewError && hasVerifiedPreviewAmounts
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -362,8 +353,8 @@ export default function BillingPage() {
           <div className="billing-modal__summary">
             <p><span>Current plan</span>{subscription?.planLabel || subscriptionState.planLabel}</p>
             <p><span>New plan</span>{PLAN_CONFIG_LABELS[targetPlan] || targetPlan}</p>
-            <p><span>Immediate charge / credit</span>{isLoadingPreview ? 'Loading…' : formatPreviewAmount(getPreviewTotal(planPreview?.immediateTransaction), planPreview?.immediateTransaction?.currency_code || 'USD')}</p>
-            <p><span>Next billing</span>{isLoadingPreview ? 'Loading…' : `${formatPreviewAmount(getPreviewTotal(planPreview?.nextTransaction), planPreview?.nextTransaction?.currency_code || 'USD')} on ${formatDate(planPreview?.nextTransaction?.billing_period?.starts_at || subscription?.nextBillingDate)}`}</p>
+            <p><span>Immediate charge / credit</span>{isLoadingPreview ? 'Loading…' : (hasVerifiedPreviewAmounts ? planPreview?.immediateAmountFormatted : 'Unable to verify billing amount.')}</p>
+            <p><span>Next billing</span>{isLoadingPreview ? 'Loading…' : (hasVerifiedPreviewAmounts ? `${planPreview?.nextBillingAmountFormatted} on ${formatDate(planPreview?.nextBillingDate || subscription?.nextBillingDate)}` : 'Unable to verify billing amount.')}</p>
             <p><span>Payment method</span>{subscription?.paymentMethod || planPreview?.paymentMethod || 'Card on file'}</p>
           </div>
           <p className="billing-modal__muted">
@@ -382,7 +373,7 @@ export default function BillingPage() {
           {actionFeedback.type === 'error' && actionFeedback.message ? <p className="billing-page__feedback billing-page__feedback--error" role="alert">{actionFeedback.message}</p> : null}
           <div className="billing-modal__actions">
             <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPlanModalOpen(false)} disabled={isChangingPlan}>Close</button>
-            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan} disabled={isChangingPlan || isLoadingPreview || Boolean(previewError)}>{isChangingPlan ? 'Updating plan…' : 'Confirm'}</button>
+            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan} disabled={!canConfirmPlanChange}>{isChangingPlan ? 'Updating plan…' : 'Confirm'}</button>
           </div>
         </Modal>
       ) : null}
