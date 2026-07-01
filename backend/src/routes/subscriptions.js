@@ -143,6 +143,7 @@ function planFromPriceId(priceId, paddle = resolvePaddleConfig()) {
   if (priceId === paddle.priceIdsByPlan.monthly) return 'monthly'
   if (priceId === paddle.priceIdsByPlan.annual) return 'annual'
   if (priceId === paddle.testUpgrade?.annualPriceId) return 'annual'
+  if (priceId === paddle.testUpgrade?.monthlyPriceId) return 'monthly'
   if (paddle.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
   if (paddle.legacyPriceIdsByPlan?.annual?.includes(priceId)) return 'annual'
   return null
@@ -487,19 +488,23 @@ router.get('/history', requireAuth, async (req, res) => {
 })
 
 function resolveTargetPriceId(targetPlan, upgradeTestKey, paddle, context = {}) {
-  const shouldUseTestAnnualPrice = targetPlan === 'annual'
-    && paddle.testUpgrade?.enabled === true
+  const testPriceIdByPlan = {
+    annual: paddle.testUpgrade?.annualPriceId,
+    monthly: paddle.testUpgrade?.monthlyPriceId,
+  }
+  const testPriceId = testPriceIdByPlan[targetPlan]
+  const shouldUseTestPrice = paddle.testUpgrade?.enabled === true
     && Boolean(paddle.testUpgrade?.key)
     && upgradeTestKey === paddle.testUpgrade.key
-    && Boolean(paddle.testUpgrade?.annualPriceId)
+    && Boolean(testPriceId)
 
-  if (shouldUseTestAnnualPrice) {
-    console.info('[subscriptions.change-plan] Using gated test annual price override', {
+  if (shouldUseTestPrice) {
+    console.info('[subscriptions.change-plan] Using gated test price override', {
       userId: context.userId,
       targetPlan,
-      priceId: maskPriceId(paddle.testUpgrade.annualPriceId),
+      priceId: maskPriceId(testPriceId),
     })
-    return paddle.testUpgrade.annualPriceId
+    return testPriceId
   }
 
   return targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
