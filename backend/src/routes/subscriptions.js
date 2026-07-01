@@ -290,7 +290,8 @@ function previewDetails(payload = {}) {
   const immediate = extractPreviewTransactionAmount(immediateTransaction)
   const next = extractPreviewTransactionAmount(nextTransaction)
   const previewCurrencyCode = immediate.currencyCode || next.currencyCode || null
-  const hasVerifiedPreviewAmounts = immediate.isVerified && next.isVerified
+  const hasImmediateTransaction = Boolean(immediateTransaction)
+  const hasVerifiedPreviewAmounts = next.isVerified && (!hasImmediateTransaction || immediate.isVerified)
 
   return {
     immediateAmountFormatted: immediate.isVerified ? immediate.amountFormatted : null,
