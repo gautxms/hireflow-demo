@@ -10,6 +10,11 @@ process.env.PADDLE_ENVIRONMENT = 'sandbox'
 process.env.PADDLE_SANDBOX_WEBHOOK_SECRET = WEBHOOK_SECRET
 process.env.PADDLE_SANDBOX_MONTHLY_PRICE_ID = 'pri_monthly'
 process.env.PADDLE_SANDBOX_ANNUAL_PRICE_ID = 'pri_annual'
+process.env.PADDLE_ENABLE_TEST_UPGRADE = 'true'
+process.env.PADDLE_TEST_UPGRADE_KEY = 'upgrade-secret'
+process.env.PADDLE_TEST_ANNUAL_PRICE_ID = 'pri_test_annual'
+process.env.PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS = 'pri_legacy_monthly'
+process.env.PADDLE_SANDBOX_ANNUAL_LEGACY_PRICE_IDS = 'pri_legacy_annual'
 
 function signBody(rawBody, secret = WEBHOOK_SECRET, timestamp = Math.floor(Date.now() / 1000)) {
   const hmac = crypto.createHmac('sha256', secret).update(`${timestamp}:${rawBody}`, 'utf8').digest('hex')
@@ -156,6 +161,23 @@ function userUpdateCalls(calls) {
   return calls.filter(({ sql }) => /UPDATE users/.test(sql))
 }
 
+
+test('POST /api/paddle/webhook derives monthly from subscription.updated canonical monthly item', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_monthly_item',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      custom_data: { userId: 42, plan: 'annual', paddleEnvironment: 'sandbox' },
+      items: [{ price: { id: 'pri_monthly' }, quantity: 1, totals: { total: '9900' } }],
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+
+  assert.equal(response.status, 200)
+  assert.equal(userUpdateCalls(calls)[0].params[4], 'monthly')
+})
+
 test('POST /api/paddle/webhook derives annual from subscription.updated active item', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({
     event_id: 'evt_subscription_updated_annual_item',
@@ -170,6 +192,76 @@ test('POST /api/paddle/webhook derives annual from subscription.updated active i
 
   assert.equal(response.status, 200)
   assert.equal(userUpdateCalls(calls)[0].params[4], 'annual')
+})
+
+
+test('POST /api/paddle/webhook derives annual from subscription.updated test annual item', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_test_annual_item',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      items: [{ price: { id: 'pri_test_annual' }, quantity: 1, totals: { total: '1200' } }],
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+
+  assert.equal(response.status, 200)
+  assert.equal(userUpdateCalls(calls)[0].params[4], 'annual')
+})
+
+test('POST /api/paddle/webhook derives annual from transaction.completed test annual item', async (t) => {
+  const payload = {
+    event_id: 'evt_transaction_completed_test_annual_item',
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_test_annual_123',
+      subscription_id: 'sub_test_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      billing_period: { ends_at: '2027-07-24T00:00:00.000Z' },
+      items: [
+        { price: { id: 'pri_monthly' }, quantity: -1, totals: { total: '-4900' }, description: 'Credit for removed monthly plan' },
+        { price: { id: 'pri_test_annual' }, quantity: 1, totals: { total: '1200' }, description: 'Test annual plan' },
+      ],
+    },
+  }
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+
+  assert.equal(response.status, 200)
+  assert.equal(userUpdateCalls(calls)[0].params[3], 'annual')
+})
+
+test('POST /api/paddle/webhook maps legacy monthly and annual item aliases', async (t) => {
+  const monthlyPayload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_legacy_monthly_item',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      custom_data: { userId: 42, plan: 'annual', paddleEnvironment: 'sandbox' },
+      items: [{ price: { id: 'pri_legacy_monthly' }, quantity: 1, totals: { total: '9900' } }],
+    },
+  })
+
+  const monthlyResult = await postValidWebhookWithQueryMock(t, monthlyPayload)
+
+  assert.equal(monthlyResult.response.status, 200)
+  assert.equal(userUpdateCalls(monthlyResult.calls)[0].params[4], 'monthly')
+
+  const annualPayload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_legacy_annual_item',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      items: [{ price: { id: 'pri_legacy_annual' }, quantity: 1, totals: { total: '99900' } }],
+    },
+  })
+
+  const annualResult = await postValidWebhookWithQueryMock(t, annualPayload)
+
+  assert.equal(annualResult.response.status, 200)
+  assert.equal(userUpdateCalls(annualResult.calls)[0].params[4], 'annual')
 })
 
 test('POST /api/paddle/webhook ignores old monthly credit and derives annual transaction item', async (t) => {
