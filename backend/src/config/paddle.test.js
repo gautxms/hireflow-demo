@@ -103,5 +103,6 @@ test('resolvePaddleConfig exposes hidden test upgrade configuration independentl
     enabled: true,
     key: 'upgrade-secret',
     annualPriceId: 'pri_test_annual',
+    monthlyPriceId: 'pri_test_monthly',
   })
 })

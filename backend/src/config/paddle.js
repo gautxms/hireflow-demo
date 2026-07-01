@@ -79,6 +79,7 @@ export function resolvePaddleConfig(env = process.env) {
       enabled: isTestUpgradeEnabled,
       key: firstDefined(env.PADDLE_TEST_UPGRADE_KEY),
       annualPriceId: firstDefined(env.PADDLE_TEST_ANNUAL_PRICE_ID),
+      monthlyPriceId: firstDefined(env.PADDLE_TEST_MONTHLY_PRICE_ID),
     },
   }
 }
