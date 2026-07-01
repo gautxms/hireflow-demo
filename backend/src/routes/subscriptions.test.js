@@ -190,8 +190,8 @@ test('POST /api/subscriptions/change-plan-preview returns Paddle preview without
   const previewPayload = {
     data: {
       id: 'sub_123',
-      immediate_transaction: { id: 'txn_now', details: { totals: { total: '2500' } } },
-      next_transaction: { id: 'txn_next', details: { totals: { total: '99900' } } },
+      immediate_transaction: { id: 'txn_now', details: { totals: { total: '2500', currency_code: 'USD' } } },
+      next_transaction: { id: 'txn_next', details: { totals: { total: '99900', currency_code: 'USD' } }, billing_period: { starts_at: '2026-07-02T00:00:00.000Z' } },
     },
   }
   const paddleCalls = mockPaddleSequence([
@@ -205,12 +205,105 @@ test('POST /api/subscriptions/change-plan-preview returns Paddle preview without
   assert.equal(res.payload.status, 'ok')
   assert.equal(res.payload.currentPlan, 'monthly')
   assert.equal(res.payload.targetPlan, 'annual')
-  assert.deepEqual(res.payload.immediateTransaction, previewPayload.data.immediate_transaction)
-  assert.deepEqual(res.payload.nextTransaction, previewPayload.data.next_transaction)
+  assert.equal(res.payload.immediateAmountFormatted, '$25.00')
+  assert.equal(res.payload.nextBillingAmountFormatted, '$999.00')
+  assert.equal(res.payload.previewCurrencyCode, 'USD')
+  assert.equal(res.payload.hasVerifiedPreviewAmounts, true)
+  assert.equal(res.payload.immediateTransaction, undefined)
+  assert.equal(res.payload.nextTransaction, undefined)
   assert.equal(paddleCalls.length, 2)
   assert.match(paddleCalls[1].url, /\/subscriptions\/sub_123\/preview$/)
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
+})
+
+async function assertPreviewNormalization({ immediateTransaction, nextTransaction, expected }) {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', immediate_transaction: immediateTransaction, next_transaction: nextTransaction } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  for (const [key, value] of Object.entries(expected)) {
+    assert.equal(res.payload[key], value)
+  }
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+}
+
+test('POST /api/subscriptions/change-plan-preview formats INR preview as INR, not USD', async () => {
+  await assertPreviewNormalization({
+    immediateTransaction: { details: { totals: { total: '7192126', currency_code: 'INR' } } },
+    nextTransaction: { details: { totals: { total: '7200000', currency_code: 'INR' } } },
+    expected: {
+      immediateAmountFormatted: '₹71,921.26',
+      nextBillingAmountFormatted: '₹72,000.00',
+      previewCurrencyCode: 'INR',
+      hasVerifiedPreviewAmounts: true,
+    },
+  })
+})
+
+test('POST /api/subscriptions/change-plan-preview prefers Paddle formatted totals', async () => {
+  await assertPreviewNormalization({
+    immediateTransaction: { details: { totals: { total: '2500', currency_code: 'USD' }, formatted_totals: { total: 'US$25.00 from Paddle' } } },
+    nextTransaction: { details: { totals: { total: '99900', currency_code: 'USD' }, formatted_totals: { total: 'US$999.00 from Paddle' } } },
+    expected: {
+      immediateAmountFormatted: 'US$25.00 from Paddle',
+      nextBillingAmountFormatted: 'US$999.00 from Paddle',
+      hasVerifiedPreviewAmounts: true,
+    },
+  })
+})
+
+test('POST /api/subscriptions/change-plan-preview marks preview unverified when currency is missing', async () => {
+  await assertPreviewNormalization({
+    immediateTransaction: { details: { totals: { total: '2500' } } },
+    nextTransaction: { details: { totals: { total: '99900' } } },
+    expected: {
+      immediateAmountFormatted: null,
+      nextBillingAmountFormatted: null,
+      previewCurrencyCode: null,
+      hasVerifiedPreviewAmounts: false,
+    },
+  })
+})
+
+test('POST /api/subscriptions/change-plan-preview marks preview unverified when total is missing', async () => {
+  await assertPreviewNormalization({
+    immediateTransaction: { details: { totals: { currency_code: 'USD' } } },
+    nextTransaction: { details: { totals: { currency_code: 'USD' } } },
+    expected: {
+      immediateAmountFormatted: null,
+      nextBillingAmountFormatted: null,
+      previewCurrencyCode: 'USD',
+      hasVerifiedPreviewAmounts: false,
+    },
+  })
+})
+
+test('POST /api/subscriptions/change-plan-preview displays large valid Paddle amounts with detected currency', async () => {
+  await assertPreviewNormalization({
+    immediateTransaction: { details: { totals: { total: '7192126', currency_code: 'USD' } } },
+    nextTransaction: { details: { totals: { total: '7200000', currency_code: 'USD' } } },
+    expected: {
+      immediateAmountFormatted: '$71,921.26',
+      nextBillingAmountFormatted: '$72,000.00',
+      previewCurrencyCode: 'USD',
+      hasVerifiedPreviewAmounts: true,
+    },
+  })
 })
 
 test('POST /api/subscriptions/change-plan-preview rejects missing Paddle subscription ID without Paddle or mutation', async () => {

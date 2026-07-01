@@ -240,13 +240,64 @@ function extractBillingDates(paddlePayload = {}) {
   }
 }
 
+
+function firstPresent(...values) {
+  return values.find((value) => value !== null && value !== undefined && value !== '') ?? null
+}
+
+function isNumericMinorUnit(value) {
+  return typeof value === 'string' ? /^-?\d+$/.test(value.trim()) : Number.isInteger(value)
+}
+
+function formatMinorUnits(value, currencyCode) {
+  if (!isNumericMinorUnit(value) || !currencyCode) return null
+  const amount = Number(value)
+  if (!Number.isSafeInteger(amount)) return null
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+    }).format(amount / 100)
+  } catch {
+    return null
+  }
+}
+
+function extractPreviewTransactionAmount(transaction = {}) {
+  const details = transaction?.details || {}
+  const totals = firstPresent(details?.totals, transaction?.totals, transaction?.items?.[0]?.totals) || {}
+  const formattedTotals = firstPresent(details?.formatted_totals, details?.formattedTotals, transaction?.formatted_totals, transaction?.formattedTotals) || {}
+  const total = firstPresent(totals?.total, details?.total, transaction?.total)
+  const currencyCode = firstPresent(totals?.currency_code, totals?.currencyCode, details?.currency_code, details?.currencyCode, transaction?.currency_code, transaction?.currencyCode)
+  const paddleFormattedTotal = firstPresent(formattedTotals?.total, details?.formatted_total, details?.formattedTotal, transaction?.formatted_total, transaction?.formattedTotal)
+  const fallbackFormattedTotal = formatMinorUnits(total, currencyCode)
+
+  return {
+    rawTotal: total === null ? null : String(total),
+    currencyCode,
+    amountFormatted: paddleFormattedTotal || fallbackFormattedTotal,
+    billingPeriodStart: firstPresent(transaction?.billing_period?.starts_at, transaction?.billingPeriod?.startsAt, details?.billing_period?.starts_at),
+    billingPeriodEnd: firstPresent(transaction?.billing_period?.ends_at, transaction?.billingPeriod?.endsAt, details?.billing_period?.ends_at),
+    isVerified: Boolean(isNumericMinorUnit(total) && currencyCode && (paddleFormattedTotal || fallbackFormattedTotal)),
+  }
+}
+
 function previewDetails(payload = {}) {
   const data = payload.data || payload
+  const immediateTransaction = data.immediate_transaction || data.immediateTransaction || null
+  const nextTransaction = data.next_transaction || data.nextTransaction || null
+  const immediate = extractPreviewTransactionAmount(immediateTransaction)
+  const next = extractPreviewTransactionAmount(nextTransaction)
+  const previewCurrencyCode = immediate.currencyCode || next.currencyCode || null
+  const hasVerifiedPreviewAmounts = immediate.isVerified && next.isVerified
+
   return {
-    immediateTransaction: data.immediate_transaction || data.immediateTransaction || null,
-    nextTransaction: data.next_transaction || data.nextTransaction || null,
-    recurringTransactionDetails: data.recurring_transaction_details || data.recurringTransactionDetails || null,
-    updateSummary: data.update_summary || data.updateSummary || null,
+    immediateAmountFormatted: immediate.isVerified ? immediate.amountFormatted : null,
+    nextBillingAmountFormatted: next.isVerified ? next.amountFormatted : null,
+    nextBillingDate: next.billingPeriodStart || data.next_billed_at || data.nextBilledAt || null,
+    previewCurrencyCode,
+    hasVerifiedPreviewAmounts,
   }
 }
 
