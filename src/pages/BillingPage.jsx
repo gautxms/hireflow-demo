@@ -136,6 +136,7 @@ export default function BillingPage() {
   const subscriptionState = resolveSubscriptionState({ subscription })
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
   const hasVerifiedPreviewAmounts = planPreview?.hasVerifiedPreviewAmounts === true
+  const immediatePreviewLabel = planPreview?.immediateAmountFormatted || 'No immediate charge / credit'
   const canConfirmPlanChange = !isChangingPlan && !isLoadingPreview && !previewError && hasVerifiedPreviewAmounts
 
   const switchingLabel = useMemo(() => {
@@ -353,7 +354,7 @@ export default function BillingPage() {
           <div className="billing-modal__summary">
             <p><span>Current plan</span>{subscription?.planLabel || subscriptionState.planLabel}</p>
             <p><span>New plan</span>{PLAN_CONFIG_LABELS[targetPlan] || targetPlan}</p>
-            <p><span>Immediate charge / credit</span>{isLoadingPreview ? 'Loading…' : (hasVerifiedPreviewAmounts ? planPreview?.immediateAmountFormatted : 'Unable to verify billing amount.')}</p>
+            <p><span>Immediate charge / credit</span>{isLoadingPreview ? 'Loading…' : (hasVerifiedPreviewAmounts ? immediatePreviewLabel : 'Unable to verify billing amount.')}</p>
             <p><span>Next billing</span>{isLoadingPreview ? 'Loading…' : (hasVerifiedPreviewAmounts ? `${planPreview?.nextBillingAmountFormatted} on ${formatDate(planPreview?.nextBillingDate || subscription?.nextBillingDate)}` : 'Unable to verify billing amount.')}</p>
             <p><span>Payment method</span>{subscription?.paymentMethod || planPreview?.paymentMethod || 'Card on file'}</p>
           </div>

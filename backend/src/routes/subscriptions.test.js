@@ -267,6 +267,48 @@ test('POST /api/subscriptions/change-plan-preview prefers Paddle formatted total
   })
 })
 
+test('POST /api/subscriptions/change-plan-preview verifies scheduled downgrades without immediate transaction', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'annual',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2027-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [{ price: { id: 'pri_annual' }, quantity: 1 }] } } },
+    {
+      payload: {
+        data: {
+          id: 'sub_123',
+          immediate_transaction: null,
+          next_transaction: {
+            id: 'txn_next',
+            details: { totals: { total: '9900', currency_code: 'USD' } },
+            billing_period: { starts_at: '2027-07-01T00:00:00.000Z' },
+          },
+        },
+      },
+    },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'monthly' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.currentPlan, 'annual')
+  assert.equal(res.payload.targetPlan, 'monthly')
+  assert.equal(res.payload.immediateAmountFormatted, null)
+  assert.equal(res.payload.nextBillingAmountFormatted, '$99.00')
+  assert.equal(res.payload.nextBillingDate, '2027-07-01T00:00:00.000Z')
+  assert.equal(res.payload.previewCurrencyCode, 'USD')
+  assert.equal(res.payload.hasVerifiedPreviewAmounts, true)
+  assert.equal(JSON.parse(paddleCalls[1].options.body).proration_billing_mode, 'prorated_next_billing_period')
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
 test('POST /api/subscriptions/change-plan-preview marks preview unverified when currency is missing', async () => {
   await assertPreviewNormalization({
     immediateTransaction: { details: { totals: { total: '2500' } } },
