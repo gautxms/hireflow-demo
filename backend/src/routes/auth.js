@@ -389,7 +389,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
 
     logAuthDebug('[AUTH] User found for login')
     const isValidPassword = verifyPassword(password, user.password_hash)
-    logAuthDebug('[AUTH] Password verification completed', { valid: isValidPassword })
+    logAuthDebug('[AUTH] Password verification completed')
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' })
