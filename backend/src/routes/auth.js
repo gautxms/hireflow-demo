@@ -28,6 +28,26 @@ import { requireAuth } from '../middleware/auth.js'
 import { hashPassword, verifyPassword } from '../services/passwordHash.js'
 
 const router = Router()
+
+const shouldLogAuthDebug = process.env.NODE_ENV !== 'production' || process.env.AUTH_DEBUG_LOGS === 'true'
+
+function logAuthDebug(message, metadata) {
+  if (shouldLogAuthDebug) {
+    console.debug(message, metadata)
+  }
+}
+
+function getEmailDomain(email) {
+  return typeof email === 'string' ? email.split('@')[1]?.toLowerCase() || 'unknown' : 'unknown'
+}
+
+function sanitizeAuthError(error) {
+  return {
+    errorName: error?.name || 'UNKNOWN_ERROR',
+    errorCode: error?.code || undefined,
+  }
+}
+
 const resendVerificationAttemptsByEmail = new Map()
 const ADMIN_SETUP_TOKEN_TTL_MS = 10 * 60 * 1000
 const TOTP_PERIOD_SECONDS = 30
@@ -127,7 +147,7 @@ function recordResendAttempt(email, now = Date.now()) {
 }
 
 router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, res) => {
-  console.log('[AUTH] Signup route called')
+  logAuthDebug('[AUTH] Signup route called')
   const { email, password, company = '', phone = '' } = req.body
 
   const normalizedEmail = email.trim().toLowerCase()
@@ -136,8 +156,8 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
   const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
   try {
-    console.log('[AUTH] Signup attempt for:', normalizedEmail)
-    console.log('[AUTH] About to hash password and insert user into database')
+    logAuthDebug('[AUTH] Signup attempt', { emailDomain: getEmailDomain(normalizedEmail) })
+    logAuthDebug('[AUTH] About to hash password and insert user into database')
     const passwordHash = hashPassword(password)
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, company, phone, email_verification_token, email_verification_expires_at)
@@ -145,10 +165,10 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
        RETURNING id, email, company, phone, created_at`,
       [normalizedEmail, passwordHash, company, phone, verificationTokenHash, verificationExpiresAt],
     )
-    console.log('[AUTH] Insert query completed')
+    logAuthDebug('[AUTH] Insert query completed')
 
     const user = result.rows[0]
-    console.log('[AUTH] User created with id:', user?.id)
+    logAuthDebug('[AUTH] User created')
     const token = signToken({ ...user, subscription_status: 'trialing' })
     setAuthCookie(res, token)
 
@@ -162,29 +182,28 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
 
       if (!emailSent) {
         console.error('[AUTH] Verification email send failed', {
-          userId: user.id,
-          emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+          hasUser: true,
+          emailDomain: getEmailDomain(user.email),
         })
       }
     } catch (mailError) {
       console.error('[AUTH] Verification email send failed', {
-        userId: user.id,
-        emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+        hasUser: true,
+        emailDomain: getEmailDomain(user.email),
         errorName: mailError?.name || 'UNKNOWN_ERROR',
-        errorMessage: mailError?.message || 'Unknown verification email error',
       })
     }
 
     try {
-      console.log('[AUTH] About to track event for user:', user.id)
+      logAuthDebug('[AUTH] About to track signup event')
       await trackEvent({
         userId: user.id,
         eventType: 'signup',
         metadata: { source: 'auth.signup' },
       })
-      console.log('[AUTH] Event tracked successfully')
+      logAuthDebug('[AUTH] Signup event tracked successfully')
     } catch (trackError) {
-      console.error('[AUTH] Failed to track event:', trackError)
+      console.error('[AUTH] Failed to track signup event:', sanitizeAuthError(trackError))
     }
 
     try {
@@ -195,7 +214,7 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
         createdAt: user.created_at,
       })
     } catch (webhookError) {
-      console.error('[AUTH] Failed to send user.created webhook:', webhookError)
+      console.error('[AUTH] Failed to send user.created webhook:', sanitizeAuthError(webhookError))
     }
 
     return res.status(201).json({
@@ -211,7 +230,7 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
       },
     })
   } catch (error) {
-    console.error('[AUTH] Signup error:', error.message, error.code)
+    console.error('[AUTH] Signup error:', sanitizeAuthError(error))
     if (error.code === '23505') {
       return res.status(409).json({ error: 'Email already exists' })
     }
@@ -269,7 +288,7 @@ router.post('/resend-email-verification', signupLimiter, async (req, res) => {
 
   if (resendWindow.blocked) {
     console.info('[AUTH] Verification email resend blocked', {
-      email: normalizedEmail,
+      emailDomain: getEmailDomain(normalizedEmail),
       retryAfterSeconds: resendWindow.retryAfterSeconds,
       reason: resendWindow.reason,
     })
@@ -294,7 +313,7 @@ router.post('/resend-email-verification', signupLimiter, async (req, res) => {
 
     if (!user || user.email_verified) {
       console.info('[AUTH] Verification email resend attempted for non-pending account', {
-        email: normalizedEmail,
+        emailDomain: getEmailDomain(normalizedEmail),
       })
 
       return res.json({
@@ -328,15 +347,15 @@ router.post('/resend-email-verification', signupLimiter, async (req, res) => {
 
     if (!emailSent) {
       console.error('[AUTH] Verification email send failed', {
-        userId: user.id,
-        emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+        hasUser: true,
+        emailDomain: getEmailDomain(user.email),
         source: 'auth.resend-email-verification',
       })
     }
 
     console.info('[AUTH] Verification email resent', {
-      userId: user.id,
-      emailDomain: user.email.split('@')[1]?.toLowerCase() || 'unknown',
+      hasUser: true,
+      emailDomain: getEmailDomain(user.email),
       emailSent,
     })
 
@@ -345,7 +364,7 @@ router.post('/resend-email-verification', signupLimiter, async (req, res) => {
       retryAfterSeconds: 60,
     })
   } catch (error) {
-    console.error('[AUTH] Failed to resend verification email:', error)
+    console.error('[AUTH] Failed to resend verification email:', sanitizeAuthError(error))
     return res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -356,7 +375,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
   const normalizedEmail = email.trim().toLowerCase()
 
   try {
-    console.log('[AUTH] Login attempt for:', normalizedEmail)
+    logAuthDebug('[AUTH] Login attempt', { emailDomain: getEmailDomain(normalizedEmail) })
     const result = await pool.query(
       'SELECT id, email, company, phone, password_hash, created_at, subscription_status, deleted_at, deletion_scheduled_for, email_verified FROM users WHERE email = $1',
       [normalizedEmail],
@@ -368,9 +387,9 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    console.log('[AUTH] User found, password_hash format:', user.password_hash?.substring(0, 20))
+    logAuthDebug('[AUTH] User found for login')
     const isValidPassword = verifyPassword(password, user.password_hash)
-    console.log('[AUTH] Password valid:', isValidPassword)
+    logAuthDebug('[AUTH] Password verification completed', { valid: isValidPassword })
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' })
@@ -404,7 +423,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
       },
     })
   } catch (error) {
-    console.error('[AUTH] Login error:', error.message)
+    console.error('[AUTH] Login error:', sanitizeAuthError(error))
     return res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
@@ -428,7 +447,7 @@ router.get('/me', requireAuth, async (req, res) => {
 
     return res.json(user)
   } catch (error) {
-    console.error('[AUTH] Failed to fetch current user:', error)
+    console.error('[AUTH] Failed to fetch current user:', sanitizeAuthError(error))
     return res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -555,7 +574,7 @@ router.post('/admin/login', loginLimiter, async (req, res) => {
       newIpDetected: Boolean(previousLoginIp && previousLoginIp !== String(req.ip || '').replace('::ffff:', '')),
     })
   } catch (error) {
-    console.error('[AUTH] Admin login error:', error)
+    console.error('[AUTH] Admin login error:', sanitizeAuthError(error))
     return res.status(500).json({ error: 'Internal server error' })
   }
 })
