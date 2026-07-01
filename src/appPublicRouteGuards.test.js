@@ -10,7 +10,7 @@ test('public marketing pages resolve from pathname before legacy currentPage fal
 })
 
 test('header features and logo clicks navigate to concrete public pathname', () => {
-  const featuresHandler = appSource.match(/const handleFeaturesClick = \(\) => \{([\s\S]*?)\n  \}/)
+  const featuresHandler = appSource.match(/const handleFeaturesClick = \(\) => \{([\s\S]*?)\n {2}\}/)
   assert.ok(featuresHandler)
   assert.match(featuresHandler[1], /navigate\('\/'\)/)
   assert.doesNotMatch(featuresHandler[1], /setCurrentPage\(/)

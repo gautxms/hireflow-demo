@@ -5,9 +5,7 @@ import { resetTokenAuth } from '../middleware/resetTokenAuth.js'
 import {
   createPasswordResetToken,
   generateResetToken,
-  getResetRateLimitState,
   normalizeEmail,
-  recordResetAttempt,
   markTokenUsedAndResetPassword,
 } from '../services/resetTokenService.js'
 import { hashPassword } from '../services/passwordHash.js'
