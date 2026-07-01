@@ -205,6 +205,150 @@ function errorLogCalls(calls) {
 
 
 
+
+test('GET /api/subscriptions/current returns Paddle actual annual INR price for gated test annual price', async () => {
+  resetPaddleEnv()
+  enableTestUpgrade()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_test_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '40000', currency_code: 'INR' } }, quantity: 1 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.plan, 'annual')
+  assert.equal(res.payload.subscription.costFormatted, '₹400.00')
+  assert.equal(res.payload.subscription.costCurrencyCode, 'INR')
+  assert.equal(res.payload.subscription.costSource, 'paddle')
+  assert.equal(res.payload.subscription.billingInterval, 'year')
+  assert.equal(paddleCalls.length, 1)
+  assert.match(paddleCalls[0].url, /\/subscriptions\/sub_123$/)
+})
+
+test('GET /api/subscriptions/current returns Paddle actual canonical annual USD price', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '99900', currency_code: 'USD' } }, quantity: 1 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.costFormatted, '$999.00')
+  assert.equal(res.payload.subscription.costCurrencyCode, 'USD')
+  assert.equal(res.payload.subscription.costSource, 'paddle')
+  assert.equal(res.payload.subscription.billingInterval, 'year')
+})
+
+test('GET /api/subscriptions/current formats zero-decimal Paddle annual JPY price without dividing by 100', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '9900', currency_code: 'JPY' } }, quantity: 1 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.costFormatted, '¥9,900')
+  assert.equal(res.payload.subscription.costCurrencyCode, 'JPY')
+  assert.equal(res.payload.subscription.costSource, 'paddle')
+  assert.equal(res.payload.subscription.billingInterval, 'year')
+})
+
+test('GET /api/subscriptions/current falls back to PLAN_CONFIG if Paddle subscription fetch fails', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+  })
+  mockPaddleResponse({ ok: false, status: 502, payload: { error: { code: 'upstream_error' } } })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.costFormatted, '$999.00')
+  assert.equal(res.payload.subscription.costCurrencyCode, 'USD')
+  assert.equal(res.payload.subscription.costSource, 'local_fallback')
+  assert.equal(res.payload.subscription.billingInterval, 'year')
+})
+
+test('GET /api/subscriptions/current falls back when Paddle item currency is missing', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '99900' } }, quantity: 1 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.costFormatted, '$999.00')
+  assert.equal(res.payload.subscription.costCurrencyCode, 'USD')
+  assert.equal(res.payload.subscription.costSource, 'local_fallback')
+})
+
+test('GET /api/subscriptions/current falls back when Paddle item amount is missing', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { currency_code: 'USD' } }, quantity: 1 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.costFormatted, '$999.00')
+  assert.equal(res.payload.subscription.costCurrencyCode, 'USD')
+  assert.equal(res.payload.subscription.costSource, 'local_fallback')
+})
+
+test('GET /api/subscriptions/current keeps local pricing for users without Paddle subscription', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeMonthlyUser(),
+    paddle_subscription_id: null,
+    paddle_customer_id: null,
+  })
+  const paddleCalls = mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.costFormatted, '$99.00')
+  assert.equal(res.payload.subscription.costCurrencyCode, 'USD')
+  assert.equal(res.payload.subscription.costSource, 'local_fallback')
+  assert.equal(res.payload.subscription.billingInterval, 'month')
+  assert.equal(paddleCalls.length, 0)
+})
+
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {
   resetPaddleEnv()
   enableTestUpgrade()

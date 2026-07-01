@@ -306,7 +306,10 @@ export default function BillingPage() {
                 </div>
                 <span className="billing-page__status-badge">{subscriptionState.statusLabel}</span>
               </div>
-              <p className="billing-page__line">{subscription.costFormatted || '—'} <span>{subscription.plan ? `per ${subscription.plan === 'annual' ? 'year' : 'month'}` : ''}</span></p>
+              <p className="billing-page__line">{subscription.costFormatted || '—'} <span>{subscription.billingInterval ? `per ${subscription.billingInterval}` : (subscription.plan ? `per ${subscription.plan === 'annual' ? 'year' : 'month'}` : '')}</span></p>
+              {subscription.costSource === 'local_fallback' && subscription.paddleSubscriptionId ? (
+                <p className="billing-page__cost-helper">Price shown from plan settings; Paddle is the source of truth.</p>
+              ) : null}
               <div className="billing-page__meta-grid">
                 <p className="billing-page__meta"><span>Renewal date</span>{formatDate(subscription.renewalDate)}</p>
                 <p className="billing-page__meta"><span>Next billing</span>{formatDate(subscription.nextBillingDate)}</p>

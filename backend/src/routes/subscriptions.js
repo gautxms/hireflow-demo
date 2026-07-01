@@ -160,6 +160,16 @@ function getItemInterval(item = {}) {
   return item?.price?.billing_cycle?.interval || item?.price?.billingCycle?.interval || item?.billing_cycle?.interval || null
 }
 
+function getItemUnitPrice(item = {}) {
+  return item?.price?.unit_price || item?.price?.unitPrice || item?.unit_price || item?.unitPrice || {}
+}
+
+function isCreditItem(item = {}) {
+  const priceType = String(item?.price?.type || item?.type || '').toLowerCase()
+  const productType = String(item?.price?.product?.type || item?.product?.type || '').toLowerCase()
+  return priceType === 'credit' || productType === 'credit'
+}
+
 function isActiveRecurringItem(item = {}) {
   const status = item.status || item.price?.status || 'active'
   return getItemInterval(item) && status !== 'deleted' && status !== 'canceled' && status !== 'cancelled'
@@ -231,6 +241,63 @@ function buildPlanChangeItems(existingItems, targetPriceId, targetPlan, currentP
   }).filter((item) => item.price_id)
 }
 
+function resolveLocalPlanCost(plan) {
+  return {
+    costCents: plan?.amountCents || null,
+    costFormatted: plan ? money(plan.amountCents) : null,
+    costCurrencyCode: plan ? 'USD' : null,
+    costSource: 'local_fallback',
+    billingInterval: plan?.interval || null,
+  }
+}
+
+function findCurrentBasePlanItem(subscriptionPayload, planKey, paddle = resolvePaddleConfig()) {
+  const items = getSubscriptionItems(subscriptionPayload).filter((item) => isActiveRecurringItem(item) && !isCreditItem(item))
+  const knownItem = items.find((item) => planFromPriceId(getItemPriceId(item), paddle) === planKey)
+
+  if (knownItem) return knownItem
+
+  const planInterval = PLAN_CONFIG[planKey]?.interval
+  const intervalMatches = items.filter((item) => planInterval && getItemInterval(item) === planInterval)
+  return intervalMatches.length === 1 ? intervalMatches[0] : null
+}
+
+function extractCurrentPaddlePlanCost(subscriptionPayload, planKey, paddle = resolvePaddleConfig()) {
+  const item = findCurrentBasePlanItem(subscriptionPayload, planKey, paddle)
+  const unitPrice = getItemUnitPrice(item)
+  const amount = unitPrice?.amount
+  const currencyCode = unitPrice?.currency_code || unitPrice?.currencyCode || null
+  const costFormatted = formatMinorUnits(amount, currencyCode)
+
+  if (!costFormatted) return null
+
+  return {
+    costCents: Number(amount),
+    costFormatted,
+    costCurrencyCode: currencyCode,
+    costSource: 'paddle',
+    billingInterval: getItemInterval(item),
+  }
+}
+
+async function resolveCurrentPlanCost(user, planKey, plan) {
+  const fallback = resolveLocalPlanCost(plan)
+
+  if (!user?.paddle_subscription_id || !planKey) return fallback
+
+  try {
+    const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`)
+    return extractCurrentPaddlePlanCost(subscriptionPayload, planKey) || fallback
+  } catch (error) {
+    console.warn('[subscriptions.current] Falling back to local plan cost after Paddle subscription lookup failed', {
+      userId: user.id,
+      paddleSubscriptionId: user.paddle_subscription_id,
+      code: error.code || 'UNKNOWN',
+    })
+    return fallback
+  }
+}
+
 function extractBillingDates(paddlePayload = {}) {
   const data = paddlePayload.data || paddlePayload
   return {
@@ -250,16 +317,32 @@ function isNumericMinorUnit(value) {
   return typeof value === 'string' ? /^-?\d+$/.test(value.trim()) : Number.isInteger(value)
 }
 
-function formatMinorUnits(value, currencyCode) {
-  if (!isNumericMinorUnit(value) || !currencyCode) return null
-  const amount = Number(value)
-  if (!Number.isSafeInteger(amount)) return null
+function getCurrencyFractionDigits(currencyCode) {
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currencyCode,
-      minimumFractionDigits: 2,
-    }).format(amount / 100)
+    }).resolvedOptions().maximumFractionDigits
+  } catch {
+    return null
+  }
+}
+
+function formatMinorUnits(value, currencyCode) {
+  if (!isNumericMinorUnit(value) || !currencyCode) return null
+  const amount = Number(value)
+  if (!Number.isSafeInteger(amount)) return null
+
+  const fractionDigits = getCurrencyFractionDigits(currencyCode)
+  if (!Number.isInteger(fractionDigits) || fractionDigits < 0) return null
+
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(amount / (10 ** fractionDigits))
   } catch {
     return null
   }
@@ -342,6 +425,7 @@ router.get('/current', requireAuth, async (req, res) => {
     const planKey = user.subscription_plan || null
     const plan = planKey ? (PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly) : null
     const hasBillingPortalAccess = Boolean(user.paddle_customer_id && user.paddle_subscription_id)
+    const planCost = await resolveCurrentPlanCost(user, planKey, plan)
 
     return res.json({
       subscription: {
@@ -349,8 +433,11 @@ router.get('/current', requireAuth, async (req, res) => {
         plan: planKey,
         started_date: isoOrNull(user.subscription_started_at),
         planLabel: plan?.label || null,
-        costCents: plan?.amountCents || null,
-        costFormatted: plan ? money(plan.amountCents) : null,
+        costCents: planCost.costCents,
+        costFormatted: planCost.costFormatted,
+        costCurrencyCode: planCost.costCurrencyCode,
+        costSource: planCost.costSource,
+        billingInterval: planCost.billingInterval,
         paddleCustomerId: user.paddle_customer_id || null,
         paddleSubscriptionId: user.paddle_subscription_id || null,
         hasBillingPortalAccess,
