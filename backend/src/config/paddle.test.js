@@ -61,3 +61,25 @@ test('resolvePaddleConfig exposes test-monthly price only when hidden checkout i
   assert.equal(enabled.testCheckout.enabled, true)
   assert.equal(enabled.testCheckout.key, 'secret')
 })
+
+test('resolvePaddleConfig parses environment-specific legacy monthly and annual aliases', () => {
+  const production = resolvePaddleConfig({
+    PADDLE_ENVIRONMENT: 'production',
+    PADDLE_PRODUCTION_MONTHLY_LEGACY_PRICE_IDS: 'pri_old_monthly, pri_current_monthly ',
+    PADDLE_PRODUCTION_ANNUAL_LEGACY_PRICE_IDS: ' pri_old_annual ',
+    PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS: 'pri_sb_monthly',
+  })
+
+  assert.deepEqual(production.legacyPriceIdsByPlan.monthly, ['pri_old_monthly', 'pri_current_monthly'])
+  assert.deepEqual(production.legacyPriceIdsByPlan.annual, ['pri_old_annual'])
+
+  const sandbox = resolvePaddleConfig({
+    PADDLE_ENVIRONMENT: 'sandbox',
+    PADDLE_PRODUCTION_MONTHLY_LEGACY_PRICE_IDS: 'pri_prod_monthly',
+    PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS: 'pri_sb_monthly',
+    PADDLE_SANDBOX_ANNUAL_LEGACY_PRICE_IDS: 'pri_sb_annual_1,pri_sb_annual_2',
+  })
+
+  assert.deepEqual(sandbox.legacyPriceIdsByPlan.monthly, ['pri_sb_monthly'])
+  assert.deepEqual(sandbox.legacyPriceIdsByPlan.annual, ['pri_sb_annual_1', 'pri_sb_annual_2'])
+})
