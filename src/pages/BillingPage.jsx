@@ -78,6 +78,11 @@ export default function BillingPage() {
   const [previewErrorCode, setPreviewErrorCode] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
 
+  const upgradeTestKey = useMemo(() => {
+    if (typeof window === 'undefined') return ''
+    return new URLSearchParams(window.location.search).get('upgradeTestKey') || ''
+  }, [])
+
   usePageSeo('Billing & Subscription', 'Manage your subscription, invoices, and billing settings.')
 
   const token = localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -156,7 +161,10 @@ export default function BillingPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ targetPlan: nextPlan }),
+        body: JSON.stringify({
+          targetPlan: nextPlan,
+          ...(upgradeTestKey ? { upgradeTestKey } : {}),
+        }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -191,7 +199,10 @@ export default function BillingPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ targetPlan }),
+        body: JSON.stringify({
+          targetPlan,
+          ...(upgradeTestKey ? { upgradeTestKey } : {}),
+        }),
       })
 
       const payload = await response.json().catch(() => ({}))
