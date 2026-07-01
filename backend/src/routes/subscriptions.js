@@ -142,6 +142,7 @@ function planFromPriceId(priceId, paddle = resolvePaddleConfig()) {
   if (!priceId) return null
   if (priceId === paddle.priceIdsByPlan.monthly) return 'monthly'
   if (priceId === paddle.priceIdsByPlan.annual) return 'annual'
+  if (priceId === paddle.testUpgrade?.annualPriceId) return 'annual'
   if (paddle.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
   if (paddle.legacyPriceIdsByPlan?.annual?.includes(priceId)) return 'annual'
   return null
@@ -398,7 +399,26 @@ router.get('/history', requireAuth, async (req, res) => {
   }
 })
 
-async function loadPlanChangeContext(userId, targetPlan) {
+function resolveTargetPriceId(targetPlan, upgradeTestKey, paddle, context = {}) {
+  const shouldUseTestAnnualPrice = targetPlan === 'annual'
+    && paddle.testUpgrade?.enabled === true
+    && Boolean(paddle.testUpgrade?.key)
+    && upgradeTestKey === paddle.testUpgrade.key
+    && Boolean(paddle.testUpgrade?.annualPriceId)
+
+  if (shouldUseTestAnnualPrice) {
+    console.info('[subscriptions.change-plan] Using gated test annual price override', {
+      userId: context.userId,
+      targetPlan,
+      priceId: maskPriceId(paddle.testUpgrade.annualPriceId),
+    })
+    return paddle.testUpgrade.annualPriceId
+  }
+
+  return targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
+}
+
+async function loadPlanChangeContext(userId, targetPlan, options = {}) {
   if (!PLAN_CONFIG[targetPlan]) {
     throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'invalid_target_plan' })
   }
@@ -431,7 +451,7 @@ async function loadPlanChangeContext(userId, targetPlan) {
   }
 
   const paddle = resolvePaddleConfig()
-  const targetPriceId = targetPlan === 'annual' ? paddle.priceIdsByPlan.annual : paddle.priceIdsByPlan.monthly
+  const targetPriceId = resolveTargetPriceId(targetPlan, options.upgradeTestKey, paddle, { userId })
 
   if (!targetPriceId) {
     throw new BillingError('BILLING_CONFIG_MISSING', { reason: 'missing_target_price_id' })
@@ -462,10 +482,10 @@ async function loadPlanChangeContext(userId, targetPlan) {
 }
 
 router.post('/change-plan-preview', requireAuth, async (req, res) => {
-  const { targetPlan } = req.body || {}
+  const { targetPlan, upgradeTestKey } = req.body || {}
 
   try {
-    const context = await loadPlanChangeContext(req.userId, targetPlan)
+    const context = await loadPlanChangeContext(req.userId, targetPlan, { upgradeTestKey })
     const preview = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}/preview`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -494,11 +514,11 @@ router.post('/change-plan-preview', requireAuth, async (req, res) => {
 })
 
 router.post('/change-plan', requireAuth, async (req, res) => {
-  const { targetPlan } = req.body || {}
+  const { targetPlan, upgradeTestKey } = req.body || {}
   let currentPlan = null
 
   try {
-    const context = await loadPlanChangeContext(req.userId, targetPlan)
+    const context = await loadPlanChangeContext(req.userId, targetPlan, { upgradeTestKey })
     currentPlan = context.currentPlan
     const paddleUpdate = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}`, {
       method: 'PATCH',

@@ -27,6 +27,7 @@ export function resolvePaddleConfig(env = process.env) {
   )
 
   const isTestCheckoutEnabled = env.PADDLE_ENABLE_TEST_CHECKOUT === 'true'
+  const isTestUpgradeEnabled = env.PADDLE_ENABLE_TEST_UPGRADE === 'true'
 
   const priceIdsByPlan = {
     monthly: firstDefined(
@@ -73,6 +74,11 @@ export function resolvePaddleConfig(env = process.env) {
     testCheckout: {
       enabled: isTestCheckoutEnabled,
       key: firstDefined(env.PADDLE_TEST_CHECKOUT_KEY),
+    },
+    testUpgrade: {
+      enabled: isTestUpgradeEnabled,
+      key: firstDefined(env.PADDLE_TEST_UPGRADE_KEY),
+      annualPriceId: firstDefined(env.PADDLE_TEST_ANNUAL_PRICE_ID),
     },
   }
 }

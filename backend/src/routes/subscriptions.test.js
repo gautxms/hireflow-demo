@@ -49,6 +49,33 @@ function resetPaddleEnv() {
   delete process.env.PADDLE_PRODUCTION_API_KEY
   delete process.env.PADDLE_PRODUCTION_MONTHLY_PRICE_ID
   delete process.env.PADDLE_PRODUCTION_ANNUAL_PRICE_ID
+  delete process.env.PADDLE_ENABLE_TEST_UPGRADE
+  delete process.env.PADDLE_TEST_UPGRADE_KEY
+  delete process.env.PADDLE_TEST_ANNUAL_PRICE_ID
+}
+
+function activeMonthlyUser() {
+  return {
+    id: 123,
+    email: 'user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  }
+}
+
+function activeAnnualUser() {
+  return {
+    ...activeMonthlyUser(),
+    subscription_plan: 'annual',
+  }
+}
+
+function enableTestUpgrade() {
+  process.env.PADDLE_ENABLE_TEST_UPGRADE = 'true'
+  process.env.PADDLE_TEST_UPGRADE_KEY = 'upgrade-secret'
+  process.env.PADDLE_TEST_ANNUAL_PRICE_ID = 'pri_test_annual'
 }
 
 async function invokeRoute(path, body = {}) {
@@ -176,6 +203,103 @@ function errorLogCalls(calls) {
   return calls.filter(({ sql }) => String(sql).includes('INSERT INTO error_logs'))
 }
 
+
+
+test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {
+  resetPaddleEnv()
+  enableTestUpgrade()
+  const { calls, connectCalls } = installDbMock(activeMonthlyUser())
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', immediate_transaction: { details: { totals: { total: '100', currency_code: 'USD' } } }, next_transaction: { details: { totals: { total: '1200', currency_code: 'USD' } } } } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual', upgradeTestKey: 'upgrade-secret' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_test_annual', quantity: 1 }])
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan uses gated test annual price for valid upgradeTestKey', async () => {
+  resetPaddleEnv()
+  enableTestUpgrade()
+  installDbMock(activeMonthlyUser())
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', current_billing_period: { ends_at: '2026-08-01T00:00:00.000Z' } } } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual', upgradeTestKey: 'upgrade-secret' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_test_annual', quantity: 1 }])
+})
+
+test('POST /api/subscriptions/change-plan-preview uses normal annual price when upgradeTestKey is missing', async () => {
+  resetPaddleEnv()
+  enableTestUpgrade()
+  installDbMock(activeMonthlyUser())
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123' } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_annual', quantity: 1 }])
+})
+
+test('POST /api/subscriptions/change-plan-preview uses normal annual price when upgradeTestKey is wrong', async () => {
+  resetPaddleEnv()
+  enableTestUpgrade()
+  installDbMock(activeMonthlyUser())
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123' } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual', upgradeTestKey: 'wrong-secret' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_annual', quantity: 1 }])
+})
+
+test('POST /api/subscriptions/change-plan-preview uses normal annual price when test upgrade is disabled', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_ENABLE_TEST_UPGRADE = 'false'
+  process.env.PADDLE_TEST_UPGRADE_KEY = 'upgrade-secret'
+  process.env.PADDLE_TEST_ANNUAL_PRICE_ID = 'pri_test_annual'
+  installDbMock(activeMonthlyUser())
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123' } } },
+  ])
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual', upgradeTestKey: 'upgrade-secret' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_annual', quantity: 1 }])
+})
+
+test('POST /api/subscriptions/change-plan does not use test annual override for monthly downgrade', async () => {
+  resetPaddleEnv()
+  enableTestUpgrade()
+  installDbMock(activeAnnualUser())
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' } }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', current_billing_period: { ends_at: '2026-08-01T00:00:00.000Z' } } } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'monthly', upgradeTestKey: 'upgrade-secret' })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body).items, [{ price_id: 'pri_monthly', quantity: 1 }])
+})
 
 test('POST /api/subscriptions/change-plan-preview returns Paddle preview without local mutation', async () => {
   resetPaddleEnv()

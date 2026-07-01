@@ -83,3 +83,25 @@ test('resolvePaddleConfig parses environment-specific legacy monthly and annual 
   assert.deepEqual(sandbox.legacyPriceIdsByPlan.monthly, ['pri_sb_monthly'])
   assert.deepEqual(sandbox.legacyPriceIdsByPlan.annual, ['pri_sb_annual_1', 'pri_sb_annual_2'])
 })
+
+
+test('resolvePaddleConfig exposes hidden test upgrade configuration independently of test checkout', () => {
+  const cfg = resolvePaddleConfig({
+    PADDLE_ENVIRONMENT: 'production',
+    PADDLE_ENABLE_TEST_CHECKOUT: 'true',
+    PADDLE_TEST_CHECKOUT_KEY: 'checkout-secret',
+    PADDLE_TEST_MONTHLY_PRICE_ID: 'pri_test_monthly',
+    PADDLE_ENABLE_TEST_UPGRADE: 'true',
+    PADDLE_TEST_UPGRADE_KEY: 'upgrade-secret',
+    PADDLE_TEST_ANNUAL_PRICE_ID: 'pri_test_annual',
+  })
+
+  assert.equal(cfg.testCheckout.enabled, true)
+  assert.equal(cfg.testCheckout.key, 'checkout-secret')
+  assert.equal(cfg.priceIdsByPlan['test-monthly'], 'pri_test_monthly')
+  assert.deepEqual(cfg.testUpgrade, {
+    enabled: true,
+    key: 'upgrade-secret',
+    annualPriceId: 'pri_test_annual',
+  })
+})

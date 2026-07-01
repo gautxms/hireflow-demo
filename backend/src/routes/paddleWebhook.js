@@ -71,6 +71,9 @@ function planFromPriceId(priceId) {
   if (!priceId) return null
   if (priceId === paddleConfig.priceIdsByPlan.monthly) return 'monthly'
   if (priceId === paddleConfig.priceIdsByPlan.annual) return 'annual'
+  if (priceId === paddleConfig.testUpgrade?.annualPriceId) return 'annual'
+  if (paddleConfig.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
+  if (paddleConfig.legacyPriceIdsByPlan?.annual?.includes(priceId)) return 'annual'
   return null
 }
 
