@@ -82,6 +82,14 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
+const AUTH_ROUTE_PATHS = new Set([
+  '/login',
+  '/signup',
+  '/verify-email-info',
+  '/forgot-password',
+  '/reset-password',
+])
+
 const PUBLIC_ROUTE_PATHS = new Set([
   '/',
   '/login',
@@ -1133,6 +1141,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     </PublicRouteChunkErrorBoundary>
   )
   const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus)
+  const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
 
   useEffect(() => {
     document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
@@ -1167,6 +1176,15 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         >
           {pageContent}
         </UserAppShell>
+      </>
+    )
+  }
+
+  if (useAuthRouteLayout) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        {pageContent}
       </>
     )
   }
