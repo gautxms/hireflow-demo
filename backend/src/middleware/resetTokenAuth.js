@@ -1,5 +1,12 @@
 import { getValidResetTokenRecord } from '../services/resetTokenService.js'
 
+function sanitizeAuthError(error) {
+  return {
+    errorName: error?.name || 'UNKNOWN_ERROR',
+    errorCode: error?.code || undefined,
+  }
+}
+
 function getTokenFromRequest(req) {
   if (typeof req.query?.token === 'string' && req.query.token.trim()) {
     return req.query.token.trim()
@@ -40,7 +47,7 @@ export function resetTokenAuth(options = {}) {
       req.resetTokenRecord = resetTokenRecord
       return next()
     } catch (error) {
-      console.error('[AUTH] Reset token verification failed:', error)
+      console.error('[AUTH] Reset token verification failed:', sanitizeAuthError(error))
 
       if (allowValidFalseResponse) {
         return res.json({ valid: false })

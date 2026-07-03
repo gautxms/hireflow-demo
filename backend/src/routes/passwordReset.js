@@ -19,6 +19,17 @@ function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
 }
 
+function getEmailDomain(email) {
+  return typeof email === 'string' ? email.split('@')[1]?.toLowerCase() || 'unknown' : 'unknown'
+}
+
+function sanitizeAuthError(error) {
+  return {
+    errorName: error?.name || 'UNKNOWN_ERROR',
+    errorCode: error?.code || undefined,
+  }
+}
+
 function buildResetUrl(token) {
   const url = new URL('/reset-password', getFrontendOrigin())
   url.searchParams.set('token', token)
@@ -54,12 +65,11 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
       })
 
       console.info('[AUTH] Password reset requested', {
-        userId: user.id,
-        email: normalizedEmail,
+        emailDomain: getEmailDomain(normalizedEmail),
       })
     } else {
       console.info('[AUTH] Password reset requested for non-existent email', {
-        email: normalizedEmail,
+        emailDomain: getEmailDomain(normalizedEmail),
       })
     }
 
@@ -68,7 +78,7 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
       message: 'Check your email for reset link',
     })
   } catch (error) {
-    console.error('[AUTH] Failed to create password reset request:', error)
+    console.error('[AUTH] Failed to create password reset request:', sanitizeAuthError(error))
     return res.status(500).json({ error: 'Unable to process password reset request.' })
   }
 })
@@ -104,8 +114,7 @@ router.post('/reset-password', resetTokenAuth(), async (req, res) => {
     })
 
     console.info('[AUTH] Password reset successful', {
-      userId: req.resetTokenRecord.user_id,
-      email: req.resetTokenRecord.email,
+      emailDomain: getEmailDomain(req.resetTokenRecord.email),
     })
 
     return res.json({
@@ -113,7 +122,7 @@ router.post('/reset-password', resetTokenAuth(), async (req, res) => {
       message: 'Password reset successful',
     })
   } catch (error) {
-    console.error('[AUTH] Failed to reset password:', error)
+    console.error('[AUTH] Failed to reset password:', sanitizeAuthError(error))
     return res.status(500).json({ error: 'Unable to reset password.' })
   }
 })
