@@ -390,3 +390,13 @@
     font-weight: 700;
   }
 }
+
+.billing-page__renewal-note {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--hf-lime-dim);
+  border: 1px solid var(--hf-lime-border);
+  border-radius: var(--hf-r-lg, 8px);
+  color: var(--hf-text-2);
+  font: 600 14px/1.55 var(--hf-font-ui, 'DM Sans', sans-serif);
+}

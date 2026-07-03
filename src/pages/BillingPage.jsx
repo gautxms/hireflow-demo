@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
-import { getBillingPlanAction, getCancelActionLabel } from './billingPageActions'
+import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -145,6 +145,9 @@ export default function BillingPage() {
   const canConfirmPlanChange = !isChangingPlan && !isLoadingPreview && !previewError && hasVerifiedPreviewAmounts
   const planAction = getBillingPlanAction(subscription?.plan)
   const cancelActionLabel = getCancelActionLabel(subscription?.plan)
+  const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
+  const cancellationAccessMessage = getCancellationAccessMessage(subscription, formatDate)
+  const shouldShowCancelAction = canShowCancelAction(subscriptionState, subscription)
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -246,7 +249,7 @@ export default function BillingPage() {
       }
 
       setCancelModalOpen(false)
-      setActionFeedback({ type: 'success', message: payload.message || 'Subscription cancellation confirmed.' })
+      setActionFeedback({ type: 'success', message: getCancellationSuccessMessage(subscription, payload, formatDate) })
       await loadBilling()
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Unable to cancel subscription' })
@@ -307,7 +310,7 @@ export default function BillingPage() {
                   <p className="billing-page__eyebrow">Current Plan</p>
                   <h2 className="billing-page__plan-title">{subscription.planLabel || subscriptionState.planLabel}</h2>
                 </div>
-                <span className="billing-page__status-badge">{subscriptionState.statusLabel}</span>
+                <span className="billing-page__status-badge">{displayedStatusLabel}</span>
               </div>
               <p className="billing-page__line">{subscription.costFormatted || '—'} <span>{subscription.billingInterval ? `per ${subscription.billingInterval}` : (subscription.plan ? `per ${subscription.plan === 'annual' ? 'year' : 'month'}` : '')}</span></p>
               {subscription.costSource === 'local_fallback' && subscription.paddleSubscriptionId ? (
@@ -319,6 +322,7 @@ export default function BillingPage() {
                 <p className="billing-page__meta"><span>Payment method</span>{subscription.paymentMethod || 'Managed securely in Paddle'}</p>
                 <p className="billing-page__meta"><span>Cancellation effective</span>{formatDate(subscription.cancellationEffectiveAt)}</p>
               </div>
+              {cancellationAccessMessage ? <p className="billing-page__renewal-note">{cancellationAccessMessage}</p> : null}
               {actionFeedback.message ? <p className={`billing-page__feedback billing-page__feedback--${actionFeedback.type}`} role={actionFeedback.type === 'error' ? 'alert' : 'status'}>{actionFeedback.message}</p> : null}
 
               {subscriptionState.canManageBilling ? (
@@ -331,9 +335,11 @@ export default function BillingPage() {
                   {planAction && !planAction.isSelfServe ? (
                     <p className="billing-page__support-note">{planAction.label}</p>
                   ) : null}
-                  <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }} disabled={subscriptionState.isCanceled}>
-                    {cancelActionLabel}
-                  </button>
+                  {shouldShowCancelAction ? (
+                    <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }}>
+                      {cancelActionLabel}
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </article>

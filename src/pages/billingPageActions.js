@@ -23,3 +23,48 @@ export function getBillingPlanAction(plan) {
 export function getCancelActionLabel(plan) {
   return plan === 'annual' ? 'Cancel renewal' : 'Cancel subscription'
 }
+
+
+export function getFutureCancellationEffectiveDate(subscription, now = new Date()) {
+  if (!subscription?.cancellationEffectiveAt) return null
+  const effectiveDate = new Date(subscription.cancellationEffectiveAt)
+  const comparisonDate = now instanceof Date ? now : new Date(now)
+
+  if (Number.isNaN(effectiveDate.getTime()) || Number.isNaN(comparisonDate.getTime())) return null
+
+  return effectiveDate > comparisonDate ? effectiveDate : null
+}
+
+export function hasFutureCancellationEffectiveAt(subscription, now = new Date()) {
+  return Boolean(getFutureCancellationEffectiveDate(subscription, now))
+}
+
+export function getBillingStatusLabel(subscriptionState, subscription, formatDate = (value) => value) {
+  const effectiveDate = getFutureCancellationEffectiveDate(subscription)
+  if (effectiveDate) return `Active until ${formatDate(effectiveDate)}`
+
+  return subscriptionState?.statusLabel || 'Free plan / No active subscription'
+}
+
+export function getCancellationAccessMessage(subscription, formatDate = (value) => value) {
+  const effectiveDate = getFutureCancellationEffectiveDate(subscription)
+  if (!effectiveDate) return ''
+
+  return `Your access remains active until ${formatDate(effectiveDate)}. You will not be charged again.`
+}
+
+export function getCancellationSuccessMessage(subscription, payload, formatDate = (value) => value) {
+  const effectiveDate = getFutureCancellationEffectiveDate(subscription)
+    || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.cancellationEffectiveAt })
+    || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.subscription?.cancellationEffectiveAt })
+    || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.subscription?.currentPeriodEnd })
+    || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.currentPeriodEnd })
+
+  if (effectiveDate) return `Renewal canceled. Your access remains active until ${formatDate(effectiveDate)}.`
+
+  return 'Renewal canceled. Your access remains active through the end of your current billing period.'
+}
+
+export function canShowCancelAction(subscriptionState, subscription, now = new Date()) {
+  return Boolean(subscriptionState?.canManageBilling && !subscriptionState?.isCanceled && !hasFutureCancellationEffectiveAt(subscription, now))
+}
