@@ -55,7 +55,7 @@ test('authenticated subscribed users keep public header and footer on landing ro
 
 test('dashboard path remains a shell route and unauthenticated users hit auth guard flow', () => {
   assert.match(appSource, /function shouldRenderWithinUserShell\([\s\S]*return isUserShellRoutePath\(resolvedPathname\)/)
-  assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*guardAuthenticatedRoute\([\s\S]*promptMessage: 'Please login to view the dashboard\.'/)
+  assert.match(appSource, /if \(resolvedPathname === '\/dashboard'\) \{[\s\S]*guardSubscriptionRoute\([\s\S]*authPromptMessage: 'Please login to view the dashboard\.'/)
   assert.match(appSource, /if \(useUserShellLayout\) \{[\s\S]*<UserAppShell/)
 })
 
@@ -83,6 +83,13 @@ test('dashboard rendering remains explicit to dashboard pathname', () => {
 })
 
 test('shortlists route stays canonical and authenticated in app routing', () => {
-  assert.match(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*guardAuthenticatedRoute\([\s\S]*promptMessage: 'Please login to view shortlists\.'[\s\S]*return <ShortlistsPage \/>/)
+  assert.match(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*guardSubscriptionRoute\([\s\S]*authPromptMessage: 'Please login to view shortlists\.'[\s\S]*return <ShortlistsPage \/>/)
   assert.doesNotMatch(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*return <CandidatesPage \/>/)
+})
+
+
+test('auth routes render without public marketing chrome', () => {
+  assert.match(appSource, /const AUTH_ROUTE_PATHS = new Set\(\[/)
+  assert.match(appSource, /const useAuthRouteLayout = AUTH_ROUTE_PATHS\.has\(resolvedPathname\) \|\| resolvedPathname\.startsWith\('\/reset-password\/'\)/)
+  assert.match(appSource, /if \(useAuthRouteLayout\) \{[\s\S]*<PageSeo pathname=\{pathname\} currentPage=\{currentPage\} \/>[\s\S]*\{pageContent\}[\s\S]*\}/)
 })

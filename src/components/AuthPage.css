@@ -1,9 +1,10 @@
 .auth-shell {
   min-height: 100vh;
-  padding: 80px 2rem 2rem;
+  padding: 2rem;
   background: var(--color-bg-primary);
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .auth-shell::before {
