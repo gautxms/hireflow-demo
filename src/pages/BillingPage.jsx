@@ -4,6 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
+import { getBillingPlanAction, getCancelActionLabel } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -142,6 +143,8 @@ export default function BillingPage() {
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
   const hasVerifiedPreviewAmounts = planPreview?.hasVerifiedPreviewAmounts === true
   const canConfirmPlanChange = !isChangingPlan && !isLoadingPreview && !previewError && hasVerifiedPreviewAmounts
+  const planAction = getBillingPlanAction(subscription?.plan)
+  const cancelActionLabel = getCancelActionLabel(subscription?.plan)
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -320,11 +323,16 @@ export default function BillingPage() {
 
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
-                  <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(subscription.plan === 'monthly' ? 'annual' : 'monthly')}>
-                    {subscription.plan === 'monthly' ? 'Upgrade to annual' : 'Downgrade to monthly'}
-                  </button>
+                  {planAction?.isSelfServe ? (
+                    <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>
+                      {planAction.label}
+                    </button>
+                  ) : null}
+                  {planAction && !planAction.isSelfServe ? (
+                    <p className="billing-page__support-note">{planAction.label}</p>
+                  ) : null}
                   <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }} disabled={subscriptionState.isCanceled}>
-                    Cancel subscription
+                    {cancelActionLabel}
                   </button>
                 </div>
               ) : null}
