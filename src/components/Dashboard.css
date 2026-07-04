@@ -1,0 +1,206 @@
+.legacy-dashboard {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+}
+
+.legacy-dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2rem 4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.legacy-dashboard__title {
+  margin-bottom: 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.legacy-dashboard__subtitle,
+.legacy-dashboard__empty {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+}
+
+.legacy-dashboard__actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.legacy-dashboard__button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.legacy-dashboard__button--primary {
+  color: var(--color-accent-green);
+}
+
+.legacy-dashboard__button--secondary {
+  color: var(--color-text-secondary);
+}
+
+.legacy-dashboard__section {
+  padding: 2rem 4rem;
+}
+
+.legacy-dashboard__section--bordered,
+.legacy-dashboard__footer {
+  border-top: 1px solid var(--border);
+}
+
+.legacy-dashboard__section-title {
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.legacy-dashboard__stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.legacy-dashboard__agent-card {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.legacy-dashboard__task-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.legacy-dashboard__task-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.legacy-dashboard__item-title {
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.legacy-dashboard__item-title--compact {
+  margin-bottom: 0.25rem;
+}
+
+.legacy-dashboard__text-sm,
+.legacy-dashboard__metric-label,
+.legacy-dashboard__task-meta,
+.legacy-dashboard__status-pill,
+.legacy-dashboard__progress-copy,
+.legacy-dashboard__footer {
+  font-size: 0.875rem;
+}
+
+.legacy-dashboard__muted,
+.legacy-dashboard__metric-label,
+.legacy-dashboard__progress-copy,
+.legacy-dashboard__footer,
+.legacy-dashboard__area-copy {
+  color: var(--color-text-secondary);
+}
+
+.legacy-dashboard__metric {
+  text-align: center;
+}
+
+.legacy-dashboard__metric-value,
+.legacy-dashboard__metric-number,
+.legacy-dashboard__area-label {
+  font-weight: 700;
+}
+
+.legacy-dashboard__metric-value--accent {
+  color: var(--color-accent-green-hover);
+}
+
+.legacy-dashboard__metric-number {
+  font-size: 1.5rem;
+}
+
+.legacy-dashboard__metric-number--accent,
+.legacy-dashboard__area-label {
+  color: var(--color-accent-green);
+}
+
+.legacy-dashboard__task-meta {
+  display: flex;
+  gap: 1rem;
+}
+
+.legacy-dashboard__status-pill {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.legacy-dashboard__progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.legacy-dashboard__progress-fill {
+  height: 100%;
+  background: var(--color-accent-green);
+  transition: width var(--motion-duration-slow) var(--motion-ease-standard);
+}
+
+.legacy-dashboard__progress-fill--complete {
+  background: var(--color-accent-green-hover);
+}
+
+.legacy-dashboard__progress-copy {
+  margin-top: 0.5rem;
+}
+
+.legacy-dashboard__area-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 0.5rem;
+}
+
+.legacy-dashboard__area-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  text-align: center;
+}
+
+.legacy-dashboard__area-card--active {
+  border-color: var(--color-accent-green);
+  background: var(--color-accent-alpha-08);
+}
+
+.legacy-dashboard__area-label {
+  margin-bottom: 0.5rem;
+}
+
+.legacy-dashboard__area-copy {
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.legacy-dashboard__footer {
+  padding: 2rem 4rem;
+  text-align: center;
+}
