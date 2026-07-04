@@ -1,74 +1,9 @@
 import { useState } from 'react'
 
 export default function Dashboard({ onNavigate }) {
-  const [tasks] = useState([
-    {
-      id: 1,
-      title: 'Wave 1: Send 10 warm outreach emails',
-      status: 'DONE',
-      agent: 'blitzz',
-      progress: 100,
-      priority: 'HIGH',
-      dueDate: '2026-02-21'
-    },
-    {
-      id: 2,
-      title: 'Deploy updated UI to hireflow.dev',
-      status: 'IN_PROGRESS',
-      agent: 'blitzz',
-      progress: 75,
-      priority: 'CRITICAL',
-      dueDate: '2026-02-22'
-    },
-    {
-      id: 3,
-      title: 'Monitor email responses from prospects',
-      status: 'IN_PROGRESS',
-      agent: 'blitzz',
-      progress: 50,
-      priority: 'HIGH',
-      dueDate: '2026-02-28'
-    },
-    {
-      id: 4,
-      title: 'Wave 2: Send next 8 outreach emails',
-      status: 'PENDING',
-      agent: 'blitzz',
-      progress: 0,
-      priority: 'HIGH',
-      dueDate: '2026-02-26'
-    },
-    {
-      id: 5,
-      title: 'Schedule demo calls with interested prospects',
-      status: 'PENDING',
-      agent: 'blitzz',
-      progress: 0,
-      priority: 'HIGH',
-      dueDate: '2026-02-28'
-    },
-    {
-      id: 6,
-      title: 'Convert first beta customer',
-      status: 'PENDING',
-      agent: 'blitzz',
-      progress: 0,
-      priority: 'CRITICAL',
-      dueDate: '2026-03-06'
-    }
-  ])
+  const [tasks] = useState([])
 
-  const [agents] = useState([
-    {
-      id: 'blitzz',
-      name: 'blitzz',
-      role: 'Lead AI Operator',
-      status: 'ACTIVE',
-      tasksAssigned: 6,
-      tasksDone: 1,
-      tasksInProgress: 2
-    }
-  ])
+  const [agents] = useState([])
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -94,7 +29,7 @@ export default function Dashboard({ onNavigate }) {
       <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>HireFlow Operations</h1>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>Launch readiness: monitor active analyses, subscription health, and customer support workflows</p>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>Launch readiness workspace for reviewing operational checklists before customer rollout</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button onClick={() => onNavigate?.('settings')} style={{
@@ -126,7 +61,9 @@ export default function Dashboard({ onNavigate }) {
       <div style={{ padding: '2rem 4rem' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Active Agents</h2>
         <div style={{ display: 'grid', gap: '1rem' }}>
-          {agents.map(agent => (
+          {agents.length === 0 ? (
+            <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>No active operator assignments are configured for this workspace.</div>
+          ) : agents.map(agent => (
             <div key={agent.id} style={{
               background: 'var(--card)',
               border: '1px solid var(--border)',
@@ -162,9 +99,11 @@ export default function Dashboard({ onNavigate }) {
 
       {/* Tasks */}
       <div style={{ padding: '2rem 4rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Tasks & Progress</h2>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Readiness Checklist</h2>
         <div style={{ display: 'grid', gap: '1rem' }}>
-          {tasks.map(task => (
+          {tasks.length === 0 ? (
+            <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>No operational tasks are configured. Add customer-safe checklist items when they are ready to share.</div>
+          ) : tasks.map(task => (
             <div key={task.id} style={{
               background: 'var(--card)',
               border: '1px solid var(--border)',
@@ -175,7 +114,7 @@ export default function Dashboard({ onNavigate }) {
                 <div>
                   <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '1.05rem' }}>{task.title}</div>
                   <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem' }}>
-                    <span style={{ color: 'var(--color-text-secondary)' }}>Agent: {task.agent}</span>
+                    <span style={{ color: 'var(--color-text-secondary)' }}>Owner: {task.agent}</span>
                     <span className={getPriorityColor(task.priority)}>Priority: {task.priority}</span>
                     <span style={{ color: 'var(--color-text-secondary)' }}>Due: {task.dueDate}</span>
                   </div>
@@ -203,17 +142,17 @@ export default function Dashboard({ onNavigate }) {
 
       {/* Timeline */}
       <div style={{ padding: '2rem 4rem', borderTop: '1px solid var(--border)' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>8-Week Timeline</h2>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Launch Readiness Areas</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '0.5rem' }}>
           {[
-            { week: 1, milestone: 'Warm outreach (25 emails)', status: 'IN_PROGRESS' },
-            { week: 2, milestone: 'First demo calls', status: 'PENDING' },
-            { week: 3, milestone: 'First conversions', status: 'PENDING' },
-            { week: 4, milestone: '1st paid customer', status: 'PENDING' },
-            { week: 5, milestone: 'Scale outreach', status: 'PENDING' },
-            { week: 6, milestone: 'PH pre-launch', status: 'PENDING' },
-            { week: 7, milestone: 'Final PH prep', status: 'PENDING' },
-            { week: 8, milestone: 'Product Hunt launch', status: 'PENDING' }
+            { week: 1, milestone: 'Environment configuration', status: 'REFERENCE' },
+            { week: 2, milestone: 'Upload workflow checks', status: 'REFERENCE' },
+            { week: 3, milestone: 'Analysis review checks', status: 'REFERENCE' },
+            { week: 4, milestone: 'Billing verification', status: 'REFERENCE' },
+            { week: 5, milestone: 'Auth session checks', status: 'REFERENCE' },
+            { week: 6, milestone: 'Support readiness', status: 'REFERENCE' },
+            { week: 7, milestone: 'Monitoring review', status: 'REFERENCE' },
+            { week: 8, milestone: 'Rollback planning', status: 'REFERENCE' }
           ].map(item => (
             <div key={item.week} style={{
               background: item.status === 'IN_PROGRESS' ? 'rgba(232,255,90,0.1)' : 'var(--card)',
@@ -222,7 +161,7 @@ export default function Dashboard({ onNavigate }) {
               padding: '1rem',
               textAlign: 'center'
             }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--color-accent-green)' }}>W{item.week}</div>
+              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--color-accent-green)' }}>Area {item.week}</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: '1.3' }}>{item.milestone}</div>
             </div>
           ))}
