@@ -146,7 +146,7 @@ export default function BillingPage() {
   const planAction = getBillingPlanAction(subscription?.plan)
   const cancelActionLabel = getCancelActionLabel(subscription?.plan)
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
-  const cancellationAccessMessage = getCancellationAccessMessage(subscription, formatDate)
+  const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
   const shouldShowCancelAction = canShowCancelAction(subscriptionState, subscription)
 
   const switchingLabel = useMemo(() => {
