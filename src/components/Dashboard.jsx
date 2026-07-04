@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import './Dashboard.css'
 
 export default function Dashboard({ onNavigate }) {
   const [tasks] = useState([])
@@ -24,73 +25,50 @@ export default function Dashboard({ onNavigate }) {
   }
 
   return (
-    <div style={{ background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
+    <div className="legacy-dashboard">
       {/* Header */}
-      <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="legacy-dashboard__header">
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>HireFlow Operations</h1>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>Launch readiness workspace for reviewing operational checklists before customer rollout</p>
+          <h1 className="legacy-dashboard__title">HireFlow Operations</h1>
+          <p className="legacy-dashboard__subtitle">Launch readiness workspace for reviewing operational checklists before customer rollout</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={() => onNavigate?.('settings')} style={{
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: 'var(--color-accent-green)',
-            padding: '0.5rem 1rem',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.9rem'
-          }}>
+        <div className="legacy-dashboard__actions">
+          <button onClick={() => onNavigate?.('settings')} className="legacy-dashboard__button legacy-dashboard__button--primary">
             ⚙️ Settings
           </button>
-          <button onClick={() => onNavigate?.('landing')} style={{
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: 'var(--color-text-secondary)',
-            padding: '0.5rem 1rem',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.9rem'
-          }}>
+          <button onClick={() => onNavigate?.('landing')} className="legacy-dashboard__button legacy-dashboard__button--secondary">
             ← Home
           </button>
         </div>
       </div>
 
       {/* Agents Status */}
-      <div style={{ padding: '2rem 4rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Active Agents</h2>
-        <div style={{ display: 'grid', gap: '1rem' }}>
+      <div className="legacy-dashboard__section">
+        <h2 className="legacy-dashboard__section-title">Active Agents</h2>
+        <div className="legacy-dashboard__stack">
           {agents.length === 0 ? (
-            <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>No active operator assignments are configured for this workspace.</div>
+            <div className="legacy-dashboard__empty">No active operator assignments are configured for this workspace.</div>
           ) : agents.map(agent => (
-            <div key={agent.id} style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              padding: '1.5rem',
-              display: 'grid',
-              gridTemplateColumns: '1fr auto auto auto auto'
-            }}>
+            <div key={agent.id} className="legacy-dashboard__agent-card">
               <div>
-                <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>{agent.name}</div>
-                <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{agent.role}</div>
+                <div className="legacy-dashboard__item-title legacy-dashboard__item-title--compact">{agent.name}</div>
+                <div className="legacy-dashboard__muted legacy-dashboard__text-sm">{agent.role}</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Status</div>
-                <div style={{ color: 'var(--color-accent-green-hover)', fontWeight: 'bold' }}>{agent.status}</div>
+              <div className="legacy-dashboard__metric">
+                <div className="legacy-dashboard__metric-label">Status</div>
+                <div className="legacy-dashboard__metric-value legacy-dashboard__metric-value--accent">{agent.status}</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Done</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{agent.tasksDone}</div>
+              <div className="legacy-dashboard__metric">
+                <div className="legacy-dashboard__metric-label">Done</div>
+                <div className="legacy-dashboard__metric-number">{agent.tasksDone}</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>In Progress</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-accent-green)' }}>{agent.tasksInProgress}</div>
+              <div className="legacy-dashboard__metric">
+                <div className="legacy-dashboard__metric-label">In Progress</div>
+                <div className="legacy-dashboard__metric-number legacy-dashboard__metric-number--accent">{agent.tasksInProgress}</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Assigned</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{agent.tasksAssigned}</div>
+              <div className="legacy-dashboard__metric">
+                <div className="legacy-dashboard__metric-label">Assigned</div>
+                <div className="legacy-dashboard__metric-number">{agent.tasksAssigned}</div>
               </div>
             </div>
           ))}
@@ -98,41 +76,34 @@ export default function Dashboard({ onNavigate }) {
       </div>
 
       {/* Tasks */}
-      <div style={{ padding: '2rem 4rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Readiness Checklist</h2>
-        <div style={{ display: 'grid', gap: '1rem' }}>
+      <div className="legacy-dashboard__section">
+        <h2 className="legacy-dashboard__section-title">Readiness Checklist</h2>
+        <div className="legacy-dashboard__stack">
           {tasks.length === 0 ? (
-            <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>No operational tasks are configured. Add customer-safe checklist items when they are ready to share.</div>
+            <div className="legacy-dashboard__empty">No operational tasks are configured. Add customer-safe checklist items when they are ready to share.</div>
           ) : tasks.map(task => (
-            <div key={task.id} style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              padding: '1.5rem'
-            }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', marginBottom: '1rem' }}>
+            <div key={task.id} className="legacy-dashboard__task-card">
+              <div className="legacy-dashboard__task-header">
                 <div>
-                  <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '1.05rem' }}>{task.title}</div>
-                  <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem' }}>
-                    <span style={{ color: 'var(--color-text-secondary)' }}>Owner: {task.agent}</span>
+                  <div className="legacy-dashboard__item-title">{task.title}</div>
+                  <div className="legacy-dashboard__task-meta">
+                    <span className="legacy-dashboard__muted">Owner: {task.agent}</span>
                     <span className={getPriorityColor(task.priority)}>Priority: {task.priority}</span>
-                    <span style={{ color: 'var(--color-text-secondary)' }}>Due: {task.dueDate}</span>
+                    <span className="legacy-dashboard__muted">Due: {task.dueDate}</span>
                   </div>
                 </div>
-                <span className={getStatusColor(task.status)} style={{ padding: '0.5rem 1rem', borderRadius: '4px', fontSize: '0.875rem', fontWeight: 'bold' }}>
+                <span className={`${getStatusColor(task.status)} legacy-dashboard__status-pill`}>
                   {task.status}
                 </span>
               </div>
               {/* Progress bar */}
-              <div style={{ background: 'rgba(0,0,0,0.3)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                <div style={{
-                  background: task.progress === 100 ? 'var(--color-accent-green-hover)' : 'var(--color-accent-green)',
-                  height: '100%',
-                  width: `${task.progress}%`,
-                  transition: 'width var(--motion-duration-slow) var(--motion-ease-standard)'
-                }} />
+              <div className="legacy-dashboard__progress-track">
+                <div
+                  className={`legacy-dashboard__progress-fill${task.progress === 100 ? ' legacy-dashboard__progress-fill--complete' : ''}`}
+                  style={{ width: `${task.progress}%` }}
+                />
               </div>
-              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+              <div className="legacy-dashboard__progress-copy">
                 {task.progress}% complete
               </div>
             </div>
@@ -141,9 +112,9 @@ export default function Dashboard({ onNavigate }) {
       </div>
 
       {/* Timeline */}
-      <div style={{ padding: '2rem 4rem', borderTop: '1px solid var(--border)' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Launch Readiness Areas</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '0.5rem' }}>
+      <div className="legacy-dashboard__section legacy-dashboard__section--bordered">
+        <h2 className="legacy-dashboard__section-title">Launch Readiness Areas</h2>
+        <div className="legacy-dashboard__area-grid">
           {[
             { week: 1, milestone: 'Environment configuration', status: 'REFERENCE' },
             { week: 2, milestone: 'Upload workflow checks', status: 'REFERENCE' },
@@ -154,22 +125,16 @@ export default function Dashboard({ onNavigate }) {
             { week: 7, milestone: 'Monitoring review', status: 'REFERENCE' },
             { week: 8, milestone: 'Rollback planning', status: 'REFERENCE' }
           ].map(item => (
-            <div key={item.week} style={{
-              background: item.status === 'IN_PROGRESS' ? 'rgba(232,255,90,0.1)' : 'var(--card)',
-              border: item.status === 'IN_PROGRESS' ? '1px solid var(--color-accent-green)' : '1px solid var(--border)',
-              borderRadius: '8px',
-              padding: '1rem',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--color-accent-green)' }}>Area {item.week}</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: '1.3' }}>{item.milestone}</div>
+            <div key={item.week} className={`legacy-dashboard__area-card${item.status === 'IN_PROGRESS' ? ' legacy-dashboard__area-card--active' : ''}`}>
+              <div className="legacy-dashboard__area-label">Area {item.week}</div>
+              <div className="legacy-dashboard__area-copy">{item.milestone}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Footer */}
-      <div style={{ padding: '2rem 4rem', borderTop: '1px solid var(--border)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+      <div className="legacy-dashboard__footer">
         Last updated: {new Date().toLocaleString()}
       </div>
     </div>
