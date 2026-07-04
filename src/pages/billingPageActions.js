@@ -102,3 +102,7 @@ export function getCancellationSuccessMessage(subscription, payload, formatDate 
 export function canShowCancelAction(subscriptionState, subscription, now = new Date()) {
   return Boolean(subscriptionState?.canManageBilling && !subscriptionState?.isCanceled && !hasScheduledCancellation(subscriptionState, subscription, now))
 }
+
+export function shouldRenderBillingHistory(history) {
+  return Array.isArray(history) && history.length > 0
+}
