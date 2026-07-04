@@ -94,7 +94,7 @@ export default function Dashboard({ onNavigate }) {
       <div style={{ borderBottom: '1px solid var(--border)', padding: '2rem 4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>HireFlow Operations</h1>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>Goal: 5 beta customers by week 8 | Current: Week 1 (warm outreach)</p>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>Launch readiness: monitor active analyses, subscription health, and customer support workflows</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button onClick={() => onNavigate?.('settings')} style={{
