@@ -1,9 +1,15 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Brain, Target, Lightbulb, UploadCloud, BarChart3, Users } from 'lucide-react'
 import '../styles/landing.css'
 import PublicPageLayout from './public/PublicPageLayout'
+import DemoVideoModal from './DemoVideoModal'
 
 export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' }) {
+  const [isDemoVideoOpen, setIsDemoVideoOpen] = useState(false)
+  const demoVideoTriggerRef = useRef(null)
+  const demoVideoUrl = import.meta.env.VITE_DEMO_VIDEO_URL?.trim() || ''
+  const demoVideoPosterUrl = import.meta.env.VITE_DEMO_VIDEO_POSTER_URL?.trim() || ''
+  const demoVideoCaptionsUrl = import.meta.env.VITE_DEMO_VIDEO_CAPTIONS_URL?.trim() || ''
   useEffect(() => {
     // Smooth scroll and interactive effects
     const anchors = document.querySelectorAll('a[href^="#"]')
@@ -45,7 +51,18 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
             <button className="btn-primary" onClick={onStartDemo}>
               {ctaLabel}
             </button>
-            <button className="btn-ghost">Watch 2-min Demo</button>
+            {demoVideoUrl ? (
+              <button
+                ref={demoVideoTriggerRef}
+                type="button"
+                className="btn-ghost btn-ghost--accent"
+                onClick={() => setIsDemoVideoOpen(true)}
+              >
+                Watch product demo
+              </button>
+            ) : (
+              <a className="btn-ghost" href="/demo">Book a demo</a>
+            )}
           </div>
         </div>
       </section>
@@ -246,6 +263,15 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
           </div>
         </footer>
       </section>
+      {isDemoVideoOpen && demoVideoUrl ? (
+        <DemoVideoModal
+          videoUrl={demoVideoUrl}
+          posterUrl={demoVideoPosterUrl}
+          captionsUrl={demoVideoCaptionsUrl}
+          onClose={() => setIsDemoVideoOpen(false)}
+          triggerRef={demoVideoTriggerRef}
+        />
+      ) : null}
     </PublicPageLayout>
   )
 }
