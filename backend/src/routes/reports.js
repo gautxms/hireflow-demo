@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 
 const router = Router()
 
@@ -51,7 +52,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireActiveSubscription, async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim()
     const filters = normalizeFilters(req.body?.filters)
@@ -80,7 +81,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireActiveSubscription, async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim()
     const filters = normalizeFilters(req.body?.filters)
@@ -119,7 +120,7 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireActiveSubscription, async (req, res) => {
   try {
     const result = await pool.query(
       `DELETE FROM report_definitions

@@ -33,8 +33,8 @@ export function getBillingPlanAction(plan) {
   return null
 }
 
-export function getCancelActionLabel(plan) {
-  return plan === 'annual' ? 'Cancel renewal' : 'Cancel subscription'
+export function getCancelActionLabel(_plan) {
+  return 'Cancel subscription'
 }
 
 export function getFutureCancellationEffectiveDate(subscription, now = new Date()) {
@@ -72,7 +72,7 @@ export function getBillingStatusLabel(subscriptionState, subscription, formatDat
   const effectiveDate = hasScheduledCancellation(subscriptionState, subscription, now)
     ? getFutureCancellationEffectiveDate(subscription, now)
     : null
-  if (effectiveDate) return `Active until ${formatDate(effectiveDate)}`
+  if (effectiveDate) return `Access until ${formatDate(effectiveDate)}`
 
   return subscriptionState?.statusLabel || 'Free plan / No active subscription'
 }
@@ -83,7 +83,7 @@ export function getCancellationAccessMessage(subscriptionState, subscription, fo
     : null
   if (!effectiveDate) return ''
 
-  return `Your access remains active until ${formatDate(effectiveDate)}. You will not be charged again.`
+  return `Subscription canceled. Your access remains active until ${formatDate(effectiveDate)}. You will not be charged again.`
 }
 
 export function getCancellationSuccessMessage(subscription, payload, formatDate = (value) => value) {
@@ -94,9 +94,9 @@ export function getCancellationSuccessMessage(subscription, payload, formatDate 
     || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.subscription?.currentPeriodEnd })
     || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.currentPeriodEnd })
 
-  if (effectiveDate) return `Renewal canceled. Your access remains active until ${formatDate(effectiveDate)}.`
+  if (effectiveDate) return `Subscription canceled. Your access remains active until ${formatDate(effectiveDate)}.`
 
-  return 'Renewal canceled. Your access remains active through the end of your current billing period.'
+  return 'Subscription canceled. Your access remains active through the end of your current billing period.'
 }
 
 export function canShowCancelAction(subscriptionState, subscription, now = new Date()) {

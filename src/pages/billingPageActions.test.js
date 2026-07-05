@@ -20,17 +20,17 @@ test('annual billing users do not see a self-serve monthly downgrade action', ()
   assert.equal(action.isSelfServe, false)
 })
 
-test('cancel action remains visible with annual renewal copy', () => {
+test('cancel action uses subscription copy for monthly and annual plans', () => {
   assert.equal(getCancelActionLabel('monthly'), 'Cancel subscription')
-  assert.equal(getCancelActionLabel('annual'), 'Cancel renewal')
+  assert.equal(getCancelActionLabel('annual'), 'Cancel subscription')
 })
 
-test('annual active user without cancellation date can cancel renewal', () => {
+test('annual active user without cancellation date can cancel subscription', () => {
   const subscriptionState = { canManageBilling: true, isCanceled: false }
   const subscription = { plan: 'annual', status: 'active' }
 
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), true)
-  assert.equal(getCancelActionLabel(subscription.plan), 'Cancel renewal')
+  assert.equal(getCancelActionLabel(subscription.plan), 'Cancel subscription')
 })
 
 test('active reactivated subscription with stale future cancellation date keeps active status and cancel action', () => {
@@ -48,8 +48,8 @@ test('scheduled subscription with future cancellation date shows active until st
   const format = () => '1/7/2027'
 
   assert.equal(hasScheduledCancellation(subscriptionState, subscription, NOW), true)
-  assert.equal(getBillingStatusLabel(subscriptionState, subscription, format, NOW), 'Active until 1/7/2027')
-  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Your access remains active until 1/7/2027. You will not be charged again.')
+  assert.equal(getBillingStatusLabel(subscriptionState, subscription, format, NOW), 'Access until 1/7/2027')
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Subscription canceled. Your access remains active until 1/7/2027. You will not be charged again.')
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
 })
 
@@ -58,16 +58,16 @@ test('canceled subscription with future cancellation date shows active until sta
   const subscription = { plan: 'annual', status: 'canceled', cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
   const format = () => '1/7/2027'
 
-  assert.equal(getBillingStatusLabel(subscriptionState, subscription, format, NOW), 'Active until 1/7/2027')
+  assert.equal(getBillingStatusLabel(subscriptionState, subscription, format, NOW), 'Access until 1/7/2027')
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
 })
 
-test('fresh cancel response with effectiveAt uses renewal canceled access wording', () => {
+test('fresh cancel response with effectiveAt uses subscription canceled access wording', () => {
   const subscription = { plan: 'annual' }
   const payload = { effectiveAt: '2027-01-07T00:00:00Z', message: 'Subscription cancelled. A confirmation email will be sent by webhook processing.' }
   const format = () => '1/7/2027'
 
-  assert.equal(getCancellationSuccessMessage(subscription, payload, format), 'Renewal canceled. Your access remains active until 1/7/2027.')
+  assert.equal(getCancellationSuccessMessage(subscription, payload, format), 'Subscription canceled. Your access remains active until 1/7/2027.')
 })
 
 test('monthly cancellation path remains available before a cancellation is scheduled', () => {
