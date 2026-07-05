@@ -145,3 +145,28 @@
   max-height: calc(100vh - (var(--spacing-xl) * 2));
   overflow-y: auto;
 }
+
+.back-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs, 8px);
+  min-height: 36px;
+  padding: 8px 12px;
+  color: var(--hf-lime);
+  border-color: var(--hf-lime-border);
+  font: 600 14px/1.2 var(--hf-font-ui, 'DM Sans', sans-serif);
+}
+
+.back-button:hover {
+  color: var(--hf-lime-hover);
+  border-color: var(--hf-lime);
+  background: var(--hf-lime-dim);
+}
+
+.back-button:focus-visible {
+  outline: 2px solid var(--hf-lime);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--hf-lime-dim);
+}

@@ -208,6 +208,52 @@ function errorLogCalls(calls) {
 
 
 
+
+test('GET /api/subscriptions/current returns cancelAtPeriodEnd true when local cancellation_effective_at is future', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+    cancellation_effective_at: '2027-01-07T00:00:00.000Z',
+  })
+  mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.cancellationEffectiveAt, '2027-01-07T00:00:00.000Z')
+  assert.equal(res.payload.subscription.cancelAtPeriodEnd, true)
+  assert.equal(res.payload.subscription.latestRecordStatus, 'cancellation_scheduled')
+})
+
+test('GET /api/subscriptions/current does not return cancelAtPeriodEnd true when cancellation_effective_at is missing or past', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+    cancellation_effective_at: '2020-01-07T00:00:00.000Z',
+  })
+  mockPaddleResponse()
+
+  const pastRes = await invokeRoute('/current')
+
+  assert.equal(pastRes.statusCode, 200)
+  assert.equal(pastRes.payload.subscription.cancelAtPeriodEnd, false)
+
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+    cancellation_effective_at: null,
+  })
+  mockPaddleResponse()
+
+  const missingRes = await invokeRoute('/current')
+
+  assert.equal(missingRes.statusCode, 200)
+  assert.equal(missingRes.payload.subscription.cancellationEffectiveAt, null)
+  assert.equal(missingRes.payload.subscription.cancelAtPeriodEnd, false)
+})
+
 test('GET /api/subscriptions/current returns Paddle actual annual INR price for gated test annual price', async () => {
   resetPaddleEnv()
   enableTestUpgrade()

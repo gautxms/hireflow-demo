@@ -61,6 +61,18 @@ export function isoOrNull(value) {
   return new Date(value).toISOString()
 }
 
+function dateOrNull(value) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function isFutureDate(value, now = new Date()) {
+  const date = dateOrNull(value)
+  const comparisonDate = dateOrNull(now)
+  return Boolean(date && comparisonDate && date > comparisonDate)
+}
+
 class BillingError extends Error {
   constructor(code, details = {}) {
     super(ERROR_RESPONSES[code]?.message || ERROR_RESPONSES.UNKNOWN.message)
@@ -427,6 +439,8 @@ router.get('/current', requireAuth, async (req, res) => {
     const plan = planKey ? (PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly) : null
     const hasBillingPortalAccess = Boolean(user.paddle_customer_id && user.paddle_subscription_id)
     const planCost = await resolveCurrentPlanCost(user, planKey, plan)
+    const cancellationEffectiveAt = isoOrNull(user.cancellation_effective_at)
+    const hasScheduledCancellation = isFutureDate(cancellationEffectiveAt)
 
     return res.json({
       subscription: {
@@ -444,11 +458,12 @@ router.get('/current', requireAuth, async (req, res) => {
         hasBillingPortalAccess,
         renewalDate: isoOrNull(user.subscription_renewal_date || user.current_period_end),
         nextBillingDate: isoOrNull(user.next_billing_date || user.current_period_end),
-        cancellationEffectiveAt: isoOrNull(user.cancellation_effective_at),
+        cancellationEffectiveAt,
+        cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: user.payment_method_last4
           ? `${user.payment_method_brand || 'Card'} •••• ${user.payment_method_last4}`
           : hasBillingPortalAccess ? 'Card on file' : null,
-        latestRecordStatus: latestSubscription?.status || null,
+        latestRecordStatus: hasScheduledCancellation ? (latestSubscription?.status || 'cancellation_scheduled') : (latestSubscription?.status || null),
         latestRecordCreatedAt: isoOrNull(latestSubscription?.created_at),
       },
     })
