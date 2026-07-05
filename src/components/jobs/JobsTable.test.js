@@ -11,8 +11,10 @@ test('job title trigger uses analyses link styling and opens edit modal', () => 
 
 test('jobs table keeps only archive action and removes edit/delete actions', () => {
   assert.match(source, /Archive size=\{16\}/)
-  assert.match(source, /aria-label=\{`Archive job/)
-  assert.match(source, /Archiving…/)
+  assert.match(source, /aria-label=\{`\$\{archivingId === itemId \? 'Archiving' : 'Archive'\} job/)
+  assert.match(source, /jobs-table__action-button/)
+  assert.match(source, /jobs-table__action-spinner/)
+  assert.doesNotMatch(source, />Archiving…</)
   assert.doesNotMatch(source, />Edit</)
   assert.doesNotMatch(source, /Trash2/)
 })
