@@ -1,53 +1,53 @@
 .job-description-page .analyses-layout__content {
-  width: min(1200px, 100%);
+  width: min(100%, calc(100vw - (var(--spacing-xl) * 2)));
 }
 
 .job-description-page .analyses-layout__table-shell {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .jobs-table {
-  min-width: 1080px;
+  min-width: 0;
 }
 
 .jobs-table__col-title {
-  width: 24%;
+  width: 27%;
 }
 
 
 .jobs-table th:nth-child(1),
 .jobs-table td:nth-child(1) {
-  width: 24%;
+  width: 27%;
 }
 
 .jobs-table th:nth-child(2),
 .jobs-table td:nth-child(2) {
-  width: 9%;
+  width: 8%;
 }
 
 .jobs-table th:nth-child(3),
 .jobs-table td:nth-child(3) {
-  width: 11%;
+  width: 10%;
 }
 
 .jobs-table th:nth-child(4),
 .jobs-table td:nth-child(4) {
-  width: 13%;
+  width: 14%;
 }
 
 .jobs-table th:nth-child(5),
 .jobs-table td:nth-child(5) {
-  width: 11%;
+  width: 9%;
 }
 
 .jobs-table th:nth-child(6),
 .jobs-table td:nth-child(6) {
-  width: 13%;
+  width: 12%;
 }
 
 .jobs-table th:nth-child(7),
 .jobs-table td:nth-child(7) {
-  width: 13%;
+  width: 12%;
 }
 
 .jobs-table th:nth-child(8),
@@ -57,8 +57,8 @@
 
 .jobs-table th,
 .jobs-table td {
-  padding-right: 0.9rem;
-  padding-left: 0.9rem;
+  padding-right: clamp(0.45rem, 0.8vw, 0.9rem);
+  padding-left: clamp(0.45rem, 0.8vw, 0.9rem);
 }
 
 .jobs-table__actions-header,
