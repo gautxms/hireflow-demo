@@ -1,9 +1,9 @@
 import {
-  ACTIVE_SUBSCRIPTION_STATUSES,
   RESUME_ANALYSIS_USAGE_WARNING_THRESHOLD_PERCENT,
   resolveMonthlyResumeAnalysisLimit,
 } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
+import { canUsePaidMutation, hasActivePaidAccess } from '../utils/subscriptionAccess.js'
 
 export function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
@@ -40,7 +40,7 @@ export async function getUsageCount(userId, monthStart, shouldResetUsage = false
 export async function requireActiveSubscription(req, res, next) {
   try {
     const userResult = await pool.query(
-      `SELECT id, subscription_status
+      `SELECT id, subscription_status, cancellation_effective_at, current_period_end
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -52,15 +52,16 @@ export async function requireActiveSubscription(req, res, next) {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    if (!ACTIVE_SUBSCRIPTION_STATUSES.has(user.subscription_status)) {
+    if (!canUsePaidMutation(user)) {
       return res.status(403).json({
         error: 'Subscription inactive',
         message:
-          'Your subscription is inactive or cancelled. Please reactivate your subscription to continue uploading files.',
+          'Your subscription has ended. Please resubscribe to continue paid workflow actions.',
       })
     }
 
-    req.subscriptionStatus = user.subscription_status
+    req.hasActivePaidAccess = hasActivePaidAccess(user)
+    req.subscriptionStatus = req.hasActivePaidAccess ? 'active' : user.subscription_status
     return next()
   } catch (error) {
     console.error('[Subscription] Failed to validate subscription status:', error)

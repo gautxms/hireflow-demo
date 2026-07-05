@@ -377,7 +377,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
   try {
     logAuthDebug('[AUTH] Login attempt', { emailDomain: getEmailDomain(normalizedEmail) })
     const result = await pool.query(
-      'SELECT id, email, company, phone, password_hash, created_at, subscription_status, deleted_at, deletion_scheduled_for, email_verified FROM users WHERE email = $1',
+      'SELECT id, email, company, phone, password_hash, created_at, subscription_status, cancellation_effective_at, current_period_end, deleted_at, deletion_scheduled_for, email_verified FROM users WHERE email = $1',
       [normalizedEmail],
     )
 
@@ -417,6 +417,8 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
         company: user.company || '',
         phone: user.phone || '',
         subscription_status: user.subscription_status,
+        cancellation_effective_at: user.cancellation_effective_at,
+        current_period_end: user.current_period_end,
         created_at: user.created_at,
         deleted_at: user.deleted_at,
         deletion_scheduled_for: user.deletion_scheduled_for,
@@ -433,7 +435,7 @@ router.get('/me', requireAuth, async (req, res) => {
     const result = await pool.query(
       `SELECT id, email, company, phone, subscription_status, subscription_plan, subscription_started_at,
               subscription_renewal_date, current_period_end, next_billing_date, paddle_customer_id,
-              paddle_subscription_id, created_at, deleted_at, deletion_scheduled_for
+              paddle_subscription_id, cancellation_effective_at, created_at, deleted_at, deletion_scheduled_for
        FROM users
        WHERE id = $1`,
       [req.userId],

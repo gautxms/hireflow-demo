@@ -1,3 +1,4 @@
+import { hasActivePaidAccess } from '../utils/subscriptionState'
 const FEATURE_KEYS = {
   sidebarShell: 'sidebar_shell',
   analysesPages: 'analyses_pages',
@@ -92,8 +93,12 @@ function isExplicitlyDisabled(rawValue) {
 }
 
 export function isFeatureEnabled(featureKey, { userProfile = null, subscriptionStatus = 'inactive' } = {}) {
-  const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
-  const isSubscribedUser = normalizedSubscriptionStatus === 'active' || normalizedSubscriptionStatus === 'trialing'
+  const normalizedSubscriptionStatus = String(subscriptionStatus || userProfile?.subscription_status || 'inactive').trim().toLowerCase()
+  const isSubscribedUser = hasActivePaidAccess({
+    status: normalizedSubscriptionStatus,
+    cancellationEffectiveAt: userProfile?.cancellationEffectiveAt || userProfile?.cancellation_effective_at,
+    currentPeriodEnd: userProfile?.currentPeriodEnd || userProfile?.current_period_end,
+  })
 
   if (isSubscribedUser && SUBSCRIPTION_GATED_FEATURES.has(featureKey)) {
     return true

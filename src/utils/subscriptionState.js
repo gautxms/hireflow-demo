@@ -19,8 +19,43 @@ export function hasActiveSubscription(status) {
   return ACTIVE_STATUSES.has(normalized) || TRIALING_STATUSES.has(normalized)
 }
 
-export function canAccessProductDashboard(status) {
-  return hasActiveSubscription(status)
+export function canAccessProductDashboard(subscriptionStateOrStatus, now = new Date()) {
+  if (typeof subscriptionStateOrStatus === 'object' && subscriptionStateOrStatus !== null) {
+    return hasActivePaidAccess(subscriptionStateOrStatus, now)
+  }
+
+  return hasActiveSubscription(subscriptionStateOrStatus)
+}
+
+
+export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now = new Date()) {
+  const rawDate = subscriptionStateOrSubscription?.cancellationEffectiveAt || subscriptionStateOrSubscription?.cancellation_effective_at || subscriptionStateOrSubscription?.currentPeriodEnd || subscriptionStateOrSubscription?.current_period_end
+  if (!rawDate) return null
+
+  const endDate = new Date(rawDate)
+  const comparisonDate = now instanceof Date ? now : new Date(now)
+  if (Number.isNaN(endDate.getTime()) || Number.isNaN(comparisonDate.getTime())) return null
+
+  return endDate > comparisonDate ? endDate : null
+}
+
+export function hasScheduledCancellationAccess(subscriptionStateOrSubscription, now = new Date()) {
+  const status = normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
+  return Boolean(CANCELED_STATUSES.has(status) && getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now))
+}
+
+export function hasActivePaidAccess(subscriptionStateOrSubscription, now = new Date()) {
+  const status = normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
+  return ACTIVE_STATUSES.has(status) || TRIALING_STATUSES.has(status) || hasScheduledCancellationAccess(subscriptionStateOrSubscription, now)
+}
+
+export function isReadOnlyExpiredSubscriber(subscriptionStateOrSubscription, now = new Date()) {
+  const status = normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
+  return Boolean(CANCELED_STATUSES.has(status) && !getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now))
+}
+
+export function canUsePaidMutation(subscriptionStateOrSubscription, now = new Date()) {
+  return hasActivePaidAccess(subscriptionStateOrSubscription, now)
 }
 
 export function canRenderBillingPage(subscriptionState) {
@@ -67,6 +102,12 @@ export function resolveSubscriptionState({ user = null, subscription = null } = 
     hasProviderSubscription,
     hasBillingPortalAccess,
     canManageBilling: hasBillingPortalAccess && BILLING_MANAGEABLE_STATUSES.has(rawStatus),
-    canAccessProductDashboard: isActive || trialing,
+    cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at || null,
+    currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end || null,
+    hasActivePaidAccess: hasActivePaidAccess({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
+    hasScheduledCancellationAccess: hasScheduledCancellationAccess({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
+    isReadOnlyExpiredSubscriber: isReadOnlyExpiredSubscriber({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
+    canUsePaidMutation: canUsePaidMutation({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
+    canAccessProductDashboard: canAccessProductDashboard({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
   }
 }

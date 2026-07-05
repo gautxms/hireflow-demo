@@ -18,6 +18,7 @@ export function guardAuthenticatedRoute({
 export function guardSubscriptionRoute({
   isAuthenticated,
   subscriptionStatus,
+  subscriptionState,
   onRequireAuth,
   onRequireUpgrade,
   authPromptMessage,
@@ -32,7 +33,7 @@ export function guardSubscriptionRoute({
     return false
   }
 
-  if (canAccessProductDashboard(subscriptionStatus)) {
+  if (canAccessProductDashboard(subscriptionState || subscriptionStatus)) {
     return true
   }
 

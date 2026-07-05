@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
+import { hasActivePaidAccess } from '../utils/subscriptionState'
 import { buildRoleSafeErrorView, isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
 import {
   ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL,
@@ -153,7 +154,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const [failedAnalysisState, setFailedAnalysisState] = useState(null)
   const [jobStatuses, setJobStatuses] = useState([])
   const [analysisName, setAnalysisName] = useState('')
-  const isActiveSubscriber = (subscriptionStatus || '').toLowerCase() === 'active'
+  const isActiveSubscriber = hasActivePaidAccess({
+    status: subscriptionStatus,
+    cancellationEffectiveAt: userProfile?.cancellationEffectiveAt || userProfile?.cancellation_effective_at,
+    currentPeriodEnd: userProfile?.currentPeriodEnd || userProfile?.current_period_end,
+  })
   const isJobDescriptionRequired = import.meta.env.VITE_REQUIRE_JOB_DESCRIPTION_FOR_ANALYSIS === 'true'
   const isDevelopment = import.meta.env.DEV
   const canViewAdminDiagnostics = isAdmin || isDevelopment

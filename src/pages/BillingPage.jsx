@@ -323,7 +323,12 @@ export default function BillingPage() {
                 <p className="billing-page__meta"><span>Payment method</span>{subscription.paymentMethod || 'Managed securely in Paddle'}</p>
                 <p className="billing-page__meta"><span>Cancellation effective</span>{formatDate(subscription.cancellationEffectiveAt)}</p>
               </div>
-              {cancellationAccessMessage ? <p className="billing-page__renewal-note">{cancellationAccessMessage}</p> : null}
+              {cancellationAccessMessage ? (
+                <>
+                  <p className="billing-page__renewal-note">{cancellationAccessMessage}</p>
+                  <p className="billing-page__support-note">Need to keep using HireFlow? Contact support to resume your subscription.</p>
+                </>
+              ) : null}
               {actionFeedback.message ? <p className={`billing-page__feedback billing-page__feedback--${actionFeedback.type}`} role={actionFeedback.type === 'error' ? 'alert' : 'status'}>{actionFeedback.message}</p> : null}
 
               {subscriptionState.canManageBilling ? (

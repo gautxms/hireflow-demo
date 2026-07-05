@@ -3,6 +3,7 @@ import path from 'path'
 import multer from 'multer'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 
 const router = Router()
@@ -288,7 +289,7 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-router.post('/', (req, res, next) => {
+router.post('/', requireActiveSubscription, (req, res, next) => {
   upload.single('jdFile')(req, res, (error) => {
     if (!error) {
       return next()
@@ -376,7 +377,7 @@ router.post('/', (req, res, next) => {
   }
 })
 
-router.put('/:id', (req, res, next) => {
+router.put('/:id', requireActiveSubscription, (req, res, next) => {
   upload.single('jdFile')(req, res, (error) => {
     if (!error) {
       return next()
@@ -481,7 +482,7 @@ router.put('/:id', (req, res, next) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireActiveSubscription, async (req, res) => {
   try {
     await ensureSchema()
     const hardDelete = String(req.query.hardDelete || 'false') === 'true'
@@ -546,7 +547,7 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
-router.post('/:id/duplicate', async (req, res) => {
+router.post('/:id/duplicate', requireActiveSubscription, async (req, res) => {
   try {
     await ensureSchema()
     const source = await pool.query(

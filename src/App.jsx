@@ -74,8 +74,8 @@ import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysi
 import { resolveUserSectionPath } from './config/userNavigation'
 import { isUserShellRoutePath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
-import { guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
-import { resolveSubscriptionState } from './utils/subscriptionState'
+import { guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
+import { hasActivePaidAccess, resolveSubscriptionState } from './utils/subscriptionState'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -164,8 +164,8 @@ function shouldDisableUserShell(pathname) {
   return isSharedResultsPath(pathname)
 }
 
-function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStatus = 'inactive') {
-  if (!isAuthenticated || !hasActiveSubscription(subscriptionStatus)) {
+function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStatus = 'inactive', subscriptionState = null) {
+  if (!isAuthenticated || !hasActivePaidAccess(subscriptionState || { status: subscriptionStatus })) {
     return false
   }
 
@@ -219,7 +219,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
 
     if (page === 'uploader' && isAuthenticated) {
       const storedSubscriptionStatus = getStoredSubscriptionStatus()
-      if (!hasActiveSubscription(storedSubscriptionStatus)) {
+      if (!hasActivePaidAccess(userProfile || { status: storedSubscriptionStatus })) {
         navigate('/pricing?reason=upgrade_required')
         return
       }
@@ -377,7 +377,12 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus })
   const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus })
   const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus })
-  const isActiveSubscriber = hasActiveSubscription(normalizedSubscriptionStatus)
+  const subscriptionAccessState = useMemo(() => ({
+    status: normalizedSubscriptionStatus,
+    cancellationEffectiveAt: userProfile?.cancellationEffectiveAt || userProfile?.cancellation_effective_at,
+    currentPeriodEnd: userProfile?.currentPeriodEnd || userProfile?.current_period_end,
+  }), [normalizedSubscriptionStatus, userProfile?.cancellationEffectiveAt, userProfile?.cancellation_effective_at, userProfile?.currentPeriodEnd, userProfile?.current_period_end])
+  const isActiveSubscriber = hasActivePaidAccess(subscriptionAccessState)
   const profileBillingState = resolveSubscriptionState({ user: userProfile })
   const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
@@ -463,6 +468,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessDashboard = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
         authPromptMessage: 'Please login to view the dashboard.',
@@ -481,6 +487,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessDashboard = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
         authPromptMessage: 'Please login to view the dashboard.',
@@ -578,6 +585,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessUploader = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
       })
@@ -610,6 +618,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessReports = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=reports_upgrade_required'),
         authPromptMessage: 'Please login to view reports.',
@@ -674,6 +683,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessAnalyses = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=analyses_upgrade_required'),
         authPromptMessage: 'Please login to view analyses.',
@@ -712,6 +722,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessCandidates = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=candidates_upgrade_required'),
         authPromptMessage: 'Please login to view candidates.',
@@ -732,6 +743,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessShortlists = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=shortlists_upgrade_required'),
         authPromptMessage: 'Please login to view shortlists.',
@@ -765,6 +777,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       const canAccessJobDescriptions = guardSubscriptionRoute({
         isAuthenticated,
         subscriptionStatus,
+        subscriptionState: subscriptionAccessState,
         onRequireAuth,
         onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
         authPromptMessage: 'Please login to manage job descriptions.',
@@ -1082,22 +1095,22 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     else if (resolvedPathname === '/' || resolvedPathname === '/ai-resume-screening') matchedBranch = 'public:landing'
     else if (resolvedPathname === '/pricing') matchedBranch = 'public:pricing'
     else if (resolvedPathname.startsWith('/admin')) matchedBranch = 'admin'
-    else if (isAuthenticated && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus)) matchedBranch = 'user-shell'
+    else if (isAuthenticated && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus, subscriptionAccessState)) matchedBranch = 'user-shell'
 
     console.debug('[route-diagnostics]', { pathname, resolvedPathname, matchedBranch })
-  }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled, subscriptionStatus])
+  }, [isAuthenticated, pathname, resolvedPathname, routeDiagnosticsEnabled, subscriptionAccessState, subscriptionStatus])
 
   const routeRecoveryActions = useMemo(() => {
     const hardRedirect = (path) => {
       window.location.assign(path)
     }
 
-    const isSubscribedUser = isAuthenticated && hasActiveSubscription(subscriptionStatus)
+    const isSubscribedUser = isAuthenticated && hasActivePaidAccess(subscriptionAccessState)
     const isAuthenticatedAppRoute = isAuthenticated && (
       resolvedPathname === '/uploader'
       || resolvedPathname === '/analyses'
       || resolvedPathname.startsWith('/analyses/')
-      || shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus)
+      || shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus, subscriptionAccessState)
     )
 
     if (isAuthenticatedAppRoute) {
@@ -1120,7 +1133,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       primaryLabel: 'Go to pricing',
       primaryAction: () => hardRedirect('/pricing'),
     }
-  }, [isAuthenticated, resolvedPathname, subscriptionStatus])
+  }, [isAuthenticated, resolvedPathname, subscriptionAccessState, subscriptionStatus])
 
   const [shellPageTitle, setShellPageTitle] = useState('')
 
@@ -1140,7 +1153,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </Suspense>
     </PublicRouteChunkErrorBoundary>
   )
-  const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus)
+  const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, subscriptionStatus, subscriptionAccessState)
   const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
 
   useEffect(() => {

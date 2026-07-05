@@ -66,7 +66,7 @@ test('requireActiveSubscription blocks Paddle failed payment states', async () =
   const originalQuery = pool.query
 
   try {
-    for (const status of ['past_due', 'payment_failed', 'paused', 'cancelled']) {
+    for (const status of ['past_due', 'payment_failed', 'paused']) {
       pool.query = async () => ({ rows: [{ id: 1, subscription_status: status }] })
       const req = { userId: 1 }
       const res = createRes()
@@ -80,6 +80,81 @@ test('requireActiveSubscription blocks Paddle failed payment states', async () =
       assert.equal(res.statusCode, 403)
       assert.equal(res.body.error, 'Subscription inactive')
     }
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+
+test('requireActiveSubscription allows scheduled cancellation before effective date', async () => {
+  const originalQuery = pool.query
+  pool.query = async () => ({ rows: [{ id: 1, subscription_status: 'cancelled', cancellation_effective_at: '2099-01-01T00:00:00Z' }] })
+
+  try {
+    const req = { userId: 1 }
+    const res = createRes()
+    let nextCalled = false
+
+    await requireActiveSubscription(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, true)
+    assert.equal(req.subscriptionStatus, 'active')
+    assert.equal(req.hasActivePaidAccess, true)
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+test('requireActiveSubscription blocks expired canceled subscribers from paid mutations', async () => {
+  const originalQuery = pool.query
+  pool.query = async () => ({ rows: [{ id: 1, subscription_status: 'cancelled', cancellation_effective_at: '2025-01-01T00:00:00Z' }] })
+
+  try {
+    const req = { userId: 1 }
+    const res = createRes()
+    let nextCalled = false
+
+    await requireActiveSubscription(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, false)
+    assert.equal(res.statusCode, 403)
+    assert.equal(res.body.error, 'Subscription inactive')
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+
+test('scheduled cancellation before effective date receives paid upload allowance', async () => {
+  const originalQuery = pool.query
+  pool.query = async (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'cancelled', cancellation_effective_at: '2099-01-01T00:00:00Z' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: PAID_MONTHLY_RESUME_ANALYSIS_LIMIT - 1 }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  }
+
+  try {
+    const req = { userId: 1, ip: '127.0.0.1', headers: {}, files: [{ originalname: 'resume.pdf' }] }
+    const res = createRes()
+    let accessNextCalled = false
+    let quotaNextCalled = false
+
+    await requireActiveSubscription(req, res, () => {
+      accessNextCalled = true
+    })
+    await enforceUploadLimit(req, res, () => {
+      quotaNextCalled = true
+    })
+
+    assert.equal(accessNextCalled, true)
+    assert.equal(quotaNextCalled, true)
+    assert.equal(req.subscriptionStatus, 'active')
+    assert.equal(req.usageContext.uploadLimit, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT)
   } finally {
     pool.query = originalQuery
   }
