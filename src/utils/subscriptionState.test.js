@@ -78,6 +78,8 @@ test('scheduled cancellation keeps paid mutation access until effective date', (
   assert.equal(state.hasScheduledCancellationAccess, true)
   assert.equal(state.hasActivePaidAccess, true)
   assert.equal(state.canUsePaidMutation, true)
+  assert.equal(state.canAccessProductDashboard, true)
+  assert.equal(canAccessProductDashboard(state), true)
   assert.equal(state.isReadOnlyExpiredSubscriber, false)
 })
 

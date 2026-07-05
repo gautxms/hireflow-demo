@@ -19,8 +19,16 @@ export function hasActiveSubscription(status) {
   return ACTIVE_STATUSES.has(normalized) || TRIALING_STATUSES.has(normalized)
 }
 
-export function canAccessProductDashboard(status) {
-  return hasActiveSubscription(status)
+function getSubscriptionStatus(subscriptionStateOrSubscription) {
+  if (typeof subscriptionStateOrSubscription === 'string') {
+    return normalizeSubscriptionStatus(subscriptionStateOrSubscription)
+  }
+
+  return normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
+}
+
+export function canAccessProductDashboard(subscriptionStateOrSubscription, now = new Date()) {
+  return hasActivePaidAccess(subscriptionStateOrSubscription, now)
 }
 
 
@@ -36,17 +44,17 @@ export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, no
 }
 
 export function hasScheduledCancellationAccess(subscriptionStateOrSubscription, now = new Date()) {
-  const status = normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
+  const status = getSubscriptionStatus(subscriptionStateOrSubscription)
   return Boolean(CANCELED_STATUSES.has(status) && getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now))
 }
 
 export function hasActivePaidAccess(subscriptionStateOrSubscription, now = new Date()) {
-  const status = normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
+  const status = getSubscriptionStatus(subscriptionStateOrSubscription)
   return ACTIVE_STATUSES.has(status) || TRIALING_STATUSES.has(status) || hasScheduledCancellationAccess(subscriptionStateOrSubscription, now)
 }
 
 export function isReadOnlyExpiredSubscriber(subscriptionStateOrSubscription, now = new Date()) {
-  const status = normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
+  const status = getSubscriptionStatus(subscriptionStateOrSubscription)
   return Boolean(CANCELED_STATUSES.has(status) && !getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now))
 }
 
@@ -104,6 +112,6 @@ export function resolveSubscriptionState({ user = null, subscription = null } = 
     hasScheduledCancellationAccess: hasScheduledCancellationAccess({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
     isReadOnlyExpiredSubscriber: isReadOnlyExpiredSubscriber({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
     canUsePaidMutation: canUsePaidMutation({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
-    canAccessProductDashboard: isActive || trialing,
+    canAccessProductDashboard: hasActivePaidAccess({ status: rawStatus, cancellationEffectiveAt: subscription?.cancellationEffectiveAt || subscription?.cancellation_effective_at || user?.cancellationEffectiveAt || user?.cancellation_effective_at, currentPeriodEnd: subscription?.currentPeriodEnd || subscription?.current_period_end || user?.currentPeriodEnd || user?.current_period_end }),
   }
 }
