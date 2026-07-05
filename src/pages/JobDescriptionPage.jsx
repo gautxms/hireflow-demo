@@ -33,7 +33,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     setError('')
 
     try {
-      const response = await fetch(`${API_BASE}/job-descriptions?includeArchived=true`, {
+      const response = await fetch(`${API_BASE}/job-descriptions`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const payload = await response.json().catch(() => ({}))
@@ -108,42 +108,39 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     }
   }, [activeItem, fetchItems, modalMode, onRequireAuth, token])
 
-  const runJobMutation = useCallback(async ({ item, hardDelete = false }) => {
-    const response = await fetch(
-      `${API_BASE}/job-descriptions/${item.id}${hardDelete ? '?hardDelete=true' : ''}`,
-      {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+  const archiveJob = useCallback(async (item) => {
+    const response = await fetch(`${API_BASE}/job-descriptions/${item.id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
       },
-    )
+    })
 
     const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(payload.error || 'Unable to update job description')
+    if (!response.ok) throw new Error(payload.error || 'Unable to archive job description')
   }, [token])
 
-  const [deletingJobId, setDeletingJobId] = useState('')
+  const [archivingJobId, setArchivingJobId] = useState('')
 
-  const handleDelete = useCallback(async (item) => {
-    const confirmedHardDelete = window.confirm(
-      `Permanently delete "${item.title || 'Untitled role'}"? Linked resumes/analyses may be affected if dependencies exist.`,
+  const handleArchive = useCallback(async (item) => {
+    const confirmedArchive = window.confirm(
+      'Archive this job? It will be hidden from active job lists, but historical analyses and candidate results will remain available.',
     )
-    if (!confirmedHardDelete) return
+    if (!confirmedArchive) return
 
     setError('')
     setSuccessMessage('')
     try {
-      setDeletingJobId(String(item.id))
-      await runJobMutation({ item, hardDelete: true })
+      setArchivingJobId(String(item.id))
+      await archiveJob(item)
       await fetchItems()
-      setSuccessMessage('Job deleted successfully.')
+      setSuccessMessage('Job archived successfully.')
     } catch (requestError) {
-      setError(requestError.message || 'Unable to delete job description')
+      setError(requestError.message || 'Unable to archive job description')
     } finally {
-      setDeletingJobId('')
+      setArchivingJobId('')
     }
-  }, [fetchItems, runJobMutation])
+  }, [archiveJob, fetchItems])
 
   return (
     <section className="analyses-layout job-description-page">
@@ -171,7 +168,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
           </p>
         ) : null}
         {!isLoading && !error && items.length > 0 ? (
-          <JobsTable items={items} onEdit={handleOpenEdit} onDelete={handleDelete} deletingId={deletingJobId} />
+          <JobsTable items={items} onEdit={handleOpenEdit} onArchive={handleArchive} archivingId={archivingJobId} />
         ) : null}
 
         <JobModal
