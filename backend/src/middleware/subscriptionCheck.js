@@ -3,7 +3,7 @@ import {
   resolveMonthlyResumeAnalysisLimit,
 } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
-import { canUsePaidMutation } from '../utils/subscriptionAccess.js'
+import { canUsePaidMutation, hasActivePaidAccess, hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
 
 export function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
@@ -52,7 +52,11 @@ export async function requireActiveSubscription(req, res, next) {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    if (!canUsePaidMutation(user)) {
+    const rawSubscriptionStatus = user.subscription_status
+    const hasScheduledCancellationPaidAccess = hasScheduledCancellationAccess(user)
+    const hasPaidMutationAccess = canUsePaidMutation(user)
+
+    if (!hasPaidMutationAccess) {
       return res.status(403).json({
         error: 'Subscription inactive',
         message:
@@ -60,7 +64,11 @@ export async function requireActiveSubscription(req, res, next) {
       })
     }
 
-    req.subscriptionStatus = user.subscription_status
+    req.rawSubscriptionStatus = rawSubscriptionStatus
+    req.hasActivePaidAccess = hasActivePaidAccess(user)
+    req.hasScheduledCancellationAccess = hasScheduledCancellationPaidAccess
+    req.subscriptionStatus = hasScheduledCancellationPaidAccess ? 'active' : rawSubscriptionStatus
+    req.subscriptionStatusForQuota = hasScheduledCancellationPaidAccess ? 'active' : rawSubscriptionStatus
     return next()
   } catch (error) {
     console.error('[Subscription] Failed to validate subscription status:', error)
@@ -73,7 +81,8 @@ export async function enforceUploadLimit(req, res, next) {
     const monthStart = getMonthStart()
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown'
     const usageOverride = await getUsageOverride(req.userId, monthStart)
-    const uploadLimit = resolveMonthlyResumeAnalysisLimit(req.subscriptionStatus, usageOverride)
+    const quotaSubscriptionStatus = req.subscriptionStatusForQuota || req.subscriptionStatus
+    const uploadLimit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride)
     const currentUsage = await getUsageCount(req.userId, monthStart, usageOverride?.reset_usage)
     const requestedUploads = Math.max(req.files?.length || 1, 1)
     const projectedUsage = currentUsage + requestedUploads

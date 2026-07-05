@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PAID_MONTHLY_RESUME_ANALYSIS_LIMIT } from '../config/resumeAnalysisQuota.js'
+import { PAID_MONTHLY_RESUME_ANALYSIS_LIMIT, TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
 import { enforceUploadLimit, requireActiveSubscription, trackUploadUsage } from './subscriptionCheck.js'
 
@@ -39,6 +39,34 @@ test('requireActiveSubscription allows active subscribers', async () => {
 
     assert.equal(nextCalled, true)
     assert.equal(req.subscriptionStatus, 'active')
+    assert.equal(req.subscriptionStatusForQuota, 'active')
+    assert.equal(req.rawSubscriptionStatus, 'active')
+    assert.equal(req.hasActivePaidAccess, true)
+    assert.equal(req.hasScheduledCancellationAccess, false)
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+test('requireActiveSubscription preserves trialing status for trial quota', async () => {
+  const originalQuery = pool.query
+  pool.query = async () => ({ rows: [{ id: 1, subscription_status: 'trialing' }] })
+
+  try {
+    const req = { userId: 1 }
+    const res = createRes()
+    let nextCalled = false
+
+    await requireActiveSubscription(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, true)
+    assert.equal(req.subscriptionStatus, 'trialing')
+    assert.equal(req.subscriptionStatusForQuota, 'trialing')
+    assert.equal(req.rawSubscriptionStatus, 'trialing')
+    assert.equal(req.hasActivePaidAccess, true)
+    assert.equal(req.hasScheduledCancellationAccess, false)
   } finally {
     pool.query = originalQuery
   }
@@ -100,7 +128,11 @@ test('requireActiveSubscription allows scheduled cancellation before effective d
     })
 
     assert.equal(nextCalled, true)
-    assert.equal(req.subscriptionStatus, 'cancelled')
+    assert.equal(req.subscriptionStatus, 'active')
+    assert.equal(req.subscriptionStatusForQuota, 'active')
+    assert.equal(req.rawSubscriptionStatus, 'cancelled')
+    assert.equal(req.hasActivePaidAccess, true)
+    assert.equal(req.hasScheduledCancellationAccess, true)
   } finally {
     pool.query = originalQuery
   }
@@ -154,6 +186,73 @@ test('enforceUploadLimit allows active paid users through the advertised 800-res
     assert.equal(req.usageContext.uploadLimit, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT)
     assert.equal(req.usageContext.currentUsage, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT - 1)
     assert.equal(req.usageContext.requestedUploads, 1)
+    assert.equal(req.usageContext.remainingUploads, 1)
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+test('enforceUploadLimit keeps trialing users on the trial resume allowance', async () => {
+  const originalQuery = pool.query
+  pool.query = async (sql) => {
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  }
+
+  try {
+    const req = {
+      userId: 1,
+      subscriptionStatus: 'trialing',
+      subscriptionStatusForQuota: 'trialing',
+      ip: '127.0.0.1',
+      headers: {},
+      files: [{ originalname: 'resume.pdf' }],
+    }
+    const res = createRes()
+    let nextCalled = false
+
+    await enforceUploadLimit(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, false)
+    assert.equal(res.statusCode, 429)
+    assert.equal(res.body.limit, TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT)
+    assert.equal(res.body.used, TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT)
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+test('enforceUploadLimit gives scheduled-cancellation users the paid resume allowance', async () => {
+  const originalQuery = pool.query
+  pool.query = async (sql) => {
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: PAID_MONTHLY_RESUME_ANALYSIS_LIMIT - 1 }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  }
+
+  try {
+    const req = {
+      userId: 1,
+      subscriptionStatus: 'active',
+      subscriptionStatusForQuota: 'active',
+      rawSubscriptionStatus: 'cancelled',
+      hasScheduledCancellationAccess: true,
+      ip: '127.0.0.1',
+      headers: {},
+      files: [{ originalname: 'resume.pdf' }],
+    }
+    const res = createRes()
+    let nextCalled = false
+
+    await enforceUploadLimit(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, true)
+    assert.equal(req.usageContext.uploadLimit, PAID_MONTHLY_RESUME_ANALYSIS_LIMIT)
     assert.equal(req.usageContext.remainingUploads, 1)
   } finally {
     pool.query = originalQuery
