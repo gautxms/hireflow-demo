@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
-import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage } from './billingPageActions'
+import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, shouldRenderBillingHistory } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -148,6 +148,7 @@ export default function BillingPage() {
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
   const shouldShowCancelAction = canShowCancelAction(subscriptionState, subscription)
+  const hasBillingHistory = shouldRenderBillingHistory(history)
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -344,33 +345,33 @@ export default function BillingPage() {
               ) : null}
             </article>
 
-            <article className="billing-page__card">
-              <h2 className="billing-page__history-title">Billing History (past 12 months)</h2>
-              <table className="billing-page__table">
-                <thead>
-                  <tr>
-                    <th className="billing-page__table-head">Date</th>
-                    <th className="billing-page__table-head">Amount</th>
-                    <th className="billing-page__table-head">Status</th>
-                    <th className="billing-page__table-head">Invoice</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.length === 0 ? (
-                    <tr><td colSpan={4} className="billing-page__table-cell--empty"><StatePattern kind="empty" compact title="No invoices yet" description="Invoices will appear after your first successful billing cycle." /></td></tr>
-                  ) : history.map((row) => (
-                    <tr key={row.id}>
-                      <td className="billing-page__table-cell--pad" data-label="Date">{formatDate(row.date)}</td>
-                      <td className="billing-page__table-cell--pad" data-label="Amount">{row.amountFormatted}</td>
-                      <td className="billing-page__table-cell--pad" data-label="Status"><span className="billing-page__invoice-status">{row.status}</span></td>
-                      <td className="billing-page__table-cell--pad" data-label="Invoice">
-                        <button type="button" className="hf-btn hf-btn--secondary" onClick={() => downloadInvoice(row.id)} disabled={!row.canDownload}>Download PDF</button>
-                      </td>
+            {hasBillingHistory ? (
+              <article className="billing-page__card">
+                <h2 className="billing-page__history-title">Billing History (past 12 months)</h2>
+                <table className="billing-page__table">
+                  <thead>
+                    <tr>
+                      <th className="billing-page__table-head">Date</th>
+                      <th className="billing-page__table-head">Amount</th>
+                      <th className="billing-page__table-head">Status</th>
+                      <th className="billing-page__table-head">Invoice</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </article>
+                  </thead>
+                  <tbody>
+                    {history.map((row) => (
+                      <tr key={row.id}>
+                        <td className="billing-page__table-cell--pad" data-label="Date">{formatDate(row.date)}</td>
+                        <td className="billing-page__table-cell--pad" data-label="Amount">{row.amountFormatted}</td>
+                        <td className="billing-page__table-cell--pad" data-label="Status"><span className="billing-page__invoice-status">{row.status}</span></td>
+                        <td className="billing-page__table-cell--pad" data-label="Invoice">
+                          <button type="button" className="hf-btn hf-btn--secondary" onClick={() => downloadInvoice(row.id)} disabled={!row.canDownload}>Download PDF</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </article>
+            ) : null}
           </>
         ) : null}
       </section>

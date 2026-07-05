@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, hasScheduledCancellation } from './billingPageActions.js'
+import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, hasScheduledCancellation, shouldRenderBillingHistory } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -76,4 +76,13 @@ test('monthly cancellation path remains available before a cancellation is sched
 
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), true)
   assert.equal(getCancelActionLabel(subscription.plan), 'Cancel subscription')
+})
+
+test('billing history is hidden when invoice history is empty or unavailable', () => {
+  assert.equal(shouldRenderBillingHistory([]), false)
+  assert.equal(shouldRenderBillingHistory(null), false)
+})
+
+test('billing history renders when invoice rows exist', () => {
+  assert.equal(shouldRenderBillingHistory([{ id: 'inv_123', canDownload: true }]), true)
 })
