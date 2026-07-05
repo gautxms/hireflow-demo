@@ -133,14 +133,14 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     try {
       setArchivingJobId(String(item.id))
       await archiveJob(item)
-      await fetchItems()
+      setItems((currentItems) => currentItems.filter((currentItem) => String(currentItem.id) !== String(item.id)))
       setSuccessMessage('Job archived successfully.')
     } catch (requestError) {
       setError(requestError.message || 'Unable to archive job description')
     } finally {
       setArchivingJobId('')
     }
-  }, [archiveJob, fetchItems])
+  }, [archiveJob])
 
   return (
     <section className="analyses-layout job-description-page">
