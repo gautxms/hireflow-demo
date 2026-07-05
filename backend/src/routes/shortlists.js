@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { resolveCandidateResumeUuid } from '../utils/candidateIdentity.js'
 
 const router = Router()
@@ -120,7 +121,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireActiveSubscription, async (req, res) => {
   const name = String(req.body?.name || '').trim()
   const description = req.body?.description ? String(req.body.description).trim() : null
   const shortlistJobId = normalizeJobDescriptionId(req.body?.jobDescriptionId)
@@ -171,7 +172,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireActiveSubscription, async (req, res) => {
   const name = req.body?.name === undefined ? undefined : String(req.body.name || '').trim().slice(0, 120)
   const description = req.body?.description === undefined ? undefined : (req.body.description ? String(req.body.description).trim().slice(0, 500) : null)
 
@@ -205,7 +206,7 @@ router.patch('/:id', async (req, res) => {
   }
 })
 
-router.post('/:id/archive', async (req, res) => {
+router.post('/:id/archive', requireActiveSubscription, async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE shortlists
@@ -222,7 +223,7 @@ router.post('/:id/archive', async (req, res) => {
   }
 })
 
-router.post('/:id/unarchive', async (req, res) => {
+router.post('/:id/unarchive', requireActiveSubscription, async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE shortlists
@@ -239,7 +240,7 @@ router.post('/:id/unarchive', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireActiveSubscription, async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM shortlists WHERE id = $1 AND user_id = $2 RETURNING id', [req.params.id, req.userId])
     if (!result.rows[0]) return res.status(404).json({ error: 'Shortlist not found' })
@@ -331,7 +332,7 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-router.post('/:id/candidates', async (req, res) => {
+router.post('/:id/candidates', requireActiveSubscription, async (req, res) => {
   const resumeId = resolveCandidateResumeUuid(req.body?.resumeId)
     || resolveCandidateResumeUuid(req.body?.candidateId)
     || resolveCandidateResumeUuid(req.body)
@@ -561,7 +562,7 @@ export async function batchAddShortlistCandidates({ db = pool, shortlistId, user
   }
 }
 
-router.post('/:id/candidates/batch', async (req, res) => {
+router.post('/:id/candidates/batch', requireActiveSubscription, async (req, res) => {
   const normalizedResumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
   const resumeIds = normalizedResumeIds.valid
   const malformedIds = normalizedResumeIds.invalid
@@ -619,7 +620,7 @@ router.post('/:id/candidates/batch', async (req, res) => {
   }
 })
 
-router.delete('/:id/candidates/:resumeId', async (req, res) => {
+router.delete('/:id/candidates/:resumeId', requireActiveSubscription, async (req, res) => {
   try {
     const resolvedResumeId = resolveCandidateResumeUuid(req.params.resumeId) || String(req.params.resumeId || '').trim()
     const ownerCheck = await pool.query(
@@ -649,7 +650,7 @@ router.delete('/:id/candidates/:resumeId', async (req, res) => {
   }
 })
 
-router.post('/:id/candidates/batch-remove', async (req, res) => {
+router.post('/:id/candidates/batch-remove', requireActiveSubscription, async (req, res) => {
   const normalizedResumeIds = normalizeBatchResumeIds(req.body?.resumeIds)
   const resumeIds = normalizedResumeIds.valid
   const malformedIds = normalizedResumeIds.invalid

@@ -66,7 +66,7 @@ test('requireActiveSubscription blocks Paddle failed payment states', async () =
   const originalQuery = pool.query
 
   try {
-    for (const status of ['past_due', 'payment_failed', 'paused', 'cancelled']) {
+    for (const status of ['past_due', 'payment_failed', 'paused']) {
       pool.query = async () => ({ rows: [{ id: 1, subscription_status: status }] })
       const req = { userId: 1 }
       const res = createRes()
@@ -80,6 +80,48 @@ test('requireActiveSubscription blocks Paddle failed payment states', async () =
       assert.equal(res.statusCode, 403)
       assert.equal(res.body.error, 'Subscription inactive')
     }
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+
+test('requireActiveSubscription allows scheduled cancellation before effective date', async () => {
+  const originalQuery = pool.query
+  pool.query = async () => ({ rows: [{ id: 1, subscription_status: 'cancelled', cancellation_effective_at: '2099-01-01T00:00:00Z' }] })
+
+  try {
+    const req = { userId: 1 }
+    const res = createRes()
+    let nextCalled = false
+
+    await requireActiveSubscription(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, true)
+    assert.equal(req.subscriptionStatus, 'cancelled')
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+test('requireActiveSubscription blocks expired canceled subscribers from paid mutations', async () => {
+  const originalQuery = pool.query
+  pool.query = async () => ({ rows: [{ id: 1, subscription_status: 'cancelled', cancellation_effective_at: '2025-01-01T00:00:00Z' }] })
+
+  try {
+    const req = { userId: 1 }
+    const res = createRes()
+    let nextCalled = false
+
+    await requireActiveSubscription(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, false)
+    assert.equal(res.statusCode, 403)
+    assert.equal(res.body.error, 'Subscription inactive')
   } finally {
     pool.query = originalQuery
   }

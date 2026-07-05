@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { buildCandidatesCsv } from '../services/csvExportService.js'
 import { applyCandidateFilters, normalizeCandidate, sortCandidates } from './results.js'
 
 const router = Router()
 const EXPORT_LIMIT = 1000
 
-router.post('/csv', requireAuth, async (req, res) => {
+router.post('/csv', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const {
       candidates = [],

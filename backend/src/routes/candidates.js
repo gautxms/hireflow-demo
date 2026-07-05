@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Buffer } from 'node:buffer'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { matchCandidatesToJob } from '../services/matchingService.js'
 import { pool } from '../db/client.js'
 import { normalizeTags } from './candidateTagsState.js'
@@ -514,7 +515,7 @@ function resolveResumeTextForReanalysis(row) {
   return normalizedTextBlocks.length > 0 ? normalizedTextBlocks.join('\n\n') : null
 }
 
-router.post('/reanalyse', requireAuth, async (req, res) => {
+router.post('/reanalyse', requireAuth, requireActiveSubscription, async (req, res) => {
   const jobDescription = String(req.body?.jobDescription || '').trim()
   if (!jobDescription) {
     return res.status(400).json({ error: 'jobDescription is required' })
@@ -740,7 +741,7 @@ router.get('/directory', requireAuth, async (req, res) => {
   }
 })
 
-router.post('/match', requireAuth, async (req, res) => {
+router.post('/match', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const candidates = Array.isArray(req.body?.candidates) ? req.body.candidates : []
     const jobDescriptionId = req.body?.jobDescriptionId ?? null
@@ -768,7 +769,7 @@ router.post('/match', requireAuth, async (req, res) => {
   }
 })
 
-router.post('/tags/bulk', requireAuth, async (req, res) => {
+router.post('/tags/bulk', requireAuth, requireActiveSubscription, async (req, res) => {
   const operation = ['add', 'remove', 'replace'].includes(req.body?.operation) ? req.body.operation : null
   const tags = normalizeTags(req.body?.tags)
   const rawResumeIds = Array.isArray(req.body?.resumeIds) ? req.body.resumeIds : []
