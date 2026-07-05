@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Trash2 } from 'lucide-react'
+import { Archive } from 'lucide-react'
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -106,7 +106,7 @@ function SkillsPreviewPopover({ item, isOpen, onOpen, onClose, popoverId }) {
   )
 }
 
-export default function JobsTable({ items = [], onEdit, onDelete, deletingId = '' }) {
+export default function JobsTable({ items = [], onEdit, onArchive, archivingId = '' }) {
   const [openSkillsPopoverId, setOpenSkillsPopoverId] = useState(null)
 
   useEffect(() => {
@@ -198,11 +198,11 @@ export default function JobsTable({ items = [], onEdit, onDelete, deletingId = '
                   <button
                     type="button"
                     className="hf-btn hf-btn--secondary"
-                    onClick={() => onDelete?.(item)}
-                    disabled={deletingId === itemId}
-                    aria-label={`Delete job ${item.title || 'Untitled role'}`}
+                    onClick={() => onArchive?.(item)}
+                    disabled={archivingId === itemId || item.status === 'archived'}
+                    aria-label={`Archive job ${item.title || 'Untitled role'}`}
                   >
-                    {deletingId === itemId ? 'Deleting…' : <Trash2 size={16} aria-hidden="true" />}
+                    {archivingId === itemId ? 'Archiving…' : <Archive size={16} aria-hidden="true" />}
                   </button>
                 </td>
               </tr>
