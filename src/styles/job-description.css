@@ -27,15 +27,12 @@
 }
 
 .jobs-table__col-skills {
-  width: 10%;
+  width: 12%;
 }
 
-.jobs-table__col-created {
-  width: 13%;
-}
-
+.jobs-table__col-created,
 .jobs-table__col-updated {
-  width: 13%;
+  width: 12%;
 }
 
 .jobs-table__col-actions {
@@ -46,6 +43,16 @@
 .jobs-table td {
   padding-right: clamp(0.45rem, 0.8vw, 0.9rem);
   padding-left: clamp(0.45rem, 0.8vw, 0.9rem);
+}
+
+.jobs-table__header--created,
+.jobs-table__header--updated,
+.jobs-table__cell--created,
+.jobs-table__cell--updated {
+  padding-right: clamp(0.55rem, 0.75vw, 0.8rem);
+  padding-left: clamp(0.55rem, 0.75vw, 0.8rem);
+  text-align: left;
+  white-space: nowrap;
 }
 
 .jobs-table__actions-header,

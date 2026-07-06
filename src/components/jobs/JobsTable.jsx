@@ -154,8 +154,8 @@ export default function JobsTable({ items = [], onEdit, onArchive, archivingId =
             <th scope="col">Experience</th>
             <th scope="col">Location</th>
             <th scope="col">Skills</th>
-            <th scope="col">Created</th>
-            <th scope="col">Updated</th>
+            <th scope="col" className="jobs-table__header--created">Created</th>
+            <th scope="col" className="jobs-table__header--updated">Updated</th>
             <th scope="col" className="jobs-table__actions-header">Actions</th>
           </tr>
         </thead>
@@ -196,11 +196,11 @@ export default function JobsTable({ items = [], onEdit, onArchive, archivingId =
                   />
                 </td>
 
-                <td className="analyses-layout__cell" data-label="Created">
+                <td className="analyses-layout__cell jobs-table__cell--created" data-label="Created">
                   <span className="analyses-layout__meta">{formatDateTime(item.createdAt)}</span>
                 </td>
 
-                <td className="analyses-layout__cell" data-label="Updated">
+                <td className="analyses-layout__cell jobs-table__cell--updated" data-label="Updated">
                   <span className="analyses-layout__meta">{formatDateTime(item.updatedAt || item.createdAt)}</span>
                 </td>
 
