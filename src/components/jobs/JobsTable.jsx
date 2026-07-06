@@ -137,9 +137,19 @@ export default function JobsTable({ items = [], onEdit, onArchive, archivingId =
   return (
     <div className="analyses-layout__table-shell">
       <table className="analyses-layout__table jobs-table" aria-label="Job descriptions table">
+        <colgroup>
+          <col className="jobs-table__col-title" />
+          <col className="jobs-table__col-status" />
+          <col className="jobs-table__col-experience" />
+          <col className="jobs-table__col-location" />
+          <col className="jobs-table__col-skills" />
+          <col className="jobs-table__col-created" />
+          <col className="jobs-table__col-updated" />
+          <col className="jobs-table__col-actions" />
+        </colgroup>
         <thead>
           <tr>
-            <th scope="col" className="jobs-table__col-title">Title</th>
+            <th scope="col">Title</th>
             <th scope="col">Status</th>
             <th scope="col">Experience</th>
             <th scope="col">Location</th>
