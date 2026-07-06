@@ -11,7 +11,7 @@
 }
 
 .jobs-table__col-title {
-  width: 27%;
+  width: 25%;
 }
 
 .jobs-table__col-status {
@@ -19,24 +19,27 @@
 }
 
 .jobs-table__col-experience {
-  width: 10%;
+  width: 11%;
 }
 
 .jobs-table__col-location {
-  width: 14%;
+  width: 13%;
 }
 
 .jobs-table__col-skills {
-  width: 9%;
+  width: 10%;
 }
 
-.jobs-table__col-created,
+.jobs-table__col-created {
+  width: 13%;
+}
+
 .jobs-table__col-updated {
-  width: 12%;
+  width: 13%;
 }
 
 .jobs-table__col-actions {
-  width: 6%;
+  width: 7%;
 }
 
 .jobs-table th,
