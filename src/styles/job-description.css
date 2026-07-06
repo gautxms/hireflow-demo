@@ -3,11 +3,11 @@
 }
 
 .job-description-page .analyses-layout__table-shell {
-  overflow-x: visible;
+  overflow-x: auto;
 }
 
 .jobs-table {
-  min-width: 0;
+  min-width: 1120px;
 }
 
 .jobs-table__col-title {
@@ -222,6 +222,16 @@
 .job-form__file-row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
 .job-form__file-clear { border: 1px solid var(--color-border); background: #151515; color: var(--color-text-secondary); width: 1.8rem; height: 1.8rem; border-radius: 999px; }
 .job-form__footer { position: sticky; bottom: 0; background: #111111; border-top: 1px solid #1e1e1e; padding: 0.7rem 1rem; display: flex; justify-content: flex-end; gap: 0.5rem; }
+
+@media (max-width: 860px) {
+  .job-description-page .analyses-layout__table-shell {
+    overflow-x: visible;
+  }
+
+  .jobs-table {
+    min-width: 100%;
+  }
+}
 
 @media (max-width: 768px) {
   .job-form__grid--two, .job-form__grid--three { grid-template-columns: 1fr; }
