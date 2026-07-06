@@ -37,6 +37,10 @@ export function getCancelActionLabel(_plan) {
   return 'Cancel subscription'
 }
 
+export function shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription, now = new Date()) {
+  return Boolean(planAction && !planAction.isSelfServe && !hasScheduledCancellation(subscriptionState, subscription, now))
+}
+
 export function getFutureCancellationEffectiveDate(subscription, now = new Date()) {
   if (!subscription?.cancellationEffectiveAt) return null
   const effectiveDate = new Date(subscription.cancellationEffectiveAt)
