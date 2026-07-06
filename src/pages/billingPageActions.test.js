@@ -42,6 +42,34 @@ test('active reactivated subscription with stale future cancellation date keeps 
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), true)
 })
 
+
+test('active subscription with future cancellationEffectiveAt but no backend schedule signal keeps cancel action', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
+  const subscription = { plan: 'annual', status: 'active', cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
+
+  assert.equal(hasScheduledCancellation(subscriptionState, subscription, NOW), false)
+  assert.equal(getBillingStatusLabel(subscriptionState, subscription, () => '1/7/2027', NOW), 'Active')
+  assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), true)
+})
+
+test('subscription with cancelAtPeriodEnd true and future cancellationEffectiveAt shows access until', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
+  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
+  const format = () => '1/7/2027'
+
+  assert.equal(hasScheduledCancellation(subscriptionState, subscription, NOW), true)
+  assert.equal(getBillingStatusLabel(subscriptionState, subscription, format, NOW), 'Access until 1/7/2027')
+})
+
+test('scheduled cancellation hides cancel subscription and returns access message', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
+  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
+  const format = () => '1/7/2027'
+
+  assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Subscription canceled. Your access remains active until 1/7/2027. You will not be charged again.')
+})
+
 test('scheduled subscription with future cancellation date shows active until status and hides cancel action', () => {
   const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
   const subscription = { plan: 'annual', status: 'active', latestRecordStatus: 'cancelled', cancellationEffectiveAt: '2027-01-07T00:00:00Z' }

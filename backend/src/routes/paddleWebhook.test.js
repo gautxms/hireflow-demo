@@ -163,6 +163,35 @@ function userUpdateCalls(calls) {
 }
 
 
+
+test('POST /api/paddle/webhook clears stale cancellation_effective_at when subscription.updated reactivates without scheduled cancellation', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({ event_id: 'evt_subscription_updated_reactivated_clear_cancel' })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+  const [updateCall] = userUpdateCalls(calls)
+
+  assert.equal(response.status, 200)
+  assert.match(updateCall.sql, /cancellation_effective_at = CASE/)
+  assert.equal(updateCall.params[2], 'active')
+  assert.equal(updateCall.params[8], null)
+})
+
+test('POST /api/paddle/webhook preserves scheduled cancellation effective date from subscription.updated scheduled_change', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_scheduled_cancel_effective_at',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      scheduled_change: { action: 'cancel', effective_at: '2027-01-07T00:00:00.000Z' },
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+  const [updateCall] = userUpdateCalls(calls)
+
+  assert.equal(response.status, 200)
+  assert.equal(updateCall.params[8], '2027-01-07T00:00:00.000Z')
+})
+
 test('POST /api/paddle/webhook derives monthly from subscription.updated canonical monthly item', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({
     event_id: 'evt_subscription_updated_monthly_item',

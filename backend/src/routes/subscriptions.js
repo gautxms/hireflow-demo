@@ -47,6 +47,15 @@ const PLAN_CONFIG = {
   annual: { label: 'Annual', amountCents: 99900, interval: 'year' },
 }
 
+const SCHEDULED_CANCELLATION_STATUSES = new Set([
+  'canceled',
+  'cancelled',
+  'cancel_scheduled',
+  'cancellation_scheduled',
+  'pending_cancellation',
+  'scheduled_cancellation',
+])
+
 
 export function money(cents, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
@@ -59,6 +68,26 @@ export function money(cents, currency = 'USD') {
 export function isoOrNull(value) {
   if (!value) return null
   return new Date(value).toISOString()
+}
+
+function dateOrNull(value) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function isFutureDate(value, now = new Date()) {
+  const date = dateOrNull(value)
+  const comparisonDate = dateOrNull(now)
+  return Boolean(date && comparisonDate && date > comparisonDate)
+}
+
+function normalizeStatus(status) {
+  return String(status || '').trim().toLowerCase()
+}
+
+function hasScheduledCancellationStatus(status) {
+  return SCHEDULED_CANCELLATION_STATUSES.has(normalizeStatus(status))
 }
 
 class BillingError extends Error {
@@ -288,7 +317,7 @@ async function resolveCurrentPlanCost(user, planKey, plan) {
 
   try {
     const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`)
-    return extractCurrentPaddlePlanCost(subscriptionPayload, planKey) || fallback
+    return { ...(extractCurrentPaddlePlanCost(subscriptionPayload, planKey) || fallback), paddleSubscriptionPayload: subscriptionPayload }
   } catch (error) {
     console.warn('[subscriptions.current] Falling back to local plan cost after Paddle subscription lookup failed', {
       userId: user.id,
@@ -307,6 +336,20 @@ function extractBillingDates(paddlePayload = {}) {
     status: data?.status || null,
     providerSubscriptionId: data?.id || null,
   }
+}
+
+function hasPaddleScheduledCancellationSignal(paddlePayload = {}) {
+  const data = paddlePayload?.data || paddlePayload || {}
+  const scheduledChange = data?.scheduled_change || data?.scheduledChange || null
+  const scheduledAction = normalizeStatus(scheduledChange?.action || scheduledChange?.type || scheduledChange?.status)
+
+  return Boolean(
+    data?.cancel_at_period_end
+      || data?.cancelAtPeriodEnd
+      || data?.cancellation_scheduled
+      || data?.cancellationScheduled
+      || scheduledAction.includes('cancel'),
+  )
 }
 
 
@@ -427,6 +470,11 @@ router.get('/current', requireAuth, async (req, res) => {
     const plan = planKey ? (PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly) : null
     const hasBillingPortalAccess = Boolean(user.paddle_customer_id && user.paddle_subscription_id)
     const planCost = await resolveCurrentPlanCost(user, planKey, plan)
+    const cancellationEffectiveAt = isoOrNull(user.cancellation_effective_at)
+    const hasScheduledCancellationSignal = hasScheduledCancellationStatus(user.subscription_status)
+      || hasScheduledCancellationStatus(latestSubscription?.status)
+      || hasPaddleScheduledCancellationSignal(planCost.paddleSubscriptionPayload)
+    const hasScheduledCancellation = isFutureDate(cancellationEffectiveAt) && hasScheduledCancellationSignal
 
     return res.json({
       subscription: {
@@ -444,11 +492,12 @@ router.get('/current', requireAuth, async (req, res) => {
         hasBillingPortalAccess,
         renewalDate: isoOrNull(user.subscription_renewal_date || user.current_period_end),
         nextBillingDate: isoOrNull(user.next_billing_date || user.current_period_end),
-        cancellationEffectiveAt: isoOrNull(user.cancellation_effective_at),
+        cancellationEffectiveAt,
+        cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: user.payment_method_last4
           ? `${user.payment_method_brand || 'Card'} •••• ${user.payment_method_last4}`
           : hasBillingPortalAccess ? 'Card on file' : null,
-        latestRecordStatus: latestSubscription?.status || null,
+        latestRecordStatus: hasScheduledCancellation ? (latestSubscription?.status || 'cancellation_scheduled') : (latestSubscription?.status || null),
         latestRecordCreatedAt: isoOrNull(latestSubscription?.created_at),
       },
     })

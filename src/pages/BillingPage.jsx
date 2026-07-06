@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
-import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, shouldRenderBillingHistory } from './billingPageActions'
+import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, hasScheduledCancellation, shouldRenderBillingHistory } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -147,7 +147,9 @@ export default function BillingPage() {
   const cancelActionLabel = getCancelActionLabel(subscription?.plan)
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
+  const hasScheduledCancellationState = hasScheduledCancellation(subscriptionState, subscription)
   const shouldShowCancelAction = canShowCancelAction(subscriptionState, subscription)
+  const nextBillingLabel = hasScheduledCancellationState ? 'No further billing' : formatDate(subscription?.nextBillingDate)
   const hasBillingHistory = shouldRenderBillingHistory(history)
 
   const switchingLabel = useMemo(() => {
@@ -319,7 +321,7 @@ export default function BillingPage() {
               ) : null}
               <div className="billing-page__meta-grid">
                 <p className="billing-page__meta"><span>Renewal date</span>{formatDate(subscription.renewalDate)}</p>
-                <p className="billing-page__meta"><span>Next billing</span>{formatDate(subscription.nextBillingDate)}</p>
+                <p className="billing-page__meta"><span>Next billing</span>{nextBillingLabel}</p>
                 <p className="billing-page__meta"><span>Payment method</span>{subscription.paymentMethod || 'Managed securely in Paddle'}</p>
                 <p className="billing-page__meta"><span>Cancellation effective</span>{formatDate(subscription.cancellationEffectiveAt)}</p>
               </div>
