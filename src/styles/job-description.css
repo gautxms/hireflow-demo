@@ -3,15 +3,15 @@
 }
 
 .job-description-page .analyses-layout__table-shell {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .jobs-table {
-  min-width: 1120px;
+  min-width: 0;
 }
 
 .jobs-table__col-title {
-  width: 25%;
+  width: 23%;
 }
 
 .jobs-table__col-status {
@@ -19,24 +19,27 @@
 }
 
 .jobs-table__col-experience {
-  width: 11%;
+  width: 10%;
 }
 
 .jobs-table__col-location {
-  width: 13%;
+  width: 11%;
 }
 
 .jobs-table__col-skills {
-  width: 12%;
+  width: 9%;
 }
 
-.jobs-table__col-created,
+.jobs-table__col-created {
+  width: 15%;
+}
+
 .jobs-table__col-updated {
-  width: 12%;
+  width: 15%;
 }
 
 .jobs-table__col-actions {
-  width: 7%;
+  width: 9%;
 }
 
 .jobs-table th,
@@ -52,7 +55,13 @@
   padding-right: clamp(0.55rem, 0.75vw, 0.8rem);
   padding-left: clamp(0.55rem, 0.75vw, 0.8rem);
   text-align: left;
-  white-space: nowrap;
+}
+
+.jobs-table__cell--created .analyses-layout__meta,
+.jobs-table__cell--updated .analyses-layout__meta {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .jobs-table__actions-header,
@@ -229,7 +238,7 @@
   }
 
   .jobs-table {
-    min-width: 100%;
+    min-width: 0;
   }
 }
 
