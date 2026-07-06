@@ -39,6 +39,13 @@ function getSubscriptionStatus(payload) {
   return payload?.data?.status || payload?.status || null
 }
 
+function getScheduledCancellationEffectiveAt(payload) {
+  const scheduledChange = payload?.data?.scheduled_change || payload?.data?.scheduledChange || payload?.scheduled_change || payload?.scheduledChange || null
+  const scheduledAction = String(scheduledChange?.action || scheduledChange?.type || '').toLowerCase()
+  if (!scheduledAction.includes('cancel')) return null
+  return scheduledChange?.effective_at || scheduledChange?.effectiveAt || null
+}
+
 async function resolveUserFromPayload(payload) {
   const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
 
@@ -384,10 +391,15 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
                current_period_end = COALESCE($6, current_period_end),
                next_billing_date = COALESCE($7, next_billing_date),
                paddle_environment = $8,
+               cancellation_effective_at = CASE
+                 WHEN $9 IS NOT NULL THEN $9
+                 WHEN $3 IN ('active', 'trialing') THEN NULL
+                 ELSE cancellation_effective_at
+               END,
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
                updated_at = NOW()
            WHERE id = $1`,
-          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment],
+          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment, getScheduledCancellationEffectiveAt(payload)],
         )
       }
     }

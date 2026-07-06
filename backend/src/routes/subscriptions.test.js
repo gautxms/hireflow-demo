@@ -209,10 +209,11 @@ function errorLogCalls(calls) {
 
 
 
-test('GET /api/subscriptions/current returns cancelAtPeriodEnd true when local cancellation_effective_at is future', async () => {
+test('GET /api/subscriptions/current returns cancelAtPeriodEnd true when future cancellation_effective_at and cancellation status exist', async () => {
   resetPaddleEnv()
   installDbMock({
     ...activeAnnualUser(),
+    subscription_status: 'cancelled',
     paddle_customer_id: 'ctm_123',
     cancellation_effective_at: '2027-01-07T00:00:00.000Z',
   })
@@ -224,6 +225,40 @@ test('GET /api/subscriptions/current returns cancelAtPeriodEnd true when local c
   assert.equal(res.payload.subscription.cancellationEffectiveAt, '2027-01-07T00:00:00.000Z')
   assert.equal(res.payload.subscription.cancelAtPeriodEnd, true)
   assert.equal(res.payload.subscription.latestRecordStatus, 'cancellation_scheduled')
+})
+
+
+test('GET /api/subscriptions/current returns cancelAtPeriodEnd false for active stale future cancellation_effective_at without schedule signal', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+    cancellation_effective_at: '2027-01-07T00:00:00.000Z',
+  })
+  mockPaddleResponse({ payload: { data: { id: 'sub_123', status: 'active' } } })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.cancellationEffectiveAt, '2027-01-07T00:00:00.000Z')
+  assert.equal(res.payload.subscription.cancelAtPeriodEnd, false)
+  assert.equal(res.payload.subscription.latestRecordStatus, null)
+})
+
+test('GET /api/subscriptions/current returns cancelAtPeriodEnd true when Paddle scheduled_change proves cancellation', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+    cancellation_effective_at: '2027-01-07T00:00:00.000Z',
+  })
+  mockPaddleResponse({ payload: { data: { id: 'sub_123', status: 'active', scheduled_change: { action: 'cancel', effective_at: '2027-01-07T00:00:00.000Z' } } } })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.cancelAtPeriodEnd, true)
 })
 
 test('GET /api/subscriptions/current does not return cancelAtPeriodEnd true when cancellation_effective_at is missing or past', async () => {
