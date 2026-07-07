@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import API_BASE from '../config/api'
 import { buildCandidateDirectoryQueryParams } from '../schemas/candidateDirectoryQuerySchema'
+import { resolveDirectoryScoreDisplay } from '../utils/candidateScoreDisplay'
 import AddToShortlistModal from '../components/AddToShortlistModal'
 import '../styles/candidates-directory.css'
 
@@ -50,11 +51,25 @@ function resolveCandidateJob(candidate) {
   }
 }
 
-function getScoreLabel(candidate) {
-  if (candidate.profileScore !== null && candidate.profileScore !== undefined) {
-    return String(candidate.profileScore)
+function CandidateDirectoryScore({ candidate, compact = false }) {
+  const score = resolveDirectoryScoreDisplay(candidate)
+
+  if (compact) {
+    return (
+      <span className={`candidate-directory-score candidate-directory-score--compact${score.isPending ? ' candidate-directory-score--pending' : ''}`}>
+        <span className="candidate-directory-score__value">{score.text}</span>
+        {!score.isPending && <span className="candidate-directory-score__separator" aria-hidden="true"> · </span>}
+        {!score.isPending && <span className="candidate-directory-score__label">{score.label}</span>}
+      </span>
+    )
   }
-  return 'Score pending'
+
+  return (
+    <div className={`candidate-directory-score${score.isPending ? ' candidate-directory-score--pending' : ''}`}>
+      <span className="candidate-directory-score__value">{score.text}</span>
+      {!score.isPending && <span className="candidate-directory-score__label">{score.label}</span>}
+    </div>
+  )
 }
 
 function getExperienceLabel(candidate) {
@@ -307,7 +322,7 @@ export default function CandidatesPage() {
                       </label>
                     </td>
                     <td><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></td>
-                    <td>{getScoreLabel(candidate)}</td>
+                    <td><CandidateDirectoryScore candidate={candidate} /></td>
                     <td>{getExperienceLabel(candidate)}</td>
                     <td>{getSkillsLabel(candidate)}</td>
                     <td>{(candidate.tags || []).join(', ') || 'No tags'}</td>
@@ -327,7 +342,7 @@ export default function CandidatesPage() {
                   <span aria-hidden="true" className="candidates-directory__checkbox-indicator" />
                 </label>
                 <h2><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></h2>
-                <p><strong>Score:</strong> {getScoreLabel(candidate)}</p>
+                <p><strong>Score:</strong> <CandidateDirectoryScore candidate={candidate} compact /></p>
                 <p><strong>Experience:</strong> {getExperienceLabel(candidate)}</p>
                 <p><strong>Skills:</strong> {getSkillsLabel(candidate)}</p>
                 <p><strong>Tags:</strong> {(candidate.tags || []).join(', ') || 'No tags'}</p>
