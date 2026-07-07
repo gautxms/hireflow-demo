@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, hasScheduledCancellation, shouldRenderBillingHistory } from './billingPageActions.js'
+import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, hasScheduledCancellation, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -18,6 +18,33 @@ test('annual billing users do not see a self-serve monthly downgrade action', ()
   assert.notEqual(action.label, 'Downgrade to monthly')
   assert.equal(action.targetPlan, 'monthly')
   assert.equal(action.isSelfServe, false)
+})
+
+
+test('scheduled cancellation hides monthly-billing support note for annual plans', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
+  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
+  const planAction = getBillingPlanAction(subscription.plan)
+
+  assert.equal(shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription, NOW), false)
+})
+
+test('normal active annual plan still shows monthly-billing support note', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
+  const subscription = { plan: 'annual', status: 'active' }
+  const planAction = getBillingPlanAction(subscription.plan)
+
+  assert.equal(shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription, NOW), true)
+  assert.equal(planAction.label, 'Need monthly billing? Contact support and we’ll help update your billing cadence safely.')
+})
+
+test('scheduled cancellation still shows resume-support access note', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
+  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
+  const format = () => '1/7/2027'
+
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Subscription canceled. Your access remains active until 1/7/2027. You will not be charged again.')
+  assert.equal(shouldShowPlanActionSupportNote(getBillingPlanAction(subscription.plan), subscriptionState, subscription, NOW), false)
 })
 
 test('cancel action uses subscription copy for monthly and annual plans', () => {
