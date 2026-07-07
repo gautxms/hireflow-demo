@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import candidatesRouter, { buildDirectoryResponse, closeCandidateRouteResourcesForTests, isCandidateDirectorySqlPaginationEnabled, isCandidateDirectorySyncOnReadEnabled, normalizeResumeTagLookupInput } from './candidates.js'
+import { resolveProfilePayload } from '../services/candidateProfilesService.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
 
@@ -397,6 +398,134 @@ test('GET /candidates/directory calls sync when CANDIDATE_DIRECTORY_SYNC_ON_READ
   assert.equal(status, 200)
   assert.equal(queries.some((sql) => /FROM resumes r\s+LEFT JOIN LATERAL/.test(sql)), true)
   assert.equal(queries.some((sql) => /FROM candidate_profiles cp/.test(sql)), true)
+})
+
+
+test('GET /candidates/directory exposes JD-fit score metadata without changing profileScore', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  const row = {
+    ...candidateProfileRows()[0],
+    profile: {
+      ...candidateProfileRows()[0].profile,
+      name: 'Sophia Martinez',
+      profile_score: 78,
+      matchScore: { score: 87 },
+    },
+    profile_score: 78,
+  }
+  mockDirectoryJsQuery(t, [row])
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
+  const candidate = body.candidates[0]
+
+  assert.equal(status, 200)
+  assert.equal(candidate.profileScore, 78)
+  assert.equal(candidate.scoreRaw, 87)
+  assert.equal(candidate.scoreDisplay, '8.7')
+  assert.equal(candidate.scoreContext, 'jd_fit')
+  assert.equal(candidate.scoreSource, 'matchScore.score')
+  assert.deepEqual(candidate.scoreMetadata, {
+    raw: 87,
+    display: '8.7',
+    unit: 'raw_0_100',
+    displayUnit: 'out_of_10',
+    source: 'matchScore.score',
+    context: 'jd_fit',
+    sourceParseJobId: 'parse-job-1',
+    sourceJobId: '22222222-2222-4222-8222-222222222222',
+    sourceUpdatedAt: '2026-01-02T00:00:00.000Z',
+  })
+})
+
+test('GET /candidates/directory uses profile score metadata for resume-only candidates', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  const row = {
+    ...candidateProfileRows()[1],
+    profile: {
+      ...candidateProfileRows()[1].profile,
+      profile_score: 78,
+    },
+    profile_score: 78,
+    job_description_id: null,
+  }
+  mockDirectoryJsQuery(t, [row])
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
+  const candidate = body.candidates[0]
+
+  assert.equal(status, 200)
+  assert.equal(candidate.profileScore, 78)
+  assert.equal(candidate.scoreRaw, 78)
+  assert.equal(candidate.scoreDisplay, '7.8')
+  assert.equal(candidate.scoreContext, 'profile_only')
+  assert.equal(candidate.scoreSource, 'profile_score')
+})
+
+test('GET /candidates/directory falls back to legacy score metadata when no match score exists', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  const row = {
+    ...candidateProfileRows()[1],
+    profile: {
+      name: 'Legacy Candidate',
+      score: 82,
+      skills: [],
+    },
+    profile_score: null,
+    job_description_id: null,
+  }
+  mockDirectoryJsQuery(t, [row])
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
+  const candidate = body.candidates[0]
+
+  assert.equal(status, 200)
+  assert.equal(candidate.scoreRaw, 82)
+  assert.equal(candidate.scoreDisplay, '8.2')
+  assert.equal(candidate.scoreContext, 'legacy')
+  assert.equal(candidate.scoreSource, 'score')
+})
+
+test('GET /candidates/directory marks missing or invalid score metadata as missing', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  const row = {
+    ...candidateProfileRows()[1],
+    profile: {
+      name: 'No Score Candidate',
+      profile_score: 'not-a-score',
+      matchScore: { score: 'bad' },
+      skills: [],
+    },
+    profile_score: null,
+    job_description_id: null,
+  }
+  mockDirectoryJsQuery(t, [row])
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
+  const candidate = body.candidates[0]
+
+  assert.equal(status, 200)
+  assert.equal(candidate.scoreRaw, null)
+  assert.equal(candidate.scoreDisplay, null)
+  assert.equal(candidate.scoreContext, 'missing')
+  assert.equal(candidate.scoreSource, 'missing')
+})
+
+test('candidate profile payload resolution prefers latest completed parse job candidate over stale resume parse result', () => {
+  const resolved = resolveProfilePayload({
+    resumeParseResult: { candidates: [{ name: 'Sophia Martinez', profile_score: 78 }] },
+    resumeUpdatedAt: '2026-01-01T00:00:00.000Z',
+    parseJobResult: { candidates: [{ name: 'Sophia Martinez', profile_score: 78, matchScore: { score: 87 } }] },
+    parseJobUpdatedAt: '2026-01-02T00:00:00.000Z',
+    parseJobId: 'parse-job-latest',
+  })
+
+  assert.equal(resolved.profile.matchScore.score, 87)
+  assert.equal(resolved.sourceParseJobId, 'parse-job-latest')
+  assert.equal(resolved.sourceUpdatedAt, '2026-01-02T00:00:00.000Z')
 })
 
 test('GET /candidates/directory candidate shape remains shortlist-compatible', async (t) => {
