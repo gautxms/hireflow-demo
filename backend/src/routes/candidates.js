@@ -12,6 +12,7 @@ import { syncCandidateProfilesForUser } from '../services/candidateProfilesServi
 import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { normalizeCandidateDirectoryQuery } from '../../../src/schemas/candidateDirectoryQuerySchema.js'
 import { getDisplayFilename } from '../utils/resumeFileMetadata.js'
+import { resolveCandidateDirectoryScore } from '../utils/candidateDirectoryScore.js'
 
 const router = Router()
 
@@ -340,6 +341,14 @@ function mapCandidateDirectoryRow(row) {
   const skills = normalizedSkills
   const nullableSkills = normalizedSkills.length > 0 ? normalizedSkills : null
   const tags = normalizeStringArray(row.tags)
+  const sourceParseJobId = row.source_parse_job_id || null
+  const sourceJobId = row.job_description_id ? String(row.job_description_id) : null
+  const sourceUpdatedAt = row.source_updated_at
+  const scoreMetadata = resolveCandidateDirectoryScore(profile, {
+    sourceParseJobId,
+    sourceJobId,
+    sourceUpdatedAt,
+  })
 
   return {
     resumeId: String(row.resume_id),
@@ -353,8 +362,15 @@ function mapCandidateDirectoryRow(row) {
       yearsExperience,
       skills: nullableSkills,
     },
+    scoreRaw: scoreMetadata.raw,
+    scoreDisplay: scoreMetadata.display,
+    scoreContext: scoreMetadata.context,
+    scoreSource: scoreMetadata.source,
+    scoreMetadata,
     parseHints: {
       scoreSource: persistedProfileScore !== null ? 'candidate_profile' : (fallbackProfileScore !== null ? 'resume_fallback' : 'missing'),
+      scoreMetadataSource: scoreMetadata.source,
+      scoreMetadataContext: scoreMetadata.context,
       experienceSource: persistedYearsExperience !== null ? 'candidate_profile' : (fallbackYearsExperience !== null ? 'resume_fallback' : 'missing'),
       skillsSource: nullableSkills ? 'candidate_profile' : 'missing',
       scoreNullable: profileScore === null,
@@ -362,13 +378,13 @@ function mapCandidateDirectoryRow(row) {
       skillsNullable: nullableSkills === null,
     },
     provenanceHints: {
-      sourceAnalysisId: row.source_parse_job_id || null,
-      sourceUpdatedAt: row.source_updated_at,
-      sourceJobId: row.job_description_id ? String(row.job_description_id) : null,
+      sourceAnalysisId: sourceParseJobId,
+      sourceUpdatedAt,
+      sourceJobId,
     },
     tags,
-    sourceParseJobId: row.source_parse_job_id || null,
-    sourceUpdatedAt: row.source_updated_at,
+    sourceParseJobId,
+    sourceUpdatedAt,
     associatedJob: row.job_description_id
       ? {
           id: String(row.job_description_id),

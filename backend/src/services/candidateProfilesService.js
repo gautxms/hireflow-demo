@@ -20,7 +20,15 @@ function pickPrimaryCandidate(payload) {
   return null
 }
 
-function resolveProfilePayload({
+function isPerResumeParseJobSnapshot(payload) {
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.candidates)) {
+    return false
+  }
+
+  return payload.candidates.length === 1
+}
+
+export function resolveProfilePayload({
   resumeParseResult,
   resumeUpdatedAt,
   parseJobResult,
@@ -28,6 +36,20 @@ function resolveProfilePayload({
   parseJobId,
 }) {
   const fromResume = pickPrimaryCandidate(resumeParseResult)
+  const fromParseJob = isPerResumeParseJobSnapshot(parseJobResult) ? pickPrimaryCandidate(parseJobResult) : null
+
+  if (fromParseJob) {
+    const normalizedParseJobUpdatedAt = normalizeTimestamp(parseJobUpdatedAt || resumeUpdatedAt)
+    const normalizedResumeUpdatedAt = normalizeTimestamp(resumeUpdatedAt)
+    if (!fromResume || normalizedParseJobUpdatedAt.getTime() >= normalizedResumeUpdatedAt.getTime()) {
+      return {
+        profile: fromParseJob,
+        sourceParseJobId: parseJobId || null,
+        sourceUpdatedAt: parseJobUpdatedAt || resumeUpdatedAt || new Date(),
+      }
+    }
+  }
+
   if (fromResume) {
     return {
       profile: fromResume,
@@ -36,16 +58,7 @@ function resolveProfilePayload({
     }
   }
 
-  const fromParseJob = pickPrimaryCandidate(parseJobResult)
-  if (!fromParseJob) {
-    return null
-  }
-
-  return {
-    profile: fromParseJob,
-    sourceParseJobId: parseJobId || null,
-    sourceUpdatedAt: parseJobUpdatedAt || resumeUpdatedAt || new Date(),
-  }
+  return null
 }
 
 export async function upsertCandidateProfile({
