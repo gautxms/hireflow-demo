@@ -38,8 +38,11 @@ function hasJobContext(candidate, metadata) {
   if (!candidate || typeof candidate !== 'object') return false
   if (candidate.jobDescriptionContextUsed === true) return true
   if (candidate.jobDescriptionContext?.hasContext === true) return true
+  if (candidate.canonical_score_context === 'jd_fit') return true
+  if (candidate.fit_assessment?.has_job_description_context === true) return true
+  if (candidate.hasJobDescription === true || candidate.has_job_description === true) return true
   if (candidate.jobDescriptionId || candidate.job_description_id || candidate.jobId || candidate.job_id) return true
-  return candidate.matchScore !== undefined && candidate.matchScore !== null
+  return false
 }
 
 export function resolveCandidateDirectoryScore(candidate, metadata = {}) {
