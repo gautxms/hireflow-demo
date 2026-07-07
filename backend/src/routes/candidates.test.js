@@ -528,6 +528,26 @@ test('candidate profile payload resolution prefers latest completed parse job ca
   assert.equal(resolved.sourceUpdatedAt, '2026-01-02T00:00:00.000Z')
 })
 
+test('candidate profile payload resolution skips aggregate reanalysis parse job snapshots', () => {
+  const resolved = resolveProfilePayload({
+    resumeParseResult: { candidates: [{ name: 'Attached Resume Candidate', profile_score: 78 }] },
+    resumeUpdatedAt: '2026-01-01T00:00:00.000Z',
+    parseJobResult: {
+      candidates: [
+        { name: 'Different Reanalysed Candidate', profile_score: 92, matchScore: { score: 94 } },
+        { name: 'Attached Resume Candidate', profile_score: 81, matchScore: { score: 88 } },
+      ],
+    },
+    parseJobUpdatedAt: '2026-01-02T00:00:00.000Z',
+    parseJobId: 'aggregate-reanalyse-job',
+  })
+
+  assert.equal(resolved.profile.name, 'Attached Resume Candidate')
+  assert.equal(resolved.profile.profile_score, 78)
+  assert.equal(resolved.sourceParseJobId, null)
+  assert.equal(resolved.sourceUpdatedAt, '2026-01-01T00:00:00.000Z')
+})
+
 test('GET /candidates/directory candidate shape remains shortlist-compatible', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})

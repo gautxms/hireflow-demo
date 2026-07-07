@@ -20,6 +20,14 @@ function pickPrimaryCandidate(payload) {
   return null
 }
 
+function isPerResumeParseJobSnapshot(payload) {
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.candidates)) {
+    return false
+  }
+
+  return payload.candidates.length === 1
+}
+
 export function resolveProfilePayload({
   resumeParseResult,
   resumeUpdatedAt,
@@ -28,7 +36,7 @@ export function resolveProfilePayload({
   parseJobId,
 }) {
   const fromResume = pickPrimaryCandidate(resumeParseResult)
-  const fromParseJob = pickPrimaryCandidate(parseJobResult)
+  const fromParseJob = isPerResumeParseJobSnapshot(parseJobResult) ? pickPrimaryCandidate(parseJobResult) : null
 
   if (fromParseJob) {
     const normalizedParseJobUpdatedAt = normalizeTimestamp(parseJobUpdatedAt || resumeUpdatedAt)
