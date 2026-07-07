@@ -114,6 +114,15 @@ function normalizeNumberFilter(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function normalizeDirectoryScoreFilter(value, scoreUnit) {
+  const parsed = normalizeNumberFilter(value)
+  if (parsed === null) return null
+  if (scoreUnit === 'out_of_10') {
+    return Math.max(0, Math.min(10, parsed)) * 10
+  }
+  return parsed
+}
+
 
 function isCandidateDirectorySyncOnReadEnabled() {
   return String(process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ || '').trim().toLowerCase() === 'true'
@@ -142,9 +151,58 @@ const SAFE_YEARS_EXPERIENCE_SQL = `CASE
   ELSE NULL
 END`
 
+function safeProfileNumberSql(pathExpression) {
+  return `CASE
+  WHEN NULLIF(BTRIM(${pathExpression}), '') ~ '^-?\\d+(\\.\\d+)?$'
+    THEN (${pathExpression})::numeric
+  ELSE NULL
+END`
+}
+
+const SQL_SCORE_SOURCES = {
+  profileScore: SAFE_PROFILE_SCORE_SQL,
+  matchScoreObject: safeProfileNumberSql("cp.profile#>>'{matchScore,score}'"),
+  matchScoreScalar: `CASE
+  WHEN jsonb_typeof(cp.profile->'matchScore') = 'number' THEN (cp.profile->>'matchScore')::numeric
+  WHEN jsonb_typeof(cp.profile->'matchScore') = 'string' AND NULLIF(BTRIM(cp.profile->>'matchScore'), '') ~ '^-?\\d+(\\.\\d+)?$' THEN (cp.profile->>'matchScore')::numeric
+  ELSE NULL
+END`,
+  score: safeProfileNumberSql("cp.profile->>'score'"),
+  scoreBreakdownOverall: safeProfileNumberSql("cp.profile#>>'{scoreBreakdown,overall}'"),
+  overallScoreSnake: safeProfileNumberSql("cp.profile->>'overall_score'"),
+  overallScoreCamel: safeProfileNumberSql("cp.profile->>'overallScore'"),
+  totalScoreSnake: safeProfileNumberSql("cp.profile->>'total_score'"),
+  totalScoreCamel: safeProfileNumberSql("cp.profile->>'totalScore'"),
+}
+
+const EFFECTIVE_DIRECTORY_SCORE_SQL = `CASE
+  WHEN r.job_description_id IS NOT NULL THEN COALESCE(
+    ${SQL_SCORE_SOURCES.matchScoreObject},
+    ${SQL_SCORE_SOURCES.matchScoreScalar},
+    ${SQL_SCORE_SOURCES.score},
+    ${SQL_SCORE_SOURCES.scoreBreakdownOverall},
+    ${SQL_SCORE_SOURCES.overallScoreSnake},
+    ${SQL_SCORE_SOURCES.overallScoreCamel},
+    ${SQL_SCORE_SOURCES.totalScoreSnake},
+    ${SQL_SCORE_SOURCES.totalScoreCamel},
+    ${SQL_SCORE_SOURCES.profileScore},
+    r.profile_score::numeric
+  )
+  ELSE COALESCE(
+    ${SQL_SCORE_SOURCES.profileScore},
+    ${SQL_SCORE_SOURCES.score},
+    ${SQL_SCORE_SOURCES.scoreBreakdownOverall},
+    ${SQL_SCORE_SOURCES.overallScoreSnake},
+    ${SQL_SCORE_SOURCES.overallScoreCamel},
+    ${SQL_SCORE_SOURCES.totalScoreSnake},
+    ${SQL_SCORE_SOURCES.totalScoreCamel},
+    r.profile_score::numeric
+  )
+END`
+
 const DIRECTORY_SORT_SQL = {
   name: 'LOWER(candidate_name)',
-  profileScore: 'effective_profile_score',
+  profileScore: 'effective_directory_score',
   yearsExperience: 'effective_years_experience',
   sourceUpdatedAt: 'cp.source_updated_at',
 }
@@ -198,8 +256,8 @@ function buildCandidateDirectorySql({ userId, filters, normalizedQuery, countOnl
 
   if (filters.experienceMin !== null) where.push(`effective_years_experience >= ${appendSqlParam(params, filters.experienceMin)}`)
   if (filters.experienceMax !== null) where.push(`effective_years_experience <= ${appendSqlParam(params, filters.experienceMax)}`)
-  if (filters.scoreMin !== null) where.push(`effective_profile_score >= ${appendSqlParam(params, filters.scoreMin)}`)
-  if (filters.scoreMax !== null) where.push(`effective_profile_score <= ${appendSqlParam(params, filters.scoreMax)}`)
+  if (filters.scoreMin !== null) where.push(`effective_directory_score >= ${appendSqlParam(params, filters.scoreMin)}`)
+  if (filters.scoreMax !== null) where.push(`effective_directory_score <= ${appendSqlParam(params, filters.scoreMax)}`)
   if (filters.sourceJobId) where.push(`job_description_id::text = ${appendSqlParam(params, filters.sourceJobId)}`)
   if (filters.sourceAnalysisId) where.push(`source_parse_job_id = ${appendSqlParam(params, filters.sourceAnalysisId)}`)
 
@@ -221,6 +279,7 @@ function buildCandidateDirectorySql({ userId, filters, normalizedQuery, countOnl
            jd.title AS job_title,
            COALESCE(tag_agg.tags, ARRAY[]::text[]) AS tags,
            COALESCE(${SAFE_PROFILE_SCORE_SQL}, r.profile_score::numeric) AS effective_profile_score,
+           ${EFFECTIVE_DIRECTORY_SCORE_SQL} AS effective_directory_score,
            COALESCE(${SAFE_YEARS_EXPERIENCE_SQL}, r.years_experience::numeric) AS effective_years_experience,
            COALESCE(NULLIF(BTRIM(cp.profile->>'name'), ''), NULLIF(BTRIM(cp.profile->>'full_name'), ''), NULLIF(BTRIM(r.original_filename), ''), NULLIF(BTRIM(r.filename), ''), 'Candidate') AS candidate_name,
            COALESCE(skills_agg.skills_flat, ARRAY[]::text[]) AS skills_flat
@@ -284,7 +343,7 @@ function buildDirectoryPagedResponse(candidates, totalCount, filtersApplied, nor
 
 const sortComparators = {
   name: (entry) => String(entry.name || '').toLowerCase(),
-  profileScore: (entry) => entry.profileScore ?? Number.NEGATIVE_INFINITY,
+  profileScore: (entry) => entry.scoreRaw ?? entry.profileScore ?? Number.NEGATIVE_INFINITY,
   yearsExperience: (entry) => entry.yearsExperience ?? Number.NEGATIVE_INFINITY,
   sourceUpdatedAt: (entry) => new Date(entry.sourceUpdatedAt || 0).getTime(),
 }
@@ -424,8 +483,9 @@ function filterCandidateDirectoryEntries(entries, filters) {
 
     if (filters.experienceMin !== null && (entry.yearsExperience ?? -Infinity) < filters.experienceMin) return false
     if (filters.experienceMax !== null && (entry.yearsExperience ?? Infinity) > filters.experienceMax) return false
-    if (filters.scoreMin !== null && (entry.profileScore ?? -Infinity) < filters.scoreMin) return false
-    if (filters.scoreMax !== null && (entry.profileScore ?? Infinity) > filters.scoreMax) return false
+    const effectiveScore = entry.scoreRaw ?? entry.profileScore
+    if (filters.scoreMin !== null && (effectiveScore ?? -Infinity) < filters.scoreMin) return false
+    if (filters.scoreMax !== null && (effectiveScore ?? Infinity) > filters.scoreMax) return false
     if (filters.sourceJobId && entry.associatedJob?.id !== filters.sourceJobId) return false
     if (filters.sourceAnalysisId && entry.sourceParseJobId !== filters.sourceAnalysisId) return false
 
@@ -697,8 +757,8 @@ router.get('/directory', requireAuth, async (req, res) => {
       tags: parseStringList(req.query.tags).map((tag) => tag.toLowerCase()),
       experienceMin: normalizeNumberFilter(req.query.experienceMin),
       experienceMax: normalizeNumberFilter(req.query.experienceMax),
-      scoreMin: normalizeNumberFilter(req.query.scoreMin),
-      scoreMax: normalizeNumberFilter(req.query.scoreMax),
+      scoreMin: normalizeDirectoryScoreFilter(req.query.scoreMin, normalizedQuery.scoreUnit),
+      scoreMax: normalizeDirectoryScoreFilter(req.query.scoreMax, normalizedQuery.scoreUnit),
       sourceJobId: normalizeString(req.query.sourceJobId),
       sourceAnalysisId: normalizeString(req.query.sourceAnalysisId),
       search: normalizedQuery.search,

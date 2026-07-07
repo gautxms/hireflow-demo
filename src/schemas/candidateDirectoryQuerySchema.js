@@ -1,6 +1,7 @@
 const SORTABLE_FIELDS = new Set(['name', 'profileScore', 'yearsExperience', 'sourceUpdatedAt'])
 const SORT_DIRECTIONS = new Set(['asc', 'desc'])
 const PARSE_STATUSES = new Set(['queued', 'processing', 'complete', 'failed'])
+const SCORE_UNITS = new Set(['raw_0_100', 'out_of_10'])
 
 export const candidateDirectoryQuerySchema = {
   defaults: {
@@ -51,6 +52,11 @@ function normalizeParseStatus(value) {
   return PARSE_STATUSES.has(normalized) ? normalized : null
 }
 
+function normalizeScoreUnit(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return SCORE_UNITS.has(normalized) ? normalized : null
+}
+
 export function normalizeCandidateDirectoryQuery(rawQuery = {}) {
   return {
     search: normalizeString(rawQuery.search),
@@ -62,6 +68,7 @@ export function normalizeCandidateDirectoryQuery(rawQuery = {}) {
     experienceMax: normalizeNumberFilter(rawQuery.experienceMax),
     scoreMin: normalizeNumberFilter(rawQuery.scoreMin),
     scoreMax: normalizeNumberFilter(rawQuery.scoreMax),
+    scoreUnit: normalizeScoreUnit(rawQuery.scoreUnit),
     sourceJobId: normalizeString(rawQuery.sourceJobId),
     sourceAnalysisId: normalizeString(rawQuery.sourceAnalysisId),
     sortBy: normalizeSortBy(rawQuery.sortBy),
