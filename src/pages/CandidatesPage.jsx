@@ -59,7 +59,7 @@ function CandidateDirectoryScore({ candidate, compact = false }) {
       <span className={`candidate-directory-score candidate-directory-score--compact${score.isPending ? ' candidate-directory-score--pending' : ''}`}>
         <span className="candidate-directory-score__value">{score.text}</span>
         {!score.isPending && <span className="candidate-directory-score__separator" aria-hidden="true"> · </span>}
-        <span className="candidate-directory-score__label">{score.label}</span>
+        {!score.isPending && <span className="candidate-directory-score__label">{score.label}</span>}
       </span>
     )
   }
@@ -67,7 +67,7 @@ function CandidateDirectoryScore({ candidate, compact = false }) {
   return (
     <div className={`candidate-directory-score${score.isPending ? ' candidate-directory-score--pending' : ''}`}>
       <span className="candidate-directory-score__value">{score.text}</span>
-      <span className="candidate-directory-score__label">{score.label}</span>
+      {!score.isPending && <span className="candidate-directory-score__label">{score.label}</span>}
     </div>
   )
 }
