@@ -203,3 +203,35 @@
   .candidates-directory__table-wrap { display: none; }
   .candidates-directory__mobile-list { display: grid; }
 }
+
+.candidate-directory-score {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 4.5rem;
+}
+
+.candidate-directory-score--compact {
+  display: inline;
+  min-width: 0;
+}
+
+.candidate-directory-score__value {
+  color: var(--color-text-primary);
+  font-family: var(--font-family-ui);
+  font-weight: var(--font-weight-semibold, 600);
+  line-height: 1.2;
+}
+
+.candidate-directory-score__label,
+.candidate-directory-score__separator {
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-ui);
+  font-size: var(--type-nav-size);
+  line-height: 1.3;
+}
+
+.candidate-directory-score--pending .candidate-directory-score__value,
+.candidate-directory-score--pending .candidate-directory-score__label {
+  color: var(--color-text-secondary);
+}
