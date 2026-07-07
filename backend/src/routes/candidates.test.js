@@ -438,7 +438,7 @@ test('GET /candidates/directory exposes JD-fit score metadata without changing p
   })
 })
 
-test('GET /candidates/directory uses profile score metadata for resume-only candidates', async (t) => {
+test('GET /candidates/directory uses profile score metadata for resume-only candidates with match score', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(console, 'info', () => {})
   const row = {
@@ -446,6 +446,7 @@ test('GET /candidates/directory uses profile score metadata for resume-only cand
     profile: {
       ...candidateProfileRows()[1].profile,
       profile_score: 78,
+      matchScore: { score: 87 },
     },
     profile_score: 78,
     job_description_id: null,
@@ -461,6 +462,7 @@ test('GET /candidates/directory uses profile score metadata for resume-only cand
   assert.equal(candidate.scoreDisplay, '7.8')
   assert.equal(candidate.scoreContext, 'profile_only')
   assert.equal(candidate.scoreSource, 'profile_score')
+  assert.notEqual(candidate.scoreContext, 'jd_fit')
 })
 
 test('GET /candidates/directory falls back to legacy score metadata when no match score exists', async (t) => {
