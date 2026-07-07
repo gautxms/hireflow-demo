@@ -131,6 +131,7 @@ export default function CandidatesPage() {
       experienceMax: filters.experienceMax,
       scoreMin: filters.scoreMin,
       scoreMax: filters.scoreMax,
+      scoreUnit: filters.scoreMin || filters.scoreMax ? 'out_of_10' : null,
       sourceJobId: filters.sourceJobId,
       sourceAnalysisId: filters.sourceAnalysisId,
       sortBy: querySort.sortBy,

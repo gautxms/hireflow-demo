@@ -255,12 +255,45 @@ test('GET /candidates/directory builds parameterized SQL filters without logging
   assert.equal(status, 200)
   assert.equal(queries.length, 2)
   assert.match(queries[1].sql, /LOWER\(candidate_name\) LIKE \$2/)
-  assert.match(queries[1].sql, /effective_profile_score >= \$\d+/)
-  assert.match(queries[1].sql, /ORDER BY effective_profile_score DESC NULLS LAST/)
+  assert.match(queries[1].sql, /effective_directory_score >= \$\d+/)
+  assert.match(queries[1].sql, /ORDER BY effective_directory_score DESC NULLS LAST/)
   assert.match(queries[1].sql, /LIMIT \$\d+ OFFSET \$\d+/)
   assert.equal(queries[1].sql.includes('AdaSecret'), false)
   assert.equal(queries[1].params.includes('%adasecret%'), true)
   assert.equal(JSON.stringify(logs).includes('AdaSecret'), false)
+})
+
+
+
+test('GET /candidates/directory SQL path normalizes out-of-10 score filters and uses effective directory score', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
+  t.mock.method(console, 'info', () => {})
+  const queries = mockDirectoryQueries(t, candidateProfileRows().slice(0, 1), 1)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?scoreUnit=out_of_10&scoreMin=8&scoreMax=9')
+
+  assert.equal(status, 200)
+  assert.match(queries[1].sql, /effective_directory_score >= \$\d+/)
+  assert.match(queries[1].sql, /effective_directory_score <= \$\d+/)
+  assert.equal(queries[1].params.includes(80), true)
+  assert.equal(queries[1].params.includes(90), true)
+  assert.equal(body.filtersApplied.scoreMin, 80)
+  assert.equal(body.filtersApplied.scoreMax, 90)
+})
+
+test('GET /candidates/directory SQL path sorts score by effective directory score', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION })
+  t.mock.method(console, 'info', () => {})
+  const queries = mockDirectoryQueries(t)
+
+  const { status } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=profileScore&sortDirection=desc')
+
+  assert.equal(status, 200)
+  assert.match(queries[1].sql, /ORDER BY effective_directory_score DESC NULLS LAST/)
 })
 
 test('GET /candidates/directory clamps out-of-range pages before fetching', async (t) => {
@@ -331,7 +364,7 @@ test('GET /candidates/directory SQL numeric ascending sorts put missing values f
   let response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=profileScore&sortDirection=asc')
 
   assert.equal(response.status, 200)
-  assert.match(queries[1].sql, /ORDER BY effective_profile_score ASC NULLS FIRST/)
+  assert.match(queries[1].sql, /ORDER BY effective_directory_score ASC NULLS FIRST/)
 
   t.mock.restoreAll()
   t.mock.method(console, 'info', () => {})
@@ -353,7 +386,7 @@ test('GET /candidates/directory SQL numeric descending sorts put missing values 
   let response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?sortBy=profileScore&sortDirection=desc')
 
   assert.equal(response.status, 200)
-  assert.match(queries[1].sql, /ORDER BY effective_profile_score DESC NULLS LAST/)
+  assert.match(queries[1].sql, /ORDER BY effective_directory_score DESC NULLS LAST/)
 
   t.mock.restoreAll()
   t.mock.method(console, 'info', () => {})
@@ -400,6 +433,74 @@ test('GET /candidates/directory calls sync when CANDIDATE_DIRECTORY_SYNC_ON_READ
   assert.equal(queries.some((sql) => /FROM candidate_profiles cp/.test(sql)), true)
 })
 
+
+
+
+test('GET /candidates/directory JS path uses out-of-10 scoreMin against effective displayed raw score', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  mockDirectoryJsQuery(t, [
+    { ...candidateProfileRows()[0], profile: { ...candidateProfileRows()[0].profile, profile_score: 78, matchScore: { score: 87 } }, profile_score: 78 },
+    { ...candidateProfileRows()[1], profile: { ...candidateProfileRows()[1].profile, profile_score: 78 }, profile_score: 78 },
+  ])
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?scoreUnit=out_of_10&scoreMin=8.5')
+
+  assert.equal(status, 200)
+  assert.deepEqual(body.candidates.map((candidate) => candidate.name), ['Ada Lovelace'])
+  assert.equal(body.filtersApplied.scoreMin, 85)
+})
+
+test('GET /candidates/directory JS path uses out-of-10 scoreMax against effective displayed raw score', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  mockDirectoryJsQuery(t)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?scoreUnit=out_of_10&scoreMax=8')
+
+  assert.equal(status, 200)
+  assert.deepEqual(body.candidates, [])
+  assert.equal(body.filtersApplied.scoreMax, 80)
+})
+
+test('GET /candidates/directory JS path preserves raw scoreMin behavior without scoreUnit', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  mockDirectoryJsQuery(t)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?scoreMin=80')
+
+  assert.equal(status, 200)
+  assert.deepEqual(body.candidates.map((candidate) => candidate.name), ['Ada Lovelace', 'Grace Hopper'])
+  assert.equal(body.filtersApplied.scoreMin, 80)
+})
+
+test('GET /candidates/directory JS path filters profile-only fallback scores on display scale', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  mockDirectoryJsQuery(t, [{ ...candidateProfileRows()[1], profile: { ...candidateProfileRows()[1].profile, profile_score: 78 }, profile_score: 78 }])
+
+  let response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?scoreUnit=out_of_10&scoreMin=7.5')
+  assert.equal(response.status, 200)
+  assert.equal(response.body.candidates.length, 1)
+
+  response = await getJson(createCandidateDirectoryApp(), '/candidates/directory?scoreUnit=out_of_10&scoreMin=8.0')
+  assert.equal(response.status, 200)
+  assert.equal(response.body.candidates.length, 0)
+})
+
+test('GET /candidates/directory safely ignores invalid score values and units', async (t) => {
+  delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
+  t.mock.method(console, 'info', () => {})
+  mockDirectoryJsQuery(t)
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory?scoreUnit=unsafe&scoreMin=NaN&scoreMax=Infinity')
+
+  assert.equal(status, 200)
+  assert.equal(body.candidates.length, 2)
+  assert.equal(body.filtersApplied.scoreMin, null)
+  assert.equal(body.filtersApplied.scoreMax, null)
+})
 
 test('GET /candidates/directory exposes JD-fit score metadata without changing profileScore', async (t) => {
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
