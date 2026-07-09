@@ -68,14 +68,10 @@ export default function DemoVideoModal({ videoUrl, posterUrl, captionsUrl, onClo
         role="dialog"
         aria-modal="true"
         aria-labelledby="demo-video-modal-title"
-        aria-describedby="demo-video-modal-description"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="demo-video-modal__header">
-          <div>
-            <p className="demo-video-modal__eyebrow">Product walkthrough</p>
-            <h2 id="demo-video-modal-title" className="demo-video-modal__title">Watch the HireFlow product demo</h2>
-          </div>
+          <h2 id="demo-video-modal-title" className="demo-video-modal__title">Product demo</h2>
           <button
             ref={closeButtonRef}
             type="button"
@@ -86,10 +82,6 @@ export default function DemoVideoModal({ videoUrl, posterUrl, captionsUrl, onClo
             <X size={18} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
-
-        <p id="demo-video-modal-description" className="demo-video-modal__description">
-          See how HireFlow turns resume batches into ranked candidates, transparent fit reasoning, and recruiter-ready shortlists.
-        </p>
 
         <div className="demo-video-modal__frame">
           <video
