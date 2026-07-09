@@ -148,7 +148,18 @@
 }
 
 .demo-video-modal__dialog {
-  width: min(1280px, calc(100vw - 32px));
+  --demo-video-modal-chrome: 88px;
+  --demo-video-modal-max-width: 1120px;
+  width: min(
+    var(--demo-video-modal-max-width),
+    calc(100vw - 64px),
+    calc(((100vh - var(--demo-video-modal-chrome)) * 16 / 9) + 36px)
+  );
+  width: min(
+    var(--demo-video-modal-max-width),
+    calc(100vw - 64px),
+    calc(((100dvh - var(--demo-video-modal-chrome)) * 16 / 9) + 36px)
+  );
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   display: flex;
@@ -208,14 +219,13 @@
 }
 
 .demo-video-modal__frame {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
   aspect-ratio: 16 / 9;
-  width: min(100%, calc((100vh - 116px) * 16 / 9));
-  width: min(100%, calc((100dvh - 116px) * 16 / 9));
-  max-height: calc(100vh - 116px);
-  max-height: calc(100dvh - 116px);
+  width: 100%;
+  max-height: calc(100vh - var(--demo-video-modal-chrome));
+  max-height: calc(100dvh - var(--demo-video-modal-chrome));
   align-self: center;
   border: 1px solid var(--hf-border-2);
   border-radius: var(--hf-r-xl);
@@ -239,6 +249,7 @@
   }
 
   .demo-video-modal__dialog {
+    --demo-video-modal-chrome: 82px;
     width: 100%;
     max-height: calc(100vh - 24px);
     max-height: calc(100dvh - 24px);
