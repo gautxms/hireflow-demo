@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
+import { getContactInquiryRecipient } from '../services/emailService.js'
 import { createTransactionalNotification } from '../services/notificationService.js'
 
 const router = Router()
@@ -156,6 +157,27 @@ router.post('/contact', async (req, res) => {
       subject,
       message,
     })
+
+    const notification = await createTransactionalNotification({
+      userId: null,
+      type: 'contact.inquiry.received',
+      recipientEmail: getContactInquiryRecipient(),
+      payload: {
+        requesterName: name,
+        requesterEmail: email,
+        company,
+        subject,
+        message,
+      },
+      idempotencyKey: `contact-inquiry:${inquiry.id}:admin`,
+    })
+
+    if (notification.delivery.status === 'failed') {
+      return res.status(503).json({
+        error: 'Contact inquiry was saved, but the notification email could not be sent.',
+        inquiryId: inquiry.id,
+      })
+    }
 
     return res.status(201).json({ success: true, inquiryId: inquiry.id })
   } catch (error) {

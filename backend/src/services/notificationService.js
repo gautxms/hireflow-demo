@@ -1,11 +1,16 @@
 import crypto from 'crypto'
 import { pool } from '../db/client.js'
 import {
+  sendContactInquiryEmail,
   sendDemoRequestConfirmationEmail,
   sendDemoRequestEmail,
 } from './emailService.js'
 
-const SUPPORTED_TRANSACTIONAL_TYPES = new Set(['demo.request.submitted', 'demo.request.received'])
+const SUPPORTED_TRANSACTIONAL_TYPES = new Set([
+  'contact.inquiry.received',
+  'demo.request.submitted',
+  'demo.request.received',
+])
 
 function normalizeIdempotencyKey(inputKey, fallbackSeed) {
   const raw = String(inputKey || '').trim()
@@ -127,6 +132,22 @@ export async function createTransactionalNotification({
   let errorMessage = null
 
   try {
+    if (type === 'contact.inquiry.received') {
+      const sent = await sendContactInquiryEmail({
+        requesterName: payload.requesterName || 'there',
+        requesterEmail: payload.requesterEmail || normalizedEmail,
+        company: payload.company || '',
+        subject: payload.subject || 'Contact inquiry',
+        message: payload.message || 'New contact inquiry.',
+        to: normalizedEmail,
+      })
+
+      if (!sent) {
+        status = 'failed'
+        errorMessage = 'Email transport is unavailable'
+      }
+    }
+
     if (type === 'demo.request.received') {
       const sent = await sendDemoRequestEmail({
         requesterName: payload.requesterName || 'there',
