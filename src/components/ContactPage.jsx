@@ -11,16 +11,16 @@ export default function ContactPage({ onBack }) {
   const [submitError, setSubmitError] = useState('')
 
   const contactMethods = [
-    { icon: 'mail', title: 'Email', description: 'Best for detailed inquiries and deletion requests', value: 'hello@hireflow.dev' },
+    { icon: 'mail', title: 'Email', description: 'Best for detailed inquiries and deletion requests', value: 'Hello@hireflow.dev' },
     { icon: 'chat', title: 'Contact form', description: 'Share product, billing, privacy, or support questions', value: 'Use the form below' },
     { icon: 'target', title: 'Demo requests', description: 'Book time to review HireFlow workflows', value: 'Schedule a demo' }
   ]
 
   const faqItems = [
-    { question: 'How do I contact HireFlow?', answer: 'Use the form on this page or email hello@hireflow.dev. We review messages as quickly as practical during launch preparation.' },
-    { question: 'Can I request data deletion?', answer: 'Yes. Email hello@hireflow.dev with enough detail to identify the account, workspace, job, resume, or candidate record involved.' },
+    { question: 'How do I contact HireFlow?', answer: 'Use the form on this page or email Hello@hireflow.dev. We review messages as quickly as practical during launch preparation.' },
+    { question: 'Can I request data deletion?', answer: 'Yes. Email Hello@hireflow.dev with enough detail to identify the account, workspace, job, resume, or candidate record involved.' },
     { question: 'Can I schedule a call with your team?', answer: 'Yes. Visit the demo page to request a time to review HireFlow workflows.' },
-    { question: 'What if I have billing questions?', answer: 'Send billing questions through this form or to hello@hireflow.dev so we can review your account context.' },
+    { question: 'What if I have billing questions?', answer: 'Send billing questions through this form or to Hello@hireflow.dev so we can review your account context.' },
     { question: 'Do you have privacy and AI processing information?', answer: 'Yes. Review the Privacy Policy, Terms of Service, Cookie Policy, and AI Disclosure linked in the footer.' }
   ]
 

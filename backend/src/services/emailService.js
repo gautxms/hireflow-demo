@@ -56,7 +56,7 @@ function getBrandingValues() {
 
   return {
     companyName: process.env.COMPANY_NAME || 'HireFlow',
-    supportEmail: process.env.SUPPORT_EMAIL || 'gautam@hireflow.dev',
+    supportEmail: process.env.SUPPORT_EMAIL || 'Hello@hireflow.dev',
     logoUrl: process.env.COMPANY_LOGO_URL || `${appUrl}/vite.svg`,
     appUrl,
     year: String(new Date().getUTCFullYear()),
@@ -70,7 +70,7 @@ function getReplyToAddresses() {
 }
 
 function getFromAddress() {
-  return process.env.EMAIL_FROM?.trim() || process.env.SMTP_FROM?.trim() || 'HireFlow <gautam@hireflow.dev>'
+  return process.env.EMAIL_FROM?.trim() || process.env.SMTP_FROM?.trim() || 'Hello@hireflow.dev'
 }
 
 function getSendGridConfig() {
@@ -179,7 +179,7 @@ function withDefaults({ to, firstName, unsubscribeUrl, ...values }) {
 }
 
 export function getDemoRequestRecipient() {
-  return process.env.DEMO_REQUEST_TO_EMAIL || process.env.SUPPORT_EMAIL || 'gautam@hireflow.dev'
+  return process.env.DEMO_REQUEST_TO_EMAIL || process.env.SUPPORT_EMAIL || 'Hello@hireflow.dev'
 }
 
 async function sendViaSes({ to, subject, text, html, templateName }) {
@@ -391,7 +391,7 @@ export function logEmailConfigStatus() {
 }
 
 export async function previewEmailTemplate(templateName, values = {}) {
-  const mergedValues = withDefaults({ to: values.to || 'demo@hireflow.dev', ...values })
+  const mergedValues = withDefaults({ to: values.to || 'Hello@hireflow.dev', ...values })
   const html = await renderTemplate(templateName, mergedValues)
   return { html, values: mergedValues }
 }

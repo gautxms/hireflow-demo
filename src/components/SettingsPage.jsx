@@ -25,7 +25,7 @@ function ComingSoonRow({ title, description, action = 'Coming soon' }) {
 export default function SettingsPage({ onBack }) {
   const [activeTab, setActiveTab] = useState('account')
   const [displayName, setDisplayName] = useState('Gautam')
-  const [email, setEmail] = useState('gautam@hireflow.dev')
+  const [email, setEmail] = useState('Hello@hireflow.dev')
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
 

@@ -12,7 +12,7 @@ export default function TermsPage() {
       <h2 className="content-document__heading">Service availability</h2>
       <p className="content-document__paragraph">HireFlow may update, improve, or maintain the platform over time. We strive for reliable access but do not guarantee uninterrupted availability.</p>
       <h2 className="content-document__heading">Contact</h2>
-      <p className="content-document__paragraph">Questions about these terms can be sent to <a className="content-document__link" href="mailto:hello@hireflow.dev">hello@hireflow.dev</a>.</p>
+      <p className="content-document__paragraph">Questions about these terms can be sent to <a className="content-document__link" href="mailto:Hello@hireflow.dev">Hello@hireflow.dev</a>.</p>
     </ContentDocument>
   )
 }

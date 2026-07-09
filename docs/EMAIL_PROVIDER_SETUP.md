@@ -17,7 +17,7 @@ There is no automatic SendGrid-first fallback anymore.
 Required for SES mode:
 - `EMAIL_PROVIDER=ses`
 - `AWS_SES_REGION` (example `ap-south-1`)
-- `EMAIL_FROM` (example `HireFlow <gautam@hireflow.dev>`)
+- `EMAIL_FROM` (example `Hello@hireflow.dev`)
 - `AWS_SES_ACCESS_KEY_ID` (preferred)
 - `AWS_SES_SECRET_ACCESS_KEY` (preferred)
 
@@ -28,7 +28,7 @@ Credential fallback behavior:
 - SES-specific keys always take precedence when present.
 
 Optional:
-- `REPLY_TO_EMAIL=gautam@hireflow.dev`
+- `REPLY_TO_EMAIL=Hello@hireflow.dev`
 
 ### SES domain verification and production access
 1. Verify your sender identity (domain or email) in AWS SES.
@@ -68,10 +68,10 @@ Minimum for SES on Railway:
 - `AWS_SES_REGION=ap-south-1`
 - `AWS_SES_ACCESS_KEY_ID=...`
 - `AWS_SES_SECRET_ACCESS_KEY=...`
-- `EMAIL_FROM=HireFlow <gautam@hireflow.dev>`
-- `REPLY_TO_EMAIL=gautam@hireflow.dev` (optional)
-- `SUPPORT_EMAIL=support@hireflow.dev` (recommended)
-- `DEMO_REQUEST_TO_EMAIL=support@hireflow.dev` (recommended)
+- `EMAIL_FROM=Hello@hireflow.dev`
+- `REPLY_TO_EMAIL=Hello@hireflow.dev` (optional)
+- `SUPPORT_EMAIL=Hello@hireflow.dev` (recommended)
+- `DEMO_REQUEST_TO_EMAIL=Hello@hireflow.dev` (recommended)
 
 ## Testing steps
 

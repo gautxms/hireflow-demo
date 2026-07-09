@@ -14,7 +14,7 @@ export default function AiDisclosurePage() {
       <h2 className="content-document__heading">Responsible customer use</h2>
       <p className="content-document__paragraph">Customers are responsible for using HireFlow in compliance with employment, privacy, anti-discrimination, and data protection obligations. HireFlow should not be used as the sole basis for hiring or rejection decisions.</p>
       <h2 className="content-document__heading">Related policies</h2>
-      <p className="content-document__paragraph">For more detail about data handling, review our <a className="content-document__link" href="/privacy">Privacy Policy</a> and <a className="content-document__link" href="/terms">Terms of Service</a>. Questions can be sent to <a className="content-document__link" href="mailto:hello@hireflow.dev">hello@hireflow.dev</a>.</p>
+      <p className="content-document__paragraph">For more detail about data handling, review our <a className="content-document__link" href="/privacy">Privacy Policy</a> and <a className="content-document__link" href="/terms">Terms of Service</a>. Questions can be sent to <a className="content-document__link" href="mailto:Hello@hireflow.dev">Hello@hireflow.dev</a>.</p>
     </ContentDocument>
   )
 }

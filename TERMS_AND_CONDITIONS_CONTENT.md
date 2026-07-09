@@ -46,4 +46,4 @@ HireFlow is provided with reasonable care for an early-stage SaaS product, but w
 
 ## Contact
 
-Questions about these terms, deletion requests, or account concerns can be sent to hello@hireflow.dev.
+Questions about these terms, deletion requests, or account concerns can be sent to Hello@hireflow.dev.
