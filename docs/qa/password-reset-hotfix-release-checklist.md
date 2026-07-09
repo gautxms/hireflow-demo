@@ -4,7 +4,7 @@ Use this checklist to ship and verify the password-reset hashing + email CTA fix
 
 ## 1) Configuration update
 
-- [ ] Update runtime environment variable `SUPPORT_EMAIL` to `hello@gfactai.com` in each target environment (staging + production).
+- [ ] Update runtime environment variable `SUPPORT_EMAIL` to `Hello@hireflow.dev` in each target environment (staging + production).
 - [ ] Confirm backend processes have reloaded environment variables after deploy.
 
 ## 2) Deployment
@@ -18,7 +18,7 @@ Use this checklist to ship and verify the password-reset hashing + email CTA fix
 
 - [ ] Password reset flow: complete reset and open confirmation email.
 - [ ] Verify confirmation email CTA opens `/login`.
-- [ ] Verify support contact displays `hello@gfactai.com`.
+- [ ] Verify support contact displays `Hello@hireflow.dev`.
 - [ ] Verify login succeeds with the newly reset password.
 - [ ] Capture evidence (screenshots/log snippets) for each validation in both staging and production.
 

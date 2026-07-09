@@ -210,7 +210,7 @@ router.post('/demo-request', async (req, res) => {
     const adminDelivery = await createTransactionalNotification({
       userId: null,
       type: 'demo.request.received',
-      recipientEmail: 'hello@gfactai.com',
+      recipientEmail: 'Hello@hireflow.dev',
       payload: {
         requesterName: name,
         requesterEmail: email,

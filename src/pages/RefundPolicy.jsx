@@ -14,7 +14,7 @@ export default function RefundPolicy() {
       </p>
       <p className="content-document__paragraph">
         If you believe you were charged in error, please contact us at{' '}
-        <a href="mailto:hello@gfactai.com" className="content-document__link">hello@gfactai.com</a>.
+        <a href="mailto:Hello@hireflow.dev" className="content-document__link">Hello@hireflow.dev</a>.
       </p>
       <p className="content-document__paragraph">
         This policy complies with Paddle’s merchant and billing requirements.

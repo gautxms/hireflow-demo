@@ -22,7 +22,7 @@ router.get('/preview/:templateName', async (req, res) => {
 
   try {
     const { html } = await previewEmailTemplate(templateName, {
-      to: req.query.email || 'preview@hireflow.dev',
+      to: req.query.email || 'Hello@hireflow.dev',
       invoiceId: 'INV-2026-001',
       amount: '$99.00',
       invoiceDate: new Date().toISOString().slice(0, 10),

@@ -31,7 +31,7 @@ This guide helps you set up SendGrid email sending in Railway using the **HTTP A
 
 1. Go to **Settings → Sender Authentication**
 2. Click **Verify a Single Sender**
-3. Enter your sender email: `noreply@hireflow.dev`
+3. Enter your sender email: `Hello@hireflow.dev`
 4. SendGrid sends verification email
 5. Click the link in the email
 
@@ -43,7 +43,7 @@ This guide helps you set up SendGrid email sending in Railway using the **HTTP A
 
 ```
 SENDGRID_API_KEY=SG.your_full_api_key_here
-SMTP_FROM=noreply@hireflow.dev
+SMTP_FROM=Hello@hireflow.dev
 ```
 
 4. Click **Deploy**
@@ -54,7 +54,7 @@ Check logs for:
 
 ```
 [EMAIL] Configuration status:
-  ✓ SendGrid API: noreply@hireflow.dev
+  ✓ SendGrid API: Hello@hireflow.dev
   ✓ Sent via SendGrid API: Verify your HireFlow email → user@example.com
 ```
 
@@ -76,7 +76,7 @@ If you see this, **you're done!** 🎉
 
 ```
 [EMAIL] Configuration status:
-  ✓ SendGrid API: noreply@hireflow.dev
+  ✓ SendGrid API: Hello@hireflow.dev
 ```
 
 If you see `✗` next to SendGrid API, the API key is missing or wrong.
@@ -86,7 +86,7 @@ If you see `✗` next to SendGrid API, the API key is missing or wrong.
 | Problem | Solution |
 |---------|----------|
 | `✗ SendGrid API key missing` | Add `SENDGRID_API_KEY=SG.xxx` to Railway variables |
-| Email in spam | Add `noreply@hireflow.dev` to contacts in your email client |
+| Email in spam | Add `Hello@hireflow.dev` to contacts in your email client |
 | Sending fails silently | Check Railway logs for `[EMAIL] SendGrid API error` messages |
 
 ### How to Debug in SendGrid
@@ -103,7 +103,7 @@ If you see `✗` next to SendGrid API, the API key is missing or wrong.
 
 1. Double-check API key is pasted correctly (no spaces, starts with `SG.`)
 2. Verify sender email in SendGrid: **Settings → Sender Authentication**
-3. Check that `SMTP_FROM=noreply@hireflow.dev` is set in Railway
+3. Check that `SMTP_FROM=Hello@hireflow.dev` is set in Railway
 4. Redeploy backend after any variable changes
 
 ## Free Tier Limits

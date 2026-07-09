@@ -5,7 +5,7 @@ const RETRY_DELAYS_HOURS = [1, 24, 24 * 7]
 const MAX_RETRY_ATTEMPTS = RETRY_DELAYS_HOURS.length
 
 function getSupportEmail() {
-  return process.env.PAYMENT_SUPPORT_EMAIL || process.env.SMTP_FROM || 'support@hireflow.dev'
+  return process.env.PAYMENT_SUPPORT_EMAIL || process.env.SMTP_FROM || 'Hello@hireflow.dev'
 }
 
 function getFailureReason(payload) {

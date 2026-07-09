@@ -3,7 +3,7 @@ import BackButton from '../components/BackButton'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
-const SUPPORT_EMAIL = 'hello@hireflow.dev'
+const SUPPORT_EMAIL = 'Hello@hireflow.dev'
 
 export default function UpdatePaymentMethodPage() {
   usePageSeo('Update Payment Method', 'Update your billing card details securely through Paddle.')
