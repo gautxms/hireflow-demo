@@ -82,7 +82,7 @@ export default function DemoVideoModal({ videoUrl, posterUrl, captionsUrl, onClo
         </div>
 
         <p id="demo-video-modal-description" className="demo-video-modal__description">
-          A hosted product walkthrough will play here when your browser loads the configured video asset.
+          See how HireFlow turns resume batches into ranked candidates, transparent fit reasoning, and recruiter-ready shortlists.
         </p>
 
         <div className="demo-video-modal__frame">
