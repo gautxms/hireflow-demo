@@ -5,6 +5,10 @@ import { buildSeoHeadMarkup, resolvePageSeo } from '../src/seo/pageSeo.js'
 const DIST_DIR = resolve(process.cwd(), 'dist')
 const INDEX_PATH = resolve(DIST_DIR, 'index.html')
 const SITE_URL = process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://hireflow.dev'
+const DEMO_VIDEO_URL = process.env.VITE_DEMO_VIDEO_URL?.trim() || ''
+const landingHeroSecondaryCta = DEMO_VIDEO_URL
+  ? '<button type="button" class="btn-ghost btn-ghost--accent">Watch demo</button>'
+  : ''
 
 const PUBLIC_ROUTES = [
   {
@@ -26,8 +30,8 @@ const PUBLIC_ROUTES = [
                 and clearer context for recruiter-led decisions.
               </p>
               <div class="hero-cta">
-                <a class="btn-primary" href="/pricing">View pricing</a>
-                <a class="btn-ghost" href="/demo">Watch 2-min Demo</a>
+                <a class="btn-primary" href="/pricing">Try Free Demo</a>
+                ${landingHeroSecondaryCta}
               </div>
             </div>
           </section>
