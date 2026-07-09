@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
-import { getContactInquiryRecipient } from '../services/emailService.js'
+import { getContactInquiryRecipient, getDemoRequestRecipient } from '../services/emailService.js'
 import { createTransactionalNotification } from '../services/notificationService.js'
 
 const router = Router()
@@ -232,7 +232,7 @@ router.post('/demo-request', async (req, res) => {
     const adminDelivery = await createTransactionalNotification({
       userId: null,
       type: 'demo.request.received',
-      recipientEmail: 'Hello@hireflow.dev',
+      recipientEmail: getDemoRequestRecipient(),
       payload: {
         requesterName: name,
         requesterEmail: email,
