@@ -182,6 +182,10 @@ export function getDemoRequestRecipient() {
   return process.env.DEMO_REQUEST_TO_EMAIL || process.env.SUPPORT_EMAIL || 'Hello@hireflow.dev'
 }
 
+export function getContactInquiryRecipient() {
+  return process.env.CONTACT_INQUIRY_TO_EMAIL || process.env.SUPPORT_EMAIL || 'Hello@hireflow.dev'
+}
+
 async function sendViaSes({ to, subject, text, html, templateName }) {
   const sesConfig = getSesConfig()
   if (!sesConfig) {
@@ -408,5 +412,6 @@ export async function sendPasswordResetEmail({ to, firstName, resetUrl }) { cons
 export async function sendPasswordResetConfirmationEmail({ to, firstName }) { const values = withDefaults({ to, firstName }); return sendTemplateEmail({ to, subject: 'Your HireFlow password was changed', templateName: 'welcome', text: `Hi ${values.firstName}, your password was reset successfully. If this wasn't you, contact support immediately.`, values: { ...values, dashboardUrl: `${getAppUrl()}/login` } }) }
 export async function sendDemoRequestConfirmationEmail({ to, requesterName }) { const values = withDefaults({ to, firstName: requesterName || undefined, dashboardUrl: `${getAppUrl()}/about` }); return sendTemplateEmail({ to, subject: 'We received your demo request', templateName: 'welcome', text: `Hi ${values.firstName}, thanks for requesting a demo. Our team will reach out shortly.`, values }) }
 export async function sendDemoRequestEmail({ requesterName, requesterEmail, company, phone, message, to = getDemoRequestRecipient(), }) { const values = withDefaults({ to, requesterName, requesterEmail, company, phone: phone || 'Not provided', message, }); return sendTemplateEmail({ to, subject: `New demo request from ${requesterName}`, templateName: 'demo-request', text: ['New demo request submitted.', `Name: ${requesterName}`, `Email: ${requesterEmail}`, `Company: ${company}`, `Phone: ${phone || 'Not provided'}`, `Message: ${message}`,].join('\n'), values, }) }
+export async function sendContactInquiryEmail({ requesterName, requesterEmail, company, subject, message, to = getContactInquiryRecipient(), }) { const values = withDefaults({ to, requesterName, requesterEmail, company: company || 'Not provided', inquirySubject: subject, message, }); return sendTemplateEmail({ to, subject: `New contact inquiry: ${subject}`, templateName: 'contact-inquiry', text: ['New contact inquiry submitted.', `Name: ${requesterName}`, `Email: ${requesterEmail}`, `Company: ${company || 'Not provided'}`, `Subject: ${subject}`, `Message: ${message}`,].join('\n'), values, }) }
 
 export const __emailServiceTestUtils = { getConfiguredProvider, getRecipientDomain, getSesConfig, getSendGridConfig, getSmtpConfig }
