@@ -58,11 +58,9 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
                 className="btn-ghost btn-ghost--accent"
                 onClick={() => setIsDemoVideoOpen(true)}
               >
-                Watch product demo
+                Watch demo
               </button>
-            ) : (
-              <a className="btn-ghost" href="/demo">Book a demo</a>
-            )}
+            ) : null}
           </div>
         </div>
       </section>
