@@ -39,6 +39,12 @@ export default function DemoVideoModal({ videoUrl, posterUrl, captionsUrl, onClo
     const video = videoRef.current
     const trigger = triggerRef?.current
 
+    if (video) {
+      video.play()?.catch(() => {
+        // Browser autoplay policies may block audio playback; controls remain available.
+      })
+    }
+
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
@@ -89,7 +95,9 @@ export default function DemoVideoModal({ videoUrl, posterUrl, captionsUrl, onClo
           <video
             ref={videoRef}
             className="demo-video-modal__video"
+            autoPlay
             controls
+            playsInline
             preload="metadata"
             poster={posterUrl || undefined}
             title="HireFlow product demo video"
