@@ -89,6 +89,20 @@ export function formatRate(numerator, denominator) {
   return Number(((boundedNumerator / safeDenominator) * 100).toFixed(2))
 }
 
+
+export async function loadFreshAccountProfile(userId) {
+  const result = await pool.query(
+    `SELECT id, email, company, phone, subscription_status, subscription_plan,
+            paddle_customer_id, paddle_subscription_id, current_period_end, next_billing_date,
+            created_at, deleted_at, deletion_scheduled_for
+     FROM users
+     WHERE id = $1`,
+    [userId],
+  )
+
+  return result.rows[0] || null
+}
+
 function csvEscape(value) {
   if (value === null || value === undefined) return '""'
   return `"${String(value).replace(/"/g, '""')}"`
@@ -529,18 +543,18 @@ router.get('/dashboard/kpis', async (req, res) => {
 })
 
 router.get('/me', async (req, res) => {
-  return res.json({
-    user: {
-      id: req.user.id,
-      email: req.user.email,
-      company: req.user.company || '',
-      phone: req.user.phone || '',
-      subscription_status: req.user.subscription_status || 'inactive',
-      created_at: req.user.created_at,
-      deleted_at: req.user.deleted_at,
-      deletion_scheduled_for: req.user.deletion_scheduled_for,
-    },
-  })
+  try {
+    const user = await loadFreshAccountProfile(req.userId || req.user?.id)
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    return res.json({ user })
+  } catch (error) {
+    console.error('[profile.get] Failed to load profile', { userId: req.userId || req.user?.id, error: error.message })
+    return res.status(500).json({ error: 'Internal server error' })
+  }
 })
 
 router.patch('/me', async (req, res) => {
@@ -577,17 +591,22 @@ router.patch('/me', async (req, res) => {
   values.push(req.user.id)
 
   try {
-    const result = await pool.query(
+    await pool.query(
       `UPDATE users
        SET ${updates.join(', ')}
-       WHERE id = $${values.length}
-       RETURNING id, email, company, phone, subscription_status, created_at, deleted_at, deletion_scheduled_for`,
+       WHERE id = $${values.length}`,
       values,
     )
 
+    const user = await loadFreshAccountProfile(req.userId || req.user?.id)
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
     return res.json({
       message: 'Profile updated successfully',
-      user: result.rows[0],
+      user,
     })
   } catch (error) {
     console.error('[profile.patch] Failed to update profile', { userId: req.user?.id, error: error.message })
