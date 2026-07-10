@@ -32,6 +32,7 @@ function getTransactionCurrency(payload) {
 function getCustomerEmail(payload) {
   return (
     payload?.data?.customer?.email ||
+    payload?.data?.custom_data?.email ||
     payload?.data?.email ||
     payload?.customer_email ||
     payload?.email ||

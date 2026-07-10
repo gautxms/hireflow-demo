@@ -32,3 +32,25 @@ test('recordFailedPaymentAttempt stores failed transaction details against align
   assert.equal(calls[0].params[2], 'customer@example.com')
   assert.equal(calls[0].params[4], 'USD')
 })
+
+test('recordFailedPaymentAttempt falls back to custom_data email when Paddle omits customer email', async (t) => {
+  const calls = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    return { rows: [{ transaction_id: params[0], status: 'failed', customer_email: params[2] }] }
+  })
+
+  const attempt = await recordFailedPaymentAttempt({
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_custom_data_email',
+      amount: '9900',
+      currency_code: 'USD',
+      custom_data: { userId: 40, email: 'fallback@example.com' },
+      status_details: { reason: 'card_declined' },
+    },
+  })
+
+  assert.equal(attempt.customer_email, 'fallback@example.com')
+  assert.equal(calls[0].params[2], 'fallback@example.com')
+})

@@ -440,7 +440,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
                next_billing_date = COALESCE($7, next_billing_date),
                paddle_environment = $8,
                cancellation_effective_at = CASE
-                 WHEN $9 IS NOT NULL THEN $9
+                 WHEN $9::timestamp IS NOT NULL THEN $9::timestamp
                  WHEN $3 IN ('active', 'trialing') THEN NULL
                  ELSE cancellation_effective_at
                END,

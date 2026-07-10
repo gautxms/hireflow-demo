@@ -76,6 +76,29 @@ function buildSubscriptionUpdatedPayload(overrides = {}) {
   }
 }
 
+function buildSubscriptionCreatedPayload(overrides = {}) {
+  return {
+    event_id: 'evt_subscription_created_test',
+    event_type: 'subscription.created',
+    data: {
+      id: 'sub_01kx5pmebr2rska4ygrxz2zbeb',
+      status: 'active',
+      customer_id: 'ctm_test_123',
+      custom_data: {
+        userId: 42,
+        plan: 'monthly',
+        paddleEnvironment: 'sandbox',
+      },
+      scheduled_change: null,
+      current_billing_period: {
+        ends_at: '2026-08-10T09:44:40.151545Z',
+      },
+      next_billed_at: '2026-08-10T09:44:40.151545Z',
+    },
+    ...overrides,
+  }
+}
+
 test('POST /api/paddle/webhook rejects invalid signatures before parsing or DB writes', async (t) => {
   const rawBody = '{"event_type":"subscription.updated",'
   const queryMock = t.mock.method(pool, 'query', async () => {
@@ -174,6 +197,22 @@ test('POST /api/paddle/webhook clears stale cancellation_effective_at when subsc
   assert.match(updateCall.sql, /cancellation_effective_at = CASE/)
   assert.equal(updateCall.params[2], 'active')
   assert.equal(updateCall.params[8], null)
+})
+
+test('POST /api/paddle/webhook processes active subscription.created with null scheduled_change', async (t) => {
+  const payload = buildSubscriptionCreatedPayload({
+    event_id: 'evt_subscription_created_active_null_scheduled_change',
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+  const [updateCall] = userUpdateCalls(calls)
+
+  assert.equal(response.status, 200)
+  assert.match(updateCall.sql, /WHEN \$9::timestamp IS NOT NULL THEN \$9::timestamp/)
+  assert.equal(updateCall.params[1], 'sub_01kx5pmebr2rska4ygrxz2zbeb')
+  assert.equal(updateCall.params[2], 'active')
+  assert.equal(updateCall.params[8], null)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
 })
 
 test('POST /api/paddle/webhook preserves scheduled cancellation effective date from subscription.updated scheduled_change', async (t) => {
