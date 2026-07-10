@@ -37,7 +37,7 @@ async function setSimulatedUsage({ userId, targetUsage }) {
        FROM usage_log
        WHERE user_id = $1
          AND month_start = $2
-         AND ip_address <> $3`,
+         AND ip_address IS DISTINCT FROM $3`,
       [userId, monthStart, SIMULATION_IP],
     )
     const realUsage = Number(realUsageResult.rows[0]?.usage_count || 0)
