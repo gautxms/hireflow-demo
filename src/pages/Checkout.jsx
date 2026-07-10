@@ -9,7 +9,6 @@ const fallbackClientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
 const PADDLE_LAST_TRANSACTION_STORAGE_KEY = 'paddle_last_transaction'
 const PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY = 'paddle_checkout_active'
-const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
 
 const PLAN_DETAILS = {
   monthly: {
@@ -38,13 +37,6 @@ function getTestKeyFromQuery() {
 }
 
 
-function markCreateAnalysisIntent() {
-  const intent = {
-    id: crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    createdAt: Date.now(),
-  }
-  sessionStorage.setItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY, JSON.stringify(intent))
-}
 
 function navigate(pathname, options = {}) {
   if (window.location.pathname !== pathname) {
@@ -128,7 +120,7 @@ export default function Checkout({ onAuthSuccess }) {
       }
     }
 
-    const persistActiveSubscription = (token, user, redirectPath = '/uploader') => {
+    const persistActiveSubscription = (token, user, redirectPath = '/dashboard') => {
       const normalizedStatus = user?.subscription_status || 'inactive'
       localStorage.setItem('subscription_status', normalizedStatus)
 
@@ -232,8 +224,7 @@ export default function Checkout({ onAuthSuccess }) {
 
         if (isActive) {
           console.log('[Checkout] User already subscribed, redirecting to dashboard')
-          markCreateAnalysisIntent()
-          persistActiveSubscription(token, user, '/uploader')
+          persistActiveSubscription(token, user, '/dashboard')
           return
         }
 

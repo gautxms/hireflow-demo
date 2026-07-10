@@ -51,7 +51,7 @@ async function resolveUserFromPayload(payload) {
 
   if (explicitUserId) {
     const result = await pool.query(
-      `SELECT id, paddle_customer_id FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, updated_at FROM users WHERE id = $1 LIMIT 1`,
       [explicitUserId],
     )
 
@@ -65,13 +65,46 @@ async function resolveUserFromPayload(payload) {
   }
 
   const result = await pool.query(
-    `SELECT id, paddle_customer_id FROM users WHERE paddle_customer_id = $1 LIMIT 1`,
+    `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, updated_at FROM users WHERE paddle_customer_id = $1 LIMIT 1`,
     [paddleCustomerId],
   )
 
   return result.rows[0] || null
 }
 
+function shouldApplyFailedPaymentToUser(user, payload, eventType) {
+  if (!user?.id) {
+    return false
+  }
+
+  const failedSubscriptionId = getTransactionSubscriptionId(payload)
+  const failedCustomerId = getPaddleCustomerId(payload)
+
+  if (user.subscription_status !== 'active' && user.subscription_status !== 'trialing') {
+    return true
+  }
+
+  if (failedSubscriptionId && user.paddle_subscription_id && failedSubscriptionId !== user.paddle_subscription_id) {
+    console.warn('[Paddle webhook] skipping stale failed-payment status update for active user', {
+      eventType,
+      transactionId: payload?.data?.id || payload?.transaction_id || payload?.id || null,
+      failedSubscriptionId,
+      currentSubscriptionId: user.paddle_subscription_id,
+      customerId: failedCustomerId,
+      userId: user.id,
+    })
+    return false
+  }
+
+  return true
+}
+
+function getSafeErrorContext(error) {
+  return {
+    code: error?.code || error?.name || 'UNKNOWN_ERROR',
+    message: error?.message || String(error),
+  }
+}
 
 function planFromPriceId(priceId) {
   const paddleConfig = resolvePaddleConfig()
@@ -337,7 +370,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
-      if (!hasEnvironmentMismatch && user?.id) {
+      if (!hasEnvironmentMismatch && shouldApplyFailedPaymentToUser(user, payload, eventType)) {
         await pool.query(
           `UPDATE users
            SET subscription_status = $2,
@@ -362,7 +395,22 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
         )
       }
 
-      await recordFailedPaymentAttempt(payload)
+      try {
+        await recordFailedPaymentAttempt(payload)
+      } catch (error) {
+        const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
+        const failedSubscriptionId = getTransactionSubscriptionId(payload)
+        const context = {
+          eventType,
+          transactionId,
+          customerId: getPaddleCustomerId(payload),
+          userId: user?.id || null,
+          subscriptionId: failedSubscriptionId,
+          error: getSafeErrorContext(error),
+        }
+        console.error('[Paddle webhook] payment.failure.record_failed', context)
+        await logErrorToDatabase('payment.failure.record_failed', error, context)
+      }
 
       await trackEvent({
         userId: user?.id || null,

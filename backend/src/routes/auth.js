@@ -162,14 +162,15 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, company, phone, email_verification_token, email_verification_expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, email, company, phone, created_at`,
+       RETURNING id, email, company, phone, created_at, subscription_status`,
       [normalizedEmail, passwordHash, company, phone, verificationTokenHash, verificationExpiresAt],
     )
     logAuthDebug('[AUTH] Insert query completed')
 
     const user = result.rows[0]
     logAuthDebug('[AUTH] User created')
-    const token = signToken({ ...user, subscription_status: 'trialing' })
+    const subscriptionStatus = user.subscription_status || 'inactive'
+    const token = signToken({ ...user, subscription_status: subscriptionStatus })
     setAuthCookie(res, token)
 
     const verificationUrl = buildVerificationUrl(req, verificationToken)
@@ -225,7 +226,7 @@ router.post('/signup', signupLimiter, validateBody(schemas.signup), async (req, 
         email_verified: false,
         company: user.company || '',
         phone: user.phone || '',
-        subscription_status: 'trialing',
+        subscription_status: subscriptionStatus,
         created_at: user.created_at,
       },
     })

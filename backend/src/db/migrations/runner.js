@@ -42,6 +42,7 @@ const migrationFiles = [
   '038-ensure-subscription-tracking-columns',
   '039-ensure-subscriptions-current-read-schema',
   '040-ensure-shortlist-batch-add-schema',
+  '041-align-payment-attempts-schema',
 ]
 
 async function ensureMigrationsTable(client) {
