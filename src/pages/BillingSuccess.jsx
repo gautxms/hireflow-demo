@@ -6,19 +6,11 @@ import BillingStatusLayout from '../components/BillingStatusLayout'
 import API_BASE from '../config/api'
 import { hasActiveSubscription } from '../utils/routeGuards'
 
-const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const SUBSCRIPTION_POLL_TIMEOUT_MS = 60000
 const SUBSCRIPTION_POLL_INTERVAL_MS = 2000
 
-function markCreateAnalysisIntent() {
-  const intent = {
-    id: crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    createdAt: Date.now(),
-  }
-  sessionStorage.setItem(CREATE_ANALYSIS_INTENT_STORAGE_KEY, JSON.stringify(intent))
-}
 
 function navigate(pathname, options = {}) {
   if (window.location.pathname !== pathname) {
@@ -115,8 +107,7 @@ export default function BillingSuccess() {
       setCountdown((previousCountdown) => {
         if (previousCountdown <= 1) {
           window.clearInterval(timer)
-          markCreateAnalysisIntent()
-          navigate('/uploader', { replace: true })
+          navigate('/dashboard', { replace: true })
           return 0
         }
 
@@ -154,7 +145,7 @@ export default function BillingSuccess() {
           )}
         </>
       )}
-      footer={isFinalizing ? 'Finalizing subscription...' : isTimedOut ? 'Your payment was received. We will keep checking when you retry.' : `Redirecting to resume uploader in ${countdown} seconds...`}
+      footer={isFinalizing ? 'Finalizing subscription...' : isTimedOut ? 'Your payment was received. We will keep checking when you retry.' : `Redirecting to dashboard in ${countdown} seconds...`}
       actions={isTimedOut ? (
         <button
           type="button"
@@ -171,13 +162,12 @@ export default function BillingSuccess() {
         <button
           type="button"
           onClick={() => {
-            markCreateAnalysisIntent()
-            navigate('/uploader', { replace: true })
+            navigate('/dashboard', { replace: true })
           }}
           className="hf-btn hf-btn--primary"
           disabled={isFinalizing}
         >
-          {isFinalizing ? 'Finalizing subscription...' : 'Go to Resume Uploader'}
+          {isFinalizing ? 'Finalizing subscription...' : 'Go to dashboard'}
         </button>
       )}
     />

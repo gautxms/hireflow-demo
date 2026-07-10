@@ -427,3 +427,214 @@ test('POST /api/paddle/webhook rejects invalid JSON with valid signature before 
   assert.equal(payload.error, 'Invalid JSON payload')
   assert.equal(queryMock.mock.callCount(), 0)
 })
+
+
+test('POST /api/paddle/webhook returns 200 and logs when failed-payment attempt tracking fails', async (t) => {
+  const payload = {
+    event_id: 'evt_payment_failed_tracking_error',
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_tracking_error',
+      subscription_id: 'sub_test_123',
+      customer_id: 'ctm_test_123',
+      currency_code: 'USD',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+  const errors = []
+
+  t.mock.method(console, 'error', (...args) => {
+    errors.push(args)
+  })
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+
+    if (String(sql).includes('FROM paddle_webhook_events')) {
+      return { rowCount: 0, rows: [] }
+    }
+
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123', subscription_status: 'inactive' }] }
+    }
+
+    if (String(sql).includes('INSERT INTO payment_attempts')) {
+      const error = new Error('column "customer_email" of relation "payment_attempts" does not exist')
+      error.code = '42703'
+      throw error
+    }
+
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response, payload: responsePayload } = await postWebhook({
+    body: rawBody,
+    signature: signBody(rawBody),
+  })
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(responsePayload, { received: true })
+  assert.equal(calls.some(({ sql }) => /UPDATE users/.test(sql)), true)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
+  assert.equal(calls.some(({ sql, params }) => /log_errors|error_logs|INSERT INTO/.test(sql) && params?.includes?.('payment.failure.record_failed')), true)
+  assert.equal(errors.some(([message]) => String(message).includes('payment.failure.record_failed')), true)
+})
+
+test('POST /api/paddle/webhook skips stale unrelated failed-payment status for active subscription', async (t) => {
+  const payload = {
+    event_id: 'evt_payment_failed_stale_unrelated',
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_stale_unrelated',
+      subscription_id: 'sub_old_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+
+    if (String(sql).includes('FROM paddle_webhook_events')) {
+      return { rowCount: 0, rows: [] }
+    }
+
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123', paddle_subscription_id: 'sub_current_123', subscription_status: 'active' }] }
+    }
+
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), false)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO payment_attempts/.test(sql)), true)
+})
+
+test('POST /api/paddle/webhook lets inactive users become payment_failed for failed checkout', async (t) => {
+  const payload = {
+    event_id: 'evt_payment_failed_inactive_checkout',
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_inactive_checkout',
+      subscription_id: null,
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123', subscription_status: 'inactive' }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO payment_attempts/.test(sql)), true)
+})
+
+test('POST /api/paddle/webhook skips subscriptionless failed checkout for active user', async (t) => {
+  const payload = {
+    event_id: 'evt_payment_failed_active_subscriptionless',
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_active_subscriptionless',
+      subscription_id: null,
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(console, 'warn', () => {})
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123', paddle_subscription_id: 'sub_current_123', subscription_status: 'active' }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), false)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO payment_attempts/.test(sql)), true)
+})
+
+test('POST /api/paddle/webhook allows failed payment for active user current subscription', async (t) => {
+  const payload = {
+    event_id: 'evt_payment_failed_active_current_subscription',
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_active_current_subscription',
+      subscription_id: 'sub_current_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123', paddle_subscription_id: 'sub_current_123', subscription_status: 'active' }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
+})
+
+test('POST /api/paddle/webhook transaction.completed keeps setting user active', async (t) => {
+  const payload = {
+    event_id: 'evt_transaction_completed_sets_active',
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_completed_sets_active',
+      subscription_id: 'sub_test_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      billing_period: { ends_at: '2026-08-24T00:00:00.000Z' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123' }] }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(calls.some(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql)), true)
+})
