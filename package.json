@@ -33,7 +33,8 @@
     "qa:dashboard-visual-baseline": "node scripts/verify-dashboard-visual-baseline.mjs",
     "check:dashboard-token-hygiene": "node scripts/check-dashboard-token-hygiene.mjs",
     "qa:dashboard-a11y-smoke": "node scripts/dashboard-a11y-smoke-checks.mjs",
-    "qa:shortlist-design-gate": "node scripts/check-shortlist-design-constitution.mjs"
+    "qa:shortlist-design-gate": "node scripts/check-shortlist-design-constitution.mjs",
+    "check:seo-consistency": "node scripts/check-seo-consistency.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",

@@ -31,6 +31,7 @@ export const PUBLIC_PAGE_SEO = {
   '/demo': {
     title: 'Book a HireFlow Demo',
     description: 'Schedule a live HireFlow demo to see AI-powered resume screening, candidate scoring, and hiring workflows.',
+    robots: 'noindex, follow',
   },
   '/pricing': {
     title: 'HireFlow Pricing',
