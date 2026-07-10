@@ -33,6 +33,7 @@ Safety controls:
 
 - Refuses to run when `NODE_ENV=production`.
 - Requires `HIREFLOW_ALLOW_USAGE_SIMULATION=true`.
+- Requires `HIREFLOW_USAGE_SIMULATION_ENV=local` or `HIREFLOW_USAGE_SIMULATION_ENV=staging`.
 - Requires an explicit `--user-id`.
 - Only accepts target states `750`, `790`, `795`, `799`, `800`, or `801`.
 - Deletes/replaces only prior simulation rows with the marker IP; it does not delete real usage.
@@ -40,7 +41,7 @@ Safety controls:
 Example:
 
 ```bash
-HIREFLOW_ALLOW_USAGE_SIMULATION=true DATABASE_URL=postgres://... node backend/scripts/simulateResumeUsage.local.mjs --user-id 123 --usage 799
+HIREFLOW_ALLOW_USAGE_SIMULATION=true HIREFLOW_USAGE_SIMULATION_ENV=local DATABASE_URL=postgres://... node backend/scripts/simulateResumeUsage.local.mjs --user-id 123 --usage 799
 ```
 
 ## Test matrix: observed from code audit

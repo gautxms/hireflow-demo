@@ -5,6 +5,7 @@ import { getMonthStart } from '../src/middleware/subscriptionCheck.js'
 
 const SIMULATION_IP = 'quota-simulation-local'
 const SUPPORTED_TARGETS = new Set([750, 790, 795, 799, 800, 801])
+const ALLOWED_SIMULATION_ENVIRONMENTS = new Set(['local', 'staging'])
 
 function readArg(name) {
   const prefix = `--${name}=`
@@ -20,6 +21,9 @@ function assertSafeEnvironment() {
   }
   if (process.env.HIREFLOW_ALLOW_USAGE_SIMULATION !== 'true') {
     throw new Error('Set HIREFLOW_ALLOW_USAGE_SIMULATION=true to confirm this local/staging-only usage simulation.')
+  }
+  if (!ALLOWED_SIMULATION_ENVIRONMENTS.has(process.env.HIREFLOW_USAGE_SIMULATION_ENV)) {
+    throw new Error('Set HIREFLOW_USAGE_SIMULATION_ENV=local or HIREFLOW_USAGE_SIMULATION_ENV=staging to confirm the target environment.')
   }
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is required.')
