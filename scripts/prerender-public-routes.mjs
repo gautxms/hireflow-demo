@@ -129,6 +129,16 @@ const PUBLIC_ROUTES = [
       </main>
     `,
   },
+
+  {
+    route: '/cookie-policy',
+    body: `
+      <main>
+        <h1>Cookie Policy</h1>
+        <p>Learn how HireFlow uses necessary cookies, optional analytics, and privacy-safe cookie preferences.</p>
+      </main>
+    `,
+  },
   {
     route: '/refund-policy',
     body: `
