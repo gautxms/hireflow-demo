@@ -26,7 +26,7 @@ test('recordFailedPaymentAttempt stores failed transaction details against align
   assert.equal(attempt.status, 'failed')
   assert.match(calls[0].sql, /INSERT INTO payment_attempts/)
   assert.match(calls[0].sql, /customer_email/)
-  assert.match(calls[0].sql, /ON CONFLICT \(transaction_id\)/)
+  assert.match(calls[0].sql, /ON CONFLICT \(transaction_id\) WHERE transaction_id IS NOT NULL/)
   assert.equal(calls[0].params[0], 'txn_failed_test')
   assert.equal(calls[0].params[1], 40)
   assert.equal(calls[0].params[2], 'customer@example.com')

@@ -157,7 +157,7 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
       payload
     )
     VALUES ($1, $2, $3, $4, $5, 'failed', 0, $6, $7, $8::jsonb)
-    ON CONFLICT (transaction_id)
+    ON CONFLICT (transaction_id) WHERE transaction_id IS NOT NULL
     DO UPDATE SET
       customer_email = COALESCE(EXCLUDED.customer_email, payment_attempts.customer_email),
       user_id = COALESCE(EXCLUDED.user_id, payment_attempts.user_id),

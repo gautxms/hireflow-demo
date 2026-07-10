@@ -84,19 +84,19 @@ function shouldApplyFailedPaymentToUser(user, payload, eventType) {
     return true
   }
 
-  if (failedSubscriptionId && user.paddle_subscription_id && failedSubscriptionId !== user.paddle_subscription_id) {
-    console.warn('[Paddle webhook] skipping stale failed-payment status update for active user', {
-      eventType,
-      transactionId: payload?.data?.id || payload?.transaction_id || payload?.id || null,
-      failedSubscriptionId,
-      currentSubscriptionId: user.paddle_subscription_id,
-      customerId: failedCustomerId,
-      userId: user.id,
-    })
-    return false
+  if (failedSubscriptionId && user.paddle_subscription_id && failedSubscriptionId === user.paddle_subscription_id) {
+    return true
   }
 
-  return true
+  console.warn('[Paddle webhook] skipping stale failed-payment status update for active user', {
+    eventType,
+    transactionId: payload?.data?.id || payload?.transaction_id || payload?.id || null,
+    failedSubscriptionId,
+    currentSubscriptionId: user.paddle_subscription_id,
+    customerId: failedCustomerId,
+    userId: user.id,
+  })
+  return false
 }
 
 function getSafeErrorContext(error) {

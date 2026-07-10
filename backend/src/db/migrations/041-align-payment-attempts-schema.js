@@ -65,12 +65,19 @@ export async function up(pool) {
   `)
 
   await pool.query(`
-    DROP INDEX IF EXISTS idx_payment_attempts_transaction_id_unique
-  `)
-
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_attempts_transaction_id_unique
-      ON payment_attempts (transaction_id)
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_indexes
+        WHERE schemaname = current_schema()
+          AND indexname = 'idx_payment_attempts_transaction_id_unique'
+      ) THEN
+        CREATE UNIQUE INDEX idx_payment_attempts_transaction_id_unique
+          ON payment_attempts (transaction_id)
+          WHERE transaction_id IS NOT NULL;
+      END IF;
+    END $$
   `)
 
   await pool.query(`
