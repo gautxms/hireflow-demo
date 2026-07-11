@@ -65,6 +65,25 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
         </div>
       </section>
 
+      <section className="landing-trust-strip public-page-main" aria-labelledby="landing-trust-heading">
+        <div className="landing-trust-strip__content">
+          <div className="landing-trust-strip__copy">
+            <p className="landing-trust-strip__eyebrow">Trust &amp; responsible AI</p>
+            <h2 id="landing-trust-heading">Built for responsible recruiter-led review</h2>
+          </div>
+          <ul className="landing-trust-strip__points">
+            <li>AI output is decision support, not automated hiring.</li>
+            <li>Recruiters and hiring managers remain responsible for final decisions.</li>
+            <li>Candidate data is used to provide the requested workflow.</li>
+          </ul>
+          <div className="landing-trust-strip__links" aria-label="Trust and privacy resources">
+            <a href="/trust">Trust details</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/ai-disclosure">AI Disclosure</a>
+          </div>
+        </div>
+      </section>
+
       {/* Features Section */}
       <section className="features" id="features">
         <div className="features-grid">
