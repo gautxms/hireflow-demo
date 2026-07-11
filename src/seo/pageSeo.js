@@ -49,6 +49,10 @@ export const PUBLIC_PAGE_SEO = {
     title: 'HireFlow AI Disclosure',
     description: 'Learn how HireFlow uses AI-assisted resume analysis as decision support, not automated hiring decisions.',
   },
+  '/trust': {
+    title: 'HireFlow Trust and Responsible AI',
+    description: 'Learn about HireFlow trust, privacy, responsible AI, safeguards, current limitations, and customer responsibilities for early-access recruiting workflows.',
+  },
   '/cookie-policy': {
     title: 'HireFlow Cookie Policy',
     description: 'Learn how HireFlow uses necessary cookies, optional analytics, and privacy-safe cookie preferences.',

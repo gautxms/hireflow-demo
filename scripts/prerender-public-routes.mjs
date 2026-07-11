@@ -129,6 +129,15 @@ const PUBLIC_ROUTES = [
       </main>
     `,
   },
+  {
+    route: '/trust',
+    body: `
+      <main>
+        <h1>Trust and responsible AI</h1>
+        <p>Learn how HireFlow approaches privacy, responsible AI, safeguards, limitations, and recruiter-led review for early-access hiring workflows.</p>
+      </main>
+    `,
+  },
 
   {
     route: '/cookie-policy',
