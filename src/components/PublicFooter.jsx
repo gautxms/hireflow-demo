@@ -33,6 +33,7 @@ export default function PublicFooter() {
           <ul className="public-footer__list">
             <li><a className="public-footer__link" href="/about">About</a></li>
             <li><a className="public-footer__link" href="/contact">Contact</a></li>
+            <li><a className="public-footer__link" href="/trust">Trust</a></li>
           </ul>
         </nav>
 
