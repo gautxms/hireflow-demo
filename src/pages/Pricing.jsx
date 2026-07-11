@@ -6,7 +6,7 @@ const PLAN_FEATURES = [
   'AI resume analysis — up to 800 resumes/month',
   'AI-powered candidate screening',
   'Structured scoring signals',
-  'Secure data handling',
+  'Responsible AI and privacy-conscious workflows',
   'Email support',
 ]
 
@@ -40,7 +40,7 @@ const SHARED_PLAN_FEATURES = [
   'AI-powered candidate screening to help surface stronger matches faster.',
   'Structured scoring signals designed to support more consistent shortlisting decisions.',
   'Bulk resume upload support so teams can process high-volume intake in fewer steps.',
-  'Secure data handling built into the platform workflows used for parsing and analysis.',
+  'Upload validation, rate limiting, and recruiter-led review for responsible AI workflows.',
   'Email support for setup, billing, and day-to-day product questions.',
 ]
 
@@ -230,9 +230,10 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
           </div>
         </section>
 
-        <p className="pricing-page__trust-line">
-          Trusted by hiring teams that want transparent pricing and reliable AI-assisted screening workflows.
-        </p>
+        <div className="pricing-page__trust-line">
+          <p>Responsible AI and privacy-conscious workflows support recruiter-led review without replacing human hiring decisions.</p>
+          <a href="/trust" className="pricing-page__trust-link">See Trust &amp; Responsible AI</a>
+        </div>
       </section>
 
     </main>

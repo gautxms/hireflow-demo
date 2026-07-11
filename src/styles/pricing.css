@@ -242,3 +242,20 @@
   color: #000000;
   transform: scale(0.97);
 }
+
+.pricing-page__trust-line p {
+  margin: 0 0 0.6rem;
+}
+
+
+.pricing-page__trust-link {
+  color: var(--hf-lime);
+  font-family: var(--hf-font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.pricing-page__trust-link:hover {
+  color: var(--hf-text-primary);
+}

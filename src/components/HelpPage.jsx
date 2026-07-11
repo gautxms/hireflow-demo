@@ -43,9 +43,9 @@ const HELP_ARTICLES = {
       title: 'Supported file formats and size limits',
       desc: 'Exactly what upload accepts today',
       content: [
-        'HireFlow currently accepts PDF and DOCX resumes only.',
+        'HireFlow currently accepts PDF, DOC, DOCX, and TXT resumes.',
         'Each resume file must be 25MB or smaller.',
-        'If a file type is rejected, convert it to PDF or DOCX and upload again.',
+        'If a file type is rejected, convert it to PDF, DOCX, or TXT and upload again.',
       ],
     },
     {
@@ -64,7 +64,7 @@ const HELP_ARTICLES = {
       desc: 'Understand processing states after upload',
       content: [
         'After upload, parsing status updates while HireFlow processes candidate data.',
-        'A parse failure message includes a reason and recommends retrying with PDF or DOCX.',
+        'A parse failure message includes a reason and recommends retrying with PDF, DOCX, or TXT.',
         'When upload cannot be completed, the error panel explains the reason and next action.',
       ],
     },
@@ -145,7 +145,7 @@ const HELP_CATEGORIES = [
 const HELP_FAQS = [
   {
     q: 'What file types can I upload right now?',
-    a: 'Upload supports PDF and DOCX resumes. Other file types must be converted before uploading.',
+    a: 'Upload supports PDF, DOC, DOCX, and TXT resumes. Other file types must be converted before uploading.',
   },
   {
     q: 'Is there a file size limit?',
@@ -153,7 +153,7 @@ const HELP_FAQS = [
   },
   {
     q: 'Can I upload resumes in bulk?',
-    a: 'Yes. You can upload multiple files in one session, and progress is shown while chunks upload and parse.',
+    a: 'Yes. You can upload up to 20 files in a standard batch, and progress is shown while chunks upload and parse.',
   },
   {
     q: 'Can I export candidate results?',
