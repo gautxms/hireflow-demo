@@ -36,10 +36,23 @@ test('AccountPage only latest non-aborted request can commit state or parent pro
   assert.match(source, /if \(isLatestRequest\(requestId, controller\)\) \{\s*setRefreshWarning\(nextWarning\)\s*setLoading\(false\)/)
 })
 
-test('AccountPage preserves displayable subscription data during refresh and failed partial responses', () => {
-  assert.doesNotMatch(source, /setSubscriptionData\(null\)/)
+test('AccountPage preserves displayable subscription data during same-account refresh and failed partial responses', () => {
+  assert.match(source, /if \(!didAuthenticatedScopeChange\) \{\s*setFatalError\(''\)\s*setRefreshWarning\(''\)\s*\}/)
   assert.match(source, /setSubscriptionData\(subscriptionPayload\.subscription \|\| null\)/)
   assert.match(source, /nextWarning = 'We could not refresh subscription details\. Showing the safest available account view\.'/)
+})
+
+test('AccountPage clears subscription data immediately when authenticated account scope changes', () => {
+  assert.match(source, /const nextAuthenticatedScope = `\$\{token\}:\$\{getUserKey\(currentUser\)\}`/)
+  assert.match(source, /const didAuthenticatedScopeChange = authenticatedScopeRef\.current !== nextAuthenticatedScope/)
+  assert.match(source, /if \(didAuthenticatedScopeChange\) \{[\s\S]*setSubscriptionData\(null\)/)
+  assert.match(source, /if \(didAuthenticatedScopeChange\) \{[\s\S]*requestSequenceRef\.current \+= 1/)
+})
+
+test('AccountPage account or token changes cannot render previous account subscription while fetching', () => {
+  assert.match(source, /authenticatedScopeRef = useRef\(''\)/)
+  assert.match(source, /activeRequestControllerRef\.current\?\.abort\(\)[\s\S]*requestSequenceRef\.current \+= 1[\s\S]*setSubscriptionData\(null\)/)
+  assert.match(source, /fetchUserData\(\{ isInitialLoad: didAuthenticatedScopeChange \}\)/)
 })
 
 test('AccountPage stable refs prevent callback rerenders from retriggering initial loading', () => {

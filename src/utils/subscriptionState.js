@@ -12,7 +12,19 @@ const SCHEDULED_CANCELLATION_STATUSES = new Set([
 ])
 const PAUSED_STATUSES = new Set(['paused'])
 const INACTIVE_STATUSES = new Set(['inactive', 'no_subscription', 'none', 'free', ''])
-const BILLING_MANAGEABLE_STATUSES = new Set(['active', 'trialing', 'past_due', 'paused', 'canceled', 'cancelled'])
+const BILLING_MANAGEABLE_STATUSES = new Set([
+  'active',
+  'trialing',
+  'trial',
+  'past_due',
+  'paused',
+  'canceled',
+  'cancelled',
+  'cancel_scheduled',
+  'cancellation_scheduled',
+  'pending_cancellation',
+  'scheduled_cancellation',
+])
 
 export function normalizeSubscriptionStatus(status) {
   return String(status || 'inactive').trim().toLowerCase()
@@ -51,12 +63,11 @@ export function hasExplicitScheduledCancellationSignal(subscriptionStateOrSubscr
   )
 }
 
-function firstPresent(values) {
-  return values.find((value) => value !== undefined && value !== null && value !== '') || null
-}
-
 export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now = new Date()) {
-  const rawDate = firstPresent([
+  const comparisonDate = now instanceof Date ? now : new Date(now)
+  if (Number.isNaN(comparisonDate.getTime())) return null
+
+  const dateCandidates = [
     subscriptionStateOrSubscription?.cancellationEffectiveAt,
     subscriptionStateOrSubscription?.cancellation_effective_at,
     subscriptionStateOrSubscription?.accessEndsAt,
@@ -65,14 +76,19 @@ export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, no
     subscriptionStateOrSubscription?.paid_through_date,
     subscriptionStateOrSubscription?.currentPeriodEnd,
     subscriptionStateOrSubscription?.current_period_end,
-  ])
-  if (!rawDate) return null
+  ]
 
-  const endDate = new Date(rawDate)
-  const comparisonDate = now instanceof Date ? now : new Date(now)
-  if (Number.isNaN(endDate.getTime()) || Number.isNaN(comparisonDate.getTime())) return null
+  for (const rawDate of dateCandidates) {
+    if (rawDate === undefined || rawDate === null || rawDate === '') continue
 
-  return endDate > comparisonDate ? endDate : null
+    const endDate = new Date(rawDate)
+    if (Number.isNaN(endDate.getTime())) continue
+    if (endDate <= comparisonDate) continue
+
+    return endDate
+  }
+
+  return null
 }
 
 export function hasScheduledCancellationAccess(subscriptionStateOrSubscription, now = new Date()) {
@@ -94,7 +110,7 @@ export function hasActivePaidAccess(subscriptionStateOrSubscription, now = new D
 
 export function isReadOnlyExpiredSubscriber(subscriptionStateOrSubscription, now = new Date()) {
   const status = getSubscriptionStatus(subscriptionStateOrSubscription)
-  if (INACTIVE_STATUSES.has(status)) {
+  if (INACTIVE_STATUSES.has(status) || ACTIVE_STATUSES.has(status) || TRIALING_STATUSES.has(status)) {
     return false
   }
 

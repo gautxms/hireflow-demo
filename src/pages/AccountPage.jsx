@@ -34,6 +34,7 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
   const onUserProfileUpdateRef = useRef(onUserProfileUpdate)
   const requestSequenceRef = useRef(0)
   const activeRequestControllerRef = useRef(null)
+  const authenticatedScopeRef = useRef('')
 
   useEffect(() => {
     userRef.current = user
@@ -190,10 +191,25 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
       return
     }
 
+    const nextAuthenticatedScope = `${token}:${getUserKey(currentUser)}`
+    const didAuthenticatedScopeChange = authenticatedScopeRef.current !== nextAuthenticatedScope
+
+    if (didAuthenticatedScopeChange) {
+      activeRequestControllerRef.current?.abort()
+      requestSequenceRef.current += 1
+      authenticatedScopeRef.current = nextAuthenticatedScope
+      setSubscriptionData(null)
+      setFatalError('')
+      setRefreshWarning('')
+      setLoading(true)
+    }
+
     setUserData(currentUser)
-    setFatalError('')
-    setRefreshWarning('')
-    fetchUserData({ isInitialLoad: true })
+    if (!didAuthenticatedScopeChange) {
+      setFatalError('')
+      setRefreshWarning('')
+    }
+    fetchUserData({ isInitialLoad: didAuthenticatedScopeChange })
 
     return () => {
       activeRequestControllerRef.current?.abort()

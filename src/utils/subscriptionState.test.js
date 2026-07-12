@@ -4,6 +4,7 @@ import {
   canAccessProductDashboard,
   canRenderBillingPage,
   hasActiveSubscription,
+  getFutureSubscriptionEndDate,
   hasScheduledCancellationAccess,
   resolveSubscriptionState,
 } from './subscriptionState.js'
@@ -85,6 +86,45 @@ test('recognized scheduled status with future date is scheduled', () => {
   assert.equal(hasScheduledCancellationAccess({ status: 'pending_cancellation', paidThroughDate: FUTURE }, NOW), true)
 })
 
+
+
+test('future date selection skips malformed cancellationEffectiveAt and falls through to currentPeriodEnd', () => {
+  const endDate = getFutureSubscriptionEndDate({ cancellationEffectiveAt: 'not-a-date', currentPeriodEnd: FUTURE }, NOW)
+
+  assert.equal(endDate.toISOString(), '2027-01-07T00:00:00.000Z')
+})
+
+test('future date selection skips past cancellationEffectiveAt and falls through to currentPeriodEnd', () => {
+  const endDate = getFutureSubscriptionEndDate({ cancellationEffectiveAt: PAST, currentPeriodEnd: FUTURE }, NOW)
+
+  assert.equal(endDate.toISOString(), '2027-01-07T00:00:00.000Z')
+})
+
+test('future date selection skips several invalid candidates before valid paidThroughDate', () => {
+  const endDate = getFutureSubscriptionEndDate({
+    cancellationEffectiveAt: 'bad',
+    cancellation_effective_at: PAST,
+    accessEndsAt: '',
+    access_ends_at: 'also-bad',
+    paidThroughDate: FUTURE,
+    currentPeriodEnd: '2028-01-07T00:00:00Z',
+  }, NOW)
+
+  assert.equal(endDate.toISOString(), '2027-01-07T00:00:00.000Z')
+})
+
+test('future date selection returns null when all candidates are invalid or past', () => {
+  const endDate = getFutureSubscriptionEndDate({
+    cancellationEffectiveAt: 'bad',
+    cancellation_effective_at: PAST,
+    accessEndsAt: '',
+    paidThroughDate: '2020-01-07T00:00:00Z',
+    currentPeriodEnd: 'not-a-date',
+  }, NOW)
+
+  assert.equal(endDate, null)
+})
+
 test('active subscription with future currentPeriodEnd only is not scheduled cancellation', () => {
   const resolved = state({ status: 'active', currentPeriodEnd: FUTURE })
 
@@ -99,6 +139,46 @@ test('active subscription with stale future cancellationEffectiveAt but no signa
   assert.equal(resolved.statusLabel, 'Active')
   assert.equal(resolved.isCancellationScheduled, false)
   assert.equal(resolved.cancelAtPeriodEnd, false)
+})
+
+
+
+test('active subscription with cancelAtPeriodEnd and missing date is not read-only expired', () => {
+  const resolved = state({ status: 'active', cancelAtPeriodEnd: true })
+
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.isReadOnlyExpiredSubscriber, false)
+  assert.equal(resolved.isCancellationScheduled, false)
+})
+
+test('active subscription with cancelAtPeriodEnd and past date is not read-only expired', () => {
+  const resolved = state({ status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: PAST })
+
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.isReadOnlyExpiredSubscriber, false)
+  assert.equal(resolved.isCancellationScheduled, false)
+})
+
+test('trialing subscription with cancellation signal and missing date is not read-only expired', () => {
+  const resolved = state({ status: 'trialing', cancelAtPeriodEnd: true })
+
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.isReadOnlyExpiredSubscriber, false)
+  assert.equal(resolved.statusLabel, 'Trialing')
+})
+
+test('active paid access and read-only expired are never simultaneously true', () => {
+  const cases = [
+    state({ status: 'active', cancelAtPeriodEnd: true }),
+    state({ status: 'trialing', cancelAtPeriodEnd: true }),
+    state({ status: 'canceled', cancellationEffectiveAt: FUTURE }),
+    state({ status: 'canceled', cancellationEffectiveAt: PAST }),
+    state({ status: 'scheduled_cancellation' }),
+  ]
+
+  for (const resolved of cases) {
+    assert.equal(resolved.hasActivePaidAccess && resolved.isReadOnlyExpiredSubscriber, false)
+  }
 })
 
 test('canceled subscription with past effective date is expired and loses paid access', () => {
@@ -151,6 +231,15 @@ test('paused users are provider-managed billing states without dashboard access'
   assert.equal(resolved.statusLabel, 'Paused')
   assert.equal(resolved.canAccessProductDashboard, false)
   assert.equal(resolved.canManageBilling, true)
+})
+
+
+
+test('trial alias and scheduled statuses with provider IDs can manage billing', () => {
+  for (const status of ['trial', 'cancellation_scheduled', 'cancel_scheduled', 'pending_cancellation', 'scheduled_cancellation']) {
+    const resolved = state({ status, paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123', currentPeriodEnd: FUTURE })
+    assert.equal(resolved.canManageBilling, true)
+  }
 })
 
 test('billing page rendering requires management access or valid provider billing state', () => {

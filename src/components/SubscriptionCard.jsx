@@ -1,5 +1,5 @@
 import { Package } from 'lucide-react'
-import { resolveSubscriptionState } from '../utils/subscriptionState'
+import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
 import './accountCards.css'
 
 function formatDate(value) {
@@ -20,18 +20,17 @@ export default function SubscriptionCard({ user, subscription }) {
   const status = subscriptionState.rawStatus
   const plan = subscriptionState.planLabel
   const startedAt = subscription?.started_date || user?.subscription_started_at || null
-  const statusClass = ['active', 'trialing', 'cancelled', 'canceled', 'past_due', 'paused', 'inactive'].includes(status) ? (status === 'canceled' ? 'cancelled' : status) : 'inactive'
+  const statusClass = subscriptionState.isCancellationScheduled
+    ? 'active'
+    : ['active', 'trialing', 'cancelled', 'canceled', 'past_due', 'paused', 'inactive'].includes(status)
+      ? (status === 'canceled' ? 'cancelled' : status)
+      : 'inactive'
   const accessUntil = formatDate(subscriptionState.accessEndsAt || subscriptionState.paidThroughDate)
-  const shouldManageBilling = Boolean(
-    subscriptionState.hasProviderSubscription
-      || subscriptionState.canManageBilling
-      || subscriptionState.isActive
-      || subscriptionState.isCancellationScheduled
-      || subscriptionState.isPastDue
-      || subscriptionState.isPaused,
-  )
-  const actionHref = shouldManageBilling ? '/billing' : '/pricing'
-  const actionLabel = shouldManageBilling ? 'Manage plan & billing' : 'View plans'
+  const canOpenBilling = canRenderBillingPage(subscriptionState)
+  const shouldViewPlans = subscriptionState.isFree || (!subscriptionState.hasProviderSubscription && !subscriptionState.hasActivePaidAccess && !subscriptionState.isPastDue && !subscriptionState.isPaused)
+  const needsBillingSupport = !canOpenBilling && !shouldViewPlans
+  const actionHref = canOpenBilling ? '/billing' : shouldViewPlans ? '/pricing' : '/help'
+  const actionLabel = canOpenBilling ? 'Manage plan & billing' : shouldViewPlans ? 'View plans' : 'Contact support'
 
   return (
     <div className="hf-account-card">
@@ -52,7 +51,9 @@ export default function SubscriptionCard({ user, subscription }) {
         <p className="hf-account-card__value">{plan}</p>
       </div>
 
-      {subscriptionState.isCancellationScheduled && accessUntil ? (
+      {needsBillingSupport ? (
+        <p className="hf-billing-card__description">Billing setup needs attention. Contact support so we can safely manage this subscription.</p>
+      ) : subscriptionState.isCancellationScheduled && accessUntil ? (
         <div className="hf-account-card__section hf-account-card__section--last">
           <p className="hf-account-card__label">Access until</p>
           <p className="hf-account-card__value">{accessUntil}</p>
