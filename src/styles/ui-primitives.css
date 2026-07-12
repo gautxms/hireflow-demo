@@ -1,5 +1,5 @@
 .ui-card {
-  background: var(--color-bg-secondary);
+  background: var(--color-surface-raised, var(--hf-surface, var(--color-bg-secondary)));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
@@ -137,13 +137,14 @@
   display: grid;
   place-items: center;
   padding: var(--spacing-lg);
-  background: rgba(0, 0, 0, 0.76);
+  background: var(--hf-bg-overlay-80, rgba(0, 0, 0, 0.76));
 }
 
 .ui-modal__dialog {
   width: min(760px, calc(100vw - (var(--spacing-xl) * 2)));
   max-height: calc(100vh - (var(--spacing-xl) * 2));
   overflow-y: auto;
+  background: var(--color-surface-raised, var(--hf-surface, var(--color-bg-secondary)));
 }
 
 .back-button {
