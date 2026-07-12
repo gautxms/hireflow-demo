@@ -1,102 +1,162 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveSubscriptionState, hasActiveSubscription, canAccessProductDashboard, canRenderBillingPage } from './subscriptionState.js'
+import {
+  canAccessProductDashboard,
+  canRenderBillingPage,
+  hasActiveSubscription,
+  hasScheduledCancellationAccess,
+  resolveSubscriptionState,
+} from './subscriptionState.js'
 
-test('free users cannot manage billing or access product dashboard', () => {
-  const state = resolveSubscriptionState({ user: { subscription_status: 'inactive' } })
+const NOW = new Date('2026-07-12T00:00:00Z')
+const FUTURE = '2027-01-07T00:00:00Z'
+const PAST = '2025-01-07T00:00:00Z'
 
-  assert.equal(state.planLabel, 'Free plan')
-  assert.equal(state.statusLabel, 'Free plan / No active subscription')
-  assert.equal(state.canManageBilling, false)
-  assert.equal(canRenderBillingPage(state), false)
-  assert.equal(state.canAccessProductDashboard, false)
+function state(subscription) {
+  return resolveSubscriptionState({ subscription, now: NOW })
+}
+
+test('active renewing subscription keeps active paid access without cancellation scheduling', () => {
+  const resolved = state({ status: 'active', plan: 'monthly', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })
+
+  assert.equal(resolved.statusLabel, 'Active')
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.canAccessProductDashboard, true)
+  assert.equal(resolved.isCancellationScheduled, false)
+  assert.equal(resolved.cancelAtPeriodEnd, false)
+  assert.equal(resolved.canManageBilling, true)
+  assert.equal(canRenderBillingPage(resolved), true)
 })
 
-test('active users require Paddle customer and subscription identifiers to manage billing', () => {
-  const missingProviderState = resolveSubscriptionState({ subscription: { status: 'active', plan: 'monthly' } })
-  const providerReadyState = resolveSubscriptionState({
-    subscription: {
-      status: 'active',
-      plan: 'monthly',
-      paddleCustomerId: 'ctm_123',
-      paddleSubscriptionId: 'sub_123',
-    },
-  })
+test('trialing subscription keeps product access without being labeled inactive', () => {
+  const resolved = state({ status: 'trialing', plan: 'monthly' })
 
-  assert.equal(missingProviderState.canManageBilling, false)
-  assert.equal(providerReadyState.canManageBilling, true)
-  assert.equal(canRenderBillingPage(providerReadyState), true)
-  assert.equal(providerReadyState.canAccessProductDashboard, true)
-})
-
-test('trialing users keep product access without being labeled inactive', () => {
-  const state = resolveSubscriptionState({ subscription: { status: 'trialing', plan: 'monthly' } })
-
-  assert.equal(state.statusLabel, 'Trialing')
+  assert.equal(resolved.statusLabel, 'Trialing')
   assert.equal(hasActiveSubscription('trialing'), true)
-  assert.equal(canAccessProductDashboard('trialing'), true)
+  assert.equal(canAccessProductDashboard(resolved, NOW), true)
 })
 
-test('past due users are payment issue states, not free states', () => {
-  const state = resolveSubscriptionState({
-    subscription: {
-      status: 'past_due',
-      plan: 'monthly',
-      paddleCustomerId: 'ctm_123',
-      paddleSubscriptionId: 'sub_123',
-    },
-  })
+test('canceled subscription with future cancellationEffectiveAt has scheduled cancellation paid access', () => {
+  const resolved = state({ status: 'canceled', plan: 'annual', cancellationEffectiveAt: FUTURE })
 
-  assert.equal(state.statusLabel, 'Past due')
-  assert.equal(state.canAccessProductDashboard, false)
-  assert.equal(state.canManageBilling, true)
+  assert.equal(resolved.statusLabel, 'Cancellation scheduled')
+  assert.equal(resolved.isCancellationScheduled, true)
+  assert.equal(resolved.hasScheduledCancellationAccess, true)
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.accessEndsAt, '2027-01-07T00:00:00.000Z')
 })
 
-test('billing page rendering requires management access or valid Paddle billing state', () => {
-  const freeWithCustomerOnly = resolveSubscriptionState({
-    subscription: { status: 'inactive', paddleCustomerId: 'ctm_123' },
-  })
-  const canceledProviderState = resolveSubscriptionState({
-    subscription: { status: 'canceled', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' },
-  })
+test('cancelled subscription with future currentPeriodEnd uses it only as access end date', () => {
+  const resolved = state({ status: 'cancelled', plan: 'annual', currentPeriodEnd: FUTURE })
+
+  assert.equal(resolved.isCancellationScheduled, true)
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.paidThroughDate, '2027-01-07T00:00:00.000Z')
+})
+
+test('active subscription with cancelAtPeriodEnd and future cancellationEffectiveAt is scheduled', () => {
+  const resolved = state({ status: 'active', plan: 'annual', cancelAtPeriodEnd: true, cancellationEffectiveAt: FUTURE })
+
+  assert.equal(resolved.statusLabel, 'Cancellation scheduled')
+  assert.equal(resolved.cancelAtPeriodEnd, true)
+  assert.equal(resolved.canAccessProductDashboard, true)
+})
+
+test('active subscription with cancel_at_period_end and future currentPeriodEnd is scheduled', () => {
+  const resolved = state({ status: 'active', plan: 'annual', cancel_at_period_end: true, currentPeriodEnd: FUTURE })
+
+  assert.equal(resolved.statusLabel, 'Cancellation scheduled')
+  assert.equal(resolved.cancelAtPeriodEnd, true)
+  assert.equal(resolved.hasScheduledCancellationAccess, true)
+})
+
+test('active subscription with latestRecordStatus cancellation_scheduled and future date is scheduled', () => {
+  const resolved = state({ status: 'active', latestRecordStatus: 'cancellation_scheduled', accessEndsAt: FUTURE })
+
+  assert.equal(resolved.statusLabel, 'Cancellation scheduled')
+  assert.equal(resolved.hasActivePaidAccess, true)
+})
+
+test('recognized scheduled status with future date is scheduled', () => {
+  const resolved = state({ status: 'cancellation_scheduled', paidThroughDate: FUTURE })
+
+  assert.equal(resolved.statusLabel, 'Cancellation scheduled')
+  assert.equal(resolved.hasScheduledCancellationAccess, true)
+  assert.equal(hasScheduledCancellationAccess({ status: 'pending_cancellation', paidThroughDate: FUTURE }, NOW), true)
+})
+
+test('active subscription with future currentPeriodEnd only is not scheduled cancellation', () => {
+  const resolved = state({ status: 'active', currentPeriodEnd: FUTURE })
+
+  assert.equal(resolved.statusLabel, 'Active')
+  assert.equal(resolved.isCancellationScheduled, false)
+  assert.equal(resolved.hasActivePaidAccess, true)
+})
+
+test('active subscription with stale future cancellationEffectiveAt but no signal is not scheduled', () => {
+  const resolved = state({ status: 'active', cancellationEffectiveAt: FUTURE, latestRecordStatus: 'active' })
+
+  assert.equal(resolved.statusLabel, 'Active')
+  assert.equal(resolved.isCancellationScheduled, false)
+  assert.equal(resolved.cancelAtPeriodEnd, false)
+})
+
+test('canceled subscription with past effective date is expired and loses paid access', () => {
+  const resolved = state({ status: 'canceled', plan: 'annual', cancellationEffectiveAt: PAST })
+
+  assert.equal(resolved.statusLabel, 'Canceled')
+  assert.equal(resolved.hasScheduledCancellationAccess, false)
+  assert.equal(resolved.hasActivePaidAccess, false)
+  assert.equal(resolved.canUsePaidMutation, false)
+  assert.equal(resolved.isReadOnlyExpiredSubscriber, true)
+})
+
+test('scheduled status with missing access-end date is not scheduled access', () => {
+  const resolved = state({ status: 'scheduled_cancellation' })
+
+  assert.equal(resolved.hasScheduledCancellationAccess, false)
+  assert.equal(resolved.hasActivePaidAccess, false)
+  assert.equal(resolved.isReadOnlyExpiredSubscriber, true)
+})
+
+test('malformed cancellation date is ignored', () => {
+  const resolved = state({ status: 'canceled', cancellationEffectiveAt: 'not-a-date' })
+
+  assert.equal(resolved.hasScheduledCancellationAccess, false)
+  assert.equal(resolved.hasActivePaidAccess, false)
+})
+
+test('free and inactive users have no active subscription or scheduled access', () => {
+  const resolved = resolveSubscriptionState({ user: { subscription_status: 'inactive', currentPeriodEnd: FUTURE, cancelAtPeriodEnd: true }, now: NOW })
+
+  assert.equal(resolved.planLabel, 'No active subscription')
+  assert.equal(resolved.statusLabel, 'No active subscription')
+  assert.equal(resolved.canManageBilling, false)
+  assert.equal(canRenderBillingPage(resolved), false)
+  assert.equal(resolved.hasScheduledCancellationAccess, false)
+  assert.equal(resolved.canAccessProductDashboard, false)
+})
+
+test('past due users are payment issue states without product dashboard access', () => {
+  const resolved = state({ status: 'past_due', plan: 'monthly', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })
+
+  assert.equal(resolved.statusLabel, 'Past due')
+  assert.equal(resolved.canAccessProductDashboard, false)
+  assert.equal(resolved.canManageBilling, true)
+})
+
+test('paused users are provider-managed billing states without dashboard access', () => {
+  const resolved = state({ status: 'paused', plan: 'monthly', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })
+
+  assert.equal(resolved.statusLabel, 'Paused')
+  assert.equal(resolved.canAccessProductDashboard, false)
+  assert.equal(resolved.canManageBilling, true)
+})
+
+test('billing page rendering requires management access or valid provider billing state', () => {
+  const freeWithCustomerOnly = state({ status: 'inactive', paddleCustomerId: 'ctm_123' })
+  const canceledProviderState = state({ status: 'canceled', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })
 
   assert.equal(canRenderBillingPage(freeWithCustomerOnly), false)
   assert.equal(canRenderBillingPage(canceledProviderState), true)
-})
-
-test('scheduled cancellation keeps paid mutation access until effective date', () => {
-  const state = resolveSubscriptionState({
-    subscription: {
-      status: 'canceled',
-      plan: 'annual',
-      paddleCustomerId: 'ctm_123',
-      paddleSubscriptionId: 'sub_123',
-      cancellationEffectiveAt: '2027-01-07T00:00:00Z',
-    },
-  })
-
-  assert.equal(state.hasScheduledCancellationAccess, true)
-  assert.equal(state.hasActivePaidAccess, true)
-  assert.equal(state.canUsePaidMutation, true)
-  assert.equal(state.canAccessProductDashboard, true)
-  assert.equal(canAccessProductDashboard(state), true)
-  assert.equal(state.isReadOnlyExpiredSubscriber, false)
-})
-
-test('expired canceled subscriptions are read-only and cannot use paid mutations', () => {
-  const state = resolveSubscriptionState({
-    subscription: {
-      status: 'canceled',
-      plan: 'annual',
-      paddleCustomerId: 'ctm_123',
-      paddleSubscriptionId: 'sub_123',
-      cancellationEffectiveAt: '2025-01-07T00:00:00Z',
-    },
-  })
-
-  assert.equal(state.hasScheduledCancellationAccess, false)
-  assert.equal(state.hasActivePaidAccess, false)
-  assert.equal(state.canUsePaidMutation, false)
-  assert.equal(state.isReadOnlyExpiredSubscriber, true)
-  assert.equal(canRenderBillingPage(state), true)
 })
