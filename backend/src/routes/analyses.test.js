@@ -47,6 +47,26 @@ test('GET /analyses returns authenticated user scoped items with frontend fields
   assert.equal(queryMock.mock.callCount(), 4)
 })
 
+test('GET /analyses strips accidental Job title label from job description title', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM analyses a')) {
+      return { rows: [{ id: 12, created_at: '2026-05-01T00:00:00.000Z', status: 'processing', job_description_title: 'Job title Customer Success Manager - Mid-Market SaaS (US Market)', total_count: '1', complete_count: '0', failed_count: '0', processing_count: '1' }] }
+    }
+    return { rows: [] }
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses`, { headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.items[0].jobDescriptionTitle, 'Customer Success Manager - Mid-Market SaaS (US Market)')
+})
+
 
 
 
