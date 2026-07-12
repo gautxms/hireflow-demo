@@ -190,9 +190,9 @@
   width: min(900px, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
   padding: 0;
-  background: #111111;
-  border: 1px solid #1e1e1e;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--hf-shadow-lg);
   overflow: hidden;
 }
 
@@ -204,17 +204,17 @@
   justify-content: space-between;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #1e1e1e;
-  background: #111111;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
 }
 .job-modal__subtitle { margin: 0.3rem 0 0; color: var(--color-text-secondary); font-family: var(--font-family-ui); }
-.job-modal__close { width: 2rem; height: 2rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: #151515; color: var(--color-text-secondary); }
+.job-modal__close { width: 2rem; height: 2rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--hf-bg-elevated); color: var(--color-text-secondary); }
 .job-modal__close:focus-visible, .job-form__control:focus-visible, .job-form__file-clear:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .job-modal__error { margin: 0.75rem 1.25rem 0; color: var(--color-error); font-family: var(--font-family-ui); }
 
 .job-form { display: flex; flex-direction: column; max-height: calc(100vh - 10rem); }
 .job-form__scrollable { overflow-y: auto; padding: 0.75rem 1rem; display: grid; gap: 0.7rem; }
-.job-form__section { border: 1px solid #252525; border-radius: 8px; padding: 0.7rem 0.75rem; background: #121212; }
+.job-form__section { border: 1px solid var(--hf-border-2); border-radius: 8px; padding: 0.7rem 0.75rem; background: var(--hf-bg-elevated); }
 .job-form__section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; font-family: var(--font-family-heading); }
 .job-form__grid { display: grid; gap: 0.6rem; }
 .job-form__grid--two { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -222,15 +222,15 @@
 .job-form__field--full { grid-column: 1 / -1; }
 .job-form__field span { font-size: 0.84rem; color: var(--color-text-primary); }
 .job-form__field em { color: var(--color-error); font-style: normal; }
-.job-form__control { min-height: 2.35rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: #101010; color: var(--color-text-primary); padding: 0.48rem 0.65rem; font-family: var(--font-family-ui); }
+.job-form__control { min-height: 2.35rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--hf-bg-primary); color: var(--color-text-primary); padding: 0.48rem 0.65rem; font-family: var(--font-family-ui); }
 .job-form__control--textarea { min-height: 5.75rem; resize: vertical; }
 .job-form__error,.job-form__help,.job-form__file-name { margin: 0; font-family: var(--font-family-ui); font-size: 0.8rem; }
 .job-form__error { color: var(--color-error); }
 .job-form__help,.job-form__file-name { color: var(--color-text-secondary); }
 .job-form__file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .job-form__file-row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
-.job-form__file-clear { border: 1px solid var(--color-border); background: #151515; color: var(--color-text-secondary); width: 1.8rem; height: 1.8rem; border-radius: 999px; }
-.job-form__footer { position: sticky; bottom: 0; background: #111111; border-top: 1px solid #1e1e1e; padding: 0.7rem 1rem; display: flex; justify-content: flex-end; gap: 0.5rem; }
+.job-form__file-clear { border: 1px solid var(--color-border); background: var(--hf-bg-elevated); color: var(--color-text-secondary); width: 1.8rem; height: 1.8rem; border-radius: 999px; }
+.job-form__footer { position: sticky; bottom: 0; background: var(--color-surface-raised); border-top: 1px solid var(--color-border); padding: 0.7rem 1rem; display: flex; justify-content: flex-end; gap: 0.5rem; }
 
 @media (max-width: 860px) {
   .job-description-page .analyses-layout__table-shell {

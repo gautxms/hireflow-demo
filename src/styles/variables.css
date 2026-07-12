@@ -81,6 +81,7 @@
   --hf-focus-ring-inner: var(--hf-bg-primary);
 
   --hf-surface-card: var(--hf-bg-secondary);
+  --hf-surface-raised: var(--hf-bg-secondary);
   --hf-surface-input: var(--hf-bg-primary);
   --hf-surface-muted: #333333;
   --hf-surface-muted-hover: #444444;
@@ -144,6 +145,7 @@
   --color-bg-secondary: var(--hf-bg-secondary);
   --color-bg-elevated: var(--hf-bg-elevated);
   --color-bg-overlay-80: var(--hf-bg-overlay-80);
+  --color-surface-raised: var(--hf-surface-raised);
   --color-text-primary: var(--hf-text-primary);
   --color-text-secondary: var(--hf-text-secondary);
   --color-text-nav: var(--hf-text-nav);
