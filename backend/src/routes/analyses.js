@@ -12,6 +12,12 @@ const TERMINAL_STATUSES = new Set(['complete', 'failed'])
 const FAILED_UPLOAD_STATUSES = new Set(['failed', 'rejected', 'expired'])
 const STALE_UPLOAD_TIMEOUT_MINUTES = 30
 
+function normalizeJobDescriptionTitle(title) {
+  const normalizedTitle = String(title || '').trim()
+  if (!normalizedTitle) return null
+  return normalizedTitle.replace(/^job\s+title\s*:?\s+/i, '').trim() || null
+}
+
 function mapUploadChunkStatus(row) {
   const status = String(row?.status || '').toLowerCase()
   if (FAILED_UPLOAD_STATUSES.has(status)) return 'failed'
@@ -548,7 +554,7 @@ router.get('/', requireAuth, async (req, res) => {
         fileCount: summary.total,
         files: filesByAnalysis.get(String(row.id)) || [],
         filesPreview: (filesByAnalysis.get(String(row.id)) || []).slice(0, 5),
-        jobDescriptionTitle: row.job_description_title || null,
+        jobDescriptionTitle: normalizeJobDescriptionTitle(row.job_description_title),
       }
     })
 
@@ -584,7 +590,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       pending: counts.queued,
     },
     jobDescriptionId: analysis.job_description_id ? String(analysis.job_description_id) : null,
-    jobDescriptionTitle: analysis.job_description_title || null,
+    jobDescriptionTitle: normalizeJobDescriptionTitle(analysis.job_description_title),
     items,
     diagnostics: {
       resultExtraction: extractionDiagnostics,
