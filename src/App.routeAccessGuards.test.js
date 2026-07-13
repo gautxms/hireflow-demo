@@ -54,20 +54,20 @@ test('historical detail routes do not run module-flag fallback redirects', () =>
   assert.doesNotMatch(candidateDetailBlock, /navigate\('\/results'\)/)
 })
 
-test('login success waits for authoritative auth sync before resolving access', () => {
+test('login success waits for authoritative auth-state effect before resolving access', () => {
   const loginBlock = source.slice(source.indexOf('const handleAuthSuccess ='), source.indexOf('const logout = useCallback'))
 
   assert.match(loginBlock, /setAccessResolution\(\{ status: 'resolving', error: '' \}\)/)
   assert.doesNotMatch(loginBlock, /setAccessResolution\(\{ status: 'resolved'/)
-  assert.match(loginBlock, /void syncAuthenticatedUser\(\)/)
+  assert.doesNotMatch(loginBlock, /void syncAuthenticatedUser\(\)/)
 })
 
 test('token storage changes start latest authenticated sync for non-empty replacement tokens', () => {
   const storageBlock = source.slice(source.indexOf('const onStorage ='), source.indexOf("if (event.key === USER_STORAGE_KEY)"))
 
   assert.match(storageBlock, /setToken\(event\.newValue \|\| ''\)/)
-  assert.match(storageBlock, /setAccessResolution\(\{ status: event\.newValue \? 'resolving' : 'resolved', error: '' \}\)/)
-  assert.match(storageBlock, /if \(event\.newValue\) \{\s*void syncAuthenticatedUser\(\)\s*\}/)
+  assert.match(storageBlock, /setAccessResolution\(\{ status: event\.newValue && !isStandaloneOrdinaryUserAuthRoutePath\(pathname\) \? 'resolving' : 'resolved', error: '' \}\)/)
+  assert.match(storageBlock, /if \(event\.newValue && !isStandaloneOrdinaryUserAuthRoutePath\(pathname\)\) \{\s*void syncAuthenticatedUser\(\)\s*\}/)
 })
 
 test('resolving access holds public shell decisions and pricing redirects', () => {
@@ -92,4 +92,31 @@ test('landing dashboard CTA depends on authenticated active subscriber context, 
 
   assert.match(landingBlock, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'View pricing'\}/)
   assert.match(source, /buildResolvedAccessContext\(\{/)
+})
+
+test('standalone routes bypass ordinary user auth sync side effects', () => {
+  const syncStart = source.slice(source.indexOf('const syncAuthenticatedUser = useCallback'), source.indexOf("setAccessResolution({ status: 'resolving'") )
+  const storageBlock = source.slice(source.indexOf('const onStorage ='), source.indexOf("if (event.key === USER_STORAGE_KEY)"))
+  const authUpdatedBlock = source.slice(source.indexOf('const onAuthStateRefresh ='), source.indexOf('const onStorage ='))
+  const focusBlock = source.slice(source.indexOf('const handleWindowFocus ='), source.indexOf("window.addEventListener('focus'") )
+
+  assert.match(syncStart, /isStandaloneOrdinaryUserAuthRoutePath\(pathname\)/)
+  assert.match(storageBlock, /event\.newValue && !isStandaloneOrdinaryUserAuthRoutePath\(pathname\)/)
+  assert.match(authUpdatedBlock, /!isStandaloneOrdinaryUserAuthRoutePath\(pathname\)/)
+  assert.match(focusBlock, /!isStandaloneOrdinaryUserAuthRoutePath\(pathname\)/)
+})
+
+test('login success relies on auth-state effect for a single authoritative sync trigger', () => {
+  const loginBlock = source.slice(source.indexOf('const handleAuthSuccess ='), source.indexOf('const logout = useCallback'))
+
+  assert.match(loginBlock, /setAccessResolution\(\{ status: 'resolving', error: '' \}\)/)
+  assert.doesNotMatch(loginBlock, /void syncAuthenticatedUser\(\)/)
+  assert.match(source, /useEffect\(\(\) => \{\s*if \(!isAuthenticated \|\| isStandaloneOrdinaryUserAuthRoutePath\(pathname\)\)/)
+})
+
+test('canonical detail helpers gate detail rendering instead of broad prefixes', () => {
+  assert.match(source, /if \(getAnalysisDetailRouteId\(resolvedPathname\)\)/)
+  assert.match(source, /if \(getCandidateDetailRouteId\(resolvedPathname\)\)/)
+  assert.doesNotMatch(source, /resolvedPathname\.startsWith\('\/analyses\/'\)/)
+  assert.doesNotMatch(source, /resolvedPathname\.startsWith\('\/candidates\/'\)/)
 })

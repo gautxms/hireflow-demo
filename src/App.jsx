@@ -74,7 +74,7 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
-import { isAuthenticatedAccountShellRoutePath, isCheckoutStandaloneRoutePath, isPaidWorkspaceRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
+import { canonicalizePathname, getAnalysisDetailRouteId, getCandidateDetailRouteId, isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isStandaloneOrdinaryUserAuthRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
@@ -375,11 +375,12 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
   const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
   const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
   const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
-  const isAdminPath = pathname.startsWith('/admin')
-  const isRootLandingPath = pathname === '/'
-  const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
+  const canonicalPathname = canonicalizePathname(pathname)
+  const isAdminPath = canonicalPathname.startsWith('/admin')
+  const isRootLandingPath = canonicalPathname === '/'
+  const resolvedPathname = isRootLandingPath ? canonicalPathname : resolveUserSectionPath(canonicalPathname)
 
-  const normalizedLegacyAccountPath = normalizeLegacyAccountPath(pathname, window.location.search)
+  const normalizedLegacyAccountPath = normalizeLegacyAccountPath(canonicalPathname, window.location.search)
 
   useEffect(() => {
     if (normalizedLegacyAccountPath) {
@@ -698,7 +699,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
       return <AnalysesPage onCreateAnalysis={handleCreateAnalysis} />
     }
 
-    if (resolvedPathname.startsWith('/analyses/')) {
+    if (getAnalysisDetailRouteId(resolvedPathname)) {
       const canAccessAnalysisDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view analysis details.',
@@ -753,7 +754,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
       return <ShortlistsPage />
     }
 
-    if (resolvedPathname.startsWith('/candidates/')) {
+    if (getCandidateDetailRouteId(resolvedPathname)) {
       const canAccessCandidateDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view candidate profiles.',
@@ -1096,7 +1097,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     const isAuthenticatedAppRoute = isAuthenticated && (
       resolvedPathname === '/uploader'
       || resolvedPathname === '/analyses'
-      || resolvedPathname.startsWith('/analyses/')
+      || getAnalysisDetailRouteId(resolvedPathname)
       || shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
     )
 
@@ -1144,7 +1145,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
   }, [useAccountShellLayout, useUserShellLayout])
 
-  const isStandaloneDuringAccessResolution = isSharedResultsPath(resolvedPathname) || isCheckoutStandaloneRoutePath(resolvedPathname) || useAuthRouteLayout
+  const isStandaloneDuringAccessResolution = isStandaloneOrdinaryUserAuthRoutePath(resolvedPathname) || useAuthRouteLayout
   const shouldHoldForAccessResolution = isAuthenticated && !isStandaloneDuringAccessResolution
   const isBlockedPaidWorkspaceRoute = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isPaidWorkspaceRoutePath(resolvedPathname)
 
@@ -1366,6 +1367,11 @@ export default function App() {
       return null
     }
 
+    if (isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+      setAccessResolution({ status: 'resolved', error: '' })
+      return null
+    }
+
     setAccessResolution({ status: 'resolving', error: '' })
     authSyncControllerRef.current?.abort()
     const controller = new AbortController()
@@ -1427,7 +1433,7 @@ export default function App() {
         authSyncControllerRef.current = null
       }
     }
-  }, [clearAuthenticatedSession])
+  }, [clearAuthenticatedSession, pathname])
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
@@ -1436,14 +1442,16 @@ export default function App() {
       setToken(nextToken)
       setSubscriptionStatus(getStoredSubscriptionStatus())
       setUserProfile(getStoredUserProfile())
-      setAccessResolution({ status: nextToken ? 'resolving' : 'resolved', error: '' })
-      void syncAuthenticatedUser()
+      setAccessResolution({ status: nextToken && !isStandaloneOrdinaryUserAuthRoutePath(pathname) ? 'resolving' : 'resolved', error: '' })
+      if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+        void syncAuthenticatedUser()
+      }
     }
     const onStorage = (event) => {
       if (event.key === TOKEN_STORAGE_KEY) {
         setToken(event.newValue || '')
-        setAccessResolution({ status: event.newValue ? 'resolving' : 'resolved', error: '' })
-        if (event.newValue) {
+        setAccessResolution({ status: event.newValue && !isStandaloneOrdinaryUserAuthRoutePath(pathname) ? 'resolving' : 'resolved', error: '' })
+        if (event.newValue && !isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
           void syncAuthenticatedUser()
         }
       }
@@ -1467,19 +1475,19 @@ export default function App() {
       window.removeEventListener('hireflow-auth-updated', onAuthStateRefresh)
       authSyncControllerRef.current?.abort()
     }
-  }, [syncAuthenticatedUser])
+  }, [pathname, syncAuthenticatedUser])
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
       setAccessResolution({ status: 'resolved', error: '' })
       return
     }
 
     void syncAuthenticatedUser()
-  }, [isAuthenticated, syncAuthenticatedUser])
+  }, [isAuthenticated, pathname, syncAuthenticatedUser])
 
   const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive', nextUserProfile = null, redirectPath = '/') => {
     const normalizedSubscriptionStatus = nextSubscriptionStatus || 'inactive'
@@ -1494,7 +1502,6 @@ export default function App() {
     setAccessResolution({ status: 'resolving', error: '' })
     setAuthPrompt('')
     navigate(redirectPath)
-    void syncAuthenticatedUser()
   }
 
   const logout = useCallback(async () => {
@@ -1528,11 +1535,13 @@ export default function App() {
     }
 
     const handleWindowFocus = () => {
-      void syncAuthenticatedUser()
+      if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+        void syncAuthenticatedUser()
+      }
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
         void syncAuthenticatedUser()
       }
     }
@@ -1545,7 +1554,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       authSyncControllerRef.current?.abort()
     }
-  }, [isAuthenticated, syncAuthenticatedUser])
+  }, [isAuthenticated, pathname, syncAuthenticatedUser])
 
   useEffect(() => {
     // Authenticated users are intentionally redirected away from auth forms to the home route.

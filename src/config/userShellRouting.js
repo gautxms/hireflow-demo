@@ -14,8 +14,15 @@ const WORKSPACE_ROUTE_PATHS = new Set([
 const ACCOUNT_ROUTE_PATHS = new Set(['/settings', '/billing', '/account'])
 const CHECKOUT_RETURN_ROUTE_PATHS = new Set(['/account/payment-method'])
 
+export function canonicalizePathname(pathname = '/') {
+  const normalized = String(pathname || '/').trim() || '/'
+  if (normalized === '/') return '/'
+  return normalized.replace(/\/+$/, '') || '/'
+}
+
 export function normalizeLegacyAccountPath(pathname, search = '') {
-  if (pathname !== '/account') return null
+  const canonicalPathname = canonicalizePathname(pathname)
+  if (canonicalPathname !== '/account') return null
   const params = new URLSearchParams(search || '')
   const nextParams = new URLSearchParams()
   const upgradeTestKey = params.get('upgradeTestKey')
@@ -25,38 +32,74 @@ export function normalizeLegacyAccountPath(pathname, search = '') {
 }
 
 export function isPaidWorkspaceRoutePath(pathname) {
-  return WORKSPACE_ROUTE_PATHS.has(pathname)
+  return WORKSPACE_ROUTE_PATHS.has(canonicalizePathname(pathname))
 }
 
 export function isAuthenticatedAccountRoutePath(pathname) {
-  return ACCOUNT_ROUTE_PATHS.has(pathname)
+  return ACCOUNT_ROUTE_PATHS.has(canonicalizePathname(pathname))
+}
+
+function getTwoSegmentDetailId(pathname, basePath) {
+  const canonicalPathname = canonicalizePathname(pathname)
+  const segments = canonicalPathname.split('/').filter(Boolean)
+  if (segments.length !== 2 || segments[0] !== basePath.replace('/', '')) {
+    return null
+  }
+  return segments[1] || null
+}
+
+export function getAnalysisDetailRouteId(pathname) {
+  return getTwoSegmentDetailId(pathname, '/analyses')
+}
+
+export function getCandidateDetailRouteId(pathname) {
+  return getTwoSegmentDetailId(pathname, '/candidates')
+}
+
+export function isAnalysisDetailRoutePath(pathname) {
+  return Boolean(getAnalysisDetailRouteId(pathname))
+}
+
+export function isCandidateDetailRoutePath(pathname) {
+  return Boolean(getCandidateDetailRouteId(pathname))
 }
 
 export function isAuthenticatedHistoricalRoutePath(pathname) {
-  if (pathname === '/results') return true
-  if (pathname.startsWith('/analyses/')) return pathname.split('/').filter(Boolean).length === 2
-  if (pathname.startsWith('/candidates/')) return pathname.split('/').filter(Boolean).length === 2
-  return false
+  const canonicalPathname = canonicalizePathname(pathname)
+  return canonicalPathname === '/results' || isAnalysisDetailRoutePath(canonicalPathname) || isCandidateDetailRoutePath(canonicalPathname)
 }
 
 export function isCheckoutReturnRoutePath(pathname) {
-  return CHECKOUT_RETURN_ROUTE_PATHS.has(pathname)
+  return CHECKOUT_RETURN_ROUTE_PATHS.has(canonicalizePathname(pathname))
 }
 
 export function isCheckoutStandaloneRoutePath(pathname) {
-  return pathname === '/checkout' || pathname === '/billing/success' || pathname === '/billing/cancel'
+  const canonicalPathname = canonicalizePathname(pathname)
+  return canonicalPathname === '/checkout' || canonicalPathname === '/billing/success' || canonicalPathname === '/billing/cancel'
+}
+
+export function isAdminStandaloneRoutePath(pathname) {
+  const canonicalPathname = canonicalizePathname(pathname)
+  return canonicalPathname === '/admin' || canonicalPathname.startsWith('/admin/')
+}
+
+export function isStandaloneOrdinaryUserAuthRoutePath(pathname) {
+  const canonicalPathname = canonicalizePathname(pathname)
+  return canonicalPathname.startsWith('/results/') || isCheckoutStandaloneRoutePath(canonicalPathname) || isAdminStandaloneRoutePath(canonicalPathname)
 }
 
 export function isAuthenticatedAccountShellRoutePath(pathname) {
-  return isAuthenticatedAccountRoutePath(pathname) || isAuthenticatedHistoricalRoutePath(pathname)
+  const canonicalPathname = canonicalizePathname(pathname)
+  return isAuthenticatedAccountRoutePath(canonicalPathname) || isAuthenticatedHistoricalRoutePath(canonicalPathname)
 }
 
 // These routes are eligible for an authenticated app shell. Routing decides
 // between the full workspace shell and account-only shell after consuming
 // resolveSubscriptionState(...).canAccessProductDashboard.
 export function isUserShellRoutePath(pathname) {
-  return isPaidWorkspaceRoutePath(pathname)
-    || isAuthenticatedAccountRoutePath(pathname)
-    || isAuthenticatedHistoricalRoutePath(pathname)
-    || isCheckoutReturnRoutePath(pathname)
+  const canonicalPathname = canonicalizePathname(pathname)
+  return isPaidWorkspaceRoutePath(canonicalPathname)
+    || isAuthenticatedAccountRoutePath(canonicalPathname)
+    || isAuthenticatedHistoricalRoutePath(canonicalPathname)
+    || isCheckoutReturnRoutePath(canonicalPathname)
 }
