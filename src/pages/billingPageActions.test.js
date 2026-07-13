@@ -1,8 +1,37 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, hasScheduledCancellation, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, hasScheduledCancellation, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
+
+
+test('past_due monthly users do not see annual upgrade plan action', () => {
+  const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
+
+  assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
+})
+
+test('past_due billing state shows payment-required notice and payment CTA', () => {
+  const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
+  const action = getPastDueBillingAction(subscriptionState)
+
+  assert.equal(action.label, 'Update payment method')
+  assert.equal(action.href, '/account/payment-method')
+  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue using HireFlow. Your workspace is read-only until billing is resolved.')
+})
+
+test('past_due metadata replaces renewal language with payment and workspace access labels', () => {
+  const rows = getBillingMetadataRows(
+    { isPastDue: true, canManageBilling: true },
+    { status: 'past_due', nextBillingDate: '2026-07-15T00:00:00Z', renewalDate: '2026-08-15T00:00:00Z', paymentMethod: 'Card on file' },
+    () => '7/15/2026',
+    NOW,
+  )
+
+  assert.deepEqual(rows.map((row) => row.label), ['Retry date', 'Workspace access', 'Payment method'])
+  assert.equal(rows[1].value, 'Read-only until billing is resolved')
+  assert.equal(rows[2].value, 'Card on file')
+})
 
 test('monthly billing users see annual upgrade as the self-serve plan action', () => {
   const action = getBillingPlanAction('monthly')
