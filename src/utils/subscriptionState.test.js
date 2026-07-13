@@ -167,6 +167,14 @@ test('trialing subscription with cancellation signal and missing date is not rea
   assert.equal(resolved.statusLabel, 'Trialing')
 })
 
+test('cancellation signal is exposed independently from scheduled access', () => {
+  const resolved = state({ status: 'active', cancelAtPeriodEnd: true })
+
+  assert.equal(resolved.hasCancellationSignal, true)
+  assert.equal(resolved.isCancellationScheduled, false)
+  assert.equal(resolved.hasScheduledCancellationAccess, false)
+})
+
 test('active paid access and read-only expired are never simultaneously true', () => {
   const cases = [
     state({ status: 'active', cancelAtPeriodEnd: true }),

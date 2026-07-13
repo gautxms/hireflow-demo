@@ -34,6 +34,12 @@ test('scheduled status badge styling does not fall back to inactive class', () =
   assert.match(source, /const statusClass = subscriptionState\.isCancellationScheduled\s*\? 'active'/)
 })
 
+
+test('explicit cancellation signal without future date shows reconciled support copy without access until', () => {
+  assert.match(source, /subscriptionState\.hasCancellationSignal && !subscriptionState\.isCancellationScheduled/)
+  assert.match(source, /Cancellation is being reconciled\. Contact support if this status does not update\./)
+})
+
 test('SubscriptionCard no longer contains direct cancellation or blind checkout workflow', () => {
   assert.doesNotMatch(source, /\/subscriptions\/cancel/)
   assert.doesNotMatch(source, /window\.confirm/)

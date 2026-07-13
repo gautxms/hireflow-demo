@@ -51,7 +51,9 @@ export default function SubscriptionCard({ user, subscription }) {
         <p className="hf-account-card__value">{plan}</p>
       </div>
 
-      {needsBillingSupport ? (
+      {subscriptionState.hasCancellationSignal && !subscriptionState.isCancellationScheduled ? (
+        <p className="hf-billing-card__description">Cancellation is being reconciled. Contact support if this status does not update.</p>
+      ) : needsBillingSupport ? (
         <p className="hf-billing-card__description">Billing setup needs attention. Contact support so we can safely manage this subscription.</p>
       ) : subscriptionState.isCancellationScheduled && accessUntil ? (
         <div className="hf-account-card__section hf-account-card__section--last">

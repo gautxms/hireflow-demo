@@ -165,6 +165,7 @@ export function resolveSubscriptionState({ user = null, subscription = null, now
   const plan = subscription?.plan || user?.subscription_plan || null
   const accessInput = buildSubscriptionAccessInput({ user, subscription, rawStatus })
   const accessEndsAt = getFutureSubscriptionEndDate(accessInput, now)
+  const hasCancellationSignal = hasExplicitScheduledCancellationSignal(accessInput) && !INACTIVE_STATUSES.has(rawStatus)
   const isCancellationScheduled = hasScheduledCancellationAccess(accessInput, now)
   const activePaidAccess = hasActivePaidAccess(accessInput, now)
   const readOnlyExpiredSubscriber = isReadOnlyExpiredSubscriber(accessInput, now)
@@ -204,6 +205,7 @@ export function resolveSubscriptionState({ user = null, subscription = null, now
     currentPeriodEnd: accessInput.currentPeriodEnd,
     latestRecordStatus: accessInput.latestRecordStatus,
     cancelAtPeriodEnd,
+    hasCancellationSignal,
     isCancellationScheduled,
     accessEndsAt: accessEndsAt ? accessEndsAt.toISOString() : null,
     paidThroughDate: accessEndsAt ? accessEndsAt.toISOString() : null,

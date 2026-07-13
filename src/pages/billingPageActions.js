@@ -1,4 +1,4 @@
-import { getFutureSubscriptionEndDate, hasScheduledCancellationAccess } from '../utils/subscriptionState.js'
+import { getFutureSubscriptionEndDate, hasExplicitScheduledCancellationSignal, hasScheduledCancellationAccess } from '../utils/subscriptionState.js'
 
 
 export function getBillingPlanAction(plan) {
@@ -54,6 +54,10 @@ export function getFutureCancellationEffectiveDate(subscription, now = new Date(
   return getFutureSubscriptionEndDate(subscription, now)
 }
 
+export function hasCancellationSignal(subscriptionState, subscription) {
+  return Boolean(subscriptionState?.hasCancellationSignal || hasExplicitScheduledCancellationSignal(buildBillingAccessInput(subscriptionState, subscription)))
+}
+
 export function hasScheduledCancellation(subscriptionState, subscription, now = new Date()) {
   return hasScheduledCancellationAccess(buildBillingAccessInput(subscriptionState, subscription), now)
 }
@@ -75,7 +79,11 @@ export function getCancellationAccessMessage(subscriptionState, subscription, fo
   const effectiveDate = hasScheduledCancellation(subscriptionState, subscription, now)
     ? getFutureCancellationEffectiveDate(subscription, now)
     : null
-  if (!effectiveDate) return ''
+  if (!effectiveDate) {
+    return hasCancellationSignal(subscriptionState, subscription)
+      ? 'Cancellation is being reconciled. Contact support if this status does not update.'
+      : ''
+  }
 
   return `Subscription canceled. Your access remains active until ${formatDate(effectiveDate)}. You will not be charged again.`
 }
@@ -94,7 +102,7 @@ export function getCancellationSuccessMessage(subscription, payload, formatDate 
 }
 
 export function canShowCancelAction(subscriptionState, subscription, now = new Date()) {
-  return Boolean(subscriptionState?.canManageBilling && !subscriptionState?.isCanceled && !hasScheduledCancellation(subscriptionState, subscription, now))
+  return Boolean(subscriptionState?.canManageBilling && !hasCancellationSignal(subscriptionState, subscription) && !hasScheduledCancellation(subscriptionState, subscription, now))
 }
 
 export function shouldRenderBillingHistory(history) {
