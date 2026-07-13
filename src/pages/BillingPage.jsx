@@ -40,6 +40,13 @@ const CANCEL_REASONS = [
   'Switching to competitor',
 ]
 
+function navigateInternal(pathname) {
+  if (typeof window === 'undefined' || window.location.pathname === pathname) return
+
+  window.history.pushState({}, '', pathname)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 function Modal({ title, children, onClose, isPending = false }) {
   useEffect(() => {
     function onKeyDown(event) {
@@ -348,9 +355,9 @@ export default function BillingPage() {
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
                   {pastDueAction ? (
-                    <a className="hf-btn hf-btn--primary" href={pastDueAction.href}>
+                    <button type="button" className="hf-btn hf-btn--primary" onClick={() => navigateInternal(pastDueAction.href)}>
                       {pastDueAction.label}
-                    </a>
+                    </button>
                   ) : null}
                   {planAction?.isSelfServe ? (
                     <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>

@@ -7,7 +7,7 @@ export function isPastDueBillingState(subscriptionState) {
 }
 
 export function getPastDueBillingNotice() {
-  return 'Payment is required to continue using HireFlow. Your workspace is read-only until billing is resolved.'
+  return 'Payment is required to continue. Your workspace is read-only until billing is resolved.'
 }
 
 export function getPastDueBillingAction(subscriptionState) {
@@ -15,9 +15,9 @@ export function getPastDueBillingAction(subscriptionState) {
 
   return {
     kind: 'update-payment-method',
-    label: subscriptionState?.hasProviderSubscription ? 'Update payment method' : 'Resume subscription',
+    label: 'Contact support to resolve billing',
     href: '/account/payment-method',
-    isSelfServe: true,
+    isSelfServe: false,
   }
 }
 
@@ -138,7 +138,6 @@ export function getBillingMetadataRows(subscriptionState, subscription, formatDa
 
   if (isPastDue) {
     rows.push({ label: subscription?.nextBillingDate ? 'Retry date' : 'Payment due', value: subscription?.nextBillingDate ? formatDate(subscription.nextBillingDate) : 'Now' })
-    rows.push({ label: 'Workspace access', value: 'Read-only until billing is resolved' })
   } else {
     rows.push({ label: 'Renewal date', value: formatDate(subscription?.renewalDate) })
     rows.push({ label: 'Next billing', value: scheduledCancellation ? 'No further billing' : formatDate(subscription?.nextBillingDate) })

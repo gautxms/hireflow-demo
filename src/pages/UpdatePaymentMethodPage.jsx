@@ -5,6 +5,13 @@ import '../styles/checkout.css'
 
 const SUPPORT_EMAIL = 'Hello@hireflow.dev'
 
+function navigateInternal(pathname) {
+  if (typeof window === 'undefined' || window.location.pathname === pathname) return
+
+  window.history.pushState({}, '', pathname)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 export default function UpdatePaymentMethodPage() {
   usePageSeo('Update Payment Method', 'Update your billing card details securely through Paddle.')
 
@@ -30,9 +37,9 @@ export default function UpdatePaymentMethodPage() {
             <a className="hf-btn hf-btn--primary" href={`mailto:${SUPPORT_EMAIL}?subject=Payment%20method%20update%20request`}>
               Contact support
             </a>
-            <a className="hf-btn hf-btn--secondary" href="/billing">
+            <button type="button" className="hf-btn hf-btn--secondary" onClick={() => navigateInternal('/billing')}>
               Back to billing
-            </a>
+            </button>
           </div>
         </div>
       </section>

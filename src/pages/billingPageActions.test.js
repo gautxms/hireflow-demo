@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
@@ -18,7 +19,7 @@ test('payment_failed billing state is treated as past due and gets payment CTA',
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
-  assert.equal(action.label, 'Update payment method')
+  assert.equal(action.label, 'Contact support to resolve billing')
   assert.equal(action.href, '/account/payment-method')
 })
 
@@ -26,12 +27,12 @@ test('past_due billing state shows payment-required notice and payment CTA', () 
   const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
   const action = getPastDueBillingAction(subscriptionState)
 
-  assert.equal(action.label, 'Update payment method')
+  assert.equal(action.label, 'Contact support to resolve billing')
   assert.equal(action.href, '/account/payment-method')
-  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue using HireFlow. Your workspace is read-only until billing is resolved.')
+  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until billing is resolved.')
 })
 
-test('past_due metadata replaces renewal language with payment and workspace access labels', () => {
+test('past_due metadata replaces renewal language with payment labels without workspace access duplication', () => {
   const rows = getBillingMetadataRows(
     { isPastDue: true, canManageBilling: true },
     { status: 'past_due', nextBillingDate: '2026-07-15T00:00:00Z', renewalDate: '2026-08-15T00:00:00Z', paymentMethod: 'Card on file' },
@@ -39,9 +40,35 @@ test('past_due metadata replaces renewal language with payment and workspace acc
     NOW,
   )
 
-  assert.deepEqual(rows.map((row) => row.label), ['Retry date', 'Workspace access', 'Payment method'])
-  assert.equal(rows[1].value, 'Read-only until billing is resolved')
-  assert.equal(rows[2].value, 'Card on file')
+  assert.deepEqual(rows.map((row) => row.label), ['Retry date', 'Payment method'])
+  assert.equal(rows[1].value, 'Card on file')
+  assert.equal(rows.some((row) => row.label === 'Workspace access'), false)
+})
+
+
+test('past_due metadata uses payment due when retry date is missing', () => {
+  const rows = getBillingMetadataRows(
+    { isPastDue: true, canManageBilling: true },
+    { status: 'past_due', paymentMethod: 'Visa ending in 4242' },
+    () => 'formatted date',
+    NOW,
+  )
+
+  assert.deepEqual(rows.map((row) => row.label), ['Payment due', 'Payment method'])
+  assert.equal(rows[0].value, 'Now')
+  assert.equal(rows[1].value, 'Visa ending in 4242')
+})
+
+test('payment_failed metadata matches past_due compact payment rows', () => {
+  const rows = getBillingMetadataRows(
+    { rawStatus: 'payment_failed', canManageBilling: true },
+    { status: 'payment_failed', nextBillingDate: '2026-07-15T00:00:00Z', paymentMethod: 'Mastercard ending in 5555' },
+    () => '7/15/2026',
+    NOW,
+  )
+
+  assert.deepEqual(rows.map((row) => row.label), ['Retry date', 'Payment method'])
+  assert.equal(rows.some((row) => row.label === 'Workspace access'), false)
 })
 
 test('monthly billing users see annual upgrade as the self-serve plan action', () => {
@@ -222,4 +249,20 @@ test('billing history is hidden when invoice history is empty or unavailable', (
 
 test('billing history renders when invoice rows exist', () => {
   assert.equal(shouldRenderBillingHistory([{ id: 'inv_123', canDownload: true }]), true)
+})
+
+test('BillingPage past-due CTA uses visible button text and SPA navigation', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /<button type="button" className="hf-btn hf-btn--primary" onClick=\{\(\) => navigateInternal\(pastDueAction\.href\)\}>/)
+  assert.match(source, /\{pastDueAction\.label\}/)
+  assert.doesNotMatch(source, /<a className="hf-btn hf-btn--primary" href=\{pastDueAction\.href\}>/)
+})
+
+test('BillingPage past-due copy is rendered only through the compact notice helper', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /pastDueBillingNotice \? <p className="billing-page__past-due-note">\{pastDueBillingNotice\}<\/p> : null/)
+  assert.doesNotMatch(source, /Workspace access/)
+  assert.doesNotMatch(source, /Read-only until billing is resolved/)
 })
