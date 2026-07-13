@@ -1,8 +1,9 @@
-import { getFutureSubscriptionEndDate, hasExplicitScheduledCancellationSignal, hasScheduledCancellationAccess } from '../utils/subscriptionState.js'
+import { getFutureSubscriptionEndDate, hasExplicitScheduledCancellationSignal, hasScheduledCancellationAccess, normalizeSubscriptionStatus } from '../utils/subscriptionState.js'
 
 
 export function isPastDueBillingState(subscriptionState) {
-  return subscriptionState?.isPastDue === true
+  const status = normalizeSubscriptionStatus(subscriptionState?.rawStatus || subscriptionState?.status || subscriptionState?.subscription_status)
+  return subscriptionState?.isPastDue === true || status === 'payment_failed'
 }
 
 export function getPastDueBillingNotice() {

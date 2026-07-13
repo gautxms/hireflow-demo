@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, hasScheduledCancellation, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -9,6 +9,17 @@ test('past_due monthly users do not see annual upgrade plan action', () => {
   const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
 
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
+})
+
+
+test('payment_failed billing state is treated as past due and gets payment CTA', () => {
+  const subscriptionState = { rawStatus: 'payment_failed', canManageBilling: true, hasProviderSubscription: true }
+  const action = getPastDueBillingAction(subscriptionState)
+
+  assert.equal(isPastDueBillingState(subscriptionState), true)
+  assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
+  assert.equal(action.label, 'Update payment method')
+  assert.equal(action.href, '/account/payment-method')
 })
 
 test('past_due billing state shows payment-required notice and payment CTA', () => {

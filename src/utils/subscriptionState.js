@@ -1,6 +1,6 @@
 const ACTIVE_STATUSES = new Set(['active'])
 const TRIALING_STATUSES = new Set(['trialing', 'trial'])
-const PAST_DUE_STATUSES = new Set(['past_due', 'past due'])
+const PAST_DUE_STATUSES = new Set(['past_due', 'past due', 'payment_failed'])
 const CANCELED_STATUSES = new Set(['canceled', 'cancelled'])
 const SCHEDULED_CANCELLATION_STATUSES = new Set([
   'canceled',
@@ -17,6 +17,7 @@ const BILLING_MANAGEABLE_STATUSES = new Set([
   'trialing',
   'trial',
   'past_due',
+  'payment_failed',
   'paused',
   'canceled',
   'cancelled',
