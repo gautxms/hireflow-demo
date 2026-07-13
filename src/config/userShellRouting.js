@@ -12,7 +12,7 @@ const WORKSPACE_ROUTE_PATHS = new Set([
 ])
 
 const ACCOUNT_ROUTE_PATHS = new Set(['/settings', '/billing', '/account'])
-const CHECKOUT_RETURN_ROUTE_PATHS = new Set(['/checkout', '/billing/success', '/billing/cancel', '/account/payment-method'])
+const CHECKOUT_RETURN_ROUTE_PATHS = new Set(['/account/payment-method'])
 
 export function normalizeLegacyAccountPath(pathname, search = '') {
   if (pathname !== '/account') return null
@@ -41,6 +41,10 @@ export function isAuthenticatedHistoricalRoutePath(pathname) {
 
 export function isCheckoutReturnRoutePath(pathname) {
   return CHECKOUT_RETURN_ROUTE_PATHS.has(pathname)
+}
+
+export function isCheckoutStandaloneRoutePath(pathname) {
+  return pathname === '/checkout' || pathname === '/billing/success' || pathname === '/billing/cancel'
 }
 
 export function isAuthenticatedAccountShellRoutePath(pathname) {

@@ -76,7 +76,7 @@ import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysi
 import { resolveUserSectionPath } from './config/userNavigation'
 import { isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
-import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
+import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { resolveSubscriptionState } from './utils/subscriptionState'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 
@@ -131,9 +131,24 @@ function getStoredUserProfile() {
   }
 }
 
-function navigate(pathname, options = {}) {
-  if (window.location.pathname !== pathname) {
-    window.history.pushState(options.state ?? {}, '', pathname)
+function navigate(to, options = {}) {
+  if (typeof to === 'number') {
+    window.history.go(to)
+    return
+  }
+
+  const nextUrl = new URL(to, window.location.origin)
+  const currentUrl = new URL(window.location.href)
+  const nextPathWithSearch = `${nextUrl.pathname}${nextUrl.search}`
+  const currentPathWithSearch = `${currentUrl.pathname}${currentUrl.search}`
+
+  if (currentPathWithSearch !== nextPathWithSearch) {
+    const state = options.state ?? {}
+    if (options.replace) {
+      window.history.replaceState(state, '', nextPathWithSearch)
+    } else {
+      window.history.pushState(state, '', nextPathWithSearch)
+    }
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }
@@ -186,7 +201,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
   return isUserShellRoutePath(resolvedPathname)
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
+function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionError, onRetryAccessResolution, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [resultsRecoveryAttempted, setResultsRecoveryAttempted] = useState(false)
@@ -218,12 +233,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return
     }
 
-    if (page === 'uploader' && isAuthenticated) {
-      const storedSubscriptionStatus = getStoredSubscriptionStatus()
-      if (!hasActiveSubscription(storedSubscriptionStatus)) {
-        navigate('/pricing?reason=subscription_required')
-        return
-      }
+    if (page === 'uploader' && isAuthenticated && !canAccessProductDashboard(profileBillingState)) {
+      navigate('/pricing?reason=subscription_required', { replace: true })
+      return
     }
 
     setCurrentPage(page)
@@ -349,9 +361,10 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   }, [pathname])
 
   const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
-  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus })
-  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus })
-  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus })
+  const workspaceAccessForFlags = canAccessProductDashboard(profileBillingState)
+  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
+  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
+  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
   const profileBillingState = useMemo(() => resolveSubscriptionState({
     user: userProfile
       ? { ...userProfile, subscription_status: userProfile.subscription_status || subscriptionStatus }
@@ -452,7 +465,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
@@ -471,7 +484,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
@@ -552,7 +565,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
       })
       if (!canAccessUploader) {
         return null
@@ -588,7 +601,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
       })
       if (canAccessCreateAnalysis) {
         handleCreateAnalysis()
@@ -607,7 +620,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view reports.',
       })
       if (!canAccessReports) {
@@ -672,7 +685,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view analyses.',
       })
       if (!canAccessAnalyses) {
@@ -683,11 +696,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname.startsWith('/analyses/')) {
-      if (!analysesModuleEnabled) {
-        navigate('/results')
-        return null
-      }
-
       const canAccessAnalysisDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view analysis details.',
@@ -711,7 +719,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view candidates.',
       })
       if (!canAccessCandidates) {
@@ -732,7 +740,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view shortlists.',
       })
       if (!canAccessShortlists) {
@@ -743,11 +751,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname.startsWith('/candidates/')) {
-      if (!candidateModuleEnabled) {
-        navigate('/results')
-        return null
-      }
-
       const canAccessCandidateDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view candidate profiles.',
@@ -766,7 +769,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to manage job descriptions.',
       })
       if (!canAccessJobDescriptions) {
@@ -1122,6 +1125,69 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setShellPageTitle('')
   }, [resolvedPathname])
 
+  const hasWorkspaceAccess = canAccessProductDashboard(profileBillingState)
+  const isAccessResolving = isAuthenticated && accessResolutionStatus === 'resolving'
+  const isAccessError = isAuthenticated && accessResolutionStatus === 'error'
+  const isAuthResolved = !isAuthenticated || accessResolutionStatus === 'resolved'
+  const useUserShellLayout = isAuthResolved && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
+  const useAccountShellLayout = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isAuthenticatedAccountShellRoutePath(resolvedPathname)
+  const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
+
+  useEffect(() => {
+    document.body.classList.toggle('user-app-shell-active', useUserShellLayout || useAccountShellLayout)
+
+    return () => {
+      document.body.classList.remove('user-app-shell-active')
+    }
+  }, [useAccountShellLayout, useUserShellLayout])
+
+  const isProtectedAccessRoute = isAuthenticated && (isPaidWorkspaceRoutePath(resolvedPathname) || isAuthenticatedAccountShellRoutePath(resolvedPathname))
+  const isBlockedPaidWorkspaceRoute = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isPaidWorkspaceRoutePath(resolvedPathname)
+
+  useEffect(() => {
+    if (isBlockedPaidWorkspaceRoute) {
+      navigate('/pricing?reason=subscription_required', { replace: true })
+    }
+  }, [isBlockedPaidWorkspaceRoute])
+
+  if (isAccessResolving && isProtectedAccessRoute) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-loading">
+          <StatePattern kind="loading" title="Checking account access…" description="Confirming your account before opening this page." />
+        </main>
+      </>
+    )
+  }
+
+  if (isAccessError && isProtectedAccessRoute) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-error">
+          <StatePattern
+            kind="error"
+            title="We could not confirm account access"
+            description={accessResolutionError || 'Please retry before opening this account page.'}
+            action={<button type="button" className="route-state-card__action" onClick={onRetryAccessResolution}>Retry</button>}
+          />
+        </main>
+      </>
+    )
+  }
+
+  if (isBlockedPaidWorkspaceRoute) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-loading">
+          <StatePattern kind="loading" title="Checking workspace access…" description="Confirming your account before opening this page." />
+        </main>
+      </>
+    )
+  }
+
   const pageContent = (
     <PublicRouteChunkErrorBoundary
       primaryAction={routeRecoveryActions.primaryAction}
@@ -1134,37 +1200,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </Suspense>
     </PublicRouteChunkErrorBoundary>
   )
-  const hasWorkspaceAccess = canAccessProductDashboard(profileBillingState)
-  const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
-  const useAccountShellLayout = isAuthenticated && !hasWorkspaceAccess && isAuthenticatedAccountShellRoutePath(resolvedPathname)
-  const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
-
-  useEffect(() => {
-    document.body.classList.toggle('user-app-shell-active', useUserShellLayout || useAccountShellLayout)
-
-    return () => {
-      document.body.classList.remove('user-app-shell-active')
-    }
-  }, [useAccountShellLayout, useUserShellLayout])
-
-  const isBlockedPaidWorkspaceRoute = isAuthenticated && !hasWorkspaceAccess && isPaidWorkspaceRoutePath(resolvedPathname)
-
-  useEffect(() => {
-    if (isBlockedPaidWorkspaceRoute) {
-      navigate('/pricing?reason=subscription_required')
-    }
-  }, [isBlockedPaidWorkspaceRoute])
-
-  if (isBlockedPaidWorkspaceRoute) {
-    return (
-      <>
-        <PageSeo pathname={pathname} currentPage={currentPage} />
-        <main className="route-state route-state--auth-loading">
-          <StatePattern kind="loading" title="Checking workspace access…" description="Confirming your account before opening this page." />
-        </main>
-      </>
-    )
-  }
 
   if (isAdminPath) {
     return (
@@ -1185,6 +1220,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           onLogout={onLogout}
           userProfile={userProfile}
           navItems={userShellNavItems}
+          hasWorkspaceAccess={hasWorkspaceAccess}
           subscriptionStatus={subscriptionStatus}
           pageTitleProp={shellPageTitle}
           showUpgradeCta={canViewUpgradePricing}
@@ -1288,6 +1324,7 @@ export default function App() {
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
+  const [accessResolution, setAccessResolution] = useState(() => ({ status: getStoredToken() ? 'resolving' : 'resolved', error: '' }))
   const authSyncSequenceRef = useRef(0)
   const authSyncControllerRef = useRef(null)
 
@@ -1299,6 +1336,7 @@ export default function App() {
     setToken('')
     setSubscriptionStatus('inactive')
     setUserProfile(null)
+    setAccessResolution({ status: 'resolved', error: '' })
     if (message) {
       setAuthPrompt(message)
     }
@@ -1309,9 +1347,11 @@ export default function App() {
     const activeToken = getStoredToken()
 
     if (!activeToken) {
+      setAccessResolution({ status: 'resolved', error: '' })
       return null
     }
 
+    setAccessResolution({ status: 'resolving', error: '' })
     authSyncControllerRef.current?.abort()
     const controller = new AbortController()
     authSyncControllerRef.current = controller
@@ -1338,6 +1378,9 @@ export default function App() {
       }
 
       if (!response.ok) {
+        if (isLatestAuthSync() && getStoredToken() === activeToken) {
+          setAccessResolution({ status: 'error', error: 'We could not refresh your account. Please retry.' })
+        }
         return null
       }
 
@@ -1354,10 +1397,14 @@ export default function App() {
       setToken(activeToken)
       setSubscriptionStatus(nextSubscriptionStatus)
       setUserProfile(nextUserProfile || null)
+      setAccessResolution({ status: 'resolved', error: '' })
       return nextUserProfile
     } catch (error) {
       if (error?.name === 'AbortError') {
         return null
+      }
+      if (isLatestAuthSync() && getStoredToken() === activeToken) {
+        setAccessResolution({ status: 'error', error: 'We could not confirm your account. Please check your connection and retry.' })
       }
       return null
     } finally {
@@ -1370,14 +1417,17 @@ export default function App() {
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
     const onAuthStateRefresh = () => {
-      setToken(getStoredToken())
+      const nextToken = getStoredToken()
+      setToken(nextToken)
       setSubscriptionStatus(getStoredSubscriptionStatus())
       setUserProfile(getStoredUserProfile())
+      setAccessResolution({ status: nextToken ? 'resolving' : 'resolved', error: '' })
       void syncAuthenticatedUser()
     }
     const onStorage = (event) => {
       if (event.key === TOKEN_STORAGE_KEY) {
         setToken(event.newValue || '')
+        setAccessResolution({ status: event.newValue ? 'resolving' : 'resolved', error: '' })
       }
 
       if (event.key === USER_STORAGE_KEY) {
@@ -1403,6 +1453,16 @@ export default function App() {
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
 
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAccessResolution({ status: 'resolved', error: '' })
+      return
+    }
+
+    void syncAuthenticatedUser()
+  }, [isAuthenticated, syncAuthenticatedUser])
+
   const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive', nextUserProfile = null, redirectPath = '/') => {
     const normalizedSubscriptionStatus = nextSubscriptionStatus || 'inactive'
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
@@ -1413,6 +1473,7 @@ export default function App() {
     setToken(newToken)
     setSubscriptionStatus(normalizedSubscriptionStatus)
     setUserProfile(nextUserProfile)
+    setAccessResolution({ status: 'resolved', error: '' })
     setAuthPrompt('')
     navigate(redirectPath)
   }
@@ -1487,6 +1548,9 @@ export default function App() {
       <CookieConsentProvider>
         <MainSite
           isAuthenticated={isAuthenticated}
+          accessResolutionStatus={accessResolution.status}
+          accessResolutionError={accessResolution.error}
+          onRetryAccessResolution={() => { void syncAuthenticatedUser() }}
           onLogout={logout}
           onRequireAuth={requireAuth}
           pathname={pathname}

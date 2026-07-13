@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   isAuthenticatedAccountShellRoutePath,
   isAuthenticatedHistoricalRoutePath,
+  isCheckoutStandaloneRoutePath,
   isPaidWorkspaceRoutePath,
   isUserShellRoutePath,
   normalizeLegacyAccountPath,
@@ -24,6 +25,15 @@ test('classifies account-only eligible authenticated routes', () => {
     assert.equal(isAuthenticatedAccountShellRoutePath(path), true, `${path} should be account-shell eligible`)
     assert.equal(isUserShellRoutePath(path), true, `${path} should be authenticated-shell eligible`)
   }
+})
+
+test('keeps checkout and billing return routes standalone', () => {
+  for (const path of ['/checkout', '/billing/success', '/billing/cancel']) {
+    assert.equal(isCheckoutStandaloneRoutePath(path), true, `${path} should be standalone`)
+    assert.equal(isUserShellRoutePath(path), false, `${path} should not be a new shell route`)
+  }
+
+  assert.equal(isUserShellRoutePath('/account/payment-method'), true)
 })
 
 test('normalizes legacy account alias safely', () => {

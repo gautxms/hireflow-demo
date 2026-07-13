@@ -15,12 +15,12 @@ export default function AppHeader({ user, isSubscribed, pageTitle, onNavigate, o
           <div className="app-header-free-strip">
             <span className="app-header-free-text">
               {analysesLeft != null
-                ? `Free plan · ${analysesLeft} analyses remaining`
-                : 'Free plan'}
+                ? `Subscription required · ${analysesLeft} analyses remaining`
+                : 'Subscription required'}
             </span>
             <button className="app-header-upgrade-btn"
               onClick={() => onNavigate('/pricing')}>
-              Upgrade
+              View plans
             </button>
           </div>
         )}

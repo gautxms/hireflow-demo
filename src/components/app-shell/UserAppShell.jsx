@@ -16,7 +16,6 @@ import {
   FileText,
   Target,
 } from 'lucide-react'
-import { hasActiveSubscription } from '../../utils/routeGuards'
 import { openCookiePreferences } from '../../privacy/cookieConsent'
 
 const ICONS_BY_KEY = {
@@ -44,7 +43,7 @@ const DEFAULT_NAV = [
   { label: 'Settings', path: '/settings', Icon: Settings2 },
 ]
 
-export default function UserAppShell({ children, pathname, onNavigate, onLogout, pageTitleProp, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
+export default function UserAppShell({ children, pathname, onNavigate, onLogout, pageTitleProp, userProfile = null, hasWorkspaceAccess = false, navItems = DEFAULT_NAV }) {
   const getInitialPinned = () => {
     try {
       return localStorage.getItem('hf-sb-pinned') !== 'false'
@@ -63,7 +62,7 @@ export default function UserAppShell({ children, pathname, onNavigate, onLogout,
   const [pinned, setPinned] = useState(getInitialPinned)
   const [expanded, setExpanded] = useState(getInitialPinned)
 
-  const isSubscribed = hasActiveSubscription(String(subscriptionStatus || 'inactive').trim().toLowerCase())
+  const isSubscribed = hasWorkspaceAccess === true
 
   const normalizedNavItems = useMemo(() => {
     return (Array.isArray(navItems) ? navItems : DEFAULT_NAV).map((item) => {
@@ -157,14 +156,6 @@ export default function UserAppShell({ children, pathname, onNavigate, onLogout,
             )
           })}
         </nav>
-
-        {!isSubscribed && expanded && (
-          <div className="app-sb-upgrade">
-            <div className="app-sb-upgrade-title">Upgrade plan</div>
-            <div className="app-sb-upgrade-body">800 analyses/month with structured hiring reports</div>
-            <button className="app-sb-upgrade-btn" onClick={() => onNavigate('/pricing')}>View Plans</button>
-          </div>
-        )}
 
         <div className="app-sb-footer">
           {expanded && (
