@@ -54,3 +54,35 @@ test('historical detail routes do not run module-flag fallback redirects', () =>
   assert.doesNotMatch(candidateDetailBlock, /navigate\('\/results'\)/)
 })
 
+test('login success waits for authoritative auth sync before resolving access', () => {
+  const loginBlock = source.slice(source.indexOf('const handleAuthSuccess ='), source.indexOf('const logout = useCallback'))
+
+  assert.match(loginBlock, /setAccessResolution\(\{ status: 'resolving', error: '' \}\)/)
+  assert.doesNotMatch(loginBlock, /setAccessResolution\(\{ status: 'resolved'/)
+  assert.match(loginBlock, /void syncAuthenticatedUser\(\)/)
+})
+
+test('token storage changes start latest authenticated sync for non-empty replacement tokens', () => {
+  const storageBlock = source.slice(source.indexOf('const onStorage ='), source.indexOf("if (event.key === USER_STORAGE_KEY)"))
+
+  assert.match(storageBlock, /setToken\(event\.newValue \|\| ''\)/)
+  assert.match(storageBlock, /setAccessResolution\(\{ status: event\.newValue \? 'resolving' : 'resolved', error: '' \}\)/)
+  assert.match(storageBlock, /if \(event\.newValue\) \{\s*void syncAuthenticatedUser\(\)\s*\}/)
+})
+
+test('resolving access holds public shell decisions and pricing redirects', () => {
+  assert.match(source, /const shouldHoldForAccessResolution = isAuthenticated && !isStandaloneDuringAccessResolution/)
+  assert.match(source, /if \(isAccessResolving && shouldHoldForAccessResolution\)/)
+  assert.match(source, /if \(isAuthenticated && isAccessAuthoritative && isActiveSubscriber\)/)
+  assert.match(source, /buildResolvedAccessContext\(\{/)
+})
+
+test('legacy account alias uses replace navigation before shell content construction', () => {
+  const legacyEffect = source.slice(source.indexOf('const normalizedLegacyAccountPath'), source.indexOf('const getPageContent ='))
+  const legacyReturnStart = source.indexOf('if (normalizedLegacyAccountPath)', source.indexOf('const isBlockedPaidWorkspaceRoute'))
+  const legacyReturn = source.slice(legacyReturnStart, source.indexOf('if (isAccessResolving && shouldHoldForAccessResolution)'))
+
+  assert.match(legacyEffect, /navigate\(normalizedLegacyAccountPath, \{ replace: true \}\)/)
+  assert.match(legacyReturn, /Opening account settings/)
+  assert.doesNotMatch(legacyReturn, /UserAppShell|AuthenticatedAccountShell/)
+})

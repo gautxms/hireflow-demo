@@ -74,11 +74,11 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
-import { isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
+import { isAuthenticatedAccountShellRoutePath, isCheckoutStandaloneRoutePath, isPaidWorkspaceRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
-import { resolveSubscriptionState } from './utils/subscriptionState'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
+import { buildResolvedAccessContext } from './appAccessRuntime'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -360,29 +360,32 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
   }, [pathname])
 
-  const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
-  const workspaceAccessForFlags = canAccessProductDashboard(profileBillingState)
+  const {
+    profileBillingState,
+    isAccessAuthoritative,
+    workspaceAccessForFlags,
+    isActiveSubscriber,
+    canViewUpgradePricing,
+  } = useMemo(() => buildResolvedAccessContext({
+    isAuthenticated,
+    accessResolutionStatus,
+    subscriptionStatus,
+    userProfile,
+  }), [accessResolutionStatus, isAuthenticated, subscriptionStatus, userProfile])
   const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
   const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
   const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
-  const profileBillingState = useMemo(() => resolveSubscriptionState({
-    user: userProfile
-      ? { ...userProfile, subscription_status: userProfile.subscription_status || subscriptionStatus }
-      : { subscription_status: subscriptionStatus },
-  }), [subscriptionStatus, userProfile])
-  const isActiveSubscriber = canAccessProductDashboard(profileBillingState)
-  const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
   const isAdminPath = pathname.startsWith('/admin')
   const isRootLandingPath = pathname === '/'
   const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
 
+  const normalizedLegacyAccountPath = normalizeLegacyAccountPath(pathname, window.location.search)
+
   useEffect(() => {
-    const normalizedLegacyAccountPath = normalizeLegacyAccountPath(pathname, window.location.search)
     if (normalizedLegacyAccountPath) {
-      window.history.replaceState(window.history.state || {}, '', normalizedLegacyAccountPath)
-      window.dispatchEvent(new PopStateEvent('popstate'))
+      navigate(normalizedLegacyAccountPath, { replace: true })
     }
-  }, [pathname])
+  }, [normalizedLegacyAccountPath])
 
   const getPageContent = () => {
     // Contract: `/results/:token` always resolves through the shared-results loading path.
@@ -436,7 +439,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (resolvedPathname === '/pricing') {
-      if (isAuthenticated && isActiveSubscriber) {
+      if (isAuthenticated && isAccessAuthoritative && isActiveSubscriber) {
         navigate('/billing')
         return null
       }
@@ -1141,7 +1144,8 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
   }, [useAccountShellLayout, useUserShellLayout])
 
-  const isProtectedAccessRoute = isAuthenticated && (isPaidWorkspaceRoutePath(resolvedPathname) || isAuthenticatedAccountShellRoutePath(resolvedPathname))
+  const isStandaloneDuringAccessResolution = isSharedResultsPath(resolvedPathname) || isCheckoutStandaloneRoutePath(resolvedPathname) || useAuthRouteLayout
+  const shouldHoldForAccessResolution = isAuthenticated && !isStandaloneDuringAccessResolution
   const isBlockedPaidWorkspaceRoute = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isPaidWorkspaceRoutePath(resolvedPathname)
 
   useEffect(() => {
@@ -1150,7 +1154,18 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
   }, [isBlockedPaidWorkspaceRoute])
 
-  if (isAccessResolving && isProtectedAccessRoute) {
+  if (normalizedLegacyAccountPath) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-loading">
+          <StatePattern kind="loading" title="Opening account settings…" description="Redirecting to the current account settings page." />
+        </main>
+      </>
+    )
+  }
+
+  if (isAccessResolving && shouldHoldForAccessResolution) {
     return (
       <>
         <PageSeo pathname={pathname} currentPage={currentPage} />
@@ -1161,7 +1176,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     )
   }
 
-  if (isAccessError && isProtectedAccessRoute) {
+  if (isAccessError && shouldHoldForAccessResolution) {
     return (
       <>
         <PageSeo pathname={pathname} currentPage={currentPage} />
@@ -1428,6 +1443,9 @@ export default function App() {
       if (event.key === TOKEN_STORAGE_KEY) {
         setToken(event.newValue || '')
         setAccessResolution({ status: event.newValue ? 'resolving' : 'resolved', error: '' })
+        if (event.newValue) {
+          void syncAuthenticatedUser()
+        }
       }
 
       if (event.key === USER_STORAGE_KEY) {
@@ -1473,9 +1491,10 @@ export default function App() {
     setToken(newToken)
     setSubscriptionStatus(normalizedSubscriptionStatus)
     setUserProfile(nextUserProfile)
-    setAccessResolution({ status: 'resolved', error: '' })
+    setAccessResolution({ status: 'resolving', error: '' })
     setAuthPrompt('')
     navigate(redirectPath)
+    void syncAuthenticatedUser()
   }
 
   const logout = useCallback(async () => {
