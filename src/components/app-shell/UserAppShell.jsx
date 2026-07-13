@@ -44,7 +44,7 @@ const DEFAULT_NAV = [
   { label: 'Settings', path: '/settings', Icon: Settings2 },
 ]
 
-export default function UserAppShell({ children, pathname, onNavigate, pageTitleProp, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
+export default function UserAppShell({ children, pathname, onNavigate, onLogout, pageTitleProp, userProfile = null, subscriptionStatus = 'inactive', navItems = DEFAULT_NAV }) {
   const getInitialPinned = () => {
     try {
       return localStorage.getItem('hf-sb-pinned') !== 'false'
@@ -183,6 +183,8 @@ export default function UserAppShell({ children, pathname, onNavigate, pageTitle
           user={userProfile}
           isSubscribed={isSubscribed}
           pageTitle={pageTitle}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
         />
         <div className="user-app-shell__page-content">{children}</div>
         <footer className="user-app-shell__footer" aria-label="Workspace footer">

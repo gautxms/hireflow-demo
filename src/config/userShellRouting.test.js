@@ -1,21 +1,34 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveUserSectionPath } from './userNavigation.js'
-import { isUserShellRoutePath } from './userShellRouting.js'
+import {
+  isAuthenticatedAccountShellRoutePath,
+  isAuthenticatedHistoricalRoutePath,
+  isPaidWorkspaceRoutePath,
+  isUserShellRoutePath,
+  normalizeLegacyAccountPath,
+} from './userShellRouting.js'
 
-test('shell routing treats canonical dashboard, analyses, and results paths as shell routes', () => {
-  assert.equal(isUserShellRoutePath(resolveUserSectionPath('/dashboard')), true)
-  assert.equal(isUserShellRoutePath(resolveUserSectionPath('/analyses')), true)
-  assert.equal(isUserShellRoutePath(resolveUserSectionPath('/results')), true)
+test('classifies exact paid workspace base routes without swallowing detail routes', () => {
+  for (const path of ['/dashboard', '/dashboard/legacy', '/job-descriptions', '/jobs', '/analyses', '/candidates', '/shortlists', '/reports', '/uploader', '/create-analysis']) {
+    assert.equal(isPaidWorkspaceRoutePath(path), true, `${path} should be paid`)
+  }
+
+  assert.equal(isPaidWorkspaceRoutePath('/analyses/abc'), false)
+  assert.equal(isPaidWorkspaceRoutePath('/candidates/abc'), false)
+  assert.equal(isAuthenticatedHistoricalRoutePath('/analyses/abc'), true)
+  assert.equal(isAuthenticatedHistoricalRoutePath('/candidates/abc'), true)
 })
 
-test('shell routing treats aliases as shell routes after path normalization', () => {
-  assert.equal(isUserShellRoutePath(resolveUserSectionPath('/shortlists')), true)
-  assert.equal(isUserShellRoutePath(resolveUserSectionPath('/jobs')), true)
-  assert.equal(isUserShellRoutePath(resolveUserSectionPath('/account/analyses')), true)
+test('classifies account-only eligible authenticated routes', () => {
+  for (const path of ['/settings', '/billing', '/results', '/analyses/abc', '/candidates/abc']) {
+    assert.equal(isAuthenticatedAccountShellRoutePath(path), true, `${path} should be account-shell eligible`)
+    assert.equal(isUserShellRoutePath(path), true, `${path} should be authenticated-shell eligible`)
+  }
 })
 
-test('shell routing keeps root path outside the user shell', () => {
-  assert.equal(isUserShellRoutePath(resolveUserSectionPath('/')), false)
+test('normalizes legacy account alias safely', () => {
+  assert.equal(normalizeLegacyAccountPath('/account', ''), '/settings')
+  assert.equal(normalizeLegacyAccountPath('/account', '?section=billing'), '/settings')
+  assert.equal(normalizeLegacyAccountPath('/account', '?upgradeTestKey=abc&section=billing'), '/settings?upgradeTestKey=abc')
+  assert.equal(normalizeLegacyAccountPath('/settings', ''), null)
 })
-

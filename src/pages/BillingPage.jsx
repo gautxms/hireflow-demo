@@ -109,10 +109,6 @@ export default function BillingPage() {
       setSubscription(nextSubscription)
 
       const subscriptionState = resolveSubscriptionState({ subscription: nextSubscription })
-      if (!canRenderBillingPage(subscriptionState)) {
-        window.location.replace('/account?section=billing')
-        return
-      }
 
       if (!subscriptionState.canManageBilling) {
         setHistory([])
@@ -293,9 +289,6 @@ export default function BillingPage() {
     )
   }
 
-  if (!error && !loading && !canShowBillingPage) {
-    return null
-  }
 
   return (
     <main className="billing-page">
@@ -305,6 +298,23 @@ export default function BillingPage() {
         <p className="billing-page__subtitle">View your subscription, billing access, and plan options.</p>
 
         {error ? <StatePattern kind="error" compact title="We could not open billing management right now" description={error} action={(<button type="button" className="route-state-card__action" onClick={loadBilling}>Retry</button>)} /> : null}
+
+
+        {!error && !canShowBillingPage ? (
+          <article className="billing-page__card billing-page__card--empty">
+            <div className="billing-page__card-header">
+              <div>
+                <p className="billing-page__eyebrow">Subscription required</p>
+                <h2 className="billing-page__plan-title">No active subscription</h2>
+              </div>
+              <span className="billing-page__status-badge">Subscription required</span>
+            </div>
+            <p className="billing-page__line">Choose a plan to unlock the HireFlow workspace.</p>
+            <div className="billing-page__actions">
+              <a className="hf-btn hf-btn--primary" href="/pricing?reason=subscription_required">View plans</a>
+            </div>
+          </article>
+        ) : null}
 
         {!error && subscription && canShowBillingPage ? (
           <>

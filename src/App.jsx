@@ -31,7 +31,6 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
-const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage'))
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage'))
@@ -42,6 +41,8 @@ import PublicFooter from './components/PublicFooter'
 import BrandLogo from './components/BrandLogo'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
+import AuthenticatedAccountShell from './components/app-shell/AuthenticatedAccountShell'
+import AuthenticatedProfileMenu from './components/AuthenticatedProfileMenu'
 import PublicRouteChunkErrorBoundary from './components/PublicRouteChunkErrorBoundary'
 import CookieConsentProvider from './components/privacy/CookieConsentProvider'
 import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
@@ -73,7 +74,7 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
-import { isUserShellRoutePath } from './config/userShellRouting'
+import { isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
 import { resolveSubscriptionState } from './utils/subscriptionState'
@@ -192,8 +193,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const [sharedResults, setSharedResults] = useState(null)
   const [sharedResultsLoading, setSharedResultsLoading] = useState(false)
   const [sharedResultsError, setSharedResultsError] = useState('')
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
-  const profileMenuRef = useRef(null)
   const lastResultsValidatedOwnerKeyRef = useRef(null)
   const uploaderIntentAccessRef = useRef({ pathname: '', allowed: null })
   const { logout: logoutAdmin } = useAdminAuth()
@@ -222,7 +221,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     if (page === 'uploader' && isAuthenticated) {
       const storedSubscriptionStatus = getStoredSubscriptionStatus()
       if (!hasActiveSubscription(storedSubscriptionStatus)) {
-        navigate('/pricing?reason=upgrade_required')
+        navigate('/pricing?reason=subscription_required')
         return
       }
     }
@@ -349,32 +348,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
   }, [pathname])
 
-  useEffect(() => {
-    if (!isProfileMenuOpen) {
-      return undefined
-    }
-
-    const handleClickOutside = (event) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
-        setIsProfileMenuOpen(false)
-      }
-    }
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setIsProfileMenuOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isProfileMenuOpen])
-
   const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
   const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus })
   const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus })
@@ -389,6 +362,14 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const isAdminPath = pathname.startsWith('/admin')
   const isRootLandingPath = pathname === '/'
   const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
+
+  useEffect(() => {
+    const normalizedLegacyAccountPath = normalizeLegacyAccountPath(pathname, window.location.search)
+    if (normalizedLegacyAccountPath) {
+      window.history.replaceState(window.history.state || {}, '', normalizedLegacyAccountPath)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }
+  }, [pathname])
 
   const getPageContent = () => {
     // Contract: `/results/:token` always resolves through the shared-results loading path.
@@ -471,7 +452,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
         authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
@@ -490,7 +471,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
         authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
@@ -536,16 +517,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/account') {
-      const canAccessAccount = guardAuthenticatedRoute({
-        isAuthenticated,
-        promptMessage: 'Please login or sign up to manage your account settings.',
-        onRequireAuth,
-      })
-      if (!canAccessAccount) {
-        return null
-      }
-
-      return <AccountPage token={localStorage.getItem(TOKEN_STORAGE_KEY) || ''} user={userProfile} onLogout={onLogout} onUserProfileUpdate={onUserProfileUpdate} />
+      return null
     }
 
     if (resolvedPathname === '/settings') {
@@ -558,7 +530,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      return <AccountSettingsPage />
+      return <AccountSettingsPage onUserProfileUpdate={onUserProfileUpdate} />
     }
 
     if (resolvedPathname === '/billing') {
@@ -575,6 +547,17 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/uploader') {
+      const canAccessUploader = guardSubscriptionRoute({
+        isAuthenticated,
+        subscriptionStatus,
+        subscriptionState: profileBillingState,
+        onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+      })
+      if (!canAccessUploader) {
+        return null
+      }
+
       if (uploaderIntentAccessRef.current.pathname !== pathname) {
         uploaderIntentAccessRef.current = {
           pathname,
@@ -587,16 +570,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      const canAccessUploader = guardSubscriptionRoute({
-        isAuthenticated,
-        subscriptionStatus,
-        subscriptionState: profileBillingState,
-        onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
-      })
-      if (!canAccessUploader) {
-        return null
-      }
       return (
         <ResumeUploader
           onFileUploaded={handleFileUploaded}
@@ -610,7 +583,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/create-analysis') {
-      handleCreateAnalysis()
+      const canAccessCreateAnalysis = guardSubscriptionRoute({
+        isAuthenticated,
+        subscriptionStatus,
+        subscriptionState: profileBillingState,
+        onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
+      })
+      if (canAccessCreateAnalysis) {
+        handleCreateAnalysis()
+      }
       return null
     }
 
@@ -625,7 +607,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=reports_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
         authPromptMessage: 'Please login to view reports.',
       })
       if (!canAccessReports) {
@@ -690,7 +672,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=analyses_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
         authPromptMessage: 'Please login to view analyses.',
       })
       if (!canAccessAnalyses) {
@@ -729,7 +711,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=candidates_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
         authPromptMessage: 'Please login to view candidates.',
       })
       if (!canAccessCandidates) {
@@ -750,7 +732,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=shortlists_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
         authPromptMessage: 'Please login to view shortlists.',
       })
       if (!canAccessShortlists) {
@@ -784,7 +766,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required'),
         authPromptMessage: 'Please login to manage job descriptions.',
       })
       if (!canAccessJobDescriptions) {
@@ -1046,7 +1028,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     )
   }
 
-  const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     navigate('/')
@@ -1063,11 +1044,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const handleSolutionsClick = () => {
     navigate('/ai-resume-screening')
   }
-  const handleDashboardShortcutClick = () => {
-    setIsProfileMenuOpen(false)
-    navigate('/dashboard')
-  }
-
 
   const userShellNavItems = useMemo(() => {
     return [
@@ -1158,16 +1134,37 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </Suspense>
     </PublicRouteChunkErrorBoundary>
   )
+  const hasWorkspaceAccess = canAccessProductDashboard(profileBillingState)
   const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
+  const useAccountShellLayout = isAuthenticated && !hasWorkspaceAccess && isAuthenticatedAccountShellRoutePath(resolvedPathname)
   const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
 
   useEffect(() => {
-    document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
+    document.body.classList.toggle('user-app-shell-active', useUserShellLayout || useAccountShellLayout)
 
     return () => {
       document.body.classList.remove('user-app-shell-active')
     }
-  }, [useUserShellLayout])
+  }, [useAccountShellLayout, useUserShellLayout])
+
+  const isBlockedPaidWorkspaceRoute = isAuthenticated && !hasWorkspaceAccess && isPaidWorkspaceRoutePath(resolvedPathname)
+
+  useEffect(() => {
+    if (isBlockedPaidWorkspaceRoute) {
+      navigate('/pricing?reason=subscription_required')
+    }
+  }, [isBlockedPaidWorkspaceRoute])
+
+  if (isBlockedPaidWorkspaceRoute) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-loading">
+          <StatePattern kind="loading" title="Checking workspace access…" description="Confirming your account before opening this page." />
+        </main>
+      </>
+    )
+  }
 
   if (isAdminPath) {
     return (
@@ -1194,6 +1191,22 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         >
           {pageContent}
         </UserAppShell>
+      </>
+    )
+  }
+
+  if (useAccountShellLayout) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <AuthenticatedAccountShell
+          pathname={pathname}
+          onNavigate={navigate}
+          onLogout={onLogout}
+          userProfile={userProfile}
+        >
+          {pageContent}
+        </AuthenticatedAccountShell>
       </>
     )
   }
@@ -1236,7 +1249,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                 <button
                   type="button"
                   className="btn-ghost btn-ghost--accent"
-                  onClick={handleDashboardShortcutClick}
+                  onClick={() => navigate('/dashboard')}
                 >
                   Dashboard
                 </button>
@@ -1249,58 +1262,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                   View pricing
                 </button>
               )}
-              <div className="site-profile-menu" ref={profileMenuRef}>
-                <button
-                  onClick={() => setIsProfileMenuOpen((open) => !open)}
-                  aria-haspopup="menu"
-                  aria-expanded={isProfileMenuOpen}
-                  aria-label="Open user menu"
-                  className="site-profile-menu__trigger"
-                >
-                  {profileInitial}
-                </button>
-
-                {isProfileMenuOpen && (
-                  <div
-                    role="menu"
-                    className="site-profile-menu__list"
-                  >
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        navigate('/account')
-                      }}
-                      className="site-profile-menu__item"
-                    >
-                      Account
-                    </button>
-                    {profileBillingState.canManageBilling ? (
-                      <button
-                        role="menuitem"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false)
-                          navigate('/billing')
-                        }}
-                        className="site-profile-menu__item"
-                      >
-                        Billing
-                      </button>
-                    ) : null}
-                    <div className="site-profile-menu__divider" />
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        onLogout()
-                      }}
-                      className="site-profile-menu__item site-profile-menu__item--danger"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
+              <AuthenticatedProfileMenu user={userProfile} onNavigate={navigate} onLogout={onLogout} />
             </>
           ) : (
             <>

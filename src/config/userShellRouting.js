@@ -1,30 +1,58 @@
-// These routes are eligible for the workspace shell only after App-level
-// subscription checks confirm active/trialing product workspace access.
-const USER_SHELL_ROUTE_PATHS = new Set([
+const WORKSPACE_ROUTE_PATHS = new Set([
   '/dashboard',
   '/dashboard/legacy',
-  '/results',
-  '/shortlists',
   '/job-descriptions',
   '/jobs',
   '/analyses',
   '/candidates',
+  '/shortlists',
   '/reports',
-  '/account',
-  '/settings',
-  '/billing',
-  '/account/payment-method',
+  '/uploader',
+  '/create-analysis',
 ])
 
-export function isUserShellRoutePath(pathname) {
-  if (USER_SHELL_ROUTE_PATHS.has(pathname)) {
-    return true
-  }
+const ACCOUNT_ROUTE_PATHS = new Set(['/settings', '/billing', '/account'])
+const CHECKOUT_RETURN_ROUTE_PATHS = new Set(['/checkout', '/billing/success', '/billing/cancel', '/account/payment-method'])
 
-  return pathname.startsWith('/analyses/')
-    || pathname.startsWith('/candidates/')
-    || pathname === '/uploader'
-    || pathname === '/create-analysis'
-    || pathname === '/account/payment-method'
+export function normalizeLegacyAccountPath(pathname, search = '') {
+  if (pathname !== '/account') return null
+  const params = new URLSearchParams(search || '')
+  const nextParams = new URLSearchParams()
+  const upgradeTestKey = params.get('upgradeTestKey')
+  if (upgradeTestKey) nextParams.set('upgradeTestKey', upgradeTestKey)
+  const query = nextParams.toString()
+  return `/settings${query ? `?${query}` : ''}`
 }
 
+export function isPaidWorkspaceRoutePath(pathname) {
+  return WORKSPACE_ROUTE_PATHS.has(pathname)
+}
+
+export function isAuthenticatedAccountRoutePath(pathname) {
+  return ACCOUNT_ROUTE_PATHS.has(pathname)
+}
+
+export function isAuthenticatedHistoricalRoutePath(pathname) {
+  if (pathname === '/results') return true
+  if (pathname.startsWith('/analyses/')) return pathname.split('/').filter(Boolean).length === 2
+  if (pathname.startsWith('/candidates/')) return pathname.split('/').filter(Boolean).length === 2
+  return false
+}
+
+export function isCheckoutReturnRoutePath(pathname) {
+  return CHECKOUT_RETURN_ROUTE_PATHS.has(pathname)
+}
+
+export function isAuthenticatedAccountShellRoutePath(pathname) {
+  return isAuthenticatedAccountRoutePath(pathname) || isAuthenticatedHistoricalRoutePath(pathname)
+}
+
+// These routes are eligible for an authenticated app shell. Routing decides
+// between the full workspace shell and account-only shell after consuming
+// resolveSubscriptionState(...).canAccessProductDashboard.
+export function isUserShellRoutePath(pathname) {
+  return isPaidWorkspaceRoutePath(pathname)
+    || isAuthenticatedAccountRoutePath(pathname)
+    || isAuthenticatedHistoricalRoutePath(pathname)
+    || isCheckoutReturnRoutePath(pathname)
+}
