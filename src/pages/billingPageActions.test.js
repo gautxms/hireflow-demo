@@ -79,6 +79,48 @@ test('active subscription with future cancellationEffectiveAt but no backend sch
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), true)
 })
 
+
+
+test('active cancelAtPeriodEnd with missing date hides cancel and shows reconciled copy', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, hasCancellationSignal: true }
+  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true }
+
+  assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, (value) => value, NOW), 'Cancellation is being reconciled. Contact support if this status does not update.')
+})
+
+test('active cancelAtPeriodEnd with malformed date hides cancel and shows reconciled copy', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true }
+  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: 'not-a-date' }
+
+  assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, (value) => value, NOW), 'Cancellation is being reconciled. Contact support if this status does not update.')
+})
+
+test('active cancelAtPeriodEnd with past date hides cancel and shows reconciled copy', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true }
+  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2025-01-07T00:00:00Z' }
+
+  assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, (value) => value, NOW), 'Cancellation is being reconciled. Contact support if this status does not update.')
+})
+
+test('cancellation_scheduled with missing date hides cancel', () => {
+  const subscriptionState = { statusLabel: 'Cancellation scheduled', canManageBilling: true }
+  const subscription = { plan: 'annual', status: 'cancellation_scheduled' }
+
+  assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, (value) => value, NOW), 'Cancellation is being reconciled. Contact support if this status does not update.')
+})
+
+test('pending_cancellation with provider IDs and missing date hides cancel', () => {
+  const subscriptionState = { statusLabel: 'Cancellation scheduled', canManageBilling: true }
+  const subscription = { plan: 'annual', status: 'pending_cancellation', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' }
+
+  assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, (value) => value, NOW), 'Cancellation is being reconciled. Contact support if this status does not update.')
+})
+
 test('subscription with cancelAtPeriodEnd true and future cancellationEffectiveAt shows access until', () => {
   const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
   const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2027-01-07T00:00:00Z' }

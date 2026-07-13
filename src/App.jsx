@@ -1326,6 +1326,8 @@ export default function App() {
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
+  const authSyncSequenceRef = useRef(0)
+  const authSyncControllerRef = useRef(null)
 
   const clearAuthenticatedSession = useCallback((message = '') => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
@@ -1348,13 +1350,26 @@ export default function App() {
       return null
     }
 
+    authSyncControllerRef.current?.abort()
+    const controller = new AbortController()
+    authSyncControllerRef.current = controller
+    const requestId = authSyncSequenceRef.current + 1
+    authSyncSequenceRef.current = requestId
+
+    const isLatestAuthSync = () => authSyncSequenceRef.current === requestId && !controller.signal.aborted
+
     try {
       const response = await fetch(`${API_BASE}/auth/me`, {
         headers: { Authorization: `Bearer ${activeToken}` },
+        signal: controller.signal,
       })
 
+      if (!isLatestAuthSync() || getStoredToken() !== activeToken) {
+        return null
+      }
+
       if (response.status === 401) {
-        if (redirectOnUnauthorized) {
+        if (redirectOnUnauthorized && isLatestAuthSync() && getStoredToken() === activeToken) {
           clearAuthenticatedSession('Your session expired while you were away. Please log in again.')
         }
         return null
@@ -1365,6 +1380,11 @@ export default function App() {
       }
 
       const nextUserProfile = await response.json()
+
+      if (!isLatestAuthSync() || getStoredToken() !== activeToken) {
+        return null
+      }
+
       const nextSubscriptionStatus = nextUserProfile?.subscription_status || 'inactive'
 
       localStorage.setItem('subscription_status', nextSubscriptionStatus)
@@ -1373,8 +1393,15 @@ export default function App() {
       setSubscriptionStatus(nextSubscriptionStatus)
       setUserProfile(nextUserProfile || null)
       return nextUserProfile
-    } catch {
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        return null
+      }
       return null
+    } finally {
+      if (authSyncControllerRef.current === controller) {
+        authSyncControllerRef.current = null
+      }
     }
   }, [clearAuthenticatedSession])
 
@@ -1408,6 +1435,7 @@ export default function App() {
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('storage', onStorage)
       window.removeEventListener('hireflow-auth-updated', onAuthStateRefresh)
+      authSyncControllerRef.current?.abort()
     }
   }, [syncAuthenticatedUser])
 
@@ -1427,9 +1455,9 @@ export default function App() {
     navigate(redirectPath)
   }
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     clearAuthenticatedSession()
-  }
+  }, [clearAuthenticatedSession])
 
   const requireAuth = (message) => {
     setAuthPrompt(message)
@@ -1442,10 +1470,15 @@ export default function App() {
     navigate('/verify-email-info')
   }
 
-  const handleUserProfileUpdate = (nextUserProfile) => {
+  const handleUserProfileUpdate = useCallback((nextUserProfile) => {
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUserProfile || null))
     setUserProfile(nextUserProfile || null)
-  }
+
+    if (nextUserProfile?.subscription_status) {
+      localStorage.setItem('subscription_status', nextUserProfile.subscription_status)
+      setSubscriptionStatus(nextUserProfile.subscription_status)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -1468,6 +1501,7 @@ export default function App() {
     return () => {
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      authSyncControllerRef.current?.abort()
     }
   }, [isAuthenticated, syncAuthenticatedUser])
 

@@ -15,6 +15,10 @@ function getUserKey(user) {
   return user?.id || user?.email || ''
 }
 
+function isAbortError(error) {
+  return error?.name === 'AbortError'
+}
+
 export default function AccountPage({ token, user, onLogout, onUserProfileUpdate }) {
   const fallbackUser = useMemo(() => user || null, [user])
   const [loading, setLoading] = useState(true)
@@ -26,19 +30,36 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
   const hasDisplayableUser = Boolean(userData || fallbackUser)
   const hasDisplayableUserRef = useRef(hasDisplayableUser)
   const userRef = useRef(user)
+  const onLogoutRef = useRef(onLogout)
+  const onUserProfileUpdateRef = useRef(onUserProfileUpdate)
+  const requestSequenceRef = useRef(0)
+  const activeRequestControllerRef = useRef(null)
+  const authenticatedScopeRef = useRef('')
 
   useEffect(() => {
     userRef.current = user
   }, [user])
 
   useEffect(() => {
+    onLogoutRef.current = onLogout
+  }, [onLogout])
+
+  useEffect(() => {
+    onUserProfileUpdateRef.current = onUserProfileUpdate
+  }, [onUserProfileUpdate])
+
+  useEffect(() => {
     hasDisplayableUserRef.current = hasDisplayableUser
   }, [hasDisplayableUser])
 
+  const isLatestRequest = useCallback((requestId, controller) => {
+    return requestSequenceRef.current === requestId && !controller.signal.aborted
+  }, [])
+
   const handleExpiredSession = useCallback(() => {
-    onLogout?.('Your session expired while you were away. Please log in again.')
+    onLogoutRef.current?.('Your session expired while you were away. Please log in again.')
     window.location.href = '/login'
-  }, [onLogout])
+  }, [])
 
   const fetchUserData = useCallback(async ({ isInitialLoad = false } = {}) => {
     if (!token) {
@@ -46,7 +67,13 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
       return
     }
 
-    if (isInitialLoad) {
+    activeRequestControllerRef.current?.abort()
+    const controller = new AbortController()
+    activeRequestControllerRef.current = controller
+    const requestId = requestSequenceRef.current + 1
+    requestSequenceRef.current = requestId
+
+    if (isInitialLoad && !hasDisplayableUserRef.current) {
       setLoading(true)
     }
 
@@ -56,17 +83,28 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
       const [userResult, subscriptionResult] = await Promise.allSettled([
         fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         }),
         fetch(`${API_BASE}/subscriptions/current`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         }),
       ])
 
+      if (!isLatestRequest(requestId, controller)) {
+        return
+      }
+
       if (userResult.status === 'rejected') {
+        if (isAbortError(userResult.reason)) return
         throw new Error('Failed to fetch user data')
       }
 
       const userResponse = userResult.value
+
+      if (!isLatestRequest(requestId, controller)) {
+        return
+      }
 
       if (userResponse.status === 401) {
         handleExpiredSession()
@@ -77,7 +115,15 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
         throw new Error('Failed to fetch user data')
       }
 
-      const userPayload = await userResponse.json().catch(() => null)
+      const userPayload = await userResponse.json().catch((error) => {
+        if (isAbortError(error)) return null
+        return null
+      })
+
+      if (!isLatestRequest(requestId, controller)) {
+        return
+      }
+
       const normalizedUser = normalizeUserPayload(userPayload)
 
       if (!normalizedUser) {
@@ -85,12 +131,19 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
       }
 
       setUserData(normalizedUser)
-      onUserProfileUpdate?.(normalizedUser)
+      onUserProfileUpdateRef.current?.(normalizedUser)
       setFatalError('')
 
       if (subscriptionResult.status === 'fulfilled') {
         const subscriptionResponse = subscriptionResult.value
-        const subscriptionPayload = await subscriptionResponse.json().catch(() => ({}))
+        const subscriptionPayload = await subscriptionResponse.json().catch((error) => {
+          if (isAbortError(error)) return {}
+          return {}
+        })
+
+        if (!isLatestRequest(requestId, controller)) {
+          return
+        }
 
         if (subscriptionResponse.status === 401) {
           handleExpiredSession()
@@ -104,10 +157,15 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
           nextWarning = 'We could not refresh subscription details. Showing the safest available account view.'
         }
       } else {
+        if (isAbortError(subscriptionResult.reason)) return
         console.error('[AccountPage] Failed to load subscription details:', subscriptionResult.reason)
         nextWarning = 'We could not refresh subscription details. Showing the safest available account view.'
       }
     } catch (err) {
+      if (isAbortError(err) || !isLatestRequest(requestId, controller)) {
+        return
+      }
+
       const message = err.message || 'Failed to load account'
       if (isInitialLoad && !hasDisplayableUserRef.current) {
         setFatalError(message)
@@ -115,10 +173,15 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
         nextWarning = 'We could not refresh account data. Showing last loaded details.'
       }
     } finally {
-      setRefreshWarning(nextWarning)
-      setLoading(false)
+      if (isLatestRequest(requestId, controller)) {
+        setRefreshWarning(nextWarning)
+        setLoading(false)
+        if (activeRequestControllerRef.current === controller) {
+          activeRequestControllerRef.current = null
+        }
+      }
     }
-  }, [handleExpiredSession, onUserProfileUpdate, token])
+  }, [handleExpiredSession, isLatestRequest, token])
 
   useEffect(() => {
     const currentUser = userRef.current
@@ -128,11 +191,29 @@ export default function AccountPage({ token, user, onLogout, onUserProfileUpdate
       return
     }
 
+    const nextAuthenticatedScope = `${token}:${getUserKey(currentUser)}`
+    const didAuthenticatedScopeChange = authenticatedScopeRef.current !== nextAuthenticatedScope
+
+    if (didAuthenticatedScopeChange) {
+      activeRequestControllerRef.current?.abort()
+      requestSequenceRef.current += 1
+      authenticatedScopeRef.current = nextAuthenticatedScope
+      setSubscriptionData(null)
+      setFatalError('')
+      setRefreshWarning('')
+      setLoading(true)
+    }
+
     setUserData(currentUser)
-    setSubscriptionData(null)
-    setFatalError('')
-    setRefreshWarning('')
-    fetchUserData({ isInitialLoad: true })
+    if (!didAuthenticatedScopeChange) {
+      setFatalError('')
+      setRefreshWarning('')
+    }
+    fetchUserData({ isInitialLoad: didAuthenticatedScopeChange })
+
+    return () => {
+      activeRequestControllerRef.current?.abort()
+    }
   }, [fetchUserData, stableUserKey, token])
 
   const deleteAccount = async () => {
