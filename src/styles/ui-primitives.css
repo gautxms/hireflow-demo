@@ -11,6 +11,10 @@
 }
 
 .hf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 44px;
   border-radius: var(--radius-md);
   padding: 10px 22px;
@@ -22,13 +26,13 @@
 
 .hf-btn--primary {
   background: var(--hf-accent-primary);
-  color: var(--hf-text-inverse);
+  color: var(--hf-text-inverse, #000000);
   border-color: transparent;
   font-weight: 700;
 }
 
 .hf-btn--primary:hover {
-  background: color-mix(in srgb, var(--color-accent-green), #000 10%);
+  background: color-mix(in srgb, var(--color-accent-green, #c8ff00), #000 10%);
 }
 
 .hf-btn--primary:active {
