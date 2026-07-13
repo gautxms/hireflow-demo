@@ -17,10 +17,27 @@ test('manageable provider billing state links to billing management', () => {
   assert.match(source, /const actionLabel = canOpenBilling \? 'Manage plan & billing' : shouldViewPlans \? 'View plans' : 'Contact support'/)
 })
 
-test('inactive state links to pricing plans', () => {
-  assert.match(source, /const shouldViewPlans = subscriptionState\.isFree \|\| \(!subscriptionState\.hasProviderSubscription && !subscriptionState\.hasActivePaidAccess/)
+test('inactive state links to pricing plans only when there is no cancellation signal', () => {
+  assert.match(source, /const shouldViewPlans = !subscriptionState\.hasCancellationSignal && \(subscriptionState\.isFree \|\| \(!subscriptionState\.hasProviderSubscription && !subscriptionState\.hasActivePaidAccess/)
   assert.match(source, /View plans/)
   assert.match(source, /No active subscription|Subscription required/)
+})
+
+test('cancellation_scheduled missing date without provider IDs uses support state instead of pricing', () => {
+  assert.match(source, /const shouldViewPlans = !subscriptionState\.hasCancellationSignal/)
+  assert.match(source, /const actionHref = canOpenBilling \? '\/billing' : shouldViewPlans \? '\/pricing' : '\/help'/)
+  assert.match(source, /const actionLabel = canOpenBilling \? 'Manage plan & billing' : shouldViewPlans \? 'View plans' : 'Contact support'/)
+})
+
+test('pending_cancellation missing date without provider IDs uses support state instead of pricing', () => {
+  assert.match(source, /subscriptionState\.hasCancellationSignal && !subscriptionState\.isCancellationScheduled/)
+  assert.match(source, /Contact support/)
+  assert.match(source, /\/help/)
+})
+
+test('active cancelAtPeriodEnd missing date without provider IDs uses support state instead of pricing', () => {
+  assert.match(source, /!subscriptionState\.hasCancellationSignal &&/)
+  assert.match(source, /const needsBillingSupport = !canOpenBilling && !shouldViewPlans/)
 })
 
 test('active or scheduled states without provider billing identifiers use support state instead of pricing', () => {
@@ -32,6 +49,19 @@ test('active or scheduled states without provider billing identifiers use suppor
 
 test('scheduled status badge styling does not fall back to inactive class', () => {
   assert.match(source, /const statusClass = subscriptionState\.isCancellationScheduled\s*\? 'active'/)
+})
+
+test('explicit cancellation signal without future date uses cancelled badge styling and cancellation label', () => {
+  assert.match(source, /: subscriptionState\.hasCancellationSignal\s*\? 'cancelled'/)
+  assert.match(source, /const statusLabel = subscriptionState\.hasCancellationSignal && !subscriptionState\.isCancellationScheduled/)
+  assert.match(source, /\? 'Cancellation scheduled'/)
+})
+
+test('valid scheduled cancellation with provider billing access keeps billing CTA and Access until', () => {
+  assert.match(source, /canRenderBillingPage\(subscriptionState\)/)
+  assert.match(source, /Manage plan & billing/)
+  assert.match(source, /subscriptionState\.isCancellationScheduled && accessUntil/)
+  assert.match(source, /Access until/)
 })
 
 

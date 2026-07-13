@@ -22,15 +22,20 @@ export default function SubscriptionCard({ user, subscription }) {
   const startedAt = subscription?.started_date || user?.subscription_started_at || null
   const statusClass = subscriptionState.isCancellationScheduled
     ? 'active'
-    : ['active', 'trialing', 'cancelled', 'canceled', 'past_due', 'paused', 'inactive'].includes(status)
-      ? (status === 'canceled' ? 'cancelled' : status)
-      : 'inactive'
+    : subscriptionState.hasCancellationSignal
+      ? 'cancelled'
+      : ['active', 'trialing', 'cancelled', 'canceled', 'past_due', 'paused', 'inactive'].includes(status)
+        ? (status === 'canceled' ? 'cancelled' : status)
+        : 'inactive'
   const accessUntil = formatDate(subscriptionState.accessEndsAt || subscriptionState.paidThroughDate)
   const canOpenBilling = canRenderBillingPage(subscriptionState)
-  const shouldViewPlans = subscriptionState.isFree || (!subscriptionState.hasProviderSubscription && !subscriptionState.hasActivePaidAccess && !subscriptionState.isPastDue && !subscriptionState.isPaused)
+  const shouldViewPlans = !subscriptionState.hasCancellationSignal && (subscriptionState.isFree || (!subscriptionState.hasProviderSubscription && !subscriptionState.hasActivePaidAccess && !subscriptionState.isPastDue && !subscriptionState.isPaused))
   const needsBillingSupport = !canOpenBilling && !shouldViewPlans
   const actionHref = canOpenBilling ? '/billing' : shouldViewPlans ? '/pricing' : '/help'
   const actionLabel = canOpenBilling ? 'Manage plan & billing' : shouldViewPlans ? 'View plans' : 'Contact support'
+  const statusLabel = subscriptionState.hasCancellationSignal && !subscriptionState.isCancellationScheduled
+    ? 'Cancellation scheduled'
+    : subscriptionState.statusLabel
 
   return (
     <div className="hf-account-card">
@@ -42,7 +47,7 @@ export default function SubscriptionCard({ user, subscription }) {
       <div className="hf-account-card__section">
         <p className="hf-account-card__label hf-account-card__label--status">Status</p>
         <span className={`hf-account-card__status-badge hf-account-card__status-badge--${statusClass} ${subscriptionState.isActive || subscriptionState.isCancellationScheduled ? 'hf-account-card__status-badge--active-text' : 'hf-account-card__status-badge--default-text'}`}>
-          {subscriptionState.statusLabel}
+          {statusLabel}
         </span>
       </div>
 
