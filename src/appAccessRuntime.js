@@ -13,13 +13,17 @@ export function buildResolvedAccessContext({
       : { subscription_status: subscriptionStatus },
   })
   const isAccessAuthoritative = !isAuthenticated || accessResolutionStatus === 'resolved'
-  const workspaceAccessForFlags = isAccessAuthoritative ? canAccessProductDashboard(profileBillingState) : false
-  const isActiveSubscriber = isAccessAuthoritative && canAccessProductDashboard(profileBillingState)
+  const hasAuthoritativeAuthenticatedAccess = isAuthenticated && accessResolutionStatus === 'resolved'
+  const workspaceAccessForFlags = hasAuthoritativeAuthenticatedAccess
+    ? canAccessProductDashboard(profileBillingState)
+    : false
+  const isActiveSubscriber = hasAuthoritativeAuthenticatedAccess && canAccessProductDashboard(profileBillingState)
   const canViewUpgradePricing = !isAuthenticated || (isAccessAuthoritative && !isActiveSubscriber)
 
   return {
     profileBillingState,
     isAccessAuthoritative,
+    hasAuthoritativeAuthenticatedAccess,
     workspaceAccessForFlags,
     isActiveSubscriber,
     canViewUpgradePricing,
