@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
-import { canShowCancelAction, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, hasScheduledCancellation, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -139,14 +139,15 @@ export default function BillingPage() {
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
   const hasVerifiedPreviewAmounts = planPreview?.hasVerifiedPreviewAmounts === true
   const canConfirmPlanChange = !isChangingPlan && !isLoadingPreview && !previewError && hasVerifiedPreviewAmounts
-  const planAction = getBillingPlanAction(subscription?.plan)
+  const planAction = getBillingPlanAction(subscription?.plan, subscriptionState)
+  const pastDueAction = getPastDueBillingAction(subscriptionState)
   const cancelActionLabel = getCancelActionLabel(subscription?.plan)
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
-  const hasScheduledCancellationState = hasScheduledCancellation(subscriptionState, subscription)
   const shouldShowCancelAction = canShowCancelAction(subscriptionState, subscription)
   const shouldShowPlanSupportNote = shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription)
-  const nextBillingLabel = hasScheduledCancellationState ? 'No further billing' : formatDate(subscription?.nextBillingDate)
+  const billingMetadataRows = getBillingMetadataRows(subscriptionState, subscription, formatDate)
+  const pastDueBillingNotice = subscriptionState.isPastDue ? getPastDueBillingNotice() : ''
   const hasBillingHistory = shouldRenderBillingHistory(history)
 
   const switchingLabel = useMemo(() => {
@@ -331,11 +332,11 @@ export default function BillingPage() {
                 <p className="billing-page__cost-helper">Price shown from plan settings; Paddle is the source of truth.</p>
               ) : null}
               <div className="billing-page__meta-grid">
-                <p className="billing-page__meta"><span>Renewal date</span>{formatDate(subscription.renewalDate)}</p>
-                <p className="billing-page__meta"><span>Next billing</span>{nextBillingLabel}</p>
-                <p className="billing-page__meta"><span>Payment method</span>{subscription.paymentMethod || 'Managed securely in Paddle'}</p>
-                <p className="billing-page__meta"><span>Cancellation effective</span>{formatDate(subscription.cancellationEffectiveAt)}</p>
+                {billingMetadataRows.map((row) => (
+                  <p className="billing-page__meta" key={row.label}><span>{row.label}</span>{row.value}</p>
+                ))}
               </div>
+              {pastDueBillingNotice ? <p className="billing-page__past-due-note">{pastDueBillingNotice}</p> : null}
               {cancellationAccessMessage ? (
                 <>
                   <p className="billing-page__renewal-note">{cancellationAccessMessage}</p>
@@ -346,6 +347,11 @@ export default function BillingPage() {
 
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
+                  {pastDueAction ? (
+                    <a className="hf-btn hf-btn--primary" href={pastDueAction.href}>
+                      {pastDueAction.label}
+                    </a>
+                  ) : null}
                   {planAction?.isSelfServe ? (
                     <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>
                       {planAction.label}

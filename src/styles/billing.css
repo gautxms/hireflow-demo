@@ -230,6 +230,17 @@
   padding-top: 2px;
 }
 
+
+.billing-page__past-due-note {
+  margin: 0;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--hf-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hf-warning) 35%, var(--hf-border));
+  border-radius: var(--hf-r-lg, 8px);
+  color: var(--hf-text);
+  font: 700 14px/1.55 var(--hf-font-ui, 'DM Sans', sans-serif);
+}
+
 .billing-page__support-note {
   flex: 1 1 320px;
   margin: 0;

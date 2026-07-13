@@ -1,7 +1,29 @@
-import { getFutureSubscriptionEndDate, hasExplicitScheduledCancellationSignal, hasScheduledCancellationAccess } from '../utils/subscriptionState.js'
+import { getFutureSubscriptionEndDate, hasExplicitScheduledCancellationSignal, hasScheduledCancellationAccess, normalizeSubscriptionStatus } from '../utils/subscriptionState.js'
 
 
-export function getBillingPlanAction(plan) {
+export function isPastDueBillingState(subscriptionState) {
+  const status = normalizeSubscriptionStatus(subscriptionState?.rawStatus || subscriptionState?.status || subscriptionState?.subscription_status)
+  return subscriptionState?.isPastDue === true || status === 'payment_failed'
+}
+
+export function getPastDueBillingNotice() {
+  return 'Payment is required to continue using HireFlow. Your workspace is read-only until billing is resolved.'
+}
+
+export function getPastDueBillingAction(subscriptionState) {
+  if (!isPastDueBillingState(subscriptionState)) return null
+
+  return {
+    kind: 'update-payment-method',
+    label: subscriptionState?.hasProviderSubscription ? 'Update payment method' : 'Resume subscription',
+    href: '/account/payment-method',
+    isSelfServe: true,
+  }
+}
+
+export function getBillingPlanAction(plan, subscriptionState = null) {
+  if (isPastDueBillingState(subscriptionState)) return null
+
   if (plan === 'monthly') {
     return {
       kind: 'upgrade',
@@ -107,4 +129,26 @@ export function canShowCancelAction(subscriptionState, subscription, now = new D
 
 export function shouldRenderBillingHistory(history) {
   return Array.isArray(history) && history.length > 0
+}
+
+export function getBillingMetadataRows(subscriptionState, subscription, formatDate = (value) => value, now = new Date()) {
+  const rows = []
+  const scheduledCancellation = hasScheduledCancellation(subscriptionState, subscription, now)
+  const isPastDue = isPastDueBillingState(subscriptionState)
+
+  if (isPastDue) {
+    rows.push({ label: subscription?.nextBillingDate ? 'Retry date' : 'Payment due', value: subscription?.nextBillingDate ? formatDate(subscription.nextBillingDate) : 'Now' })
+    rows.push({ label: 'Workspace access', value: 'Read-only until billing is resolved' })
+  } else {
+    rows.push({ label: 'Renewal date', value: formatDate(subscription?.renewalDate) })
+    rows.push({ label: 'Next billing', value: scheduledCancellation ? 'No further billing' : formatDate(subscription?.nextBillingDate) })
+  }
+
+  rows.push({ label: 'Payment method', value: subscription?.paymentMethod || 'Managed securely in Paddle' })
+
+  if (subscription?.cancellationEffectiveAt) {
+    rows.push({ label: 'Cancellation effective', value: formatDate(subscription.cancellationEffectiveAt) })
+  }
+
+  return rows
 }

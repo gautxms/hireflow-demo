@@ -233,6 +233,17 @@ test('past due users are payment issue states without product dashboard access',
   assert.equal(resolved.canManageBilling, true)
 })
 
+
+test('payment_failed users are past-due manageable billing states without product dashboard access', () => {
+  const resolved = state({ status: 'payment_failed', plan: 'monthly', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })
+
+  assert.equal(resolved.statusLabel, 'Past due')
+  assert.equal(resolved.isPastDue, true)
+  assert.equal(resolved.canAccessProductDashboard, false)
+  assert.equal(resolved.canManageBilling, true)
+  assert.equal(canRenderBillingPage(resolved), true)
+})
+
 test('paused users are provider-managed billing states without dashboard access', () => {
   const resolved = state({ status: 'paused', plan: 'monthly', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })
 
