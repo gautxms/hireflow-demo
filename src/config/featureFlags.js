@@ -91,12 +91,20 @@ function isExplicitlyDisabled(rawValue) {
   return normalized === 'off' || normalized === 'false' || normalized === '0' || normalized === 'disabled'
 }
 
-export function isFeatureEnabled(featureKey, { userProfile = null, subscriptionStatus = 'inactive' } = {}) {
+export function isFeatureEnabled(featureKey, { userProfile = null, subscriptionStatus = 'inactive', workspaceAccess = null } = {}) {
   const normalizedSubscriptionStatus = String(subscriptionStatus || 'inactive').trim().toLowerCase()
-  const isSubscribedUser = normalizedSubscriptionStatus === 'active' || normalizedSubscriptionStatus === 'trialing'
+  const isSubscribedUser = workspaceAccess === null
+    ? normalizedSubscriptionStatus === 'active' || normalizedSubscriptionStatus === 'trialing'
+    : workspaceAccess === true
 
-  if (isSubscribedUser && SUBSCRIPTION_GATED_FEATURES.has(featureKey)) {
-    return true
+  if (SUBSCRIPTION_GATED_FEATURES.has(featureKey)) {
+    if (isSubscribedUser) {
+      return true
+    }
+
+    if (workspaceAccess !== null) {
+      return false
+    }
   }
 
   const localOverride = readLocalOverride(featureKey)

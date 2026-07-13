@@ -31,7 +31,6 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage'))
-const AccountPage = lazy(() => import('./pages/AccountPage'))
 const JobDescriptionPage = lazy(() => import('./pages/JobDescriptionPage'))
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage'))
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage'))
@@ -42,6 +41,8 @@ import PublicFooter from './components/PublicFooter'
 import BrandLogo from './components/BrandLogo'
 import PageSeo from './components/PageSeo'
 import UserAppShell from './components/app-shell/UserAppShell'
+import AuthenticatedAccountShell from './components/app-shell/AuthenticatedAccountShell'
+import AuthenticatedProfileMenu from './components/AuthenticatedProfileMenu'
 import PublicRouteChunkErrorBoundary from './components/PublicRouteChunkErrorBoundary'
 import CookieConsentProvider from './components/privacy/CookieConsentProvider'
 import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
@@ -73,11 +74,11 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
-import { isUserShellRoutePath } from './config/userShellRouting'
+import { canonicalizePathname, getAnalysisDetailRouteId, getCandidateDetailRouteId, isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isStandaloneOrdinaryUserAuthRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
-import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute, hasActiveSubscription } from './utils/routeGuards'
-import { resolveSubscriptionState } from './utils/subscriptionState'
+import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
+import { buildResolvedAccessContext } from './appAccessRuntime'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -130,9 +131,24 @@ function getStoredUserProfile() {
   }
 }
 
-function navigate(pathname, options = {}) {
-  if (window.location.pathname !== pathname) {
-    window.history.pushState(options.state ?? {}, '', pathname)
+function navigate(to, options = {}) {
+  if (typeof to === 'number') {
+    window.history.go(to)
+    return
+  }
+
+  const nextUrl = new URL(to, window.location.origin)
+  const currentUrl = new URL(window.location.href)
+  const nextPathWithSearch = `${nextUrl.pathname}${nextUrl.search}`
+  const currentPathWithSearch = `${currentUrl.pathname}${currentUrl.search}`
+
+  if (currentPathWithSearch !== nextPathWithSearch) {
+    const state = options.state ?? {}
+    if (options.replace) {
+      window.history.replaceState(state, '', nextPathWithSearch)
+    } else {
+      window.history.pushState(state, '', nextPathWithSearch)
+    }
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }
@@ -185,15 +201,13 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
   return isUserShellRoutePath(resolvedPathname)
 }
 
-function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
+function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionError, onRetryAccessResolution, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [resultsRecoveryAttempted, setResultsRecoveryAttempted] = useState(false)
   const [sharedResults, setSharedResults] = useState(null)
   const [sharedResultsLoading, setSharedResultsLoading] = useState(false)
   const [sharedResultsError, setSharedResultsError] = useState('')
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
-  const profileMenuRef = useRef(null)
   const lastResultsValidatedOwnerKeyRef = useRef(null)
   const uploaderIntentAccessRef = useRef({ pathname: '', allowed: null })
   const { logout: logoutAdmin } = useAdminAuth()
@@ -219,12 +233,9 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return
     }
 
-    if (page === 'uploader' && isAuthenticated) {
-      const storedSubscriptionStatus = getStoredSubscriptionStatus()
-      if (!hasActiveSubscription(storedSubscriptionStatus)) {
-        navigate('/pricing?reason=upgrade_required')
-        return
-      }
+    if (page === 'uploader' && isAuthenticated && !canAccessProductDashboard(profileBillingState)) {
+      navigate('/pricing?reason=subscription_required', { replace: true })
+      return
     }
 
     setCurrentPage(page)
@@ -349,46 +360,33 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
   }, [pathname])
 
+  const {
+    profileBillingState,
+    isAccessAuthoritative,
+    workspaceAccessForFlags,
+    isActiveSubscriber,
+    canViewUpgradePricing,
+  } = useMemo(() => buildResolvedAccessContext({
+    isAuthenticated,
+    accessResolutionStatus,
+    subscriptionStatus,
+    userProfile,
+  }), [accessResolutionStatus, isAuthenticated, subscriptionStatus, userProfile])
+  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
+  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
+  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
+  const canonicalPathname = canonicalizePathname(pathname)
+  const isAdminPath = canonicalPathname.startsWith('/admin')
+  const isRootLandingPath = canonicalPathname === '/'
+  const resolvedPathname = isRootLandingPath ? canonicalPathname : resolveUserSectionPath(canonicalPathname)
+
+  const normalizedLegacyAccountPath = normalizeLegacyAccountPath(canonicalPathname, window.location.search)
+
   useEffect(() => {
-    if (!isProfileMenuOpen) {
-      return undefined
+    if (normalizedLegacyAccountPath) {
+      navigate(normalizedLegacyAccountPath, { replace: true })
     }
-
-    const handleClickOutside = (event) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
-        setIsProfileMenuOpen(false)
-      }
-    }
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setIsProfileMenuOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isProfileMenuOpen])
-
-  const normalizedSubscriptionStatus = (subscriptionStatus || 'inactive').toLowerCase()
-  const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus })
-  const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus })
-  const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus })
-  const profileBillingState = useMemo(() => resolveSubscriptionState({
-    user: userProfile
-      ? { ...userProfile, subscription_status: userProfile.subscription_status || subscriptionStatus }
-      : { subscription_status: subscriptionStatus },
-  }), [subscriptionStatus, userProfile])
-  const isActiveSubscriber = canAccessProductDashboard(profileBillingState)
-  const canViewUpgradePricing = !isAuthenticated || normalizedSubscriptionStatus === 'trialing' || normalizedSubscriptionStatus === 'cancelled' || normalizedSubscriptionStatus === 'canceled' || normalizedSubscriptionStatus === 'inactive'
-  const isAdminPath = pathname.startsWith('/admin')
-  const isRootLandingPath = pathname === '/'
-  const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
+  }, [normalizedLegacyAccountPath])
 
   const getPageContent = () => {
     // Contract: `/results/:token` always resolves through the shared-results loading path.
@@ -442,7 +440,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/pricing') {
-      if (isAuthenticated && isActiveSubscriber) {
+      if (isAuthenticated && isAccessAuthoritative && isActiveSubscriber) {
         navigate('/billing')
         return null
       }
@@ -471,7 +469,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
@@ -490,7 +488,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=dashboard_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
@@ -536,16 +534,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/account') {
-      const canAccessAccount = guardAuthenticatedRoute({
-        isAuthenticated,
-        promptMessage: 'Please login or sign up to manage your account settings.',
-        onRequireAuth,
-      })
-      if (!canAccessAccount) {
-        return null
-      }
-
-      return <AccountPage token={localStorage.getItem(TOKEN_STORAGE_KEY) || ''} user={userProfile} onLogout={onLogout} onUserProfileUpdate={onUserProfileUpdate} />
+      return null
     }
 
     if (resolvedPathname === '/settings') {
@@ -558,7 +547,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      return <AccountSettingsPage />
+      return <AccountSettingsPage onUserProfileUpdate={onUserProfileUpdate} />
     }
 
     if (resolvedPathname === '/billing') {
@@ -575,6 +564,17 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/uploader') {
+      const canAccessUploader = guardSubscriptionRoute({
+        isAuthenticated,
+        subscriptionStatus,
+        subscriptionState: profileBillingState,
+        onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
+      })
+      if (!canAccessUploader) {
+        return null
+      }
+
       if (uploaderIntentAccessRef.current.pathname !== pathname) {
         uploaderIntentAccessRef.current = {
           pathname,
@@ -587,16 +587,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         return null
       }
 
-      const canAccessUploader = guardSubscriptionRoute({
-        isAuthenticated,
-        subscriptionStatus,
-        subscriptionState: profileBillingState,
-        onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
-      })
-      if (!canAccessUploader) {
-        return null
-      }
       return (
         <ResumeUploader
           onFileUploaded={handleFileUploaded}
@@ -610,7 +600,16 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     }
 
     if (resolvedPathname === '/create-analysis') {
-      handleCreateAnalysis()
+      const canAccessCreateAnalysis = guardSubscriptionRoute({
+        isAuthenticated,
+        subscriptionStatus,
+        subscriptionState: profileBillingState,
+        onRequireAuth,
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
+      })
+      if (canAccessCreateAnalysis) {
+        handleCreateAnalysis()
+      }
       return null
     }
 
@@ -625,7 +624,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=reports_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view reports.',
       })
       if (!canAccessReports) {
@@ -690,7 +689,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=analyses_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view analyses.',
       })
       if (!canAccessAnalyses) {
@@ -700,12 +699,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <AnalysesPage onCreateAnalysis={handleCreateAnalysis} />
     }
 
-    if (resolvedPathname.startsWith('/analyses/')) {
-      if (!analysesModuleEnabled) {
-        navigate('/results')
-        return null
-      }
-
+    if (getAnalysisDetailRouteId(resolvedPathname)) {
       const canAccessAnalysisDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view analysis details.',
@@ -729,7 +723,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=candidates_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view candidates.',
       })
       if (!canAccessCandidates) {
@@ -750,7 +744,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=shortlists_upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to view shortlists.',
       })
       if (!canAccessShortlists) {
@@ -760,12 +754,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       return <ShortlistsPage />
     }
 
-    if (resolvedPathname.startsWith('/candidates/')) {
-      if (!candidateModuleEnabled) {
-        navigate('/results')
-        return null
-      }
-
+    if (getCandidateDetailRouteId(resolvedPathname)) {
       const canAccessCandidateDetail = guardAuthenticatedRoute({
         isAuthenticated,
         promptMessage: 'Please login to view candidate profiles.',
@@ -784,7 +773,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
         subscriptionStatus,
         subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=upgrade_required'),
+        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
         authPromptMessage: 'Please login to manage job descriptions.',
       })
       if (!canAccessJobDescriptions) {
@@ -1046,7 +1035,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     )
   }
 
-  const profileInitial = (userProfile?.name?.trim()?.[0] || userProfile?.email?.trim()?.[0] || 'U').toUpperCase()
   const handlePricingClick = () => navigate('/pricing')
   const handleFeaturesClick = () => {
     navigate('/')
@@ -1063,11 +1051,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
   const handleSolutionsClick = () => {
     navigate('/ai-resume-screening')
   }
-  const handleDashboardShortcutClick = () => {
-    setIsProfileMenuOpen(false)
-    navigate('/dashboard')
-  }
-
 
   const userShellNavItems = useMemo(() => {
     return [
@@ -1114,7 +1097,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     const isAuthenticatedAppRoute = isAuthenticated && (
       resolvedPathname === '/uploader'
       || resolvedPathname === '/analyses'
-      || resolvedPathname.startsWith('/analyses/')
+      || getAnalysisDetailRouteId(resolvedPathname)
       || shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
     )
 
@@ -1146,6 +1129,81 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
     setShellPageTitle('')
   }, [resolvedPathname])
 
+  const hasWorkspaceAccess = canAccessProductDashboard(profileBillingState)
+  const isAccessResolving = isAuthenticated && accessResolutionStatus === 'resolving'
+  const isAccessError = isAuthenticated && accessResolutionStatus === 'error'
+  const isAuthResolved = !isAuthenticated || accessResolutionStatus === 'resolved'
+  const useUserShellLayout = isAuthResolved && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
+  const useAccountShellLayout = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isAuthenticatedAccountShellRoutePath(resolvedPathname)
+  const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
+
+  useEffect(() => {
+    document.body.classList.toggle('user-app-shell-active', useUserShellLayout || useAccountShellLayout)
+
+    return () => {
+      document.body.classList.remove('user-app-shell-active')
+    }
+  }, [useAccountShellLayout, useUserShellLayout])
+
+  const isStandaloneDuringAccessResolution = isStandaloneOrdinaryUserAuthRoutePath(resolvedPathname) || useAuthRouteLayout
+  const shouldHoldForAccessResolution = isAuthenticated && !isStandaloneDuringAccessResolution
+  const isBlockedPaidWorkspaceRoute = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isPaidWorkspaceRoutePath(resolvedPathname)
+
+  useEffect(() => {
+    if (isBlockedPaidWorkspaceRoute) {
+      navigate('/pricing?reason=subscription_required', { replace: true })
+    }
+  }, [isBlockedPaidWorkspaceRoute])
+
+  if (normalizedLegacyAccountPath) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-loading">
+          <StatePattern kind="loading" title="Opening account settings…" description="Redirecting to the current account settings page." />
+        </main>
+      </>
+    )
+  }
+
+  if (isAccessResolving && shouldHoldForAccessResolution) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-loading">
+          <StatePattern kind="loading" title="Checking account access…" description="Confirming your account before opening this page." />
+        </main>
+      </>
+    )
+  }
+
+  if (isAccessError && shouldHoldForAccessResolution) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-error">
+          <StatePattern
+            kind="error"
+            title="We could not confirm account access"
+            description={accessResolutionError || 'Please retry before opening this account page.'}
+            action={<button type="button" className="route-state-card__action" onClick={onRetryAccessResolution}>Retry</button>}
+          />
+        </main>
+      </>
+    )
+  }
+
+  if (isBlockedPaidWorkspaceRoute) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <main className="route-state route-state--auth-loading">
+          <StatePattern kind="loading" title="Checking workspace access…" description="Confirming your account before opening this page." />
+        </main>
+      </>
+    )
+  }
+
   const pageContent = (
     <PublicRouteChunkErrorBoundary
       primaryAction={routeRecoveryActions.primaryAction}
@@ -1158,16 +1216,6 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
       </Suspense>
     </PublicRouteChunkErrorBoundary>
   )
-  const useUserShellLayout = shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
-  const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
-
-  useEffect(() => {
-    document.body.classList.toggle('user-app-shell-active', useUserShellLayout)
-
-    return () => {
-      document.body.classList.remove('user-app-shell-active')
-    }
-  }, [useUserShellLayout])
 
   if (isAdminPath) {
     return (
@@ -1188,12 +1236,29 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
           onLogout={onLogout}
           userProfile={userProfile}
           navItems={userShellNavItems}
+          hasWorkspaceAccess={hasWorkspaceAccess}
           subscriptionStatus={subscriptionStatus}
           pageTitleProp={shellPageTitle}
           showUpgradeCta={canViewUpgradePricing}
         >
           {pageContent}
         </UserAppShell>
+      </>
+    )
+  }
+
+  if (useAccountShellLayout) {
+    return (
+      <>
+        <PageSeo pathname={pathname} currentPage={currentPage} />
+        <AuthenticatedAccountShell
+          pathname={pathname}
+          onNavigate={navigate}
+          onLogout={onLogout}
+          userProfile={userProfile}
+        >
+          {pageContent}
+        </AuthenticatedAccountShell>
       </>
     )
   }
@@ -1236,7 +1301,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                 <button
                   type="button"
                   className="btn-ghost btn-ghost--accent"
-                  onClick={handleDashboardShortcutClick}
+                  onClick={() => navigate('/dashboard')}
                 >
                   Dashboard
                 </button>
@@ -1249,58 +1314,7 @@ function MainSite({ isAuthenticated, onLogout, onRequireAuth, pathname, onAuthSu
                   View pricing
                 </button>
               )}
-              <div className="site-profile-menu" ref={profileMenuRef}>
-                <button
-                  onClick={() => setIsProfileMenuOpen((open) => !open)}
-                  aria-haspopup="menu"
-                  aria-expanded={isProfileMenuOpen}
-                  aria-label="Open user menu"
-                  className="site-profile-menu__trigger"
-                >
-                  {profileInitial}
-                </button>
-
-                {isProfileMenuOpen && (
-                  <div
-                    role="menu"
-                    className="site-profile-menu__list"
-                  >
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        navigate('/account')
-                      }}
-                      className="site-profile-menu__item"
-                    >
-                      Account
-                    </button>
-                    {profileBillingState.canManageBilling ? (
-                      <button
-                        role="menuitem"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false)
-                          navigate('/billing')
-                        }}
-                        className="site-profile-menu__item"
-                      >
-                        Billing
-                      </button>
-                    ) : null}
-                    <div className="site-profile-menu__divider" />
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        onLogout()
-                      }}
-                      className="site-profile-menu__item site-profile-menu__item--danger"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
+              <AuthenticatedProfileMenu user={userProfile} onNavigate={navigate} onLogout={onLogout} />
             </>
           ) : (
             <>
@@ -1326,6 +1340,7 @@ export default function App() {
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
+  const [accessResolution, setAccessResolution] = useState(() => ({ status: getStoredToken() ? 'resolving' : 'resolved', error: '' }))
   const authSyncSequenceRef = useRef(0)
   const authSyncControllerRef = useRef(null)
 
@@ -1337,6 +1352,7 @@ export default function App() {
     setToken('')
     setSubscriptionStatus('inactive')
     setUserProfile(null)
+    setAccessResolution({ status: 'resolved', error: '' })
     if (message) {
       setAuthPrompt(message)
     }
@@ -1347,9 +1363,16 @@ export default function App() {
     const activeToken = getStoredToken()
 
     if (!activeToken) {
+      setAccessResolution({ status: 'resolved', error: '' })
       return null
     }
 
+    if (isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+      setAccessResolution({ status: 'resolved', error: '' })
+      return null
+    }
+
+    setAccessResolution({ status: 'resolving', error: '' })
     authSyncControllerRef.current?.abort()
     const controller = new AbortController()
     authSyncControllerRef.current = controller
@@ -1376,6 +1399,9 @@ export default function App() {
       }
 
       if (!response.ok) {
+        if (isLatestAuthSync() && getStoredToken() === activeToken) {
+          setAccessResolution({ status: 'error', error: 'We could not refresh your account. Please retry.' })
+        }
         return null
       }
 
@@ -1392,10 +1418,14 @@ export default function App() {
       setToken(activeToken)
       setSubscriptionStatus(nextSubscriptionStatus)
       setUserProfile(nextUserProfile || null)
+      setAccessResolution({ status: 'resolved', error: '' })
       return nextUserProfile
     } catch (error) {
       if (error?.name === 'AbortError') {
         return null
+      }
+      if (isLatestAuthSync() && getStoredToken() === activeToken) {
+        setAccessResolution({ status: 'error', error: 'We could not confirm your account. Please check your connection and retry.' })
       }
       return null
     } finally {
@@ -1403,19 +1433,27 @@ export default function App() {
         authSyncControllerRef.current = null
       }
     }
-  }, [clearAuthenticatedSession])
+  }, [clearAuthenticatedSession, pathname])
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
     const onAuthStateRefresh = () => {
-      setToken(getStoredToken())
+      const nextToken = getStoredToken()
+      setToken(nextToken)
       setSubscriptionStatus(getStoredSubscriptionStatus())
       setUserProfile(getStoredUserProfile())
-      void syncAuthenticatedUser()
+      setAccessResolution({ status: nextToken && !isStandaloneOrdinaryUserAuthRoutePath(pathname) ? 'resolving' : 'resolved', error: '' })
+      if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+        void syncAuthenticatedUser()
+      }
     }
     const onStorage = (event) => {
       if (event.key === TOKEN_STORAGE_KEY) {
         setToken(event.newValue || '')
+        setAccessResolution({ status: event.newValue && !isStandaloneOrdinaryUserAuthRoutePath(pathname) ? 'resolving' : 'resolved', error: '' })
+        if (event.newValue && !isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+          void syncAuthenticatedUser()
+        }
       }
 
       if (event.key === USER_STORAGE_KEY) {
@@ -1437,9 +1475,19 @@ export default function App() {
       window.removeEventListener('hireflow-auth-updated', onAuthStateRefresh)
       authSyncControllerRef.current?.abort()
     }
-  }, [syncAuthenticatedUser])
+  }, [pathname, syncAuthenticatedUser])
 
   const isAuthenticated = useMemo(() => Boolean(token), [token])
+
+
+  useEffect(() => {
+    if (!isAuthenticated || isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+      setAccessResolution({ status: 'resolved', error: '' })
+      return
+    }
+
+    void syncAuthenticatedUser()
+  }, [isAuthenticated, pathname, syncAuthenticatedUser])
 
   const handleAuthSuccess = (newToken, nextSubscriptionStatus = 'inactive', nextUserProfile = null, redirectPath = '/') => {
     const normalizedSubscriptionStatus = nextSubscriptionStatus || 'inactive'
@@ -1451,6 +1499,7 @@ export default function App() {
     setToken(newToken)
     setSubscriptionStatus(normalizedSubscriptionStatus)
     setUserProfile(nextUserProfile)
+    setAccessResolution({ status: 'resolving', error: '' })
     setAuthPrompt('')
     navigate(redirectPath)
   }
@@ -1486,11 +1535,13 @@ export default function App() {
     }
 
     const handleWindowFocus = () => {
-      void syncAuthenticatedUser()
+      if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+        void syncAuthenticatedUser()
+      }
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
         void syncAuthenticatedUser()
       }
     }
@@ -1503,7 +1554,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       authSyncControllerRef.current?.abort()
     }
-  }, [isAuthenticated, syncAuthenticatedUser])
+  }, [isAuthenticated, pathname, syncAuthenticatedUser])
 
   useEffect(() => {
     // Authenticated users are intentionally redirected away from auth forms to the home route.
@@ -1525,6 +1576,9 @@ export default function App() {
       <CookieConsentProvider>
         <MainSite
           isAuthenticated={isAuthenticated}
+          accessResolutionStatus={accessResolution.status}
+          accessResolutionError={accessResolution.error}
+          onRetryAccessResolution={() => { void syncAuthenticatedUser() }}
           onLogout={logout}
           onRequireAuth={requireAuth}
           pathname={pathname}

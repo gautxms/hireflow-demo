@@ -1,14 +1,6 @@
-import { Bell } from 'lucide-react'
-import { getAppHeaderInitials } from './appHeaderInitials.js'
+import AuthenticatedProfileMenu from './AuthenticatedProfileMenu'
 
-export default function AppHeader({ user, isSubscribed, pageTitle }) {
-  const navigateTo = (path) => {
-    if (typeof window !== 'undefined' && window?.location) {
-      window.location.href = path
-    }
-  }
-
-  const initials = getAppHeaderInitials(user)
+export default function AppHeader({ user, isSubscribed, pageTitle, onNavigate, onLogout }) {
   const analysesLeft = user?.analysesRemaining ?? null
 
   return (
@@ -23,12 +15,12 @@ export default function AppHeader({ user, isSubscribed, pageTitle }) {
           <div className="app-header-free-strip">
             <span className="app-header-free-text">
               {analysesLeft != null
-                ? `Free plan · ${analysesLeft} analyses remaining`
-                : 'Free plan'}
+                ? `Subscription required · ${analysesLeft} analyses remaining`
+                : 'Subscription required'}
             </span>
             <button className="app-header-upgrade-btn"
-              onClick={() => navigateTo('/pricing')}>
-              Upgrade
+              onClick={() => onNavigate('/pricing')}>
+              View plans
             </button>
           </div>
         )}
@@ -38,17 +30,7 @@ export default function AppHeader({ user, isSubscribed, pageTitle }) {
           <span className="app-header-pro-badge">Plan</span>
         )}
 
-        {/* Bell */}
-        <button className="app-header-icon-btn" title="Notifications">
-          <Bell size={18} strokeWidth={1.5} />
-        </button>
-
-        {/* Avatar */}
-        <div className="app-header-avatar"
-          title={user?.name || 'Account'}
-          onClick={() => navigateTo('/settings')}>
-          {initials}
-        </div>
+        <AuthenticatedProfileMenu user={user} onNavigate={onNavigate} onLogout={onLogout} className="app-header-profile-menu" />
 
       </div>
     </header>
