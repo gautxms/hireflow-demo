@@ -3,51 +3,54 @@ import ContentDocument from './ContentDocument'
 export default function TrustPage() {
   return (
     <ContentDocument title="Trust and responsible AI" eyebrow="Trust">
-      <p className="content-document__paragraph"><strong>Last updated: July 11, 2026</strong></p>
+      <p className="content-document__paragraph"><strong>Last updated: July 13, 2026</strong></p>
       <p className="content-document__paragraph">
-        HireFlow is an early-access AI-assisted recruiting workflow product. It helps teams structure resume review, compare candidate materials against role requirements, and keep recruiters and hiring managers responsible for final decisions.
+        HireFlow is an early-access AI-assisted recruiting workflow product built to help teams move faster while keeping recruiters and hiring managers in control. This page summarizes the safeguards, policies, and support paths that help customers use HireFlow with confidence.
       </p>
 
-      <h2 className="content-document__heading">What HireFlow processes</h2>
+      <h2 className="content-document__heading">Recruiter-led by design</h2>
       <p className="content-document__paragraph">
-        Depending on how customers use the service, HireFlow may process account information, job descriptions, uploaded resumes, extracted resume text, candidate analysis results, workflow metadata, shortlists, support or contact information, and technical logs needed to operate and troubleshoot the product.
+        HireFlow structures resume review, compares candidate materials against role requirements, and presents reasoning that hiring teams can inspect. AI-assisted outputs are designed to support human review, not replace recruiter judgment or make final employment decisions.
+      </p>
+      <p className="content-document__paragraph">
+        Teams should review candidate materials, role context, and HireFlow output together before deciding who to interview, shortlist, advance, or reject.
       </p>
 
-      <h2 className="content-document__heading">How AI is used</h2>
+      <h2 className="content-document__heading">Privacy-conscious workflows</h2>
       <p className="content-document__paragraph">
-        HireFlow uses AI to support requested resume and job-description analysis workflows. AI output may include scores, summaries, strengths, gaps, skills, recent experience, missing requirements, recommendations, and reasoning based on the information provided by the customer.
+        Depending on customer use, HireFlow may process account information, job descriptions, uploaded resumes, extracted resume text, candidate analysis results, workflow metadata, shortlists, support information, and technical logs needed to provide and maintain the service.
       </p>
       <p className="content-document__paragraph">
-        AI output is decision support only. HireFlow must not be used as the sole basis for hiring, rejection, interview, or shortlist decisions. Human review by recruiters and hiring managers is required before taking action on a candidate.
-      </p>
-
-      <h2 className="content-document__heading">Current safeguards</h2>
-      <p className="content-document__paragraph">
-        HireFlow is designed with safeguards appropriate for an early-access SaaS product, including authenticated app access, HTTP-only auth cookies where applicable, rate limiting, CORS allowlisting, upload validation, upload size and batch limits, async processing with persisted status, production-safe logging defaults where applicable, and support-based deletion, access, correction, and export requests.
-      </p>
-      <p className="content-document__paragraph">
-        File scanning may be available only when optional production configuration is enabled. HireFlow does not claim that all uploads are malware scanned.
+        Candidate data is used to provide requested recruiting workflows, support the product, prevent abuse, troubleshoot reliability issues, and maintain appropriate business records. Privacy and data-handling details are covered in the <a className="content-document__link" href="/privacy">Privacy Policy</a> and <a className="content-document__link" href="/terms">Terms of Service</a>.
       </p>
 
-      <h2 className="content-document__heading">Current limitations</h2>
+      <h2 className="content-document__heading">Operational safeguards</h2>
       <p className="content-document__paragraph">
-        HireFlow is early-stage software. We do not claim SOC 2 certification, ISO 27001 certification, GDPR certification, CCPA certification, EEOC certification, completed third-party audits, completed penetration tests, bias-free AI, or guaranteed AI accuracy.
+        HireFlow uses safeguards appropriate for an early-access SaaS product, including authenticated app access, HTTP-only auth cookies where applicable, rate limiting, CORS allowlisting, upload validation, upload size and batch limits, async processing with persisted status, and production-safe logging defaults where applicable.
       </p>
       <p className="content-document__paragraph">
-        AI can make mistakes or miss context. Resume extraction quality can vary for scanned, image-only, malformed, encrypted, or incomplete files. Production posture also depends on correctly configured production infrastructure and environment variables.
-      </p>
-
-      <h2 className="content-document__heading">Customer responsibilities</h2>
-      <p className="content-document__paragraph">
-        Customers are responsible for having appropriate permission or another lawful basis to upload candidate data. Customers are also responsible for complying with employment, privacy, anti-discrimination, data protection, notice, consent, and recordkeeping obligations that apply to their hiring workflows.
-      </p>
-      <p className="content-document__paragraph">
-        Recruiters and hiring managers must independently review AI-assisted outputs, candidate materials, role requirements, and any other relevant context before making hiring, rejection, interview, or shortlist decisions.
+        Uploads are validated for supported file types, file size, and batch limits before processing. Operational safeguards are reviewed as part of launch readiness and ongoing maintenance.
       </p>
 
-      <h2 className="content-document__heading">Contact and related policies</h2>
+      <h2 className="content-document__heading">Responsible AI overview</h2>
       <p className="content-document__paragraph">
-        Questions about HireFlow trust, privacy, responsible AI, or candidate data requests can be sent to <a className="content-document__link" href="mailto:Hello@hireflow.dev">Hello@hireflow.dev</a>.
+        HireFlow uses AI to support requested resume and job-description analysis workflows. AI output may be incomplete or mistaken, so it should be treated as structured decision support and reviewed by qualified people before any hiring action is taken.
+      </p>
+      <p className="content-document__paragraph">
+        For the detailed policy language on AI outputs, limitations, and responsible customer use, review the <a className="content-document__link" href="/ai-disclosure">AI Disclosure</a>.
+      </p>
+
+      <h2 className="content-document__heading">Current scope</h2>
+      <p className="content-document__paragraph">
+        HireFlow is an early-access product and does not present itself as a formally audited or certified compliance platform. We avoid unsupported claims and provide clear policies for privacy, responsible AI, billing, and customer use.
+      </p>
+      <p className="content-document__paragraph">
+        Customers remain responsible for using HireFlow in a lawful hiring process, including meeting employment, privacy, anti-discrimination, data protection, notice, consent, and recordkeeping obligations that apply to their organization and candidates.
+      </p>
+
+      <h2 className="content-document__heading">Support and related policies</h2>
+      <p className="content-document__paragraph">
+        Questions about HireFlow trust, privacy, responsible AI, billing, or candidate data requests can be sent to <a className="content-document__link" href="mailto:Hello@hireflow.dev">Hello@hireflow.dev</a>.
       </p>
       <ul className="content-document__list">
         <li><a className="content-document__link" href="/privacy">Privacy Policy</a></li>
