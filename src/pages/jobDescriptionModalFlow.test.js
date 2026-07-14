@@ -8,7 +8,7 @@ const listSource = readFileSync(new URL('../components/JobDescriptionList.jsx', 
 
 test('job modal supports create/edit open paths and closes on success', () => {
   assert.match(pageSource, /setModalMode\('create'\)/)
-  assert.match(pageSource, /setModalMode\('edit'\)/)
+  assert.match(pageSource, /setModalMode\(isReadOnly \? 'view' : 'edit'\)/)
   assert.match(pageSource, /setIsModalOpen\(true\)/)
   assert.match(pageSource, /setIsModalOpen\(false\)/)
   assert.match(pageSource, /await fetchItems\(\)[\s\S]*setIsModalOpen\(false\)/)

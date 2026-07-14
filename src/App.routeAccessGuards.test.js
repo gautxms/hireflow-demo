@@ -16,10 +16,18 @@ test('paid route block is decided before page content construction', () => {
 })
 
 test('blocked paid route uses exactly one replace navigation to subscription pricing', () => {
-  const block = source.slice(source.indexOf('useEffect(() => {\n    if (isBlockedPaidWorkspaceRoute)'), source.indexOf('if (isAccessResolving && isProtectedAccessRoute)'))
+  const blockStart = source.indexOf('if (isBlockedPaidWorkspaceRoute)')
+  const block = source.slice(blockStart, source.indexOf('if (normalizedLegacyAccountPath)', blockStart))
   const redirectMatches = block.match(/navigate\('\/pricing\?reason=subscription_required', \{ replace: true \}\)/g) || []
 
   assert.equal(redirectMatches.length, 1)
+})
+
+test('historical Jobs is the only paid workspace route opened by the read-only shell phase', () => {
+  assert.match(source, /resolvedPathname === '\/job-descriptions'[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, subscriptionStateOrStatus\)/)
+  assert.match(source, /const hasReadOnlyJobDescriptionsAccess = [\s\S]*resolvedPathname === '\/job-descriptions'[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, profileBillingState\)/)
+  assert.match(source, /isPaidWorkspaceRoutePath\(resolvedPathname\)[\s\S]*&& !hasReadOnlyJobDescriptionsAccess/)
+  assert.match(source, /<JobDescriptionPage[\s\S]*isReadOnly=\{!profileBillingState\.canUsePaidMutation\}/)
 })
 
 test('blocked guards return before page evaluation can run fallbacks or intent mutation paths', () => {

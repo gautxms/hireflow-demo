@@ -121,7 +121,7 @@ test('route policy helper honors resolved read-only subscription state booleans'
   })
 
   assert.equal(resolvedState.isReadOnlyWorkspace, true)
-  for (const path of ['/analyses', '/jobs', '/candidates/candidate-123', '/results']) {
+  for (const path of ['/analyses', '/jobs', '/job-descriptions', '/candidates/candidate-123', '/results']) {
     assert.equal(canAccessRouteForSubscriptionState(path, resolvedState), true, `${path} should allow resolved read-only access`)
   }
 

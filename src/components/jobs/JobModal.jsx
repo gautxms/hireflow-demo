@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import JobDescriptionForm from '../JobDescriptionForm'
 
-export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting, onSubmit, onClose, triggerRef, errorMessage }) {
+export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting, onSubmit, onClose, triggerRef, errorMessage, readOnly = false }) {
   const dialogRef = useRef(null)
   const wasOpenRef = useRef(false)
 
@@ -37,13 +37,13 @@ export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting,
       <div ref={dialogRef} className="ui-card ui-card--card-spacing ui-modal__dialog job-modal__dialog">
         <div className="job-modal__header">
           <div>
-            <h2 id="job-modal-title" className="job-modal__title">{mode === 'edit' ? 'Edit Job' : 'Create Job'}</h2>
-            <p className="job-modal__subtitle">Create and maintain structured job profiles for analysis workflows.</p>
+            <h2 id="job-modal-title" className="job-modal__title">{readOnly ? 'View Job' : (mode === 'edit' ? 'Edit Job' : 'Create Job')}</h2>
+            <p className="job-modal__subtitle">{readOnly ? 'Review the stored job profile and its attachment.' : 'Create and maintain structured job profiles for analysis workflows.'}</p>
           </div>
           <button type="button" className="job-modal__close" aria-label="Close job modal" onClick={onClose} disabled={isSubmitting}><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
         </div>
         {errorMessage ? <p className="job-modal__error" role="alert">{errorMessage}</p> : null}
-        <JobDescriptionForm initialValue={item} resetToken={resetToken} onSubmit={onSubmit} onCancel={onClose} isSubmitting={isSubmitting} />
+        <JobDescriptionForm initialValue={item} resetToken={resetToken} onSubmit={onSubmit} onCancel={onClose} isSubmitting={isSubmitting} readOnly={readOnly} />
       </div>
     </div>, document.body,
   )

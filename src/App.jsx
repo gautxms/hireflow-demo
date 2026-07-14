@@ -74,7 +74,7 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
-import { canonicalizePathname, getAnalysisDetailRouteId, getCandidateDetailRouteId, isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isStandaloneOrdinaryUserAuthRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
+import { canAccessRouteForSubscriptionState, canonicalizePathname, getAnalysisDetailRouteId, getCandidateDetailRouteId, isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isStandaloneOrdinaryUserAuthRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
@@ -183,7 +183,7 @@ function shouldDisableUserShell(pathname) {
 }
 
 function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStateOrStatus = 'inactive') {
-  if (!isAuthenticated || !canAccessProductDashboard(subscriptionStateOrStatus)) {
+  if (!isAuthenticated) {
     return false
   }
 
@@ -195,6 +195,16 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
   const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
 
   if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
+    return false
+  }
+
+  const canAccessWorkspaceShell = canAccessProductDashboard(subscriptionStateOrStatus)
+    || (
+      resolvedPathname === '/job-descriptions'
+      && canAccessRouteForSubscriptionState(resolvedPathname, subscriptionStateOrStatus)
+    )
+
+  if (!canAccessWorkspaceShell) {
     return false
   }
 
@@ -768,19 +778,21 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (resolvedPathname === '/job-descriptions') {
-      const canAccessJobDescriptions = guardSubscriptionRoute({
+      const canAccessJobDescriptions = guardAuthenticatedRoute({
         isAuthenticated,
-        subscriptionStatus,
-        subscriptionState: profileBillingState,
+        promptMessage: 'Please login to view job descriptions.',
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
-        authPromptMessage: 'Please login to manage job descriptions.',
       })
       if (!canAccessJobDescriptions) {
         return null
       }
 
-      return <JobDescriptionPage onRequireAuth={onRequireAuth} />
+      return (
+        <JobDescriptionPage
+          onRequireAuth={onRequireAuth}
+          isReadOnly={!profileBillingState.canUsePaidMutation}
+        />
+      )
     }
 
     if (resolvedPathname === '/account/payment-method') {
@@ -1053,6 +1065,13 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
   }
 
   const userShellNavItems = useMemo(() => {
+    if (profileBillingState.isReadOnlyWorkspace && !profileBillingState.canUsePaidMutation) {
+      return [
+        { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'jobs' },
+        { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
+      ]
+    }
+
     return [
       { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
       { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'jobs' },
@@ -1069,7 +1088,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
       },
       { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
     ]
-  }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled])
+  }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled, profileBillingState.canUsePaidMutation, profileBillingState.isReadOnlyWorkspace])
 
 
   useEffect(() => {
@@ -1147,7 +1166,15 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
   const isStandaloneDuringAccessResolution = isStandaloneOrdinaryUserAuthRoutePath(resolvedPathname) || useAuthRouteLayout
   const shouldHoldForAccessResolution = isAuthenticated && !isStandaloneDuringAccessResolution
-  const isBlockedPaidWorkspaceRoute = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isPaidWorkspaceRoutePath(resolvedPathname)
+  const hasReadOnlyJobDescriptionsAccess = isAuthResolved
+    && isAuthenticated
+    && resolvedPathname === '/job-descriptions'
+    && canAccessRouteForSubscriptionState(resolvedPathname, profileBillingState)
+  const isBlockedPaidWorkspaceRoute = isAuthResolved
+    && isAuthenticated
+    && !hasWorkspaceAccess
+    && isPaidWorkspaceRoutePath(resolvedPathname)
+    && !hasReadOnlyJobDescriptionsAccess
 
   useEffect(() => {
     if (isBlockedPaidWorkspaceRoute) {

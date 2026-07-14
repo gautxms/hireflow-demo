@@ -114,3 +114,17 @@ test('authenticated resolved inactive profile remains upgrade eligible without w
   assert.equal(inactive.workspaceAccessForFlags, false)
   assert.equal(inactive.canViewUpgradePricing, true)
 })
+
+test('authenticated resolved inactive profile with history gets read-only state without paid mutation access', () => {
+  const inactiveWithHistory = buildResolvedAccessContext({
+    isAuthenticated: true,
+    accessResolutionStatus: 'resolved',
+    subscriptionStatus: 'inactive',
+    userProfile: { subscription_status: 'inactive', hasHistoricalData: true },
+  })
+
+  assert.equal(inactiveWithHistory.profileBillingState.isReadOnlyWorkspace, true)
+  assert.equal(inactiveWithHistory.profileBillingState.canUsePaidMutation, false)
+  assert.equal(inactiveWithHistory.workspaceAccessForFlags, false)
+  assert.equal(inactiveWithHistory.canViewUpgradePricing, true)
+})

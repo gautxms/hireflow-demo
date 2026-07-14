@@ -52,6 +52,7 @@ function activeDbUser(overrides = {}) {
     created_at: '2026-07-01T00:00:00.000Z',
     deleted_at: null,
     deletion_scheduled_for: null,
+    hasHistoricalData: true,
     ...overrides,
   }
 }
@@ -107,8 +108,12 @@ test('GET /profile/me returns fresh subscription fields from database despite st
   assert.equal(payload.user.paddle_subscription_id, 'sub_123')
   assert.equal(payload.user.current_period_end, '2026-08-01T00:00:00.000Z')
   assert.equal(payload.user.next_billing_date, '2026-08-01T00:00:00.000Z')
+  assert.equal(payload.user.hasHistoricalData, true)
   assert.equal(queries.length, 1)
   assert.match(queries[0].sql, /FROM users\s+WHERE id = \$1/)
+  for (const table of ['job_descriptions', 'resumes', 'analyses', 'candidate_profiles', 'shortlists', 'report_definitions']) {
+    assert.match(queries[0].sql, new RegExp(`EXISTS \\(SELECT 1 FROM ${table}`))
+  }
 })
 
 test('Account settings subscription state treats fresh active /profile/me user as billing-manageable', () => {

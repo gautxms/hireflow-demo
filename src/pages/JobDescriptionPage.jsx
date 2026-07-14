@@ -7,7 +7,7 @@ import '../styles/job-description.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
-export default function JobDescriptionPage({ onRequireAuth }) {
+export default function JobDescriptionPage({ onRequireAuth, isReadOnly = false }) {
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -52,24 +52,26 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   }, [fetchItems])
 
   const handleOpenCreate = useCallback((trigger) => {
+    if (isReadOnly) return
     modalTriggerRef.current = trigger || null
     setModalMode('create')
     setActiveItem(null)
     setResetToken((current) => current + 1)
     setModalError('')
     setIsModalOpen(true)
-  }, [])
+  }, [isReadOnly])
 
   const handleOpenEdit = useCallback((item, trigger) => {
     modalTriggerRef.current = trigger || null
-    setModalMode('edit')
+    setModalMode(isReadOnly ? 'view' : 'edit')
     setActiveItem(item)
     setResetToken((current) => current + 1)
     setModalError('')
     setIsModalOpen(true)
-  }, [])
+  }, [isReadOnly])
 
   const handleModalSubmit = useCallback(async (nextValues) => {
+    if (isReadOnly) return
     if (!token) {
       onRequireAuth?.('Please login to manage job descriptions.')
       return
@@ -106,7 +108,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     } finally {
       setIsSubmitting(false)
     }
-  }, [activeItem, fetchItems, modalMode, onRequireAuth, token])
+  }, [activeItem, fetchItems, isReadOnly, modalMode, onRequireAuth, token])
 
   const archiveJob = useCallback(async (item) => {
     const response = await fetch(`${API_BASE}/job-descriptions/${item.id}`, {
@@ -123,6 +125,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
   const [archivingJobId, setArchivingJobId] = useState('')
 
   const handleArchive = useCallback(async (item) => {
+    if (isReadOnly) return
     const confirmedArchive = window.confirm(
       'Archive this job? It will be hidden from active job lists, but historical analyses and candidate results will remain available.',
     )
@@ -140,7 +143,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
     } finally {
       setArchivingJobId('')
     }
-  }, [archiveJob])
+  }, [archiveJob, isReadOnly])
 
   return (
     <section className="analyses-layout job-description-page">
@@ -148,13 +151,20 @@ export default function JobDescriptionPage({ onRequireAuth }) {
         <header className="analyses-page__header">
           <div>
             <h1>Jobs</h1>
-            <p>Manage your job descriptions used for resume screening workflows.</p>
+            <p>{isReadOnly ? 'View your historical job descriptions and attachments.' : 'Manage your job descriptions used for resume screening workflows.'}</p>
           </div>
-          <button type="button" className="btn-primary" onClick={(event) => handleOpenCreate(event.currentTarget)}>
-            Create Job
-          </button>
+          {!isReadOnly ? (
+            <button type="button" className="btn-primary" onClick={(event) => handleOpenCreate(event.currentTarget)}>
+              Create Job
+            </button>
+          ) : null}
         </header>
 
+        {isReadOnly ? (
+          <p className="analyses-layout__state">
+            Read-only access: historical jobs remain available, but creating or changing jobs requires an active subscription.
+          </p>
+        ) : null}
         {successMessage ? <p className="analyses-layout__state">{successMessage}</p> : null}
         {isLoading ? <p className="analyses-layout__state analyses-layout__state--loading">Loading jobs…</p> : null}
         {!isLoading && error ? (
@@ -164,11 +174,11 @@ export default function JobDescriptionPage({ onRequireAuth }) {
         ) : null}
         {!isLoading && !error && items.length === 0 ? (
           <p className="analyses-layout__state analyses-layout__state--empty">
-            No jobs yet. Create your first job to get started.
+            {isReadOnly ? 'No historical jobs are available.' : 'No jobs yet. Create your first job to get started.'}
           </p>
         ) : null}
         {!isLoading && !error && items.length > 0 ? (
-          <JobsTable items={items} onEdit={handleOpenEdit} onArchive={handleArchive} archivingId={archivingJobId} />
+          <JobsTable items={items} onEdit={handleOpenEdit} onArchive={handleArchive} archivingId={archivingJobId} readOnly={isReadOnly} />
         ) : null}
 
         <JobModal
@@ -181,6 +191,7 @@ export default function JobDescriptionPage({ onRequireAuth }) {
           onClose={() => setIsModalOpen(false)}
           triggerRef={modalTriggerRef}
           errorMessage={modalError}
+          readOnly={isReadOnly}
         />
       </div>
     </section>
