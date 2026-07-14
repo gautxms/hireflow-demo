@@ -49,6 +49,7 @@ export default function AccountSettingsPage() {
   const isProfileDirty = Boolean(profile) && (company !== (profile.company || '') || phone !== (profile.phone || ''))
   const subscriptionState = useMemo(() => resolveSubscriptionState({ user: profile }), [profile])
   const billingPrimaryHref = subscriptionState.isFree ? '/pricing' : '/billing'
+  const billingPrimaryLabel = subscriptionState.isFree ? 'View pricing' : 'Open Billing & Plans'
 
   const pushToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -375,10 +376,7 @@ export default function AccountSettingsPage() {
         <p className="type-body account-settings-card-helper">Manage plan, invoices, and renewal details from Billing &amp; Plans.</p>
         <div className="account-settings-actions">
           <a className="type-button account-settings-button" href={billingPrimaryHref}>
-            {subscriptionState.isFree ? 'View pricing' : 'Open Billing &amp; Plans'}
-          </a>
-          <a className="type-button account-settings-button" href={subscriptionState.isFree ? '/pricing' : '/billing'}>
-            {subscriptionState.isFree ? 'Compare plan options' : 'Manage plan'}
+            {billingPrimaryLabel}
           </a>
         </div>
       </section>
