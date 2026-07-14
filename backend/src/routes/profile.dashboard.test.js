@@ -51,3 +51,19 @@ test('dashboard CSV export includes resume analysis count and monthly usage fiel
     assert.match(profileRouteSource, new RegExp(key))
   }
 })
+
+test('dashboard historical metrics and CSV export remain authenticated owner-scoped GET reads', () => {
+  const authIndex = profileRouteSource.indexOf('router.use(requireAuth)')
+  const dashboardStart = profileRouteSource.indexOf("router.get('/dashboard/kpis'")
+  const dashboardEnd = profileRouteSource.indexOf("router.get('/me'", dashboardStart)
+  const dashboardRoute = profileRouteSource.slice(dashboardStart, dashboardEnd)
+
+  assert.ok(authIndex >= 0)
+  assert.ok(dashboardStart > authIndex)
+  assert.ok(dashboardEnd > dashboardStart)
+  assert.match(dashboardRoute, /userId: req\.user\.id/)
+  assert.match(dashboardRoute, /WHERE a\.user_id = \$1/)
+  assert.match(dashboardRoute, /WHERE user_id = \$1/)
+  assert.match(dashboardRoute, /exportFormat === 'csv'/)
+  assert.doesNotMatch(dashboardRoute, /router\.(post|put|patch|delete)/)
+})
