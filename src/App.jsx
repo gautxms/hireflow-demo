@@ -109,7 +109,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/refund-policy',
   ...INTENT_PAGE_ORDER,
 ])
-const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/job-descriptions', '/analyses', '/candidates', '/shortlists', '/reports'])
+const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/dashboard', '/job-descriptions', '/analyses', '/candidates', '/shortlists', '/reports'])
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -479,22 +479,19 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (resolvedPathname === '/dashboard') {
-      const canAccessDashboard = guardSubscriptionRoute({
+      const canAccessDashboard = guardAuthenticatedRoute({
         isAuthenticated,
-        subscriptionStatus,
-        subscriptionState: profileBillingState,
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
-        authPromptMessage: 'Please login to view the dashboard.',
+        promptMessage: 'Please login to view the dashboard.',
       })
       if (!canAccessDashboard) {
         return null
       }
-      if (!dashboardReportsEnabled) {
+      if (!canViewReportsHistory) {
         return <LegacyOperationsDashboard onNavigate={handleNavigate} />
       }
 
-      return <OperationsDashboard onNavigate={handleNavigate} />
+      return <OperationsDashboard onNavigate={handleNavigate} isReadOnly={!profileBillingState.canUsePaidMutation} />
     }
 
     if (resolvedPathname === '/dashboard/legacy') {
@@ -1061,6 +1058,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
   const userShellNavItems = useMemo(() => {
     if (profileBillingState.isReadOnlyWorkspace && !profileBillingState.canUsePaidMutation) {
       return [
+        { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
         { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'jobs' },
         ...(canViewAnalysesHistory ? [{ key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'analyses' }] : []),
         ...(canViewCandidateHistory ? [{ key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'candidates' }] : []),
