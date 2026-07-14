@@ -294,7 +294,7 @@ test('shortlist add flow supports create-or-select destination inline', () => {
 
 test('drawer add to shortlist opens reusable modal with exactly one candidate and no preselected shortlist requirement', () => {
   assert.match(candidateResultsSource, /const \[addModalCandidates, setAddModalCandidates\] = useState\(\[\]\)/)
-  assert.match(candidateResultsSource, /const openAddToShortlistModal = useCallback\(\(candidatesToAdd\) => \{\s*const nextCandidates = Array\.isArray\(candidatesToAdd\) \? candidatesToAdd\.filter\(Boolean\) : \[\]\s*setAddModalCandidates\(nextCandidates\)\s*setIsAddModalOpen\(nextCandidates\.length > 0\)/s)
+  assert.match(candidateResultsSource, /const openAddToShortlistModal = useCallback\(\(candidatesToAdd\) => \{\s*if \(isReadOnly\) return\s*const nextCandidates = Array\.isArray\(candidatesToAdd\) \? candidatesToAdd\.filter\(Boolean\) : \[\]\s*setAddModalCandidates\(nextCandidates\)\s*setIsAddModalOpen\(nextCandidates\.length > 0\)/s)
   assert.match(candidateResultsSource, /onClick=\{\(\) => openAddToShortlistModal\(\[candidate\]\)\}>Add to shortlist/)
   assert.doesNotMatch(candidateResultsSource, /onClick=\{\(\) => addCandidateToShortlist\(candidate\)\}>Add to shortlist/)
 })
@@ -351,8 +351,8 @@ test('legacy shortlist add path still invokes single-candidate flow when shortli
   assert.match(candidateResultsSource, /if \(!shortlistV2Enabled\) \{\s*let fallbackSuccessCount = 0\s*for \(const candidate of selected\) \{\s*\/\/ Preserve legacy single-candidate shortlist flow when v2 is disabled\.\s*const ok = await addCandidateToShortlist\(candidate(?:, destinationShortlistId)?\)/s)
 })
 
-test('shortlist selector panel can render regardless of shortlistV2 flag', () => {
-  assert.match(candidateResultsSource, /\{shortlistOpen && \(/)
+test('shortlist selector panel can render for paid users regardless of shortlistV2 flag', () => {
+  assert.match(candidateResultsSource, /\{!isReadOnly && shortlistOpen && \(/)
   assert.doesNotMatch(candidateResultsSource, /\{shortlistV2Enabled && shortlistOpen && \(/)
 })
 
