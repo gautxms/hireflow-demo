@@ -1,25 +1,12 @@
 import { getFutureSubscriptionEndDate, hasExplicitScheduledCancellationSignal, hasScheduledCancellationAccess, normalizeSubscriptionStatus } from '../utils/subscriptionState.js'
 
-export const BILLING_SUPPORT_RESOLUTION_HREF = 'mailto:Hello@hireflow.dev?subject=Billing%20resolution%20request'
-
 export function isPastDueBillingState(subscriptionState) {
   const status = normalizeSubscriptionStatus(subscriptionState?.rawStatus || subscriptionState?.status || subscriptionState?.subscription_status)
   return subscriptionState?.isPastDue === true || status === 'payment_failed'
 }
 
 export function getPastDueBillingNotice() {
-  return 'Payment is required to continue. Your workspace is read-only until billing is resolved.'
-}
-
-export function getPastDueBillingAction(subscriptionState) {
-  if (!isPastDueBillingState(subscriptionState)) return null
-
-  return {
-    kind: 'contact-support',
-    label: 'Contact support to resolve billing',
-    href: BILLING_SUPPORT_RESOLUTION_HREF,
-    isSelfServe: false,
-  }
+  return 'Payment is required to continue. Your workspace is read-only until billing is resolved. Contact hello@hireflow.dev for billing support.'
 }
 
 export function getBillingPlanAction(plan, subscriptionState = null) {
