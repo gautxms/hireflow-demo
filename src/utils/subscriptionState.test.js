@@ -6,6 +6,8 @@ import {
   hasActiveSubscription,
   getFutureSubscriptionEndDate,
   hasScheduledCancellationAccess,
+  canUsePaidMutation,
+  isReadOnlyWorkspace,
   resolveSubscriptionState,
 } from './subscriptionState.js'
 
@@ -86,8 +88,6 @@ test('recognized scheduled status with future date is scheduled', () => {
   assert.equal(hasScheduledCancellationAccess({ status: 'pending_cancellation', paidThroughDate: FUTURE }, NOW), true)
 })
 
-
-
 test('future date selection skips malformed cancellationEffectiveAt and falls through to currentPeriodEnd', () => {
   const endDate = getFutureSubscriptionEndDate({ cancellationEffectiveAt: 'not-a-date', currentPeriodEnd: FUTURE }, NOW)
 
@@ -140,8 +140,6 @@ test('active subscription with stale future cancellationEffectiveAt but no signa
   assert.equal(resolved.isCancellationScheduled, false)
   assert.equal(resolved.cancelAtPeriodEnd, false)
 })
-
-
 
 test('active subscription with cancelAtPeriodEnd and missing date is not read-only expired', () => {
   const resolved = state({ status: 'active', cancelAtPeriodEnd: true })
@@ -233,7 +231,6 @@ test('past due users are payment issue states without product dashboard access',
   assert.equal(resolved.canManageBilling, true)
 })
 
-
 test('payment_failed users are past-due manageable billing states without product dashboard access', () => {
   const resolved = state({ status: 'payment_failed', plan: 'monthly', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })
 
@@ -252,8 +249,6 @@ test('paused users are provider-managed billing states without dashboard access'
   assert.equal(resolved.canManageBilling, true)
 })
 
-
-
 test('trial alias and scheduled statuses with provider IDs can manage billing', () => {
   for (const status of ['trial', 'cancellation_scheduled', 'cancel_scheduled', 'pending_cancellation', 'scheduled_cancellation']) {
     const resolved = state({ status, paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123', currentPeriodEnd: FUTURE })
@@ -267,4 +262,72 @@ test('billing page rendering requires management access or valid provider billin
 
   assert.equal(canRenderBillingPage(freeWithCustomerOnly), false)
   assert.equal(canRenderBillingPage(canceledProviderState), true)
+})
+
+test('read-only workspace helper keeps active users full access only', () => {
+  const resolved = state({ status: 'active', plan: 'monthly', hasHistoricalData: true })
+
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.canUsePaidMutation, true)
+  assert.equal(resolved.canAccessProductDashboard, true)
+  assert.equal(resolved.isReadOnlyWorkspace, false)
+  assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: true, now: NOW }), false)
+})
+
+test('read-only workspace helper preserves trial and trialing full-access behavior', () => {
+  for (const status of ['trialing', 'trial']) {
+    const resolved = state({ status, hasHistoricalData: true })
+
+    assert.equal(resolved.hasActivePaidAccess, true, `${status} keeps full access`)
+    assert.equal(canUsePaidMutation(resolved, NOW), true, `${status} keeps paid mutation access`)
+    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: true, now: NOW }), false, `${status} is not read-only`)
+  }
+})
+
+test('read-only workspace helper keeps future scheduled cancellation full access', () => {
+  const resolved = state({ status: 'cancelled', cancellationEffectiveAt: FUTURE, hasHistoricalData: true })
+
+  assert.equal(resolved.hasScheduledCancellationAccess, true)
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.canUsePaidMutation, true)
+  assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: true, now: NOW }), false)
+})
+
+test('read-only workspace helper requires historical data after cancellation access ends', () => {
+  const expired = state({ status: 'cancelled', cancellationEffectiveAt: PAST })
+
+  assert.equal(expired.hasActivePaidAccess, false)
+  assert.equal(expired.canUsePaidMutation, false)
+  assert.equal(isReadOnlyWorkspace(expired, { hasHistoricalData: false, now: NOW }), false)
+  assert.equal(isReadOnlyWorkspace(expired, { hasHistoricalData: true, now: NOW }), true)
+})
+
+test('read-only workspace helper requires historical data for billing failure states', () => {
+  for (const status of ['past_due', 'payment_failed']) {
+    const resolved = state({ status })
+
+    assert.equal(resolved.hasActivePaidAccess, false)
+    assert.equal(resolved.canUsePaidMutation, false)
+    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: false, now: NOW }), false)
+    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: true, now: NOW }), true)
+  }
+})
+
+test('read-only workspace helper requires historical data for inactive and ended subscription states', () => {
+  for (const status of ['inactive', 'canceled', 'cancelled']) {
+    const resolved = state({ status })
+
+    assert.equal(resolved.hasActivePaidAccess, false)
+    assert.equal(resolved.canUsePaidMutation, false)
+    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: false, now: NOW }), false)
+    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: true, now: NOW }), true)
+  }
+})
+
+test('unknown and missing subscription states do not accidentally gain paid or read-only access', () => {
+  for (const input of [null, undefined, { status: 'mystery_state' }]) {
+    assert.equal(canAccessProductDashboard(input, NOW), false)
+    assert.equal(canUsePaidMutation(input, NOW), false)
+    assert.equal(isReadOnlyWorkspace(input, { hasHistoricalData: true, now: NOW }), false)
+  }
 })

@@ -2,12 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   canonicalizePathname,
+  canAccessRouteForSubscriptionState,
   getAnalysisDetailRouteId,
   getCandidateDetailRouteId,
   isAuthenticatedAccountShellRoutePath,
   isAuthenticatedHistoricalRoutePath,
   isCheckoutStandaloneRoutePath,
+  isPaidMutationWorkspaceRoutePath,
   isPaidWorkspaceRoutePath,
+  isReadOnlyWorkspaceRoutePath,
   isStandaloneOrdinaryUserAuthRoutePath,
   isUserShellRoutePath,
   normalizeLegacyAccountPath,
@@ -72,4 +75,41 @@ test('normalizes legacy account alias safely', () => {
   assert.equal(normalizeLegacyAccountPath('/account/', '?section=billing'), '/settings')
   assert.equal(normalizeLegacyAccountPath('/account', '?upgradeTestKey=abc&section=billing'), '/settings?upgradeTestKey=abc')
   assert.equal(normalizeLegacyAccountPath('/settings', ''), null)
+})
+
+test('classifies future read-only workspace candidate routes without changing routing behavior', () => {
+  for (const path of ['/dashboard', '/jobs', '/job-descriptions', '/analyses', '/analyses/abc', '/candidates', '/candidates/abc', '/shortlists', '/reports', '/results']) {
+    assert.equal(isReadOnlyWorkspaceRoutePath(path), true, `${path} should be a future read-only workspace candidate`)
+  }
+
+  assert.equal(isReadOnlyWorkspaceRoutePath('/dashboard/legacy'), false)
+  assert.equal(isReadOnlyWorkspaceRoutePath('/uploader'), false)
+  assert.equal(isReadOnlyWorkspaceRoutePath('/create-analysis'), false)
+})
+
+test('classifies paid mutation workspace routes separately from read-only candidates', () => {
+  for (const path of ['/uploader', '/uploader/', '/create-analysis', '/create-analysis/']) {
+    assert.equal(isPaidMutationWorkspaceRoutePath(path), true, `${path} should require paid mutation access`)
+    assert.equal(isReadOnlyWorkspaceRoutePath(path), false, `${path} should not be read-only workspace`)
+  }
+})
+
+test('keeps account, public, admin, and auth routes out of read-only workspace classification', () => {
+  for (const path of ['/billing', '/settings', '/login', '/signup', '/pricing', '/checkout', '/admin', '/admin/uploads', '/results/shared-token']) {
+    assert.equal(isReadOnlyWorkspaceRoutePath(path), false, `${path} should not be mixed into read-only workspace`)
+  }
+
+  assert.equal(canAccessRouteForSubscriptionState('/billing', { status: 'inactive' }), true)
+  assert.equal(canAccessRouteForSubscriptionState('/settings', { status: 'inactive' }), true)
+})
+
+test('route policy helper distinguishes read-only candidates from paid mutation routes', () => {
+  const inactiveWithHistory = { status: 'inactive' }
+  const active = { status: 'active' }
+
+  assert.equal(canAccessRouteForSubscriptionState('/analyses', inactiveWithHistory, { hasHistoricalData: true }), true)
+  assert.equal(canAccessRouteForSubscriptionState('/uploader', inactiveWithHistory, { hasHistoricalData: true }), false)
+  assert.equal(canAccessRouteForSubscriptionState('/create-analysis', inactiveWithHistory, { hasHistoricalData: true }), false)
+  assert.equal(canAccessRouteForSubscriptionState('/uploader', active, { hasHistoricalData: true }), true)
+  assert.equal(canAccessRouteForSubscriptionState('/login', active, { hasHistoricalData: true }), false)
 })

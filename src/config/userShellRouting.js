@@ -1,3 +1,5 @@
+import { canUsePaidMutation, isReadOnlyWorkspace } from '../utils/subscriptionState.js'
+
 const WORKSPACE_ROUTE_PATHS = new Set([
   '/dashboard',
   '/dashboard/legacy',
@@ -12,6 +14,17 @@ const WORKSPACE_ROUTE_PATHS = new Set([
 ])
 
 const ACCOUNT_ROUTE_PATHS = new Set(['/settings', '/billing', '/account', '/account/payment-method'])
+const READ_ONLY_WORKSPACE_ROUTE_PATHS = new Set([
+  '/dashboard',
+  '/job-descriptions',
+  '/jobs',
+  '/analyses',
+  '/candidates',
+  '/shortlists',
+  '/reports',
+  '/results',
+])
+const PAID_MUTATION_WORKSPACE_ROUTE_PATHS = new Set(['/uploader', '/create-analysis'])
 const CHECKOUT_RETURN_ROUTE_PATHS = new Set([])
 
 export function canonicalizePathname(pathname = '/') {
@@ -33,6 +46,29 @@ export function normalizeLegacyAccountPath(pathname, search = '') {
 
 export function isPaidWorkspaceRoutePath(pathname) {
   return WORKSPACE_ROUTE_PATHS.has(canonicalizePathname(pathname))
+}
+
+export function isReadOnlyWorkspaceRoutePath(pathname) {
+  const canonicalPathname = canonicalizePathname(pathname)
+  return READ_ONLY_WORKSPACE_ROUTE_PATHS.has(canonicalPathname)
+    || isAnalysisDetailRoutePath(canonicalPathname)
+    || isCandidateDetailRoutePath(canonicalPathname)
+}
+
+export function isPaidMutationWorkspaceRoutePath(pathname) {
+  return PAID_MUTATION_WORKSPACE_ROUTE_PATHS.has(canonicalizePathname(pathname))
+}
+
+export function canAccessRouteForSubscriptionState(pathname, subscriptionStateOrSubscription, options = {}) {
+  const canonicalPathname = canonicalizePathname(pathname)
+  if (isAuthenticatedAccountRoutePath(canonicalPathname)) return true
+  if (isPaidMutationWorkspaceRoutePath(canonicalPathname)) return canUsePaidMutation(subscriptionStateOrSubscription, options.now)
+  if (isReadOnlyWorkspaceRoutePath(canonicalPathname)) {
+    return canUsePaidMutation(subscriptionStateOrSubscription, options.now)
+      || isReadOnlyWorkspace(subscriptionStateOrSubscription, options)
+  }
+  if (isPaidWorkspaceRoutePath(canonicalPathname)) return canUsePaidMutation(subscriptionStateOrSubscription, options.now)
+  return false
 }
 
 export function isAuthenticatedAccountRoutePath(pathname) {
