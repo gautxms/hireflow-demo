@@ -36,7 +36,6 @@ import webhooksRoutes from './routes/webhooks.js'
 import telemetryRoutes from './routes/telemetry.js'
 import usageRoutes from './routes/usage.js'
 import { requireAuth } from './middleware/authMiddleware.js'
-import { requireActiveSubscription } from './middleware/subscriptionCheck.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
 import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
 import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
@@ -184,7 +183,7 @@ app.use('/api/profile', generalApiLimiterAuth, profileRoutes)
 app.use('/api/subscriptions', generalApiLimiterAuth, subscriptionsRoutes)
 app.use('/api/shortlists', generalApiLimiterAuth, shortlistsRoutes)
 app.use('/api/candidates', generalApiLimiterAuth, candidatesRoutes)
-app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, requireActiveSubscription, jobDescriptionsRoutes)
+app.use('/api/job-descriptions', requireAuth, generalApiLimiterAuth, jobDescriptionsRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/telemetry', requireAuth, generalApiLimiterAuth, telemetryRoutes)
 app.use('/api/notifications', requireAuth, generalApiLimiterAuth, notificationsRoutes)
