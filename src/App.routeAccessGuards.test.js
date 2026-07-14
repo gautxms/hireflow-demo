@@ -106,6 +106,17 @@ test('standalone routes bypass ordinary user auth sync side effects', () => {
   assert.match(focusBlock, /!isStandaloneOrdinaryUserAuthRoutePath\(pathname\)/)
 })
 
+
+test('focus and visibility account refreshes are silent after the initial access gate', () => {
+  const focusBlock = source.slice(source.indexOf('const handleWindowFocus ='), source.indexOf("window.addEventListener('focus'"))
+  const syncSignatureBlock = source.slice(source.indexOf('const syncAuthenticatedUser = useCallback'), source.indexOf('const activeToken = getStoredToken()'))
+
+  assert.match(syncSignatureBlock, /showLoading = true/)
+  assert.match(source, /if \(showLoading\) \{\s*setAccessResolution\(\{ status: 'resolving', error: '' \}\)\s*\}/)
+  assert.match(focusBlock, /syncAuthenticatedUser\(\{ showLoading: false \}\)/)
+  assert.doesNotMatch(focusBlock, /void syncAuthenticatedUser\(\)\s*\}/)
+})
+
 test('login success relies on auth-state effect for a single authoritative sync trigger', () => {
   const loginBlock = source.slice(source.indexOf('const handleAuthSuccess ='), source.indexOf('const logout = useCallback'))
 
