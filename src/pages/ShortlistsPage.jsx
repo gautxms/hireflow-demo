@@ -14,7 +14,7 @@ function authHeaders() {
   }
 }
 
-export default function ShortlistsPage() {
+export default function ShortlistsPage({ isReadOnly = false }) {
   const [shortlists, setShortlists] = useState([])
   const [selectedShortlistId, setSelectedShortlistId] = useState('')
   const [shortlistDetails, setShortlistDetails] = useState(null)
@@ -134,6 +134,7 @@ export default function ShortlistsPage() {
   }, [loadShortlistDetails, loadShortlists])
 
   const createShortlist = useCallback(async ({ name, description, jobDescriptionId }) => {
+    if (isReadOnly) return
     try {
       setLoadingList(true)
       setError('')
@@ -160,9 +161,10 @@ export default function ShortlistsPage() {
     } finally {
       setLoadingList(false)
     }
-  }, [loadShortlistDetails, loadShortlists, refreshShortlists])
+  }, [isReadOnly, loadShortlistDetails, loadShortlists, refreshShortlists])
 
   const removeCandidateFromShortlist = useCallback(async (resumeId) => {
+    if (isReadOnly) return
     if (!selectedShortlistId || !resumeId) return
 
     try {
@@ -189,14 +191,14 @@ export default function ShortlistsPage() {
     } catch (removeError) {
       setError(removeError.message || 'Unable to remove candidate from shortlist')
     }
-  }, [selectedShortlistId, shortlistDetails?.candidates])
+  }, [isReadOnly, selectedShortlistId, shortlistDetails?.candidates])
 
   useEffect(() => {
     if (didInitialLoadRef.current) return
     didInitialLoadRef.current = true
     void refreshShortlists()
-    void loadJobDescriptions()
-  }, [loadJobDescriptions, refreshShortlists])
+    if (!isReadOnly) void loadJobDescriptions()
+  }, [isReadOnly, loadJobDescriptions, refreshShortlists])
 
   useEffect(() => {
     void loadShortlistDetails(selectedShortlistId)
@@ -224,6 +226,7 @@ export default function ShortlistsPage() {
           loadingList={loadingList}
           loadingDetails={loadingDetails}
           error={error}
+          readOnly={isReadOnly}
         />
       </div>
     </main>

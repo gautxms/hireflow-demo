@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const shortlistPageSource = readFileSync(new URL('./ShortlistsPage.jsx', import.meta.url), 'utf8')
-const shortlistManagerSource = readFileSync(new URL('../components/ShortlistManager.jsx', import.meta.url), 'utf8')
+const shortlistPageSource = readFileSync(new URL('./ShortlistsPage.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const shortlistManagerSource = readFileSync(new URL('../components/ShortlistManager.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
 function getFunctionSource(functionName) {
   const marker = `const ${functionName} = useCallback`
@@ -49,6 +49,23 @@ test('shortlist manager exposes retry in error state and removes manual refresh 
   assert.doesNotMatch(shortlistManagerSource, />Refresh</)
   assert.match(shortlistManagerSource, /onRetry/)
   assert.match(shortlistManagerSource, /Retry<\/button>/)
+})
+
+test('read-only shortlists mode preserves history and suppresses every mutation control', () => {
+  const createShortlistSource = getFunctionSource('createShortlist')
+  const removeCandidateSource = getFunctionSource('removeCandidateFromShortlist')
+
+  assert.match(shortlistPageSource, /export default function ShortlistsPage\(\{ isReadOnly = false \}\)/)
+  assert.match(createShortlistSource, /if \(isReadOnly\) return/)
+  assert.match(removeCandidateSource, /if \(isReadOnly\) return/)
+  assert.match(shortlistPageSource, /if \(!isReadOnly\) void loadJobDescriptions\(\)/)
+  assert.match(shortlistPageSource, /readOnly=\{isReadOnly\}/)
+  assert.match(shortlistManagerSource, /readOnly = false/)
+  assert.match(shortlistManagerSource, /const handleCreate = async[\s\S]*if \(readOnly\) return/)
+  assert.match(shortlistManagerSource, /\{!readOnly \? <button[\s\S]*Create shortlist[\s\S]*<\/button> : null\}/)
+  assert.match(shortlistManagerSource, /\{!readOnly && showCreateForm \? <section/)
+  assert.match(shortlistManagerSource, /\{!readOnly \? <div className="shortlist-manager__candidate-actions">/)
+  assert.match(shortlistManagerSource, /Read-only access: historical shortlists remain available/)
 })
 
 
