@@ -11,8 +11,8 @@ const WORKSPACE_ROUTE_PATHS = new Set([
   '/create-analysis',
 ])
 
-const ACCOUNT_ROUTE_PATHS = new Set(['/settings', '/billing', '/account'])
-const CHECKOUT_RETURN_ROUTE_PATHS = new Set(['/account/payment-method'])
+const ACCOUNT_ROUTE_PATHS = new Set(['/settings', '/billing', '/account', '/account/payment-method'])
+const CHECKOUT_RETURN_ROUTE_PATHS = new Set([])
 
 export function canonicalizePathname(pathname = '/') {
   const normalized = String(pathname || '/').trim() || '/'
