@@ -59,15 +59,31 @@ export function isPaidMutationWorkspaceRoutePath(pathname) {
   return PAID_MUTATION_WORKSPACE_ROUTE_PATHS.has(canonicalizePathname(pathname))
 }
 
+function hasPaidMutationRouteAccess(subscriptionStateOrSubscription, options = {}) {
+  if (typeof subscriptionStateOrSubscription?.canUsePaidMutation === 'boolean') {
+    return subscriptionStateOrSubscription.canUsePaidMutation
+  }
+
+  return canUsePaidMutation(subscriptionStateOrSubscription, options.now)
+}
+
+function hasReadOnlyWorkspaceRouteAccess(subscriptionStateOrSubscription, options = {}) {
+  if (typeof subscriptionStateOrSubscription?.isReadOnlyWorkspace === 'boolean') {
+    return subscriptionStateOrSubscription.isReadOnlyWorkspace
+  }
+
+  return isReadOnlyWorkspace(subscriptionStateOrSubscription, options)
+}
+
 export function canAccessRouteForSubscriptionState(pathname, subscriptionStateOrSubscription, options = {}) {
   const canonicalPathname = canonicalizePathname(pathname)
   if (isAuthenticatedAccountRoutePath(canonicalPathname)) return true
-  if (isPaidMutationWorkspaceRoutePath(canonicalPathname)) return canUsePaidMutation(subscriptionStateOrSubscription, options.now)
+  if (isPaidMutationWorkspaceRoutePath(canonicalPathname)) return hasPaidMutationRouteAccess(subscriptionStateOrSubscription, options)
   if (isReadOnlyWorkspaceRoutePath(canonicalPathname)) {
-    return canUsePaidMutation(subscriptionStateOrSubscription, options.now)
-      || isReadOnlyWorkspace(subscriptionStateOrSubscription, options)
+    return hasPaidMutationRouteAccess(subscriptionStateOrSubscription, options)
+      || hasReadOnlyWorkspaceRouteAccess(subscriptionStateOrSubscription, options)
   }
-  if (isPaidWorkspaceRoutePath(canonicalPathname)) return canUsePaidMutation(subscriptionStateOrSubscription, options.now)
+  if (isPaidWorkspaceRoutePath(canonicalPathname)) return hasPaidMutationRouteAccess(subscriptionStateOrSubscription, options)
   return false
 }
 

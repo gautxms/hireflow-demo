@@ -15,6 +15,7 @@ import {
   isUserShellRoutePath,
   normalizeLegacyAccountPath,
 } from './userShellRouting.js'
+import { resolveSubscriptionState } from '../utils/subscriptionState.js'
 
 test('canonicalizes trailing slashes without changing root', () => {
   assert.equal(canonicalizePathname('/'), '/')
@@ -112,4 +113,45 @@ test('route policy helper distinguishes read-only candidates from paid mutation 
   assert.equal(canAccessRouteForSubscriptionState('/create-analysis', inactiveWithHistory, { hasHistoricalData: true }), false)
   assert.equal(canAccessRouteForSubscriptionState('/uploader', active, { hasHistoricalData: true }), true)
   assert.equal(canAccessRouteForSubscriptionState('/login', active, { hasHistoricalData: true }), false)
+})
+
+test('route policy helper honors resolved read-only subscription state booleans', () => {
+  const resolvedState = resolveSubscriptionState({
+    subscription: { status: 'inactive', hasHistoricalData: true },
+  })
+
+  assert.equal(resolvedState.isReadOnlyWorkspace, true)
+  for (const path of ['/analyses', '/jobs', '/candidates/candidate-123', '/results']) {
+    assert.equal(canAccessRouteForSubscriptionState(path, resolvedState), true, `${path} should allow resolved read-only access`)
+  }
+
+  assert.equal(canAccessRouteForSubscriptionState('/uploader', resolvedState), false)
+  assert.equal(canAccessRouteForSubscriptionState('/create-analysis', resolvedState), false)
+})
+
+test('route policy helper honors resolved paid mutation state booleans', () => {
+  const resolvedState = resolveSubscriptionState({
+    subscription: { status: 'active', hasHistoricalData: true },
+  })
+
+  assert.equal(resolvedState.canUsePaidMutation, true)
+  assert.equal(canAccessRouteForSubscriptionState('/uploader', resolvedState), true)
+  assert.equal(canAccessRouteForSubscriptionState('/create-analysis', resolvedState), true)
+})
+
+test('route policy helper requires historical-data option for raw inactive read-only candidates', () => {
+  const rawInactive = { status: 'inactive' }
+
+  assert.equal(canAccessRouteForSubscriptionState('/analyses', rawInactive), false)
+  assert.equal(canAccessRouteForSubscriptionState('/analyses', rawInactive, { hasHistoricalData: true }), true)
+})
+
+test('route policy helper keeps public auth and admin routes denied', () => {
+  const resolvedReadOnly = resolveSubscriptionState({
+    subscription: { status: 'inactive', hasHistoricalData: true },
+  })
+
+  for (const path of ['/', '/login', '/signup', '/pricing', '/checkout', '/admin', '/admin/uploads']) {
+    assert.equal(canAccessRouteForSubscriptionState(path, resolvedReadOnly), false, `${path} should not be allowed by subscription route policy`)
+  }
 })
