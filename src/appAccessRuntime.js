@@ -8,6 +8,28 @@ export function canViewHistoricalWorkspaceModule(featureEnabled, subscriptionSta
   )
 }
 
+export function buildReadOnlyWorkspaceNotice(subscriptionState = null) {
+  if (!subscriptionState?.isReadOnlyWorkspace || subscriptionState?.canUsePaidMutation) {
+    return null
+  }
+
+  if (subscriptionState.isPastDue) {
+    return {
+      title: 'Payment required',
+      description: 'Your historical workspace remains available in read-only mode. Review billing to restore recruiting actions.',
+      actionLabel: 'Review billing',
+      actionPath: '/billing',
+    }
+  }
+
+  return {
+    title: 'Workspace is read-only',
+    description: 'Your historical data remains available. Choose a plan to create analyses or change recruiting workflows.',
+    actionLabel: 'View plans',
+    actionPath: '/pricing',
+  }
+}
+
 export function buildResolvedAccessContext({
   isAuthenticated = false,
   accessResolutionStatus = 'resolved',

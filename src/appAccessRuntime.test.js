@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime.js'
+import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime.js'
 
 const FUTURE_END = '2999-01-01T00:00:00.000Z'
 
@@ -148,4 +148,35 @@ test('enabled modules remain visible to paid users', () => {
     isReadOnlyWorkspace: false,
     canUsePaidMutation: true,
   }), true)
+})
+
+test('read-only notice sends payment failures to billing with recovery copy', () => {
+  assert.deepEqual(buildReadOnlyWorkspaceNotice({
+    isReadOnlyWorkspace: true,
+    canUsePaidMutation: false,
+    isPastDue: true,
+  }), {
+    title: 'Payment required',
+    description: 'Your historical workspace remains available in read-only mode. Review billing to restore recruiting actions.',
+    actionLabel: 'Review billing',
+    actionPath: '/billing',
+  })
+})
+
+test('read-only notice sends ended subscriptions to plans', () => {
+  assert.deepEqual(buildReadOnlyWorkspaceNotice({
+    isReadOnlyWorkspace: true,
+    canUsePaidMutation: false,
+    isCanceled: true,
+  }), {
+    title: 'Workspace is read-only',
+    description: 'Your historical data remains available. Choose a plan to create analyses or change recruiting workflows.',
+    actionLabel: 'View plans',
+    actionPath: '/pricing',
+  })
+})
+
+test('read-only notice stays absent for paid and history-free accounts', () => {
+  assert.equal(buildReadOnlyWorkspaceNotice({ isReadOnlyWorkspace: false, canUsePaidMutation: false }), null)
+  assert.equal(buildReadOnlyWorkspaceNotice({ isReadOnlyWorkspace: false, canUsePaidMutation: true }), null)
 })

@@ -1,6 +1,6 @@
 import AuthenticatedProfileMenu from './AuthenticatedProfileMenu'
 
-export default function AppHeader({ user, isSubscribed, pageTitle, onNavigate, onLogout }) {
+export default function AppHeader({ user, isSubscribed, pageTitle, onNavigate, onLogout, showUpgradeCta = true, upgradeLabel = 'View plans', upgradePath = '/pricing' }) {
   const analysesLeft = user?.analysesRemaining ?? null
 
   return (
@@ -11,7 +11,7 @@ export default function AppHeader({ user, isSubscribed, pageTitle, onNavigate, o
       <div className="app-header-right">
 
         {/* Free user strip */}
-        {!isSubscribed && (
+        {!isSubscribed && showUpgradeCta && (
           <div className="app-header-free-strip">
             <span className="app-header-free-text">
               {analysesLeft != null
@@ -19,8 +19,8 @@ export default function AppHeader({ user, isSubscribed, pageTitle, onNavigate, o
                 : 'Subscription required'}
             </span>
             <button className="app-header-upgrade-btn"
-              onClick={() => onNavigate('/pricing')}>
-              View plans
+              onClick={() => onNavigate(upgradePath)}>
+              {upgradeLabel}
             </button>
           </div>
         )}
