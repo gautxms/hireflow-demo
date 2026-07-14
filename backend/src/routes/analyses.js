@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { cancelParseJobsByIds, parseQueue } from '../services/jobQueue.js'
 import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
 import { getDisplayFilename } from '../utils/resumeFileMetadata.js'
@@ -637,7 +638,7 @@ router.get('/:id/status', requireAuth, async (req, res) => {
 })
 
 
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, requireActiveSubscription, async (req, res) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')

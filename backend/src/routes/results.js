@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { pool } from '../db/client.js'
 import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js'
 import { formatEducationForDisplay } from '../utils/candidateEducation.js'
@@ -674,7 +675,7 @@ router.get('/', requireAuth, async (req, res) => {
   }
 })
 
-router.post('/share', requireAuth, async (req, res) => {
+router.post('/share', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     cleanupExpiredShareTokens()
 

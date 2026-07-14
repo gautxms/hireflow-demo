@@ -3,6 +3,7 @@ import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Buffer } from 'node:buffer'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
+import { canUsePaidMutation } from '../utils/subscriptionAccess.js'
 import { matchCandidatesToJob } from '../services/matchingService.js'
 import { pool } from '../db/client.js'
 import { normalizeTags } from './candidateTagsState.js'
@@ -130,6 +131,23 @@ function isCandidateDirectorySyncOnReadEnabled() {
 
 function isCandidateDirectorySqlPaginationEnabled() {
   return String(process.env.CANDIDATE_DIRECTORY_SQL_PAGINATION || '').trim().toLowerCase() === 'true'
+}
+
+async function canSyncCandidateProfilesForRequest(userId) {
+  const result = await pool.query(
+    `SELECT id, subscription_status, cancellation_effective_at, current_period_end
+     FROM users
+     WHERE id = $1`,
+    [userId],
+  )
+
+  return canUsePaidMutation(result.rows[0])
+}
+
+async function syncCandidateProfilesForPaidUser(userId) {
+  if (!await canSyncCandidateProfilesForRequest(userId)) return false
+  await syncCandidateProfilesForUser(userId)
+  return true
 }
 
 function countAppliedFilters(filters) {
@@ -704,7 +722,7 @@ router.post('/reanalyse', requireAuth, requireActiveSubscription, async (req, re
 
 router.get('/profiles', requireAuth, async (req, res) => {
   try {
-    await syncCandidateProfilesForUser(req.userId)
+    await syncCandidateProfilesForPaidUser(req.userId)
 
     const result = await pool.query(
       `SELECT user_id,
@@ -747,8 +765,11 @@ router.get('/directory', requireAuth, async (req, res) => {
     let syncDurationMs = null
     if (syncOnReadEnabled) {
       const syncStartedAt = Date.now()
-      await syncCandidateProfilesForUser(req.userId)
-      syncDurationMs = Date.now() - syncStartedAt
+      const didSync = await syncCandidateProfilesForPaidUser(req.userId)
+      syncDurationMs = didSync ? Date.now() - syncStartedAt : null
+      if (!didSync) {
+        console.info('[Candidates] Skipped directory sync-on-read for read-only subscription state')
+      }
     }
 
     const normalizedQuery = normalizeCandidateDirectoryQuery(req.query)
@@ -1025,7 +1046,7 @@ router.get('/:resumeId', requireAuth, async (req, res) => {
   }
 
   try {
-    await syncCandidateProfilesForUser(req.userId)
+    await syncCandidateProfilesForPaidUser(req.userId)
 
     const result = await pool.query(
       `SELECT cp.resume_id,

@@ -5,6 +5,7 @@ import express from 'express'
 import jwt from 'jsonwebtoken'
 
 import resultsExportRouter from './resultsExport.js'
+import { pool } from '../db/client.js'
 
 function buildApp() {
   const app = express()
@@ -38,8 +39,9 @@ async function postCsvExport({ body, headers } = {}) {
   }
 }
 
-test('POST /api/results/export/csv neutralizes candidate-controlled formula cells and preserves attachment headers', async () => {
+test('POST /api/results/export/csv neutralizes candidate-controlled formula cells and preserves attachment headers', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async () => ({ rows: [{ id: 42, subscription_status: 'active' }] }))
 
   const { response, text } = await postCsvExport({
     headers: authHeader(42),
@@ -65,4 +67,17 @@ test('POST /api/results/export/csv neutralizes candidate-controlled formula cell
     text.split('\n')[1],
     '"\'=HYPERLINK(""https://evil.example"",""click"")",candidate@example.com,88,"\'@SUM(1,2)",React,Delivery',
   )
+})
+
+test('POST /api/results/export/csv remains blocked for inactive subscriptions', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async () => ({ rows: [{ id: 42, subscription_status: 'payment_failed' }] }))
+
+  const { response, text } = await postCsvExport({
+    headers: authHeader(42),
+    body: { candidates: [{ name: 'Ada' }] },
+  })
+
+  assert.equal(response.status, 403)
+  assert.match(text, /Subscription inactive/)
 })

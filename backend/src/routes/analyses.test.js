@@ -21,6 +21,15 @@ function authHeader(userId) {
   return { Authorization: `Bearer ${jwt.sign({ userId }, process.env.JWT_SECRET)}` }
 }
 
+function mockActiveSubscription(t, status = 'active') {
+  return t.mock.method(pool, 'query', async (sql) => {
+    if (String(sql).includes('FROM users')) {
+      return { rows: [{ id: 1, subscription_status: status, cancellation_effective_at: null, current_period_end: null }] }
+    }
+    return { rows: [] }
+  })
+}
+
 test('GET /analyses returns authenticated user scoped items with frontend fields', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
   const queryMock = t.mock.method(pool, 'query', async (sql) => {
@@ -356,6 +365,7 @@ test('GET /analyses/:id returns 404 for cross-user access', async (t) => {
 
 test('DELETE /analyses/:id deletes owner analysis transactionally', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
+  mockActiveSubscription(t)
   const client = {
     released: false,
     query: t.mock.fn(async (sql) => {
@@ -383,6 +393,7 @@ test('DELETE /analyses/:id deletes owner analysis transactionally', async (t) =>
 
 test('DELETE /analyses/:id returns 403 for non-owner', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
+  mockActiveSubscription(t)
   const client = {
     query: t.mock.fn(async (sql) => {
       if (sql.includes('SELECT id FROM analyses WHERE id = $1 AND user_id = $2')) return { rowCount: 0, rows: [] }
@@ -406,6 +417,7 @@ test('DELETE /analyses/:id returns 403 for non-owner', async (t) => {
 
 test('DELETE /analyses/:id returns 404 when analysis is missing', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
+  mockActiveSubscription(t)
   const client = {
     query: t.mock.fn(async (sql) => {
       if (sql.includes('SELECT id FROM analyses WHERE id = $1 AND user_id = $2')) return { rowCount: 0, rows: [] }
@@ -446,6 +458,7 @@ test('DELETE /analyses/:id attempts queued parse job cancellation and tolerates 
     return null
   })
 
+  mockActiveSubscription(t)
   const client = {
     released: false,
     query: t.mock.fn(async (sql) => {
@@ -560,4 +573,23 @@ test('GET /analyses aggregation mixed completed and uploading upload_chunks do n
 
   assert.equal(item.fileCount, 2)
   assert.notEqual(item.fileCount, 3)
+})
+
+test('DELETE /analyses/:id blocks inactive subscriptions before mutation', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  mockActiveSubscription(t, 'past_due')
+  const connectMock = t.mock.method(pool, 'connect', async () => {
+    throw new Error('mutation client should not be acquired')
+  })
+
+  const app = buildApp()
+  const server = app.listen(0)
+  const port = server.address().port
+  const response = await fetch(`http://127.0.0.1:${port}/analyses/a-1`, { method: 'DELETE', headers: authHeader(7) })
+  const payload = await response.json()
+  server.close()
+
+  assert.equal(response.status, 403)
+  assert.equal(payload.error, 'Subscription inactive')
+  assert.equal(connectMock.mock.callCount(), 0)
 })
