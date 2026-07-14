@@ -109,7 +109,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/refund-policy',
   ...INTENT_PAGE_ORDER,
 ])
-const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/job-descriptions', '/analyses', '/candidates', '/shortlists'])
+const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/job-descriptions', '/analyses', '/candidates', '/shortlists', '/reports'])
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -630,19 +630,16 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         return null
       }
 
-      const canAccessReports = guardSubscriptionRoute({
+      const canAccessReports = guardAuthenticatedRoute({
         isAuthenticated,
-        subscriptionStatus,
-        subscriptionState: profileBillingState,
+        promptMessage: 'Please login to view reports.',
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
-        authPromptMessage: 'Please login to view reports.',
       })
       if (!canAccessReports) {
         return null
       }
 
-      return <ReportsPage />
+      return <ReportsPage isReadOnly={!profileBillingState.canUsePaidMutation} />
     }
 
     if (isResultsRootPath(resolvedPathname)) {
@@ -1063,6 +1060,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         ...(analysesModuleEnabled ? [{ key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'analyses' }] : []),
         ...(candidateModuleEnabled ? [{ key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'candidates' }] : []),
         ...(candidateModuleEnabled ? [{ key: 'shortlists', label: 'Shortlists', path: '/shortlists', icon: 'shortlists' }] : []),
+        ...(dashboardReportsEnabled ? [{ key: 'reports', label: 'Reports', path: '/reports', icon: 'reports' }] : []),
         { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
       ]
     }

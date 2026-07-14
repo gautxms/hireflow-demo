@@ -23,8 +23,8 @@ test('blocked paid route uses exactly one replace navigation to subscription pri
   assert.equal(redirectMatches.length, 1)
 })
 
-test('only staged historical Jobs, Analyses, Candidates, and Shortlists routes are opened by the read-only shell', () => {
-  assert.match(source, /const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set\(\['\/job-descriptions', '\/analyses', '\/candidates', '\/shortlists'\]\)/)
+test('only staged historical Jobs, Analyses, Candidates, Shortlists, and Reports routes are opened by the read-only shell', () => {
+  assert.match(source, /const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set\(\['\/job-descriptions', '\/analyses', '\/candidates', '\/shortlists', '\/reports'\]\)/)
   assert.match(source, /READ_ONLY_WORKSPACE_FRONTEND_ROUTES\.has\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, subscriptionStateOrStatus\)/)
   assert.match(source, /const hasReadOnlyWorkspaceRouteAccess = [\s\S]*READ_ONLY_WORKSPACE_FRONTEND_ROUTES\.has\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, profileBillingState\)/)
   assert.match(source, /isPaidWorkspaceRoutePath\(resolvedPathname\)[\s\S]*&& !hasReadOnlyWorkspaceRouteAccess/)
@@ -32,6 +32,7 @@ test('only staged historical Jobs, Analyses, Candidates, and Shortlists routes a
   assert.match(source, /<AnalysesPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
   assert.match(source, /<CandidatesPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
   assert.match(source, /<ShortlistsPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
+  assert.match(source, /<ReportsPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
 })
 
 test('blocked guards return before page evaluation can run fallbacks or intent mutation paths', () => {

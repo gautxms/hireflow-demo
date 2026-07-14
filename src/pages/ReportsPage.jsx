@@ -11,7 +11,7 @@ function parseColumnsInput(value) {
     .filter(Boolean)
 }
 
-export default function ReportsPage() {
+export default function ReportsPage({ isReadOnly = false }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -55,6 +55,7 @@ export default function ReportsPage() {
 
   async function createReport(event) {
     event.preventDefault()
+    if (isReadOnly) return
 
     if (!form.name.trim()) {
       setError('Report name is required.')
@@ -94,6 +95,7 @@ export default function ReportsPage() {
   }
 
   async function toggleSchedule(item) {
+    if (isReadOnly) return
     try {
       const response = await fetch(`${API_BASE}/reports/${item.id}`, {
         method: 'PUT',
@@ -121,6 +123,7 @@ export default function ReportsPage() {
   }
 
   async function deleteReport(id) {
+    if (isReadOnly) return
     try {
       const response = await fetch(`${API_BASE}/reports/${id}`, {
         method: 'DELETE',
@@ -142,9 +145,11 @@ export default function ReportsPage() {
     <main className="reports-page">
       <section className="reports-page__card">
         <h1 className="reports-page__title">Reports</h1>
-        <p className="reports-page__description">Define reusable report configurations. Background generation is not enabled yet.</p>
+        <p className="reports-page__description">{isReadOnly ? 'Review your saved historical report configurations.' : 'Define reusable report configurations. Background generation is not enabled yet.'}</p>
 
-        <form onSubmit={createReport} className="reports-page__form">
+        {isReadOnly ? <p className="reports-page__feedback">Read-only access: saved reports remain available, but creating, scheduling, or deleting reports requires an active subscription.</p> : null}
+
+        {!isReadOnly ? <form onSubmit={createReport} className="reports-page__form">
           <div className="reports-page__field">
             <label className="reports-page__label" htmlFor="report-name">Name</label>
           <input className="reports-page__input" id="report-name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
@@ -174,13 +179,13 @@ export default function ReportsPage() {
           <div className="reports-page__actions">
             <button type="submit" className="hf-btn hf-btn--primary" disabled={saving}>{saving ? 'Creating…' : 'Create report definition'}</button>
           </div>
-        </form>
+        </form> : null}
 
         {loading && <p className="reports-page__feedback">Loading report definitions…</p>}
         {!loading && error && <p role="alert" className="reports-page__feedback reports-page__feedback--error">{error}</p>}
 
         {!loading && !error && items.length === 0 && (
-          <p className="reports-page__feedback">No report definitions yet.</p>
+          <p className="reports-page__feedback">{isReadOnly ? 'No historical report definitions are available.' : 'No report definitions yet.'}</p>
         )}
 
         {!loading && items.length > 0 && (
@@ -191,7 +196,7 @@ export default function ReportsPage() {
                 <th>Columns</th>
                 <th>Schedule</th>
                 <th>Updated</th>
-                <th>Actions</th>
+                {!isReadOnly ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -201,7 +206,7 @@ export default function ReportsPage() {
                   <td>{Array.isArray(item.columns) && item.columns.length > 0 ? item.columns.join(', ') : '—'}</td>
                   <td>{item.scheduleEnabled ? 'Enabled' : 'Disabled'}</td>
                   <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '—'}</td>
-                  <td>
+                  {!isReadOnly ? <td>
                     <div className="reports-page__table-actions">
                       <button type="button" onClick={() => toggleSchedule(item)} className="hf-btn hf-btn--secondary">
                       {item.scheduleEnabled ? 'Disable schedule' : 'Enable schedule'}
@@ -216,7 +221,7 @@ export default function ReportsPage() {
                         <Trash2 size={18} strokeWidth={1.5} aria-hidden="true" />
                       </button>
                     </div>
-                  </td>
+                  </td> : null}
                 </tr>
               ))}
             </tbody>
