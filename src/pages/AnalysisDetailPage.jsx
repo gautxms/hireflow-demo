@@ -155,7 +155,7 @@ function summarizeCandidateFieldTypes(candidates = [], sampleSize = 5) {
 }
 
 
-export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = null }) {
+export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = null, isReadOnly = false }) {
   const analysisId = useMemo(() => {
     const parts = String(pathname || '').split('/').filter(Boolean)
     return parts.length >= 2 ? parts[1] : ''
@@ -399,6 +399,7 @@ export default function AnalysisDetailPage({ pathname = '', onPageTitleChange = 
 
         <CandidateResults
           candidates={candidateResultsPayload}
+          isReadOnly={isReadOnly}
           onBack={() => {
             window.location.assign('/analyses')
           }}

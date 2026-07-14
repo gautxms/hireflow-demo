@@ -432,6 +432,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
           onBack={() => navigate('/')}
           isSharedLoading={sharedResultsLoading}
           userProfile={userProfile}
+          isReadOnly
         />
       )
     }
@@ -681,6 +682,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
           }}
           onBack={() => navigate('/')}
           userProfile={userProfile}
+          isReadOnly={!profileBillingState.canUsePaidMutation}
         />
       )
     }
@@ -714,7 +716,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         return null
       }
 
-      return <AnalysisDetailPage pathname={resolvedPathname} onPageTitleChange={setShellPageTitle} />
+      return <AnalysisDetailPage pathname={resolvedPathname} onPageTitleChange={setShellPageTitle} isReadOnly={!profileBillingState.canUsePaidMutation} />
     }
 
     if (resolvedPathname === '/candidates') {

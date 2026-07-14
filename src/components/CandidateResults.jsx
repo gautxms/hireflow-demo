@@ -666,7 +666,7 @@ function filterAndSortCandidates(candidates, filters) {
 }
 
 
-export default function CandidateResults({ candidates: candidatePayload, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null, analysisId = '', candidateCount = 0, normalizationStats = null, candidatePayloadShape = null, candidateFieldTypeSummary = [] }) {
+export default function CandidateResults({ candidates: candidatePayload, onBack, isLoading = false, isSharedLoading = false, loadingProgress = 0, userProfile = null, analysisId = '', candidateCount = 0, normalizationStats = null, candidatePayloadShape = null, candidateFieldTypeSummary = [], isReadOnly = false }) {
   const [searchText, setSearchText] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [expRange, setExpRange] = useState({ min: '0', max: '50' })
@@ -797,6 +797,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }, [authHeaders, shortlistSort])
 
   const createShortlist = useCallback(async ({ name, description, jobDescriptionId }) => {
+    if (isReadOnly) return
+
     try {
       setShortlistLoading(true)
       setShortlistError('')
@@ -829,9 +831,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     } finally {
       setShortlistLoading(false)
     }
-  }, [authHeaders, loadShortlistDetails, loadShortlists, parseMeta?.jobDescriptionId])
+  }, [authHeaders, isReadOnly, loadShortlistDetails, loadShortlists, parseMeta?.jobDescriptionId])
 
   const addCandidateToShortlist = useCallback(async (candidate, shortlistIdOverride = '') => {
+    if (isReadOnly) return false
+
     try {
       const destinationShortlistId = shortlistIdOverride || selectedShortlistId
       if (!destinationShortlistId) {
@@ -871,24 +875,26 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistError(error.message || 'Unable to add candidate to shortlist')
       return false
     }
-  }, [analysisId, analysisTitle, authHeaders, parseMeta?.jobDescriptionId, selectedShortlistId])
+  }, [analysisId, analysisTitle, authHeaders, isReadOnly, parseMeta?.jobDescriptionId, selectedShortlistId])
 
 
 
 
   const createShortlistInAddFlow = useCallback(async () => {
+    if (isReadOnly) return ''
     if (selectedShortlistId) return selectedShortlistId
     setIsCreatingShortlistInAddFlow(true)
     setShortlistError('No shortlist selected. Create one to continue.')
     setIsCreatingShortlistInAddFlow(false)
     return ''
-  }, [selectedShortlistId])
+  }, [isReadOnly, selectedShortlistId])
 
   const openAddToShortlistModal = useCallback((candidatesToAdd) => {
+    if (isReadOnly) return
     const nextCandidates = Array.isArray(candidatesToAdd) ? candidatesToAdd.filter(Boolean) : []
     setAddModalCandidates(nextCandidates)
     setIsAddModalOpen(nextCandidates.length > 0)
-  }, [])
+  }, [isReadOnly])
 
   const closeAddToShortlistModal = useCallback(() => {
     setIsAddModalOpen(false)
@@ -896,6 +902,8 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }, [])
 
   const addSelectedCandidatesToShortlist = useCallback(async (selected) => {
+    if (isReadOnly) return false
+
     let destinationShortlistId = selectedShortlistId
     if (!destinationShortlistId) {
       destinationShortlistId = await createShortlistInAddFlow()
@@ -913,9 +921,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
 
     return true
-  }, [addCandidateToShortlist, createShortlistInAddFlow, selectedShortlistId, shortlistV2Enabled])
+  }, [addCandidateToShortlist, createShortlistInAddFlow, isReadOnly, selectedShortlistId, shortlistV2Enabled])
 
   const removeCandidateFromShortlist = useCallback(async (resumeId) => {
+    if (isReadOnly) return
+
     try {
       if (!selectedShortlistId || !resumeId) {
         return
@@ -942,7 +952,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     } finally {
       setShortlistLoading(false)
     }
-  }, [authHeaders, loadShortlistDetails, loadShortlists, selectedShortlistId])
+  }, [authHeaders, isReadOnly, loadShortlistDetails, loadShortlists, selectedShortlistId])
 
   const openCandidateResumeInNewTab = useCallback(async (candidate) => {
     const resumeId = resolveCandidateResumeUuid(candidate)
@@ -971,10 +981,16 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }, [authHeaders])
 
   useEffect(() => {
-    loadShortlists()
-  }, [loadShortlists])
+    if (!isReadOnly) loadShortlists()
+  }, [isReadOnly, loadShortlists])
 
   useEffect(() => {
+    if (isReadOnly) {
+      setShortlistDetails(null)
+      setShortlistNotice('')
+      return
+    }
+
     if (!selectedShortlistId) {
       setShortlistDetails(null)
       setShortlistNotice('No destination shortlist selected yet.')
@@ -987,7 +1003,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistNotice(`Destination shortlist: ${selected.name}`)
     }
     loadShortlistDetails(selectedShortlistId)
-  }, [SHORTLIST_SESSION_KEY, loadShortlistDetails, selectedShortlistId, shortlists])
+  }, [SHORTLIST_SESSION_KEY, isReadOnly, loadShortlistDetails, selectedShortlistId, shortlists])
   const candidateRows = useMemo(() => {
     if (!Array.isArray(displayCandidates)) {
       return []
@@ -1101,12 +1117,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const sortedCandidates = visibleCandidates
 
   const toggleCandidateSelection = (candidate) => {
+    if (isReadOnly) return
     const resumeId = resolveSelectionResumeId(candidate)
     if (!resumeId) return
     setSelectedIds((currentSelected) => toggleSelection(currentSelected, resumeId))
   }
 
   const toggleSelectAllFiltered = () => {
+    if (isReadOnly) return
     setSelectedIds((currentSelected) => toggleSelectAllVisible(currentSelected, visibleCandidates, resolveSelectionResumeId))
   }
 
@@ -1123,6 +1141,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }
 
   const exportCSV = async (selected) => {
+    if (isReadOnly) return
     const effectiveRows = selected.length > 0 ? selected : filtered
 
     try {
@@ -1163,6 +1182,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }
 
   const emailForm = async (selected) => {
+    if (isReadOnly) return { opened: false, recipients: [] }
     const recipients = selected.map((candidate) => candidate.email).filter(Boolean)
     if (recipients.length === 0) {
       alert('No candidate emails found. Please add emails before exporting to email.')
@@ -1185,6 +1205,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
 
   const sendFeedbackForm = async (selected) => {
+    if (isReadOnly) return
     const result = await emailForm(selected)
     if (!result?.opened) {
       return
@@ -1197,6 +1218,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }
 
   const mutateSelectedTags = async (operation) => {
+    if (isReadOnly) return
     const tags = tagDraft.split(',').map((tag) => tag.trim()).filter(Boolean)
     if (tags.length === 0 || selectedCandidates.length === 0) {
       return
@@ -1258,6 +1280,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   }
 
   const createShareLink = async () => {
+    if (isReadOnly) return
     try {
       setResultsError('')
       const response = await fetch(`${API_BASE}/results/share`, {
@@ -1385,10 +1408,12 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
 
+      {isReadOnly ? <p className="candidate-results-page__state-copy">Read-only access: historical results and resumes remain available, but export, sharing, tagging, feedback, selection, and shortlist actions require an active subscription.</p> : null}
+
       {shouldShowResumeOnlyBanner && <ResumeOnlyRankingBanner onDismiss={() => setIsResumeOnlyBannerDismissed(true)} />}
 
       <CandidateFilters
-        shortlistEnabled={shortlistV2Enabled}
+        shortlistEnabled={!isReadOnly && shortlistV2Enabled}
         candidates={displayCandidates}
         searchText={searchText}
         selectedSkills={selectedSkills}
@@ -1400,7 +1425,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 50 }))}
         onSort={(next) => setSortBy(normalizeSortBy(next))}
         shortlistOpen={shortlistOpen}
-        onToggleShortlist={setShortlistOpen}
+        onToggleShortlist={isReadOnly ? undefined : setShortlistOpen}
       />
       <div className="candidate-results-page__tag-filter" role="group" aria-label="Filter candidates by tags">
         <span className="candidate-results-page__tag-filter-label">Filter tags:</span>
@@ -1414,7 +1439,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         })}
       </div>
 
-      {shortlistOpen && (
+      {!isReadOnly && shortlistOpen && (
         <>
           <div className="panel-overlay" onClick={() => setShortlistOpen(false)} aria-hidden="true" />
           <div className="shortlist-panel" role="dialog" aria-modal="true" aria-label="Candidate shortlists">
@@ -1447,7 +1472,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         </>
       )}
 
-      {selectedCandidates.length > 0 && (
+      {!isReadOnly && selectedCandidates.length > 0 && (
         <BulkActions selectedCount={selectedCandidates.length}>
           <button className="touch-target bulk-btn" onClick={() => exportCSV(selectedCandidates)} type="button"><Upload size={18} strokeWidth={1.5} aria-hidden="true" />Export CSV</button>
           <button className="touch-target bulk-btn" onClick={() => emailForm(selectedCandidates)} type="button"><Mail size={18} strokeWidth={1.5} aria-hidden="true" />Export to Email</button>
@@ -1469,7 +1494,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       )}
 
 
-      <AddToShortlistModal
+      {!isReadOnly && <AddToShortlistModal
         isOpen={isAddModalOpen}
         onClose={closeAddToShortlistModal}
         candidates={addModalCandidates}
@@ -1488,7 +1513,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           setSelectedIds([])
           setAddModalCandidates([])
         }}
-      />
+      />}
 
       {hasSelectedJob && <div className="ranking-stats">
         <div className="ranking-stat">
@@ -1505,7 +1530,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         </div>
       </div>}
 
-      <div className="results-select-all">
+      {!isReadOnly && <div className="results-select-all">
         <label className="results-select-all__label">
           <input
             type="checkbox"
@@ -1515,7 +1540,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           />
           Select all on this page
         </label>
-      </div>
+      </div>}
 
       <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
@@ -1605,7 +1630,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 </span>
               </div>
 
-              <label className="rc-checkbox-wrap" onClick={(event) => event.stopPropagation()}>
+              {!isReadOnly && <label className="rc-checkbox-wrap" onClick={(event) => event.stopPropagation()}>
                 <input
                   type="checkbox"
                   className="rc-checkbox"
@@ -1619,7 +1644,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                   disabled={!selectionResumeId}
                 />
                 <span className="rc-checkbox-label">{selectionResumeId ? 'Select' : 'Missing resume ID'}</span>
-              </label>
+              </label>}
             </div>
           )
         })}
@@ -1682,7 +1707,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             </div>}
           </div>
           <div className="dd-header-actions">
-            <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openAddToShortlistModal([candidate])}>Add to shortlist</button>
+            {!isReadOnly && <button className="hf-btn hf-btn--secondary dd-btn-ghost" type="button" onClick={() => openAddToShortlistModal([candidate])}>Add to shortlist</button>}
             <button className="hf-btn hf-btn--ghost hf-btn--icon dd-btn-ghost" type="button" onClick={(event) => { event.stopPropagation(); openCandidateResumeInNewTab(candidate) }} aria-label="Open resume" title="Open resume">
               <ExternalLink size={18} strokeWidth={1.5} aria-hidden="true" />
             </button>
