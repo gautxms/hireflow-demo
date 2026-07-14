@@ -1,5 +1,6 @@
 import { getFutureSubscriptionEndDate, hasExplicitScheduledCancellationSignal, hasScheduledCancellationAccess, normalizeSubscriptionStatus } from '../utils/subscriptionState.js'
 
+export const BILLING_SUPPORT_RESOLUTION_HREF = 'mailto:Hello@hireflow.dev?subject=Billing%20resolution%20request'
 
 export function isPastDueBillingState(subscriptionState) {
   const status = normalizeSubscriptionStatus(subscriptionState?.rawStatus || subscriptionState?.status || subscriptionState?.subscription_status)
@@ -14,9 +15,9 @@ export function getPastDueBillingAction(subscriptionState) {
   if (!isPastDueBillingState(subscriptionState)) return null
 
   return {
-    kind: 'update-payment-method',
+    kind: 'contact-support',
     label: 'Contact support to resolve billing',
-    href: '/account/payment-method',
+    href: BILLING_SUPPORT_RESOLUTION_HREF,
     isSelfServe: false,
   }
 }

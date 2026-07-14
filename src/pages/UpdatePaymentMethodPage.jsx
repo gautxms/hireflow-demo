@@ -13,16 +13,16 @@ function navigateInternal(pathname) {
 }
 
 export default function UpdatePaymentMethodPage() {
-  usePageSeo('Update Payment Method', 'Update your billing card details securely through Paddle.')
+  usePageSeo('Resolve Billing Issue', 'Contact support to resolve billing securely through Paddle.')
 
   return (
     <main className="billing-shell">
       <section className="billing-shell__section">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Update Payment Method</h1>
+            <h1 className="page-title">Resolve billing issue</h1>
             <p className="page-subtitle">
-              Payment method updates are handled through Paddle&apos;s secure billing flow so HireFlow never collects or processes card numbers, expiry dates, or security codes.
+              Billing recovery is handled through Paddle&apos;s secure billing flow so HireFlow never collects or processes card numbers, expiry dates, or security codes.
             </p>
           </div>
           <BackButton />
@@ -34,8 +34,8 @@ export default function UpdatePaymentMethodPage() {
             A self-service Paddle payment method update link is not available in this workspace yet. Please contact support and we&apos;ll send you the secure Paddle-hosted billing instructions for your account.
           </p>
           <div className="billing-shell__actions">
-            <a className="hf-btn hf-btn--primary" href={`mailto:${SUPPORT_EMAIL}?subject=Payment%20method%20update%20request`}>
-              Contact support
+            <a className="hf-btn hf-btn--primary" href={`mailto:${SUPPORT_EMAIL}?subject=Billing%20resolution%20request`}>
+              Contact support to resolve billing
             </a>
             <button type="button" className="hf-btn hf-btn--secondary" onClick={() => navigateInternal('/billing')}>
               Back to billing

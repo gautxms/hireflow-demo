@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
+import { BILLING_SUPPORT_RESOLUTION_HREF, canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -13,22 +13,22 @@ test('past_due monthly users do not see annual upgrade plan action', () => {
 })
 
 
-test('payment_failed billing state is treated as past due and gets payment CTA', () => {
+test('payment_failed billing state is treated as past due and gets support CTA', () => {
   const subscriptionState = { rawStatus: 'payment_failed', canManageBilling: true, hasProviderSubscription: true }
   const action = getPastDueBillingAction(subscriptionState)
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
   assert.equal(action.label, 'Contact support to resolve billing')
-  assert.equal(action.href, '/account/payment-method')
+  assert.equal(action.href, BILLING_SUPPORT_RESOLUTION_HREF)
 })
 
-test('past_due billing state shows payment-required notice and payment CTA', () => {
+test('past_due billing state shows payment-required notice and support CTA', () => {
   const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
   const action = getPastDueBillingAction(subscriptionState)
 
   assert.equal(action.label, 'Contact support to resolve billing')
-  assert.equal(action.href, '/account/payment-method')
+  assert.equal(action.href, BILLING_SUPPORT_RESOLUTION_HREF)
   assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until billing is resolved.')
 })
 
@@ -251,12 +251,12 @@ test('billing history renders when invoice rows exist', () => {
   assert.equal(shouldRenderBillingHistory([{ id: 'inv_123', canDownload: true }]), true)
 })
 
-test('BillingPage past-due CTA uses visible button text and SPA navigation', () => {
+test('BillingPage past-due CTA uses visible mailto text without SPA navigation', () => {
   const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
 
-  assert.match(source, /<button type="button" className="hf-btn hf-btn--primary" onClick=\{\(\) => navigateInternal\(pastDueAction\.href\)\}>/)
+  assert.match(source, /<a className="hf-btn hf-btn--primary" href=\{pastDueAction\.href\}>/)
   assert.match(source, /\{pastDueAction\.label\}/)
-  assert.doesNotMatch(source, /<a className="hf-btn hf-btn--primary" href=\{pastDueAction\.href\}>/)
+  assert.doesNotMatch(source, /navigateInternal\(pastDueAction\.href\)/)
 })
 
 test('BillingPage past-due copy is rendered only through the compact notice helper', () => {

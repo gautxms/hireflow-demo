@@ -36,7 +36,7 @@ test('classifies exact paid workspace base routes with canonical trailing slash 
 })
 
 test('classifies account-only eligible authenticated routes with canonical trailing slash handling', () => {
-  for (const path of ['/settings', '/settings/', '/billing', '/billing/', '/results', '/analyses/abc', '/analyses/abc/', '/candidates/abc', '/candidates/abc/']) {
+  for (const path of ['/settings', '/settings/', '/billing', '/billing/', '/account/payment-method', '/account/payment-method/', '/results', '/analyses/abc', '/analyses/abc/', '/candidates/abc', '/candidates/abc/']) {
     assert.equal(isAuthenticatedAccountShellRoutePath(path), true, `${path} should be account-shell eligible`)
     assert.equal(isUserShellRoutePath(path), true, `${path} should be authenticated-shell eligible`)
   }
@@ -63,6 +63,7 @@ test('keeps checkout, shared-result, and admin routes standalone for ordinary au
   assert.equal(isStandaloneOrdinaryUserAuthRoutePath('/results/shared-token'), true)
   assert.equal(isStandaloneOrdinaryUserAuthRoutePath('/admin'), true)
   assert.equal(isStandaloneOrdinaryUserAuthRoutePath('/admin/login'), true)
+  assert.equal(isAuthenticatedAccountShellRoutePath('/account/payment-method'), true)
   assert.equal(isUserShellRoutePath('/account/payment-method'), true)
 })
 
