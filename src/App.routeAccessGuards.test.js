@@ -40,8 +40,13 @@ test('historical dashboard uses authenticated routing and preserves paid legacy 
 
 test('only staged historical Dashboard, Jobs, Analyses, Candidates, Shortlists, and Reports routes are opened by the read-only shell', () => {
   assert.match(source, /const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set\(\['\/dashboard', '\/job-descriptions', '\/analyses', '\/candidates', '\/shortlists', '\/reports'\]\)/)
-  assert.match(source, /READ_ONLY_WORKSPACE_FRONTEND_ROUTES\.has\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, subscriptionStateOrStatus\)/)
-  assert.match(source, /const hasReadOnlyWorkspaceRouteAccess = [\s\S]*READ_ONLY_WORKSPACE_FRONTEND_ROUTES\.has\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, profileBillingState\)/)
+  assert.match(source, /function isReadOnlyWorkspaceFrontendRoute\(pathname\)/)
+  assert.match(source, /READ_ONLY_WORKSPACE_FRONTEND_ROUTES\.has\(pathname\)/)
+  assert.match(source, /getAnalysisDetailRouteId\(pathname\)/)
+  assert.match(source, /getCandidateDetailRouteId\(pathname\)/)
+  assert.match(source, /isResultsRootPath\(pathname\)/)
+  assert.match(source, /isReadOnlyWorkspaceFrontendRoute\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, subscriptionStateOrStatus\)/)
+  assert.match(source, /const hasReadOnlyWorkspaceRouteAccess = [\s\S]*isReadOnlyWorkspaceFrontendRoute\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, profileBillingState\)/)
   assert.match(source, /isPaidWorkspaceRoutePath\(resolvedPathname\)[\s\S]*&& !hasReadOnlyWorkspaceRouteAccess/)
   assert.match(source, /<JobDescriptionPage[\s\S]*isReadOnly=\{!profileBillingState\.canUsePaidMutation\}/)
   assert.match(source, /<AnalysesPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
@@ -55,6 +60,7 @@ test('only staged historical Dashboard, Jobs, Analyses, Candidates, Shortlists, 
   assert.match(source, /if \(!canViewAnalysesHistory\)/)
   assert.match(source, /if \(!canViewCandidateHistory\)/)
   assert.match(source, /if \(!canViewReportsHistory\)/)
+  assert.match(source, /readOnlyNotice=\{readOnlyWorkspaceNotice\}/)
 })
 
 test('blocked guards return before page evaluation can run fallbacks or intent mutation paths', () => {

@@ -78,7 +78,7 @@ import { canAccessRouteForSubscriptionState, canonicalizePathname, getAnalysisDe
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
-import { buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
+import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -110,6 +110,13 @@ const PUBLIC_ROUTE_PATHS = new Set([
   ...INTENT_PAGE_ORDER,
 ])
 const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/dashboard', '/job-descriptions', '/analyses', '/candidates', '/shortlists', '/reports'])
+
+function isReadOnlyWorkspaceFrontendRoute(pathname) {
+  return READ_ONLY_WORKSPACE_FRONTEND_ROUTES.has(pathname)
+    || Boolean(getAnalysisDetailRouteId(pathname))
+    || Boolean(getCandidateDetailRouteId(pathname))
+    || isResultsRootPath(pathname)
+}
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -201,7 +208,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
 
   const canAccessWorkspaceShell = canAccessProductDashboard(subscriptionStateOrStatus)
     || (
-      READ_ONLY_WORKSPACE_FRONTEND_ROUTES.has(resolvedPathname)
+      isReadOnlyWorkspaceFrontendRoute(resolvedPathname)
       && canAccessRouteForSubscriptionState(resolvedPathname, subscriptionStateOrStatus)
     )
 
@@ -389,6 +396,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
   const canViewAnalysesHistory = canViewHistoricalWorkspaceModule(analysesModuleEnabled, profileBillingState)
   const canViewCandidateHistory = canViewHistoricalWorkspaceModule(candidateModuleEnabled, profileBillingState)
   const canViewReportsHistory = canViewHistoricalWorkspaceModule(dashboardReportsEnabled, profileBillingState)
+  const readOnlyWorkspaceNotice = buildReadOnlyWorkspaceNotice(profileBillingState)
   const canonicalPathname = canonicalizePathname(pathname)
   const isAdminPath = canonicalPathname.startsWith('/admin')
   const isRootLandingPath = canonicalPathname === '/'
@@ -1149,7 +1157,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
   const isAccessError = isAuthenticated && accessResolutionStatus === 'error'
   const isAuthResolved = !isAuthenticated || accessResolutionStatus === 'resolved'
   const useUserShellLayout = isAuthResolved && shouldRenderWithinUserShell(resolvedPathname, isAuthenticated, profileBillingState)
-  const useAccountShellLayout = isAuthResolved && isAuthenticated && !hasWorkspaceAccess && isAuthenticatedAccountShellRoutePath(resolvedPathname)
+  const useAccountShellLayout = isAuthResolved && isAuthenticated && !useUserShellLayout && !hasWorkspaceAccess && isAuthenticatedAccountShellRoutePath(resolvedPathname)
   const useAuthRouteLayout = AUTH_ROUTE_PATHS.has(resolvedPathname) || resolvedPathname.startsWith('/reset-password/')
 
   useEffect(() => {
@@ -1164,7 +1172,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
   const shouldHoldForAccessResolution = isAuthenticated && !isStandaloneDuringAccessResolution
   const hasReadOnlyWorkspaceRouteAccess = isAuthResolved
     && isAuthenticated
-    && READ_ONLY_WORKSPACE_FRONTEND_ROUTES.has(resolvedPathname)
+    && isReadOnlyWorkspaceFrontendRoute(resolvedPathname)
     && canAccessRouteForSubscriptionState(resolvedPathname, profileBillingState)
   const isBlockedPaidWorkspaceRoute = isAuthResolved
     && isAuthenticated
@@ -1263,6 +1271,8 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
           subscriptionStatus={subscriptionStatus}
           pageTitleProp={shellPageTitle}
           showUpgradeCta={canViewUpgradePricing}
+          isReadOnlyWorkspace={Boolean(readOnlyWorkspaceNotice)}
+          readOnlyNotice={readOnlyWorkspaceNotice}
         >
           {pageContent}
         </UserAppShell>
