@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -140,7 +140,6 @@ export default function BillingPage() {
   const hasVerifiedPreviewAmounts = planPreview?.hasVerifiedPreviewAmounts === true
   const canConfirmPlanChange = !isChangingPlan && !isLoadingPreview && !previewError && hasVerifiedPreviewAmounts
   const planAction = getBillingPlanAction(subscription?.plan, subscriptionState)
-  const pastDueAction = getPastDueBillingAction(subscriptionState)
   const cancelActionLabel = getCancelActionLabel(subscription?.plan)
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
@@ -347,11 +346,6 @@ export default function BillingPage() {
 
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
-                  {pastDueAction ? (
-                    <a className="hf-btn hf-btn--primary" href={pastDueAction.href}>
-                      {pastDueAction.label}
-                    </a>
-                  ) : null}
                   {planAction?.isSelfServe ? (
                     <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>
                       {planAction.label}

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { BILLING_SUPPORT_RESOLUTION_HREF, canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingAction, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -13,23 +13,20 @@ test('past_due monthly users do not see annual upgrade plan action', () => {
 })
 
 
-test('payment_failed billing state is treated as past due and gets support CTA', () => {
+test('payment_failed billing state is treated as past due and uses the compact support notice', () => {
   const subscriptionState = { rawStatus: 'payment_failed', canManageBilling: true, hasProviderSubscription: true }
-  const action = getPastDueBillingAction(subscriptionState)
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
-  assert.equal(action.label, 'Contact support to resolve billing')
-  assert.equal(action.href, BILLING_SUPPORT_RESOLUTION_HREF)
+  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until billing is resolved. Contact hello@hireflow.dev for billing support.')
 })
 
-test('past_due billing state shows payment-required notice and support CTA', () => {
+test('past_due billing state shows payment-required support notice without a primary CTA action', () => {
   const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
-  const action = getPastDueBillingAction(subscriptionState)
 
-  assert.equal(action.label, 'Contact support to resolve billing')
-  assert.equal(action.href, BILLING_SUPPORT_RESOLUTION_HREF)
-  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until billing is resolved.')
+  assert.equal(isPastDueBillingState(subscriptionState), true)
+  assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
+  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until billing is resolved. Contact hello@hireflow.dev for billing support.')
 })
 
 test('past_due metadata replaces renewal language with payment labels without workspace access duplication', () => {
@@ -251,12 +248,12 @@ test('billing history renders when invoice rows exist', () => {
   assert.equal(shouldRenderBillingHistory([{ id: 'inv_123', canDownload: true }]), true)
 })
 
-test('BillingPage past-due CTA uses visible mailto text without SPA navigation', () => {
+test('BillingPage past_due does not render the pastDueAction button or link', () => {
   const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
 
-  assert.match(source, /<a className="hf-btn hf-btn--primary" href=\{pastDueAction\.href\}>/)
-  assert.match(source, /\{pastDueAction\.label\}/)
-  assert.doesNotMatch(source, /navigateInternal\(pastDueAction\.href\)/)
+  assert.doesNotMatch(source, /pastDueAction/)
+  assert.doesNotMatch(source, /Contact support to resolve billing/)
+  assert.doesNotMatch(source, /account\/payment-method/)
 })
 
 test('BillingPage past-due copy is rendered only through the compact notice helper', () => {
@@ -265,4 +262,13 @@ test('BillingPage past-due copy is rendered only through the compact notice help
   assert.match(source, /pastDueBillingNotice \? <p className="billing-page__past-due-note">\{pastDueBillingNotice\}<\/p> : null/)
   assert.doesNotMatch(source, /Workspace access/)
   assert.doesNotMatch(source, /Read-only until billing is resolved/)
+})
+
+test('BillingPage past_due support email is only rendered through the notice helper', () => {
+  const pageSource = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+  const actionSource = readFileSync(new URL('./billingPageActions.js', import.meta.url), 'utf8')
+
+  assert.match(actionSource, /hello@hireflow\.dev/)
+  assert.equal((pageSource.match(/pastDueBillingNotice/g) || []).length, 3)
+  assert.equal((pageSource.match(/hello@hireflow\.dev/g) || []).length, 0)
 })
