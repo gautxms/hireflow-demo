@@ -653,31 +653,137 @@ router.post('/change-password', async (req, res) => {
   }
 })
 
+const PROFILE_EXPORT_VERSION = '2026-07-workspace-snapshot-v1'
+
 router.get('/export', async (req, res) => {
   try {
-    const [userResult, resumeResult, subscriptionResult] = await Promise.all([
+    const userId = req.user.id
+    const [
+      userResult,
+      jobResult,
+      resumeResult,
+      analysisResult,
+      analysisItemResult,
+      candidateResult,
+      shortlistResult,
+      shortlistedCandidateResult,
+      subscriptionResult,
+      billingInvoiceResult,
+    ] = await Promise.all([
       pool.query(
-        `SELECT id, email, company, phone, subscription_status, created_at, deleted_at, deletion_scheduled_for
+        `SELECT id, email, company, phone, subscription_status, subscription_plan,
+                created_at, deleted_at, deletion_scheduled_for
          FROM users
          WHERE id = $1`,
-        [req.user.id],
+        [userId],
       ),
-      pool.query('SELECT id, filename, created_at FROM resumes WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]),
       pool.query(
-        'SELECT id, paddle_subscription_id, status, created_at, updated_at FROM subscriptions WHERE user_id = $1 ORDER BY created_at DESC',
-        [req.user.id],
+        `SELECT id, title, status, department, employment_type, location, experience_years,
+                description, requirements, skills, source_type, version, created_at, updated_at
+         FROM job_descriptions
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT id, filename, original_filename, file_extension, original_mime_type,
+                scan_status, job_description_id, raw_text, years_experience, profile_score,
+                strengths, considerations, seniority_level, tags, top_skills, skills_structured,
+                skills, created_at, updated_at
+         FROM resumes
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT a.id, a.name, a.job_description_id, a.status, a.created_at, a.completed_at,
+                a.error_summary, COUNT(ai.id)::int AS resume_count
+         FROM analyses a
+         LEFT JOIN analysis_items ai ON ai.analysis_id = a.id
+         WHERE a.user_id = $1
+         GROUP BY a.id
+         ORDER BY a.created_at DESC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT ai.id, ai.analysis_id, ai.resume_id, ai.parse_job_id, ai.created_at,
+                pj.status, pj.progress, pj.error_message, pj.updated_at, pj.result AS stored_result
+         FROM analysis_items ai
+         INNER JOIN analyses a ON a.id = ai.analysis_id AND a.user_id = $1
+         LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id AND pj.user_id = $1
+         ORDER BY ai.created_at ASC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT cp.id, cp.resume_id, cp.profile AS stored_candidate_result, cp.source_parse_job_id,
+                cp.source_updated_at, cp.schema_version, cp.created_at, cp.updated_at
+         FROM candidate_profiles cp
+         INNER JOIN resumes r ON r.id = cp.resume_id AND r.user_id = cp.user_id
+         WHERE cp.user_id = $1
+         ORDER BY cp.updated_at DESC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT id, name, description, job_description_id, status, created_at, updated_at
+         FROM shortlists
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT sc.id, sc.shortlist_id, sc.resume_id, sc.analysis_id, sc.notes, sc.rating,
+                sc.decision_status, sc.source_context, sc.candidate_snapshot, sc.added_at,
+                sc.created_at, sc.updated_at
+         FROM shortlist_candidates sc
+         INNER JOIN shortlists s ON s.id = sc.shortlist_id AND s.user_id = $1
+         ORDER BY sc.added_at DESC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT id, paddle_subscription_id, status, latest_event_type, paddle_environment,
+                created_at, updated_at
+         FROM subscriptions
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [userId],
+      ),
+      pool.query(
+        `SELECT id, paddle_transaction_id, invoice_number, billed_at, amount_cents,
+                currency, status, invoice_pdf_url, created_at
+         FROM billing_invoices
+         WHERE user_id = $1
+         ORDER BY billed_at DESC`,
+        [userId],
       ),
     ])
 
+    const user = userResult.rows[0] || null
+
     return res.json({
       exported_at: new Date().toISOString(),
+      export_version: PROFILE_EXPORT_VERSION,
       data: {
-        user: userResult.rows[0] || null,
+        user,
+        subscription_summary: user
+          ? {
+              subscription_status: user.subscription_status,
+              subscription_plan: user.subscription_plan,
+              subscription_records_count: subscriptionResult.rows.length,
+            }
+          : {},
+        jobs: jobResult.rows,
         resumes: resumeResult.rows,
+        analyses: analysisResult.rows,
+        analysis_items: analysisItemResult.rows,
+        candidate_results: candidateResult.rows,
+        shortlists: shortlistResult.rows,
+        shortlisted_candidates: shortlistedCandidateResult.rows,
         subscriptions: subscriptionResult.rows,
+        billing_invoices: billingInvoiceResult.rows,
       },
     })
-  } catch {
+  } catch (error) {
+    console.error('[Profile] Export failed:', error)
     return res.status(500).json({ error: 'Internal server error' })
   }
 })

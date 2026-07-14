@@ -153,3 +153,153 @@ test('PATCH /profile/me keeps editable fields behavior and returns fresh account
   assert.equal(payload.user.subscription_status, 'active')
   assert.equal(queries.length, 2)
 })
+
+function buildExportRowsForUser(status = 'active') {
+  return {
+    users: [activeDbUser({ subscription_status: status, subscription_plan: status === 'inactive' ? null : 'monthly' })],
+    job_descriptions: [{ id: 'job-user', title: 'Engineer', status: 'active', description: 'Build things' }],
+    resumes: [{ id: 'resume-user', filename: 'alice.pdf', original_filename: 'Alice Resume.pdf', created_at: '2026-07-02T00:00:00.000Z' }],
+    analyses: [{ id: 'analysis-user', name: 'July analysis', job_description_id: 'job-user', status: 'complete', resume_count: 1 }],
+    analysis_items: [{ id: 'item-user', analysis_id: 'analysis-user', resume_id: 'resume-user', status: 'complete', stored_result: { candidates: [{ name: 'Alice', score: 91 }] } }],
+    candidate_profiles: [{ id: 'candidate-user', resume_id: 'resume-user', stored_candidate_result: { name: 'Alice', score: 91, reasoning: 'stored text' } }],
+    shortlists: [{ id: 'shortlist-user', name: 'Top candidates', status: 'active' }],
+    shortlist_candidates: [{ id: 'shortlisted-user', shortlist_id: 'shortlist-user', resume_id: 'resume-user', analysis_id: 'analysis-user' }],
+    subscriptions: status === 'none' ? [] : [{ id: 'sub-user', paddle_subscription_id: 'sub_public', status, latest_event_type: 'subscription.updated' }],
+    billing_invoices: [{ id: 'invoice-user', invoice_number: 'INV-1', amount_cents: 1200, currency: 'USD', status: 'paid' }],
+  }
+}
+
+function mockProfileExportQueries(t, rowsByTable) {
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql, params })
+    assert.deepEqual(params, [40])
+
+    if (/FROM users/.test(sql)) return { rows: rowsByTable.users || [] }
+    if (/FROM job_descriptions/.test(sql)) return { rows: rowsByTable.job_descriptions || [] }
+    if (/FROM resumes/.test(sql)) return { rows: rowsByTable.resumes || [] }
+    if (/FROM analyses a/.test(sql)) return { rows: rowsByTable.analyses || [] }
+    if (/FROM analysis_items ai/.test(sql)) return { rows: rowsByTable.analysis_items || [] }
+    if (/FROM candidate_profiles cp/.test(sql)) return { rows: rowsByTable.candidate_profiles || [] }
+    if (/FROM shortlists/.test(sql)) return { rows: rowsByTable.shortlists || [] }
+    if (/FROM shortlist_candidates sc/.test(sql)) return { rows: rowsByTable.shortlist_candidates || [] }
+    if (/FROM subscriptions/.test(sql)) return { rows: rowsByTable.subscriptions || [] }
+    if (/FROM billing_invoices/.test(sql)) return { rows: rowsByTable.billing_invoices || [] }
+
+    throw new Error(`Unexpected export query: ${sql}`)
+  })
+  return queries
+}
+
+for (const status of ['active', 'trialing', 'past_due', 'payment_failed', 'canceled', 'cancelled', 'inactive', 'none']) {
+  test(`GET /profile/export returns 200 for ${status} users`, async (t) => {
+    process.env.JWT_SECRET = 'test-secret'
+    mockProfileExportQueries(t, buildExportRowsForUser(status))
+
+    const { response, payload } = await requestProfile('/profile/export', {
+      headers: authHeaderWithEmbeddedUser(activeDbUser({ subscription_status: status === 'none' ? 'inactive' : status })),
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(payload.export_version, '2026-07-workspace-snapshot-v1')
+    assert.equal(payload.data.user.id, 40)
+    assert.ok(Array.isArray(payload.data.subscriptions))
+  })
+}
+
+test('GET /profile/export returns complete workspace snapshot shape and preserves legacy sections', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  mockProfileExportQueries(t, buildExportRowsForUser('active'))
+
+  const { response, payload } = await requestProfile('/profile/export', {
+    headers: authHeaderWithEmbeddedUser(activeDbUser()),
+  })
+
+  assert.equal(response.status, 200)
+  assert.match(payload.exported_at, /^\d{4}-\d{2}-\d{2}T/)
+  assert.deepEqual(Object.keys(payload.data), [
+    'user',
+    'subscription_summary',
+    'jobs',
+    'resumes',
+    'analyses',
+    'analysis_items',
+    'candidate_results',
+    'shortlists',
+    'shortlisted_candidates',
+    'subscriptions',
+    'billing_invoices',
+  ])
+  assert.equal(payload.data.resumes[0].id, 'resume-user')
+  assert.equal(payload.data.subscriptions[0].id, 'sub-user')
+  assert.equal(payload.data.candidate_results[0].stored_candidate_result.reasoning, 'stored text')
+})
+
+test('GET /profile/export returns empty arrays for an empty workspace', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  mockProfileExportQueries(t, { users: [activeDbUser({ subscription_status: 'inactive', subscription_plan: null })] })
+
+  const { response, payload } = await requestProfile('/profile/export', {
+    headers: authHeaderWithEmbeddedUser(activeDbUser({ subscription_status: 'inactive' })),
+  })
+
+  assert.equal(response.status, 200)
+  for (const key of ['jobs', 'resumes', 'analyses', 'analysis_items', 'candidate_results', 'shortlists', 'shortlisted_candidates', 'subscriptions', 'billing_invoices']) {
+    assert.deepEqual(payload.data[key], [])
+  }
+})
+
+test('GET /profile/export scopes every workspace query to authenticated user and safe joins', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const queries = mockProfileExportQueries(t, buildExportRowsForUser('active'))
+
+  const { response, payload } = await requestProfile('/profile/export', {
+    headers: authHeaderWithEmbeddedUser(activeDbUser()),
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.data.jobs.some((job) => job.id === 'job-other'), false)
+  assert.equal(payload.data.resumes.some((resume) => resume.id === 'resume-other'), false)
+  assert.equal(payload.data.analyses.some((analysis) => analysis.id === 'analysis-other'), false)
+  assert.equal(payload.data.analysis_items.some((item) => item.id === 'item-other'), false)
+  assert.equal(payload.data.candidate_results.some((candidate) => candidate.id === 'candidate-other'), false)
+  assert.equal(payload.data.shortlists.some((shortlist) => shortlist.id === 'shortlist-other'), false)
+  assert.match(queries.find((query) => /FROM analysis_items ai/.test(query.sql)).sql, /INNER JOIN analyses a ON a\.id = ai\.analysis_id AND a\.user_id = \$1/)
+  assert.match(queries.find((query) => /FROM shortlist_candidates sc/.test(query.sql)).sql, /INNER JOIN shortlists s ON s\.id = sc\.shortlist_id AND s\.user_id = \$1/)
+})
+
+test('GET /profile/export does not select sensitive auth or payment fields', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const queries = mockProfileExportQueries(t, buildExportRowsForUser('active'))
+
+  const { response, payload } = await requestProfile('/profile/export', {
+    headers: authHeaderWithEmbeddedUser(activeDbUser()),
+  })
+
+  assert.equal(response.status, 200)
+  const serializedPayload = JSON.stringify(payload)
+  assert.equal(serializedPayload.includes('password_hash'), false)
+  assert.equal(serializedPayload.includes('email_verification_token'), false)
+  assert.equal(serializedPayload.includes('latest_event_payload'), false)
+  assert.equal(serializedPayload.includes('payload'), false)
+  for (const { sql } of queries) {
+    assert.doesNotMatch(sql, /password_hash|email_verification_token|reset_token|latest_event_payload|payload|secret|api_key/i)
+  }
+})
+
+test('GET /profile/export exports older partial analysis records without crashing', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const rows = buildExportRowsForUser('active')
+  rows.analyses = [{ id: 'analysis-partial', name: null, job_description_id: null, status: 'partial', error_summary: 'Some resumes failed' }]
+  rows.analysis_items = [{ id: 'item-partial', analysis_id: 'analysis-partial', resume_id: 'resume-user', status: 'failed', stored_result: null }]
+  rows.candidate_profiles = []
+  mockProfileExportQueries(t, rows)
+
+  const { response, payload } = await requestProfile('/profile/export', {
+    headers: authHeaderWithEmbeddedUser(activeDbUser()),
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.data.analyses[0].id, 'analysis-partial')
+  assert.equal(payload.data.analysis_items[0].stored_result, null)
+})
