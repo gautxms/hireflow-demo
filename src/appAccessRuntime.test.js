@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildResolvedAccessContext } from './appAccessRuntime.js'
+import { buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime.js'
 
 const FUTURE_END = '2999-01-01T00:00:00.000Z'
 
@@ -127,4 +127,25 @@ test('authenticated resolved inactive profile with history gets read-only state 
   assert.equal(inactiveWithHistory.profileBillingState.canUsePaidMutation, false)
   assert.equal(inactiveWithHistory.workspaceAccessForFlags, false)
   assert.equal(inactiveWithHistory.canViewUpgradePricing, true)
+})
+
+test('read-only history can remain visible when subscription-gated feature flags are off', () => {
+  assert.equal(canViewHistoricalWorkspaceModule(false, {
+    isReadOnlyWorkspace: true,
+    canUsePaidMutation: false,
+  }), true)
+})
+
+test('historical module visibility does not grant access to inactive accounts without history', () => {
+  assert.equal(canViewHistoricalWorkspaceModule(false, {
+    isReadOnlyWorkspace: false,
+    canUsePaidMutation: false,
+  }), false)
+})
+
+test('enabled modules remain visible to paid users', () => {
+  assert.equal(canViewHistoricalWorkspaceModule(true, {
+    isReadOnlyWorkspace: false,
+    canUsePaidMutation: true,
+  }), true)
 })
