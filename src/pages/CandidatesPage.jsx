@@ -103,7 +103,7 @@ function formatDate(value) {
   return date.toLocaleString()
 }
 
-export default function CandidatesPage() {
+export default function CandidatesPage({ isReadOnly = false }) {
   const [filters, setFilters] = useState(emptyFilters)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState('updated_desc')
@@ -231,6 +231,7 @@ export default function CandidatesPage() {
   }, [filters, searchTerm, sortBy])
 
   const toggleSelectedCandidate = (resumeId) => {
+    if (isReadOnly) return
     setSelectedResumeIds((current) => (
       current.includes(resumeId)
         ? current.filter((id) => id !== resumeId)
@@ -245,14 +246,16 @@ export default function CandidatesPage() {
       <header className="candidates-directory__hero">
         <div>
           <h1>Candidates Directory</h1>
-          <p>Fast pipeline triage with structured scoring, skills intelligence, and shortlist actions.</p>
+          <p>{isReadOnly ? 'Review historical candidate profiles, scores, skills, and source details.' : 'Fast pipeline triage with structured scoring, skills intelligence, and shortlist actions.'}</p>
         </div>
         <div className="candidates-directory__summary-chips" aria-label="Directory summary">
           <span className="summary-chip">Total: {viewState === 'api-error' ? '—' : pagination.totalCount}</span>
           <span className="summary-chip">Visible: {viewState === 'api-error' ? '—' : visibleCandidates.length}</span>
-          <span className="summary-chip">Selected: {viewState === 'api-error' ? '—' : selectedResumeIds.length}</span>
+          {!isReadOnly ? <span className="summary-chip">Selected: {viewState === 'api-error' ? '—' : selectedResumeIds.length}</span> : null}
         </div>
       </header>
+
+      {isReadOnly ? <p className="candidates-directory__status">Read-only access: historical candidates remain available, but shortlist and candidate mutation actions require an active subscription.</p> : null}
 
       <section className="candidates-directory__toolbar" aria-label="Candidate search and quick filters">
         <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, tags, role, skills" />
@@ -288,7 +291,7 @@ export default function CandidatesPage() {
         </div>
       </details>
 
-      {selectedResumeIds.length > 0 && (
+      {!isReadOnly && selectedResumeIds.length > 0 && (
         <section className="candidates-directory__bulk" aria-label="Bulk shortlist actions">
           <button type="button" className="hf-btn hf-btn--primary" onClick={() => setIsAddModalOpen(true)}>Add selected to shortlist</button>
         </section>
@@ -311,17 +314,17 @@ export default function CandidatesPage() {
           <section className="candidates-directory__table-wrap" aria-live="polite">
             <table className="candidates-directory__table">
               <thead>
-                <tr><th></th><th>Name</th><th>Score</th><th>Experience</th><th>Skills</th><th>Tags</th><th>Job</th><th>Updated</th></tr>
+                <tr>{!isReadOnly ? <th aria-label="Select candidate" /> : null}<th>Name</th><th>Score</th><th>Experience</th><th>Skills</th><th>Tags</th><th>Job</th><th>Updated</th></tr>
               </thead>
               <tbody>
                 {visibleCandidates.map((candidate) => (
                   <tr key={candidate.resumeId}>
-                    <td>
+                    {!isReadOnly ? <td>
                       <label className="candidates-directory__checkbox" aria-label={`Select ${candidate.name || 'candidate'}`}>
                         <input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} />
                         <span aria-hidden="true" className="candidates-directory__checkbox-indicator" />
                       </label>
-                    </td>
+                    </td> : null}
                     <td><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></td>
                     <td><CandidateDirectoryScore candidate={candidate} /></td>
                     <td>{getExperienceLabel(candidate)}</td>
@@ -338,10 +341,10 @@ export default function CandidatesPage() {
           <section className="candidates-directory__mobile-list">
             {visibleCandidates.map((candidate) => (
               <article key={candidate.resumeId} className="candidate-directory-card">
-                <label className="candidates-directory__checkbox" aria-label={`Select ${candidate.name || 'candidate'}`}>
+                {!isReadOnly ? <label className="candidates-directory__checkbox" aria-label={`Select ${candidate.name || 'candidate'}`}>
                   <input type="checkbox" checked={selectedResumeIds.includes(candidate.resumeId)} onChange={() => toggleSelectedCandidate(candidate.resumeId)} />
                   <span aria-hidden="true" className="candidates-directory__checkbox-indicator" />
-                </label>
+                </label> : null}
                 <h2><a href={`/candidates/${candidate.resumeId}`}>{candidate.name || 'Candidate'}</a></h2>
                 <p><strong>Score:</strong> <CandidateDirectoryScore candidate={candidate} compact /></p>
                 <p><strong>Experience:</strong> {getExperienceLabel(candidate)}</p>
@@ -376,7 +379,7 @@ export default function CandidatesPage() {
           )}
         </>
       )}
-      <AddToShortlistModal
+      {!isReadOnly ? <AddToShortlistModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         candidates={visibleCandidates.filter((candidate) => selectedResumeIds.includes(candidate.resumeId))}
@@ -385,7 +388,7 @@ export default function CandidatesPage() {
           setSelectedResumeIds([])
           setIsAddModalOpen(false)
         }}
-      />
+      /> : null}
 
     </main>
   )
