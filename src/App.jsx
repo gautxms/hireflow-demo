@@ -109,6 +109,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/refund-policy',
   ...INTENT_PAGE_ORDER,
 ])
+const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/job-descriptions', '/analyses'])
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -200,7 +201,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
 
   const canAccessWorkspaceShell = canAccessProductDashboard(subscriptionStateOrStatus)
     || (
-      resolvedPathname === '/job-descriptions'
+      READ_ONLY_WORKSPACE_FRONTEND_ROUTES.has(resolvedPathname)
       && canAccessRouteForSubscriptionState(resolvedPathname, subscriptionStateOrStatus)
     )
 
@@ -694,19 +695,16 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         return null
       }
 
-      const canAccessAnalyses = guardSubscriptionRoute({
+      const canAccessAnalyses = guardAuthenticatedRoute({
         isAuthenticated,
-        subscriptionStatus,
-        subscriptionState: profileBillingState,
+        promptMessage: 'Please login to view analyses.',
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
-        authPromptMessage: 'Please login to view analyses.',
       })
       if (!canAccessAnalyses) {
         return null
       }
 
-      return <AnalysesPage onCreateAnalysis={handleCreateAnalysis} />
+      return <AnalysesPage isReadOnly={!profileBillingState.canUsePaidMutation} />
     }
 
     if (getAnalysisDetailRouteId(resolvedPathname)) {
@@ -1068,6 +1066,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     if (profileBillingState.isReadOnlyWorkspace && !profileBillingState.canUsePaidMutation) {
       return [
         { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'jobs' },
+        ...(analysesModuleEnabled ? [{ key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'analyses' }] : []),
         { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
       ]
     }
@@ -1166,15 +1165,15 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
   const isStandaloneDuringAccessResolution = isStandaloneOrdinaryUserAuthRoutePath(resolvedPathname) || useAuthRouteLayout
   const shouldHoldForAccessResolution = isAuthenticated && !isStandaloneDuringAccessResolution
-  const hasReadOnlyJobDescriptionsAccess = isAuthResolved
+  const hasReadOnlyWorkspaceRouteAccess = isAuthResolved
     && isAuthenticated
-    && resolvedPathname === '/job-descriptions'
+    && READ_ONLY_WORKSPACE_FRONTEND_ROUTES.has(resolvedPathname)
     && canAccessRouteForSubscriptionState(resolvedPathname, profileBillingState)
   const isBlockedPaidWorkspaceRoute = isAuthResolved
     && isAuthenticated
     && !hasWorkspaceAccess
     && isPaidWorkspaceRoutePath(resolvedPathname)
-    && !hasReadOnlyJobDescriptionsAccess
+    && !hasReadOnlyWorkspaceRouteAccess
 
   useEffect(() => {
     if (isBlockedPaidWorkspaceRoute) {

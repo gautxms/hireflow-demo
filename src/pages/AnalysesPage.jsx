@@ -66,7 +66,7 @@ function inferResumeMimeType(fileLike = {}) {
   return explicitType
 }
 
-export default function AnalysesPage() {
+export default function AnalysesPage({ isReadOnly = false }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [items, setItems] = useState([])
@@ -376,6 +376,7 @@ export default function AnalysesPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isReadOnly) return
     if (isSubmitting) return
 
     const nameValue = analysisName.trim()
@@ -453,6 +454,7 @@ export default function AnalysesPage() {
   }
 
   const handleDeleteAnalysis = async (analysisId, analysisName) => {
+    if (isReadOnly) return
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) {
       setDeleteFeedback({ type: 'error', message: 'Authentication required.' })
@@ -493,7 +495,15 @@ export default function AnalysesPage() {
   return (
     <main className="analyses-layout">
       <section className="analyses-layout__content">
-        <div className="analyses-page__header"><div><h1>Analyses</h1><p>Track existing analyses and launch a new one in seconds.</p></div><button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} ref={createButtonRef}>Create analysis</button></div>
+        <div className="analyses-page__header">
+          <div>
+            <h1>Analyses</h1>
+            <p>{isReadOnly ? 'View your historical analysis runs and results.' : 'Track existing analyses and launch a new one in seconds.'}</p>
+          </div>
+          {!isReadOnly ? <button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} ref={createButtonRef}>Create analysis</button> : null}
+        </div>
+
+        {isReadOnly ? <p className="analyses-layout__state">Read-only access: historical analyses remain available, but creating or deleting analyses requires an active subscription.</p> : null}
 
         {deleteFeedback.message && <p role="status" className={`analyses-layout__state ${deleteFeedback.type === 'error' ? 'analyses-layout__state--error' : 'analyses-layout__state--success'}`}>{deleteFeedback.message}</p>}
         {uploadFeedback.message && <p role={uploadFeedback.type === 'error' ? 'alert' : 'status'} className={`analyses-layout__state ${uploadFeedback.type === 'error' ? 'analyses-layout__state--error' : 'analyses-layout__state--success'}`}>{uploadFeedback.message}</p>}
@@ -501,11 +511,11 @@ export default function AnalysesPage() {
         <div className="analyses-layout__table-shell">
           {loading && <p className="analyses-layout__state analyses-layout__state--loading">Loading analyses…</p>}
           {!loading && error && <p role="alert" className="analyses-layout__state analyses-layout__state--error">{error}</p>}
-          {!loading && !error && sortedItems.length === 0 && <p className="analyses-layout__state analyses-layout__state--empty">No analyses yet. Upload resumes to create your first run.</p>}
+          {!loading && !error && sortedItems.length === 0 && <p className="analyses-layout__state analyses-layout__state--empty">{isReadOnly ? 'No historical analyses are available.' : 'No analyses yet. Upload resumes to create your first run.'}</p>}
 
           {!loading && !error && sortedItems.length > 0 && (
             <table className="analyses-layout__table">
-              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Files</th><th>Job description</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Analysis name</th><th>Created</th><th>Status</th><th>Files</th><th>Job description</th>{!isReadOnly ? <th>Actions</th> : null}</tr></thead>
               <tbody>
                 {pagedItems.map((analysis) => {
                   const status = deriveDisplayStatus(analysis)
@@ -551,7 +561,7 @@ export default function AnalysesPage() {
                       <td className="analyses-layout__cell analyses-layout__cell--jd" data-label="Job description">
                         <span className="analyses-layout__meta">{analysis.jobDescriptionTitle || 'No job description'}</span>
                       </td>
-                      <td className="analyses-layout__cell" data-label="Actions">
+                      {!isReadOnly ? <td className="analyses-layout__cell" data-label="Actions">
                         <button
                           type="button"
                           className="hf-btn hf-btn--secondary"
@@ -561,7 +571,7 @@ export default function AnalysesPage() {
                         >
                           {deletingAnalysisId === String(analysis.id) ? 'Deleting…' : <Trash2 size={16} aria-hidden="true" />}
                         </button>
-                      </td>
+                      </td> : null}
                     </tr>
                   )
                 })}
@@ -593,7 +603,7 @@ export default function AnalysesPage() {
         </div>
       </section>
 
-      <CreateAnalysisModal
+      {!isReadOnly ? <CreateAnalysisModal
         isOpen={isCreateModalOpen}
         isSubmitting={isSubmitting}
         analysisName={analysisName}
@@ -612,7 +622,7 @@ export default function AnalysesPage() {
         isDraggingOverDropzone={isDraggingOverDropzone}
         onDraggingOverDropzoneChange={setIsDraggingOverDropzone}
         onRemoveSelectedFile={handleRemoveSelectedFile}
-      />
+      /> : null}
     </main>
   )
 }
