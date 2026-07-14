@@ -75,6 +75,7 @@ export default function ShortlistManager(props) {
     loadingDetails,
     error,
     jobDescriptions = [],
+    readOnly = false,
   } = props
 
   const [name, setName] = useState('')
@@ -166,6 +167,7 @@ export default function ShortlistManager(props) {
 
   const handleCreate = async (event) => {
     event.preventDefault()
+    if (readOnly) return
     if (!name.trim()) return
     setCreateError('')
     try {
@@ -186,15 +188,17 @@ export default function ShortlistManager(props) {
       <header className="shortlist-manager__page-header">
         <div className="shortlist-manager__heading-copy">
           <h1>Shortlists</h1>
-          <p>Review and manage shortlisted candidates with clear job context.</p>
+          <p>{readOnly ? 'Review historical shortlists and candidate context.' : 'Review and manage shortlisted candidates with clear job context.'}</p>
         </div>
-        <button type="button" className="shortlist-manager__create-button" onClick={() => setShowCreateForm((value) => !value)} aria-expanded={showCreateForm}>
+        {!readOnly ? <button type="button" className="shortlist-manager__create-button" onClick={() => setShowCreateForm((value) => !value)} aria-expanded={showCreateForm}>
           <Plus size={18} strokeWidth={1.5} aria-hidden="true" />
           Create shortlist
-        </button>
+        </button> : null}
       </header>
 
-      {showCreateForm ? <section className="shortlist-manager__filters-card" aria-label="Create shortlist">
+      {readOnly ? <p className="shortlist-manager__muted-text">Read-only access: historical shortlists remain available, but creating or changing shortlists requires an active subscription.</p> : null}
+
+      {!readOnly && showCreateForm ? <section className="shortlist-manager__filters-card" aria-label="Create shortlist">
         <form onSubmit={handleCreate} className="shortlist-manager__create-form">
           <label className="shortlist-manager__filter-label">Shortlist name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter shortlist name" className="shortlist-manager__input" /></label>
           <label className="shortlist-manager__filter-label">Description<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Role, stage, or hiring notes" className="shortlist-manager__input" /></label>
@@ -233,7 +237,7 @@ export default function ShortlistManager(props) {
 
         {loadingList ? <div className="shortlist-manager__skeleton-list" role="status" aria-live="polite" aria-label="Loading shortlists"><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /><div className="shortlist-manager__skeleton-card" /></div> : null}
 
-        {!loadingList && !hasShortlists ? <div className="shortlist-manager__empty"><p>No shortlists yet.</p><p className="shortlist-manager__muted-text">Create your first shortlist to start reviewing candidates.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--accent" onClick={() => setShowCreateForm(true)}>Create shortlist</button></div> : null}
+        {!loadingList && !hasShortlists ? <div className="shortlist-manager__empty"><p>No shortlists yet.</p><p className="shortlist-manager__muted-text">{readOnly ? 'No historical shortlists are available.' : 'Create your first shortlist to start reviewing candidates.'}</p>{!readOnly ? <button type="button" className="shortlist-manager__button shortlist-manager__button--accent" onClick={() => setShowCreateForm(true)}>Create shortlist</button> : null}</div> : null}
 
         {!loadingList && hasShortlists ? <div className="shortlist-manager__content-grid">
           <aside className="shortlist-manager__shortlist-rail" aria-label="Shortlist selector">
@@ -260,13 +264,13 @@ export default function ShortlistManager(props) {
               const scoreChip = canLinkScore
                 ? <a className={scoreClassName} href={analysisHref} aria-label={`View analysis that produced ${scoreDisplay.label} for ${candidateName}`}>{scoreDisplay.label}</a>
                 : <span className={scoreClassName}>{scoreDisplay.label}</span>
-              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{analysisHref ? <a className="shortlist-manager__candidate-link" href={analysisHref} aria-label={`View analysis results for ${candidateName}`}>{candidateName}</a> : candidateName}</h4>{shouldShowFileLabel ? <p className="shortlist-manager__candidate-file"><FileText size={14} strokeWidth={1.5} aria-hidden="true" />{fileLabel}</p> : null}{candidateDescription ? <p className="shortlist-manager__candidate-notes">{candidateDescription}</p> : null}<div className="shortlist-manager__chip-list">{scoreChip}<span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div><div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
+              return <article key={candidate.id || candidate.resume_id} className="shortlist-manager__candidate-card"><div><h4 className="shortlist-manager__candidate-name">{analysisHref ? <a className="shortlist-manager__candidate-link" href={analysisHref} aria-label={`View analysis results for ${candidateName}`}>{candidateName}</a> : candidateName}</h4>{shouldShowFileLabel ? <p className="shortlist-manager__candidate-file"><FileText size={14} strokeWidth={1.5} aria-hidden="true" />{fileLabel}</p> : null}{candidateDescription ? <p className="shortlist-manager__candidate-notes">{candidateDescription}</p> : null}<div className="shortlist-manager__chip-list">{scoreChip}<span className="shortlist-manager__chip"><CalendarDays size={14} strokeWidth={1.5} aria-hidden="true" />Added {formatDate(candidate.added_at)}</span></div></div>{!readOnly ? <div className="shortlist-manager__candidate-actions"><button type="button" onClick={async () => {
                 const confirmed = window.confirm(`Remove ${candidateName} from this shortlist?`)
                 if (!confirmed) return
                 await onRemoveCandidate(candidate.resume_id)
-              }} className="shortlist-manager__button shortlist-manager__button--danger shortlist-manager__icon-button" aria-label={`Remove ${candidateName} from shortlist`}><Trash2 size={16} strokeWidth={1.5} aria-hidden="true" /></button></div></article>
+              }} className="shortlist-manager__button shortlist-manager__button--danger shortlist-manager__icon-button" aria-label={`Remove ${candidateName} from shortlist`}><Trash2 size={16} strokeWidth={1.5} aria-hidden="true" /></button></div> : null}</article>
             })}</div> : null}
-            {hasSelectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates in this shortlist yet.</p><p className="shortlist-manager__muted-text">Add candidates from the Candidates directory to continue reviewing.</p><a className="shortlist-manager__button shortlist-manager__button--accent shortlist-manager__link-button" href="/candidates">Go to Candidates</a></div> : null}
+            {hasSelectedShortlist && !loadingDetails && allCandidates.length === 0 ? <div className="shortlist-manager__empty"><p>No candidates in this shortlist yet.</p><p className="shortlist-manager__muted-text">{readOnly ? 'This historical shortlist has no candidates.' : 'Add candidates from the Candidates directory to continue reviewing.'}</p><a className="shortlist-manager__button shortlist-manager__button--accent shortlist-manager__link-button" href="/candidates">View Candidates</a></div> : null}
             {hasSelectedShortlist && !loadingDetails && filteredCandidates.length > PAGE_SIZE ? <nav className="shortlist-manager__pagination" aria-label="Candidate pagination"><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button><span aria-live="polite">Page {currentPage} of {totalPages}</span><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button></nav> : null}
             {showNoMatches ? <div className="shortlist-manager__empty"><p>No candidates match your current filters.</p><button type="button" className="shortlist-manager__button shortlist-manager__button--neutral" onClick={resetFilters}>Clear filters</button></div> : null}
           </div>

@@ -83,7 +83,7 @@ test('dashboard rendering remains explicit to dashboard pathname', () => {
 })
 
 test('shortlists route stays canonical and authenticated in app routing', () => {
-  assert.match(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*guardSubscriptionRoute\([\s\S]*authPromptMessage: 'Please login to view shortlists\.'[\s\S]*return <ShortlistsPage \/>/)
+  assert.match(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*guardAuthenticatedRoute\([\s\S]*promptMessage: 'Please login to view shortlists\.'[\s\S]*return <ShortlistsPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
   assert.doesNotMatch(appSource, /if \(resolvedPathname === '\/shortlists'\) \{[\s\S]*return <CandidatesPage \/>/)
 })
 
