@@ -109,7 +109,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/refund-policy',
   ...INTENT_PAGE_ORDER,
 ])
-const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/job-descriptions', '/analyses'])
+const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/job-descriptions', '/analyses', '/candidates'])
 function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -726,19 +726,16 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         return null
       }
 
-      const canAccessCandidates = guardSubscriptionRoute({
+      const canAccessCandidates = guardAuthenticatedRoute({
         isAuthenticated,
-        subscriptionStatus,
-        subscriptionState: profileBillingState,
+        promptMessage: 'Please login to view candidates.',
         onRequireAuth,
-        onRequireUpgrade: () => navigate('/pricing?reason=subscription_required', { replace: true }),
-        authPromptMessage: 'Please login to view candidates.',
       })
       if (!canAccessCandidates) {
         return null
       }
 
-      return <CandidatesPage />
+      return <CandidatesPage isReadOnly={!profileBillingState.canUsePaidMutation} />
     }
 
     if (resolvedPathname === '/shortlists') {
@@ -1067,6 +1064,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
       return [
         { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'jobs' },
         ...(analysesModuleEnabled ? [{ key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'analyses' }] : []),
+        ...(candidateModuleEnabled ? [{ key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'candidates' }] : []),
         { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
       ]
     }
