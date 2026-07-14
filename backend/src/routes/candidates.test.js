@@ -125,6 +125,45 @@ function candidateProfileRows() {
   ]
 }
 
+function persistedCandidateProfileRow() {
+  return {
+    user_id: 42,
+    resume_id: '11111111-1111-4111-8111-111111111111',
+    profile: {
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      skills: { tools_and_platforms: ['React', 'Node'], methodologies: [], domain_expertise: [], soft_skills: [] },
+      profile_score: 92,
+      years_experience: 7,
+    },
+    source_parse_job_id: 'parse-job-1',
+    source_updated_at: '2026-01-02T00:00:00.000Z',
+    schema_version: 'v1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-02T00:00:00.000Z',
+    filename: 'ada.pdf',
+    original_filename: 'ada.pdf',
+    file_extension: 'pdf',
+    file_type: 'application/pdf',
+    job_description_id: '22222222-2222-4222-8222-222222222222',
+    job_title: 'Frontend Engineer',
+    tags: ['priority'],
+  }
+}
+
+function assertNoCandidateProfileSyncOrWrites(queries) {
+  assert.equal(
+    queries.some(({ sql }) => /FROM resumes r\s+LEFT JOIN LATERAL/.test(sql)),
+    false,
+    'read-only candidate GET must not scan resumes to synchronize profiles',
+  )
+  assert.equal(
+    queries.some(({ sql }) => /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+candidate_profiles\b/i.test(sql)),
+    false,
+    'read-only candidate GET must not mutate candidate_profiles',
+  )
+}
+
 
 function mockDirectoryQueries(t, rows = candidateProfileRows(), totalCount = rows.length) {
   const queries = []
@@ -688,7 +727,7 @@ test('backend docs include candidate profile recovery runbook without making syn
 
   assert.match(docs, /GET \/candidates\/directory` is a read path by default/)
   assert.match(docs, /CANDIDATE_DIRECTORY_SYNC_ON_READ=false/)
-  assert.match(docs, /npm --prefix backend run backfill:candidate-profiles\n/)
+  assert.match(docs, /npm --prefix backend run backfill:candidate-profiles\r?\n/)
   assert.match(docs, /npm --prefix backend run backfill:candidate-profiles:execute/)
   assert.match(docs, /npm --prefix backend run backfill:candidate-profiles -- --user-id <USER_ID>/)
   assert.match(docs, /Use the rollback flag only temporarily/)
@@ -713,4 +752,122 @@ test('GET /candidates/directory skips sync-on-read for inactive subscriptions', 
   assert.equal(body.total, 0)
   assert.equal(queries.some((sql) => /FROM resumes r\s+LEFT JOIN LATERAL/.test(sql)), false)
   assert.equal(queries.some((sql) => /FROM candidate_profiles cp/.test(sql)), true)
+})
+
+test('GET /candidates/profiles returns owned persisted profiles without sync for read-only subscriptions', async (t) => {
+  const readOnlyStatuses = ['past_due', 'payment_failed', 'inactive', 'cancelled']
+  let currentStatus = readOnlyStatuses[0]
+  const queries = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params, status: currentStatus })
+
+    if (/FROM users/.test(text)) {
+      return {
+        rows: [{
+          id: 42,
+          subscription_status: currentStatus,
+          cancellation_effective_at: currentStatus === 'cancelled' ? '2025-01-01T00:00:00.000Z' : null,
+          current_period_end: null,
+        }],
+      }
+    }
+
+    if (/FROM candidate_profiles\s+WHERE user_id = \$1/.test(text)) {
+      assert.deepEqual(params, [42])
+      return { rows: [persistedCandidateProfileRow()] }
+    }
+
+    throw new Error(`Unexpected query for ${currentStatus}: ${text}`)
+  })
+
+  for (const status of readOnlyStatuses) {
+    currentStatus = status
+    const { status: responseStatus, body } = await getJson(createCandidateDirectoryApp(), '/candidates/profiles')
+
+    assert.equal(responseStatus, 200, status)
+    assert.equal(body.profiles.length, 1, status)
+    assert.equal(body.profiles[0].userId, 42, status)
+    assert.equal(body.profiles[0].resumeId, '11111111-1111-4111-8111-111111111111', status)
+  }
+
+  const profileReads = queries.filter(({ sql }) => /FROM candidate_profiles\s+WHERE user_id = \$1/.test(sql))
+  assert.equal(profileReads.length, readOnlyStatuses.length)
+  assert.equal(profileReads.every(({ params }) => params.length === 1 && params[0] === 42), true)
+  assertNoCandidateProfileSyncOrWrites(queries)
+})
+
+test('GET /candidates/:resumeId returns only owned persisted detail without sync for read-only subscriptions', async (t) => {
+  const ownedResumeId = '11111111-1111-4111-8111-111111111111'
+  const otherUserResumeId = '99999999-9999-4999-8999-999999999999'
+  const readOnlyStatuses = ['past_due', 'payment_failed', 'inactive', 'cancelled']
+  let currentStatus = readOnlyStatuses[0]
+  const queries = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params, status: currentStatus })
+
+    if (/FROM users/.test(text)) {
+      return {
+        rows: [{
+          id: 42,
+          subscription_status: currentStatus,
+          cancellation_effective_at: currentStatus === 'cancelled' ? '2025-01-01T00:00:00.000Z' : null,
+          current_period_end: null,
+        }],
+      }
+    }
+
+    if (/FROM candidate_profiles cp/.test(text)) {
+      assert.match(text, /WHERE cp\.user_id = \$1\s+AND cp\.resume_id = \$2/)
+      return { rows: params[0] === 42 && params[1] === ownedResumeId ? [persistedCandidateProfileRow()] : [] }
+    }
+
+    throw new Error(`Unexpected query for ${currentStatus}: ${text}`)
+  })
+
+  for (const status of readOnlyStatuses) {
+    currentStatus = status
+    const ownedResponse = await getJson(createCandidateDirectoryApp(), `/candidates/${ownedResumeId}`)
+    assert.equal(ownedResponse.status, 200, status)
+    assert.equal(ownedResponse.body.resumeId, ownedResumeId, status)
+    assert.equal(ownedResponse.body.fields.name, 'Ada Lovelace', status)
+
+    const otherUserResponse = await getJson(createCandidateDirectoryApp(), `/candidates/${otherUserResumeId}`)
+    assert.equal(otherUserResponse.status, 404, status)
+    assert.equal(otherUserResponse.body.error, 'Candidate not found', status)
+  }
+
+  const detailReads = queries.filter(({ sql }) => /FROM candidate_profiles cp/.test(sql))
+  assert.equal(detailReads.length, readOnlyStatuses.length * 2)
+  assert.equal(detailReads.every(({ params }) => params[0] === 42), true)
+  assertNoCandidateProfileSyncOrWrites(queries)
+})
+
+test('candidate profile GET routes preserve sync behavior for active paid users', async (t) => {
+  const ownedResumeId = '11111111-1111-4111-8111-111111111111'
+  const queries = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params })
+
+    if (/FROM users/.test(text)) return { rows: [{ id: 42, subscription_status: 'active' }] }
+    if (/FROM resumes r\s+LEFT JOIN LATERAL/.test(text)) return { rows: [] }
+    if (/FROM candidate_profiles\s+WHERE user_id = \$1/.test(text)) return { rows: [persistedCandidateProfileRow()] }
+    if (/FROM candidate_profiles cp/.test(text)) return { rows: [persistedCandidateProfileRow()] }
+
+    throw new Error(`Unexpected active-user query: ${text}`)
+  })
+
+  const profilesResponse = await getJson(createCandidateDirectoryApp(), '/candidates/profiles')
+  const detailResponse = await getJson(createCandidateDirectoryApp(), `/candidates/${ownedResumeId}`)
+
+  assert.equal(profilesResponse.status, 200)
+  assert.equal(profilesResponse.body.profiles.length, 1)
+  assert.equal(detailResponse.status, 200)
+  assert.equal(detailResponse.body.resumeId, ownedResumeId)
+  assert.equal(queries.filter(({ sql }) => /FROM resumes r\s+LEFT JOIN LATERAL/.test(sql)).length, 2)
 })
