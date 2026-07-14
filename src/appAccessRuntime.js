@@ -1,6 +1,13 @@
 import { resolveSubscriptionState } from './utils/subscriptionState.js'
 import { canAccessProductDashboard } from './utils/routeGuards.js'
 
+export function canViewHistoricalWorkspaceModule(featureEnabled, subscriptionState = null) {
+  return Boolean(
+    featureEnabled
+      || (subscriptionState?.isReadOnlyWorkspace && !subscriptionState?.canUsePaidMutation),
+  )
+}
+
 export function buildResolvedAccessContext({
   isAuthenticated = false,
   accessResolutionStatus = 'resolved',

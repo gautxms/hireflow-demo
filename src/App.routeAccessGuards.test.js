@@ -33,6 +33,12 @@ test('only staged historical Jobs, Analyses, Candidates, Shortlists, and Reports
   assert.match(source, /<CandidatesPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
   assert.match(source, /<ShortlistsPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
   assert.match(source, /<ReportsPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
+  assert.match(source, /const canViewAnalysesHistory = canViewHistoricalWorkspaceModule\(analysesModuleEnabled, profileBillingState\)/)
+  assert.match(source, /const canViewCandidateHistory = canViewHistoricalWorkspaceModule\(candidateModuleEnabled, profileBillingState\)/)
+  assert.match(source, /const canViewReportsHistory = canViewHistoricalWorkspaceModule\(dashboardReportsEnabled, profileBillingState\)/)
+  assert.match(source, /if \(!canViewAnalysesHistory\)/)
+  assert.match(source, /if \(!canViewCandidateHistory\)/)
+  assert.match(source, /if \(!canViewReportsHistory\)/)
 })
 
 test('blocked guards return before page evaluation can run fallbacks or intent mutation paths', () => {

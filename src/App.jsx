@@ -78,7 +78,7 @@ import { canAccessRouteForSubscriptionState, canonicalizePathname, getAnalysisDe
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
-import { buildResolvedAccessContext } from './appAccessRuntime'
+import { buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -386,6 +386,9 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
   const analysesModuleEnabled = isFeatureEnabled(FEATURE_KEYS.analysesPages, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
   const candidateModuleEnabled = isFeatureEnabled(FEATURE_KEYS.candidateModule, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
   const dashboardReportsEnabled = isFeatureEnabled(FEATURE_KEYS.dashboardReports, { userProfile, subscriptionStatus, workspaceAccess: workspaceAccessForFlags })
+  const canViewAnalysesHistory = canViewHistoricalWorkspaceModule(analysesModuleEnabled, profileBillingState)
+  const canViewCandidateHistory = canViewHistoricalWorkspaceModule(candidateModuleEnabled, profileBillingState)
+  const canViewReportsHistory = canViewHistoricalWorkspaceModule(dashboardReportsEnabled, profileBillingState)
   const canonicalPathname = canonicalizePathname(pathname)
   const isAdminPath = canonicalPathname.startsWith('/admin')
   const isRootLandingPath = canonicalPathname === '/'
@@ -626,7 +629,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (resolvedPathname === '/reports') {
-      if (!dashboardReportsEnabled) {
+      if (!canViewReportsHistory) {
         navigate('/dashboard/legacy')
         return null
       }
@@ -689,7 +692,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
 
     if (resolvedPathname === '/analyses') {
-      if (!analysesModuleEnabled) {
+      if (!canViewAnalysesHistory) {
         navigate('/results')
         return null
       }
@@ -720,7 +723,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (resolvedPathname === '/candidates') {
-      if (!candidateModuleEnabled) {
+      if (!canViewCandidateHistory) {
         navigate('/results')
         return null
       }
@@ -738,7 +741,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (resolvedPathname === '/shortlists') {
-      if (!candidateModuleEnabled) {
+      if (!canViewCandidateHistory) {
         navigate('/results')
         return null
       }
@@ -1059,10 +1062,10 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     if (profileBillingState.isReadOnlyWorkspace && !profileBillingState.canUsePaidMutation) {
       return [
         { key: 'jobs', label: 'Jobs', path: '/jobs', icon: 'jobs' },
-        ...(analysesModuleEnabled ? [{ key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'analyses' }] : []),
-        ...(candidateModuleEnabled ? [{ key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'candidates' }] : []),
-        ...(candidateModuleEnabled ? [{ key: 'shortlists', label: 'Shortlists', path: '/shortlists', icon: 'shortlists' }] : []),
-        ...(dashboardReportsEnabled ? [{ key: 'reports', label: 'Reports', path: '/reports', icon: 'reports' }] : []),
+        ...(canViewAnalysesHistory ? [{ key: 'analyses', label: 'Analyses', path: '/analyses', icon: 'analyses' }] : []),
+        ...(canViewCandidateHistory ? [{ key: 'candidates', label: 'Candidates', path: '/candidates', icon: 'candidates' }] : []),
+        ...(canViewCandidateHistory ? [{ key: 'shortlists', label: 'Shortlists', path: '/shortlists', icon: 'shortlists' }] : []),
+        ...(canViewReportsHistory ? [{ key: 'reports', label: 'Reports', path: '/reports', icon: 'reports' }] : []),
         { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
       ]
     }
@@ -1083,7 +1086,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
       },
       { key: 'settings', label: 'Settings', path: '/settings', icon: 'settings' },
     ]
-  }, [analysesModuleEnabled, candidateModuleEnabled, dashboardReportsEnabled, profileBillingState.canUsePaidMutation, profileBillingState.isReadOnlyWorkspace])
+  }, [analysesModuleEnabled, canViewAnalysesHistory, canViewCandidateHistory, canViewReportsHistory, candidateModuleEnabled, dashboardReportsEnabled, profileBillingState.canUsePaidMutation, profileBillingState.isReadOnlyWorkspace])
 
 
   useEffect(() => {
