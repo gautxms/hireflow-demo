@@ -125,6 +125,25 @@ export function canUsePaidMutation(subscriptionStateOrSubscription, now = new Da
   return hasActivePaidAccess(subscriptionStateOrSubscription, now)
 }
 
+export function isReadOnlyWorkspace(subscriptionStateOrSubscription, { hasHistoricalData = false, now = new Date() } = {}) {
+  if (!subscriptionStateOrSubscription || !hasHistoricalData) {
+    return false
+  }
+
+  if (hasActivePaidAccess(subscriptionStateOrSubscription, now)) {
+    return false
+  }
+
+  const status = getSubscriptionStatus(subscriptionStateOrSubscription)
+  const readOnlyStatuses = new Set([
+    ...PAST_DUE_STATUSES,
+    ...CANCELED_STATUSES,
+    ...INACTIVE_STATUSES,
+  ])
+
+  return readOnlyStatuses.has(status) || isReadOnlyExpiredSubscriber(subscriptionStateOrSubscription, now)
+}
+
 export function canAccessProductDashboard(subscriptionStateOrSubscription, now = new Date()) {
   return hasActivePaidAccess(subscriptionStateOrSubscription, now)
 }
@@ -213,6 +232,7 @@ export function resolveSubscriptionState({ user = null, subscription = null, now
     hasActivePaidAccess: activePaidAccess,
     hasScheduledCancellationAccess: isCancellationScheduled,
     isReadOnlyExpiredSubscriber: readOnlyExpiredSubscriber,
+    isReadOnlyWorkspace: isReadOnlyWorkspace(accessInput, { hasHistoricalData: Boolean(subscription?.hasHistoricalData || user?.hasHistoricalData), now }),
     canUsePaidMutation: canUseMutation,
     canAccessProductDashboard: activePaidAccess,
   }

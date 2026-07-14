@@ -1,4 +1,5 @@
 const ACTIVE_PAID_STATUSES = new Set(['active', 'trialing', 'trial'])
+const READ_ONLY_WORKSPACE_STATUSES = new Set(['past_due', 'payment_failed', 'inactive', 'no_subscription', 'none', 'free', '', 'canceled', 'cancelled'])
 const SCHEDULED_CANCELLATION_STATUSES = new Set(['canceled', 'cancelled', 'cancel_scheduled', 'cancellation_scheduled', 'pending_cancellation', 'scheduled_cancellation'])
 
 export function normalizeSubscriptionStatus(status) {
@@ -33,4 +34,12 @@ export function isReadOnlyExpiredSubscriber(user, now = new Date()) {
 
 export function canUsePaidMutation(user, now = new Date()) {
   return hasActivePaidAccess(user, now)
+}
+
+export function isReadOnlyWorkspaceAccess(user, { hasHistoricalData = false, now = new Date() } = {}) {
+  if (!user || !hasHistoricalData) return false
+  if (hasActivePaidAccess(user, now)) return false
+
+  const status = normalizeSubscriptionStatus(user?.subscription_status || user?.status)
+  return READ_ONLY_WORKSPACE_STATUSES.has(status) || isReadOnlyExpiredSubscriber(user, now)
 }

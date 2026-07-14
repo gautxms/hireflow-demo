@@ -89,7 +89,6 @@ test('requireActiveSubscription blocks inactive subscribers', async () => {
   }
 })
 
-
 test('requireActiveSubscription blocks Paddle failed payment states', async () => {
   const originalQuery = pool.query
 
@@ -112,7 +111,6 @@ test('requireActiveSubscription blocks Paddle failed payment states', async () =
     pool.query = originalQuery
   }
 })
-
 
 test('requireActiveSubscription allows scheduled cancellation before effective date', async () => {
   const originalQuery = pool.query
@@ -154,6 +152,61 @@ test('requireActiveSubscription blocks expired canceled subscribers from paid mu
     assert.equal(nextCalled, false)
     assert.equal(res.statusCode, 403)
     assert.equal(res.body.error, 'Subscription inactive')
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+test('requireActiveSubscription paid mutation matrix preserves blocked and allowed subscription states', async () => {
+  const originalQuery = pool.query
+
+  try {
+    const blockedCases = [
+      { subscription_status: 'past_due' },
+      { subscription_status: 'payment_failed' },
+      { subscription_status: 'inactive' },
+      { subscription_status: 'canceled', cancellation_effective_at: '2025-01-01T00:00:00Z' },
+      { subscription_status: 'cancelled', cancellation_effective_at: '2025-01-01T00:00:00Z' },
+      { subscription_status: 'unknown' },
+      { subscription_status: null },
+    ]
+
+    for (const user of blockedCases) {
+      pool.query = async () => ({ rows: [{ id: 1, ...user }] })
+      const req = { userId: 1 }
+      const res = createRes()
+      let nextCalled = false
+
+      await requireActiveSubscription(req, res, () => {
+        nextCalled = true
+      })
+
+      assert.equal(nextCalled, false, `${user.subscription_status} should not call next`)
+      assert.equal(res.statusCode, 403, `${user.subscription_status} should be blocked`)
+      assert.equal(res.body.error, 'Subscription inactive')
+    }
+
+    const allowedCases = [
+      { subscription_status: 'active', expectedStatus: 'active' },
+      { subscription_status: 'trialing', expectedStatus: 'trialing' },
+      { subscription_status: 'trial', expectedStatus: 'trial' },
+      { subscription_status: 'cancelled', cancellation_effective_at: '2099-01-01T00:00:00Z', expectedStatus: 'active' },
+    ]
+
+    for (const user of allowedCases) {
+      pool.query = async () => ({ rows: [{ id: 1, ...user }] })
+      const req = { userId: 1 }
+      const res = createRes()
+      let nextCalled = false
+
+      await requireActiveSubscription(req, res, () => {
+        nextCalled = true
+      })
+
+      assert.equal(nextCalled, true, `${user.subscription_status} should call next`)
+      assert.equal(req.subscriptionStatusForQuota, user.expectedStatus)
+      assert.equal(req.hasActivePaidAccess, true)
+    }
   } finally {
     pool.query = originalQuery
   }
