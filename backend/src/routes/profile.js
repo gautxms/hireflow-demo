@@ -94,7 +94,15 @@ export async function loadFreshAccountProfile(userId) {
   const result = await pool.query(
     `SELECT id, email, company, phone, subscription_status, subscription_plan,
             paddle_customer_id, paddle_subscription_id, current_period_end, next_billing_date,
-            created_at, deleted_at, deletion_scheduled_for
+            created_at, deleted_at, deletion_scheduled_for,
+            (
+              EXISTS (SELECT 1 FROM job_descriptions jd WHERE jd.user_id = users.id)
+              OR EXISTS (SELECT 1 FROM resumes r WHERE r.user_id = users.id)
+              OR EXISTS (SELECT 1 FROM analyses a WHERE a.user_id = users.id)
+              OR EXISTS (SELECT 1 FROM candidate_profiles cp WHERE cp.user_id = users.id)
+              OR EXISTS (SELECT 1 FROM shortlists s WHERE s.user_id = users.id)
+              OR EXISTS (SELECT 1 FROM report_definitions rd WHERE rd.user_id = users.id)
+            ) AS "hasHistoricalData"
      FROM users
      WHERE id = $1`,
     [userId],

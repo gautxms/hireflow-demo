@@ -106,7 +106,7 @@ function SkillsPreviewPopover({ item, isOpen, onOpen, onClose, popoverId }) {
   )
 }
 
-export default function JobsTable({ items = [], onEdit, onArchive, archivingId = '' }) {
+export default function JobsTable({ items = [], onEdit, onArchive, archivingId = '', readOnly = false }) {
   const [openSkillsPopoverId, setOpenSkillsPopoverId] = useState(null)
 
   useEffect(() => {
@@ -145,7 +145,7 @@ export default function JobsTable({ items = [], onEdit, onArchive, archivingId =
           <col className="jobs-table__col-skills" />
           <col className="jobs-table__col-created" />
           <col className="jobs-table__col-updated" />
-          <col className="jobs-table__col-actions" />
+          {!readOnly ? <col className="jobs-table__col-actions" /> : null}
         </colgroup>
         <thead>
           <tr>
@@ -156,7 +156,7 @@ export default function JobsTable({ items = [], onEdit, onArchive, archivingId =
             <th scope="col">Skills</th>
             <th scope="col" className="jobs-table__header--created">Created</th>
             <th scope="col" className="jobs-table__header--updated">Updated</th>
-            <th scope="col" className="jobs-table__actions-header">Actions</th>
+            {!readOnly ? <th scope="col" className="jobs-table__actions-header">Actions</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -169,6 +169,7 @@ export default function JobsTable({ items = [], onEdit, onArchive, archivingId =
                     type="button"
                     className="analyses-layout__title-link analyses-layout__open-link jobs-table__title-link-reset"
                     onClick={(event) => onEdit?.(item, event.currentTarget)}
+                    aria-label={`${readOnly ? 'View' : 'Edit'} job ${item.title || 'Untitled role'}`}
                   >
                     <span className="analyses-layout__title">{item.title || 'Untitled role'}</span>
                   </button>
@@ -204,22 +205,24 @@ export default function JobsTable({ items = [], onEdit, onArchive, archivingId =
                   <span className="analyses-layout__meta">{formatDateTime(item.updatedAt || item.createdAt)}</span>
                 </td>
 
-                <td className="analyses-layout__cell jobs-table__actions-cell" data-label="Actions">
-                  <button
-                    type="button"
-                    className={`hf-btn hf-btn--secondary jobs-table__action-button${archivingId === itemId ? ' jobs-table__action-button--loading' : ''}`}
-                    onClick={() => onArchive?.(item)}
-                    disabled={archivingId === itemId || item.status === 'archived'}
-                    aria-label={`${archivingId === itemId ? 'Archiving' : 'Archive'} job ${item.title || 'Untitled role'}`}
-                    aria-busy={archivingId === itemId}
-                  >
-                    {archivingId === itemId ? (
-                      <span className="jobs-table__action-spinner" aria-hidden="true" />
-                    ) : (
-                      <Archive size={16} aria-hidden="true" />
-                    )}
-                  </button>
-                </td>
+                {!readOnly ? (
+                  <td className="analyses-layout__cell jobs-table__actions-cell" data-label="Actions">
+                    <button
+                      type="button"
+                      className={`hf-btn hf-btn--secondary jobs-table__action-button${archivingId === itemId ? ' jobs-table__action-button--loading' : ''}`}
+                      onClick={() => onArchive?.(item)}
+                      disabled={archivingId === itemId || item.status === 'archived'}
+                      aria-label={`${archivingId === itemId ? 'Archiving' : 'Archive'} job ${item.title || 'Untitled role'}`}
+                      aria-busy={archivingId === itemId}
+                    >
+                      {archivingId === itemId ? (
+                        <span className="jobs-table__action-spinner" aria-hidden="true" />
+                      ) : (
+                        <Archive size={16} aria-hidden="true" />
+                      )}
+                    </button>
+                  </td>
+                ) : null}
               </tr>
             )
           })}
