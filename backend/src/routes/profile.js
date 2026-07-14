@@ -689,7 +689,7 @@ router.get('/export', async (req, res) => {
         `SELECT id, filename, original_filename, file_extension, original_mime_type,
                 scan_status, job_description_id, raw_text, years_experience, profile_score,
                 strengths, considerations, seniority_level, tags, top_skills, skills_structured,
-                skills, created_at, updated_at
+                skills, created_at
          FROM resumes
          WHERE user_id = $1
          ORDER BY created_at DESC`,

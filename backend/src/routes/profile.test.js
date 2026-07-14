@@ -235,6 +235,24 @@ test('GET /profile/export returns complete workspace snapshot shape and preserve
   assert.equal(payload.data.candidate_results[0].stored_candidate_result.reasoning, 'stored text')
 })
 
+
+test('GET /profile/export keeps resume SELECT compatible with checked migrations without resumes.updated_at', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const queries = mockProfileExportQueries(t, buildExportRowsForUser('active'))
+
+  const { response, payload } = await requestProfile('/profile/export', {
+    headers: authHeaderWithEmbeddedUser(activeDbUser()),
+  })
+
+  assert.equal(response.status, 200)
+  const resumeQuery = queries.find((query) => /FROM resumes\s+WHERE user_id = \$1/.test(query.sql))
+  assert.ok(resumeQuery)
+  const resumeSelectList = resumeQuery.sql.split('FROM resumes')[0]
+  assert.doesNotMatch(resumeSelectList, /\bupdated_at\b/)
+  assert.equal(payload.data.resumes[0].created_at, '2026-07-02T00:00:00.000Z')
+  assert.equal(Object.hasOwn(payload.data.resumes[0], 'updated_at'), false)
+})
+
 test('GET /profile/export returns empty arrays for an empty workspace', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
   mockProfileExportQueries(t, { users: [activeDbUser({ subscription_status: 'inactive', subscription_plan: null })] })
