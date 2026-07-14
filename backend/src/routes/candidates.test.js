@@ -421,6 +421,7 @@ test('GET /candidates/directory calls sync when CANDIDATE_DIRECTORY_SYNC_ON_READ
   t.mock.method(pool, 'query', async (sql) => {
     const text = String(sql)
     queries.push(text)
+    if (/FROM users/.test(text)) return { rows: [{ id: 42, subscription_status: 'active' }] }
     if (/FROM resumes r\s+LEFT JOIN LATERAL/.test(text)) return { rows: [] }
     if (/COUNT\(\*\)::integer AS total_count/.test(text)) return { rows: [{ total_count: 0 }] }
     return { rows: [] }
@@ -691,4 +692,25 @@ test('backend docs include candidate profile recovery runbook without making syn
   assert.match(docs, /npm --prefix backend run backfill:candidate-profiles:execute/)
   assert.match(docs, /npm --prefix backend run backfill:candidate-profiles -- --user-id <USER_ID>/)
   assert.match(docs, /Use the rollback flag only temporarily/)
+})
+
+test('GET /candidates/directory skips sync-on-read for inactive subscriptions', async (t) => {
+  process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ = 'true'
+  t.after(() => { delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ })
+  t.mock.method(console, 'info', () => {})
+  const queries = []
+  t.mock.method(pool, 'query', async (sql) => {
+    const text = String(sql)
+    queries.push(text)
+    if (/FROM users/.test(text)) return { rows: [{ id: 42, subscription_status: 'past_due' }] }
+    if (/FROM candidate_profiles cp/.test(text)) return { rows: [] }
+    return { rows: [] }
+  })
+
+  const { status, body } = await getJson(createCandidateDirectoryApp(), '/candidates/directory')
+
+  assert.equal(status, 200)
+  assert.equal(body.total, 0)
+  assert.equal(queries.some((sql) => /FROM resumes r\s+LEFT JOIN LATERAL/.test(sql)), false)
+  assert.equal(queries.some((sql) => /FROM candidate_profiles cp/.test(sql)), true)
 })
