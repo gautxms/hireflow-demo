@@ -23,6 +23,17 @@ test('analyses list page includes loading, empty, and populated rendering branch
   assert.match(analysesPageSource, /<table className="analyses-layout__table">/)
 })
 
+test('read-only analyses mode exposes history and suppresses create and delete actions', () => {
+  assert.match(analysesPageSource, /export default function AnalysesPage\(\{ isReadOnly = false \}\)/)
+  assert.match(analysesPageSource, /const handleSubmit = async[\s\S]*if \(isReadOnly\) return/)
+  assert.match(analysesPageSource, /const handleDeleteAnalysis = async[\s\S]*if \(isReadOnly\) return/)
+  assert.match(analysesPageSource, /\{!isReadOnly \? <button[\s\S]*Create analysis<\/button> : null\}/)
+  assert.match(analysesPageSource, /Read-only access: historical analyses remain available/)
+  assert.match(analysesPageSource, /\{!isReadOnly \? <th>Actions<\/th> : null\}/)
+  assert.match(analysesPageSource, /\{!isReadOnly \? <td className="analyses-layout__cell" data-label="Actions">/)
+  assert.match(analysesPageSource, /\{!isReadOnly \? <CreateAnalysisModal[\s\S]*\/> : null\}/)
+})
+
 test('analyses list page provides conditional and keyboard-accessible pagination controls', () => {
   assert.match(analysesPageSource, /shouldRenderPaginationControls && \(/)
   assert.match(analysesPageSource, /aria-label="Analyses pagination"/)

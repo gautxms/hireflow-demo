@@ -23,11 +23,13 @@ test('blocked paid route uses exactly one replace navigation to subscription pri
   assert.equal(redirectMatches.length, 1)
 })
 
-test('historical Jobs is the only paid workspace route opened by the read-only shell phase', () => {
-  assert.match(source, /resolvedPathname === '\/job-descriptions'[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, subscriptionStateOrStatus\)/)
-  assert.match(source, /const hasReadOnlyJobDescriptionsAccess = [\s\S]*resolvedPathname === '\/job-descriptions'[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, profileBillingState\)/)
-  assert.match(source, /isPaidWorkspaceRoutePath\(resolvedPathname\)[\s\S]*&& !hasReadOnlyJobDescriptionsAccess/)
+test('only staged historical Jobs and Analyses routes are opened by the read-only shell', () => {
+  assert.match(source, /const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set\(\['\/job-descriptions', '\/analyses'\]\)/)
+  assert.match(source, /READ_ONLY_WORKSPACE_FRONTEND_ROUTES\.has\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, subscriptionStateOrStatus\)/)
+  assert.match(source, /const hasReadOnlyWorkspaceRouteAccess = [\s\S]*READ_ONLY_WORKSPACE_FRONTEND_ROUTES\.has\(resolvedPathname\)[\s\S]*canAccessRouteForSubscriptionState\(resolvedPathname, profileBillingState\)/)
+  assert.match(source, /isPaidWorkspaceRoutePath\(resolvedPathname\)[\s\S]*&& !hasReadOnlyWorkspaceRouteAccess/)
   assert.match(source, /<JobDescriptionPage[\s\S]*isReadOnly=\{!profileBillingState\.canUsePaidMutation\}/)
+  assert.match(source, /<AnalysesPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
 })
 
 test('blocked guards return before page evaluation can run fallbacks or intent mutation paths', () => {
