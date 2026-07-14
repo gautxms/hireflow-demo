@@ -197,6 +197,21 @@ async function getJson(app, path) {
   }
 }
 
+async function requestJson(app, path, { method = 'GET', body } = {}) {
+  const server = app.listen(0)
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method,
+      headers: { ...authHeaders(), 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    return { status: response.status, body: await response.json() }
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+}
+
 test('candidate directory sync-on-read feature flag defaults off', () => {
   const previous = process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
   delete process.env.CANDIDATE_DIRECTORY_SYNC_ON_READ
@@ -752,6 +767,48 @@ test('GET /candidates/directory skips sync-on-read for inactive subscriptions', 
   assert.equal(body.total, 0)
   assert.equal(queries.some((sql) => /FROM resumes r\s+LEFT JOIN LATERAL/.test(sql)), false)
   assert.equal(queries.some((sql) => /FROM candidate_profiles cp/.test(sql)), true)
+})
+
+test('read-only subscription states remain blocked from every candidate mutation', async (t) => {
+  const readOnlyStatuses = ['past_due', 'payment_failed', 'inactive', 'cancelled']
+  const mutationRequests = [
+    { method: 'POST', path: '/candidates/reanalyse', body: { resumeIds: ['11111111-1111-4111-8111-111111111111'] } },
+    { method: 'POST', path: '/candidates/match', body: { candidates: [{ resumeId: '11111111-1111-4111-8111-111111111111' }] } },
+    { method: 'POST', path: '/candidates/tags/bulk', body: { resumeIds: ['11111111-1111-4111-8111-111111111111'], tags: ['priority'] } },
+  ]
+  let currentStatus = readOnlyStatuses[0]
+  const queries = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params, status: currentStatus })
+
+    if (/FROM users/.test(text)) {
+      return {
+        rows: [{
+          id: 42,
+          subscription_status: currentStatus,
+          cancellation_effective_at: currentStatus === 'cancelled' ? '2025-01-01T00:00:00.000Z' : null,
+          current_period_end: null,
+        }],
+      }
+    }
+
+    throw new Error(`Read-only candidate mutation reached its route handler: ${text}`)
+  })
+
+  const app = createCandidateDirectoryApp()
+  for (const status of readOnlyStatuses) {
+    currentStatus = status
+    for (const request of mutationRequests) {
+      const response = await requestJson(app, request.path, request)
+      assert.equal(response.status, 403, `${status} ${request.method} ${request.path}`)
+      assert.equal(response.body.error, 'Subscription inactive')
+    }
+  }
+
+  assert.equal(queries.length, readOnlyStatuses.length * mutationRequests.length)
+  assert.equal(queries.every(({ sql, params }) => /FROM users/.test(sql) && params[0] === 42), true)
 })
 
 test('GET /candidates/profiles returns owned persisted profiles without sync for read-only subscriptions', async (t) => {
