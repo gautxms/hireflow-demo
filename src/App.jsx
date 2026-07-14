@@ -1359,7 +1359,7 @@ export default function App() {
     navigate('/login')
   }, [])
 
-  const syncAuthenticatedUser = useCallback(async ({ redirectOnUnauthorized = true } = {}) => {
+  const syncAuthenticatedUser = useCallback(async ({ redirectOnUnauthorized = true, showLoading = true } = {}) => {
     const activeToken = getStoredToken()
 
     if (!activeToken) {
@@ -1372,7 +1372,9 @@ export default function App() {
       return null
     }
 
-    setAccessResolution({ status: 'resolving', error: '' })
+    if (showLoading) {
+      setAccessResolution({ status: 'resolving', error: '' })
+    }
     authSyncControllerRef.current?.abort()
     const controller = new AbortController()
     authSyncControllerRef.current = controller
@@ -1536,13 +1538,13 @@ export default function App() {
 
     const handleWindowFocus = () => {
       if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
-        void syncAuthenticatedUser()
+        void syncAuthenticatedUser({ showLoading: false })
       }
     }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && !isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
-        void syncAuthenticatedUser()
+        void syncAuthenticatedUser({ showLoading: false })
       }
     }
 
