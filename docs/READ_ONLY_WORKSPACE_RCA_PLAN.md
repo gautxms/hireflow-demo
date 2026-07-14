@@ -22,6 +22,7 @@ Future implementation must preserve these constraints:
 - `/job-descriptions` is blocked for non-active users at both frontend routing and backend app-level middleware, including GET requests.
 - Backend mutation protection exists on many paid actions through `requireActiveSubscription`, but coverage is inconsistent:
   - Strong coverage: uploads/chunk creation, candidate reanalysis/match/tag mutations, shortlists mutations, reports mutations, results CSV export.
+  - Candidate read-route risk: some candidate GET endpoints can call `syncCandidateProfilesForUser`, which may upsert/delete `candidate_profiles`; `/api/candidates/directory` may also sync on read when `CANDIDATE_DIRECTORY_SYNC_ON_READ=true`. Future read-only access must not treat these routes as safe until hardened.
   - Risky coverage: `DELETE /api/analyses/:id` is authenticated but not subscription-guarded, so it would allow a historical data mutation by unpaid users if reachable.
   - Route-level ambiguity: `/api/job-descriptions` is mounted behind `requireActiveSubscription`, so even read-only GETs are currently blocked.
   - Export mismatch: `GET /api/profile/export` is account/data export and currently authenticated-only, while `POST /api/results/export/csv` is subscription-guarded; product must decide whether historical export includes results CSV export and then guard only generation-like paid actions.
@@ -55,8 +56,8 @@ Read-only workspace access should be introduced as a separate authorization mode
 | `/job-descriptions` | Active paid access | Read-only allowed | Must hide/disable create/edit/delete/duplicate/upload attachment actions in UI and rely on backend mutation guard. |
 | `/analyses` | Active paid access | Read-only allowed | Should list historical completed/partial/failed/processing analyses without create-analysis CTA for read-only users. |
 | `/analyses/:id` | Authenticated historical route | Read-only allowed | Already auth-only in route; must preserve completed/partial/failed/processing rendering. |
-| `/candidates` | Active paid access | Read-only allowed | Candidate directory should be GET-only and hide paid matching/tag mutation controls. |
-| `/candidates/:id` | Authenticated historical route | Read-only allowed | Already auth-only in route. Must preserve rendering and owner scoping. |
+| `/candidates` | Active paid access | Read-only allowed only after candidate sync-on-read hardening | Candidate directory must be persisted-read only for unpaid users; hide paid matching/tag mutation controls. |
+| `/candidates/:id` | Authenticated historical route | Read-only allowed only after candidate sync-on-read hardening | Already auth-only in route, but backend candidate detail reads must not upsert/delete `candidate_profiles` for read-only users. Preserve rendering and owner scoping. |
 | `/shortlists` | Active paid access | Read-only allowed | GET list/detail can be historical; create/update/delete/add/remove/archive actions must be blocked. |
 | `/reports` | Active paid access | Read-only allowed for existing saved report definitions only; report generation is paid mutation | Current page may create report definitions; future read-only mode must suppress generation/edit/delete. |
 | `/uploader` | Active paid access | Blocked for unpaid authenticated users | Paid workflow action that leads to resume upload/AI analysis. |
@@ -110,13 +111,13 @@ Important mount finding: `app.js` mounts `/api/job-descriptions` with `requireAc
 | `GET /api/analyses/:id/status` | Read-only safe | Read-only allowed | Must preserve processing/partial/failed state rendering. |
 | `DELETE /api/analyses/:id` | Unclear/risky mutation | Paid mutation blocked for read-only or disallowed entirely | Currently only `requireAuth`; future guard required before read-only users can access analysis pages broadly. |
 | `POST /api/candidates/reanalyse` | Paid mutation / AI analysis | Paid mutation blocked for read-only | Guarded. Do not touch AI scoring/ranking. |
-| `GET /api/candidates/profiles` | Read-only safe | Read-only allowed | Authenticated and user scoped. |
-| `GET /api/candidates/directory` | Read-only safe | Read-only allowed | Authenticated and user scoped. |
+| `GET /api/candidates/profiles` | Read endpoint with sync-on-read mutation risk | Requires hardening before unpaid/read-only access | May call `syncCandidateProfilesForUser`, which can upsert/delete `candidate_profiles`; do not expose to read-only users until sync-on-read is disabled, guarded, or moved behind active paid access. |
+| `GET /api/candidates/directory` | Read endpoint with sync-on-read mutation risk | Requires hardening before unpaid/read-only access | May sync on read when `CANDIDATE_DIRECTORY_SYNC_ON_READ=true`; read-only users must not trigger `candidate_profiles` writes. |
 | `POST /api/candidates/match` | Paid mutation / scoring-match action | Paid mutation blocked for read-only | Guarded. Do not change scoring/ranking. |
 | `POST /api/candidates/tags/bulk` | Paid/user workspace mutation | Paid mutation blocked for read-only | Guarded. |
 | `POST /api/candidates/tags/lookup` | Read-only-ish lookup | Read-only allowed if no write side effects | Confirm no writes; currently auth-only. |
 | `GET /api/candidates/:resumeId/resume` | Read-only safe | Read-only allowed | Must remain owner-scoped file access. |
-| `GET /api/candidates/:resumeId` | Read-only safe | Read-only allowed | Must remain owner-scoped. |
+| `GET /api/candidates/:resumeId` | Read endpoint with sync-on-read mutation risk | Requires hardening before unpaid/read-only access | May call `syncCandidateProfilesForUser`; must be persisted-read only, or blocked for read-only states until safe. |
 | `GET /api/shortlists` | Read-only safe | Read-only allowed | App-level requireAuth applies via mount. |
 | `GET /api/shortlists/:id` | Read-only safe | Read-only allowed | Must remain owner-scoped. |
 | `POST /api/shortlists` | Paid mutation | Paid mutation blocked for read-only | Guarded. |
@@ -213,6 +214,7 @@ Acceptance criteria:
 - Move `/api/job-descriptions` app-level subscription guard off the entire router and keep paid guards on POST/PUT/DELETE/duplicate only.
 - Add/confirm guard coverage for every paid mutation.
 - Add guard to `DELETE /api/analyses/:id` or decide to disallow that endpoint for read-only users.
+- Audit and harden candidate sync-on-read behavior before exposing candidate GET routes to unpaid/read-only users. For read-only subscription states, `GET /api/candidates/profiles`, `GET /api/candidates/directory`, and `GET /api/candidates/:resumeId` must not upsert/delete `candidate_profiles`; either skip sync-on-read for read-only users or keep those routes blocked until a safe persisted-read path exists.
 - Decide and implement policy for `POST /api/results/share` and `POST /api/results/export/csv`.
 - Ensure every paid mutation returns a clear 403 with upgrade/billing copy for non-active states.
 - Preserve all read-only GET endpoints and owner scoping.
@@ -220,7 +222,7 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Read-only statuses receive 403 for paid mutations across jobs, uploads/chunks, analysis delete/retry/reprocess, candidates reanalyse/match/tags, shortlists, and reports.
-- Read-only statuses can call approved GET/export endpoints for their own data.
+- Read-only statuses can call approved GET/export endpoints for their own data, and candidate GET endpoints are either blocked or proven not to mutate `candidate_profiles`.
 - Cross-user access tests continue to pass.
 - No AI/resume analysis logic, scoring/ranking, async queue behavior, or Paddle webhook/payment behavior changes.
 
@@ -271,6 +273,8 @@ Backend:
 
 - Middleware tests for active, trial/trialing, future scheduled cancellation, expired cancellation, past_due, payment_failed, inactive, canceled/cancelled, and free/no-subscription.
 - Route tests proving allowed read-only GET/export endpoints return own-user data and reject cross-user data.
+- Backend tests proving read-only user access to candidate GET endpoints does not insert, update, or delete `candidate_profiles`.
+- Backend tests covering candidate GET behavior with `CANDIDATE_DIRECTORY_SYNC_ON_READ=true` and `CANDIDATE_DIRECTORY_SYNC_ON_READ=false`.
 - Route tests proving paid mutations return 403 for non-active states:
   - job create/edit/delete/duplicate;
   - upload and upload chunk init/chunk/complete;
