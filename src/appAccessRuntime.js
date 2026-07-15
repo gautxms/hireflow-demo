@@ -22,6 +22,15 @@ export function buildReadOnlyWorkspaceNotice(subscriptionState = null) {
     }
   }
 
+  if (subscriptionState.isPaused) {
+    return {
+      title: 'Subscription paused',
+      description: 'Your historical workspace remains available in read-only mode. Review billing to resume recruiting actions.',
+      actionLabel: 'Review billing',
+      actionPath: '/billing',
+    }
+  }
+
   return {
     title: 'Workspace is read-only',
     description: 'Your historical data remains available. Choose a plan to create analyses or change recruiting workflows.',
@@ -47,6 +56,8 @@ export function buildResolvedAccessContext({
     ? canAccessProductDashboard(profileBillingState)
     : false
   const isActiveSubscriber = hasAuthoritativeAuthenticatedAccess && canAccessProductDashboard(profileBillingState)
+  const canOpenWorkspaceDashboard = hasAuthoritativeAuthenticatedAccess
+    && (isActiveSubscriber || profileBillingState.isReadOnlyWorkspace)
   const canViewUpgradePricing = !isAuthenticated || (isAccessAuthoritative && !isActiveSubscriber)
 
   return {
@@ -55,6 +66,7 @@ export function buildResolvedAccessContext({
     hasAuthoritativeAuthenticatedAccess,
     workspaceAccessForFlags,
     isActiveSubscriber,
+    canOpenWorkspaceDashboard,
     canViewUpgradePricing,
   }
 }

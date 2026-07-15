@@ -36,8 +36,8 @@ test('route diagnostics include pathname, resolvedPathname, and matched branch',
 })
 
 test('route matching in getPageContent consistently uses resolvedPathname', () => {
-  assert.match(appSource, /if \(resolvedPathname\.startsWith\('\/analyses\/'\)\)/)
-  assert.match(appSource, /if \(resolvedPathname\.startsWith\('\/candidates\/'\)\)/)
+  assert.match(appSource, /if \(getAnalysisDetailRouteId\(resolvedPathname\)\)/)
+  assert.match(appSource, /if \(getCandidateDetailRouteId\(resolvedPathname\)\)/)
   assert.doesNotMatch(appSource, /if \(pathname\.startsWith\('\/analyses\/'\)\)/)
   assert.doesNotMatch(appSource, /if \(pathname\.startsWith\('\/candidates\/'\)\)/)
 })
@@ -46,11 +46,11 @@ test('user shell routing resolves from canonical route paths', () => {
   assert.match(appSource, /function shouldRenderWithinUserShell\([\s\S]*return isUserShellRoutePath\(resolvedPathname\)/)
 })
 
-test('authenticated subscribed users keep public header and footer on landing route', () => {
+test('authenticated paid and read-only users keep public header and footer on landing route', () => {
   assert.match(appSource, /if \(PUBLIC_ROUTE_PATHS\.has\(pathname\)\) \{[\s\S]*return false/)
   assert.match(appSource, /<header className="site-header">/)
   assert.match(appSource, /<PublicFooter \/>/)
-  assert.match(appSource, /isActiveSubscriber \? \([\s\S]*Dashboard[\s\S]*\) : \(/)
+  assert.match(appSource, /canOpenWorkspaceDashboard \? \([\s\S]*Dashboard[\s\S]*\) : \(/)
 })
 
 test('dashboard path remains a shell route and unauthenticated users hit auth guard flow', () => {
@@ -68,14 +68,14 @@ test('authenticated root path bypasses dashboard alias resolution and stays land
 
 
 
-test('landing CTA uses dashboard label and route for active/trialing subscribers', () => {
-  assert.match(appSource, /onStartDemo=\{\(\) => \(isActiveSubscriber \? navigate\('\/dashboard'\) : navigate\('\/pricing'\)\)\}/)
-  assert.match(appSource, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'View pricing'\}/)
+test('landing CTA uses dashboard label and route for paid and read-only Dashboard users', () => {
+  assert.match(appSource, /onStartDemo=\{\(\) => \(canOpenWorkspaceDashboard \? navigate\('\/dashboard'\) : navigate\('\/pricing'\)\)\}/)
+  assert.match(appSource, /ctaLabel=\{canOpenWorkspaceDashboard \? 'Dashboard' : 'View pricing'\}/)
 })
 
 test('landing CTA keeps non-subscribed behavior unchanged', () => {
-  assert.match(appSource, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'View pricing'\}/)
-  assert.doesNotMatch(appSource, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'Start demo'\}/)
+  assert.match(appSource, /ctaLabel=\{canOpenWorkspaceDashboard \? 'Dashboard' : 'View pricing'\}/)
+  assert.doesNotMatch(appSource, /ctaLabel=\{canOpenWorkspaceDashboard \? 'Dashboard' : 'Start demo'\}/)
 })
 
 test('dashboard rendering remains explicit to dashboard pathname', () => {

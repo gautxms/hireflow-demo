@@ -1,5 +1,5 @@
 const ACTIVE_PAID_STATUSES = new Set(['active', 'trialing', 'trial'])
-const READ_ONLY_WORKSPACE_STATUSES = new Set(['past_due', 'payment_failed', 'inactive', 'no_subscription', 'none', 'free', '', 'canceled', 'cancelled'])
+const READ_ONLY_WORKSPACE_STATUSES = new Set(['past_due', 'payment_failed', 'paused', 'inactive', 'no_subscription', 'none', 'free', '', 'canceled', 'cancelled'])
 const SCHEDULED_CANCELLATION_STATUSES = new Set(['canceled', 'cancelled', 'cancel_scheduled', 'cancellation_scheduled', 'pending_cancellation', 'scheduled_cancellation'])
 
 export function normalizeSubscriptionStatus(status) {

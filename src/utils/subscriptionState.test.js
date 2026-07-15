@@ -303,7 +303,7 @@ test('read-only workspace helper requires historical data after cancellation acc
 })
 
 test('read-only workspace helper requires historical data for billing failure states', () => {
-  for (const status of ['past_due', 'payment_failed']) {
+  for (const status of ['past_due', 'payment_failed', 'paused']) {
     const resolved = state({ status })
 
     assert.equal(resolved.hasActivePaidAccess, false)
