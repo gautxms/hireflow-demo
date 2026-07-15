@@ -6,7 +6,7 @@ export function isPastDueBillingState(subscriptionState) {
 }
 
 export function getPastDueBillingNotice() {
-  return 'Payment is required to continue. Your workspace is read-only until billing is resolved. Contact hello@hireflow.dev for billing support.'
+  return 'Payment is required to continue. Your workspace is read-only until the overdue payment is completed securely through Paddle.'
 }
 
 export function getBillingPlanAction(plan, subscriptionState = null) {
@@ -95,7 +95,7 @@ export function getCancellationAccessMessage(subscriptionState, subscription, fo
       : ''
   }
 
-  return `Subscription canceled. Your access remains active until ${formatDate(effectiveDate)}. You will not be charged again.`
+  return `Cancellation scheduled. Your workspace remains fully available until ${formatDate(effectiveDate)}. You will not be charged again unless you keep the subscription.`
 }
 
 export function getCancellationSuccessMessage(subscription, payload, formatDate = (value) => value) {
@@ -106,9 +106,9 @@ export function getCancellationSuccessMessage(subscription, payload, formatDate 
     || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.subscription?.currentPeriodEnd })
     || getFutureCancellationEffectiveDate({ cancellationEffectiveAt: payload?.currentPeriodEnd })
 
-  if (effectiveDate) return `Subscription canceled. Your access remains active until ${formatDate(effectiveDate)}.`
+  if (effectiveDate) return `Cancellation scheduled. Your workspace remains fully available until ${formatDate(effectiveDate)}.`
 
-  return 'Subscription canceled. Your access remains active through the end of your current billing period.'
+  return 'Cancellation scheduled. Your workspace remains fully available through the end of your current billing period.'
 }
 
 export function canShowCancelAction(subscriptionState, subscription, now = new Date()) {

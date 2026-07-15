@@ -433,8 +433,18 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, email, company, phone, subscription_status, subscription_plan, subscription_started_at,
-              subscription_renewal_date, current_period_end, next_billing_date, paddle_customer_id,
+              subscription_renewal_date, current_period_end, next_billing_date, cancellation_effective_at, paddle_customer_id,
               paddle_subscription_id, created_at, deleted_at, deletion_scheduled_for,
+              CASE
+                WHEN trial_consumed_at IS NULL
+                  AND trial_ends_at IS NULL
+                  AND subscription_started_at IS NULL
+                  AND paddle_subscription_id IS NULL
+                  AND LOWER(COALESCE(subscription_status, 'inactive')) IN ('inactive', 'no_subscription', 'none', 'free', '')
+                  AND NOT EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id)
+                THEN TRUE
+                ELSE FALSE
+              END AS "trialEligible",
               (
                 EXISTS (SELECT 1 FROM job_descriptions jd WHERE jd.user_id = users.id)
                 OR EXISTS (SELECT 1 FROM resumes r WHERE r.user_id = users.id)

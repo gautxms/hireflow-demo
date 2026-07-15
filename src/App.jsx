@@ -469,7 +469,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         navigate('/billing')
         return null
       }
-      return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} />
+      return <Pricing isAuthenticated={isAuthenticated} onRequireAuth={onRequireAuth} trialEligible={userProfile?.trialEligible} />
     }
 
     if (resolvedPathname === '/about') {

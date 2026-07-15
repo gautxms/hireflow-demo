@@ -53,6 +53,17 @@ export function resolvePaddleConfig(env = process.env, environmentOverride) {
     ),
   }
 
+  const noTrialPriceIdsByPlan = {
+    monthly: firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_MONTHLY_NO_TRIAL_PRICE_ID : env.PADDLE_PRODUCTION_MONTHLY_NO_TRIAL_PRICE_ID,
+      isProduction ? env.PADDLE_MONTHLY_NO_TRIAL_PRICE_ID : undefined,
+    ),
+    annual: firstDefined(
+      isSandbox ? env.PADDLE_SANDBOX_ANNUAL_NO_TRIAL_PRICE_ID : env.PADDLE_PRODUCTION_ANNUAL_NO_TRIAL_PRICE_ID,
+      isProduction ? env.PADDLE_ANNUAL_NO_TRIAL_PRICE_ID : undefined,
+    ),
+  }
+
   if (isTestCheckoutEnabled) {
     priceIdsByPlan['test-monthly'] = firstDefined(env.PADDLE_TEST_MONTHLY_PRICE_ID)
   }
@@ -83,6 +94,7 @@ export function resolvePaddleConfig(env = process.env, environmentOverride) {
       isProduction ? env.PADDLE_WEBHOOK_SECRET : undefined,
     ),
     priceIdsByPlan,
+    noTrialPriceIdsByPlan,
     legacyPriceIdsByPlan,
     testCheckout: {
       enabled: isTestCheckoutEnabled,

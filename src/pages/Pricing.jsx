@@ -51,7 +51,7 @@ const PRICING_FAQ = [
   },
   {
     question: 'Is there a free trial?',
-    answer: 'Yes. Both plans include a 7-day free trial so you can test Hireflow with real hiring workflows before you commit. The trial is intended to give you enough time to upload resumes, review AI scoring output, and confirm the platform fits your process. If you cancel during the trial window, you are not charged for the subscription.',
+    answer: 'Eligible new accounts can use one 7-day free trial to test Hireflow before committing. A trial is not reinstated after cancellation, payment failure, pausing, or a previous subscription. Returning subscribers are charged when checkout completes.',
   },
   {
     question: 'How does billing work?',
@@ -74,7 +74,7 @@ function navigate(pathname) {
   }
 }
 
-function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
+function PricingCard({ plan, selected, emphasized, onStartCheckout, loading, trialAvailable }) {
   return (
     <article
       className={`pricing-card ${selected ? 'is-selected' : ''} ${emphasized ? 'is-emphasized' : ''}`}
@@ -91,7 +91,7 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
 
       <p className="pricing-card__billing">{plan.billing}</p>
       {plan.savings && <p className="pricing-card__savings">{plan.savings}</p>}
-      <p className="pricing-card__trial">{plan.trial}</p>
+      <p className="pricing-card__trial">{trialAvailable ? plan.trial : 'Returning subscription — billed immediately'}</p>
 
       <button
         type="button"
@@ -99,7 +99,7 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
         disabled={loading}
         className={`pricing-card__cta ${selected ? 'is-selected' : ''}`}
       >
-        {loading ? 'Preparing checkout…' : plan.cta}
+        {loading ? 'Preparing checkout…' : trialAvailable ? plan.cta : `Subscribe ${plan.id === 'annual' ? 'Annual' : 'Monthly'}`}
       </button>
 
       <ul className="pricing-card__features">
@@ -111,8 +111,9 @@ function PricingCard({ plan, selected, emphasized, onStartCheckout, loading }) {
   )
 }
 
-export default function Pricing({ isAuthenticated, onRequireAuth }) {
+export default function Pricing({ isAuthenticated, onRequireAuth, trialEligible = true }) {
   const [selectedBilling, setSelectedBilling] = useState('annual')
+  const trialAvailable = trialEligible !== false
 
   const startCheckout = (plan) => {
     if (!isAuthenticated) {
@@ -132,7 +133,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
 
         <h1 className="pricing-page__title">Choose your plan</h1>
         <p className="pricing-page__subtitle">
-          7-day free trial, cancel anytime.
+          {trialAvailable ? '7-day free trial for eligible new accounts, cancel anytime.' : 'Choose a paid plan to restart your HireFlow subscription.'}
         </p>
         <p className="pricing-page__intro">
           Hireflow gives recruiting teams a straightforward way to evaluate candidates with AI support, without confusing add-ons or hidden pricing mechanics.
@@ -179,6 +180,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
             emphasized
             onStartCheckout={startCheckout}
             loading={false}
+            trialAvailable={trialAvailable}
           />
           <PricingCard
             plan={PRICING.monthly}
@@ -186,6 +188,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth }) {
             emphasized={false}
             onStartCheckout={startCheckout}
             loading={false}
+            trialAvailable={trialAvailable}
           />
         </div>
 

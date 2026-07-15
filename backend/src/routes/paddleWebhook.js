@@ -125,6 +125,8 @@ function planFromPriceId(priceId, paddleConfig) {
   if (!priceId) return null
   if (priceId === paddleConfig.priceIdsByPlan.monthly) return 'monthly'
   if (priceId === paddleConfig.priceIdsByPlan.annual) return 'annual'
+  if (priceId === paddleConfig.noTrialPriceIdsByPlan?.monthly) return 'monthly'
+  if (priceId === paddleConfig.noTrialPriceIdsByPlan?.annual) return 'annual'
   if (priceId === paddleConfig.testUpgrade?.annualPriceId) return 'annual'
   if (priceId === paddleConfig.testUpgrade?.monthlyPriceId) return 'monthly'
   if (paddleConfig.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
@@ -353,6 +355,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             `UPDATE users
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
+                 trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
                  paddle_subscription_id = COALESCE($2, paddle_subscription_id),
                  paddle_customer_id = COALESCE($3, paddle_customer_id),
                  subscription_plan = COALESCE($4, subscription_plan),
@@ -464,6 +467,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                  ELSE cancellation_effective_at
                END,
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
+               trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,
                updated_at = NOW()
            WHERE id = $1`,
           [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload, paddle), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment, getScheduledCancellationEffectiveAt(payload)],

@@ -8,14 +8,81 @@ import { resolvePaddleConfigForUser } from '../config/paddle.js'
 const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
 const TEST_MONTHLY_STORED_PLAN = 'monthly'
+const CHECKOUT_BLOCKED_STATUSES = new Set(['active', 'trialing', 'trial', 'past_due', 'payment_failed', 'paused'])
+
+function normalizeStatus(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function isFutureDate(value, now = new Date()) {
+  if (!value) return false
+  const date = new Date(value)
+  return !Number.isNaN(date.getTime()) && date > now
+}
+
+export function isTrialEligibleForUser(user = {}) {
+  const status = normalizeStatus(user.subscription_status)
+  const hasPreviousSubscriptionState = status && !['inactive', 'no_subscription', 'none', 'free'].includes(status)
+
+  return !(
+    hasPreviousSubscriptionState
+    || user.has_payment_attempts
+    || user.trial_consumed_at
+    || user.trial_ends_at
+    || user.subscription_started_at
+    || user.paddle_subscription_id
+  )
+}
+
+export function getCheckoutBlockReason(user = {}, providerSubscription = null, now = new Date()) {
+  const localStatus = normalizeStatus(user.subscription_status)
+  const providerStatus = normalizeStatus(providerSubscription?.status || providerSubscription?.data?.status)
+  const effectiveStatus = providerStatus || localStatus
+  const hasRecoverableProviderSubscription = Boolean(providerStatus || user.paddle_subscription_id)
+
+  if (CHECKOUT_BLOCKED_STATUSES.has(effectiveStatus)) {
+    const status = effectiveStatus
+    if ((status === 'past_due' || status === 'payment_failed') && !hasRecoverableProviderSubscription) {
+      return null
+    }
+    return {
+      reason: status === 'past_due' || status === 'payment_failed' ? 'payment_required' : 'existing_subscription',
+      redirectTo: status === 'past_due' || status === 'payment_failed' ? '/account/payment-method' : '/billing',
+    }
+  }
+
+  if (isFutureDate(user.cancellation_effective_at, now)) {
+    return { reason: 'cancellation_scheduled', redirectTo: '/billing' }
+  }
+
+  return null
+}
 
 function getAppOrigin(req) {
   return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
 }
 
-export function validatePaddleCheckoutPlan({ plan, testKey, paddle }) {
+export function validatePaddleCheckoutPlan({ plan, testKey, paddle, trialEligible = true }) {
   if (plan !== TEST_MONTHLY_PLAN) {
-    return { ok: true, priceId: paddle.priceIdsByPlan[plan], storedPlan: plan }
+    const priceId = trialEligible
+      ? paddle.priceIdsByPlan[plan]
+      : paddle.noTrialPriceIdsByPlan?.[plan]
+
+    if (!trialEligible && !priceId) {
+      return {
+        ok: false,
+        status: 503,
+        error: 'Checkout for returning subscribers is not configured. Please contact support.',
+      }
+    }
+
+    return {
+      ok: true,
+      priceId,
+      storedPlan: plan,
+      trialEligible,
+      checkoutMode: trialEligible ? 'trial' : 'paid_returning',
+    }
   }
 
   if (!paddle.testCheckout?.enabled || !paddle.priceIdsByPlan[TEST_MONTHLY_PLAN]) {
@@ -26,7 +93,30 @@ export function validatePaddleCheckoutPlan({ plan, testKey, paddle }) {
     return { ok: false, status: 403, error: 'Checkout is unavailable' }
   }
 
-  return { ok: true, priceId: paddle.priceIdsByPlan[TEST_MONTHLY_PLAN], storedPlan: TEST_MONTHLY_STORED_PLAN }
+  return { ok: true, priceId: paddle.priceIdsByPlan[TEST_MONTHLY_PLAN], storedPlan: TEST_MONTHLY_STORED_PLAN, trialEligible: false, checkoutMode: 'test' }
+}
+
+async function loadProviderSubscription(user, paddle) {
+  if (!user.paddle_subscription_id) return null
+
+  const response = await fetch(`${paddle.apiBaseUrl}/subscriptions/${user.paddle_subscription_id}`, {
+    headers: {
+      Authorization: `Bearer ${paddle.apiKey}`,
+      'Content-Type': 'application/json',
+      'Paddle-Version': paddle.apiVersion,
+    },
+  })
+
+  if (response.status === 404) return null
+
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const error = new Error('Unable to verify the existing Paddle subscription')
+    error.status = response.status
+    throw error
+  }
+
+  return payload?.data || payload
 }
 
 async function createCheckout(req, res, logLabel) {
@@ -36,7 +126,11 @@ async function createCheckout(req, res, logLabel) {
 
   try {
     const userResult = await pool.query(
-      'SELECT id, email, paddle_environment FROM users WHERE id = $1',
+      `SELECT id, email, subscription_status, subscription_started_at, trial_ends_at, trial_consumed_at,
+              cancellation_effective_at, paddle_customer_id, paddle_subscription_id, paddle_environment,
+              EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts
+       FROM users
+       WHERE id = $1`,
       [req.userId],
     )
     user = userResult.rows[0]
@@ -71,7 +165,37 @@ async function createCheckout(req, res, logLabel) {
     return res.status(500).json({ error: 'PADDLE_CLIENT_TOKEN is not configured' })
   }
 
-  const planAccess = validatePaddleCheckoutPlan({ plan, testKey, paddle })
+  let providerSubscription = null
+
+  try {
+    const localBlock = getCheckoutBlockReason(user)
+    if (localBlock) {
+      return res.status(409).json({
+        error: 'Checkout is unavailable for the current subscription state.',
+        code: localBlock.reason,
+        redirectTo: localBlock.redirectTo,
+      })
+    }
+
+    providerSubscription = await loadProviderSubscription(user, paddle)
+    const providerBlock = getCheckoutBlockReason(user, providerSubscription)
+    if (providerBlock) {
+      return res.status(409).json({
+        error: 'Checkout is unavailable because a Paddle subscription still requires attention.',
+        code: providerBlock.reason,
+        redirectTo: providerBlock.redirectTo,
+      })
+    }
+  } catch (error) {
+    return res.status(502).json({
+      error: 'Unable to verify the existing subscription before checkout. Please try again.',
+      message: error.message,
+    })
+  }
+
+  const trialEligible = isTrialEligibleForUser(user)
+
+  const planAccess = validatePaddleCheckoutPlan({ plan, testKey, paddle, trialEligible })
 
   if (!planAccess.ok) {
     return res.status(planAccess.status).json({ error: planAccess.error })
@@ -99,15 +223,17 @@ async function createCheckout(req, res, logLabel) {
           price_id: priceId,
           quantity: 1,
         }],
-        customer: {
-          email: user.email,
-        },
+        ...(user.paddle_customer_id
+          ? { customer_id: user.paddle_customer_id }
+          : { customer: { email: user.email } }),
         custom_data: {
           userId: user.id,
           email: user.email,
           plan: storedPlan,
           requestedPlan: plan,
           paddleEnvironment: paddle.environment,
+          trialEligible: planAccess.trialEligible,
+          checkoutMode: planAccess.checkoutMode,
         },
         return_url: successUrl,
       }),
@@ -142,6 +268,8 @@ async function createCheckout(req, res, logLabel) {
       userEmail: user.email,
       clientToken: paddle.clientToken,
       paddleEnvironment: paddle.environment,
+      trialEligible: planAccess.trialEligible,
+      checkoutMode: planAccess.checkoutMode,
       _version: 'WITH_USER_EMAIL_2026_03_26',
     })
   } catch (error) {

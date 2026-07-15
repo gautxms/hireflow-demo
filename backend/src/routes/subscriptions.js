@@ -7,7 +7,7 @@ import { resolvePaddleConfig, resolvePaddleConfigForUser } from '../config/paddl
 const router = Router()
 
 
-export const PAYMENT_METHOD_UPDATE_ERROR = 'Payment method updates must be completed through the secure Paddle billing flow.'
+export const PAYMENT_METHOD_UPDATE_ERROR = 'Raw payment details must never be sent to HireFlow. Use the secure Paddle billing flow.'
 
 export const RAW_PAYMENT_METHOD_FIELDS = [
   'cardNumber',
@@ -170,6 +170,8 @@ function planFromPriceId(priceId, paddle = resolvePaddleConfig()) {
   if (!priceId) return null
   if (priceId === paddle.priceIdsByPlan.monthly) return 'monthly'
   if (priceId === paddle.priceIdsByPlan.annual) return 'annual'
+  if (priceId === paddle.noTrialPriceIdsByPlan?.monthly) return 'monthly'
+  if (priceId === paddle.noTrialPriceIdsByPlan?.annual) return 'annual'
   if (priceId === paddle.testUpgrade?.annualPriceId) return 'annual'
   if (priceId === paddle.testUpgrade?.monthlyPriceId) return 'monthly'
   if (paddle.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
@@ -441,8 +443,10 @@ router.get('/current', requireAuth, async (req, res) => {
     const userResult = await pool.query(
       `SELECT id, email, subscription_status, subscription_plan, subscription_renewal_date,
               next_billing_date, cancellation_effective_at, current_period_end, subscription_started_at,
+              trial_ends_at, trial_consumed_at,
               payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
-              paddle_environment
+              paddle_environment,
+              EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -494,6 +498,12 @@ router.get('/current', requireAuth, async (req, res) => {
         paddleSubscriptionId: user.paddle_subscription_id || null,
         paddleEnvironment: paddle.environment,
         hasBillingPortalAccess,
+        trialEligible: !user.trial_consumed_at
+          && !user.trial_ends_at
+          && !user.subscription_started_at
+          && !user.paddle_subscription_id
+          && !user.has_payment_attempts
+          && ['inactive', 'no_subscription', 'none', 'free', ''].includes(normalizeStatus(user.subscription_status)),
         renewalDate: isoOrNull(user.subscription_renewal_date || user.current_period_end),
         nextBillingDate: isoOrNull(user.next_billing_date || user.current_period_end),
         cancellationEffectiveAt,
@@ -762,13 +772,20 @@ router.post('/cancel', requireAuth, async (req, res) => {
       return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
     }
 
-    const effectiveAt = user.current_period_end || new Date()
-
     const paddle = resolvePaddleConfigForUser(user)
 
-    await paddleRequest(`/subscriptions/${user.paddle_subscription_id}/cancel`, {
+    const cancellationPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}/cancel`, {
       method: 'POST',
     }, paddle)
+    const cancellationData = cancellationPayload?.data || cancellationPayload || {}
+    const scheduledChange = cancellationData?.scheduled_change || cancellationData?.scheduledChange || null
+    const effectiveAt = scheduledChange?.effective_at
+      || scheduledChange?.effectiveAt
+      || cancellationData?.current_billing_period?.ends_at
+      || user.current_period_end
+      || new Date()
+    const providerStatus = normalizeStatus(cancellationData?.status)
+    const storedStatus = providerStatus || normalizeStatus(user.subscription_status) || 'active'
 
     const client = await pool.connect()
 
@@ -776,12 +793,12 @@ router.post('/cancel', requireAuth, async (req, res) => {
       await client.query('BEGIN')
       await client.query(
         `UPDATE users
-         SET subscription_status = 'cancelled',
-             cancellation_effective_at = $1,
-             cancellation_reason = $2,
+         SET subscription_status = $1,
+             cancellation_effective_at = $2,
+             cancellation_reason = $3,
              updated_at = NOW()
-         WHERE id = $3`,
-        [effectiveAt, reason || null, req.userId],
+         WHERE id = $4`,
+        [storedStatus, effectiveAt, reason || null, req.userId],
       )
 
       await client.query(
@@ -799,7 +816,7 @@ router.post('/cancel', requireAuth, async (req, res) => {
 
     return res.json({
       status: 'ok',
-      message: 'Subscription cancelled. A confirmation email will be sent by webhook processing.',
+      message: 'Cancellation scheduled. Full access remains available through the end of the current paid period.',
       effectiveAt: new Date(effectiveAt).toISOString(),
     })
   } catch (error) {
@@ -808,10 +825,139 @@ router.post('/cancel', requireAuth, async (req, res) => {
   }
 })
 
+router.post('/keep-subscription', requireAuth, async (req, res) => {
+  try {
+    const userResult = await pool.query(
+      `SELECT id, subscription_status, subscription_plan, paddle_subscription_id, paddle_environment
+       FROM users
+       WHERE id = $1`,
+      [req.userId],
+    )
+    const user = userResult.rows[0]
+
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (!user.paddle_subscription_id) return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
+
+    const paddle = resolvePaddleConfigForUser(user)
+    const currentPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {}, paddle)
+    const current = currentPayload?.data || currentPayload || {}
+    const providerStatus = normalizeStatus(current.status)
+    const scheduledChange = current?.scheduled_change || current?.scheduledChange || null
+    const scheduledAction = normalizeStatus(scheduledChange?.action || scheduledChange?.type)
+
+    if (providerStatus === 'canceled' || providerStatus === 'cancelled') {
+      return res.status(409).json({
+        code: 'SUBSCRIPTION_ALREADY_ENDED',
+        error: 'This subscription has already ended. Choose a plan to subscribe again.',
+        redirectTo: '/pricing?reason=subscribe_again',
+      })
+    }
+
+    if (!scheduledAction.includes('cancel')) {
+      return res.status(409).json({
+        code: 'NO_SCHEDULED_CANCELLATION',
+        error: 'This subscription is not scheduled to cancel.',
+      })
+    }
+
+    const updatedPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ scheduled_change: null }),
+    }, paddle)
+    const updated = updatedPayload?.data || updatedPayload || {}
+    const dates = extractBillingDates(updatedPayload)
+    const restoredStatus = normalizeStatus(updated.status) || 'active'
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        `UPDATE users
+         SET subscription_status = $1,
+             cancellation_effective_at = NULL,
+             cancellation_reason = NULL,
+             current_period_end = COALESCE($2, current_period_end),
+             next_billing_date = COALESCE($3, next_billing_date),
+             updated_at = NOW()
+         WHERE id = $4`,
+        [restoredStatus, dates.currentPeriodEnd, dates.nextBillingDate, req.userId],
+      )
+      await client.query(
+        `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, metadata)
+         VALUES ($1, $2, $2, 'keep_subscription', NOW(), $3::jsonb)`,
+        [req.userId, user.subscription_plan || 'monthly', JSON.stringify({
+          source: 'billing_page',
+          paddle_subscription_id: user.paddle_subscription_id,
+        })],
+      )
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw error
+    } finally {
+      client.release()
+    }
+
+    return res.json({
+      status: 'ok',
+      message: 'Your subscription will continue and your normal renewal schedule has been restored.',
+      subscription: {
+        status: restoredStatus,
+        cancellationEffectiveAt: null,
+        nextBillingDate: isoOrNull(dates.nextBillingDate),
+      },
+    })
+  } catch (error) {
+    await logErrorToDatabase('subscriptions.keep.failed', error, { userId: req.userId })
+    return sendBillingError(res, error)
+  }
+})
+
 router.post('/payment-method', requireAuth, async (req, res) => {
-  return res.status(410).json({
-    error: PAYMENT_METHOD_UPDATE_ERROR,
-  })
+  if (containsRawPaymentMethodField(req.body)) {
+    return res.status(400).json({ error: PAYMENT_METHOD_UPDATE_ERROR })
+  }
+
+  try {
+    const userResult = await pool.query(
+      `SELECT id, subscription_status, paddle_subscription_id, paddle_environment
+       FROM users
+       WHERE id = $1`,
+      [req.userId],
+    )
+    const user = userResult.rows[0]
+
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (!user.paddle_subscription_id) return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
+
+    const paddle = resolvePaddleConfigForUser(user)
+    const payload = await paddleRequest(
+      `/subscriptions/${user.paddle_subscription_id}/update-payment-method-transaction`,
+      {},
+      paddle,
+    )
+    const transaction = payload?.data || payload || {}
+    const transactionId = transaction?.id || null
+    const checkoutUrl = transaction?.checkout?.url || transaction?.checkout_url || null
+
+    if (!transactionId) {
+      throw new BillingError('PADDLE_SUBSCRIPTION_UPDATE_FAILED', { reason: 'missing_payment_method_transaction_id' })
+    }
+
+    return res.json({
+      status: 'ok',
+      transactionId,
+      checkoutUrl,
+      clientToken: paddle.clientToken,
+      paddleEnvironment: paddle.environment,
+      action: ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
+        ? 'pay_overdue'
+        : 'update_payment_method',
+    })
+  } catch (error) {
+    await logErrorToDatabase('subscriptions.payment-method.failed', error, { userId: req.userId })
+    return sendBillingError(res, error)
+  }
 })
 
 router.get('/invoices/:invoiceId/download', requireAuth, async (req, res) => {

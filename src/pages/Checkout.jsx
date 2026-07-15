@@ -81,7 +81,8 @@ export default function Checkout({ onAuthSuccess }) {
   const [transactionId, setTransactionId] = useState(null)
   const [hasSuccessfulTransaction, setHasSuccessfulTransaction] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const isReactivation = status === 'action_required' && requiredAction === 'cancelled'
+  const isReturningSubscription = status === 'action_required' && requiredAction === 'cancelled'
+  const isSubscriptionlessPaymentRetry = status === 'action_required' && requiredAction === 'payment_retry'
 
   usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
 
@@ -235,7 +236,13 @@ export default function Checkout({ onAuthSuccess }) {
           return
         }
 
-        if (subscriptionStatus === 'past_due') {
+        if (subscriptionStatus === 'past_due' || subscriptionStatus === 'payment_failed') {
+          if (!user?.paddle_subscription_id) {
+            console.log('[Checkout] Previous checkout failed without a recoverable subscription, showing paid retry')
+            setStatus('action_required')
+            setRequiredAction('payment_retry')
+            return
+          }
           console.log('[Checkout] Subscription past due, showing payment method update option')
           setStatus('action_required')
           setRequiredAction('past_due')
@@ -301,6 +308,10 @@ export default function Checkout({ onAuthSuccess }) {
 
         if (!response.ok) {
           console.error('[Checkout] Response not OK:', { status: response.status, payload })
+          if (payload?.redirectTo) {
+            navigate(payload.redirectTo)
+            return
+          }
           throw new Error(payload?.error || payload?.message || `Checkout failed (${response.status})`)
         }
 
@@ -655,16 +666,18 @@ export default function Checkout({ onAuthSuccess }) {
           You selected the <strong>{selectedPlan}</strong> subscription.
         </p>
 
-        {isReactivation && (
+        {(isReturningSubscription || isSubscriptionlessPaymentRetry) && (
           <div>
             <div>
               <span>⚡</span>
               <div>
                 <h3 className="type-h3">
-                  Reactivate Your Subscription
+                  {isSubscriptionlessPaymentRetry ? 'Retry Subscription Payment' : 'Subscribe Again'}
                 </h3>
                 <p className="type-small">
-                  Your subscription was cancelled. Reactivate now to regain access to resume analysis and full features.
+                  {isSubscriptionlessPaymentRetry
+                    ? 'Your previous checkout did not create a recoverable subscription. Retry this paid checkout to activate access. A new trial will not be applied.'
+                    : 'Your previous subscription has ended. Choose this paid plan to restore full access. A new trial will not be applied.'}
                 </p>
                 <button
                   type="button"
@@ -673,7 +686,7 @@ export default function Checkout({ onAuthSuccess }) {
                   onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
                   onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
                 >
-                  Reactivate Now
+                  {isSubscriptionlessPaymentRetry ? 'Retry Payment' : 'Subscribe Again'}
                 </button>
               </div>
             </div>
