@@ -128,10 +128,10 @@ test('legacy account alias uses replace navigation before shell content construc
   assert.doesNotMatch(legacyReturn, /UserAppShell|AuthenticatedAccountShell/)
 })
 
-test('landing dashboard CTA depends on authenticated active subscriber context, not stale logged-out profile data', () => {
+test('landing dashboard CTA depends on authoritative paid or read-only Dashboard entry access', () => {
   const landingBlock = source.slice(source.indexOf("if (isRootLandingPath)"), source.indexOf("if (resolvedPathname === '/pricing')"))
 
-  assert.match(landingBlock, /ctaLabel=\{isActiveSubscriber \? 'Dashboard' : 'View pricing'\}/)
+  assert.match(landingBlock, /ctaLabel=\{canOpenWorkspaceDashboard \? 'Dashboard' : 'View pricing'\}/)
   assert.match(source, /buildResolvedAccessContext\(\{/)
 })
 

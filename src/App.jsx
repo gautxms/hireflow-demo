@@ -383,6 +383,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     isAccessAuthoritative,
     workspaceAccessForFlags,
     isActiveSubscriber,
+    canOpenWorkspaceDashboard,
     canViewUpgradePricing,
   } = useMemo(() => buildResolvedAccessContext({
     isAuthenticated,
@@ -456,8 +457,8 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     if (isRootLandingPath) {
       return (
         <LandingPage
-          onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-          ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
+          onStartDemo={() => (canOpenWorkspaceDashboard ? navigate('/dashboard') : navigate('/pricing'))}
+          ctaLabel={canOpenWorkspaceDashboard ? 'Dashboard' : 'View pricing'}
         />
       )
     }
@@ -1040,8 +1041,8 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
     return (
       <LandingPage
-        onStartDemo={() => (isActiveSubscriber ? navigate('/dashboard') : navigate('/pricing'))}
-        ctaLabel={isActiveSubscriber ? 'Dashboard' : 'View pricing'}
+        onStartDemo={() => (canOpenWorkspaceDashboard ? navigate('/dashboard') : navigate('/pricing'))}
+        ctaLabel={canOpenWorkspaceDashboard ? 'Dashboard' : 'View pricing'}
       />
     )
   }
@@ -1330,7 +1331,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         <div className="site-header__auth-actions">
           {isAuthenticated ? (
             <>
-              {isActiveSubscriber ? (
+              {canOpenWorkspaceDashboard ? (
                 <button
                   type="button"
                   className="btn-ghost btn-ghost--accent"

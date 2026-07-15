@@ -434,7 +434,15 @@ router.get('/me', requireAuth, async (req, res) => {
     const result = await pool.query(
       `SELECT id, email, company, phone, subscription_status, subscription_plan, subscription_started_at,
               subscription_renewal_date, current_period_end, next_billing_date, paddle_customer_id,
-              paddle_subscription_id, created_at, deleted_at, deletion_scheduled_for
+              paddle_subscription_id, created_at, deleted_at, deletion_scheduled_for,
+              (
+                EXISTS (SELECT 1 FROM job_descriptions jd WHERE jd.user_id = users.id)
+                OR EXISTS (SELECT 1 FROM resumes r WHERE r.user_id = users.id)
+                OR EXISTS (SELECT 1 FROM analyses a WHERE a.user_id = users.id)
+                OR EXISTS (SELECT 1 FROM candidate_profiles cp WHERE cp.user_id = users.id)
+                OR EXISTS (SELECT 1 FROM shortlists s WHERE s.user_id = users.id)
+                OR EXISTS (SELECT 1 FROM report_definitions rd WHERE rd.user_id = users.id)
+              ) AS "hasHistoricalData"
        FROM users
        WHERE id = $1`,
       [req.userId],

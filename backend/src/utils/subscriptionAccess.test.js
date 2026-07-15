@@ -49,8 +49,8 @@ test('read-only access helper requires historical data after cancellation access
   }
 })
 
-test('read-only access helper requires historical data for past due and payment failed states', () => {
-  for (const status of ['past_due', 'payment_failed']) {
+test('read-only access helper requires historical data for billing interruption states', () => {
+  for (const status of ['past_due', 'payment_failed', 'paused']) {
     const user = { subscription_status: status }
 
     assert.equal(hasActivePaidAccess(user, NOW), false)

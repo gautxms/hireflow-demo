@@ -138,6 +138,7 @@ export function isReadOnlyWorkspace(subscriptionStateOrSubscription, { hasHistor
   const readOnlyStatuses = new Set([
     ...PAST_DUE_STATUSES,
     ...CANCELED_STATUSES,
+    ...PAUSED_STATUSES,
     ...INACTIVE_STATUSES,
   ])
 
