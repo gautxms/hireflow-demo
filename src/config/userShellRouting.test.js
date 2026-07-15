@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   canonicalizePathname,
   canAccessRouteForSubscriptionState,
+  canRenderSettingsInReadOnlyWorkspace,
   getAnalysisDetailRouteId,
   getCandidateDetailRouteId,
   isAuthenticatedAccountShellRoutePath,
@@ -102,6 +103,22 @@ test('keeps account, public, admin, and auth routes out of read-only workspace c
 
   assert.equal(canAccessRouteForSubscriptionState('/billing', { status: 'inactive' }), true)
   assert.equal(canAccessRouteForSubscriptionState('/settings', { status: 'inactive' }), true)
+})
+
+test('keeps Settings in the workspace shell only when non-paid users have historical workspace access', () => {
+  for (const status of ['past_due', 'past due', 'payment_failed', 'paused', 'canceled', 'cancelled', 'cancel_scheduled', 'cancellation_scheduled', 'pending_cancellation', 'scheduled_cancellation', 'inactive', 'no_subscription', 'none', 'free']) {
+    const readOnlyWithHistory = resolveSubscriptionState({
+      subscription: { status, hasHistoricalData: true },
+    })
+    const historyFree = resolveSubscriptionState({
+      subscription: { status, hasHistoricalData: false },
+    })
+
+    assert.equal(canRenderSettingsInReadOnlyWorkspace('/settings', readOnlyWithHistory), true, `${status} history should keep Settings in the workspace`)
+    assert.equal(canRenderSettingsInReadOnlyWorkspace('/settings', historyFree), false, `${status} without history should use account-only Settings`)
+    assert.equal(canRenderSettingsInReadOnlyWorkspace('/billing', readOnlyWithHistory), false, `${status} billing should remain account-only`)
+    assert.equal(canRenderSettingsInReadOnlyWorkspace('/account/payment-method', readOnlyWithHistory), false, `${status} payment methods should remain account-only`)
+  }
 })
 
 test('route policy helper distinguishes read-only candidates from paid mutation routes', () => {

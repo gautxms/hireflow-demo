@@ -17,6 +17,11 @@ test('dashboard route renders inside UserAppShell and bypasses public chrome', (
   assert.match(appSource, /function shouldRenderWithinUserShell\([\s\S]*return isUserShellRoutePath\(resolvedPathname\)/)
 })
 
+test('historical read-only users keep Settings inside the workspace shell', () => {
+  assert.match(appSource, /canRenderSettingsInReadOnlyWorkspace\(resolvedPathname, subscriptionStateOrStatus\)/)
+  assert.match(appSource, /const useAccountShellLayout = [\s\S]*!useUserShellLayout/)
+})
+
 test('results root renders empty state safely when data recovery completes with no candidates', () => {
   assert.match(appSource, /if \(isResultsRootPath\(resolvedPathname\)\) \{[\s\S]*route-state--results-empty[\s\S]*RESULTS_EMPTY_STATE_COPY/)
   assert.match(appSource, /candidates:\s*uploadedFiles\?\.candidates \|\| \[\]/)
