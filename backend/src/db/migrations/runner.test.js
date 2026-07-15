@@ -211,6 +211,35 @@ test('migration runner includes shortlist batch-add safety migration 040 after m
   )
 })
 
+test('migration runner includes Paddle environment isolation migration 042 after payment-attempt alignment', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'042-isolate-paddle-environments'/)
+  assert.ok(
+    source.indexOf("'041-align-payment-attempts-schema'") <
+      source.indexOf("'042-isolate-paddle-environments'"),
+  )
+})
+
+test('Paddle environment isolation migration defaults existing billing records safely', async () => {
+  const queries = []
+  const { up } = await import('./042-isolate-paddle-environments.js')
+
+  await up({
+    query(sql) {
+      queries.push(String(sql))
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  const sql = queries.join('\n')
+  assert.match(sql, /ALTER TABLE users[\s\S]*ALTER COLUMN paddle_environment SET DEFAULT 'production'/)
+  assert.match(sql, /UPDATE users[\s\S]*LOWER\(paddle_environment\) NOT IN \('production', 'sandbox'\)/)
+  assert.match(sql, /UPDATE subscriptions subscription[\s\S]*FROM users user_account/)
+  assert.match(sql, /ALTER TABLE payment_attempts[\s\S]*ADD COLUMN IF NOT EXISTS paddle_environment TEXT/)
+  assert.match(sql, /payload->'data'->'custom_data'->>'paddleEnvironment'/)
+  assert.match(sql, /ALTER TABLE payment_attempts[\s\S]*ALTER COLUMN paddle_environment SET DEFAULT 'production'/)
+})
+
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
   const queries = []
   const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')

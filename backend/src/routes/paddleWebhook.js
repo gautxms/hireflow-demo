@@ -5,7 +5,10 @@ import { pool, logErrorToDatabase } from '../db/client.js'
 import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
 import { trackEvent } from '../services/analytics.js'
 import { triggerWebhook } from '../services/webhookService.js'
-import { resolvePaddleConfig } from '../config/paddle.js'
+import {
+  resolvePaddleConfig,
+  resolvePaddleEnvironmentForUser,
+} from '../config/paddle.js'
 import {
   getWebhookEventType,
   mapToSubscriptionStatus,
@@ -15,7 +18,6 @@ import {
 } from '../utils/paddleWebhook.js'
 
 const router = express.Router()
-const paddle = resolvePaddleConfig()
 
 function getPaddleCustomerId(payload) {
   return (
@@ -46,30 +48,43 @@ function getScheduledCancellationEffectiveAt(payload) {
   return scheduledChange?.effective_at || scheduledChange?.effectiveAt || null
 }
 
-async function resolveUserFromPayload(payload) {
+async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironment = false) {
   const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
 
   if (explicitUserId) {
     const result = await pool.query(
-      `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, updated_at FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, paddle_environment, updated_at
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
       [explicitUserId],
     )
 
-    return result.rows[0] || null
+    const user = result.rows[0] || null
+    const userEnvironment = user ? resolvePaddleEnvironmentForUser(user) : null
+
+    return {
+      user,
+      environmentMismatch: Boolean(strictEnvironment && user && userEnvironment !== paddleEnvironment),
+    }
   }
 
   const paddleCustomerId = getPaddleCustomerId(payload)
 
   if (!paddleCustomerId) {
-    return null
+    return { user: null, environmentMismatch: false }
   }
 
   const result = await pool.query(
-    `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, updated_at FROM users WHERE paddle_customer_id = $1 LIMIT 1`,
-    [paddleCustomerId],
+    `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, paddle_environment, updated_at
+     FROM users
+     WHERE paddle_customer_id = $1
+       AND ($2::boolean = FALSE OR COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $3)
+     LIMIT 1`,
+    [paddleCustomerId, strictEnvironment, paddleEnvironment],
   )
 
-  return result.rows[0] || null
+  return { user: result.rows[0] || null, environmentMismatch: false }
 }
 
 function shouldApplyFailedPaymentToUser(user, payload, eventType) {
@@ -106,8 +121,7 @@ function getSafeErrorContext(error) {
   }
 }
 
-function planFromPriceId(priceId) {
-  const paddleConfig = resolvePaddleConfig()
+function planFromPriceId(priceId, paddleConfig) {
   if (!priceId) return null
   if (priceId === paddleConfig.priceIdsByPlan.monthly) return 'monthly'
   if (priceId === paddleConfig.priceIdsByPlan.annual) return 'annual'
@@ -157,11 +171,11 @@ function isCreditOrRemovalItem(item = {}) {
   )
 }
 
-function getStoredSubscriptionPlan(payload) {
+function getStoredSubscriptionPlan(payload, paddleConfig) {
   const items = payload?.data?.items || payload?.items || []
   const activePlanFromItems = items
     .filter((item) => !isCreditOrRemovalItem(item))
-    .map((item) => planFromPriceId(getItemPriceId(item)))
+    .map((item) => planFromPriceId(getItemPriceId(item), paddleConfig))
     .find(Boolean)
 
   if (activePlanFromItems) {
@@ -238,7 +252,7 @@ async function ensureWebhookEventsTable() {
   `)
 }
 
-router.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
+async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
   const rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : ''
   const secret = paddle.webhookSecret || ''
   const incomingSignature = req.headers['paddle-signature']
@@ -296,16 +310,21 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
     const nextStatus = mapToSubscriptionStatus(eventType, payload)
     const subscriptionId = getSubscriptionId(payload, eventType)
     const payloadEnvironment = payload?.data?.custom_data?.paddleEnvironment || payload?.custom_data?.paddleEnvironment || null
-    const hasEnvironmentMismatch = payloadEnvironment && payloadEnvironment !== paddle.environment
+    const userResolution = await resolveUserFromPayload(payload, paddle.environment, strictEnvironment)
+    const user = userResolution.user
+    const hasEnvironmentMismatch = Boolean(
+      (payloadEnvironment && payloadEnvironment !== paddle.environment)
+      || userResolution.environmentMismatch,
+    )
 
     if (hasEnvironmentMismatch) {
       console.warn('[Paddle webhook] skipping event due to environment mismatch', {
         configuredEnvironment: paddle.environment,
         payloadEnvironment,
+        userEnvironment: user?.paddle_environment || null,
         eventType,
       })
     }
-    const user = await resolveUserFromPayload(payload)
 
     if (!hasEnvironmentMismatch && nextStatus && subscriptionId) {
       await pool.query(
@@ -342,7 +361,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
                  paddle_environment = $7,
                  updated_at = NOW()
              WHERE id = $1`,
-            [userId, transactionSubscriptionId, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload), payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
+            [userId, transactionSubscriptionId, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload, paddle), payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
           )
         }
 
@@ -387,7 +406,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
             nextStatus || 'payment_failed',
             getTransactionSubscriptionId(payload),
             getPaddleCustomerId(payload),
-            getStoredSubscriptionPlan(payload),
+            getStoredSubscriptionPlan(payload, paddle),
             payload?.data?.billing_period?.ends_at || payload?.data?.current_billing_period?.ends_at || null,
             payload?.data?.billing_period?.ends_at || payload?.data?.next_billed_at || null,
             paddle.environment,
@@ -396,7 +415,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
       }
 
       try {
-        await recordFailedPaymentAttempt(payload)
+        await recordFailedPaymentAttempt(payload, null, paddle.environment)
       } catch (error) {
         const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
         const failedSubscriptionId = getTransactionSubscriptionId(payload)
@@ -447,7 +466,7 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
                updated_at = NOW()
            WHERE id = $1`,
-          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment, getScheduledCancellationEffectiveAt(payload)],
+          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload, paddle), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment, getScheduledCancellationEffectiveAt(payload)],
         )
       }
     }
@@ -493,6 +512,24 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
   }
 
   return res.status(200).json({ received: true })
-})
+}
+
+export function createPaddleWebhookHandler(environmentOverride = null) {
+  return (req, res) => handlePaddleWebhook(
+    req,
+    res,
+    resolvePaddleConfig(process.env, environmentOverride || undefined),
+    Boolean(environmentOverride),
+  )
+}
+
+const rawJsonBody = express.raw({ type: 'application/json' })
+
+// Keep the legacy endpoint bound to PADDLE_ENVIRONMENT for existing live
+// notification destinations. Explicit endpoints allow live and sandbox events
+// to coexist safely in the same production deployment.
+router.post('/', rawJsonBody, createPaddleWebhookHandler())
+router.post('/production', rawJsonBody, createPaddleWebhookHandler('production'))
+router.post('/sandbox', rawJsonBody, createPaddleWebhookHandler('sandbox'))
 
 export default router

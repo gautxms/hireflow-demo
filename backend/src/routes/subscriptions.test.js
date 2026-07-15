@@ -49,6 +49,11 @@ function resetPaddleEnv() {
   delete process.env.PADDLE_PRODUCTION_API_KEY
   delete process.env.PADDLE_PRODUCTION_MONTHLY_PRICE_ID
   delete process.env.PADDLE_PRODUCTION_ANNUAL_PRICE_ID
+  delete process.env.PADDLE_SANDBOX_API_BASE_URL
+  delete process.env.PADDLE_SANDBOX_API_KEY
+  delete process.env.PADDLE_SANDBOX_CLIENT_TOKEN
+  delete process.env.PADDLE_SANDBOX_MONTHLY_PRICE_ID
+  delete process.env.PADDLE_SANDBOX_ANNUAL_PRICE_ID
   delete process.env.PADDLE_ENABLE_TEST_UPGRADE
   delete process.env.PADDLE_TEST_UPGRADE_KEY
   delete process.env.PADDLE_TEST_ANNUAL_PRICE_ID
@@ -1213,6 +1218,34 @@ test('POST /api/subscriptions/cancel uses one checked-out client after Paddle ca
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
   assertTransactionSequence(clientCalls, /UPDATE users/)
+})
+
+test('POST /api/subscriptions/cancel routes an explicitly sandbox user to the sandbox API', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_SANDBOX_API_BASE_URL = 'https://sandbox-api.paddle.test'
+  process.env.PADDLE_SANDBOX_API_KEY = 'sandbox-key'
+  process.env.PADDLE_SANDBOX_CLIENT_TOKEN = 'sandbox-token'
+  process.env.PADDLE_SANDBOX_MONTHLY_PRICE_ID = 'pri_sandbox_monthly'
+  process.env.PADDLE_SANDBOX_ANNUAL_PRICE_ID = 'pri_sandbox_annual'
+
+  installDbMock({
+    id: 123,
+    email: 'sandbox-user@example.com',
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_sandbox_123',
+    paddle_environment: 'sandbox',
+    current_period_end: '2026-07-01T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleResponse()
+  installClientMock()
+
+  const res = await invokeRoute('/cancel', { reason: 'sandbox verification' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(paddleCalls.length, 1)
+  assert.equal(paddleCalls[0].url, 'https://sandbox-api.paddle.test/subscriptions/sub_sandbox_123/cancel')
+  assert.equal(paddleCalls[0].options.headers.Authorization, 'Bearer sandbox-key')
 })
 
 test('POST /api/subscriptions/cancel rolls back and releases checked-out client on local DB failure', async () => {

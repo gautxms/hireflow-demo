@@ -30,7 +30,7 @@ async function buildApp() {
   return app
 }
 
-async function postWebhook({ body, signature }) {
+async function postWebhook({ body, signature, path = '' }) {
   const app = await buildApp()
   const server = app.listen(0)
   const port = server.address().port
@@ -41,7 +41,7 @@ async function postWebhook({ body, signature }) {
       headers['paddle-signature'] = signature
     }
 
-    const response = await fetch(`http://127.0.0.1:${port}/api/paddle/webhook`, {
+    const response = await fetch(`http://127.0.0.1:${port}/api/paddle/webhook${path}`, {
       method: 'POST',
       headers,
       body,
@@ -53,6 +53,91 @@ async function postWebhook({ body, signature }) {
     server.close()
   }
 }
+
+test('POST /api/paddle/webhook/sandbox verifies with the sandbox secret while production remains the default', async (t) => {
+  const originalEnvironment = process.env.PADDLE_ENVIRONMENT
+  const originalProductionSecret = process.env.PADDLE_PRODUCTION_WEBHOOK_SECRET
+  const originalSandboxSecret = process.env.PADDLE_SANDBOX_WEBHOOK_SECRET
+  t.after(() => {
+    process.env.PADDLE_ENVIRONMENT = originalEnvironment
+    if (originalProductionSecret === undefined) delete process.env.PADDLE_PRODUCTION_WEBHOOK_SECRET
+    else process.env.PADDLE_PRODUCTION_WEBHOOK_SECRET = originalProductionSecret
+    if (originalSandboxSecret === undefined) delete process.env.PADDLE_SANDBOX_WEBHOOK_SECRET
+    else process.env.PADDLE_SANDBOX_WEBHOOK_SECRET = originalSandboxSecret
+  })
+
+  process.env.PADDLE_ENVIRONMENT = 'production'
+  process.env.PADDLE_PRODUCTION_WEBHOOK_SECRET = 'production-webhook-secret'
+  process.env.PADDLE_SANDBOX_WEBHOOK_SECRET = 'sandbox-webhook-secret'
+  const payload = buildSubscriptionUpdatedPayload()
+  const rawBody = JSON.stringify(payload)
+  const queryMock = t.mock.method(pool, 'query', async (sql) => {
+    if (String(sql).includes('SELECT event_id')) {
+      return { rowCount: 1, rows: [{ event_id: payload.event_id }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const invalid = await postWebhook({
+    path: '/sandbox',
+    body: rawBody,
+    signature: signBody(rawBody, 'production-webhook-secret'),
+  })
+  assert.equal(invalid.response.status, 401)
+  assert.equal(queryMock.mock.callCount(), 0)
+
+  const valid = await postWebhook({
+    path: '/sandbox',
+    body: rawBody,
+    signature: signBody(rawBody, 'sandbox-webhook-secret'),
+  })
+  assert.equal(valid.response.status, 200)
+  assert.equal(valid.payload.duplicate, true)
+})
+
+test('POST /api/paddle/webhook/sandbox does not mutate a production user', async (t) => {
+  const originalEnvironment = process.env.PADDLE_ENVIRONMENT
+  const originalSandboxSecret = process.env.PADDLE_SANDBOX_WEBHOOK_SECRET
+  t.after(() => {
+    process.env.PADDLE_ENVIRONMENT = originalEnvironment
+    if (originalSandboxSecret === undefined) delete process.env.PADDLE_SANDBOX_WEBHOOK_SECRET
+    else process.env.PADDLE_SANDBOX_WEBHOOK_SECRET = originalSandboxSecret
+  })
+
+  process.env.PADDLE_ENVIRONMENT = 'production'
+  process.env.PADDLE_SANDBOX_WEBHOOK_SECRET = 'sandbox-webhook-secret'
+  const payload = buildSubscriptionUpdatedPayload()
+  delete payload.data.custom_data.paddleEnvironment
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+  t.mock.method(pool, 'query', async (sql) => {
+    calls.push(String(sql))
+    if (String(sql).includes('SELECT event_id')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_live_123',
+          paddle_subscription_id: 'sub_live_123',
+          subscription_status: 'active',
+          paddle_environment: 'production',
+        }],
+      }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const result = await postWebhook({
+    path: '/sandbox',
+    body: rawBody,
+    signature: signBody(rawBody, 'sandbox-webhook-secret'),
+  })
+
+  assert.equal(result.response.status, 200)
+  assert.ok(!calls.some((sql) => sql.includes('UPDATE users')))
+  assert.ok(!calls.some((sql) => sql.includes('INSERT INTO subscriptions')))
+})
 
 function buildSubscriptionUpdatedPayload(overrides = {}) {
   return {
