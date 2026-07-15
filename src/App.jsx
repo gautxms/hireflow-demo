@@ -74,7 +74,7 @@ import useAdminAuth, { AdminAuthProvider } from './admin/hooks/useAdminAuth'
 const AdminRouteGuard = lazy(() => import('./admin/components/AdminRouteGuard'))
 import { clearResumeAnalysisResult, getResumeAnalysisOwnerKey, readResumeAnalysisResult } from './components/resumeAnalysisSession'
 import { resolveUserSectionPath } from './config/userNavigation'
-import { canAccessRouteForSubscriptionState, canonicalizePathname, getAnalysisDetailRouteId, getCandidateDetailRouteId, isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isStandaloneOrdinaryUserAuthRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
+import { canAccessRouteForSubscriptionState, canRenderSettingsInReadOnlyWorkspace, canonicalizePathname, getAnalysisDetailRouteId, getCandidateDetailRouteId, isAuthenticatedAccountShellRoutePath, isPaidWorkspaceRoutePath, isStandaloneOrdinaryUserAuthRoutePath, isUserShellRoutePath, normalizeLegacyAccountPath } from './config/userShellRouting'
 import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isSharedResultsPath } from './utils/resultsRouteContract'
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
@@ -207,6 +207,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
   }
 
   const canAccessWorkspaceShell = canAccessProductDashboard(subscriptionStateOrStatus)
+    || canRenderSettingsInReadOnlyWorkspace(resolvedPathname, subscriptionStateOrStatus)
     || (
       isReadOnlyWorkspaceFrontendRoute(resolvedPathname)
       && canAccessRouteForSubscriptionState(resolvedPathname, subscriptionStateOrStatus)

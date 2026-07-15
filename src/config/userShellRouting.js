@@ -87,6 +87,11 @@ export function canAccessRouteForSubscriptionState(pathname, subscriptionStateOr
   return false
 }
 
+export function canRenderSettingsInReadOnlyWorkspace(pathname, subscriptionStateOrSubscription, options = {}) {
+  return canonicalizePathname(pathname) === '/settings'
+    && hasReadOnlyWorkspaceRouteAccess(subscriptionStateOrSubscription, options)
+}
+
 export function isAuthenticatedAccountRoutePath(pathname) {
   return ACCOUNT_ROUTE_PATHS.has(canonicalizePathname(pathname))
 }
