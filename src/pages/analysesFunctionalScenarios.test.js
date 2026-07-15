@@ -28,7 +28,7 @@ test('read-only analyses mode exposes history and suppresses create and delete a
   assert.match(analysesPageSource, /const handleSubmit = async[\s\S]*if \(isReadOnly\) return/)
   assert.match(analysesPageSource, /const handleDeleteAnalysis = async[\s\S]*if \(isReadOnly\) return/)
   assert.match(analysesPageSource, /\{!isReadOnly \? <button[\s\S]*Create analysis<\/button> : null\}/)
-  assert.match(analysesPageSource, /Read-only access: historical analyses remain available/)
+  assert.doesNotMatch(analysesPageSource, /Read-only access:/)
   assert.match(analysesPageSource, /\{!isReadOnly \? <th>Actions<\/th> : null\}/)
   assert.match(analysesPageSource, /\{!isReadOnly \? <td className="analyses-layout__cell" data-label="Actions">/)
   assert.match(analysesPageSource, /\{!isReadOnly \? <CreateAnalysisModal[\s\S]*\/> : null\}/)

@@ -65,7 +65,7 @@ test('read-only shortlists mode preserves history and suppresses every mutation 
   assert.match(shortlistManagerSource, /\{!readOnly \? <button[\s\S]*Create shortlist[\s\S]*<\/button> : null\}/)
   assert.match(shortlistManagerSource, /\{!readOnly && showCreateForm \? <section/)
   assert.match(shortlistManagerSource, /\{!readOnly \? <div className="shortlist-manager__candidate-actions">/)
-  assert.match(shortlistManagerSource, /Read-only access: historical shortlists remain available/)
+  assert.doesNotMatch(shortlistManagerSource, /Read-only access:/)
 })
 
 

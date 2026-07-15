@@ -19,5 +19,5 @@ test('read-only reports mode suppresses create, schedule, and delete mutations',
   assert.match(source, /\{!isReadOnly \? <form onSubmit=\{createReport\}/)
   assert.match(source, /\{!isReadOnly \? <th>Actions<\/th> : null\}/)
   assert.match(source, /\{!isReadOnly \? <td>[\s\S]*toggleSchedule\(item\)[\s\S]*deleteReport\(item\.id\)/)
-  assert.match(source, /Read-only access: saved reports remain available/)
+  assert.doesNotMatch(source, /Read-only access:/)
 })

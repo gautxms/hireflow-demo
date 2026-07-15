@@ -160,11 +160,6 @@ export default function JobDescriptionPage({ onRequireAuth, isReadOnly = false }
           ) : null}
         </header>
 
-        {isReadOnly ? (
-          <p className="analyses-layout__state">
-            Read-only access: historical jobs remain available, but creating or changing jobs requires an active subscription.
-          </p>
-        ) : null}
         {successMessage ? <p className="analyses-layout__state">{successMessage}</p> : null}
         {isLoading ? <p className="analyses-layout__state analyses-layout__state--loading">Loading jobs…</p> : null}
         {!isLoading && error ? (

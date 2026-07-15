@@ -255,8 +255,6 @@ export default function CandidatesPage({ isReadOnly = false }) {
         </div>
       </header>
 
-      {isReadOnly ? <p className="candidates-directory__status">Read-only access: historical candidates remain available, but shortlist and candidate mutation actions require an active subscription.</p> : null}
-
       <section className="candidates-directory__toolbar" aria-label="Candidate search and quick filters">
         <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, tags, role, skills" />
         <select

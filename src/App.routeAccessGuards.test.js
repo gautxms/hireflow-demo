@@ -31,7 +31,7 @@ test('historical dashboard uses authenticated routing and preserves paid legacy 
   assert.match(dashboardBlock, /guardAuthenticatedRoute\(\{/)
   assert.doesNotMatch(dashboardBlock, /guardSubscriptionRoute\(\{/)
   assert.match(dashboardBlock, /if \(!canViewReportsHistory\)/)
-  assert.match(dashboardBlock, /isReadOnly=\{!profileBillingState\.canUsePaidMutation\}/)
+  assert.match(dashboardBlock, /return <OperationsDashboard onNavigate=\{handleNavigate\} \/>/)
 
   const legacyEnd = source.indexOf("if (resolvedPathname === '/terms')", legacyStart)
   const legacyBlock = source.slice(legacyStart, legacyEnd)
@@ -53,7 +53,7 @@ test('only staged historical Dashboard, Jobs, Analyses, Candidates, Shortlists, 
   assert.match(source, /<CandidatesPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
   assert.match(source, /<ShortlistsPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
   assert.match(source, /<ReportsPage isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
-  assert.match(source, /<OperationsDashboard onNavigate=\{handleNavigate\} isReadOnly=\{!profileBillingState\.canUsePaidMutation\} \/>/)
+  assert.match(source, /<OperationsDashboard onNavigate=\{handleNavigate\} \/>/)
   assert.match(source, /const canViewAnalysesHistory = canViewHistoricalWorkspaceModule\(analysesModuleEnabled, profileBillingState\)/)
   assert.match(source, /const canViewCandidateHistory = canViewHistoricalWorkspaceModule\(candidateModuleEnabled, profileBillingState\)/)
   assert.match(source, /const canViewReportsHistory = canViewHistoricalWorkspaceModule\(dashboardReportsEnabled, profileBillingState\)/)

@@ -196,8 +196,6 @@ export default function ShortlistManager(props) {
         </button> : null}
       </header>
 
-      {readOnly ? <p className="shortlist-manager__muted-text">Read-only access: historical shortlists remain available, but creating or changing shortlists requires an active subscription.</p> : null}
-
       {!readOnly && showCreateForm ? <section className="shortlist-manager__filters-card" aria-label="Create shortlist">
         <form onSubmit={handleCreate} className="shortlist-manager__create-form">
           <label className="shortlist-manager__filter-label">Shortlist name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter shortlist name" className="shortlist-manager__input" /></label>

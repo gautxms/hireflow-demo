@@ -210,7 +210,7 @@ test('read-only notice sends ended subscriptions to plans', () => {
     canUsePaidMutation: false,
     isCanceled: true,
   }), {
-    title: 'Workspace is read-only',
+    title: 'Read-only access',
     description: 'Your historical data remains available. Choose a plan to create analyses or change recruiting workflows.',
     actionLabel: 'View plans',
     actionPath: '/pricing',

@@ -15,7 +15,7 @@ test('candidates directory keeps historical persisted reads, filters, pagination
 test('read-only candidates mode suppresses shortlist selection and mutation UI', () => {
   assert.match(source, /export default function CandidatesPage\(\{ isReadOnly = false \}\)/)
   assert.match(source, /const toggleSelectedCandidate = \(resumeId\) => \{\s*if \(isReadOnly\) return/)
-  assert.match(source, /Read-only access: historical candidates remain available/)
+  assert.doesNotMatch(source, /Read-only access:/)
   assert.match(source, /\{!isReadOnly && selectedResumeIds\.length > 0 && \(/)
   assert.match(source, /\{!isReadOnly \? <th aria-label="Select candidate" \/> : null\}/)
   assert.match(source, /\{!isReadOnly \? <td>[\s\S]*toggleSelectedCandidate/)

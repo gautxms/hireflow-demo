@@ -8,7 +8,7 @@ const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 
 test('read-only candidate results preserve historical viewing while suppressing mutation controls', () => {
   assert.match(candidateResultsSource, /isReadOnly = false/)
-  assert.match(candidateResultsSource, /Read-only access: historical results and resumes remain available/)
+  assert.doesNotMatch(candidateResultsSource, /Read-only access:/)
   assert.match(candidateResultsSource, /shortlistEnabled=\{!isReadOnly && shortlistV2Enabled\}/)
   assert.match(candidateResultsSource, /\{!isReadOnly && shortlistOpen && \(/)
   assert.match(candidateResultsSource, /\{!isReadOnly && selectedCandidates\.length > 0 && \(/)

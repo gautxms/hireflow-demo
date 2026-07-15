@@ -15,7 +15,6 @@ import {
   Home,
   FileText,
   Target,
-  LockKeyhole,
 } from 'lucide-react'
 import { openCookiePreferences } from '../../privacy/cookieConsent'
 
@@ -44,7 +43,7 @@ const DEFAULT_NAV = [
   { label: 'Settings', path: '/settings', Icon: Settings2 },
 ]
 
-export default function UserAppShell({ children, pathname, onNavigate, onLogout, pageTitleProp, userProfile = null, hasWorkspaceAccess = false, navItems = DEFAULT_NAV, showUpgradeCta = false, isReadOnlyWorkspace = false, readOnlyNotice = null }) {
+export default function UserAppShell({ children, pathname, onNavigate, onLogout, pageTitleProp, userProfile = null, hasWorkspaceAccess = false, navItems = DEFAULT_NAV, showUpgradeCta = false, readOnlyNotice = null }) {
   const getInitialPinned = () => {
     try {
       return localStorage.getItem('hf-sb-pinned') !== 'false'
@@ -178,21 +177,11 @@ export default function UserAppShell({ children, pathname, onNavigate, onLogout,
           onNavigate={onNavigate}
           onLogout={onLogout}
           showUpgradeCta={showUpgradeCta}
+          upgradeStatusLabel={readOnlyNotice?.title}
+          upgradeDescription={readOnlyNotice?.description}
           upgradeLabel={readOnlyNotice?.actionLabel}
           upgradePath={readOnlyNotice?.actionPath}
         />
-        {isReadOnlyWorkspace && readOnlyNotice ? (
-          <section className="user-app-shell__read-only" role="status" aria-label="Read-only workspace access">
-            <LockKeyhole size={18} strokeWidth={1.5} aria-hidden="true" className="user-app-shell__read-only-icon" />
-            <div className="user-app-shell__read-only-copy">
-              <strong>{readOnlyNotice.title}</strong>
-              <span>{readOnlyNotice.description}</span>
-            </div>
-            <button type="button" className="hf-btn hf-btn--primary user-app-shell__read-only-action" onClick={() => onNavigate(readOnlyNotice.actionPath)}>
-              {readOnlyNotice.actionLabel}
-            </button>
-          </section>
-        ) : null}
         <div className="user-app-shell__page-content">{children}</div>
         <footer className="user-app-shell__footer" aria-label="Workspace footer">
           <span className="user-app-shell__footer-copy">© {new Date().getFullYear()} HireFlow</span>
