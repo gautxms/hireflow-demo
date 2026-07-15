@@ -14,7 +14,11 @@ PADDLE_SANDBOX_API_KEY=<sandbox API key>
 PADDLE_SANDBOX_CLIENT_TOKEN=<sandbox client-side token>
 PADDLE_SANDBOX_MONTHLY_PRICE_ID=<sandbox monthly price ID>
 PADDLE_SANDBOX_ANNUAL_PRICE_ID=<sandbox annual price ID>
+PADDLE_SANDBOX_MONTHLY_NO_TRIAL_PRICE_ID=<sandbox monthly price with no trial>
+PADDLE_SANDBOX_ANNUAL_NO_TRIAL_PRICE_ID=<sandbox annual price with no trial>
 ```
+
+The normal monthly and annual prices may include the one-time introductory trial. The `NO_TRIAL` prices must use the same recurring amounts without a trial period; HireFlow uses them for any account with previous subscription history.
 
 Do not put Paddle API keys or webhook secrets in Vercel, frontend variables, source control, logs, screenshots, or support messages. Checkout returns only the client-side token to the browser.
 

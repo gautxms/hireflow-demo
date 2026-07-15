@@ -35,7 +35,7 @@ export const PUBLIC_PAGE_SEO = {
   },
   '/pricing': {
     title: 'HireFlow Pricing',
-    description: 'Choose monthly or yearly HireFlow pricing plans with a 7-day free trial and flexible team scaling.',
+    description: 'Choose monthly or yearly HireFlow pricing plans with a one-time 7-day trial for eligible new accounts.',
   },
   '/terms': {
     title: 'HireFlow Terms of Service',

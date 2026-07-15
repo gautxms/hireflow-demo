@@ -4,7 +4,7 @@ export default function RefundPolicy() {
   return (
     <ContentDocument title="Refund Policy" eyebrow="Legal">
       <p className="content-document__paragraph">
-        Hireflow offers a 7-day free trial on all subscription plans.
+        Hireflow offers eligible new accounts one 7-day free trial. Trials are not reinstated after cancellation, payment failure, pausing, or a previous subscription.
       </p>
       <p className="content-document__paragraph">
         Once a subscription converts to a paid plan, payments are non-refundable.

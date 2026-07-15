@@ -240,6 +240,36 @@ test('Paddle environment isolation migration defaults existing billing records s
   assert.match(sql, /ALTER TABLE payment_attempts[\s\S]*ALTER COLUMN paddle_environment SET DEFAULT 'production'/)
 })
 
+test('migration runner adds immutable trial-consumption tracking after Paddle environment isolation', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'043-add-trial-consumption'/)
+  assert.ok(
+    source.indexOf("'042-isolate-paddle-environments'") <
+      source.indexOf("'043-add-trial-consumption'"),
+  )
+})
+
+test('trial-consumption migration backfills every account with subscription history', async () => {
+  const queries = []
+  const { up } = await import('./043-add-trial-consumption.js')
+
+  await up({
+    query(sql) {
+      queries.push(String(sql))
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  const sql = queries.join('\n')
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS trial_consumed_at TIMESTAMP/)
+  assert.match(sql, /subscription_started_at IS NOT NULL/)
+  assert.match(sql, /trial_ends_at IS NOT NULL/)
+  assert.match(sql, /paddle_subscription_id IS NOT NULL/)
+  assert.match(sql, /subscription_status[\s\S]*NOT IN \('inactive', 'no_subscription', 'none', 'free', ''\)/)
+  assert.match(sql, /EXISTS \([\s\S]*FROM subscriptions subscription[\s\S]*subscription\.user_id = user_account\.id/)
+  assert.match(sql, /FROM payment_attempts attempt[\s\S]*attempt\.user_id = user_account\.id/)
+})
+
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
   const queries = []
   const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')

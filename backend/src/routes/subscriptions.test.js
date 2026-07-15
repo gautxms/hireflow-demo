@@ -1016,6 +1016,51 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
   assertTransactionSequence(clientCalls, /UPDATE users/)
 })
 
+test('POST /api/subscriptions/keep-subscription removes Paddle scheduled cancellation without a charge', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: { action: 'cancel', effective_at: '2026-08-01T00:00:00.000Z' } } } },
+    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: null, next_billed_at: '2026-08-01T00:00:00.000Z', current_billing_period: { ends_at: '2026-08-01T00:00:00.000Z' } } } },
+  ])
+  const { clientCalls } = installClientMock()
+
+  const res = await invokeRoute('/keep-subscription')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.status, 'ok')
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.cancellationEffectiveAt, null)
+  assert.equal(paddleCalls.length, 2)
+  assert.equal(paddleCalls[1].options.method, 'PATCH')
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body), { scheduled_change: null })
+  assertTransactionSequence(clientCalls, /cancellation_effective_at = NULL/)
+})
+
+test('POST /api/subscriptions/keep-subscription sends fully ended users to a new paid checkout', async () => {
+  resetPaddleEnv()
+  const { connectCalls } = installDbMock({
+    id: 123,
+    subscription_status: 'cancelled',
+    subscription_plan: 'monthly',
+    paddle_subscription_id: 'sub_123',
+  })
+  mockPaddleResponse({ payload: { data: { id: 'sub_123', status: 'canceled', scheduled_change: null } } })
+
+  const res = await invokeRoute('/keep-subscription')
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'SUBSCRIPTION_ALREADY_ENDED')
+  assert.equal(res.payload.redirectTo, '/pricing?reason=subscribe_again')
+  assert.equal(connectCalls.length, 0)
+})
+
 
 
 test('POST /api/subscriptions/change-plan-preview blocks mixed-interval recurring add-on without Paddle preview or mutation', async () => {
@@ -1218,6 +1263,7 @@ test('POST /api/subscriptions/cancel uses one checked-out client after Paddle ca
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
   assertTransactionSequence(clientCalls, /UPDATE users/)
+  assert.equal(clientCalls[1].params[0], 'active', 'scheduled cancellation keeps the locally active status')
 })
 
 test('POST /api/subscriptions/cancel routes an explicitly sandbox user to the sandbox API', async () => {

@@ -16,6 +16,8 @@ test('resolvePaddleConfig prefers sandbox variables when environment is sandbox'
     PADDLE_SANDBOX_CLIENT_TOKEN: 'sb_token',
     PADDLE_SANDBOX_MONTHLY_PRICE_ID: 'pri_sb_m',
     PADDLE_SANDBOX_ANNUAL_PRICE_ID: 'pri_sb_a',
+    PADDLE_SANDBOX_MONTHLY_NO_TRIAL_PRICE_ID: 'pri_sb_m_paid',
+    PADDLE_SANDBOX_ANNUAL_NO_TRIAL_PRICE_ID: 'pri_sb_a_paid',
   })
 
   assert.equal(cfg.environment, 'sandbox')
@@ -23,6 +25,7 @@ test('resolvePaddleConfig prefers sandbox variables when environment is sandbox'
   assert.equal(cfg.clientToken, 'sb_token')
   assert.equal(cfg.priceIdsByPlan.monthly, 'pri_sb_m')
   assert.equal(cfg.priceIdsByPlan.annual, 'pri_sb_a')
+  assert.deepEqual(cfg.noTrialPriceIdsByPlan, { monthly: 'pri_sb_m_paid', annual: 'pri_sb_a_paid' })
 })
 
 test('resolvePaddleConfig keeps production values in production', () => {
@@ -32,6 +35,8 @@ test('resolvePaddleConfig keeps production values in production', () => {
     PADDLE_CLIENT_TOKEN: 'live_token',
     PADDLE_MONTHLY_PRICE_ID: 'pri_live_m',
     PADDLE_ANNUAL_PRICE_ID: 'pri_live_a',
+    PADDLE_MONTHLY_NO_TRIAL_PRICE_ID: 'pri_live_m_paid',
+    PADDLE_ANNUAL_NO_TRIAL_PRICE_ID: 'pri_live_a_paid',
     PADDLE_SANDBOX_API_KEY: 'sb_key',
   })
 
@@ -40,6 +45,7 @@ test('resolvePaddleConfig keeps production values in production', () => {
   assert.equal(cfg.clientToken, 'live_token')
   assert.equal(cfg.priceIdsByPlan.monthly, 'pri_live_m')
   assert.equal(cfg.priceIdsByPlan.annual, 'pri_live_a')
+  assert.deepEqual(cfg.noTrialPriceIdsByPlan, { monthly: 'pri_live_m_paid', annual: 'pri_live_a_paid' })
 })
 
 test('resolvePaddleConfig accepts an explicit sandbox override while the deployment default remains production', () => {

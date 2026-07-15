@@ -12,6 +12,7 @@ CREATE TABLE users (
   paddle_subscription_id TEXT,
   subscription_status TEXT DEFAULT 'inactive',
   subscription_started_at TIMESTAMP,
+  trial_consumed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

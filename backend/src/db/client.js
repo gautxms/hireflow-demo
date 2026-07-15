@@ -25,6 +25,7 @@ export async function initializeDatabase() {
         subscription_status TEXT DEFAULT 'inactive',
         subscription_started_at TIMESTAMP,
         trial_ends_at TIMESTAMP,
+        trial_consumed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
       );
     `)
@@ -41,6 +42,7 @@ export async function initializeDatabase() {
       { name: 'subscription_status', type: 'TEXT DEFAULT \'inactive\'' },
       { name: 'subscription_started_at', type: 'TIMESTAMP' },
       { name: 'trial_ends_at', type: 'TIMESTAMP' },
+      { name: 'trial_consumed_at', type: 'TIMESTAMP' },
       { name: 'deleted_at', type: 'TIMESTAMP' },
       { name: 'deletion_scheduled_for', type: 'TIMESTAMP' },
     ]

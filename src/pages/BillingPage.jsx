@@ -78,6 +78,7 @@ export default function BillingPage() {
   const [previewError, setPreviewError] = useState('')
   const [previewErrorCode, setPreviewErrorCode] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
+  const [isKeepingSubscription, setIsKeepingSubscription] = useState(false)
 
   const upgradeTestKey = useMemo(() => {
     if (typeof window === 'undefined') return ''
@@ -148,6 +149,8 @@ export default function BillingPage() {
   const billingMetadataRows = getBillingMetadataRows(subscriptionState, subscription, formatDate)
   const pastDueBillingNotice = subscriptionState.isPastDue ? getPastDueBillingNotice() : ''
   const hasBillingHistory = shouldRenderBillingHistory(history)
+  const hasScheduledCancellation = subscriptionState.isCancellationScheduled
+  const isFinalCancellation = subscriptionState.isCanceled && !hasScheduledCancellation
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -258,6 +261,31 @@ export default function BillingPage() {
     }
   }
 
+  async function keepSubscription() {
+    if (isKeepingSubscription) return
+
+    try {
+      setIsKeepingSubscription(true)
+      setActionFeedback({ type: '', message: '' })
+      const response = await fetch(`${API_BASE}/subscriptions/keep-subscription`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to keep subscription')
+      }
+
+      setActionFeedback({ type: 'success', message: payload.message || 'Your subscription will continue.' })
+      await loadBilling()
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Unable to keep subscription' })
+    } finally {
+      setIsKeepingSubscription(false)
+    }
+  }
+
   async function downloadInvoice(invoiceId) {
     const response = await fetch(`${API_BASE}/subscriptions/invoices/${invoiceId}/download`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -337,27 +365,38 @@ export default function BillingPage() {
               </div>
               {pastDueBillingNotice ? <p className="billing-page__past-due-note">{pastDueBillingNotice}</p> : null}
               {cancellationAccessMessage ? (
-                <>
-                  <p className="billing-page__renewal-note">{cancellationAccessMessage}</p>
-                  <p className="billing-page__support-note">Need to keep using HireFlow? Contact support to resume your subscription.</p>
-                </>
+                <p className="billing-page__renewal-note">{cancellationAccessMessage}</p>
               ) : null}
               {actionFeedback.message ? <p className={`billing-page__feedback billing-page__feedback--${actionFeedback.type}`} role={actionFeedback.type === 'error' ? 'alert' : 'status'}>{actionFeedback.message}</p> : null}
 
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
-                  {planAction?.isSelfServe ? (
+                  {hasScheduledCancellation ? (
+                    <button type="button" className="hf-btn hf-btn--primary" onClick={keepSubscription} disabled={isKeepingSubscription}>
+                      {isKeepingSubscription ? 'Keeping subscription…' : 'Keep subscription'}
+                    </button>
+                  ) : null}
+                  {subscriptionState.isPastDue ? (
+                    <a className="hf-btn hf-btn--primary" href="/account/payment-method">Update payment &amp; pay now</a>
+                  ) : null}
+                  {!hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue && planAction?.isSelfServe ? (
                     <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>
                       {planAction.label}
                     </button>
                   ) : null}
-                  {shouldShowPlanSupportNote ? (
+                  {shouldShowPlanSupportNote && !hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue ? (
                     <p className="billing-page__support-note">{planAction.label}</p>
                   ) : null}
                   {shouldShowCancelAction ? (
                     <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }}>
                       {cancelActionLabel}
                     </button>
+                  ) : null}
+                  {!isFinalCancellation && !subscriptionState.isPastDue ? (
+                    <a className="hf-btn hf-btn--secondary" href="/account/payment-method">Change payment method</a>
+                  ) : null}
+                  {isFinalCancellation ? (
+                    <a className="hf-btn hf-btn--primary" href="/pricing?reason=subscribe_again">Subscribe again</a>
                   ) : null}
                 </div>
               ) : null}

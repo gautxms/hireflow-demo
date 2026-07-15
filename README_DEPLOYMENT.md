@@ -41,7 +41,7 @@ A production backend deployment requires these service categories to be configur
 - Redis for Bull parse jobs (`REDIS_URL` or host/port/password/db variables).
 - S3-compatible assembled upload storage for large/chunked uploads (`AWS_REGION`, `AWS_S3_BUCKET`, access credentials).
 - AI provider/model configuration for resume analysis.
-- Paddle production or sandbox API/client/webhook secrets and plan price IDs.
+- Paddle production or sandbox API/client/webhook secrets, introductory-trial price IDs, and matching no-trial price IDs for returning subscribers.
 - Email provider settings for verification, password reset, invoices, and customer notifications.
 - Optional file scanning provider configuration.
 

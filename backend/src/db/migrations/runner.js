@@ -44,6 +44,7 @@ const migrationFiles = [
   '040-ensure-shortlist-batch-add-schema',
   '041-align-payment-attempts-schema',
   '042-isolate-paddle-environments',
+  '043-add-trial-consumption',
 ]
 
 async function ensureMigrationsTable(client) {
