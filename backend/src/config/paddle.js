@@ -1,7 +1,10 @@
-const DEFAULT_PADDLE_API_BASE_URL = 'https://api.paddle.com'
+const DEFAULT_PADDLE_API_BASE_URLS = {
+  production: 'https://api.paddle.com',
+  sandbox: 'https://sandbox-api.paddle.com',
+}
 const DEFAULT_PADDLE_ENVIRONMENT = 'production'
 
-function normalizeEnvironment(envValue) {
+export function normalizePaddleEnvironment(envValue) {
   const normalized = String(envValue || DEFAULT_PADDLE_ENVIRONMENT).toLowerCase()
   return normalized === 'sandbox' ? 'sandbox' : 'production'
 }
@@ -15,15 +18,25 @@ function parseCommaSeparatedIds(value) {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
 }
 
-export function resolvePaddleConfig(env = process.env) {
-  const environment = normalizeEnvironment(env.PADDLE_ENVIRONMENT)
+export function resolvePaddleEnvironmentForUser(user = {}, env = process.env) {
+  const storedEnvironment = String(user?.paddle_environment || '').trim().toLowerCase()
+
+  if (storedEnvironment === 'sandbox' || storedEnvironment === 'production') {
+    return storedEnvironment
+  }
+
+  return normalizePaddleEnvironment(env.PADDLE_ENVIRONMENT)
+}
+
+export function resolvePaddleConfig(env = process.env, environmentOverride) {
+  const environment = normalizePaddleEnvironment(environmentOverride || env.PADDLE_ENVIRONMENT)
   const isSandbox = environment === 'sandbox'
   const isProduction = environment === 'production'
 
   const apiBaseUrl = firstDefined(
     isSandbox ? env.PADDLE_SANDBOX_API_BASE_URL : env.PADDLE_PRODUCTION_API_BASE_URL,
-    env.PADDLE_API_BASE_URL,
-    DEFAULT_PADDLE_API_BASE_URL,
+    isProduction ? env.PADDLE_API_BASE_URL : undefined,
+    DEFAULT_PADDLE_API_BASE_URLS[environment],
   )
 
   const isTestCheckoutEnabled = env.PADDLE_ENABLE_TEST_CHECKOUT === 'true'
@@ -82,4 +95,8 @@ export function resolvePaddleConfig(env = process.env) {
       monthlyPriceId: firstDefined(env.PADDLE_TEST_MONTHLY_PRICE_ID),
     },
   }
+}
+
+export function resolvePaddleConfigForUser(user = {}, env = process.env) {
+  return resolvePaddleConfig(env, resolvePaddleEnvironmentForUser(user, env))
 }

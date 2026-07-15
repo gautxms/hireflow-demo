@@ -1,10 +1,9 @@
 import crypto from 'crypto'
 import { Router } from 'express'
 import { pool } from '../../db/client.js'
+import { resolvePaddleConfig } from '../../config/paddle.js'
 
 const router = Router()
-const PADDLE_API_BASE_URL = process.env.PADDLE_API_BASE_URL || 'https://api.paddle.com'
-const PADDLE_API_VERSION = process.env.PADDLE_API_VERSION || '1'
 
 function toIso(value) {
   if (!value) return null
@@ -29,17 +28,17 @@ async function ensureRefundAuditTable() {
   `)
 }
 
-async function paddleRequest(path, options = {}) {
-  if (!process.env.PADDLE_API_KEY) {
-    return { skipped: true, reason: 'PADDLE_API_KEY missing' }
+async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig()) {
+  if (!paddle.apiKey) {
+    return { skipped: true, reason: `Paddle ${paddle.environment} API key missing` }
   }
 
-  const response = await fetch(`${PADDLE_API_BASE_URL}${path}`, {
+  const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+      Authorization: `Bearer ${paddle.apiKey}`,
       'Content-Type': 'application/json',
-      'Paddle-Version': PADDLE_API_VERSION,
+      'Paddle-Version': paddle.apiVersion,
       ...(options.headers || {}),
     },
   })
@@ -70,7 +69,8 @@ router.get('/', async (_req, res) => {
               pa.retry_count,
               pa.next_retry_at,
               pa.last_error,
-              pa.status AS retry_status
+              pa.status AS retry_status,
+              COALESCE(pa.paddle_environment, u.paddle_environment, 'production') AS paddle_environment
        FROM billing_invoices bi
        LEFT JOIN users u ON u.id = bi.user_id
        LEFT JOIN payment_attempts pa ON pa.transaction_id = bi.paddle_transaction_id
@@ -80,7 +80,7 @@ router.get('/', async (_req, res) => {
 
     const failedResult = await pool.query(
       `SELECT id, transaction_id, user_id, customer_email, amount, currency, status, retry_count,
-              next_retry_at, last_error, created_at, updated_at
+              next_retry_at, last_error, paddle_environment, created_at, updated_at
        FROM payment_attempts
        WHERE status IN ('failed', 'retrying', 'manual_required')
        ORDER BY updated_at DESC
@@ -100,7 +100,8 @@ router.get('/', async (_req, res) => {
           COALESCE(SUM(CASE WHEN subscription_status IN ('active', 'trialing') AND subscription_plan = 'annual' THEN 999.0 / 12 ELSE 0 END), 0) AS annualized_monthly,
           COUNT(*) FILTER (WHERE subscription_status = 'cancelled')::int AS cancelled_count,
           COUNT(*) FILTER (WHERE subscription_status IN ('active', 'trialing'))::int AS active_count
-       FROM users`,
+       FROM users
+       WHERE COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = 'production'`,
     )
 
     const metrics = summaryResult.rows[0] || {}
@@ -126,6 +127,7 @@ router.get('/', async (_req, res) => {
         currency: row.currency,
         status: row.status,
         billedAt: toIso(row.billed_at),
+        paddleEnvironment: row.paddle_environment || 'production',
         retry: row.retry_status
           ? {
             status: row.retry_status,
@@ -146,6 +148,7 @@ router.get('/', async (_req, res) => {
         retryCount: Number(row.retry_count || 0),
         nextRetryAt: toIso(row.next_retry_at),
         lastError: row.last_error,
+        paddleEnvironment: row.paddle_environment || 'production',
         createdAt: toIso(row.created_at),
         updatedAt: toIso(row.updated_at),
       })),
@@ -173,13 +176,21 @@ router.post('/:transactionId/retry', async (req, res) => {
   }
 
   try {
+    const attemptResult = await pool.query(
+      `SELECT paddle_environment
+       FROM payment_attempts
+       WHERE transaction_id = $1
+       LIMIT 1`,
+      [transactionId],
+    )
+    const paddle = resolvePaddleConfig(process.env, attemptResult.rows[0]?.paddle_environment || 'production')
     const idempotencyKey = crypto.createHash('sha256').update(`${transactionId}:${Date.now()}`).digest('hex')
 
     const paddleResponse = await paddleRequest(`/transactions/${transactionId}/charge`, {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({}),
-    })
+    }, paddle)
 
     if (!paddleResponse.skipped) {
       await pool.query(

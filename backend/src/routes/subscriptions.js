@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { Router } from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
-import { resolvePaddleConfig } from '../config/paddle.js'
+import { resolvePaddleConfig, resolvePaddleConfigForUser } from '../config/paddle.js'
 
 const router = Router()
 
@@ -138,8 +138,7 @@ function classifyPaddleFailure(status, payload = {}) {
   return 'PADDLE_SUBSCRIPTION_UPDATE_FAILED'
 }
 
-async function paddleRequest(path, options = {}) {
-  const paddle = resolvePaddleConfig()
+async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig()) {
   if (!paddle.apiKey) {
     throw new BillingError('BILLING_CONFIG_MISSING', { reason: 'missing_api_key' })
   }
@@ -316,8 +315,9 @@ async function resolveCurrentPlanCost(user, planKey, plan) {
   if (!user?.paddle_subscription_id || !planKey) return fallback
 
   try {
-    const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`)
-    return { ...(extractCurrentPaddlePlanCost(subscriptionPayload, planKey) || fallback), paddleSubscriptionPayload: subscriptionPayload }
+    const paddle = resolvePaddleConfigForUser(user)
+    const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {}, paddle)
+    return { ...(extractCurrentPaddlePlanCost(subscriptionPayload, planKey, paddle) || fallback), paddleSubscriptionPayload: subscriptionPayload }
   } catch (error) {
     console.warn('[subscriptions.current] Falling back to local plan cost after Paddle subscription lookup failed', {
       userId: user.id,
@@ -441,26 +441,29 @@ router.get('/current', requireAuth, async (req, res) => {
     const userResult = await pool.query(
       `SELECT id, email, subscription_status, subscription_plan, subscription_renewal_date,
               next_billing_date, cancellation_effective_at, current_period_end, subscription_started_at,
-              payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id
+              payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
+              paddle_environment
        FROM users
        WHERE id = $1`,
       [req.userId],
     )
 
     const user = userResult.rows[0]
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const paddle = resolvePaddleConfigForUser(user)
     const subscriptionResult = await pool.query(
       `SELECT status, created_at
        FROM subscriptions
        WHERE user_id = $1
+         AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $2
        ORDER BY created_at DESC
        LIMIT 1`,
-      [req.userId],
+      [req.userId, paddle.environment],
     )
     const latestSubscription = subscriptionResult.rows[0] || null
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' })
-    }
 
     if (!latestSubscription) {
       console.warn('[subscriptions.current] No subscription row found in subscriptions table', { userId: req.userId })
@@ -489,6 +492,7 @@ router.get('/current', requireAuth, async (req, res) => {
         billingInterval: planCost.billingInterval,
         paddleCustomerId: user.paddle_customer_id || null,
         paddleSubscriptionId: user.paddle_subscription_id || null,
+        paddleEnvironment: paddle.environment,
         hasBillingPortalAccess,
         renewalDate: isoOrNull(user.subscription_renewal_date || user.current_period_end),
         nextBillingDate: isoOrNull(user.next_billing_date || user.current_period_end),
@@ -565,7 +569,8 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
   }
 
   const userResult = await pool.query(
-    `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end
+    `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end,
+            paddle_environment
      FROM users
      WHERE id = $1`,
     [userId],
@@ -591,14 +596,14 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
     throw new BillingError('BILLING_PROVIDER_MISSING')
   }
 
-  const paddle = resolvePaddleConfig()
+  const paddle = resolvePaddleConfigForUser(user)
   const targetPriceId = resolveTargetPriceId(targetPlan, options.upgradeTestKey, paddle, { userId })
 
   if (!targetPriceId) {
     throw new BillingError('BILLING_CONFIG_MISSING', { reason: 'missing_target_price_id' })
   }
 
-  const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`)
+  const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {}, paddle)
   const subscriptionStatus = subscriptionPayload?.data?.status || subscriptionPayload?.status || null
 
   if (subscriptionStatus === 'past_due') {
@@ -619,6 +624,7 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
     prorationBillingMode: isUpgrade ? 'prorated_immediately' : 'prorated_next_billing_period',
     items,
     subscriptionPayload,
+    paddle,
   }
 }
 
@@ -634,7 +640,7 @@ router.post('/change-plan-preview', requireAuth, async (req, res) => {
         proration_billing_mode: context.prorationBillingMode,
         on_payment_failure: 'prevent_change',
       }),
-    })
+    }, context.paddle)
 
     return res.json({
       status: 'ok',
@@ -670,9 +676,10 @@ router.post('/change-plan', requireAuth, async (req, res) => {
         custom_data: {
           ...(context.subscriptionPayload?.data?.custom_data || {}),
           plan: targetPlan,
+          paddleEnvironment: context.paddle.environment,
         },
       }),
-    })
+    }, context.paddle)
 
     const dates = extractBillingDates(paddleUpdate)
     const effectiveAt = context.isUpgrade ? new Date() : new Date(context.user.current_period_end || dates.currentPeriodEnd || Date.now())
@@ -738,7 +745,8 @@ router.post('/cancel', requireAuth, async (req, res) => {
   try {
     console.info('[subscriptions.cancel] Cancel request received', { userId: req.userId, reason })
     const userResult = await pool.query(
-      `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end
+      `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end,
+              paddle_environment
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -756,9 +764,11 @@ router.post('/cancel', requireAuth, async (req, res) => {
 
     const effectiveAt = user.current_period_end || new Date()
 
+    const paddle = resolvePaddleConfigForUser(user)
+
     await paddleRequest(`/subscriptions/${user.paddle_subscription_id}/cancel`, {
       method: 'POST',
-    })
+    }, paddle)
 
     const client = await pool.connect()
 

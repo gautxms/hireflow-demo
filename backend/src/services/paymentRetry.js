@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { pool, logErrorToDatabase } from '../db/client.js'
+import { normalizePaddleEnvironment, resolvePaddleConfig } from '../config/paddle.js'
 
 const RETRY_DELAYS_HOURS = [1, 24, 24 * 7]
 const MAX_RETRY_ATTEMPTS = RETRY_DELAYS_HOURS.length
@@ -131,7 +132,7 @@ async function alertManualInterventionNeeded(attempt) {
   ])
 }
 
-export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
+export async function recordFailedPaymentAttempt(payload, errorMessage = null, paddleEnvironment = null) {
   const transactionId = getTransactionId(payload)
 
   if (!transactionId) {
@@ -143,6 +144,11 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
 
   const retryAt = getNextRetryAtFromAttemptCount(0)
   const failureReason = errorMessage || getFailureReason(payload)
+  const environment = normalizePaddleEnvironment(
+    paddleEnvironment
+      || payload?.data?.custom_data?.paddleEnvironment
+      || payload?.custom_data?.paddleEnvironment,
+  )
 
   const result = await pool.query(
     `INSERT INTO payment_attempts (
@@ -155,9 +161,10 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
       retry_count,
       next_retry_at,
       last_error,
-      payload
+      payload,
+      paddle_environment
     )
-    VALUES ($1, $2, $3, $4, $5, 'failed', 0, $6, $7, $8::jsonb)
+    VALUES ($1, $2, $3, $4, $5, 'failed', 0, $6, $7, $8::jsonb, $9)
     ON CONFLICT (transaction_id) WHERE transaction_id IS NOT NULL
     DO UPDATE SET
       customer_email = COALESCE(EXCLUDED.customer_email, payment_attempts.customer_email),
@@ -166,6 +173,7 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
       currency = COALESCE(EXCLUDED.currency, payment_attempts.currency),
       last_error = EXCLUDED.last_error,
       payload = EXCLUDED.payload,
+      paddle_environment = EXCLUDED.paddle_environment,
       updated_at = NOW(),
       status = CASE
         WHEN payment_attempts.status = 'succeeded' THEN payment_attempts.status
@@ -185,6 +193,7 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
       retryAt,
       failureReason,
       JSON.stringify(payload),
+      environment,
     ],
   )
 
@@ -192,10 +201,10 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null) {
 }
 
 async function retryPaddleTransaction(attempt) {
-  const apiKey = process.env.PADDLE_API_KEY
+  const paddle = resolvePaddleConfig(process.env, attempt.paddle_environment || undefined)
 
-  if (!apiKey) {
-    throw new Error('PADDLE_API_KEY missing; cannot retry payment')
+  if (!paddle.apiKey) {
+    throw new Error(`Paddle ${paddle.environment} API key missing; cannot retry payment`)
   }
 
   const idempotencyKey = crypto
@@ -203,10 +212,10 @@ async function retryPaddleTransaction(attempt) {
     .update(`${attempt.transaction_id}:${attempt.retry_count + 1}`)
     .digest('hex')
 
-  const response = await fetch('https://api.paddle.com/transactions/' + attempt.transaction_id + '/charge', {
+  const response = await fetch(`${paddle.apiBaseUrl}/transactions/${attempt.transaction_id}/charge`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${paddle.apiKey}`,
       'Content-Type': 'application/json',
       'Idempotency-Key': idempotencyKey,
     },

@@ -59,6 +59,7 @@ Resume uploads support PDF, DOC, DOCX, and TXT files. Standard uploads are limit
 - [ ] Verify backend health checks, database connectivity, Redis connectivity, and queue worker startup.
 - [ ] Verify AI provider credentials/model settings in the target environment.
 - [ ] Verify Paddle checkout, webhook receipt, subscription updates, payment method updates, and invoice access in the target Paddle environment.
+- [ ] For production sandbox testing, follow `docs/PADDLE_SANDBOX_PRODUCTION_TESTING.md`; never change the production deployment default to sandbox.
 - [ ] Verify email delivery for signup verification and password reset.
 - [ ] Confirm production logging does not emit auth/session secrets or raw resume content.
 

@@ -3,7 +3,7 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
-import { resolvePaddleConfig } from '../config/paddle.js'
+import { resolvePaddleConfigForUser } from '../config/paddle.js'
 
 const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
@@ -32,8 +32,28 @@ export function validatePaddleCheckoutPlan({ plan, testKey, paddle }) {
 async function createCheckout(req, res, logLabel) {
   const { plan, testKey } = req.body || {}
 
-  const paddle = resolvePaddleConfig()
+  let user
+
+  try {
+    const userResult = await pool.query(
+      'SELECT id, email, paddle_environment FROM users WHERE id = $1',
+      [req.userId],
+    )
+    user = userResult.rows[0]
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to create checkout',
+      message: error.message,
+    })
+  }
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' })
+  }
+
+  const paddle = resolvePaddleConfigForUser(user)
   console.info(`[Paddle ${logLabel}] resolved configuration`, {
+    userId: user.id,
     environment: paddle.environment,
     apiBaseUrl: paddle.apiBaseUrl,
     hasApiKey: Boolean(paddle.apiKey),
@@ -65,13 +85,6 @@ async function createCheckout(req, res, logLabel) {
   }
 
   try {
-    const userResult = await pool.query('SELECT id, email FROM users WHERE id = $1', [req.userId])
-    const user = userResult.rows[0]
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' })
-    }
-
     const appOrigin = getAppOrigin(req)
     const successUrl = `${appOrigin}/billing/success`
 

@@ -1,10 +1,9 @@
 import { Router } from 'express'
 import { pool } from '../../db/client.js'
+import { resolvePaddleConfig } from '../../config/paddle.js'
 
 const router = Router()
 const REFUND_WINDOW_DAYS = 30
-const PADDLE_API_BASE_URL = process.env.PADDLE_API_BASE_URL || 'https://api.paddle.com'
-const PADDLE_API_VERSION = process.env.PADDLE_API_VERSION || '1'
 const VALID_REASONS = new Set(['cancellation', 'dispute', 'other'])
 
 function toIso(value) {
@@ -30,17 +29,17 @@ async function ensureRefundAuditTable() {
   `)
 }
 
-async function paddleRequest(path, options = {}) {
-  if (!process.env.PADDLE_API_KEY) {
-    return { skipped: true, reason: 'PADDLE_API_KEY missing' }
+async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig()) {
+  if (!paddle.apiKey) {
+    return { skipped: true, reason: `Paddle ${paddle.environment} API key missing` }
   }
 
-  const response = await fetch(`${PADDLE_API_BASE_URL}${path}`, {
+  const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+      Authorization: `Bearer ${paddle.apiKey}`,
       'Content-Type': 'application/json',
-      'Paddle-Version': PADDLE_API_VERSION,
+      'Paddle-Version': paddle.apiVersion,
       ...(options.headers || {}),
     },
   })
@@ -92,6 +91,7 @@ router.get('/', async (req, res) => {
               u.subscription_renewal_date,
               u.cancellation_effective_at,
               u.paddle_subscription_id,
+              u.paddle_environment,
               COALESCE(last_invoice.amount_cents, 0) AS latest_amount_cents,
               last_invoice.currency AS latest_currency,
               last_invoice.billed_at AS latest_billed_at
@@ -119,6 +119,7 @@ router.get('/', async (req, res) => {
         renewalDate: toIso(row.subscription_renewal_date),
         cancellationEffectiveAt: toIso(row.cancellation_effective_at),
         paddleSubscriptionId: row.paddle_subscription_id,
+        paddleEnvironment: row.paddle_environment || 'production',
         latestAmountCents: Number(row.latest_amount_cents || 0),
         latestCurrency: row.latest_currency || 'USD',
         latestBilledAt: toIso(row.latest_billed_at),
@@ -148,7 +149,8 @@ router.get('/:subscriptionId', async (req, res) => {
               u.current_period_end,
               u.cancellation_effective_at,
               u.cancellation_reason,
-              u.paddle_subscription_id
+              u.paddle_subscription_id,
+              u.paddle_environment
        FROM users u
        WHERE u.id::text = $1 OR u.paddle_subscription_id = $1
        LIMIT 1`,
@@ -191,6 +193,7 @@ router.get('/:subscriptionId', async (req, res) => {
         cancellationEffectiveAt: toIso(subscription.cancellation_effective_at),
         cancellationReason: subscription.cancellation_reason,
         paddleSubscriptionId: subscription.paddle_subscription_id,
+        paddleEnvironment: subscription.paddle_environment || 'production',
       },
       transactions: invoiceResult.rows.map((row) => ({
         id: row.id,
@@ -235,7 +238,7 @@ async function handleRefundRequest(req, res) {
 
     const invoiceResult = await pool.query(
       `SELECT bi.id, bi.paddle_transaction_id, bi.amount_cents, bi.currency, bi.billed_at, bi.user_id,
-              u.paddle_subscription_id
+              u.paddle_subscription_id, u.paddle_environment
        FROM billing_invoices bi
        LEFT JOIN users u ON u.id = bi.user_id
        WHERE (bi.user_id::text = $1 OR u.paddle_subscription_id = $1)
@@ -272,6 +275,7 @@ async function handleRefundRequest(req, res) {
       return res.status(400).json({ error: 'Refund amount cannot exceed original transaction amount' })
     }
 
+    const paddle = resolvePaddleConfig(process.env, invoice.paddle_environment || 'production')
     const paddleResponse = await paddleRequest('/adjustments', {
       method: 'POST',
       body: JSON.stringify({
@@ -280,7 +284,7 @@ async function handleRefundRequest(req, res) {
         items: [{ type: 'full', amount: refundAmountCents }],
         reason,
       }),
-    })
+    }, paddle)
 
     const adjustmentId = paddleResponse?.data?.id || null
 
@@ -334,7 +338,7 @@ router.post('/:subscriptionId/retry-payment', async (req, res) => {
 
   try {
     const invoiceResult = await pool.query(
-      `SELECT bi.paddle_transaction_id
+      `SELECT bi.paddle_transaction_id, u.paddle_environment
        FROM billing_invoices bi
        LEFT JOIN users u ON u.id = bi.user_id
        WHERE bi.status IN ('failed', 'past_due', 'open')
@@ -350,10 +354,11 @@ router.post('/:subscriptionId/retry-payment', async (req, res) => {
       return res.status(404).json({ error: 'No failed payment found for this subscription' })
     }
 
+    const paddle = resolvePaddleConfig(process.env, invoice.paddle_environment || 'production')
     const retryResponse = await paddleRequest(`/transactions/${invoice.paddle_transaction_id}/charge`, {
       method: 'POST',
       body: JSON.stringify({}),
-    })
+    }, paddle)
 
     return res.json({
       ok: true,

@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolvePaddleConfig } from './paddle.js'
+import {
+  resolvePaddleConfig,
+  resolvePaddleConfigForUser,
+  resolvePaddleEnvironmentForUser,
+} from './paddle.js'
 
 test('resolvePaddleConfig prefers sandbox variables when environment is sandbox', () => {
   const cfg = resolvePaddleConfig({
@@ -36,6 +40,39 @@ test('resolvePaddleConfig keeps production values in production', () => {
   assert.equal(cfg.clientToken, 'live_token')
   assert.equal(cfg.priceIdsByPlan.monthly, 'pri_live_m')
   assert.equal(cfg.priceIdsByPlan.annual, 'pri_live_a')
+})
+
+test('resolvePaddleConfig accepts an explicit sandbox override while the deployment default remains production', () => {
+  const cfg = resolvePaddleConfig({
+    PADDLE_ENVIRONMENT: 'production',
+    PADDLE_API_BASE_URL: 'https://api.paddle.com',
+    PADDLE_API_KEY: 'live_key',
+    PADDLE_SANDBOX_API_KEY: 'sb_key',
+    PADDLE_SANDBOX_CLIENT_TOKEN: 'sb_token',
+    PADDLE_SANDBOX_MONTHLY_PRICE_ID: 'pri_sb_m',
+    PADDLE_SANDBOX_ANNUAL_PRICE_ID: 'pri_sb_a',
+  }, 'sandbox')
+
+  assert.equal(cfg.environment, 'sandbox')
+  assert.equal(cfg.apiBaseUrl, 'https://sandbox-api.paddle.com')
+  assert.equal(cfg.apiKey, 'sb_key')
+  assert.equal(cfg.clientToken, 'sb_token')
+  assert.equal(cfg.priceIdsByPlan.monthly, 'pri_sb_m')
+  assert.equal(cfg.priceIdsByPlan.annual, 'pri_sb_a')
+})
+
+test('resolvePaddleConfigForUser selects sandbox only for an explicitly sandbox user', () => {
+  const env = {
+    PADDLE_ENVIRONMENT: 'production',
+    PADDLE_PRODUCTION_API_KEY: 'live_key',
+    PADDLE_SANDBOX_API_KEY: 'sb_key',
+  }
+
+  assert.equal(resolvePaddleEnvironmentForUser({ paddle_environment: 'sandbox' }, env), 'sandbox')
+  assert.equal(resolvePaddleEnvironmentForUser({ paddle_environment: 'production' }, env), 'production')
+  assert.equal(resolvePaddleEnvironmentForUser({ paddle_environment: null }, env), 'production')
+  assert.equal(resolvePaddleConfigForUser({ paddle_environment: 'sandbox' }, env).apiKey, 'sb_key')
+  assert.equal(resolvePaddleConfigForUser({ paddle_environment: 'production' }, env).apiKey, 'live_key')
 })
 
 test('resolvePaddleConfig exposes test-monthly price only when hidden checkout is enabled', () => {
