@@ -1408,8 +1408,6 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         {resultsError && <p className="candidate-results-page__error">{resultsError}</p>}
       </div>
 
-      {isReadOnly ? <p className="candidate-results-page__state-copy">Read-only access: historical results and resumes remain available, but export, sharing, tagging, feedback, selection, and shortlist actions require an active subscription.</p> : null}
-
       {shouldShowResumeOnlyBanner && <ResumeOnlyRankingBanner onDismiss={() => setIsResumeOnlyBannerDismissed(true)} />}
 
       <CandidateFilters

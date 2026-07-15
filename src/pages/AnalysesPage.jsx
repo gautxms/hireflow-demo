@@ -503,8 +503,6 @@ export default function AnalysesPage({ isReadOnly = false }) {
           {!isReadOnly ? <button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} ref={createButtonRef}>Create analysis</button> : null}
         </div>
 
-        {isReadOnly ? <p className="analyses-layout__state">Read-only access: historical analyses remain available, but creating or deleting analyses requires an active subscription.</p> : null}
-
         {deleteFeedback.message && <p role="status" className={`analyses-layout__state ${deleteFeedback.type === 'error' ? 'analyses-layout__state--error' : 'analyses-layout__state--success'}`}>{deleteFeedback.message}</p>}
         {uploadFeedback.message && <p role={uploadFeedback.type === 'error' ? 'alert' : 'status'} className={`analyses-layout__state ${uploadFeedback.type === 'error' ? 'analyses-layout__state--error' : 'analyses-layout__state--success'}`}>{uploadFeedback.message}</p>}
 

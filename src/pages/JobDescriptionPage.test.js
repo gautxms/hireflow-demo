@@ -27,7 +27,7 @@ test('read-only jobs mode exposes history while suppressing every mutation path'
   assert.match(source, /const handleModalSubmit[\s\S]*if \(isReadOnly\) return/)
   assert.match(source, /const handleArchive[\s\S]*if \(isReadOnly\) return/)
   assert.match(source, /\{!isReadOnly \? \([\s\S]*Create Job[\s\S]*\) : null\}/)
-  assert.match(source, /Read-only access: historical jobs remain available/)
+  assert.doesNotMatch(source, /Read-only access:/)
   assert.match(source, /readOnly=\{isReadOnly\}/)
   assert.match(tableSource, /\{!readOnly \? <th scope="col" className="jobs-table__actions-header">Actions<\/th> : null\}/)
   assert.match(tableSource, /\{!readOnly \? \([\s\S]*onClick=\{\(\) => onArchive\?\.\(item\)\}/)

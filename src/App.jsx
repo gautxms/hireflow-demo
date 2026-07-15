@@ -500,7 +500,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         return <LegacyOperationsDashboard onNavigate={handleNavigate} />
       }
 
-      return <OperationsDashboard onNavigate={handleNavigate} isReadOnly={!profileBillingState.canUsePaidMutation} />
+      return <OperationsDashboard onNavigate={handleNavigate} />
     }
 
     if (resolvedPathname === '/dashboard/legacy') {
@@ -1272,7 +1272,6 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
           subscriptionStatus={subscriptionStatus}
           pageTitleProp={shellPageTitle}
           showUpgradeCta={canViewUpgradePricing}
-          isReadOnlyWorkspace={Boolean(readOnlyWorkspaceNotice)}
           readOnlyNotice={readOnlyWorkspaceNotice}
         >
           {pageContent}

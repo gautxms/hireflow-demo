@@ -298,7 +298,7 @@ function summarizeScoreTrend(series, fallbackScoredCount = 0, fallbackAverage = 
   return { scoredPoints, average, highest, totalScoredCount }
 }
 
-export default function NewDashboard({ isReadOnly = false }) {
+export default function NewDashboard() {
   const [rangeDays, setRangeDays] = useState('30')
   const [jobDescriptionId, setJobDescriptionId] = useState('')
   const [dashboardData, setDashboardData] = useState(null)
@@ -429,7 +429,6 @@ export default function NewDashboard({ isReadOnly = false }) {
           <span className="new-dashboard__title-icon" aria-hidden="true"><Icon name="chart" size="lg" tone="accent" /></span>
         </div>
         <p className="new-dashboard__subtitle">KPI snapshots, trend lines, and exportable reports for hiring operations.</p>
-        {isReadOnly ? <p className="new-dashboard__status">Read-only access: historical dashboard metrics and CSV exports remain available, but running new analyses requires an active subscription.</p> : null}
       </div>
 
       <section className="new-dashboard__panel">

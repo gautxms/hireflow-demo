@@ -147,8 +147,6 @@ export default function ReportsPage({ isReadOnly = false }) {
         <h1 className="reports-page__title">Reports</h1>
         <p className="reports-page__description">{isReadOnly ? 'Review your saved historical report configurations.' : 'Define reusable report configurations. Background generation is not enabled yet.'}</p>
 
-        {isReadOnly ? <p className="reports-page__feedback">Read-only access: saved reports remain available, but creating, scheduling, or deleting reports requires an active subscription.</p> : null}
-
         {!isReadOnly ? <form onSubmit={createReport} className="reports-page__form">
           <div className="reports-page__field">
             <label className="reports-page__label" htmlFor="report-name">Name</label>
