@@ -58,7 +58,11 @@ export function buildResolvedAccessContext({
   const isActiveSubscriber = hasAuthoritativeAuthenticatedAccess && canAccessProductDashboard(profileBillingState)
   const canOpenWorkspaceDashboard = hasAuthoritativeAuthenticatedAccess
     && (isActiveSubscriber || profileBillingState.isReadOnlyWorkspace)
-  const canViewUpgradePricing = !isAuthenticated || (isAccessAuthoritative && !isActiveSubscriber)
+  const requiresBillingRecovery = hasAuthoritativeAuthenticatedAccess
+    && profileBillingState.isPastDue
+    && profileBillingState.hasProviderSubscription
+  const canViewUpgradePricing = !isAuthenticated
+    || (isAccessAuthoritative && !isActiveSubscriber && !requiresBillingRecovery)
 
   return {
     profileBillingState,
@@ -67,6 +71,7 @@ export function buildResolvedAccessContext({
     workspaceAccessForFlags,
     isActiveSubscriber,
     canOpenWorkspaceDashboard,
+    requiresBillingRecovery,
     canViewUpgradePricing,
   }
 }

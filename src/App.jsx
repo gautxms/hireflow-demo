@@ -385,6 +385,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     workspaceAccessForFlags,
     isActiveSubscriber,
     canOpenWorkspaceDashboard,
+    requiresBillingRecovery,
     canViewUpgradePricing,
   } = useMemo(() => buildResolvedAccessContext({
     isAuthenticated,
@@ -458,13 +459,17 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     if (isRootLandingPath) {
       return (
         <LandingPage
-          onStartDemo={() => (canOpenWorkspaceDashboard ? navigate('/dashboard') : navigate('/pricing'))}
-          ctaLabel={canOpenWorkspaceDashboard ? 'Dashboard' : 'View pricing'}
+          onStartDemo={() => navigate(canOpenWorkspaceDashboard ? '/dashboard' : requiresBillingRecovery ? '/billing' : '/pricing')}
+          ctaLabel={canOpenWorkspaceDashboard ? 'Dashboard' : requiresBillingRecovery ? 'Review billing' : 'View pricing'}
         />
       )
     }
 
     if (resolvedPathname === '/pricing') {
+      if (requiresBillingRecovery) {
+        navigate('/billing', { replace: true })
+        return null
+      }
       if (isAuthenticated && isAccessAuthoritative && isActiveSubscriber) {
         navigate('/billing')
         return null
@@ -552,6 +557,10 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (resolvedPathname === '/checkout') {
+      if (requiresBillingRecovery) {
+        navigate('/billing', { replace: true })
+        return null
+      }
       return <Checkout onAuthSuccess={onAuthSuccess} />
     }
 
@@ -1042,13 +1051,13 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
     return (
       <LandingPage
-        onStartDemo={() => (canOpenWorkspaceDashboard ? navigate('/dashboard') : navigate('/pricing'))}
-        ctaLabel={canOpenWorkspaceDashboard ? 'Dashboard' : 'View pricing'}
+        onStartDemo={() => navigate(canOpenWorkspaceDashboard ? '/dashboard' : requiresBillingRecovery ? '/billing' : '/pricing')}
+        ctaLabel={canOpenWorkspaceDashboard ? 'Dashboard' : requiresBillingRecovery ? 'Review billing' : 'View pricing'}
       />
     )
   }
 
-  const handlePricingClick = () => navigate('/pricing')
+  const handlePricingClick = () => navigate(requiresBillingRecovery ? '/billing' : '/pricing')
   const handleFeaturesClick = () => {
     navigate('/')
     window.setTimeout(() => {
@@ -1345,7 +1354,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
                   className="btn-ghost btn-ghost--accent"
                   onClick={handlePricingClick}
                 >
-                  View pricing
+                  {requiresBillingRecovery ? 'Review billing' : 'View pricing'}
                 </button>
               )}
               <AuthenticatedProfileMenu user={userProfile} onNavigate={navigate} onLogout={onLogout} />
