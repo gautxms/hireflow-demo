@@ -182,6 +182,27 @@ test('scheduled cancellation hides cancel subscription and returns access messag
   assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription.')
 })
 
+test('scheduled cancellation metadata omits misleading renewal date', () => {
+  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
+  const subscription = {
+    plan: 'annual',
+    status: 'active',
+    cancelAtPeriodEnd: true,
+    renewalDate: '2027-01-07T00:00:00Z',
+    nextBillingDate: '2027-01-07T00:00:00Z',
+    cancellationEffectiveAt: '2027-01-07T00:00:00Z',
+    paymentMethod: 'Card on file',
+  }
+
+  const rows = getBillingMetadataRows(subscriptionState, subscription, () => '1/7/2027', NOW)
+
+  assert.deepEqual(rows, [
+    { label: 'Next billing', value: 'No further billing' },
+    { label: 'Payment method', value: 'Card on file' },
+    { label: 'Cancellation effective', value: '1/7/2027' },
+  ])
+})
+
 test('scheduled subscription with future cancellation date shows active until status and hides cancel action', () => {
   const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
   const subscription = { plan: 'annual', status: 'active', latestRecordStatus: 'cancelled', cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
@@ -252,6 +273,7 @@ test('BillingPage offers state-specific keep, payment update, and subscribe-agai
   assert.match(source, /Change payment method/)
   assert.match(source, /Subscribe again/)
   assert.match(source, /reason=subscribe_again/)
+  assert.match(source, /\{!hasScheduledCancellation && !isFinalCancellation && !subscriptionState\.isPastDue \? \([\s\S]*Change payment method/)
 })
 
 test('BillingPage omits monthly downgrade guidance and uses semantic action variants', () => {
