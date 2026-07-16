@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, shouldRenderBillingHistory } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -145,7 +145,6 @@ export default function BillingPage() {
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
   const shouldShowCancelAction = canShowCancelAction(subscriptionState, subscription)
-  const shouldShowPlanSupportNote = shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription)
   const billingMetadataRows = getBillingMetadataRows(subscriptionState, subscription, formatDate)
   const pastDueBillingNotice = subscriptionState.isPastDue ? getPastDueBillingNotice() : ''
   const hasBillingHistory = shouldRenderBillingHistory(history)
@@ -384,9 +383,6 @@ export default function BillingPage() {
                       {planAction.label}
                     </button>
                   ) : null}
-                  {shouldShowPlanSupportNote && !hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue ? (
-                    <p className="billing-page__support-note">{planAction.label}</p>
-                  ) : null}
                   {shouldShowCancelAction ? (
                     <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }}>
                       {cancelActionLabel}
@@ -444,7 +440,7 @@ export default function BillingPage() {
             <p><span>Payment method</span>{subscription?.paymentMethod || planPreview?.paymentMethod || 'Card on file'}</p>
           </div>
           <p className="billing-modal__muted">
-            Upgrades apply immediately with Paddle proration. Downgrades are scheduled for the next billing period, so your current plan remains visible until then.
+            Upgrades apply immediately with Paddle proration.
           </p>
           {previewError ? (
             <div className="billing-modal__preview-error">

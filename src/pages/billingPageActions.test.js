@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory, shouldShowPlanActionSupportNote } from './billingPageActions.js'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -79,27 +79,7 @@ test('monthly billing users see annual upgrade as the self-serve plan action', (
 test('annual billing users do not see a self-serve monthly downgrade action', () => {
   const action = getBillingPlanAction('annual')
 
-  assert.notEqual(action.label, 'Downgrade to monthly')
-  assert.equal(action.targetPlan, 'monthly')
-  assert.equal(action.isSelfServe, false)
-})
-
-
-test('scheduled cancellation hides monthly-billing support note for annual plans', () => {
-  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
-  const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
-  const planAction = getBillingPlanAction(subscription.plan)
-
-  assert.equal(shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription, NOW), false)
-})
-
-test('normal active annual plan still shows monthly-billing support note', () => {
-  const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
-  const subscription = { plan: 'annual', status: 'active' }
-  const planAction = getBillingPlanAction(subscription.plan)
-
-  assert.equal(shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription, NOW), true)
-  assert.equal(planAction.label, 'Need monthly billing? Contact support and we’ll help update your billing cadence safely.')
+  assert.equal(action, null)
 })
 
 test('scheduled cancellation still shows resume-support access note', () => {
@@ -108,7 +88,6 @@ test('scheduled cancellation still shows resume-support access note', () => {
   const format = () => '1/7/2027'
 
   assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription.')
-  assert.equal(shouldShowPlanActionSupportNote(getBillingPlanAction(subscription.plan), subscriptionState, subscription, NOW), false)
 })
 
 test('cancel action uses subscription copy for monthly and annual plans', () => {
@@ -273,6 +252,18 @@ test('BillingPage offers state-specific keep, payment update, and subscribe-agai
   assert.match(source, /Change payment method/)
   assert.match(source, /Subscribe again/)
   assert.match(source, /reason=subscribe_again/)
+})
+
+test('BillingPage omits monthly downgrade guidance and uses semantic action variants', () => {
+  const pageSource = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+  const primitiveStyles = readFileSync(new URL('../styles/ui-primitives.css', import.meta.url), 'utf8')
+  const checkoutStyles = readFileSync(new URL('../styles/checkout.css', import.meta.url), 'utf8')
+
+  assert.doesNotMatch(pageSource, /Need monthly billing|support-note|Downgrades are scheduled/)
+  assert.equal((pageSource.match(/hf-btn hf-btn--destructive/g) || []).length, 2)
+  assert.match(primitiveStyles, /\.hf-btn--destructive\s*\{[\s\S]*background: var\(--color-error\)/)
+  assert.doesNotMatch(checkoutStyles, /^\s*\.hf-btn\s*\{/m)
+  assert.doesNotMatch(checkoutStyles, /^\s*\.hf-btn--(?:primary|secondary)\s*\{/m)
 })
 
 test('BillingPage past_due no longer relies on a support email for payment recovery', () => {

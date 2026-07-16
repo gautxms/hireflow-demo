@@ -21,24 +21,11 @@ export function getBillingPlanAction(plan, subscriptionState = null) {
     }
   }
 
-  if (plan === 'annual') {
-    return {
-      kind: 'support-assisted-cadence-change',
-      targetPlan: 'monthly',
-      label: 'Need monthly billing? Contact support and we’ll help update your billing cadence safely.',
-      isSelfServe: false,
-    }
-  }
-
   return null
 }
 
 export function getCancelActionLabel(_plan) {
   return 'Cancel subscription'
-}
-
-export function shouldShowPlanActionSupportNote(planAction, subscriptionState, subscription, now = new Date()) {
-  return Boolean(planAction && !planAction.isSelfServe && !hasScheduledCancellation(subscriptionState, subscription, now))
 }
 
 function buildBillingAccessInput(subscriptionState, subscription) {
