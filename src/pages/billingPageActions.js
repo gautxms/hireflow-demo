@@ -114,7 +114,9 @@ export function getBillingMetadataRows(subscriptionState, subscription, formatDa
   if (isPastDue) {
     rows.push({ label: subscription?.nextBillingDate ? 'Retry date' : 'Payment due', value: subscription?.nextBillingDate ? formatDate(subscription.nextBillingDate) : 'Now' })
   } else {
-    rows.push({ label: 'Renewal date', value: formatDate(subscription?.renewalDate) })
+    if (!scheduledCancellation) {
+      rows.push({ label: 'Renewal date', value: formatDate(subscription?.renewalDate) })
+    }
     rows.push({ label: 'Next billing', value: scheduledCancellation ? 'No further billing' : formatDate(subscription?.nextBillingDate) })
   }
 

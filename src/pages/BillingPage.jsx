@@ -388,7 +388,7 @@ export default function BillingPage() {
                       {cancelActionLabel}
                     </button>
                   ) : null}
-                  {!isFinalCancellation && !subscriptionState.isPastDue ? (
+                  {!hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue ? (
                     <a className="hf-btn hf-btn--secondary" href="/account/payment-method">Change payment method</a>
                   ) : null}
                   {isFinalCancellation ? (
