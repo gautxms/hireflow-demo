@@ -314,8 +314,8 @@
   border: 1px dashed var(--hf-border-2);
 }
 
-.billing-page a,
-.billing-page a:visited {
+.billing-page a:not(.hf-btn),
+.billing-page a:not(.hf-btn):visited {
   color: var(--hf-lime);
 }
 
