@@ -241,17 +241,6 @@
   font: 700 14px/1.55 var(--hf-font-ui, 'DM Sans', sans-serif);
 }
 
-.billing-page__support-note {
-  flex: 1 1 320px;
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--hf-surface-2);
-  border: 1px solid var(--hf-border);
-  border-radius: var(--hf-r-lg, 8px);
-  color: var(--hf-text-2);
-  font: 600 14px/1.5 var(--hf-font-ui, 'DM Sans', sans-serif);
-}
-
 .billing-page__feedback {
   margin: 0;
   padding: 10px 12px;
