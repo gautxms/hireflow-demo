@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
+import '../styles/checkout.css'
 
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -647,96 +648,92 @@ export default function Checkout({ onAuthSuccess }) {
     }
   }
 
+  const isPreparingCheckout = !requiredAction && !errorMessage && !successMessage
+    && (status === 'idle' || status === 'loading' || status === 'ready')
+
   return (
-    <main>
-      <div>
+    <main className="checkout-page">
+      <div className="checkout-page__content">
         <button
           type="button"
-          onClick={() => window.history.back()}
-          className="hf-btn hf-btn--primary"          
+          onClick={() => navigate('/pricing')}
+          className="checkout-page__back"
         >
-          ← Back to Home
+          <span aria-hidden="true">←</span> Back to plans
         </button>
 
-        <h1 className="type-h1">
-          Checkout
-        </h1>
-
-        <p className="type-body">
-          You selected the <strong>{selectedPlan}</strong> subscription.
-        </p>
+        <header className="checkout-page__header">
+          <p className="checkout-page__eyebrow">Secure checkout</p>
+          <h1>Complete your subscription</h1>
+          <p className="checkout-page__subtitle">
+            You selected the <strong>{plan.label}</strong> plan. Payment is securely processed by Paddle.
+          </p>
+        </header>
 
         {(isReturningSubscription || isSubscriptionlessPaymentRetry) && (
-          <div>
+          <section className="checkout-page__card checkout-page__card--action" aria-labelledby="checkout-action-title">
+            <div className="checkout-page__card-icon" aria-hidden="true">↗</div>
             <div>
-              <span>⚡</span>
-              <div>
-                <h3 className="type-h3">
-                  {isSubscriptionlessPaymentRetry ? 'Retry Subscription Payment' : 'Subscribe Again'}
-                </h3>
-                <p className="type-small">
-                  {isSubscriptionlessPaymentRetry
-                    ? 'Your previous checkout did not create a recoverable subscription. Retry this paid checkout to activate access. A new trial will not be applied.'
-                    : 'Your previous subscription has ended. Choose this paid plan to restore full access. A new trial will not be applied.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleReactivateSubscription}
-                  className="hf-btn hf-btn--primary"
-                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
-                >
-                  {isSubscriptionlessPaymentRetry ? 'Retry Payment' : 'Subscribe Again'}
-                </button>
-              </div>
+              <p className="checkout-page__card-label">Paid subscription</p>
+              <h2 id="checkout-action-title">
+                {isSubscriptionlessPaymentRetry ? 'Try your payment again' : 'Restart your subscription'}
+              </h2>
+              <p>
+                {isSubscriptionlessPaymentRetry
+                  ? 'Your previous checkout did not create a recoverable subscription. Continue with this paid plan to activate your workspace.'
+                  : 'Your previous subscription has ended. Continue with this paid plan to restore full access.'}
+              </p>
+              <p className="checkout-page__trial-note">A new trial will not be applied.</p>
+              <button type="button" onClick={handleReactivateSubscription} className="hf-btn hf-btn--primary">
+                {isSubscriptionlessPaymentRetry ? 'Retry payment' : 'Continue to payment'}
+              </button>
             </div>
-          </div>
+          </section>
         )}
 
         {status === 'action_required' && requiredAction === 'past_due' && (
-          <div>
-            <p>
-              Your previous payment needs attention. Please update your payment method from the billing portal.
-            </p>
-            <a href="/billing" className="checkout-page__notice-link">Open billing portal</a>
-          </div>
-        )}
-
-        {(errorMessage || successMessage) && (
-          <div>
-            {!!errorMessage && (
-              <p>
-                Error: {errorMessage}
-                {status === 'error' && (
-                  <>
-                    <br />
-                    <a href="/pricing">
-                      ← Back to Pricing
-                    </a>
-                  </>
-                )}
-              </p>
-            )}
-            {!!successMessage && <p className="type-small">{successMessage}</p>}
-            {!errorMessage && <p>{getStatusMessage()}</p>}
-          </div>
-        )}
-
-        <div
-          id="paddle-container"
-          />
-
-        {!checkoutOpen && (
-          <div>
-            <p>Loading secure checkout...</p>
+          <section className="checkout-page__card checkout-page__card--warning" aria-labelledby="payment-attention-title">
+            <div className="checkout-page__card-icon" aria-hidden="true">!</div>
             <div>
-              <span>🔐</span>
+              <h2 id="payment-attention-title">Your payment needs attention</h2>
+              <p>Update the payment method on your existing subscription before starting another checkout.</p>
+              <a href="/account/payment-method" className="hf-btn hf-btn--primary checkout-page__button-link">Update payment method</a>
+            </div>
+          </section>
+        )}
+
+        {!!errorMessage && (
+          <div className="checkout-page__message checkout-page__message--error" role="alert">
+            <strong>We couldn&apos;t complete that step.</strong>
+            <span>{errorMessage}</span>
+            {status === 'error' ? <a href="/pricing">Back to plans</a> : null}
+          </div>
+        )}
+
+        {!!successMessage && (
+          <div className="checkout-page__message checkout-page__message--success" role="status">
+            {successMessage}
+          </div>
+        )}
+
+        <div id="paddle-container" hidden aria-hidden="true" />
+
+        {isPreparingCheckout && (
+          <div className="checkout-page__progress" role="status" aria-live="polite">
+            <span className="checkout-page__spinner" aria-hidden="true" />
+            <div>
+              <strong>Preparing your secure checkout</strong>
+              <p>{getStatusMessage()}</p>
             </div>
           </div>
         )}
 
+        {checkoutOpen && !hasSuccessfulTransaction ? (
+          <p className="checkout-page__open-status" role="status">Secure payment form opened.</p>
+        ) : null}
+
         {status === 'opened' && transactionId && (
-          <p className="type-small">
+          <p className="checkout-page__transaction">
             Transaction reference: {transactionId}
           </p>
         )}
@@ -755,18 +752,11 @@ export default function Checkout({ onAuthSuccess }) {
                 setRequiredAction(null)
               }
             }}
-            className="hf-btn hf-btn--primary"      
+            className="hf-btn hf-btn--primary checkout-page__retry"
           >
             Retry checkout
           </button>
         )}
-
-        <style>{`
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-          }
-        `}</style>
       </div>
     </main>
   )
