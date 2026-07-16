@@ -138,6 +138,37 @@ test('authenticated resolved inactive profile remains upgrade eligible without w
   assert.equal(inactive.canViewUpgradePricing, true)
 })
 
+test('recoverable payment failures route to billing instead of upgrade pricing', () => {
+  for (const status of ['past_due', 'payment_failed']) {
+    const context = buildResolvedAccessContext({
+      isAuthenticated: true,
+      accessResolutionStatus: 'resolved',
+      subscriptionStatus: status,
+      userProfile: {
+        subscription_status: status,
+        paddle_subscription_id: 'sub_recoverable',
+        hasHistoricalData: true,
+      },
+    })
+
+    assert.equal(context.requiresBillingRecovery, true, `${status} requires billing recovery`)
+    assert.equal(context.canViewUpgradePricing, false, `${status} hides upgrade pricing`)
+    assert.equal(context.canOpenWorkspaceDashboard, true, `${status} keeps historical access`)
+  }
+})
+
+test('payment failures without a recoverable provider subscription remain upgrade eligible', () => {
+  const context = buildResolvedAccessContext({
+    isAuthenticated: true,
+    accessResolutionStatus: 'resolved',
+    subscriptionStatus: 'payment_failed',
+    userProfile: { subscription_status: 'payment_failed', hasHistoricalData: false },
+  })
+
+  assert.equal(context.requiresBillingRecovery, false)
+  assert.equal(context.canViewUpgradePricing, true)
+})
+
 test('authenticated resolved non-paid profiles with history can open the read-only Dashboard', () => {
   for (const status of READ_ONLY_STATUSES) {
     const readOnlyWithHistory = buildResolvedAccessContext({
