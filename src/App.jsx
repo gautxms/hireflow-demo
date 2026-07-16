@@ -1299,6 +1299,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
           onNavigate={navigate}
           onLogout={onLogout}
           userProfile={userProfile}
+          requiresBillingRecovery={requiresBillingRecovery}
         >
           {pageContent}
         </AuthenticatedAccountShell>

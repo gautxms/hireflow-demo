@@ -2,7 +2,11 @@ import BrandLogo from '../BrandLogo'
 import AuthenticatedProfileMenu from '../AuthenticatedProfileMenu'
 import { openCookiePreferences } from '../../privacy/cookieConsent'
 
-export default function AuthenticatedAccountShell({ children, pathname, onNavigate, onLogout, userProfile }) {
+export default function AuthenticatedAccountShell({ children, pathname, onNavigate, onLogout, userProfile, requiresBillingRecovery = false }) {
+  const isBillingPage = pathname === '/billing' || pathname === '/billing/'
+  const billingActionPath = requiresBillingRecovery ? '/billing' : '/pricing'
+  const billingActionLabel = requiresBillingRecovery ? 'Review billing' : 'View plans'
+
   return (
     <div className="account-shell-layout">
       <header className="account-shell-header">
@@ -14,9 +18,11 @@ export default function AuthenticatedAccountShell({ children, pathname, onNaviga
           className="account-shell-logo"
         />
         <div className="account-shell-actions">
-          <button type="button" className="btn-primary account-shell-plans" onClick={() => onNavigate('/pricing')}>
-            View plans
-          </button>
+          {!isBillingPage ? (
+            <button type="button" className="btn-primary account-shell-plans" onClick={() => onNavigate(billingActionPath)}>
+              {billingActionLabel}
+            </button>
+          ) : null}
           <AuthenticatedProfileMenu user={userProfile} onNavigate={onNavigate} onLogout={onLogout} />
         </div>
       </header>
