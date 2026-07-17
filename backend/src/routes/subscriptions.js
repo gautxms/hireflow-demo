@@ -33,6 +33,7 @@ const ERROR_RESPONSES = {
   BILLING_PROVIDER_MISSING: { status: 409, message: 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.' },
   PAYMENT_FAILED_OR_ACTION_REQUIRED: { status: 402, message: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' },
   PADDLE_SUBSCRIPTION_UPDATE_FAILED: { status: 502, message: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' },
+  KEEP_SUBSCRIPTION_FAILED: { status: 500, message: 'Unable to confirm that your subscription will continue. Reload Billing to check the latest status before trying again.' },
   PLAN_ALREADY_ACTIVE: { status: 400, message: 'You are already on that plan.' },
   PLAN_CHANGE_NOT_ALLOWED: { status: 403, message: 'This plan change is not available for your subscription. Please contact support.' },
   UNSUPPORTED_BILLING_ITEMS: { status: 409, message: 'Your subscription has recurring add-ons that need support-assisted plan changes. Please contact support so we can update your plan safely.' },
@@ -826,6 +827,8 @@ router.post('/cancel', requireAuth, async (req, res) => {
 })
 
 router.post('/keep-subscription', requireAuth, async (req, res) => {
+  let providerCancellationRemoved = false
+
   try {
     const userResult = await pool.query(
       `SELECT id, subscription_status, subscription_plan, paddle_subscription_id, paddle_environment
@@ -853,17 +856,23 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
       })
     }
 
-    if (!scheduledAction.includes('cancel')) {
+    const providerAlreadyContinuing = !scheduledAction.includes('cancel') && ['active', 'trialing'].includes(providerStatus)
+
+    if (!scheduledAction.includes('cancel') && !providerAlreadyContinuing) {
       return res.status(409).json({
         code: 'NO_SCHEDULED_CANCELLATION',
         error: 'This subscription is not scheduled to cancel.',
       })
     }
 
-    const updatedPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ scheduled_change: null }),
-    }, paddle)
+    let updatedPayload = currentPayload
+    if (!providerAlreadyContinuing) {
+      updatedPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ scheduled_change: null }),
+      }, paddle)
+      providerCancellationRemoved = true
+    }
     const updated = updatedPayload?.data || updatedPayload || {}
     const dates = extractBillingDates(updatedPayload)
     const restoredStatus = normalizeStatus(updated.status) || 'active'
@@ -888,6 +897,7 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
         [req.userId, user.subscription_plan || 'monthly', JSON.stringify({
           source: 'billing_page',
           paddle_subscription_id: user.paddle_subscription_id,
+          provider_schedule_already_clear: providerAlreadyContinuing,
         })],
       )
       await client.query('COMMIT')
@@ -909,7 +919,16 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
     })
   } catch (error) {
     await logErrorToDatabase('subscriptions.keep.failed', error, { userId: req.userId })
-    return sendBillingError(res, error)
+
+    if (providerCancellationRemoved) {
+      return res.status(202).json({
+        status: 'syncing',
+        code: 'KEEP_SUBSCRIPTION_SYNC_PENDING',
+        message: 'Your subscription will continue. HireFlow is refreshing your billing status.',
+      })
+    }
+
+    return sendBillingError(res, error instanceof BillingError ? error : new BillingError('KEEP_SUBSCRIPTION_FAILED'))
   }
 })
 

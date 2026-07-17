@@ -45,6 +45,7 @@ const migrationFiles = [
   '041-align-payment-attempts-schema',
   '042-isolate-paddle-environments',
   '043-add-trial-consumption',
+  '044-allow-keep-subscription-change-events',
 ]
 
 async function ensureMigrationsTable(client) {

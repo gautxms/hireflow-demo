@@ -1043,6 +1043,56 @@ test('POST /api/subscriptions/keep-subscription removes Paddle scheduled cancell
   assertTransactionSequence(clientCalls, /cancellation_effective_at = NULL/)
 })
 
+test('POST /api/subscriptions/keep-subscription reconciles local state when Paddle already removed cancellation', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    subscription_status: 'active',
+    subscription_plan: 'annual',
+    paddle_subscription_id: 'sub_123',
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: null, next_billed_at: '2027-08-01T00:00:00.000Z' } } },
+  ])
+  const { clientCalls } = installClientMock()
+
+  const res = await invokeRoute('/keep-subscription')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.status, 'ok')
+  assert.equal(res.payload.subscription.cancellationEffectiveAt, null)
+  assert.equal(paddleCalls.length, 1)
+  assertTransactionSequence(clientCalls, /cancellation_effective_at = NULL/)
+  const metadata = JSON.parse(clientCalls[2].params[2])
+  assert.equal(metadata.provider_schedule_already_clear, true)
+})
+
+test('POST /api/subscriptions/keep-subscription reports sync pending when Paddle succeeds before a local database failure', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    id: 123,
+    subscription_status: 'active',
+    subscription_plan: 'annual',
+    paddle_subscription_id: 'sub_123',
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: { action: 'cancel', effective_at: '2027-08-01T00:00:00.000Z' } } } },
+    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: null } } },
+  ])
+  const { clientCalls } = installClientMock({ failOn: 'INSERT INTO subscription_change_events' })
+
+  const res = await invokeRoute('/keep-subscription')
+
+  assert.equal(res.statusCode, 202)
+  assert.equal(res.payload.status, 'syncing')
+  assert.equal(res.payload.code, 'KEEP_SUBSCRIPTION_SYNC_PENDING')
+  assert.match(res.payload.message, /subscription will continue/i)
+  assert.equal(paddleCalls.length, 2)
+  assertRollbackSequence(clientCalls)
+})
+
 test('POST /api/subscriptions/keep-subscription sends fully ended users to a new paid checkout', async () => {
   resetPaddleEnv()
   const { connectCalls } = installDbMock({

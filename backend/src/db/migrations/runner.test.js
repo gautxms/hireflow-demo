@@ -270,6 +270,35 @@ test('trial-consumption migration backfills every account with subscription hist
   assert.match(sql, /FROM payment_attempts attempt[\s\S]*attempt\.user_id = user_account\.id/)
 })
 
+test('migration runner allows keep-subscription audit events after trial tracking', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'044-allow-keep-subscription-change-events'/)
+  assert.ok(
+    source.indexOf("'043-add-trial-consumption'") <
+      source.indexOf("'044-allow-keep-subscription-change-events'"),
+  )
+})
+
+test('keep-subscription audit migration safely replaces the change type constraint', async () => {
+  const queries = []
+  const { up } = await import('./044-allow-keep-subscription-change-events.js')
+
+  await up({
+    query(sql) {
+      queries.push(String(sql))
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 1)
+  assert.match(queries[0], /pg_get_constraintdef[\s\S]*ILIKE '%change_type%'/)
+  assert.match(queries[0], /DROP CONSTRAINT %I/)
+  assert.match(queries[0], /ADD CONSTRAINT subscription_change_events_change_type_check/)
+  for (const changeType of ['upgrade', 'downgrade', 'cancel', 'keep_subscription']) {
+    assert.match(queries[0], new RegExp(`'${changeType}'`))
+  }
+})
+
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
   const queries = []
   const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')
