@@ -1032,11 +1032,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   useEffect(() => {
     const resumeIdToKeys = new Map()
-    candidateRows.forEach((candidate) => {
+    candidateRows.forEach((candidate, index) => {
       const resumeId = resolveCandidateResumeUuid(candidate)
       if (!resumeId) return
       const current = resumeIdToKeys.get(resumeId) || []
-      current.push(candidate._bulkKey)
+      current.push(resolveCandidateKey(candidate, index))
       resumeIdToKeys.set(resumeId, current)
     })
     const resumeIds = [...resumeIdToKeys.keys()]
@@ -1226,7 +1226,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
     const selectedWithResume = selectedCandidates
       .map((candidate) => ({
-        key: candidate._bulkKey,
+        key: resolveCandidateKey(candidate),
         resumeId: resolveCandidateResumeUuid(candidate),
       }))
       .filter((candidate) => Boolean(candidate.resumeId))
@@ -1261,13 +1261,20 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         throw new Error(payload.error || 'Unable to update candidate tags')
       }
       const updatedRows = Array.isArray(payload?.resumeTags) ? payload.resumeTags : []
-      const resumeToKeys = new Map(selectedWithResume.map((entry) => [entry.resumeId, entry.key]))
+      const resumeToKeys = new Map()
+      selectedWithResume.forEach((entry) => {
+        const keys = resumeToKeys.get(entry.resumeId) || []
+        keys.push(entry.key)
+        resumeToKeys.set(entry.resumeId, keys)
+      })
       setCandidateTags((current) => {
         const next = { ...current }
         updatedRows.forEach((row) => {
-          const key = resumeToKeys.get(String(row?.resumeId || ''))
-          if (!key) return
-          next[key] = Array.isArray(row.tags) ? row.tags : []
+          const rowResumeId = String(row?.resumeId || row?.resume_id || '').trim()
+          const keys = resumeToKeys.get(rowResumeId) || []
+          keys.forEach((key) => {
+            next[key] = Array.isArray(row.tags) ? row.tags : []
+          })
         })
         return next
       })
