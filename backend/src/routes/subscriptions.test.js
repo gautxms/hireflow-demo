@@ -936,7 +936,7 @@ test('POST /api/subscriptions/change-plan does not checkout client or mutate loc
 })
 
 
-test('POST /api/subscriptions/change-plan maps 402 Paddle failure to payment action error', async () => {
+test('POST /api/subscriptions/change-plan preserves the current plan after a 402 payment failure', async () => {
   resetPaddleEnv()
   const { calls, connectCalls } = installDbMock({
     id: 123,
@@ -954,12 +954,14 @@ test('POST /api/subscriptions/change-plan maps 402 Paddle failure to payment act
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 402)
-  assert.deepEqual(res.payload, { code: 'PAYMENT_FAILED_OR_ACTION_REQUIRED', error: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' })
-  assert.equal(mutationCalls(calls).length, 0)
+  assert.deepEqual(res.payload, { code: 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', error: 'The upgrade payment was declined. Your current plan and access remain unchanged.' })
+  assert.equal(mutationCalls(calls).length, 1)
+  assert.equal(mutationCalls(calls)[0].params[0], 'monthly')
+  assert.equal(mutationCalls(calls)[0].params[1], 'active')
   assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/change-plan maps known payment action Paddle code to payment action error', async () => {
+test('POST /api/subscriptions/change-plan preserves the current plan after payment action is required', async () => {
   resetPaddleEnv()
   const { calls, connectCalls } = installDbMock({
     id: 123,
@@ -977,9 +979,68 @@ test('POST /api/subscriptions/change-plan maps known payment action Paddle code 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
   assert.equal(res.statusCode, 402)
-  assert.deepEqual(res.payload, { code: 'PAYMENT_FAILED_OR_ACTION_REQUIRED', error: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' })
-  assert.equal(mutationCalls(calls).length, 0)
+  assert.deepEqual(res.payload, { code: 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', error: 'The upgrade payment was declined. Your current plan and access remain unchanged.' })
+  assert.equal(mutationCalls(calls).length, 1)
+  assert.equal(mutationCalls(calls)[0].params[0], 'monthly')
+  assert.equal(mutationCalls(calls)[0].params[1], 'active')
   assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/change-plan restores Monthly when Paddle applies a failed Annual upgrade', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    ...activeMonthlyUser(),
+    current_period_end: '2026-08-20T00:00:00.000Z',
+    next_billing_date: '2026-08-20T00:00:00.000Z',
+    subscription_renewal_date: '2026-08-20T00:00:00.000Z',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: {
+      id: 'sub_123',
+      status: 'active',
+      custom_data: { userId: 123, plan: 'monthly' },
+      items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }],
+    } } },
+    { ok: false, status: 400, payload: { error: { code: 'card_declined' } } },
+    { payload: { data: {
+      id: 'sub_123',
+      status: 'past_due',
+      custom_data: { userId: 123, plan: 'annual' },
+      items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' } }, quantity: 1 }],
+    } } },
+    { payload: { data: [{ id: 'txn_failed_upgrade', status: 'past_due', origin: 'subscription_update', created_at: new Date().toISOString() }] } },
+    { payload: { data: { id: 'txn_failed_upgrade', status: 'canceled' } } },
+    { payload: { data: { id: 'sub_123', status: 'past_due', custom_data: { userId: 123, plan: 'annual' } } } },
+    { payload: { data: { id: 'sub_123', status: 'active', custom_data: { userId: 123, plan: 'monthly' }, items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', custom_data: { userId: 123, plan: 'monthly' }, items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+  ])
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 402)
+  assert.deepEqual(res.payload, {
+    code: 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED',
+    error: 'The upgrade payment was declined. Your current plan and access remain unchanged.',
+  })
+  assert.equal(connectCalls.length, 0)
+
+  const updateRequest = JSON.parse(paddleCalls[1].options.body)
+  assert.equal(updateRequest.on_payment_failure, 'prevent_change')
+  assert.equal(updateRequest.custom_data.hireflowPlanChange.fromPlan, 'monthly')
+  assert.equal(updateRequest.custom_data.hireflowPlanChange.toPlan, 'annual')
+  assert.deepEqual(updateRequest.custom_data.hireflowPlanChange.previousItems, [{ price_id: 'pri_monthly', quantity: 1 }])
+
+  const cancelRequest = paddleCalls.find(({ url, options }) => url.endsWith('/transactions/txn_failed_upgrade') && options.method === 'PATCH')
+  assert.deepEqual(JSON.parse(cancelRequest.options.body), { status: 'canceled' })
+
+  const restoreRequest = paddleCalls.find(({ url, options }) => url.endsWith('/subscriptions/sub_123')
+    && options.method === 'PATCH'
+    && JSON.parse(options.body).proration_billing_mode === 'do_not_bill')
+  assert.deepEqual(JSON.parse(restoreRequest.options.body).items, [{ price_id: 'pri_monthly', quantity: 1 }])
+
+  const restoreLocal = calls.find(({ sql, params }) => String(sql).includes('UPDATE users') && params?.[0] === 'monthly' && params?.[1] === 'active')
+  assert.ok(restoreLocal)
+  assert.equal(restoreLocal.params[2], '2026-08-20T00:00:00.000Z')
 })
 
 test('POST /api/subscriptions/change-plan keeps downgrade visible plan current and marks pendingPlan in response', async () => {

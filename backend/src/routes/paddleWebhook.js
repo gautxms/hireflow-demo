@@ -16,8 +16,34 @@ import {
   getEventDeduplicationId,
   getTransactionSubscriptionId,
 } from '../utils/paddleWebhook.js'
+import {
+  getPlanChangeMetadata,
+  inferPlanFromPaddlePayload,
+  isSubscriptionUpdateTransaction,
+  recoverFailedPaddlePlanChange,
+} from '../services/paddlePlanChangeRecovery.js'
 
 const router = express.Router()
+
+async function paddleApiRequest(path, options = {}, paddle) {
+  const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${paddle.apiKey}`,
+      'Content-Type': 'application/json',
+      'Paddle-Version': paddle.apiVersion,
+      ...(options.headers || {}),
+    },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const error = new Error('Paddle plan change recovery request failed')
+    error.status = response.status
+    error.code = payload?.error?.code || payload?.code || 'PADDLE_RECOVERY_FAILED'
+    throw error
+  }
+  return payload
+}
 
 function getPaddleCustomerId(payload) {
   return (
@@ -53,7 +79,8 @@ async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironm
 
   if (explicitUserId) {
     const result = await pool.query(
-      `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, paddle_environment, updated_at
+      `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, subscription_plan,
+              current_period_end, next_billing_date, subscription_renewal_date, paddle_environment, updated_at
        FROM users
        WHERE id = $1
        LIMIT 1`,
@@ -76,7 +103,8 @@ async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironm
   }
 
   const result = await pool.query(
-    `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, paddle_environment, updated_at
+    `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, subscription_plan,
+            current_period_end, next_billing_date, subscription_renewal_date, paddle_environment, updated_at
      FROM users
      WHERE paddle_customer_id = $1
        AND ($2::boolean = FALSE OR COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $3)
@@ -112,6 +140,84 @@ function shouldApplyFailedPaymentToUser(user, payload, eventType) {
     userId: user.id,
   })
   return false
+}
+
+function shouldPreservePaidPlanDuringUpdate(user, payload, paddle) {
+  if (!user?.id) return false
+
+  const metadata = getPlanChangeMetadata(payload)
+  if (isSubscriptionUpdateTransaction(payload)) {
+    return Boolean(metadata || ['active', 'trialing'].includes(String(user.subscription_status || '').toLowerCase()))
+  }
+
+  const eventStatus = String(payload?.data?.status || payload?.status || '').toLowerCase()
+  const eventPlan = inferPlanFromPaddlePayload(payload, paddle)
+  const currentPlan = String(user.subscription_plan || '').toLowerCase()
+  const hasPaidEntitlement = ['active', 'trialing'].includes(String(user.subscription_status || '').toLowerCase())
+
+  return Boolean(
+    hasPaidEntitlement
+      && eventPlan
+      && currentPlan
+      && eventPlan !== currentPlan
+      && ['active', 'past_due'].includes(eventStatus),
+  )
+}
+
+async function restorePlanChangeEntitlement(user, metadata) {
+  if (!user?.id || !metadata?.fromPlan) return
+
+  const priorStatus = ['active', 'trialing'].includes(metadata.priorStatus)
+    ? metadata.priorStatus
+    : ['active', 'trialing'].includes(String(user.subscription_status || '').toLowerCase())
+      ? String(user.subscription_status).toLowerCase()
+      : 'active'
+
+  await pool.query(
+    `UPDATE users
+     SET subscription_plan = $2,
+         subscription_status = $3,
+         current_period_end = COALESCE($4, current_period_end),
+         next_billing_date = COALESCE($5, next_billing_date),
+         subscription_renewal_date = COALESCE($6, subscription_renewal_date),
+         updated_at = NOW()
+     WHERE id = $1`,
+    [
+      user.id,
+      metadata.fromPlan,
+      priorStatus,
+      metadata.priorCurrentPeriodEnd,
+      metadata.priorNextBillingDate || metadata.priorCurrentPeriodEnd,
+      metadata.priorRenewalDate || metadata.priorCurrentPeriodEnd,
+    ],
+  )
+}
+
+async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
+  const metadata = getPlanChangeMetadata(payload)
+  if (!metadata) return false
+
+  await restorePlanChangeEntitlement(user, metadata)
+
+  try {
+    await recoverFailedPaddlePlanChange({
+      request: (path, options = {}) => paddleApiRequest(path, options, paddle),
+      subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
+      transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
+      metadata,
+      existingCustomData: payload?.data?.custom_data || payload?.custom_data || {},
+    })
+  } catch (error) {
+    await logErrorToDatabase('paddle.webhook.plan_change_recovery_failed', error, {
+      userId: user.id,
+      subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
+      transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
+      fromPlan: metadata.fromPlan,
+      toPlan: metadata.toPlan,
+    })
+  }
+
+  return true
 }
 
 function getSafeErrorContext(error) {
@@ -348,8 +454,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       const userId = user?.id || null
       const transactionSubscriptionId = getTransactionSubscriptionId(payload)
       const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
+      const completedPlanChange = getPlanChangeMetadata(payload)
+      const isRecoveredPlanChange = isSubscriptionUpdateTransaction(payload) && completedPlanChange?.outcome === 'recovered'
 
-      if (!hasEnvironmentMismatch) {
+      if (!hasEnvironmentMismatch && !isRecoveredPlanChange) {
         if (userId) {
           await pool.query(
             `UPDATE users
@@ -392,7 +500,13 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
-      if (!hasEnvironmentMismatch && shouldApplyFailedPaymentToUser(user, payload, eventType)) {
+      const preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle)
+
+      if (preservePaidPlan) {
+        await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+      }
+
+      if (!hasEnvironmentMismatch && !preservePaidPlan && shouldApplyFailedPaymentToUser(user, payload, eventType)) {
         await pool.query(
           `UPDATE users
            SET subscription_status = $2,
@@ -450,8 +564,13 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     if (!hasEnvironmentMismatch && (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing')) {
       const updatedStatus = getSubscriptionStatus(payload) || mapToSubscriptionStatus(eventType, payload)
       const subscriptionFromEvent = getSubscriptionId(payload)
+      const preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle)
 
-      if (user?.id && updatedStatus) {
+      if (preservePaidPlan && String(updatedStatus || '').toLowerCase() === 'past_due') {
+        await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+      }
+
+      if (user?.id && updatedStatus && !preservePaidPlan) {
         await pool.query(
           `UPDATE users
            SET paddle_subscription_id = COALESCE($2, paddle_subscription_id),
