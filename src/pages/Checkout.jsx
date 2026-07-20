@@ -683,7 +683,6 @@ export default function Checkout({ onAuthSuccess }) {
                   ? 'Your previous checkout did not create a recoverable subscription. Continue with this paid plan to activate your workspace.'
                   : 'Your previous subscription has ended. Continue with this paid plan to restore full access.'}
               </p>
-              <p className="checkout-page__trial-note">A new trial will not be applied.</p>
               <button type="button" onClick={handleReactivateSubscription} className="hf-btn hf-btn--primary">
                 {isSubscriptionlessPaymentRetry ? 'Retry payment' : 'Continue to payment'}
               </button>
