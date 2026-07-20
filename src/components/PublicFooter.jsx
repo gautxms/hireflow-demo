@@ -1,5 +1,7 @@
 import { openCookiePreferences } from '../privacy/cookieConsent'
 
+const LINKEDIN_COMPANY_URL = 'https://www.linkedin.com/company/hireflow-dev/'
+
 export default function PublicFooter() {
   const seoLinks = [
     { href: '/ai-resume-screening', label: 'AI Resume Screening' },
@@ -34,6 +36,16 @@ export default function PublicFooter() {
             <li><a className="public-footer__link" href="/about">About</a></li>
             <li><a className="public-footer__link" href="/contact">Contact</a></li>
             <li><a className="public-footer__link" href="/trust">Trust</a></li>
+            <li>
+              <a
+                className="public-footer__link"
+                href={LINKEDIN_COMPANY_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                LinkedIn
+              </a>
+            </li>
           </ul>
         </nav>
 
