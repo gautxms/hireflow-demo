@@ -12,3 +12,12 @@ test('successful billing and checkout paths route users to the dashboard', async
   assert.doesNotMatch(billingSuccess, /navigate\('\/uploader'/)
   assert.doesNotMatch(checkout, /persistActiveSubscription\(token, user, '\/uploader'\)/)
 })
+
+test('returning checkout keeps paid-subscription context without redundant trial copy', async () => {
+  const checkout = await readFile(new URL('./Checkout.jsx', import.meta.url), 'utf8')
+
+  assert.match(checkout, /Paid subscription/)
+  assert.match(checkout, /Restart your subscription/)
+  assert.doesNotMatch(checkout, /A new trial will not be applied/)
+  assert.doesNotMatch(checkout, /checkout-page__trial-note/)
+})
