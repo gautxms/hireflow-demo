@@ -28,12 +28,19 @@ export default function SubscriptionCard({ user, subscription }) {
         ? (status === 'canceled' ? 'cancelled' : status)
         : 'inactive'
   const accessUntil = formatDate(subscriptionState.accessEndsAt || subscriptionState.paidThroughDate)
+  const isFinalCancellation = subscriptionState.isCanceled && !subscriptionState.isCancellationScheduled
+  const endedAt = formatDate(
+    subscription?.cancellationEffectiveAt
+      || subscription?.cancellation_effective_at
+      || user?.cancellationEffectiveAt
+      || user?.cancellation_effective_at,
+  )
   const canOpenBilling = canRenderBillingPage(subscriptionState)
   const shouldViewPlans = !subscriptionState.hasCancellationSignal && (subscriptionState.isFree || (!subscriptionState.hasProviderSubscription && !subscriptionState.hasActivePaidAccess && !subscriptionState.isPastDue && !subscriptionState.isPaused))
   const needsBillingSupport = !canOpenBilling && !shouldViewPlans
   const actionHref = canOpenBilling ? '/billing' : shouldViewPlans ? '/pricing' : '/help'
   const actionLabel = canOpenBilling ? 'Manage plan & billing' : shouldViewPlans ? 'View plans' : 'Contact support'
-  const statusLabel = subscriptionState.hasCancellationSignal && !subscriptionState.isCancellationScheduled
+  const statusLabel = subscriptionState.hasCancellationSignal && !subscriptionState.isCancellationScheduled && !isFinalCancellation
     ? 'Cancellation scheduled'
     : subscriptionState.statusLabel
 
@@ -56,7 +63,7 @@ export default function SubscriptionCard({ user, subscription }) {
         <p className="hf-account-card__value">{plan}</p>
       </div>
 
-      {subscriptionState.hasCancellationSignal && !subscriptionState.isCancellationScheduled ? (
+      {subscriptionState.hasCancellationSignal && !subscriptionState.isCancellationScheduled && !isFinalCancellation ? (
         <p className="hf-billing-card__description">Cancellation is being reconciled. Contact support if this status does not update.</p>
       ) : needsBillingSupport ? (
         <p className="hf-billing-card__description">Billing setup needs attention. Contact support so we can safely manage this subscription.</p>
@@ -64,6 +71,11 @@ export default function SubscriptionCard({ user, subscription }) {
         <div className="hf-account-card__section hf-account-card__section--last">
           <p className="hf-account-card__label">Access until</p>
           <p className="hf-account-card__value">{accessUntil}</p>
+        </div>
+      ) : isFinalCancellation && endedAt ? (
+        <div className="hf-account-card__section hf-account-card__section--last">
+          <p className="hf-account-card__label">Subscription ended</p>
+          <p className="hf-account-card__value">{endedAt}</p>
         </div>
       ) : !subscriptionState.isFree && startedAt ? (
         <div className="hf-account-card__section hf-account-card__section--last">

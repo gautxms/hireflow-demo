@@ -483,6 +483,8 @@ router.get('/current', requireAuth, async (req, res) => {
       || hasScheduledCancellationStatus(latestSubscription?.status)
       || hasPaddleScheduledCancellationSignal(planCost.paddleSubscriptionPayload)
     const hasScheduledCancellation = isFutureDate(cancellationEffectiveAt) && hasScheduledCancellationSignal
+    const isFinalCancellation = ['canceled', 'cancelled'].includes(normalizeStatus(user.subscription_status))
+      && !hasScheduledCancellation
 
     return res.json({
       subscription: {
@@ -505,11 +507,11 @@ router.get('/current', requireAuth, async (req, res) => {
           && !user.paddle_subscription_id
           && !user.has_payment_attempts
           && ['inactive', 'no_subscription', 'none', 'free', ''].includes(normalizeStatus(user.subscription_status)),
-        renewalDate: isoOrNull(user.subscription_renewal_date || user.current_period_end),
-        nextBillingDate: isoOrNull(user.next_billing_date || user.current_period_end),
+        renewalDate: isFinalCancellation ? null : isoOrNull(user.subscription_renewal_date || user.current_period_end),
+        nextBillingDate: isFinalCancellation ? null : isoOrNull(user.next_billing_date || user.current_period_end),
         cancellationEffectiveAt,
         cancelAtPeriodEnd: hasScheduledCancellation,
-        paymentMethod: user.payment_method_last4
+        paymentMethod: isFinalCancellation ? null : user.payment_method_last4
           ? `${user.payment_method_brand || 'Card'} •••• ${user.payment_method_last4}`
           : hasBillingPortalAccess ? 'Card on file' : null,
         latestRecordStatus: hasScheduledCancellation ? (latestSubscription?.status || 'cancellation_scheduled') : (latestSubscription?.status || null),

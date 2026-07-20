@@ -348,7 +348,7 @@ export default function BillingPage() {
             <article className="billing-page__card">
               <div className="billing-page__card-header">
                 <div>
-                  <p className="billing-page__eyebrow">Current Plan</p>
+                  <p className="billing-page__eyebrow">{isFinalCancellation ? 'Previous plan' : 'Current plan'}</p>
                   <h2 className="billing-page__plan-title">{subscription.planLabel || subscriptionState.planLabel}</h2>
                 </div>
                 <span className="billing-page__status-badge">{displayedStatusLabel}</span>
