@@ -23,6 +23,7 @@ function getSafeBillingMessage(payload, fallback = 'Unable to update plan') {
     BILLING_CONFIG_MISSING: 'Billing is not configured for this plan change yet. Please contact support and mention missing Paddle price configuration.',
     BILLING_PROVIDER_MISSING: 'We could not find a Paddle subscription for your account. Please contact support so we can update your plan safely.',
     PAYMENT_FAILED_OR_ACTION_REQUIRED: 'Paddle could not apply this change because payment failed or needs action. Please update your payment method or contact support.',
+    PLAN_CHANGE_PAYMENT_FAILED_PRESERVED: 'The upgrade payment was declined. Your current plan and access remain unchanged.',
     PADDLE_SUBSCRIPTION_UPDATE_FAILED: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.',
     PLAN_ALREADY_ACTIVE: 'You are already on that plan.',
     PLAN_CHANGE_NOT_ALLOWED: 'This plan change is not available for your subscription. Please contact support.',
@@ -216,13 +217,19 @@ export default function BillingPage() {
       const payload = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new Error(getSafeBillingMessage(payload))
+        const billingError = new Error(getSafeBillingMessage(payload))
+        billingError.code = payload?.code || 'UNKNOWN'
+        throw billingError
       }
 
       setPlanModalOpen(false)
       setActionFeedback({ type: 'success', message: payload.message || 'Plan updated successfully.' })
       await loadBilling()
     } catch (err) {
+      if (err.code === 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED') {
+        setPlanModalOpen(false)
+        await loadBilling()
+      }
       setActionFeedback({ type: 'error', message: err.message || 'Unable to update plan' })
     } finally {
       setIsChangingPlan(false)

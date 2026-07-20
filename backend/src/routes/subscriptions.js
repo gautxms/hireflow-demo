@@ -3,6 +3,13 @@ import { Router } from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { resolvePaddleConfig, resolvePaddleConfigForUser } from '../config/paddle.js'
+import {
+  buildPlanChangeCustomData,
+  getPlanChangeMetadata,
+  inferPlanFromPaddlePayload,
+  normalizePaddleSubscriptionItems,
+  recoverFailedPaddlePlanChange,
+} from '../services/paddlePlanChangeRecovery.js'
 
 const router = Router()
 
@@ -32,6 +39,7 @@ const ERROR_RESPONSES = {
   BILLING_CONFIG_MISSING: { status: 409, message: 'Subscription cannot be changed because billing configuration is missing. Please contact support.' },
   BILLING_PROVIDER_MISSING: { status: 409, message: 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.' },
   PAYMENT_FAILED_OR_ACTION_REQUIRED: { status: 402, message: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' },
+  PLAN_CHANGE_PAYMENT_FAILED_PRESERVED: { status: 402, message: 'The upgrade payment was declined. Your current plan and access remain unchanged.' },
   PADDLE_SUBSCRIPTION_UPDATE_FAILED: { status: 502, message: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' },
   KEEP_SUBSCRIPTION_FAILED: { status: 500, message: 'Unable to confirm that your subscription will continue. Reload Billing to check the latest status before trying again.' },
   PLAN_ALREADY_ACTIVE: { status: 400, message: 'You are already on that plan.' },
@@ -583,7 +591,7 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
 
   const userResult = await pool.query(
     `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end,
-            paddle_environment
+            next_billing_date, subscription_renewal_date, paddle_environment
      FROM users
      WHERE id = $1`,
     [userId],
@@ -636,9 +644,119 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
     isUpgrade,
     prorationBillingMode: isUpgrade ? 'prorated_immediately' : 'prorated_next_billing_period',
     items,
+    previousItems: normalizePaddleSubscriptionItems(getSubscriptionItems(subscriptionPayload)),
+    previousCustomData: subscriptionPayload?.data?.custom_data || subscriptionPayload?.custom_data || {},
+    startedAt: new Date(),
     subscriptionPayload,
     paddle,
   }
+}
+
+function planChangeMetadataForContext(context, outcome = 'pending') {
+  return getPlanChangeMetadata({
+    custom_data: buildPlanChangeCustomData(context.previousCustomData, {
+      fromPlan: context.currentPlan,
+      toPlan: context.targetPlan,
+      priorStatus: context.user.subscription_status,
+      priorCurrentPeriodEnd: context.user.current_period_end,
+      priorNextBillingDate: context.user.next_billing_date,
+      priorRenewalDate: context.user.subscription_renewal_date,
+      previousItems: context.previousItems,
+      startedAt: context.startedAt,
+      outcome,
+    }),
+  })
+}
+
+async function restorePreviousPlanEntitlement(userId, context) {
+  const priorStatus = ['active', 'trialing'].includes(normalizeStatus(context.user.subscription_status))
+    ? normalizeStatus(context.user.subscription_status)
+    : 'active'
+
+  await pool.query(
+    `UPDATE users
+     SET subscription_plan = $1,
+         subscription_status = $2,
+         current_period_end = $3,
+         next_billing_date = $4,
+         subscription_renewal_date = $5,
+         updated_at = NOW()
+     WHERE id = $6`,
+    [
+      context.currentPlan,
+      priorStatus,
+      context.user.current_period_end || null,
+      context.user.next_billing_date || context.user.current_period_end || null,
+      context.user.subscription_renewal_date || context.user.current_period_end || null,
+      userId,
+    ],
+  )
+}
+
+async function recoverFailedPlanChange(userId, context) {
+  const metadata = planChangeMetadataForContext(context, 'failed')
+  if (!metadata) throw new Error('Unable to build plan change recovery metadata')
+
+  const observedPayload = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}`, {}, context.paddle)
+  const observedPlan = inferPlanFromPaddlePayload(observedPayload, context.paddle)
+  const observedStatus = normalizeStatus(observedPayload?.data?.status || observedPayload?.status)
+
+  if (observedPlan === context.targetPlan && observedStatus === 'active') {
+    return { outcome: 'succeeded', payload: observedPayload }
+  }
+
+  if (observedPlan === context.targetPlan || observedStatus === 'past_due') {
+    await recoverFailedPaddlePlanChange({
+      request: (path, options = {}) => paddleRequest(path, options, context.paddle),
+      subscriptionId: context.user.paddle_subscription_id,
+      metadata,
+      existingCustomData: context.previousCustomData,
+    })
+  }
+
+  await restorePreviousPlanEntitlement(userId, context)
+  return { outcome: 'preserved', payload: observedPayload }
+}
+
+async function persistSuccessfulPlanChange(userId, context, paddleUpdate) {
+  const dates = extractBillingDates(paddleUpdate)
+  const effectiveAt = context.isUpgrade ? new Date() : new Date(context.user.current_period_end || dates.currentPeriodEnd || Date.now())
+  const visiblePlan = context.isUpgrade ? context.targetPlan : context.currentPlan
+  const client = await pool.connect()
+
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `UPDATE users
+       SET subscription_plan = $1,
+           subscription_status = COALESCE($2, subscription_status),
+           paddle_subscription_id = COALESCE($3, paddle_subscription_id),
+           current_period_end = COALESCE($4, current_period_end),
+           next_billing_date = COALESCE($5, next_billing_date),
+           updated_at = NOW()
+       WHERE id = $6`,
+      [visiblePlan, dates.status, dates.providerSubscriptionId, dates.currentPeriodEnd, dates.nextBillingDate, userId],
+    )
+
+    await client.query(
+      `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents, metadata)
+       VALUES ($1, $2, $3, $4, $5, NULL, $6::jsonb)`,
+      [userId, context.currentPlan, context.targetPlan, context.isUpgrade ? 'upgrade' : 'downgrade', effectiveAt, JSON.stringify({
+        source: 'billing_page',
+        paddle_subscription_id: dates.providerSubscriptionId || context.user.paddle_subscription_id,
+        proration_billing_mode: context.prorationBillingMode,
+        immediate: context.isUpgrade,
+      })],
+    )
+    await client.query('COMMIT')
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
+  }
+
+  return { dates, effectiveAt }
 }
 
 router.post('/change-plan-preview', requireAuth, async (req, res) => {
@@ -676,61 +794,37 @@ router.post('/change-plan-preview', requireAuth, async (req, res) => {
 router.post('/change-plan', requireAuth, async (req, res) => {
   const { targetPlan, upgradeTestKey } = req.body || {}
   let currentPlan = null
+  let context = null
 
   try {
-    const context = await loadPlanChangeContext(req.userId, targetPlan, { upgradeTestKey })
+    context = await loadPlanChangeContext(req.userId, targetPlan, { upgradeTestKey })
     currentPlan = context.currentPlan
+    const planChangeCustomData = buildPlanChangeCustomData(context.previousCustomData, {
+      fromPlan: context.currentPlan,
+      toPlan: context.targetPlan,
+      priorStatus: context.user.subscription_status,
+      priorCurrentPeriodEnd: context.user.current_period_end,
+      priorNextBillingDate: context.user.next_billing_date,
+      priorRenewalDate: context.user.subscription_renewal_date,
+      previousItems: context.previousItems,
+      startedAt: context.startedAt,
+    })
     const paddleUpdate = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}`, {
       method: 'PATCH',
       body: JSON.stringify({
         items: context.items,
         proration_billing_mode: context.prorationBillingMode,
         on_payment_failure: 'prevent_change',
-        custom_data: {
-          ...(context.subscriptionPayload?.data?.custom_data || {}),
-          plan: targetPlan,
-          paddleEnvironment: context.paddle.environment,
-        },
+        custom_data: { ...planChangeCustomData, paddleEnvironment: context.paddle.environment },
       }),
     }, context.paddle)
 
-    const dates = extractBillingDates(paddleUpdate)
-    const effectiveAt = context.isUpgrade ? new Date() : new Date(context.user.current_period_end || dates.currentPeriodEnd || Date.now())
-    const visiblePlan = context.isUpgrade ? targetPlan : currentPlan
-
-    const client = await pool.connect()
-
-    try {
-      await client.query('BEGIN')
-      await client.query(
-        `UPDATE users
-         SET subscription_plan = $1,
-             subscription_status = COALESCE($2, subscription_status),
-             paddle_subscription_id = COALESCE($3, paddle_subscription_id),
-             current_period_end = COALESCE($4, current_period_end),
-             next_billing_date = COALESCE($5, next_billing_date),
-             updated_at = NOW()
-         WHERE id = $6`,
-        [visiblePlan, dates.status, dates.providerSubscriptionId, dates.currentPeriodEnd, dates.nextBillingDate, req.userId],
-      )
-
-      await client.query(
-        `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents, metadata)
-         VALUES ($1, $2, $3, $4, $5, NULL, $6::jsonb)`,
-        [req.userId, currentPlan, targetPlan, context.isUpgrade ? 'upgrade' : 'downgrade', effectiveAt, JSON.stringify({
-          source: 'billing_page',
-          paddle_subscription_id: dates.providerSubscriptionId || context.user.paddle_subscription_id,
-          proration_billing_mode: context.prorationBillingMode,
-          immediate: context.isUpgrade,
-        })],
-      )
-      await client.query('COMMIT')
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {})
-      throw error
-    } finally {
-      client.release()
+    const updateStatus = normalizeStatus(paddleUpdate?.data?.status || paddleUpdate?.status)
+    if (context.isUpgrade && updateStatus === 'past_due') {
+      throw new BillingError('PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', { reason: 'paddle_returned_past_due' })
     }
+
+    const { effectiveAt } = await persistSuccessfulPlanChange(req.userId, context, paddleUpdate)
 
     return res.json({
       status: 'ok',
@@ -741,6 +835,37 @@ router.post('/change-plan', requireAuth, async (req, res) => {
       pendingPlan: context.isUpgrade ? null : targetPlan,
     })
   } catch (error) {
+    if (
+      context?.isUpgrade
+      && error instanceof BillingError
+      && ['PAYMENT_FAILED_OR_ACTION_REQUIRED', 'PADDLE_SUBSCRIPTION_UPDATE_FAILED', 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED'].includes(error.code)
+    ) {
+      try {
+        const reconciliation = await recoverFailedPlanChange(req.userId, context)
+
+        if (reconciliation.outcome === 'succeeded') {
+          const { effectiveAt } = await persistSuccessfulPlanChange(req.userId, context, reconciliation.payload)
+          return res.json({
+            status: 'ok',
+            message: 'Plan upgraded successfully. Your billing details have been confirmed with Paddle.',
+            effectiveAt: effectiveAt.toISOString(),
+            pendingPlan: null,
+          })
+        }
+
+        return sendBillingError(res, new BillingError('PLAN_CHANGE_PAYMENT_FAILED_PRESERVED'))
+      } catch (recoveryError) {
+        await restorePreviousPlanEntitlement(req.userId, context).catch(() => {})
+        await logErrorToDatabase('subscriptions.change-plan.recovery_failed', recoveryError, {
+          userId: req.userId,
+          targetPlan,
+          currentPlan,
+          originalCode: error.code,
+        })
+        return sendBillingError(res, new BillingError('PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', { recoveryFailed: true }))
+      }
+    }
+
     await logErrorToDatabase('subscriptions.change-plan.failed', error, {
       userId: req.userId,
       targetPlan,

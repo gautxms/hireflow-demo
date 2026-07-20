@@ -319,3 +319,10 @@ test('BillingPage past_due no longer relies on a support email for payment recov
   assert.equal((pageSource.match(/pastDueBillingNotice/g) || []).length, 3)
   assert.equal((pageSource.match(/hello@hireflow\.dev/g) || []).length, 0)
 })
+
+test('BillingPage closes and refreshes after a declined upgrade preserves the current plan', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /PLAN_CHANGE_PAYMENT_FAILED_PRESERVED: 'The upgrade payment was declined\. Your current plan and access remain unchanged\.'/)
+  assert.match(source, /err\.code === 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED'[\s\S]*setPlanModalOpen\(false\)[\s\S]*await loadBilling\(\)/)
+})
