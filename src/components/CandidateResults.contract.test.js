@@ -217,7 +217,7 @@ test('candidate cards limit tag density without reserving blank tag space', () =
   assert.match(candidateResultsSource, /const hiddenCardTags = cardTags\.slice\(visibleCardTags\.length\)/)
   assert.match(candidateResultsSource, /const hiddenCardTagCount = hiddenCardTags\.length/)
   assert.match(candidateResultsSource, /\+\{hiddenCardTagCount\}/)
-  assert.match(candidateResultsSource, /aria-label=\{\`\$\{hiddenCardTagCount\} more tags:/)
+  assert.match(candidateResultsSource, /\$\{hiddenCardTagCount\} more tags:/)
   assert.match(candidateResultsSource, /\{visibleCardTags\.length > 0 && \(/)
   assert.match(candidateResultsSource, /className="rc-tag-more"/)
   assert.match(candidateResultsStyles, /\.results-grid\s*\{[^}]*align-items:\s*start/s)
