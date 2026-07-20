@@ -179,6 +179,19 @@ test('candidate tag state uses the same canonical identity as cards and the deta
   assert.doesNotMatch(candidateResultsSource, /key: candidate\._bulkKey/)
 })
 
+test('candidate tag filters and removal stay synchronized end to end', () => {
+  assert.match(candidateResultsSource, /const candidateTagKey = resolveCandidateKey\(candidate\)/)
+  assert.doesNotMatch(candidateResultsSource, /tagMap\[candidate\?\._bulkKey\]/)
+  assert.match(candidateResultsSource, /const availableTagFilters = useMemo/)
+  assert.match(candidateResultsSource, /setSelectedTagFilters\(\(current\) =>/)
+  assert.match(candidateResultsSource, /const \[tagMutationPending, setTagMutationPending\] = useState\(false\)/)
+  assert.match(candidateResultsSource, /const \[removeTagSelection, setRemoveTagSelection\] = useState\(\[\]\)/)
+  assert.match(candidateResultsSource, /mutateSelectedTags\('remove', removeTagSelection\)/)
+  assert.match(candidateResultsSource, /Select the tags to remove from the selected candidates\./)
+  assert.match(candidateResultsSource, /disabled=\{tagMutationPending \|\| removableTags\.length === 0\}/)
+  assert.match(candidateResultsSource, /finally \{\s*setTagMutationPending\(false\)/)
+})
+
 test('click-path regression: crash panel copy is never used for candidate click interactions', () => {
   assert.doesNotMatch(candidateResultsSource, /We could not render these results\./)
   assert.doesNotMatch(candidateResultsSource, /Please return to Analyses or retry\./)
