@@ -1478,23 +1478,14 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         hideMatchSort={isResumeOnlyAnalysis}
         onSearch={setSearchText}
         onSkillsFilter={setSelectedSkills}
+        availableTags={availableTagFilters}
+        selectedTags={selectedTagFilters}
+        onTagsFilter={setSelectedTagFilters}
         onExperienceFilter={(next) => setExpRange(normalizeNumericRange(next, { min: 0, max: 50 }))}
         onSort={(next) => setSortBy(normalizeSortBy(next))}
         shortlistOpen={shortlistOpen}
         onToggleShortlist={isReadOnly ? undefined : setShortlistOpen}
       />
-      <div className="candidate-results-page__tag-filter" role="group" aria-label="Filter candidates by tags">
-        <span className="candidate-results-page__tag-filter-label">Filter tags:</span>
-        {Array.from(new Set(Object.values(candidateTags).flat())).sort((a, b) => a.localeCompare(b)).map((tag) => {
-          const isActive = selectedTagFilters.includes(tag)
-          return (
-            <button key={`tag-filter-${tag}`} type="button" className={`candidate-results-page__tag-chip${isActive ? ' candidate-results-page__tag-chip--active' : ''}`} onClick={() => setSelectedTagFilters((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]))} aria-pressed={isActive} aria-label={`Filter by tag ${tag}`}>
-              {tag}
-            </button>
-          )
-        })}
-      </div>
-
       {!isReadOnly && shortlistOpen && (
         <>
           <div className="panel-overlay" onClick={() => setShortlistOpen(false)} aria-hidden="true" />
@@ -1656,6 +1647,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
           const selectionResumeId = resolveSelectionResumeId(candidate)
           const selected = Boolean(selectionResumeId) && selectedIds.includes(selectionResumeId)
           const cardTags = candidateTags[candidateKey] || []
+          const visibleCardTags = cardTags.slice(0, 2)
+          const hiddenCardTags = cardTags.slice(visibleCardTags.length)
+          const hiddenCardTagCount = hiddenCardTags.length
 
           return (
             <div
@@ -1708,9 +1702,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                 )}
               </div>
 
-              {cardTags.length > 0 && (
+              {visibleCardTags.length > 0 && (
                 <div className="rc-tags" aria-label={`${toDisplayText(candidate.name, 'Candidate')} tags`}>
-                  {cardTags.map((tag) => <span className="rc-tag-pill" key={`${candidateKey}-tag-${tag}`} tabIndex={0}>{tag}</span>)}
+                  {visibleCardTags.map((tag) => <span className="rc-tag-pill" key={`${candidateKey}-tag-${tag}`} title={tag} tabIndex={0}>{tag}</span>)}
+                  {hiddenCardTagCount > 0 && (
+                    <span
+                      className="rc-tag-more"
+                      title={hiddenCardTags.join(', ')}
+                      aria-label={`${hiddenCardTagCount} more tags: ${hiddenCardTags.join(', ')}`}
+                      tabIndex={0}
+                    >
+                      +{hiddenCardTagCount}
+                    </span>
+                  )}
                 </div>
               )}
 
