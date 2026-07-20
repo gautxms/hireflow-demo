@@ -21,6 +21,7 @@
   font: 600 14px/1.2 'DM Sans', sans-serif;
   cursor: pointer;
   border: 1px solid var(--hf-border-2, var(--hf-border-muted));
+  text-decoration: none;
   transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease, color 0.15s ease;
 }
 

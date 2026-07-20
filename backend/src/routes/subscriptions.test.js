@@ -294,6 +294,30 @@ test('GET /api/subscriptions/current does not return cancelAtPeriodEnd true when
   assert.equal(missingRes.payload.subscription.cancelAtPeriodEnd, false)
 })
 
+test('GET /api/subscriptions/current removes stale renewal and payment metadata for a fully canceled subscription', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeAnnualUser(),
+    subscription_status: 'cancelled',
+    paddle_customer_id: 'ctm_123',
+    cancellation_effective_at: '2020-01-07T00:00:00.000Z',
+    subscription_renewal_date: '2020-01-07T00:00:00.000Z',
+    next_billing_date: '2020-01-07T00:00:00.000Z',
+    payment_method_brand: 'Visa',
+    payment_method_last4: '4242',
+  })
+  mockPaddleResponse({ payload: { data: { id: 'sub_123', status: 'canceled' } } })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'cancelled')
+  assert.equal(res.payload.subscription.renewalDate, null)
+  assert.equal(res.payload.subscription.nextBillingDate, null)
+  assert.equal(res.payload.subscription.paymentMethod, null)
+  assert.equal(res.payload.subscription.cancellationEffectiveAt, '2020-01-07T00:00:00.000Z')
+})
+
 test('GET /api/subscriptions/current returns Paddle actual annual INR price for gated test annual price', async () => {
   resetPaddleEnv()
   enableTestUpgrade()

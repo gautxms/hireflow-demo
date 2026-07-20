@@ -63,6 +63,13 @@ export function hasFutureCancellationEffectiveAt(subscription, now = new Date())
   return Boolean(getFutureCancellationEffectiveDate(subscription, now))
 }
 
+export function isFinalCancellationBillingState(subscriptionState, subscription, now = new Date()) {
+  const status = normalizeSubscriptionStatus(subscription?.status || subscriptionState?.rawStatus || subscriptionState?.status)
+  const isCanceled = subscriptionState?.isCanceled === true || status === 'canceled' || status === 'cancelled'
+
+  return isCanceled && !hasScheduledCancellation(subscriptionState, subscription, now)
+}
+
 export function getBillingStatusLabel(subscriptionState, subscription, formatDate = (value) => value, now = new Date()) {
   const effectiveDate = hasScheduledCancellation(subscriptionState, subscription, now)
     ? getFutureCancellationEffectiveDate(subscription, now)
@@ -73,6 +80,8 @@ export function getBillingStatusLabel(subscriptionState, subscription, formatDat
 }
 
 export function getCancellationAccessMessage(subscriptionState, subscription, formatDate = (value) => value, now = new Date()) {
+  if (isFinalCancellationBillingState(subscriptionState, subscription, now)) return ''
+
   const effectiveDate = hasScheduledCancellation(subscriptionState, subscription, now)
     ? getFutureCancellationEffectiveDate(subscription, now)
     : null
@@ -109,7 +118,19 @@ export function shouldRenderBillingHistory(history) {
 export function getBillingMetadataRows(subscriptionState, subscription, formatDate = (value) => value, now = new Date()) {
   const rows = []
   const scheduledCancellation = hasScheduledCancellation(subscriptionState, subscription, now)
+  const finalCancellation = isFinalCancellationBillingState(subscriptionState, subscription, now)
   const isPastDue = isPastDueBillingState(subscriptionState)
+
+  if (finalCancellation) {
+    const endedAt = subscription?.cancellationEffectiveAt
+      || subscription?.cancellation_effective_at
+      || subscription?.currentPeriodEnd
+      || subscription?.current_period_end
+
+    if (endedAt) rows.push({ label: 'Subscription ended', value: formatDate(endedAt) })
+    rows.push({ label: 'Next billing', value: 'No further billing' })
+    return rows
+  }
 
   if (isPastDue) {
     rows.push({ label: subscription?.nextBillingDate ? 'Retry date' : 'Payment due', value: subscription?.nextBillingDate ? formatDate(subscription.nextBillingDate) : 'Now' })

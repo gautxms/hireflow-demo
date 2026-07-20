@@ -485,11 +485,20 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                paddle_subscription_id = COALESCE($2, paddle_subscription_id),
                paddle_customer_id = COALESCE($3, paddle_customer_id),
                current_period_end = COALESCE($4, current_period_end),
-               next_billing_date = COALESCE($5, next_billing_date),
+               subscription_renewal_date = NULL,
+               next_billing_date = NULL,
+               cancellation_effective_at = COALESCE($5, cancellation_effective_at, $4, NOW()),
                paddle_environment = $6,
                updated_at = NOW()
            WHERE id = $1`,
-          [user.id, canceledSubscriptionId, getPaddleCustomerId(payload), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.scheduled_change?.effective_at || null, paddle.environment],
+          [
+            user.id,
+            canceledSubscriptionId,
+            getPaddleCustomerId(payload),
+            payload?.data?.current_billing_period?.ends_at || null,
+            payload?.data?.canceled_at || payload?.data?.scheduled_change?.effective_at || payload?.data?.current_billing_period?.ends_at || null,
+            paddle.environment,
+          ],
         )
       }
 

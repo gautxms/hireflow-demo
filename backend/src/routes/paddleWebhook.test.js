@@ -316,6 +316,29 @@ test('POST /api/paddle/webhook preserves scheduled cancellation effective date f
   assert.equal(updateCall.params[8], '2027-01-07T00:00:00.000Z')
 })
 
+test('POST /api/paddle/webhook clears renewal metadata when cancellation becomes final', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_canceled_final',
+    event_type: 'subscription.canceled',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      status: 'canceled',
+      canceled_at: '2026-07-24T00:00:00.000Z',
+      next_billed_at: null,
+      scheduled_change: null,
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+  const [updateCall] = userUpdateCalls(calls)
+
+  assert.equal(response.status, 200)
+  assert.match(updateCall.sql, /subscription_renewal_date = NULL/)
+  assert.match(updateCall.sql, /next_billing_date = NULL/)
+  assert.match(updateCall.sql, /cancellation_effective_at = COALESCE\(\$5, cancellation_effective_at, \$4, NOW\(\)\)/)
+  assert.equal(updateCall.params[4], '2026-07-24T00:00:00.000Z')
+})
+
 test('POST /api/paddle/webhook derives monthly from subscription.updated canonical monthly item', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({
     event_id: 'evt_subscription_updated_monthly_item',

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isPastDueBillingState, shouldRenderBillingHistory } from './billingPageActions.js'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isFinalCancellationBillingState, isPastDueBillingState, shouldRenderBillingHistory } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -223,6 +223,27 @@ test('canceled subscription with future cancellation date shows active until sta
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
 })
 
+test('fully canceled subscription uses a compact final billing state without reconciliation or payment details', () => {
+  const subscriptionState = { statusLabel: 'Canceled', canManageBilling: true, isCanceled: true }
+  const subscription = {
+    plan: 'annual',
+    status: 'canceled',
+    renewalDate: '2025-01-07T00:00:00Z',
+    nextBillingDate: '2025-01-07T00:00:00Z',
+    cancellationEffectiveAt: '2025-01-07T00:00:00Z',
+    currentPeriodEnd: '2025-01-07T00:00:00Z',
+    paymentMethod: 'Card on file',
+  }
+  const format = () => '1/7/2025'
+
+  assert.equal(isFinalCancellationBillingState(subscriptionState, subscription, NOW), true)
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), '')
+  assert.deepEqual(getBillingMetadataRows(subscriptionState, subscription, format, NOW), [
+    { label: 'Subscription ended', value: '1/7/2025' },
+    { label: 'Next billing', value: 'No further billing' },
+  ])
+})
+
 test('fresh cancel response with effectiveAt confirms scheduled cancellation and paid access', () => {
   const subscription = { plan: 'annual' }
   const payload = { effectiveAt: '2027-01-07T00:00:00Z', message: 'Subscription cancelled. A confirmation email will be sent by webhook processing.' }
@@ -274,6 +295,7 @@ test('BillingPage offers state-specific keep, payment update, and subscribe-agai
   assert.match(source, /Subscribe again/)
   assert.match(source, /reason=subscribe_again/)
   assert.match(source, /\{!hasScheduledCancellation && !isFinalCancellation && !subscriptionState\.isPastDue \? \([\s\S]*Change payment method/)
+  assert.match(source, /isFinalCancellation \? 'Previous plan' : 'Current plan'/)
 })
 
 test('BillingPage omits monthly downgrade guidance and uses semantic action variants', () => {
@@ -284,6 +306,7 @@ test('BillingPage omits monthly downgrade guidance and uses semantic action vari
   assert.doesNotMatch(pageSource, /Need monthly billing|support-note|Downgrades are scheduled/)
   assert.equal((pageSource.match(/hf-btn hf-btn--destructive/g) || []).length, 2)
   assert.match(primitiveStyles, /\.hf-btn--destructive\s*\{[\s\S]*background: var\(--color-error\)/)
+  assert.match(primitiveStyles, /\.hf-btn\s*\{[\s\S]*text-decoration: none/)
   assert.doesNotMatch(checkoutStyles, /^\s*\.hf-btn\s*\{/m)
   assert.doesNotMatch(checkoutStyles, /^\s*\.hf-btn--(?:primary|secondary)\s*\{/m)
 })
