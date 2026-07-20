@@ -163,6 +163,22 @@ test('list/detail identity regression: candidate render keys derive from resolve
   assert.doesNotMatch(candidateResultsSource, /key=\{candidate\._bulkKey\}/)
 })
 
+test('candidate tag state uses the same canonical identity as cards and the detail drawer', () => {
+  assert.match(
+    candidateResultsSource,
+    /candidateRows\.forEach\(\(candidate, index\) => \{[\s\S]*current\.push\(resolveCandidateKey\(candidate, index\)\)/,
+  )
+  assert.match(
+    candidateResultsSource,
+    /const selectedWithResume = selectedCandidates[\s\S]*key: resolveCandidateKey\(candidate\)/,
+  )
+  assert.match(candidateResultsSource, /const cardTags = candidateTags\[candidateKey\] \|\| \[\]/)
+  assert.match(candidateResultsSource, /const detailTags = candidateTags\[expandedCandidateKey\] \|\| \[\]/)
+  assert.match(candidateResultsSource, /row\?\.resumeId \|\| row\?\.resume_id/)
+  assert.doesNotMatch(candidateResultsSource, /current\.push\(candidate\._bulkKey\)/)
+  assert.doesNotMatch(candidateResultsSource, /key: candidate\._bulkKey/)
+})
+
 test('click-path regression: crash panel copy is never used for candidate click interactions', () => {
   assert.doesNotMatch(candidateResultsSource, /We could not render these results\./)
   assert.doesNotMatch(candidateResultsSource, /Please return to Analyses or retry\./)
