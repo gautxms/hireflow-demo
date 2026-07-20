@@ -1,5 +1,8 @@
 const DEFAULT_SITE_URL = 'https://hireflow.dev'
 const DEFAULT_OG_IMAGE = '/og-default.png'
+const LINKEDIN_COMPANY_URL = 'https://www.linkedin.com/company/hireflow-dev/'
+
+export const BRAND_SAME_AS = [LINKEDIN_COMPANY_URL]
 
 export const SEO_DEFAULTS = {
   title: 'HireFlow – AI Hiring Platform',
@@ -88,6 +91,36 @@ function normalizeSiteUrl(siteUrl = DEFAULT_SITE_URL) {
   return siteUrl.endsWith('/') ? siteUrl.slice(0, -1) : siteUrl
 }
 
+function buildBrandStructuredData(siteUrl = DEFAULT_SITE_URL) {
+  const normalizedSiteUrl = normalizeSiteUrl(siteUrl)
+
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${normalizedSiteUrl}/#organization`,
+        name: 'HireFlow',
+        alternateName: 'HireFlow.dev',
+        url: normalizedSiteUrl,
+        logo: `${normalizedSiteUrl}${DEFAULT_OG_IMAGE}`,
+        description: SEO_DEFAULTS.description,
+        sameAs: BRAND_SAME_AS,
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${normalizedSiteUrl}/#website`,
+        name: 'HireFlow',
+        url: normalizedSiteUrl,
+        publisher: {
+          '@id': `${normalizedSiteUrl}/#organization`,
+        },
+        sameAs: BRAND_SAME_AS,
+      },
+    ],
+  }
+}
+
 export function resolvePageSeo({ pathname = '/', currentPage = null, siteUrl = DEFAULT_SITE_URL } = {}) {
   const normalizedPath = normalizePath(pathname)
   const fallbackPath = normalizedPath === '/' && currentPage && PUBLIC_PAGE_SEO[`/${currentPage}`] ? `/${currentPage}` : normalizedPath
@@ -174,7 +207,9 @@ export function applySeoToDocument(doc, seo) {
   upsertMeta(doc, 'meta[name="twitter:image"]', { name: 'twitter:image', content: seo.image })
 }
 
-export function buildSeoHeadMarkup(seo) {
+export function buildSeoHeadMarkup(seo, { siteUrl = DEFAULT_SITE_URL } = {}) {
+  const structuredData = JSON.stringify(buildBrandStructuredData(siteUrl))
+
   return [
     `<title>${seo.title}</title>`,
     `<meta name="description" content="${seo.description}" />`,
@@ -189,5 +224,6 @@ export function buildSeoHeadMarkup(seo) {
     `<meta name="twitter:title" content="${seo.title}" />`,
     `<meta name="twitter:description" content="${seo.description}" />`,
     `<meta name="twitter:image" content="${seo.image}" />`,
+    `<script type="application/ld+json">${structuredData}</script>`,
   ].filter(Boolean).join('\n    ')
 }
