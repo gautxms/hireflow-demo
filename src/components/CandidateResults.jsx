@@ -654,7 +654,8 @@ function filterAndSortCandidates(candidates, filters) {
 
     if (selectedTags.length > 0) {
       // Tag filter semantic: candidates must include ALL selected tags.
-      const candidateTagSet = new Set((tagMap[candidate?._bulkKey] || []).map((tag) => String(tag || '').toLowerCase()))
+      const candidateTagKey = resolveCandidateKey(candidate)
+      const candidateTagSet = new Set((tagMap[candidateTagKey] || []).map((tag) => String(tag || '').toLowerCase()))
       const hasAllSelectedTags = selectedTags.every((tag) => candidateTagSet.has(String(tag || '').toLowerCase()))
       if (!hasAllSelectedTags) return false
     }
@@ -697,6 +698,9 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const [candidateTags, setCandidateTags] = useState({})
   const [selectedTagFilters, setSelectedTagFilters] = useState([])
   const [tagNotice, setTagNotice] = useState('')
+  const [tagMutationPending, setTagMutationPending] = useState(false)
+  const [removeTagOpen, setRemoveTagOpen] = useState(false)
+  const [removeTagSelection, setRemoveTagSelection] = useState([])
   const shortlistV2Enabled = isFeatureEnabled(FEATURE_KEYS.shortlistV2, { userProfile })
 
   const normalizedPayload = useMemo(() => normalizeCandidateResultsPayload(candidatePayload), [candidatePayload])
@@ -1078,6 +1082,18 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
   }, [authHeaders, candidateRows])
 
+  const availableTagFilters = useMemo(
+    () => Array.from(new Set(Object.values(candidateTags).flat())).sort((a, b) => a.localeCompare(b)),
+    [candidateTags],
+  )
+
+  useEffect(() => {
+    setSelectedTagFilters((current) => {
+      const next = current.filter((tag) => availableTagFilters.includes(tag))
+      return next.length === current.length ? current : next
+    })
+  }, [availableTagFilters])
+
   const filtered = useMemo(() => {
     if (!hasCandidatesToRender) {
       return []
@@ -1109,6 +1125,24 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
   const selectedCandidates = getSelectedCandidates(filtered, selectedIds, resolveSelectionResumeId)
   const allFilteredSelected = computeAllVisibleSelected(visibleCandidates, selectedIds, resolveSelectionResumeId)
+  const removableTags = useMemo(() => {
+    const tags = new Set()
+    selectedCandidates.forEach((candidate) => {
+      const candidateKey = resolveCandidateKey(candidate)
+      ;(candidateTags[candidateKey] || []).forEach((tag) => tags.add(tag))
+    })
+    return Array.from(tags).sort((a, b) => a.localeCompare(b))
+  }, [candidateTags, selectedCandidates])
+
+  useEffect(() => {
+    setRemoveTagSelection((current) => {
+      const next = current.filter((tag) => removableTags.includes(tag))
+      return next.length === current.length ? current : next
+    })
+    if (removableTags.length === 0) {
+      setRemoveTagOpen(false)
+    }
+  }, [removableTags])
 
   const avgScore = filtered.length
     ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
@@ -1217,10 +1251,17 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     )
   }
 
-  const mutateSelectedTags = async (operation) => {
-    if (isReadOnly) return
-    const tags = tagDraft.split(',').map((tag) => tag.trim()).filter(Boolean)
-    if (tags.length === 0 || selectedCandidates.length === 0) {
+  const mutateSelectedTags = async (operation, explicitTags = null) => {
+    if (isReadOnly || tagMutationPending) return
+    const tags = (Array.isArray(explicitTags) ? explicitTags : tagDraft.split(','))
+      .map((tag) => String(tag || '').trim())
+      .filter(Boolean)
+    if (selectedCandidates.length === 0) {
+      setResultsError('Select at least one candidate before updating tags.')
+      return
+    }
+    if (tags.length === 0) {
+      setResultsError(operation === 'remove' ? 'Select at least one tag to remove.' : 'Enter at least one tag to add.')
       return
     }
 
@@ -1243,9 +1284,11 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       operation,
     )
     setCandidateTags(next)
+    setTagMutationPending(true)
 
     try {
       setResultsError('')
+      setTagNotice('')
       const response = await fetch(`${API_BASE}/candidates/tags/bulk`, {
         method: 'POST',
         headers: authHeaders(),
@@ -1278,11 +1321,19 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
         })
         return next
       })
-      setTagNotice(`Updated tags for ${payload?.updatedCount || selectedWithResume.length} candidate(s).`)
-      setTagDraft('')
+      const updatedCount = payload?.updatedCount || selectedWithResume.length
+      setTagNotice(`${operation === 'remove' ? 'Removed' : 'Added'} tags for ${updatedCount} candidate(s).`)
+      if (operation === 'add') {
+        setTagDraft('')
+      } else {
+        setRemoveTagOpen(false)
+        setRemoveTagSelection([])
+      }
     } catch (error) {
       setCandidateTags(rollback)
       setResultsError(error.message || 'Unable to update candidate tags')
+    } finally {
+      setTagMutationPending(false)
     }
   }
 
@@ -1488,11 +1539,51 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
             className="touch-target candidate-results-page__tag-input"
             value={tagDraft}
             onChange={(event) => setTagDraft(event.target.value)}
-            placeholder="tag1, tag2"
-            aria-label="Tag input for selected candidates"
+            placeholder="Add tags, separated by commas"
+            aria-label="Tags to add to selected candidates"
+            disabled={tagMutationPending}
           />
-          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button"><Tag size={18} strokeWidth={1.5} aria-hidden="true" />Add Tags</button>
-          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('remove')} type="button"><Minus size={18} strokeWidth={1.5} aria-hidden="true" />Remove Tags</button>
+          <button className="touch-target bulk-btn" onClick={() => mutateSelectedTags('add')} type="button" disabled={tagMutationPending || !tagDraft.trim()}><Tag size={18} strokeWidth={1.5} aria-hidden="true" />{tagMutationPending ? 'Updating…' : 'Add Tags'}</button>
+          <button
+            className="touch-target bulk-btn"
+            onClick={() => {
+              setRemoveTagSelection([])
+              setRemoveTagOpen((open) => !open)
+            }}
+            type="button"
+            aria-expanded={removeTagOpen}
+            aria-controls="candidate-remove-tags-panel"
+            disabled={tagMutationPending || removableTags.length === 0}
+          >
+            <Minus size={18} strokeWidth={1.5} aria-hidden="true" />Remove Tags
+          </button>
+          {removeTagOpen && (
+            <div id="candidate-remove-tags-panel" className="candidate-results-page__remove-tags-panel" role="dialog" aria-label="Remove candidate tags">
+              <p>Select the tags to remove from the selected candidates.</p>
+              <div className="candidate-results-page__remove-tag-options">
+                {removableTags.map((tag) => {
+                  const selected = removeTagSelection.includes(tag)
+                  return (
+                    <button
+                      key={`remove-tag-${tag}`}
+                      type="button"
+                      className={`candidate-results-page__remove-tag-option${selected ? ' candidate-results-page__remove-tag-option--selected' : ''}`}
+                      aria-pressed={selected}
+                      onClick={() => setRemoveTagSelection((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]))}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="candidate-results-page__remove-tag-actions">
+                <button type="button" className="touch-target bulk-btn" onClick={() => { setRemoveTagOpen(false); setRemoveTagSelection([]) }}>Cancel</button>
+                <button type="button" className="touch-target bulk-btn danger" disabled={removeTagSelection.length === 0 || tagMutationPending} onClick={() => mutateSelectedTags('remove', removeTagSelection)}>
+                  Remove selected
+                </button>
+              </div>
+            </div>
+          )}
           {shortlistError ? <p className="shortlist-manager__error" role="status">{shortlistError}</p> : null}
           {tagNotice ? <p className="shortlist-manager__muted-text" role="status">{tagNotice}</p> : null}
         </BulkActions>
