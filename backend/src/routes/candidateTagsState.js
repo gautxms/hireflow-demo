@@ -17,3 +17,12 @@ export function applyTagOperation(existingTags, incomingTags, operation) {
 
   return normalizeTags([...current, ...incoming])
 }
+
+export function mapCandidateTagRows(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      resumeId: String(row?.resume_id ?? row?.resumeId ?? '').trim(),
+      tags: normalizeTags(row?.tags).sort((a, b) => a.localeCompare(b)),
+    }))
+    .filter((row) => row.resumeId)
+}

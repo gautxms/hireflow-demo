@@ -6,7 +6,7 @@ import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { canUsePaidMutation } from '../utils/subscriptionAccess.js'
 import { matchCandidatesToJob } from '../services/matchingService.js'
 import { pool } from '../db/client.js'
-import { normalizeTags } from './candidateTagsState.js'
+import { mapCandidateTagRows, normalizeTags } from './candidateTagsState.js'
 import { analyzeResumeWithConfiguredFallback, canonicalizeAnalysisScoreFields } from '../services/aiResumeAnalysisService.js'
 import { applyJobDescriptionScoringMode } from '../jobs/parseResumeJob.js'
 import { syncCandidateProfilesForUser } from '../services/candidateProfilesService.js'
@@ -932,7 +932,7 @@ router.post('/tags/bulk', requireAuth, requireActiveSubscription, async (req, re
     )
 
     return res.json({
-      resumeTags: result.rows,
+      resumeTags: mapCandidateTagRows(result.rows),
       updatedCount: allowedResumeIds.length,
     })
   } catch (error) {
@@ -968,10 +968,7 @@ router.post('/tags/lookup', requireAuth, async (req, res) => {
     )
 
     return res.json({
-      resumeTags: result.rows.map((row) => ({
-        resumeId: String(row.resume_id),
-        tags: normalizeTags(row.tags).sort((a, b) => a.localeCompare(b)),
-      })),
+      resumeTags: mapCandidateTagRows(result.rows),
     })
   } catch (error) {
     console.error('[Candidates] Failed to lookup tags:', error)
