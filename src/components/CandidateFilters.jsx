@@ -22,10 +22,13 @@ export default function CandidateFilters({
   candidates = [],
   searchText = '',
   selectedSkills = [],
+  availableTags = [],
+  selectedTags = [],
   expRange = { min: '0', max: '50' },
   sortBy = 'match_score',
   onSearch,
   onSkillsFilter,
+  onTagsFilter,
   onExperienceFilter,
   onSort,
   shortlistOpen = false,
@@ -34,6 +37,7 @@ export default function CandidateFilters({
   hideMatchSort = false,
 }) {
   const [skillSearch, setSkillSearch] = useState('')
+  const [tagSearch, setTagSearch] = useState('')
   const [showAllSkills, setShowAllSkills] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
   const toolbarRef = useRef(null)
@@ -113,10 +117,17 @@ export default function CandidateFilters({
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [allSkills])
 
+  const filteredTags = useMemo(() => {
+    const query = tagSearch.trim().toLowerCase()
+    if (!query) return availableTags
+    return availableTags.filter((tag) => tag.toLowerCase().includes(query))
+  }, [availableTags, tagSearch])
+
   const experienceMin = Number(expRange?.min || 0)
   const experienceMax = Number(expRange?.max || 50)
   const activeFilterCount = [
     selectedSkills.length > 0,
+    selectedTags.length > 0,
     experienceMin > 0 || experienceMax < 50,
   ].filter(Boolean).length
 
@@ -129,10 +140,19 @@ export default function CandidateFilters({
     onSkillsFilter?.(next)
   }
 
+  const toggleTag = (tag) => {
+    const next = selectedTags.includes(tag)
+      ? selectedTags.filter((selected) => selected !== tag)
+      : [...selectedTags, tag]
+    onTagsFilter?.(next)
+  }
+
   const clearAllFilters = () => {
     onSkillsFilter?.([])
+    onTagsFilter?.([])
     onExperienceFilter?.({ min: '0', max: '50' })
     setSkillSearch('')
+    setTagSearch('')
     setShowAllSkills(false)
   }
 
@@ -195,23 +215,88 @@ export default function CandidateFilters({
           aria-label="Candidate filters"
           ref={filterPanelRef}
         >
-          <div className="fp-section">
-            <div className="fp-label">Experience (years)</div>
-            <div className="fp-range-display">
-              {experienceMin}
-              {' '}
-              –
-              {' '}
-              {experienceMax}
+          <div className="fp-primary-grid">
+            <div className="fp-section fp-section--compact">
+              <div className="fp-label">Experience (years)</div>
+              <div className="fp-range-display" aria-live="polite">
+                {experienceMin}
+                {' '}
+                –
+                {' '}
+                {experienceMax}
+              </div>
+              <input
+                className="touch-target"
+                type="range"
+                min="0"
+                max="50"
+                step="1"
+                value={experienceMin}
+                aria-label="Minimum years of experience"
+                onChange={(event) => {
+                  const nextMin = Number(event.target.value)
+                  onExperienceFilter?.({ min: String(nextMin), max: String(Math.max(nextMin, experienceMax)) })
+                }}
+              />
+              <input
+                className="touch-target"
+                type="range"
+                min="0"
+                max="50"
+                step="1"
+                value={experienceMax}
+                aria-label="Maximum years of experience"
+                onChange={(event) => {
+                  const nextMax = Number(event.target.value)
+                  onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
+                }}
+              />
             </div>
-            <input className="touch-target" type="range" min="0" max="50" step="1" value={experienceMin} onChange={(event) => {
-              const nextMin = Number(event.target.value)
-              onExperienceFilter?.({ min: String(nextMin), max: String(Math.max(nextMin, experienceMax)) })
-            }} />
-            <input className="touch-target" type="range" min="0" max="50" step="1" value={experienceMax} onChange={(event) => {
-              const nextMax = Number(event.target.value)
-              onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
-            }} />
+
+            <div className="fp-section fp-section--compact">
+              <div className="fp-section-heading">
+                <div className="fp-label">Tags</div>
+                {selectedTags.length > 0 && (
+                  <span className="fp-selected-count">{selectedTags.length} selected</span>
+                )}
+              </div>
+              {availableTags.length > 0 ? (
+                <>
+                  {availableTags.length > 8 && (
+                    <input
+                      type="search"
+                      className="touch-target fp-tag-search"
+                      placeholder="Search tags..."
+                      aria-label="Search candidate tags"
+                      value={tagSearch}
+                      onChange={(event) => setTagSearch(event.target.value)}
+                    />
+                  )}
+                  <div className="fp-tag-grid" role="group" aria-label="Filter candidates by tags">
+                    {filteredTags.map((tag) => {
+                      const selected = selectedTags.includes(tag)
+                      return (
+                        <button
+                          type="button"
+                          key={`filter-tag-${tag}`}
+                          className={`touch-target fp-tag-pill${selected ? ' active' : ''}`}
+                          aria-pressed={selected}
+                          title={tag}
+                          onClick={() => toggleTag(tag)}
+                        >
+                          {tag}
+                        </button>
+                      )
+                    })}
+                    {filteredTags.length === 0 && (
+                      <span className="candidate-filter-empty-tags">No matching tags</span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <span className="candidate-filter-empty-tags">No tags available</span>
+              )}
+            </div>
           </div>
 
           <div className="fp-section">
