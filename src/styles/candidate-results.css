@@ -1187,6 +1187,7 @@
 .results-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -2080,9 +2081,12 @@
 .fp-section { display: grid; gap: 8px; }
 .fp-label { font-size: 13px; color: var(--color-text-secondary); font-weight: 600; }
 .fp-range-display { font-size: 12px; color: var(--color-text-muted); }
-.fp-skill-grid { display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow: auto; }
-.fp-skill-pill { border: 1px solid #2a2a2a; background: #0d0d0d; color: var(--color-text-secondary); border-radius: 999px; padding: 6px 10px; }
-.fp-skill-pill.active { border-color: #c8ff00; color: #c8ff00; }
+.fp-skill-grid,
+.fp-tag-grid { display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow: auto; }
+.fp-skill-pill,
+.fp-tag-pill { border: 1px solid #2a2a2a; background: #0d0d0d; color: var(--color-text-secondary); border-radius: 999px; padding: 6px 10px; }
+.fp-skill-pill.active,
+.fp-tag-pill.active { border-color: #c8ff00; color: #c8ff00; }
 .fp-footer { display: flex; justify-content: flex-end; gap: 8px; }
 .fp-apply { background: #c8ff00; border-color: #c8ff00; color: #000; font-weight: 700; }
 
@@ -2097,6 +2101,7 @@
 .filter-shortlist-btn:focus-visible,
 .fp-skill-search:focus-visible,
 .fp-skill-pill:focus-visible,
+.fp-tag-pill:focus-visible,
 .fp-show-more:focus-visible,
 .fp-clear:focus-visible,
 .fp-apply:focus-visible {
@@ -2210,25 +2215,33 @@
   .dd-header-actions .dd-btn-ghost:not(.hf-btn--icon) { flex: 1 1 180px; }
 }
 
-.candidate-results-page__tag-filter {
+.rc-tags {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 0 0 12px;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
-.candidate-results-page__tag-filter-label { color: #9ca3af; font-size: 12px; }
-.candidate-results-page__tag-chip {
-  border: 1px solid #2a2a2a;
-  background: #111;
-  color: #cbd5e1;
+
+.rc-tag-pill,
+.rc-tag-more {
+  flex: 0 1 auto;
+  max-width: 140px;
+  overflow: hidden;
+  border: 1px solid var(--color-white-alpha-10);
   border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 2px 8px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.candidate-results-page__tag-chip--active { border-color: #84cc16; color: #d9f99d; }
-.rc-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.rc-tag-pill { border: 1px solid #2a2a2a; border-radius: 999px; padding: 2px 8px; font-size: 11px; color: #e2e8f0; }
+
+.rc-tag-more {
+  flex: 0 0 auto;
+  color: var(--color-accent-green);
+}
 
 .candidate-results-page__resume-only-banner {
   display: flex;

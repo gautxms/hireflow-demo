@@ -22,10 +22,13 @@ export default function CandidateFilters({
   candidates = [],
   searchText = '',
   selectedSkills = [],
+  availableTags = [],
+  selectedTags = [],
   expRange = { min: '0', max: '50' },
   sortBy = 'match_score',
   onSearch,
   onSkillsFilter,
+  onTagsFilter,
   onExperienceFilter,
   onSort,
   shortlistOpen = false,
@@ -117,6 +120,7 @@ export default function CandidateFilters({
   const experienceMax = Number(expRange?.max || 50)
   const activeFilterCount = [
     selectedSkills.length > 0,
+    selectedTags.length > 0,
     experienceMin > 0 || experienceMax < 50,
   ].filter(Boolean).length
 
@@ -129,8 +133,16 @@ export default function CandidateFilters({
     onSkillsFilter?.(next)
   }
 
+  const toggleTag = (tag) => {
+    const next = selectedTags.includes(tag)
+      ? selectedTags.filter((selected) => selected !== tag)
+      : [...selectedTags, tag]
+    onTagsFilter?.(next)
+  }
+
   const clearAllFilters = () => {
     onSkillsFilter?.([])
+    onTagsFilter?.([])
     onExperienceFilter?.({ min: '0', max: '50' })
     setSkillSearch('')
     setShowAllSkills(false)
@@ -213,6 +225,28 @@ export default function CandidateFilters({
               onExperienceFilter?.({ min: String(Math.min(experienceMin, nextMax)), max: String(nextMax) })
             }} />
           </div>
+
+          {availableTags.length > 0 && (
+            <div className="fp-section">
+              <div className="fp-label">Tags</div>
+              <div className="fp-tag-grid">
+                {availableTags.map((tag) => {
+                  const selected = selectedTags.includes(tag)
+                  return (
+                    <button
+                      type="button"
+                      key={`filter-tag-${tag}`}
+                      className={`touch-target fp-tag-pill${selected ? ' active' : ''}`}
+                      aria-pressed={selected}
+                      onClick={() => toggleTag(tag)}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="fp-section">
             <div className="fp-label">Skills</div>

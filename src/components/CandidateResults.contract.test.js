@@ -192,6 +192,30 @@ test('candidate tag filters and removal stay synchronized end to end', () => {
   assert.match(candidateResultsSource, /finally \{\s*setTagMutationPending\(false\)/)
 })
 
+test('candidate tag filters live inside the filter popover and count as active filters', () => {
+  assert.match(candidateResultsSource, /availableTags=\{availableTagFilters\}/)
+  assert.match(candidateResultsSource, /selectedTags=\{selectedTagFilters\}/)
+  assert.match(candidateResultsSource, /onTagsFilter=\{setSelectedTagFilters\}/)
+  assert.doesNotMatch(candidateResultsSource, /candidate-results-page__tag-filter/)
+  assert.match(candidateFiltersSource, /availableTags = \[\]/)
+  assert.match(candidateFiltersSource, /selectedTags = \[\]/)
+  assert.match(candidateFiltersSource, /onTagsFilter/)
+  assert.match(candidateFiltersSource, /selectedTags\.length > 0/)
+  assert.match(candidateFiltersSource, /<div className="fp-label">Tags<\/div>/)
+  assert.match(candidateFiltersSource, /aria-pressed=\{selected\}/)
+  assert.match(candidateFiltersSource, /onTagsFilter\?\.\(\[\]\)/)
+})
+
+test('candidate cards limit tag density without reserving blank tag space', () => {
+  assert.match(candidateResultsSource, /const visibleCardTags = cardTags\.slice\(0, 2\)/)
+  assert.match(candidateResultsSource, /const hiddenCardTagCount = Math\.max\(0, cardTags\.length - visibleCardTags\.length\)/)
+  assert.match(candidateResultsSource, /\{visibleCardTags\.length > 0 && \(/)
+  assert.match(candidateResultsSource, /className="rc-tag-more"/)
+  assert.match(candidateResultsStyles, /\.results-grid\s*\{[^}]*align-items:\s*start/s)
+  assert.doesNotMatch(candidateResultsStyles, /\.candidate-results-page__tag-filter\s*\{/)
+  assert.match(candidateResultsStyles, /\.rc-tags\s*\{[^}]*overflow:\s*hidden/s)
+})
+
 test('click-path regression: crash panel copy is never used for candidate click interactions', () => {
   assert.doesNotMatch(candidateResultsSource, /We could not render these results\./)
   assert.doesNotMatch(candidateResultsSource, /Please return to Analyses or retry\./)
