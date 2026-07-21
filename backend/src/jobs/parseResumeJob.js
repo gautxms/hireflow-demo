@@ -30,6 +30,7 @@ import {
 } from '../services/aiScoreCacheService.js'
 import { buildSafeScoreCacheStoragePayload, getScoreCacheEntry, upsertScoreCacheEntry } from '../services/aiScoreCacheStorageService.js'
 import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
+import { evaluateExperienceRange } from '../utils/experienceRange.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
@@ -1188,6 +1189,40 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
   })
 }
 
+const CONFLICTING_IN_RANGE_EXPERIENCE_TEXT = /\b(?:experience|years?|yrs?)\b/i
+const CONFLICTING_IN_RANGE_JUDGMENT = /\b(?:exceed(?:s|ed|ing)?|above\s+(?:the\s+)?(?:range|requirement|maximum)|below\s+(?:the\s+)?(?:range|requirement|minimum)|underqualified|overqualified|experience\s+(?:gap|shortfall)|fail(?:s|ed|ing)?\s+(?:the\s+)?experience)\b/i
+
+function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
+  const evaluation = evaluateExperienceRange(candidate?.years_experience, {
+    min: jobDescriptionContext?.experienceMin,
+    max: jobDescriptionContext?.experienceMax,
+  })
+  const next = { ...candidate, experience_range: evaluation }
+  if (evaluation.classification !== 'within_range') return next
+
+  const conflicts = (value) => CONFLICTING_IN_RANGE_EXPERIENCE_TEXT.test(String(value || ''))
+    && CONFLICTING_IN_RANGE_JUDGMENT.test(String(value || ''))
+  const filter = (values) => Array.isArray(values) ? values.filter((entry) => !conflicts(entry)) : values
+  const fit = candidate?.fit_assessment
+  return {
+    ...next,
+    considerations: filter(candidate?.considerations),
+    concerns: filter(candidate?.concerns),
+    missingSkills: filter(candidate?.missingSkills),
+    missingRequirementsFull: filter(candidate?.missingRequirementsFull),
+    risksOrGapsFull: filter(candidate?.risksOrGapsFull),
+    fit_assessment: fit ? {
+      ...fit,
+      missing_requirements: filter(fit.missing_requirements),
+      risks_or_gaps: filter(fit.risks_or_gaps),
+      notes: filter(fit.notes),
+      rationale: conflicts(fit.rationale) ? '' : fit.rationale,
+    } : fit,
+    recommendation: conflicts(candidate?.recommendation) ? '' : candidate?.recommendation,
+    recommendationFull: conflicts(candidate?.recommendationFull) ? '' : candidate?.recommendationFull,
+  }
+}
+
 
 
 function normalizeAttemptMode(value) {
@@ -1829,6 +1864,7 @@ export async function runParse(job) {
   }
 
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
+    .map((candidate) => reconcileCandidateExperienceRange(candidate, jobDescriptionContext))
   const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
   let finalCandidates = applyDeterministicJdFitScoresForRuntimeTest({
@@ -2135,6 +2171,7 @@ export function registerParseResumeJobProcessor() {
 export const __testables = {
   normalizeStructuredSkills,
   buildNormalizedCandidates,
+  reconcileCandidateExperienceRange,
   runParse,
   loadFileBufferBase64ForParseJob,
   withParseStageTimeout,

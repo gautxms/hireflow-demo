@@ -21,7 +21,7 @@ after(async () => {
   await parseQueue.close().catch(() => {})
 })
 
-const { buildNormalizedCandidates, isLegacyWordDocument } = __testables
+const { buildNormalizedCandidates, isLegacyWordDocument, reconcileCandidateExperienceRange } = __testables
 
 function buildV2VisibleScoreCandidate(overrides = {}) {
   return {
@@ -107,6 +107,27 @@ test('buildNormalizedCandidates preserves fractional/integer/null years_experien
   assert.equal(fractional.years_experience, 3.5)
   assert.equal(integer.years_experience, 3)
   assert.equal(missing.years_experience, null)
+})
+
+test('new in-range analyses suppress only contradictory experience judgments without mutating AI payloads', () => {
+  const candidate = {
+    years_experience: 4.5,
+    considerations: ['Experience exceeds the required 2-5 year range', 'Review portfolio depth'],
+    fit_assessment: {
+      missing_requirements: ['Below requirement with 4.5 years'],
+      risks_or_gaps: ['Overqualified because of experience', 'Limited cloud evidence'],
+      rationale: 'Candidate experience exceeds the maximum.',
+    },
+  }
+  const snapshot = structuredClone(candidate)
+  const normalized = reconcileCandidateExperienceRange(candidate, { experienceMin: 2, experienceMax: 5 })
+
+  assert.deepEqual(candidate, snapshot)
+  assert.equal(normalized.experience_range.classification, 'within_range')
+  assert.deepEqual(normalized.considerations, ['Review portfolio depth'])
+  assert.deepEqual(normalized.fit_assessment.missing_requirements, [])
+  assert.deepEqual(normalized.fit_assessment.risks_or_gaps, ['Limited cloud evidence'])
+  assert.equal(normalized.fit_assessment.rationale, '')
 })
 
 test('v2 visible score experiment leaves scores unchanged when feature flag is off', () => {
