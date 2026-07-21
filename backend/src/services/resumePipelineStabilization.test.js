@@ -76,6 +76,25 @@ test('job description context includes manual JD fields when provided', () => {
   assert.equal(normalized.experienceMax, 7)
 })
 
+test('job description context carries deterministic required, preferred, and alternative semantics', () => {
+  const normalized = buildJobDescriptionContext({
+    id: 'jd-semantics',
+    title: 'Backend Engineer',
+    requirements: 'Required:\nREST APIs\nJava, Go, or Node.js\nPreferred:\nKubernetes ownership',
+    responsibilities: 'Build reliable services',
+    additional_info: 'AI exposure is a plus',
+    skills: ['SQL'],
+  })
+
+  assert.equal(normalized.responsibilities, 'Build reliable services')
+  assert.equal(normalized.additionalInfo, 'AI exposure is a plus')
+  assert.ok(normalized.requirementSemantics.required.includes('REST APIs'))
+  assert.ok(normalized.requirementSemantics.required.includes('SQL'))
+  assert.ok(normalized.requirementSemantics.preferred.includes('Kubernetes ownership'))
+  assert.ok(normalized.requirementSemantics.preferred.includes('AI exposure is a plus'))
+  assert.deepEqual(normalized.requirementSemantics.alternativeGroups, [['Java', 'Go', 'Node.js']])
+})
+
 test('job description context marks missing JD when parse request has no JD row', () => {
   const normalized = buildJobDescriptionContext(null)
   assert.deepEqual(normalized, {

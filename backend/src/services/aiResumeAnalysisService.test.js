@@ -32,6 +32,19 @@ test('buildPromptWithJobDescription includes AVAILABLE JD block when context exi
   assert.equal(prompt.includes('Job Description ID: jd-100'), true)
 })
 
+test('buildPromptWithJobDescription tells the production analyzer not to make preferred items or alternatives cumulative', () => {
+  const prompt = buildPromptWithJobDescription('Base prompt', {
+    hasContext: true,
+    title: 'Backend Engineer',
+    requirements: 'Required: Java, Go, or Node.js\nPreferred: Kubernetes',
+    skills: ['SQL'],
+  })
+
+  assert.match(prompt, /Alternative groups \(satisfying any one option satisfies the group\): \[Java OR Go OR Node\.js\]/)
+  assert.match(prompt, /Preferred\/bonus clauses: Kubernetes/)
+  assert.match(prompt, /preferred items are not mandatory failures/i)
+})
+
 test('buildPromptWithJobDescription includes MISSING block and reason when no JD exists', () => {
   const prompt = buildPromptWithJobDescription('Base prompt', {
     hasContext: false,
@@ -1313,6 +1326,23 @@ test('AI scoring contract v2 shadow prompt contains below-minimum experience cal
   assert.equal(prompt.includes('25-45'), true)
   assert.equal(prompt.includes('Education relevance must not overcompensate'), true)
   assert.equal(prompt.includes('Skills match alone must not lift weighted_total_score'), true)
+})
+
+test('AI scoring contract v2 prompt applies the same required, preferred, and alternative semantics', () => {
+  const { buildAiScoringContractV2SeparateShadowPrompt } = __testables
+  const prompt = buildAiScoringContractV2SeparateShadowPrompt({
+    resumeText: 'Node.js and SQL production experience.',
+    jobDescriptionContext: {
+      hasContext: true,
+      title: 'SDE',
+      requirements: 'Java, Go, or Node.js\nKubernetes is preferred',
+      skills: ['SQL'],
+    },
+  })
+
+  assert.match(prompt, /\[Java OR Go OR Node\.js\]/)
+  assert.match(prompt, /Preferred\/bonus clauses: Kubernetes is preferred/)
+  assert.match(prompt, /do not penalize missing unselected alternatives/i)
 })
 
 

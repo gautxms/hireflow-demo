@@ -31,6 +31,7 @@ import {
 import { buildSafeScoreCacheStoragePayload, getScoreCacheEntry, upsertScoreCacheEntry } from '../services/aiScoreCacheStorageService.js'
 import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
 import { evaluateExperienceRange } from '../utils/experienceRange.js'
+import { buildRequirementSemantics, reconcileCandidateRequirementSemantics } from '../utils/requirementSemantics.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
@@ -1449,6 +1450,8 @@ export function buildJobDescriptionContext(row) {
     title: normalizeString(row.title),
     description: normalizeString(row.description),
     requirements: normalizeString(row.requirements),
+    responsibilities: normalizeString(row.responsibilities),
+    additionalInfo: normalizeString(row.additional_info ?? row.additionalInfo),
     skills,
     experienceYears: normalizeNullableNumber(row.experience_years),
     experienceMin: normalizeNullableNumber(row.experience_min ?? row.experience_years),
@@ -1462,6 +1465,7 @@ export function buildJobDescriptionContext(row) {
     source: fileText ? 'file_text' : hasFile ? 'manual_fields_file_fallback' : 'manual_fields',
     fileTextAvailable: Boolean(fileText),
   }
+  normalized.requirementSemantics = buildRequirementSemantics(normalized)
 
   const hasManualContext = Boolean(
     normalized.title
@@ -1945,6 +1949,10 @@ export async function runParse(job) {
 
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
     .map((candidate) => reconcileCandidateExperienceRange(candidate, jobDescriptionContext))
+    .map((candidate) => reconcileCandidateRequirementSemantics(
+      candidate,
+      jobDescriptionContext?.requirementSemantics || buildRequirementSemantics(jobDescriptionContext),
+    ))
   const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
   let finalCandidates = applyDeterministicJdFitScoresForRuntimeTest({
@@ -2252,6 +2260,7 @@ export const __testables = {
   normalizeStructuredSkills,
   buildNormalizedCandidates,
   reconcileCandidateExperienceRange,
+  reconcileCandidateRequirementSemantics,
   runParse,
   loadFileBufferBase64ForParseJob,
   withParseStageTimeout,
