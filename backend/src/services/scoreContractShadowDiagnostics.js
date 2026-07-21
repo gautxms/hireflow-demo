@@ -146,6 +146,42 @@ function resolveVisibleFitScore(candidate = {}) {
   return normalizeOptionalNumber(candidate?.fit_assessment?.overall_fit_score ?? candidate?.fitAssessment?.overallFitScore)
 }
 
+function resolveScoringObservability(candidate = {}) {
+  const visible = resolveVisibleScore(candidate)
+  const deterministic = candidate?.deterministic_jd_fit_apply_metadata
+  const v2Apply = candidate?.v2_visible_score_experiment
+  const v2 = candidate?.ai_scoring_contract_v2
+  const category = v2?.category_breakdown ?? v2?.score_breakdown ?? {
+    skills_match_score: normalizeOptionalNumber(v2?.skills_match_score),
+    relevant_experience_score: normalizeOptionalNumber(v2?.relevant_experience_score),
+    education_relevance_score: normalizeOptionalNumber(v2?.education_relevance_score),
+    seniority_progression_score: normalizeOptionalNumber(v2?.seniority_progression_score),
+  }
+
+  const categoryBreakdown = Object.fromEntries(
+    Object.entries(category && typeof category === 'object' && !Array.isArray(category) ? category : {})
+      .map(([key, value]) => [key, normalizeOptionalNumber(value?.score ?? value)])
+      .filter(([, value]) => value !== null),
+  )
+  const scoreSource = deterministic?.applied_deterministic_score != null
+    ? 'deterministic_jd_fit'
+    : (v2Apply?.applied_score != null ? 'ai_scoring_contract_v2' : visible.source)
+
+  return {
+    original_ai_score: normalizeOptionalNumber(
+      deterministic?.original_ai_score ?? v2Apply?.original_visible_score ?? visible.value,
+    ),
+    v2_score: resolveV2WeightedTotalScore(candidate),
+    displayed_score: visible.value,
+    displayed_score_source: scoreSource,
+    displayed_scoring_version: normalizeOptionalString(
+      deterministic?.scoring_contract_version ?? v2Apply?.contract_version ?? v2?.scoring_contract_version,
+    ),
+    v2_confidence: normalizeOptionalString(v2?.score_confidence),
+    v2_category_breakdown: categoryBreakdown,
+  }
+}
+
 function normalizeBoolean(value) {
   if (typeof value === 'boolean') return value
   return Boolean(value)
@@ -196,6 +232,7 @@ export function buildAiScoringContractV2ScoreDeltaDiagnostic({
   const skipReason = buildSkipReason({ candidate, visibleScore, v2Score, diagnosticsDisabled: metadata.diagnosticsDisabled === true })
 
   return {
+    ...resolveScoringObservability(candidate),
     event_type: skipReason ? 'skip' : 'delta',
     skip_reason: skipReason,
     analysis_id: normalizeOptionalString(metadata.analysisId ?? metadata.analysis_id),

@@ -8,6 +8,22 @@ import {
   emitScoreContractShadowDiagnostic,
   isScoreContractShadowEnabled,
 } from './scoreContractShadowDiagnostics.js'
+import { SCORING_REGRESSION_FIXTURES } from './__fixtures__/scoringRegressionFixtures.js'
+
+test('frozen regression fixtures preserve broad ranking, decimal experience, and requirement shapes', () => {
+  const fixtures = SCORING_REGRESSION_FIXTURES
+  assert.ok(fixtures.excellent.score > fixtures.strong.score)
+  assert.ok(fixtures.strong.score > fixtures.moderate.score)
+  assert.ok(fixtures.moderate.score > fixtures.low.score)
+  assert.equal(fixtures.decimalInsideRange.years_experience, 4.5)
+  assert.equal(fixtures.lowerBoundary.years_experience, fixtures.lowerBoundary.requirements.experience.min)
+  assert.equal(fixtures.upperBoundary.years_experience, fixtures.upperBoundary.requirements.experience.max)
+  assert.deepEqual(fixtures.alternativeTechnology.requirements.anyOf, ['technology-a', 'technology-b'])
+  assert.deepEqual(fixtures.preferredQualification.requirements.required, ['core-skill'])
+  assert.deepEqual(fixtures.preferredQualification.requirements.preferred, ['bonus-skill'])
+  assert.equal(fixtures.noEducationRequirement.requirements.education, null)
+  assert.equal(Object.isFrozen(fixtures), true)
+})
 
 test('no drift when score and matchScore.score match', () => {
   const diagnostic = buildScoreContractShadowDiagnostic({
@@ -502,6 +518,44 @@ test('v2 score delta diagnostic records displayed score source and raw visible f
   assert.equal(diagnostic.score_delta_direction, 'visible_lower_than_v2')
   assert.equal(diagnostic.score_delta_bucket, '7_to_12')
   assert.equal(diagnostic.score_delta_flagged, true)
+})
+
+test('v2 diagnostic identifies the displayed scoring source without storing resume content', () => {
+  const candidate = {
+    id: 'synthetic-candidate',
+    name: 'Private Name',
+    email: 'private@example.test',
+    score: 84,
+    matchScore: { score: 84, reason: 'Sensitive resume evidence' },
+    v2_visible_score_experiment: {
+      original_visible_score: 79,
+      applied_score: 84,
+      contract_version: 'ai_jd_fit_rubric_v2',
+    },
+    ai_scoring_contract_v2: {
+      scoring_contract_version: 'ai_jd_fit_rubric_v2',
+      weighted_total_score_recomputed: 84,
+      score_confidence: 'high',
+      skills_match_score: 86,
+      relevant_experience_score: 82,
+    },
+  }
+
+  const before = structuredClone(candidate)
+  const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate })
+
+  assert.equal(diagnostic.original_ai_score, 79)
+  assert.equal(diagnostic.v2_score, 84)
+  assert.equal(diagnostic.displayed_score, 84)
+  assert.equal(diagnostic.displayed_score_source, 'ai_scoring_contract_v2')
+  assert.equal(diagnostic.displayed_scoring_version, 'ai_jd_fit_rubric_v2')
+  assert.equal(diagnostic.v2_confidence, 'high')
+  assert.deepEqual(diagnostic.v2_category_breakdown, {
+    skills_match_score: 86,
+    relevant_experience_score: 82,
+  })
+  assert.deepEqual(candidate, before)
+  assert.doesNotMatch(JSON.stringify(diagnostic), /Private Name|private@example|Sensitive resume evidence/)
 })
 
 test('v2 score delta diagnostic does not emit main event with null score_delta', () => {
