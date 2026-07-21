@@ -20,6 +20,7 @@ import {
   getPlanChangeMetadata,
   inferPlanFromPaddlePayload,
   isSubscriptionUpdateTransaction,
+  PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
 
@@ -142,11 +143,12 @@ function shouldApplyFailedPaymentToUser(user, payload, eventType) {
   return false
 }
 
-function shouldPreservePaidPlanDuringUpdate(user, payload, paddle) {
+function shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType) {
   if (!user?.id) return false
 
   const metadata = getPlanChangeMetadata(payload)
-  if (isSubscriptionUpdateTransaction(payload)) {
+  if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
+    if (!isSubscriptionUpdateTransaction(payload)) return false
     return Boolean(metadata || ['active', 'trialing'].includes(String(user.subscription_status || '').toLowerCase()))
   }
 
@@ -195,29 +197,21 @@ async function restorePlanChangeEntitlement(user, metadata) {
 
 async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
   const metadata = getPlanChangeMetadata(payload)
-  if (!metadata) return false
+  if (!metadata) return { outcome: PLAN_CHANGE_RECOVERY_OUTCOME.NOT_APPLICABLE }
 
-  await restorePlanChangeEntitlement(user, metadata)
+  const result = await recoverFailedPaddlePlanChange({
+    request: (path, options = {}) => paddleApiRequest(path, options, paddle),
+    subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
+    transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
+    metadata,
+    existingCustomData: payload?.data?.custom_data || payload?.custom_data || {},
+  })
 
-  try {
-    await recoverFailedPaddlePlanChange({
-      request: (path, options = {}) => paddleApiRequest(path, options, paddle),
-      subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
-      transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
-      metadata,
-      existingCustomData: payload?.data?.custom_data || payload?.custom_data || {},
-    })
-  } catch (error) {
-    await logErrorToDatabase('paddle.webhook.plan_change_recovery_failed', error, {
-      userId: user.id,
-      subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
-      transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
-      fromPlan: metadata.fromPlan,
-      toPlan: metadata.toPlan,
-    })
+  if (result.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED) {
+    await restorePlanChangeEntitlement(user, metadata)
   }
 
-  return true
+  return { ...result, metadata }
 }
 
 function getSafeErrorContext(error) {
@@ -360,6 +354,40 @@ async function ensureWebhookEventsTable() {
   `)
 }
 
+async function upsertSubscriptionProjection({ subscriptionId, userId, status, eventType, payload, environment }) {
+  if (!subscriptionId || !status) return
+
+  await pool.query(
+    `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+     ON CONFLICT (paddle_subscription_id)
+     DO UPDATE SET
+       user_id = COALESCE(EXCLUDED.user_id, subscriptions.user_id),
+       status = EXCLUDED.status,
+       latest_event_type = EXCLUDED.latest_event_type,
+       latest_event_payload = EXCLUDED.latest_event_payload,
+       updated_at = NOW(),
+       paddle_environment = EXCLUDED.paddle_environment`,
+    [subscriptionId, userId || null, status, eventType, JSON.stringify(payload), environment],
+  )
+}
+
+function recoveredSubscriptionProjection(currentProjection, recovery) {
+  if (!currentProjection || recovery?.outcome !== PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED) {
+    return currentProjection
+  }
+
+  const authoritativePayload = recovery.finalPayload || recovery.restoredPayload || currentProjection.payload
+  const authoritativeStatus = getSubscriptionStatus(authoritativePayload)
+    || (['active', 'trialing'].includes(recovery.metadata?.priorStatus) ? recovery.metadata.priorStatus : 'active')
+
+  return {
+    ...currentProjection,
+    status: authoritativeStatus,
+    payload: authoritativePayload,
+  }
+}
+
 async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
   const rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : ''
   const secret = paddle.webhookSecret || ''
@@ -434,21 +462,16 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       })
     }
 
-    if (!hasEnvironmentMismatch && nextStatus && subscriptionId) {
-      await pool.query(
-        `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6)
-         ON CONFLICT (paddle_subscription_id)
-         DO UPDATE SET
-           user_id = COALESCE(EXCLUDED.user_id, subscriptions.user_id),
-           status = EXCLUDED.status,
-           latest_event_type = EXCLUDED.latest_event_type,
-           latest_event_payload = EXCLUDED.latest_event_payload,
-           updated_at = NOW(),
-           paddle_environment = EXCLUDED.paddle_environment`,
-        [subscriptionId, user?.id || null, nextStatus, eventType, JSON.stringify(payload), paddle.environment],
-      )
-    }
+    let subscriptionProjection = !hasEnvironmentMismatch && nextStatus && subscriptionId
+      ? {
+          subscriptionId,
+          userId: user?.id || null,
+          status: nextStatus,
+          eventType,
+          payload,
+          environment: paddle.environment,
+        }
+      : null
 
     if (eventType === 'transaction.completed') {
       const userId = user?.id || null
@@ -500,10 +523,16 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
-      const preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle)
+      let preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
       if (preservePaidPlan) {
-        await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+        if (!getPlanChangeMetadata(payload)) {
+          subscriptionProjection = null
+        } else {
+          const recovery = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+          preservePaidPlan = recovery.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED
+          subscriptionProjection = recoveredSubscriptionProjection(subscriptionProjection, recovery)
+        }
       }
 
       if (!hasEnvironmentMismatch && !preservePaidPlan && shouldApplyFailedPaymentToUser(user, payload, eventType)) {
@@ -564,10 +593,14 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     if (!hasEnvironmentMismatch && (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing')) {
       const updatedStatus = getSubscriptionStatus(payload) || mapToSubscriptionStatus(eventType, payload)
       const subscriptionFromEvent = getSubscriptionId(payload)
-      const preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle)
+      let preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
-      if (preservePaidPlan && String(updatedStatus || '').toLowerCase() === 'past_due') {
-        await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+      if (preservePaidPlan && getPlanChangeMetadata(payload) && String(updatedStatus || '').toLowerCase() === 'past_due') {
+        const recovery = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+        preservePaidPlan = recovery.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED
+        subscriptionProjection = recoveredSubscriptionProjection(subscriptionProjection, recovery)
+      } else if (preservePaidPlan) {
+        subscriptionProjection = null
       }
 
       if (user?.id && updatedStatus && !preservePaidPlan) {
@@ -629,6 +662,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
           subscription_id: canceledSubscriptionId,
         },
       })
+    }
+
+    if (subscriptionProjection) {
+      await upsertSubscriptionProjection(subscriptionProjection)
     }
 
     await pool.query(
