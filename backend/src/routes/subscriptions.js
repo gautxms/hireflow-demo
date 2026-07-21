@@ -8,6 +8,8 @@ import {
   getPlanChangeMetadata,
   inferPlanFromPaddlePayload,
   normalizePaddleSubscriptionItems,
+  PaddlePlanChangeRecoveryError,
+  PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
 
@@ -40,6 +42,7 @@ const ERROR_RESPONSES = {
   BILLING_PROVIDER_MISSING: { status: 409, message: 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.' },
   PAYMENT_FAILED_OR_ACTION_REQUIRED: { status: 402, message: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' },
   PLAN_CHANGE_PAYMENT_FAILED_PRESERVED: { status: 402, message: 'The upgrade payment was declined. Your current plan and access remain unchanged.' },
+  PLAN_CHANGE_RECOVERY_FAILED: { status: 500, message: 'Unable to confirm that your current plan was restored. Reload Billing to check the latest status before trying again.' },
   PADDLE_SUBSCRIPTION_UPDATE_FAILED: { status: 502, message: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' },
   KEEP_SUBSCRIPTION_FAILED: { status: 500, message: 'Unable to confirm that your subscription will continue. Reload Billing to check the latest status before trying again.' },
   PLAN_ALREADY_ACTIVE: { status: 400, message: 'You are already on that plan.' },
@@ -706,12 +709,18 @@ async function recoverFailedPlanChange(userId, context) {
   }
 
   if (observedPlan === context.targetPlan || observedStatus === 'past_due') {
-    await recoverFailedPaddlePlanChange({
+    const recovery = await recoverFailedPaddlePlanChange({
       request: (path, options = {}) => paddleRequest(path, options, context.paddle),
       subscriptionId: context.user.paddle_subscription_id,
       metadata,
       existingCustomData: context.previousCustomData,
     })
+
+    if (recovery.outcome !== PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED) {
+      throw new PaddlePlanChangeRecoveryError(
+        'No failed plan update transaction could be matched while Paddle still showed the failed plan change',
+      )
+    }
   }
 
   await restorePreviousPlanEntitlement(userId, context)
@@ -855,14 +864,13 @@ router.post('/change-plan', requireAuth, async (req, res) => {
 
         return sendBillingError(res, new BillingError('PLAN_CHANGE_PAYMENT_FAILED_PRESERVED'))
       } catch (recoveryError) {
-        await restorePreviousPlanEntitlement(req.userId, context).catch(() => {})
         await logErrorToDatabase('subscriptions.change-plan.recovery_failed', recoveryError, {
           userId: req.userId,
           targetPlan,
           currentPlan,
           originalCode: error.code,
         })
-        return sendBillingError(res, new BillingError('PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', { recoveryFailed: true }))
+        return sendBillingError(res, new BillingError('PLAN_CHANGE_RECOVERY_FAILED', { recoveryFailed: true }))
       }
     }
 
