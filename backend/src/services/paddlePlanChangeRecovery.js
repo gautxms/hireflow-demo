@@ -196,6 +196,10 @@ export async function recoverFailedPaddlePlanChange({
     throw new Error('Paddle subscription items were not restored after plan change recovery')
   }
 
+  if (cancellationErrors.length > 0) {
+    throw cancellationErrors[0]
+  }
+
   return {
     restoredPayload,
     finalPayload,

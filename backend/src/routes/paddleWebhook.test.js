@@ -913,6 +913,57 @@ test('POST /api/paddle/webhook still makes a failed Monthly renewal past due', a
   assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
 })
 
+test('POST /api/paddle/webhook does not preserve a scheduled downgrade when its recurring renewal fails', async (t) => {
+  const payload = {
+    event_id: 'evt_failed_annual_renewal_after_scheduled_downgrade',
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_annual_renewal',
+      status: 'past_due',
+      origin: 'subscription_recurring',
+      subscription_id: 'sub_current_123',
+      customer_id: 'ctm_test_123',
+      custom_data: {
+        userId: 42,
+        plan: 'monthly',
+        paddleEnvironment: 'sandbox',
+        hireflowPlanChange: {
+          fromPlan: 'annual',
+          toPlan: 'monthly',
+          priorStatus: 'active',
+          previousItems: [{ price_id: 'pri_annual', quantity: 1 }],
+          startedAt: '2026-07-20T00:00:00.000Z',
+          outcome: 'pending',
+        },
+      },
+      items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{
+        id: 42,
+        paddle_customer_id: 'ctm_test_123',
+        paddle_subscription_id: 'sub_current_123',
+        subscription_status: 'active',
+        subscription_plan: 'annual',
+      }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'annual' && params?.[2] === 'active'), false)
+})
+
 test('POST /api/paddle/webhook transaction.completed keeps setting user active', async (t) => {
   const payload = {
     event_id: 'evt_transaction_completed_sets_active',

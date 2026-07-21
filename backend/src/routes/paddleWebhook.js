@@ -142,11 +142,12 @@ function shouldApplyFailedPaymentToUser(user, payload, eventType) {
   return false
 }
 
-function shouldPreservePaidPlanDuringUpdate(user, payload, paddle) {
+function shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType) {
   if (!user?.id) return false
 
   const metadata = getPlanChangeMetadata(payload)
-  if (isSubscriptionUpdateTransaction(payload)) {
+  if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
+    if (!isSubscriptionUpdateTransaction(payload)) return false
     return Boolean(metadata || ['active', 'trialing'].includes(String(user.subscription_status || '').toLowerCase()))
   }
 
@@ -500,7 +501,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
-      const preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle)
+      const preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
       if (preservePaidPlan) {
         await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
@@ -564,7 +565,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     if (!hasEnvironmentMismatch && (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing')) {
       const updatedStatus = getSubscriptionStatus(payload) || mapToSubscriptionStatus(eventType, payload)
       const subscriptionFromEvent = getSubscriptionId(payload)
-      const preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle)
+      const preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
       if (preservePaidPlan && String(updatedStatus || '').toLowerCase() === 'past_due') {
         await recoverFailedPlanChangeFromWebhook(user, payload, paddle)

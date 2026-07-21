@@ -89,3 +89,44 @@ test('failed plan recovery cancels the failed update and restores previous items
   assert.equal(restoreBody.custom_data.plan, 'monthly')
   assert.equal(restoreBody.custom_data.hireflowPlanChange.outcome, 'recovered')
 })
+
+test('failed plan recovery rejects when the failed update cannot be canceled', async () => {
+  const cancellationError = new Error('transaction cancellation failed')
+  let subscriptionReads = 0
+  let restoreAttempted = false
+  const request = async (path, options = {}) => {
+    if (path === '/transactions/txn_failed') throw cancellationError
+    if (path === '/subscriptions/sub_123' && options.method === 'PATCH') {
+      restoreAttempted = true
+      return { data: { id: 'sub_123', status: 'active' } }
+    }
+    if (path === '/subscriptions/sub_123') {
+      subscriptionReads += 1
+      return {
+        data: {
+          id: 'sub_123',
+          status: 'active',
+          custom_data: { userId: 42, plan: subscriptionReads === 1 ? 'annual' : 'monthly' },
+          items: subscriptionReads === 1
+            ? [{ price: { id: 'pri_annual' }, quantity: 1 }]
+            : [
+                { price: { id: 'pri_monthly' }, quantity: 1 },
+                { price: { id: 'pri_addon' }, quantity: 2 },
+              ],
+        },
+      }
+    }
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  await assert.rejects(
+    recoverFailedPaddlePlanChange({
+      request,
+      subscriptionId: 'sub_123',
+      transactionId: 'txn_failed',
+      metadata: recoveryMetadata(),
+    }),
+    cancellationError,
+  )
+  assert.equal(restoreAttempted, true)
+})
