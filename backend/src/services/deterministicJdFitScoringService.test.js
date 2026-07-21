@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { scoreCandidateDeterministically } from './deterministicJdFitScoringService.js'
+import { buildRequirementSemantics, reconcileCandidateRequirementSemantics } from '../utils/requirementSemantics.js'
 
 const jdContext = () => ({ location: 'Austin, TX', required_min_years: 4, required_max_years: 8 })
 
@@ -78,6 +79,32 @@ test('requirement ratio works', () => {
   low.fit_assessment.matched_requirements = ['a']
   low.fit_assessment.missing_requirements = ['b', 'c', 'd']
   assert.ok(scoreCandidateDeterministically(high, jdContext()).final_score > scoreCandidateDeterministically(low, jdContext()).final_score)
+})
+
+test('requirement semantics removes only invalid preferred and satisfied-alternative penalties before production scoring', () => {
+  const context = {
+    ...jdContext(),
+    requirements: 'Node.js, Java, or Go\nSQL is required\nKubernetes is preferred',
+    skills: ['SQL'],
+  }
+  const input = candidate()
+  input.matchedSkills = ['Node.js', 'SQL']
+  input.missingSkills = ['Java', 'Go', 'Kubernetes']
+  input.fit_assessment.matched_requirements = ['Node.js', 'SQL']
+  input.fit_assessment.missing_requirements = ['Java and Go are not documented', 'Kubernetes is not documented']
+
+  const before = scoreCandidateDeterministically(input, context)
+  const reconciled = reconcileCandidateRequirementSemantics(input, buildRequirementSemantics(context))
+  const after = scoreCandidateDeterministically(reconciled, context)
+
+  assert.deepEqual(reconciled.missingSkills, [])
+  assert.deepEqual(reconciled.fit_assessment.missing_requirements, [])
+  assert.deepEqual(reconciled.fit_assessment.preferred_gaps, ['Kubernetes is not documented'])
+  assert.ok(after.final_score > before.final_score)
+  assert.equal(after.scoring_breakdown.requirement_match.missing_count, 0)
+  assert.equal(after.scoring_breakdown.skill_alignment.missing_count, 0)
+  assert.equal(after.scoring_breakdown.requirement_match.weight, before.scoring_breakdown.requirement_match.weight)
+  assert.equal(after.scoring_breakdown.skill_alignment.weight, before.scoring_breakdown.skill_alignment.weight)
 })
 
 test('Vikram-like minor evidence count differences are dampened', () => {
