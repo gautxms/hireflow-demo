@@ -32,6 +32,7 @@ import { buildSafeScoreCacheStoragePayload, getScoreCacheEntry, upsertScoreCache
 import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
 import { evaluateExperienceRange } from '../utils/experienceRange.js'
 import { buildRequirementSemantics, reconcileCandidateRequirementSemantics } from '../utils/requirementSemantics.js'
+import { reconcileCandidateLocationAlignment } from '../utils/locationAlignment.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
@@ -856,6 +857,7 @@ function buildSafeJobDescriptionFingerprintSource(jobDescriptionContext = null) 
     skills: Array.isArray(jobDescriptionContext.skills) ? jobDescriptionContext.skills : [],
     experienceYears: jobDescriptionContext.experienceYears ?? null,
     location: jobDescriptionContext.location || null,
+    employmentType: jobDescriptionContext.employmentType || null,
     fileText: jobDescriptionContext.fileTextAvailable ? (jobDescriptionContext.fileText || null) : null,
   }
 }
@@ -1457,6 +1459,7 @@ export function buildJobDescriptionContext(row) {
     experienceMin: normalizeNullableNumber(row.experience_min ?? row.experience_years),
     experienceMax: normalizeNullableNumber(row.experience_max ?? row.experience_years),
     location: normalizeString(row.location),
+    employmentType: normalizeString(row.employment_type ?? row.employmentType ?? row.work_mode ?? row.workMode),
     salaryMin: normalizeNullableNumber(row.salary_min),
     salaryMax: normalizeNullableNumber(row.salary_max),
     salaryCurrency: normalizeString(row.salary_currency) || 'USD',
@@ -1953,6 +1956,7 @@ export async function runParse(job) {
       candidate,
       jobDescriptionContext?.requirementSemantics || buildRequirementSemantics(jobDescriptionContext),
     ))
+    .map((candidate) => reconcileCandidateLocationAlignment(candidate, jobDescriptionContext))
   const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
   let finalCandidates = applyDeterministicJdFitScoresForRuntimeTest({
@@ -2261,6 +2265,7 @@ export const __testables = {
   buildNormalizedCandidates,
   reconcileCandidateExperienceRange,
   reconcileCandidateRequirementSemantics,
+  reconcileCandidateLocationAlignment,
   runParse,
   loadFileBufferBase64ForParseJob,
   withParseStageTimeout,

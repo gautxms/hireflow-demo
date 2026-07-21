@@ -1,4 +1,5 @@
 import { evaluateExperienceRange } from '../utils/experienceRange.js'
+import { evaluateLocationAlignment } from '../utils/locationAlignment.js'
 
 const CONTRACT_VERSION = 'deterministic_jd_fit_v1'
 const STRONG_STRUCTURED_FINAL_FLOOR = 86
@@ -204,6 +205,10 @@ const hasJdContext = (context) => {
     context.skills,
     context.required_skills,
     context.location,
+    context.workMode,
+    context.work_mode,
+    context.employmentType,
+    context.employment_type,
     context.fileText,
     context.required_min_years,
     context.required_max_years,
@@ -564,33 +569,9 @@ const experienceBreakdown = (candidate, context, fitAssessment, requirement, ski
   }
 }
 
-const normalizeLocation = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
-const normalizeLocationToken = (value) => normalizeLocation(value).replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
-const hasExplicitRemote = (value) => /\bremote\b/.test(value)
-const hasFlexibleLocation = (value) => /\bremote\b|\bhybrid\b/.test(value)
-const WORK_MODE_LOCATION_TOKENS = new Set(['remote', 'hybrid', 'remote hybrid', 'onsite', 'on site'])
-const tokenizeJdLocations = (value) => normalizeLocation(value)
-  .split(/\s*(?:\/|,|;|\||\bor\b|\band\b)\s*/i)
-  .map(normalizeLocationToken)
-  .filter((token) => token.length > 0 && !WORK_MODE_LOCATION_TOKENS.has(token))
-const locationTokenMatches = (candidateLocation, jdLocation) => tokenizeJdLocations(jdLocation)
-  .some((token) => candidateLocation === token || candidateLocation.startsWith(`${token},`) || candidateLocation.includes(` ${token} `))
 const locationBreakdown = (candidate, context) => {
-  const candidateLocation = normalizeLocation(candidate?.location)
-  const jdLocation = normalizeLocation(context?.location)
-  const candidateAvailable = candidateLocation.length > 0
-  const jdAvailable = jdLocation.length > 0
-  let score = 50
-  if (candidateAvailable && jdAvailable) {
-    const candidateRemote = hasExplicitRemote(candidateLocation)
-    const jdFlexible = hasFlexibleLocation(jdLocation)
-    if (candidateLocation.includes(jdLocation) || jdLocation.includes(candidateLocation) || locationTokenMatches(candidateLocation, jdLocation)) score = 95
-    else if (candidateRemote && jdFlexible) score = 80
-    else if (jdFlexible) score = 40
-    else if (candidateRemote) score = 35
-    else score = 25
-  }
-  return { score, weight: WEIGHTS.location_alignment, candidate_location_available: candidateAvailable, jd_location_available: jdAvailable }
+  const alignment = evaluateLocationAlignment(candidate, context)
+  return { ...alignment, weight: WEIGHTS.location_alignment }
 }
 
 const evidenceBreakdown = (candidate, context, fitAssessment) => {

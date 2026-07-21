@@ -25,11 +25,27 @@ test('buildPromptWithJobDescription includes AVAILABLE JD block when context exi
     skills: ['Node.js', 'PostgreSQL'],
     experienceYears: 5,
     location: 'Remote',
+    employmentType: 'Remote',
     source: 'manual_fields',
   })
 
   assert.equal(prompt.includes('Job Description Context:\nAVAILABLE'), true)
   assert.equal(prompt.includes('Job Description ID: jd-100'), true)
+  assert.equal(prompt.includes('Work Mode: Remote'), true)
+  assert.match(prompt, /off-list candidate location is unknown/i)
+})
+
+test('buildPromptWithJobDescription prevents ambiguous Hybrid location from becoming a definite failure', () => {
+  const prompt = buildPromptWithJobDescription('Base prompt', {
+    hasContext: true,
+    title: 'Software Development Engineer',
+    location: 'Bengaluru/Hyderabad/Pune',
+    employmentType: 'Hybrid',
+  })
+
+  assert.match(prompt, /Work mode: hybrid/)
+  assert.match(prompt, /do not turn ambiguous Remote or Hybrid compatibility into a definite failure/i)
+  assert.match(prompt, /Do not infer willingness to relocate, commute, or work remotely/i)
 })
 
 test('buildPromptWithJobDescription tells the production analyzer not to make preferred items or alternatives cumulative', () => {
@@ -1343,6 +1359,24 @@ test('AI scoring contract v2 prompt applies the same required, preferred, and al
   assert.match(prompt, /\[Java OR Go OR Node\.js\]/)
   assert.match(prompt, /Preferred\/bonus clauses: Kubernetes is preferred/)
   assert.match(prompt, /do not penalize missing unselected alternatives/i)
+})
+
+test('AI scoring contract v2 prompt keeps off-list Hybrid location compatibility unknown', () => {
+  const { buildAiScoringContractV2SeparateShadowPrompt } = __testables
+  const prompt = buildAiScoringContractV2SeparateShadowPrompt({
+    resumeText: 'Candidate is based in Kochi, India.',
+    jobDescriptionContext: {
+      hasContext: true,
+      title: 'SDE',
+      location: 'Bengaluru/Hyderabad/Pune',
+      employmentType: 'Hybrid',
+    },
+  })
+
+  assert.match(prompt, /Location: Bengaluru\/Hyderabad\/Pune/)
+  assert.match(prompt, /Work Mode: Hybrid/)
+  assert.match(prompt, /off-list candidate city as unknown/i)
+  assert.match(prompt, /Do not infer willingness to relocate, commute, or work remotely/i)
 })
 
 
