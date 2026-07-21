@@ -8,6 +8,7 @@ import { prepareResumePayloadForAnalysis } from './resumeDocumentExtractionServi
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 import { buildRequirementSemantics, formatRequirementSemanticsForPrompt } from '../utils/requirementSemantics.js'
+import { formatLocationAlignmentForPrompt } from '../utils/locationAlignment.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
@@ -1371,6 +1372,7 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
         `- Skills: ${formatArray(jdContext?.skills) || 'Not provided'}`,
         `- Experience Years: ${formatScalar(jdContext?.experienceYears) || 'Not provided'}`,
         `- Location: ${formatScalar(jdContext?.location) || 'Not provided'}`,
+        `- Work Mode: ${formatScalar(jdContext?.employmentType ?? jdContext?.workMode) || 'Not provided'}`,
         `- Source: ${formatScalar(jdContext?.source) || 'manual_fields'}`,
       ].join('\n')
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
@@ -1379,8 +1381,9 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
   const requirementSemantics = hasJobDescription
     ? formatRequirementSemanticsForPrompt(jdContext?.requirementSemantics || buildRequirementSemantics(jdContext))
     : ''
+  const locationSemantics = hasJobDescription ? formatLocationAlignmentForPrompt(jdContext) : ''
 
-  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n3) Apply the deterministic requirement semantics below: alternatives are satisfied by any one evidenced option, and preferred items are not mandatory failures.\n\n${requirementSemantics}\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n3) Apply the deterministic requirement semantics below: alternatives are satisfied by any one evidenced option, and preferred items are not mandatory failures.\n4) Apply the deterministic location semantics below; do not turn ambiguous Remote or Hybrid compatibility into a definite failure.\n\n${requirementSemantics}\n\n${locationSemantics}\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
 
 
@@ -1797,6 +1800,7 @@ function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescripti
     'Experience-floor calibration: relevant_experience_score must strongly reflect the required minimum years in the JD. If the resume shows fewer years than the JD minimum, relevant_experience_score should usually be capped in the 25-45 range depending on evidence, and seniority_progression_score should remain junior-level rather than mid/senior.',
     'Education relevance must not overcompensate for an experience gap. Skills match alone must not lift weighted_total_score into moderate/strong fit when the candidate fails the JD minimum experience requirement.',
     'Treat explicitly preferred or nice-to-have qualifications as low-impact bonus signals, not mandatory core failures. For explicit alternative groups, evidence of any one option satisfies that group; do not penalize missing unselected alternatives.',
+    'For Remote or Hybrid roles, treat an off-list candidate city as unknown unless the JD and resume explicitly establish incompatibility. Do not infer unwillingness to relocate, commute, or work remotely.',
     'JSON schema: {"scoring_contract_version":"ai_jd_fit_rubric_v2","skills_match_score":number,"relevant_experience_score":number,"education_relevance_score":number,"seniority_progression_score":number,"weighted_total_score":number,"score_confidence":"high|medium|low","score_confidence_reason":"string","scoring_anomalies":["safe_internal_codes_only"],"has_job_description_context":true}',
     '',
     'Job Description Context:',
@@ -1805,7 +1809,10 @@ function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescripti
     `Requirements: ${formatScalar(jd.requirements) || 'Not provided'}`,
     `Skills: ${formatArray(jd.skills) || 'Not provided'}`,
     `Experience Years: ${formatScalar(jd.experienceYears) || 'Not provided'}`,
+    `Location: ${formatScalar(jd.location) || 'Not provided'}`,
+    `Work Mode: ${formatScalar(jd.employmentType ?? jd.workMode) || 'Not provided'}`,
     requirementSemantics,
+    formatLocationAlignmentForPrompt(jd),
     '',
     'Resume Text:',
     String(resumeText || '').slice(0, DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT),

@@ -66,6 +66,7 @@ test('job description context includes manual JD fields when provided', () => {
     experience_years: 5,
     experience_min: 4,
     experience_max: 7,
+    employment_type: 'Hybrid',
   })
 
   assert.equal(normalized.hasContext, true)
@@ -74,6 +75,7 @@ test('job description context includes manual JD fields when provided', () => {
   assert.deepEqual(normalized.skills, ['Node.js', 'PostgreSQL'])
   assert.equal(normalized.experienceMin, 4)
   assert.equal(normalized.experienceMax, 7)
+  assert.equal(normalized.employmentType, 'Hybrid')
 })
 
 test('job description context carries deterministic required, preferred, and alternative semantics', () => {

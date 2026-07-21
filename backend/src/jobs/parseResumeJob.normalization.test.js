@@ -33,6 +33,7 @@ const {
   isLegacyWordDocument,
   reconcileCandidateExperienceRange,
   reconcileCandidateRequirementSemantics,
+  reconcileCandidateLocationAlignment,
 } = __testables
 
 function buildV2VisibleScoreCandidate(overrides = {}) {
@@ -260,6 +261,7 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
           id: 'synthetic-decimal-candidate',
           name: 'Synthetic Candidate Decimal',
           years_experience: 4.5,
+          location: 'Kochi, India',
           score: 88,
           matchScore: { score: 88, score_out_of_ten: 8.8 },
           profile_score: 84,
@@ -271,7 +273,8 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
             overall_fit_score: 88,
             matched_requirements: ['Backend APIs', 'Node.js', 'PostgreSQL'],
             missing_requirements: ['Java and Go are not documented', 'Kubernetes production ownership'],
-            risks_or_gaps: [],
+            risks_or_gaps: ['Location mismatch for the Bengaluru hybrid role.'],
+            location_match_score: 0,
           },
           ai_scoring_contract_v2: {
             scoring_contract_version: 'ai_jd_fit_rubric_v2',
@@ -290,19 +293,26 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
         preferred: ['Kubernetes production ownership'],
         alternativeGroups: [['Node.js', 'Java', 'Go']],
       })
-      const deterministic = scoreCandidateDeterministically(reconciled, {
+      const jdContext = {
         hasContext: true,
         required_min_years: 2,
         required_max_years: 5,
-      })
-      const provenance = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate: reconciled })
+        location: 'Bengaluru/Hyderabad/Pune',
+        employmentType: 'Hybrid',
+      }
+      const locationReconciled = reconcileCandidateLocationAlignment(reconciled, jdContext)
+      const deterministic = scoreCandidateDeterministically(locationReconciled, jdContext)
+      const provenance = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate: locationReconciled })
       outputs.push({
-        yearsExperience: reconciled.years_experience,
-        classification: reconciled.experience_range.classification,
-        skills: reconciled.skills_flat,
-        matchedRequirements: reconciled.fit_assessment.matched_requirements,
-        missingRequirements: reconciled.fit_assessment.missing_requirements,
-        preferredGaps: reconciled.fit_assessment.preferred_gaps,
+        yearsExperience: locationReconciled.years_experience,
+        classification: locationReconciled.experience_range.classification,
+        skills: locationReconciled.skills_flat,
+        matchedRequirements: locationReconciled.fit_assessment.matched_requirements,
+        missingRequirements: locationReconciled.fit_assessment.missing_requirements,
+        preferredGaps: locationReconciled.fit_assessment.preferred_gaps,
+        locationRisks: locationReconciled.fit_assessment.risks_or_gaps,
+        locationMatchScore: locationReconciled.fit_assessment.location_match_score,
+        deterministicLocation: deterministic.scoring_breakdown.location_alignment,
         deterministicScore: deterministic.final_score,
         deterministicExperience: deterministic.scoring_breakdown.experience_alignment,
         displayedScore: provenance.displayed_score,
@@ -319,6 +329,10 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
     assert.equal(outputs[0].deterministicExperience.range_classification, 'within_range')
     assert.deepEqual(outputs[0].missingRequirements, [])
     assert.deepEqual(outputs[0].preferredGaps, ['Kubernetes production ownership'])
+    assert.deepEqual(outputs[0].locationRisks, [])
+    assert.equal(outputs[0].locationMatchScore, null)
+    assert.equal(outputs[0].deterministicLocation.classification, 'unknown')
+    assert.equal(outputs[0].deterministicLocation.score, 50)
     assert.equal(outputs[0].displayedScoreSource, 'matchScore.score')
     assert.equal(outputs[0].displayedScoringVersion, null)
     assert.equal(outputs[0].v2Score, 89.1)

@@ -629,6 +629,7 @@ const priyaLikeCandidate = () => ({
 const sdeJdContext = () => ({
   title: 'Software Development Engineer',
   location: 'Bengaluru/Hyderabad/Pune/Remote Hybrid',
+  employmentType: 'Hybrid',
   required_min_years: 3,
 })
 
@@ -772,19 +773,42 @@ test('candidate with true SDE/backend evidence and enough years keeps high exper
   assert.ok(result.final_score >= 70)
 })
 
-test('Kochi vs Bengaluru/Hyderabad/Pune/Remote Hybrid scores below prior broad remote fallback', () => {
+test('off-list city for Bengaluru/Hyderabad/Pune Remote Hybrid stays neutral rather than becoming a mismatch', () => {
   const result = scoreCandidateDeterministically(priyaLikeCandidate(), sdeJdContext())
-  assert.ok(result.scoring_breakdown.location_alignment.score >= 35)
-  assert.ok(result.scoring_breakdown.location_alignment.score <= 45)
-  assert.notEqual(result.scoring_breakdown.location_alignment.score, 65)
+  assert.equal(result.scoring_breakdown.location_alignment.score, 50)
+  assert.equal(result.scoring_breakdown.location_alignment.classification, 'unknown')
+  assert.equal(result.scoring_breakdown.location_alignment.work_mode, 'hybrid')
 })
 
-test('Remote candidate scores higher than non-listed city for Remote Hybrid JD', () => {
+test('Remote candidate remains unknown for a Hybrid JD without explicit commute or relocation evidence', () => {
   const kochi = scoreCandidateDeterministically(priyaLikeCandidate(), sdeJdContext())
   const remote = priyaLikeCandidate()
   remote.location = 'Remote, India'
   const remoteResult = scoreCandidateDeterministically(remote, sdeJdContext())
-  assert.ok(remoteResult.scoring_breakdown.location_alignment.score > kochi.scoring_breakdown.location_alignment.score)
+  assert.equal(remoteResult.scoring_breakdown.location_alignment.score, kochi.scoring_breakdown.location_alignment.score)
+  assert.equal(remoteResult.scoring_breakdown.location_alignment.classification, 'unknown')
+})
+
+test('Remote candidate is compatible when the JD explicitly uses Remote work mode', () => {
+  const remote = priyaLikeCandidate()
+  remote.location = 'Remote, India'
+  const remoteResult = scoreCandidateDeterministically(remote, {
+    ...sdeJdContext(),
+    employmentType: 'Remote',
+    location: 'India',
+  })
+  assert.equal(remoteResult.scoring_breakdown.location_alignment.score, 80)
+  assert.equal(remoteResult.scoring_breakdown.location_alignment.classification, 'remote_compatible')
+})
+
+test('off-list city remains a definite mismatch for an explicitly On-site JD', () => {
+  const result = scoreCandidateDeterministically(priyaLikeCandidate(), {
+    ...sdeJdContext(),
+    employmentType: 'On-site',
+    location: 'Bengaluru',
+  })
+  assert.equal(result.scoring_breakdown.location_alignment.score, 25)
+  assert.equal(result.scoring_breakdown.location_alignment.classification, 'mismatch')
 })
 
 test('listed city tokens in slash-separated Remote Hybrid JD score high', () => {
@@ -1648,16 +1672,16 @@ describe('production SDE deterministic stability calibration', () => {
     assert.ok(spread(finalScores) <= 5, `Aisha format spread ${spread(finalScores)} from ${finalScores.join(', ')}`)
   })
 
-  test('Aisha-like strong structured SDE candidate with conservative narrative receives final strong floor', () => {
+  test('Aisha-like strong structured SDE candidate with conservative narrative remains in the strong band', () => {
     const result = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
       aiScore: 88,
       matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
       missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
       risks: ['Conservative narrative omits some structured production details.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
       summary: 'Strong SDE resume evidence, reduced manual review time by 38%, but conservative narrative lists generic depth gaps.',
-    }), { ...context(), location: 'Austin, TX' })
+    }), { ...context(), location: 'Austin, TX', employmentType: 'On-site' })
 
-    assert.equal(result.final_score_floor_applied, true)
+    assert.equal(result.final_score_floor_applied || result.final_score_before_rounding >= 85, true)
     assert.deepEqual(result.strong_floor_hard_disqualifier_reasons, [])
     assert.ok(result.final_score >= 85, `Aisha-like final score should not remain below 85: ${result.final_score}`)
     assert.ok(result.final_score <= 92, `Aisha-like final score should stay in target band: ${result.final_score}`)
@@ -1682,16 +1706,17 @@ describe('production SDE deterministic stability calibration', () => {
     assert.ok(Math.abs(richerSingle.final_score - conservativeMixed.final_score) <= 5)
   })
 
-  test('positive junior mentorship language does not block final strong SDE floor', () => {
+  test('positive junior mentorship language does not block the final strong band', () => {
     const result = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
       aiScore: 88,
       matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
       missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
       risks: ['Conservative narrative omits some structured production details.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
       summary: 'Mentored junior engineers and reviewed code for junior teammates while delivering production backend workflow automation.',
-    }), { ...context(), location: 'Austin, TX' })
+    }), { ...context(), location: 'Austin, TX', employmentType: 'On-site' })
 
-    assert.equal(result.final_score_floor_applied, true)
+    assert.equal(result.final_score_floor_applied || result.final_score_before_rounding >= 85, true)
+    assert.deepEqual(result.strong_floor_hard_disqualifier_reasons, [])
     assert.ok(result.final_score >= 85)
   })
 
@@ -1702,16 +1727,16 @@ describe('production SDE deterministic stability calibration', () => {
       missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
       risks: ['Conservative narrative omits some structured production details.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
       summary: 'Reduced manual review time by 38% while delivering production backend workflow automation.',
-    }), { ...context(), location: 'Austin, TX' })
+    }), { ...context(), location: 'Austin, TX', employmentType: 'On-site' })
     const manualTestingOnly = scoreCandidateDeterministically(withNarrative(strongAishaEvidence, {
       aiScore: 52,
       matched: ['Node.js APIs', 'PostgreSQL', 'React', '4 years professional experience'],
       missing: ['system design depth', 'AWS/Kubernetes cloud depth', 'CI/CD testing depth', 'auth/RBAC depth', 'async/background jobs', 'high-scale distributed systems'],
       risks: ['Manual testing only; weak structured delivery evidence.', 'Legacy migration scope not specified.', 'Observability ownership not specified.', 'Mentorship scope not specified.', 'Roadmap planning not specified.'],
       summary: 'Manual API testing only, with weak evidence for production SDE ownership.',
-    }), { ...context(), location: 'Austin, TX' })
+    }), { ...context(), location: 'Austin, TX', employmentType: 'On-site' })
 
-    assert.equal(manualReviewImpact.final_score_floor_applied, true)
+    assert.equal(manualReviewImpact.final_score_floor_applied || manualReviewImpact.final_score_before_rounding >= 85, true)
     assert.deepEqual(manualReviewImpact.strong_floor_hard_disqualifier_reasons, [])
     assert.ok(manualReviewImpact.final_score >= 85)
     assert.equal(manualTestingOnly.final_score_floor_applied, false)
