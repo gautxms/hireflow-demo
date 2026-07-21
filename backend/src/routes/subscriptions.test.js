@@ -936,7 +936,7 @@ test('POST /api/subscriptions/change-plan does not checkout client or mutate loc
 })
 
 
-test('POST /api/subscriptions/change-plan preserves the current plan after a 402 payment failure', async () => {
+test('POST /api/subscriptions/change-plan reports unresolved recovery when Paddle cannot be read after a 402 failure', async () => {
   resetPaddleEnv()
   const { calls, connectCalls } = installDbMock({
     id: 123,
@@ -953,15 +953,13 @@ test('POST /api/subscriptions/change-plan preserves the current plan after a 402
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
-  assert.equal(res.statusCode, 402)
-  assert.deepEqual(res.payload, { code: 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', error: 'The upgrade payment was declined. Your current plan and access remain unchanged.' })
-  assert.equal(mutationCalls(calls).length, 1)
-  assert.equal(mutationCalls(calls)[0].params[0], 'monthly')
-  assert.equal(mutationCalls(calls)[0].params[1], 'active')
+  assert.equal(res.statusCode, 500)
+  assert.equal(res.payload.code, 'PLAN_CHANGE_RECOVERY_FAILED')
+  assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/change-plan preserves the current plan after payment action is required', async () => {
+test('POST /api/subscriptions/change-plan reports unresolved recovery when Paddle cannot be read after payment action is required', async () => {
   resetPaddleEnv()
   const { calls, connectCalls } = installDbMock({
     id: 123,
@@ -978,11 +976,9 @@ test('POST /api/subscriptions/change-plan preserves the current plan after payme
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
 
-  assert.equal(res.statusCode, 402)
-  assert.deepEqual(res.payload, { code: 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', error: 'The upgrade payment was declined. Your current plan and access remain unchanged.' })
-  assert.equal(mutationCalls(calls).length, 1)
-  assert.equal(mutationCalls(calls)[0].params[0], 'monthly')
-  assert.equal(mutationCalls(calls)[0].params[1], 'active')
+  assert.equal(res.statusCode, 500)
+  assert.equal(res.payload.code, 'PLAN_CHANGE_RECOVERY_FAILED')
+  assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
 })
 
@@ -994,6 +990,20 @@ test('POST /api/subscriptions/change-plan restores Monthly when Paddle applies a
     next_billing_date: '2026-08-20T00:00:00.000Z',
     subscription_renewal_date: '2026-08-20T00:00:00.000Z',
   })
+  const recoveredCustomData = {
+    userId: 123,
+    plan: 'monthly',
+    hireflowPlanChange: {
+      fromPlan: 'monthly',
+      toPlan: 'annual',
+      priorStatus: 'active',
+      priorCurrentPeriodEnd: '2026-08-20T00:00:00.000Z',
+      priorNextBillingDate: '2026-08-20T00:00:00.000Z',
+      priorRenewalDate: '2026-08-20T00:00:00.000Z',
+      previousItems: [{ price_id: 'pri_monthly', quantity: 1 }],
+      outcome: 'recovered',
+    },
+  }
   const paddleCalls = mockPaddleSequence([
     { payload: { data: {
       id: 'sub_123',
@@ -1011,8 +1021,8 @@ test('POST /api/subscriptions/change-plan restores Monthly when Paddle applies a
     { payload: { data: [{ id: 'txn_failed_upgrade', status: 'past_due', origin: 'subscription_update', created_at: new Date().toISOString() }] } },
     { payload: { data: { id: 'txn_failed_upgrade', status: 'canceled' } } },
     { payload: { data: { id: 'sub_123', status: 'past_due', custom_data: { userId: 123, plan: 'annual' } } } },
-    { payload: { data: { id: 'sub_123', status: 'active', custom_data: { userId: 123, plan: 'monthly' }, items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
-    { payload: { data: { id: 'sub_123', status: 'active', custom_data: { userId: 123, plan: 'monthly' }, items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', custom_data: recoveredCustomData, items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', custom_data: recoveredCustomData, items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } } },
   ])
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
@@ -1041,6 +1051,40 @@ test('POST /api/subscriptions/change-plan restores Monthly when Paddle applies a
   const restoreLocal = calls.find(({ sql, params }) => String(sql).includes('UPDATE users') && params?.[0] === 'monthly' && params?.[1] === 'active')
   assert.ok(restoreLocal)
   assert.equal(restoreLocal.params[2], '2026-08-20T00:00:00.000Z')
+})
+
+test('POST /api/subscriptions/change-plan leaves local entitlement unchanged when failed upgrade recovery cannot match a transaction', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock({
+    ...activeMonthlyUser(),
+    current_period_end: '2026-08-20T00:00:00.000Z',
+  })
+  mockPaddleSequence([
+    { payload: { data: {
+      id: 'sub_123',
+      status: 'active',
+      custom_data: { userId: 123, plan: 'monthly' },
+      items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+    } } },
+    { ok: false, status: 400, payload: { error: { code: 'card_declined' } } },
+    { payload: { data: {
+      id: 'sub_123',
+      status: 'past_due',
+      custom_data: { userId: 123, plan: 'annual' },
+      items: [{ price: { id: 'pri_annual' }, quantity: 1 }],
+    } } },
+    { payload: { data: [] } },
+  ])
+
+  const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 500)
+  assert.deepEqual(res.payload, {
+    code: 'PLAN_CHANGE_RECOVERY_FAILED',
+    error: 'Unable to confirm that your current plan was restored. Reload Billing to check the latest status before trying again.',
+  })
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
 })
 
 test('POST /api/subscriptions/change-plan keeps downgrade visible plan current and marks pendingPlan in response', async () => {
