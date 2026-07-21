@@ -5,6 +5,7 @@ import {
   buildPlanChangeCustomData,
   getPlanChangeMetadata,
   isSubscriptionUpdateTransaction,
+  PaddlePlanChangeRecoveryError,
   recoverFailedPaddlePlanChange,
 } from './paddlePlanChangeRecovery.js'
 
@@ -52,17 +53,19 @@ test('subscription update transaction origin is identified separately from renew
 test('failed plan recovery cancels the failed update and restores previous items without billing', async () => {
   const calls = []
   const metadata = recoveryMetadata()
+  let restoredCustomData = null
   const request = async (path, options = {}) => {
     calls.push({ path, options })
     if (path === '/transactions/txn_failed') return { data: { id: 'txn_failed', status: 'canceled' } }
     if (path === '/subscriptions/sub_123' && options.method === 'PATCH') {
+      restoredCustomData = JSON.parse(options.body).custom_data
       return { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly' }, quantity: 1 }] } }
     }
     return {
       data: {
         id: 'sub_123',
         status: calls.length < 4 ? 'past_due' : 'active',
-        custom_data: { userId: 42, plan: 'annual' },
+        custom_data: restoredCustomData || { userId: 42, plan: 'annual' },
         items: [{ price: { id: calls.length < 4 ? 'pri_annual' : 'pri_monthly' }, quantity: 1 }, ...(calls.length < 4 ? [] : [{ price: { id: 'pri_addon' }, quantity: 2 }])],
       },
     }
@@ -88,4 +91,158 @@ test('failed plan recovery cancels the failed update and restores previous items
   assert.equal(restoreBody.proration_billing_mode, 'do_not_bill')
   assert.equal(restoreBody.custom_data.plan, 'monthly')
   assert.equal(restoreBody.custom_data.hireflowPlanChange.outcome, 'recovered')
+})
+
+test('failed plan recovery accepts a cancellation error when the transaction is already canceled', async () => {
+  const cancellationError = new Error('transaction cancellation failed')
+  let restored = false
+  let restoredCustomData = null
+  const request = async (path, options = {}) => {
+    if (path === '/transactions/txn_failed' && options.method === 'PATCH') throw cancellationError
+    if (path === '/transactions/txn_failed') return { data: { id: 'txn_failed', status: 'canceled' } }
+    if (path === '/subscriptions/sub_123' && options.method === 'PATCH') {
+      restored = true
+      restoredCustomData = JSON.parse(options.body).custom_data
+      return { data: { id: 'sub_123', status: 'active', items: recoveryMetadata().previousItems } }
+    }
+    if (path === '/subscriptions/sub_123') {
+      return {
+        data: {
+          id: 'sub_123',
+          status: 'active',
+          custom_data: restoredCustomData || { userId: 42, plan: restored ? 'monthly' : 'annual' },
+          items: restored ? recoveryMetadata().previousItems : [{ price: { id: 'pri_annual' }, quantity: 1 }],
+        },
+      }
+    }
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  const result = await recoverFailedPaddlePlanChange({
+    request,
+    subscriptionId: 'sub_123',
+    transactionId: 'txn_failed',
+    metadata: recoveryMetadata(),
+  })
+  assert.equal(result.outcome, 'recovered')
+})
+
+test('failed plan recovery is retryable when cancellation fails and the transaction remains collectible', async () => {
+  let subscriptionRead = false
+  const request = async (path, options = {}) => {
+    if (path === '/transactions/txn_failed' && options.method === 'PATCH') throw new Error('transaction cancellation failed')
+    if (path === '/transactions/txn_failed') return { data: { id: 'txn_failed', status: 'past_due' } }
+    if (path === '/subscriptions/sub_123') subscriptionRead = true
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  await assert.rejects(
+    recoverFailedPaddlePlanChange({
+      request,
+      subscriptionId: 'sub_123',
+      transactionId: 'txn_failed',
+      metadata: recoveryMetadata(),
+    }),
+    (error) => error instanceof PaddlePlanChangeRecoveryError
+      && error.code === 'PADDLE_PLAN_CHANGE_RECOVERY_RETRYABLE',
+  )
+  assert.equal(subscriptionRead, false)
+})
+
+test('failed plan recovery repairs metadata without repricing when subscription items were already restored', async () => {
+  const patchBodies = []
+  let recoveredCustomData = null
+  const request = async (path, options = {}) => {
+    if (path === '/transactions/txn_failed') return { data: { id: 'txn_failed', status: 'canceled' } }
+    if (path === '/subscriptions/sub_123' && options.method === 'PATCH') {
+      const body = JSON.parse(options.body)
+      patchBodies.push(body)
+      recoveredCustomData = body.custom_data
+      return { data: { id: 'sub_123', status: 'active', custom_data: body.custom_data, items: recoveryMetadata().previousItems } }
+    }
+    if (path === '/subscriptions/sub_123') {
+      return {
+        data: {
+          id: 'sub_123',
+          status: 'active',
+          custom_data: recoveredCustomData || { userId: 42, plan: 'monthly' },
+          items: recoveryMetadata().previousItems,
+        },
+      }
+    }
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  const result = await recoverFailedPaddlePlanChange({
+    request,
+    subscriptionId: 'sub_123',
+    transactionId: 'txn_failed',
+    metadata: recoveryMetadata(),
+  })
+
+  assert.equal(result.outcome, 'recovered')
+  assert.equal(patchBodies.length, 1)
+  assert.equal(patchBodies[0].items, undefined)
+  assert.equal(patchBodies[0].proration_billing_mode, undefined)
+  assert.equal(patchBodies[0].custom_data.plan, 'monthly')
+  assert.equal(patchBodies[0].custom_data.hireflowPlanChange.outcome, 'recovered')
+})
+
+test('failed plan recovery recognizes a matching canceled transaction after an earlier recovery', async () => {
+  const metadata = recoveryMetadata()
+  const calls = []
+  const recoveredCustomData = buildPlanChangeCustomData({ userId: 42 }, { ...metadata, outcome: 'recovered' })
+  recoveredCustomData.plan = 'monthly'
+  const request = async (path, options = {}) => {
+    calls.push({ path, options })
+    if (path.startsWith('/transactions?')) {
+      return { data: [{
+        id: 'txn_recovered',
+        status: 'canceled',
+        origin: 'subscription_update',
+        created_at: '2026-07-20T00:01:00.000Z',
+        custom_data: buildPlanChangeCustomData({ userId: 42 }, metadata),
+      }] }
+    }
+    if (path === '/subscriptions/sub_123') {
+      return { data: {
+        id: 'sub_123',
+        status: 'active',
+        custom_data: recoveredCustomData,
+        items: metadata.previousItems,
+      } }
+    }
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  const result = await recoverFailedPaddlePlanChange({ request, subscriptionId: 'sub_123', metadata })
+
+  assert.equal(result.outcome, 'recovered')
+  assert.deepEqual(result.canceledTransactionIds, ['txn_recovered'])
+  assert.equal(calls.some(({ path, options }) => path === '/transactions/txn_recovered' && options.method === 'PATCH'), false)
+})
+
+test('failed plan recovery does not match an unrelated later subscription update', async () => {
+  const calls = []
+  const request = async (path) => {
+    calls.push(path)
+    if (path.startsWith('/transactions?')) {
+      return { data: [{
+        id: 'txn_unrelated_later_update',
+        status: 'past_due',
+        origin: 'subscription_update',
+        created_at: '2026-07-22T00:00:00.000Z',
+      }] }
+    }
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  const result = await recoverFailedPaddlePlanChange({
+    request,
+    subscriptionId: 'sub_123',
+    metadata: recoveryMetadata(),
+  })
+
+  assert.equal(result.outcome, 'not_applicable')
+  assert.equal(calls.some((path) => path.startsWith('/subscriptions/')), false)
 })
