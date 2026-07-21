@@ -7,6 +7,7 @@ import { getRuntimeSystemPromptConfig } from './adminSystemPromptService.js'
 import { prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
+import { buildRequirementSemantics, formatRequirementSemanticsForPrompt } from '../utils/requirementSemantics.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
@@ -1375,8 +1376,11 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
 
   const analysisModeDirectives = buildAnalysisModeDirectives(jdContext)
+  const requirementSemantics = hasJobDescription
+    ? formatRequirementSemanticsForPrompt(jdContext?.requirementSemantics || buildRequirementSemantics(jdContext))
+    : ''
 
-  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
+  return `${basePrompt}\n\n${analysisModeDirectives}\n\nResume-to-Job matching directives:\n1) If Job Description context is available below, evaluate candidate-job fit and include JD-aware scoring/rationale in your JSON fields where relevant.\n2) If Job Description context is missing, continue normal resume parsing and include an explicit reason marker "job_description_missing" in candidate rationale/notes fields when present.\n3) Apply the deterministic requirement semantics below: alternatives are satisfied by any one evidenced option, and preferred items are not mandatory failures.\n\n${requirementSemantics}\n\nJob Description Context:\n${hasJobDescription ? 'AVAILABLE' : 'MISSING'}\n${jdSummary}`
 }
 
 
@@ -1783,6 +1787,7 @@ function getAiScoringContractV2ShadowTimeoutMs(env = process.env) {
 
 function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescriptionContext }) {
   const jd = jobDescriptionContext && typeof jobDescriptionContext === 'object' ? jobDescriptionContext : {}
+  const requirementSemantics = formatRequirementSemanticsForPrompt(jd.requirementSemantics || buildRequirementSemantics(jd))
   return [
     'AI Scoring Contract v2 separate shadow-only analysis.',
     'Return ONLY valid JSON. Do not return candidate analysis, names, emails, phone numbers, explanations outside the JSON, or markdown.',
@@ -1791,6 +1796,7 @@ function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescripti
     'Use 0-100 values only; do not use 0-10 values.',
     'Experience-floor calibration: relevant_experience_score must strongly reflect the required minimum years in the JD. If the resume shows fewer years than the JD minimum, relevant_experience_score should usually be capped in the 25-45 range depending on evidence, and seniority_progression_score should remain junior-level rather than mid/senior.',
     'Education relevance must not overcompensate for an experience gap. Skills match alone must not lift weighted_total_score into moderate/strong fit when the candidate fails the JD minimum experience requirement.',
+    'Treat explicitly preferred or nice-to-have qualifications as low-impact bonus signals, not mandatory core failures. For explicit alternative groups, evidence of any one option satisfies that group; do not penalize missing unselected alternatives.',
     'JSON schema: {"scoring_contract_version":"ai_jd_fit_rubric_v2","skills_match_score":number,"relevant_experience_score":number,"education_relevance_score":number,"seniority_progression_score":number,"weighted_total_score":number,"score_confidence":"high|medium|low","score_confidence_reason":"string","scoring_anomalies":["safe_internal_codes_only"],"has_job_description_context":true}',
     '',
     'Job Description Context:',
@@ -1799,6 +1805,7 @@ function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescripti
     `Requirements: ${formatScalar(jd.requirements) || 'Not provided'}`,
     `Skills: ${formatArray(jd.skills) || 'Not provided'}`,
     `Experience Years: ${formatScalar(jd.experienceYears) || 'Not provided'}`,
+    requirementSemantics,
     '',
     'Resume Text:',
     String(resumeText || '').slice(0, DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT),
