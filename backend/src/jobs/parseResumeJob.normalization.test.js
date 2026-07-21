@@ -28,7 +28,12 @@ after(async () => {
   await parseQueue.close().catch(() => {})
 })
 
-const { buildNormalizedCandidates, isLegacyWordDocument, reconcileCandidateExperienceRange } = __testables
+const {
+  buildNormalizedCandidates,
+  isLegacyWordDocument,
+  reconcileCandidateExperienceRange,
+  reconcileCandidateRequirementSemantics,
+} = __testables
 
 function buildV2VisibleScoreCandidate(overrides = {}) {
   return {
@@ -261,11 +266,11 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
           skills: { tools_and_platforms: ['Node.js', 'TypeScript', 'PostgreSQL', 'Docker'] },
           top_skills: ['Node.js', 'TypeScript', 'PostgreSQL'],
           matchedSkills: ['Node.js', 'TypeScript', 'PostgreSQL'],
-          missingSkills: ['Kubernetes'],
+          missingSkills: ['Java', 'Go', 'Kubernetes'],
           fit_assessment: {
             overall_fit_score: 88,
             matched_requirements: ['Backend APIs', 'Node.js', 'PostgreSQL'],
-            missing_requirements: ['Kubernetes production ownership'],
+            missing_requirements: ['Java and Go are not documented', 'Kubernetes production ownership'],
             risks_or_gaps: [],
           },
           ai_scoring_contract_v2: {
@@ -279,7 +284,12 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
         resumeId: 'synthetic-cross-format-resume',
         filename: fixture.filename,
       })
-      const reconciled = reconcileCandidateExperienceRange(normalized, { experienceMin: 2, experienceMax: 5 })
+      const experienceReconciled = reconcileCandidateExperienceRange(normalized, { experienceMin: 2, experienceMax: 5 })
+      const reconciled = reconcileCandidateRequirementSemantics(experienceReconciled, {
+        required: ['Node.js, Java, or Go', 'PostgreSQL'],
+        preferred: ['Kubernetes production ownership'],
+        alternativeGroups: [['Node.js', 'Java', 'Go']],
+      })
       const deterministic = scoreCandidateDeterministically(reconciled, {
         hasContext: true,
         required_min_years: 2,
@@ -292,6 +302,7 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
         skills: reconciled.skills_flat,
         matchedRequirements: reconciled.fit_assessment.matched_requirements,
         missingRequirements: reconciled.fit_assessment.missing_requirements,
+        preferredGaps: reconciled.fit_assessment.preferred_gaps,
         deterministicScore: deterministic.final_score,
         deterministicExperience: deterministic.scoring_breakdown.experience_alignment,
         displayedScore: provenance.displayed_score,
@@ -306,6 +317,8 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
     assert.equal(outputs[0].yearsExperience, 4.5)
     assert.equal(outputs[0].classification, 'within_range')
     assert.equal(outputs[0].deterministicExperience.range_classification, 'within_range')
+    assert.deepEqual(outputs[0].missingRequirements, [])
+    assert.deepEqual(outputs[0].preferredGaps, ['Kubernetes production ownership'])
     assert.equal(outputs[0].displayedScoreSource, 'matchScore.score')
     assert.equal(outputs[0].displayedScoringVersion, null)
     assert.equal(outputs[0].v2Score, 89.1)
