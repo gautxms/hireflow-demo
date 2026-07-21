@@ -842,6 +842,95 @@ test('POST /api/paddle/webhook preserves Monthly access and restores Paddle afte
   assert.deepEqual(restoreBody.items, [{ price_id: 'pri_monthly', quantity: 1 }])
 })
 
+test('POST /api/paddle/webhook retries an identified upgrade when cancellation remains incomplete', async (t) => {
+  const originalFetch = globalThis.fetch
+  const calls = []
+  let cancellationCanSucceed = false
+  const payload = {
+    event_id: 'evt_failed_upgrade_retryable_cancellation',
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_failed_upgrade_retryable',
+      status: 'past_due',
+      origin: 'subscription_update',
+      subscription_id: 'sub_current_123',
+      customer_id: 'ctm_test_123',
+      custom_data: {
+        userId: 42,
+        plan: 'annual',
+        paddleEnvironment: 'sandbox',
+        hireflowPlanChange: {
+          fromPlan: 'monthly',
+          toPlan: 'annual',
+          priorStatus: 'active',
+          previousItems: [{ price_id: 'pri_monthly', quantity: 1 }],
+          startedAt: '2026-07-20T00:00:00.000Z',
+          outcome: 'pending',
+        },
+      },
+      items: [{ price: { id: 'pri_annual' }, quantity: 1 }],
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{
+        id: 42,
+        paddle_customer_id: 'ctm_test_123',
+        paddle_subscription_id: 'sub_current_123',
+        subscription_status: 'active',
+        subscription_plan: 'monthly',
+      }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    if (String(url).startsWith('http://127.0.0.1:')) return originalFetch(url, options)
+    if (String(url).endsWith('/transactions/txn_failed_upgrade_retryable') && options.method === 'PATCH') {
+      if (!cancellationCanSucceed) {
+        return { ok: false, status: 409, json: async () => ({ error: { code: 'transaction_not_cancelled' } }) }
+      }
+      return { ok: true, status: 200, json: async () => ({ data: { id: 'txn_failed_upgrade_retryable', status: 'canceled' } }) }
+    }
+    if (String(url).endsWith('/transactions/txn_failed_upgrade_retryable')) {
+      return { ok: true, status: 200, json: async () => ({ data: { id: 'txn_failed_upgrade_retryable', status: 'past_due' } }) }
+    }
+    if (String(url).endsWith('/subscriptions/sub_current_123') && options.method === 'PATCH') {
+      return { ok: true, status: 200, json: async () => ({ data: { id: 'sub_current_123', status: 'active' } }) }
+    }
+    if (String(url).endsWith('/subscriptions/sub_current_123')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: {
+          id: 'sub_current_123',
+          status: 'active',
+          custom_data: payload.data.custom_data,
+          items: [{ price: { id: cancellationCanSucceed ? 'pri_monthly' : 'pri_annual' }, quantity: 1 }],
+        } }),
+      }
+    }
+    throw new Error(`Unexpected Paddle request: ${url}`)
+  })
+
+  const firstAttempt = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(firstAttempt.response.status, 500)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), false)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && (params?.[1] === 'annual' || params?.[2] === 'past_due')), false)
+
+  cancellationCanSucceed = true
+  const retry = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(retry.response.status, 200)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'monthly' && params?.[2] === 'active'), true)
+})
+
 test('POST /api/paddle/webhook ignores a past-due Annual plan event while Monthly access is paid', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({
     event_id: 'evt_past_due_annual_upgrade_preserves_monthly',

@@ -20,6 +20,7 @@ import {
   getPlanChangeMetadata,
   inferPlanFromPaddlePayload,
   isSubscriptionUpdateTransaction,
+  PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
 
@@ -196,29 +197,21 @@ async function restorePlanChangeEntitlement(user, metadata) {
 
 async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
   const metadata = getPlanChangeMetadata(payload)
-  if (!metadata) return false
+  if (!metadata) return PLAN_CHANGE_RECOVERY_OUTCOME.NOT_APPLICABLE
 
-  try {
-    await recoverFailedPaddlePlanChange({
-      request: (path, options = {}) => paddleApiRequest(path, options, paddle),
-      subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
-      transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
-      metadata,
-      existingCustomData: payload?.data?.custom_data || payload?.custom_data || {},
-    })
+  const result = await recoverFailedPaddlePlanChange({
+    request: (path, options = {}) => paddleApiRequest(path, options, paddle),
+    subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
+    transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
+    metadata,
+    existingCustomData: payload?.data?.custom_data || payload?.custom_data || {},
+  })
+
+  if (result.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED) {
     await restorePlanChangeEntitlement(user, metadata)
-  } catch (error) {
-    await logErrorToDatabase('paddle.webhook.plan_change_recovery_failed', error, {
-      userId: user.id,
-      subscriptionId: getTransactionSubscriptionId(payload) || getSubscriptionId(payload),
-      transactionId: isSubscriptionUpdateTransaction(payload) ? (payload?.data?.id || payload?.id || null) : null,
-      fromPlan: metadata.fromPlan,
-      toPlan: metadata.toPlan,
-    })
-    return false
   }
 
-  return true
+  return result.outcome
 }
 
 function getSafeErrorContext(error) {
@@ -504,7 +497,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       let preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
       if (preservePaidPlan) {
-        preservePaidPlan = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+        const recoveryOutcome = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+        preservePaidPlan = recoveryOutcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED
       }
 
       if (!hasEnvironmentMismatch && !preservePaidPlan && shouldApplyFailedPaymentToUser(user, payload, eventType)) {
@@ -568,7 +562,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       let preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
       if (preservePaidPlan && getPlanChangeMetadata(payload) && String(updatedStatus || '').toLowerCase() === 'past_due') {
-        preservePaidPlan = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+        const recoveryOutcome = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+        preservePaidPlan = recoveryOutcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED
       }
 
       if (user?.id && updatedStatus && !preservePaidPlan) {

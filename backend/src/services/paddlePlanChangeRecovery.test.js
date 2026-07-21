@@ -5,6 +5,7 @@ import {
   buildPlanChangeCustomData,
   getPlanChangeMetadata,
   isSubscriptionUpdateTransaction,
+  PaddlePlanChangeRecoveryError,
   recoverFailedPaddlePlanChange,
 } from './paddlePlanChangeRecovery.js'
 
@@ -90,32 +91,44 @@ test('failed plan recovery cancels the failed update and restores previous items
   assert.equal(restoreBody.custom_data.hireflowPlanChange.outcome, 'recovered')
 })
 
-test('failed plan recovery rejects when the failed update cannot be canceled', async () => {
+test('failed plan recovery accepts a cancellation error when the transaction is already canceled', async () => {
   const cancellationError = new Error('transaction cancellation failed')
-  let subscriptionReads = 0
-  let restoreAttempted = false
+  let restored = false
   const request = async (path, options = {}) => {
-    if (path === '/transactions/txn_failed') throw cancellationError
+    if (path === '/transactions/txn_failed' && options.method === 'PATCH') throw cancellationError
+    if (path === '/transactions/txn_failed') return { data: { id: 'txn_failed', status: 'canceled' } }
     if (path === '/subscriptions/sub_123' && options.method === 'PATCH') {
-      restoreAttempted = true
-      return { data: { id: 'sub_123', status: 'active' } }
+      restored = true
+      return { data: { id: 'sub_123', status: 'active', items: recoveryMetadata().previousItems } }
     }
     if (path === '/subscriptions/sub_123') {
-      subscriptionReads += 1
       return {
         data: {
           id: 'sub_123',
           status: 'active',
-          custom_data: { userId: 42, plan: subscriptionReads === 1 ? 'annual' : 'monthly' },
-          items: subscriptionReads === 1
-            ? [{ price: { id: 'pri_annual' }, quantity: 1 }]
-            : [
-                { price: { id: 'pri_monthly' }, quantity: 1 },
-                { price: { id: 'pri_addon' }, quantity: 2 },
-              ],
+          custom_data: { userId: 42, plan: restored ? 'monthly' : 'annual' },
+          items: restored ? recoveryMetadata().previousItems : [{ price: { id: 'pri_annual' }, quantity: 1 }],
         },
       }
     }
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  const result = await recoverFailedPaddlePlanChange({
+    request,
+    subscriptionId: 'sub_123',
+    transactionId: 'txn_failed',
+    metadata: recoveryMetadata(),
+  })
+  assert.equal(result.outcome, 'recovered')
+})
+
+test('failed plan recovery is retryable when cancellation fails and the transaction remains collectible', async () => {
+  let subscriptionRead = false
+  const request = async (path, options = {}) => {
+    if (path === '/transactions/txn_failed' && options.method === 'PATCH') throw new Error('transaction cancellation failed')
+    if (path === '/transactions/txn_failed') return { data: { id: 'txn_failed', status: 'past_due' } }
+    if (path === '/subscriptions/sub_123') subscriptionRead = true
     throw new Error(`Unexpected request: ${path}`)
   }
 
@@ -126,7 +139,37 @@ test('failed plan recovery rejects when the failed update cannot be canceled', a
       transactionId: 'txn_failed',
       metadata: recoveryMetadata(),
     }),
-    cancellationError,
+    (error) => error instanceof PaddlePlanChangeRecoveryError
+      && error.code === 'PADDLE_PLAN_CHANGE_RECOVERY_RETRYABLE',
   )
-  assert.equal(restoreAttempted, true)
+  assert.equal(subscriptionRead, false)
+})
+
+test('failed plan recovery does not patch subscription items that were already restored', async () => {
+  let subscriptionPatch = false
+  const request = async (path, options = {}) => {
+    if (path === '/transactions/txn_failed') return { data: { id: 'txn_failed', status: 'canceled' } }
+    if (path === '/subscriptions/sub_123' && options.method === 'PATCH') subscriptionPatch = true
+    if (path === '/subscriptions/sub_123') {
+      return {
+        data: {
+          id: 'sub_123',
+          status: 'active',
+          custom_data: { userId: 42, plan: 'monthly' },
+          items: recoveryMetadata().previousItems,
+        },
+      }
+    }
+    throw new Error(`Unexpected request: ${path}`)
+  }
+
+  const result = await recoverFailedPaddlePlanChange({
+    request,
+    subscriptionId: 'sub_123',
+    transactionId: 'txn_failed',
+    metadata: recoveryMetadata(),
+  })
+
+  assert.equal(result.outcome, 'recovered')
+  assert.equal(subscriptionPatch, false)
 })
