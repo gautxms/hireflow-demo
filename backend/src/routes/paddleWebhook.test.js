@@ -964,6 +964,64 @@ test('POST /api/paddle/webhook does not preserve a scheduled downgrade when its 
   assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'annual' && params?.[2] === 'active'), false)
 })
 
+test('POST /api/paddle/webhook does not recover a recurring renewal from its companion subscription update', async (t) => {
+  const originalFetch = globalThis.fetch
+  const calls = []
+  const paddleCalls = []
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_recurring_renewal_companion_update',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      id: 'sub_current_123',
+      status: 'past_due',
+      custom_data: {
+        userId: 42,
+        plan: 'monthly',
+        paddleEnvironment: 'sandbox',
+        hireflowPlanChange: {
+          fromPlan: 'annual',
+          toPlan: 'monthly',
+          priorStatus: 'active',
+          previousItems: [{ price_id: 'pri_annual', quantity: 1 }],
+          startedAt: '2026-07-20T00:00:00.000Z',
+          outcome: 'pending',
+        },
+      },
+      items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+    },
+  })
+  const rawBody = JSON.stringify(payload)
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{
+        id: 42,
+        paddle_customer_id: 'ctm_test_123',
+        paddle_subscription_id: 'sub_current_123',
+        subscription_status: 'active',
+        subscription_plan: 'annual',
+      }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    if (String(url).startsWith('http://127.0.0.1:')) return originalFetch(url, options)
+    paddleCalls.push({ url: String(url), options })
+    return { ok: true, status: 200, json: async () => ({ data: [] }) }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(paddleCalls.some(({ url }) => url.includes('/transactions?')), true)
+  assert.equal(paddleCalls.some(({ url, options }) => url.includes('/subscriptions/') && options.method === 'PATCH'), false)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'annual' && params?.[2] === 'active'), false)
+  assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[2] === 'past_due'), true)
+})
+
 test('POST /api/paddle/webhook transaction.completed keeps setting user active', async (t) => {
   const payload = {
     event_id: 'evt_transaction_completed_sets_active',

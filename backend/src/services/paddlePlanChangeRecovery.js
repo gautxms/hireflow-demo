@@ -154,6 +154,10 @@ export async function recoverFailedPaddlePlanChange({
     ? [{ id: transactionId }]
     : await findFailedUpdateTransactions(request, subscriptionId, metadata)
 
+  if (failedTransactions.length === 0) {
+    throw new Error('No failed subscription update transaction found for plan change recovery')
+  }
+
   const cancellationErrors = []
   for (const transaction of failedTransactions) {
     if (!transaction?.id) continue

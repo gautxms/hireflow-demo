@@ -198,8 +198,6 @@ async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
   const metadata = getPlanChangeMetadata(payload)
   if (!metadata) return false
 
-  await restorePlanChangeEntitlement(user, metadata)
-
   try {
     await recoverFailedPaddlePlanChange({
       request: (path, options = {}) => paddleApiRequest(path, options, paddle),
@@ -208,6 +206,7 @@ async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
       metadata,
       existingCustomData: payload?.data?.custom_data || payload?.custom_data || {},
     })
+    await restorePlanChangeEntitlement(user, metadata)
   } catch (error) {
     await logErrorToDatabase('paddle.webhook.plan_change_recovery_failed', error, {
       userId: user.id,
@@ -216,6 +215,7 @@ async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
       fromPlan: metadata.fromPlan,
       toPlan: metadata.toPlan,
     })
+    return false
   }
 
   return true
@@ -501,10 +501,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
-      const preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
+      let preservePaidPlan = !hasEnvironmentMismatch && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
       if (preservePaidPlan) {
-        await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+        preservePaidPlan = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
       }
 
       if (!hasEnvironmentMismatch && !preservePaidPlan && shouldApplyFailedPaymentToUser(user, payload, eventType)) {
@@ -565,10 +565,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     if (!hasEnvironmentMismatch && (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing')) {
       const updatedStatus = getSubscriptionStatus(payload) || mapToSubscriptionStatus(eventType, payload)
       const subscriptionFromEvent = getSubscriptionId(payload)
-      const preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
+      let preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
 
-      if (preservePaidPlan && String(updatedStatus || '').toLowerCase() === 'past_due') {
-        await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+      if (preservePaidPlan && getPlanChangeMetadata(payload) && String(updatedStatus || '').toLowerCase() === 'past_due') {
+        preservePaidPlan = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
       }
 
       if (user?.id && updatedStatus && !preservePaidPlan) {
