@@ -1,4 +1,20 @@
 const PLAN_CHANGE_METADATA_KEY = 'hireflowPlanChange'
+const PLAN_CHANGE_MATCH_LEEWAY_MS = 5 * 60 * 1000
+const PLAN_CHANGE_MATCH_WINDOW_MS = 60 * 60 * 1000
+const RECOVERABLE_TRANSACTION_STATUSES = new Set(['past_due', 'canceled', 'cancelled'])
+
+export const PLAN_CHANGE_RECOVERY_OUTCOME = Object.freeze({
+  RECOVERED: 'recovered',
+  NOT_APPLICABLE: 'not_applicable',
+})
+
+export class PaddlePlanChangeRecoveryError extends Error {
+  constructor(message, options = {}) {
+    super(message, options)
+    this.name = 'PaddlePlanChangeRecoveryError'
+    this.code = 'PADDLE_PLAN_CHANGE_RECOVERY_RETRYABLE'
+  }
+}
 
 function dataFromPayload(payload = {}) {
   return payload?.data || payload || {}
@@ -108,13 +124,32 @@ export function inferPlanFromPaddlePayload(payload = {}, paddle = {}) {
 function transactionMatchesPlanChange(transaction, metadata, startedAt) {
   if (String(transaction?.origin || '').toLowerCase() !== 'subscription_update') return false
 
+  const status = String(transaction?.status || '').toLowerCase()
+  if (!RECOVERABLE_TRANSACTION_STATUSES.has(status)) return false
+
   const transactionMetadata = getPlanChangeMetadata(transaction)
   if (transactionMetadata) {
-    return transactionMetadata.fromPlan === metadata.fromPlan && transactionMetadata.toPlan === metadata.toPlan
+    if (transactionMetadata.fromPlan !== metadata.fromPlan || transactionMetadata.toPlan !== metadata.toPlan) {
+      return false
+    }
+
+    if (transactionMetadata.startedAt && metadata.startedAt) {
+      const transactionStartedAt = new Date(transactionMetadata.startedAt).getTime()
+      const metadataStartedAt = new Date(metadata.startedAt).getTime()
+      return Number.isFinite(transactionStartedAt)
+        && Number.isFinite(metadataStartedAt)
+        && Math.abs(transactionStartedAt - metadataStartedAt) <= PLAN_CHANGE_MATCH_LEEWAY_MS
+    }
   }
 
-  if (!startedAt || !transaction?.created_at) return true
-  return new Date(transaction.created_at).getTime() >= new Date(startedAt).getTime() - (5 * 60 * 1000)
+  if (!startedAt || !transaction?.created_at) return false
+
+  const changeStartedAt = new Date(startedAt).getTime()
+  const transactionCreatedAt = new Date(transaction.created_at).getTime()
+  if (!Number.isFinite(changeStartedAt) || !Number.isFinite(transactionCreatedAt)) return false
+
+  return transactionCreatedAt >= changeStartedAt - PLAN_CHANGE_MATCH_LEEWAY_MS
+    && transactionCreatedAt <= changeStartedAt + PLAN_CHANGE_MATCH_WINDOW_MS
 }
 
 function sameSubscriptionItems(left = [], right = []) {
@@ -124,10 +159,9 @@ function sameSubscriptionItems(left = [], right = []) {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right))
 }
 
-async function findFailedUpdateTransactions(request, subscriptionId, metadata) {
+async function findPlanChangeTransactions(request, subscriptionId, metadata) {
   const query = new URLSearchParams({
     subscription_id: subscriptionId,
-    status: 'past_due',
     origin: 'subscription_update',
     per_page: '30',
   })
@@ -152,18 +186,43 @@ export async function recoverFailedPaddlePlanChange({
 
   const failedTransactions = transactionId
     ? [{ id: transactionId }]
-    : await findFailedUpdateTransactions(request, subscriptionId, metadata)
+    : await findPlanChangeTransactions(request, subscriptionId, metadata)
 
-  const cancellationErrors = []
+  if (failedTransactions.length === 0) {
+    return {
+      outcome: PLAN_CHANGE_RECOVERY_OUTCOME.NOT_APPLICABLE,
+      canceledTransactionIds: [],
+    }
+  }
+
   for (const transaction of failedTransactions) {
     if (!transaction?.id) continue
+    const knownStatus = String(transaction?.status || '').toLowerCase()
+    if (knownStatus === 'canceled' || knownStatus === 'cancelled') continue
+
     try {
       await request(`/transactions/${transaction.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: 'canceled' }),
       })
     } catch (error) {
-      cancellationErrors.push(error)
+      let authoritativeTransaction
+      try {
+        authoritativeTransaction = dataFromPayload(await request(`/transactions/${transaction.id}`))
+      } catch (verificationError) {
+        throw new PaddlePlanChangeRecoveryError(
+          `Could not verify cancellation of failed plan update transaction ${transaction.id}`,
+          { cause: verificationError },
+        )
+      }
+
+      const status = String(authoritativeTransaction?.status || '').toLowerCase()
+      if (status !== 'canceled' && status !== 'cancelled') {
+        throw new PaddlePlanChangeRecoveryError(
+          `Failed plan update transaction ${transaction.id} remains collectible`,
+          { cause: error },
+        )
+      }
     }
   }
 
@@ -175,28 +234,55 @@ export async function recoverFailedPaddlePlanChange({
   )
   recoveryCustomData.plan = metadata.fromPlan
 
-  const restoredPayload = await request(`/subscriptions/${subscriptionId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      items: metadata.previousItems,
-      proration_billing_mode: 'do_not_bill',
-      custom_data: recoveryCustomData,
-    }),
-  })
+  const itemsAlreadyRestored = sameSubscriptionItems(currentData?.items || [], metadata.previousItems)
+  const currentRecoveryMetadata = getPlanChangeMetadata(currentPayload)
+  const metadataAlreadyRecovered = currentData?.custom_data?.plan === metadata.fromPlan
+    && currentRecoveryMetadata?.fromPlan === metadata.fromPlan
+    && currentRecoveryMetadata?.toPlan === metadata.toPlan
+    && currentRecoveryMetadata?.outcome === 'recovered'
+
+  let restoredPayload = currentPayload
+  if (!itemsAlreadyRestored) {
+    restoredPayload = await request(`/subscriptions/${subscriptionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        items: metadata.previousItems,
+        proration_billing_mode: 'do_not_bill',
+        custom_data: recoveryCustomData,
+      }),
+    })
+  } else if (!metadataAlreadyRecovered) {
+    restoredPayload = await request(`/subscriptions/${subscriptionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ custom_data: recoveryCustomData }),
+    })
+  }
 
   const finalPayload = await request(`/subscriptions/${subscriptionId}`)
-  const finalStatus = String(dataFromPayload(finalPayload)?.status || '').toLowerCase()
-  const finalItems = dataFromPayload(finalPayload)?.items || []
+  const finalData = dataFromPayload(finalPayload)
+  const finalStatus = String(finalData?.status || '').toLowerCase()
+  const finalItems = finalData?.items || []
+  const finalRecoveryMetadata = getPlanChangeMetadata(finalPayload)
 
   if (finalStatus === 'past_due') {
-    throw cancellationErrors[0] || new Error('Paddle subscription remained past due after plan change recovery')
+    throw new PaddlePlanChangeRecoveryError('Paddle subscription remained past due after plan change recovery')
   }
 
   if (!sameSubscriptionItems(finalItems, metadata.previousItems)) {
-    throw new Error('Paddle subscription items were not restored after plan change recovery')
+    throw new PaddlePlanChangeRecoveryError('Paddle subscription items were not restored after plan change recovery')
+  }
+
+  if (
+    finalData?.custom_data?.plan !== metadata.fromPlan
+    || finalRecoveryMetadata?.fromPlan !== metadata.fromPlan
+    || finalRecoveryMetadata?.toPlan !== metadata.toPlan
+    || finalRecoveryMetadata?.outcome !== 'recovered'
+  ) {
+    throw new PaddlePlanChangeRecoveryError('Paddle subscription recovery metadata was not persisted')
   }
 
   return {
+    outcome: PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED,
     restoredPayload,
     finalPayload,
     canceledTransactionIds: failedTransactions.map((transaction) => transaction?.id).filter(Boolean),
