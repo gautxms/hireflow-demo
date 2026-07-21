@@ -139,8 +139,12 @@ test('new in-range analyses suppress only contradictory experience judgments wit
 
 test('in-range reconciliation preserves skill-specific experience gaps', () => {
   const candidate = {
+    name: 'Aanya Mehta',
     years_experience: 4.5,
-    missingSkills: ['Kubernetes experience is below the role requirement'],
+    missingSkills: [
+      'Kubernetes experience is below the role requirement',
+      'Aanya has 4.5 years of Kubernetes experience, below the required 5 years',
+    ],
     fit_assessment: {
       missing_requirements: ['Kubernetes experience is below the 2 year requirement'],
       risks_or_gaps: ['Only 1 year of Kubernetes experience, below the required 2 years'],

@@ -1212,6 +1212,12 @@ function explicitlyComparesTotalYearsToBoundary(value, evaluation, candidateName
     .join('|')
   if (!boundaries) return false
 
+  const skillSpecificYears = new RegExp(
+    `\\b${candidateYears}\\s*(?:years?|yrs?)\\s+(?:of|with|in|using|on|at)\\s+(?!(?:(?:total|overall|cumulative|professional|work)\\s+)?experience\\b)[^,.;]{1,50}`,
+    'i',
+  )
+  if (skillSpecificYears.test(text)) return false
+
   const totalExperienceSubject = [
     `\\b(?:total|overall|cumulative)\\s+(?:professional\\s+|work\\s+)?experience\\b[^.\\n]{0,60}\\b${candidateYears}\\s*(?:years?|yrs?)\\b`,
     `\\bcandidate(?:['\u2019]s\\s+|\\s+has\\s+|\\s+with\\s+)?${candidateYears}\\s*(?:years?|yrs?)(?:\\s+of)?\\s+(?:total\\s+|overall\\s+|professional\\s+|work\\s+)?experience\\b`,
