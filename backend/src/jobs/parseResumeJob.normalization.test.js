@@ -112,11 +112,11 @@ test('buildNormalizedCandidates preserves fractional/integer/null years_experien
 test('new in-range analyses suppress only contradictory experience judgments without mutating AI payloads', () => {
   const candidate = {
     years_experience: 4.5,
-    considerations: ['Experience exceeds the required 2-5 year range', 'Review portfolio depth'],
+    considerations: ['Candidate has 4.5 years of experience, which exceeds the range maximum of 5 years', 'Review portfolio depth'],
     fit_assessment: {
-      missing_requirements: ['Below requirement with 4.5 years'],
-      risks_or_gaps: ['Overqualified because of experience', 'Limited cloud evidence'],
-      rationale: 'Candidate experience exceeds the maximum.',
+      missing_requirements: ['Candidate has 4.5 years of experience, below the minimum requirement of 2 years'],
+      risks_or_gaps: ['Overall experience of 4.5 years is above the maximum of 5 years', 'Limited cloud evidence'],
+      rationale: 'The candidate has 4.5 years of experience, exceeding the maximum of 5 years.',
     },
   }
   const snapshot = structuredClone(candidate)
@@ -128,6 +128,23 @@ test('new in-range analyses suppress only contradictory experience judgments wit
   assert.deepEqual(normalized.fit_assessment.missing_requirements, [])
   assert.deepEqual(normalized.fit_assessment.risks_or_gaps, ['Limited cloud evidence'])
   assert.equal(normalized.fit_assessment.rationale, '')
+})
+
+test('in-range reconciliation preserves skill-specific experience gaps', () => {
+  const candidate = {
+    years_experience: 4.5,
+    missingSkills: ['Kubernetes experience is below the role requirement'],
+    fit_assessment: {
+      missing_requirements: ['Kubernetes experience is below the 2 year requirement'],
+      risks_or_gaps: ['Only 1 year of Kubernetes experience, below the required 2 years'],
+    },
+  }
+
+  const normalized = reconcileCandidateExperienceRange(candidate, { experienceMin: 2, experienceMax: 5 })
+
+  assert.deepEqual(normalized.missingSkills, candidate.missingSkills)
+  assert.deepEqual(normalized.fit_assessment.missing_requirements, candidate.fit_assessment.missing_requirements)
+  assert.deepEqual(normalized.fit_assessment.risks_or_gaps, candidate.fit_assessment.risks_or_gaps)
 })
 
 test('v2 visible score experiment leaves scores unchanged when feature flag is off', () => {

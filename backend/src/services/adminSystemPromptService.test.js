@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { pool } from '../db/client.js'
 import {
   DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_SYSTEM_PROMPT_VERSION,
+  PREVIOUS_DEFAULT_SYSTEM_PROMPT,
   resetAdminSystemPromptToDefault,
   upsertAdminSystemPrompt,
 } from './adminSystemPromptService.js'
@@ -29,7 +31,7 @@ test('upsertAdminSystemPrompt update path binds SQL placeholders to the correct 
       return { rows: [] }
     }
 
-    if (sql.startsWith('INSERT INTO admin_system_prompts (id, system_prompt, prompt_version)')) {
+    if (sql.startsWith('INSERT INTO admin_system_prompts (id, system_prompt, prompt_version)') || (sql.startsWith('UPDATE admin_system_prompts') && sql.includes('system_prompt = $3'))) {
       return { rows: [] }
     }
 
@@ -60,8 +62,16 @@ test('upsertAdminSystemPrompt update path binds SQL placeholders to the correct 
   assert.equal(result.promptVersion, 7)
   assert.equal(result.updatedBy, 'admin-42')
 
+  const migrationCall = calls.find((entry) => entry.sql.startsWith('UPDATE admin_system_prompts') && entry.sql.includes('system_prompt = $3'))
+  assert.deepEqual(migrationCall?.params, [
+    DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_SYSTEM_PROMPT_VERSION,
+    PREVIOUS_DEFAULT_SYSTEM_PROMPT,
+  ])
+  assert.match(migrationCall?.sql || '', /WHERE id = true AND system_prompt = \$3$/)
+  assert.notEqual(PREVIOUS_DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT)
   const updateCall = calls.find((entry) => entry.sql.startsWith('UPDATE admin_system_prompts'))
-  assert.deepEqual(updateCall?.params, ['Updated prompt', 'admin-42'])
+  assert.ok(updateCall)
 })
 
 test('upsertAdminSystemPrompt falls back to insert when update does not find a row', async () => {

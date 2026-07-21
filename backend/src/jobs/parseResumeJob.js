@@ -1192,6 +1192,30 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
 const CONFLICTING_IN_RANGE_EXPERIENCE_TEXT = /\b(?:experience|years?|yrs?)\b/i
 const CONFLICTING_IN_RANGE_JUDGMENT = /\b(?:exceed(?:s|ed|ing)?|above\s+(?:the\s+)?(?:range|requirement|maximum)|below\s+(?:the\s+)?(?:range|requirement|minimum)|underqualified|overqualified|experience\s+(?:gap|shortfall)|fail(?:s|ed|ing)?\s+(?:the\s+)?experience)\b/i
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function explicitlyComparesTotalYearsToBoundary(value, evaluation) {
+  const text = String(value || '')
+  const candidateYears = escapeRegex(evaluation.candidateYears)
+  const boundaries = [evaluation.minimumYears, evaluation.maximumYears]
+    .filter((boundary) => boundary !== null)
+    .map(escapeRegex)
+    .join('|')
+  if (!boundaries) return false
+
+  const totalYears = new RegExp(
+    `(?:\\b(?:total|overall|cumulative)\\s+(?:professional\\s+|work\\s+)?experience\\b[^.\\n]{0,60}\\b${candidateYears}\\s*(?:years?|yrs?)\\b|\\bcandidate(?:'s\\s+|\\s+has\\s+)?${candidateYears}\\s*(?:years?|yrs?)(?:\\s+of)?\\s+(?:professional\\s+|work\\s+)?experience\\b)`,
+    'i',
+  )
+  const jdBoundary = new RegExp(
+    `(?:\\b(?:minimum|maximum|required|requirement|range)\\b[^.\\n]{0,40}\\b(?:${boundaries})\\s*(?:years?|yrs?)?\\b|\\b(?:${boundaries})\\s*(?:years?|yrs?)\\b[^.\\n]{0,40}\\b(?:minimum|maximum|required|requirement|range)\\b)`,
+    'i',
+  )
+  return totalYears.test(text) && jdBoundary.test(text)
+}
+
 function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
   const evaluation = evaluateExperienceRange(candidate?.years_experience, {
     min: jobDescriptionContext?.experienceMin,
@@ -1202,6 +1226,7 @@ function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
 
   const conflicts = (value) => CONFLICTING_IN_RANGE_EXPERIENCE_TEXT.test(String(value || ''))
     && CONFLICTING_IN_RANGE_JUDGMENT.test(String(value || ''))
+    && explicitlyComparesTotalYearsToBoundary(value, evaluation)
   const filter = (values) => Array.isArray(values) ? values.filter((entry) => !conflicts(entry)) : values
   const fit = candidate?.fit_assessment
   return {
