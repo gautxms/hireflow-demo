@@ -146,6 +146,53 @@ function resolveVisibleFitScore(candidate = {}) {
   return normalizeOptionalNumber(candidate?.fit_assessment?.overall_fit_score ?? candidate?.fitAssessment?.overallFitScore)
 }
 
+function resolveScoringObservability(candidate = {}) {
+  const visible = resolveVisibleScore(candidate)
+  const deterministic = candidate?.deterministic_jd_fit_apply_metadata
+  const v2Apply = candidate?.v2_visible_score_experiment
+  const v2 = candidate?.ai_scoring_contract_v2
+  // Keep both keys and values constrained to the fixed V2 schema. Never copy
+  // provider-authored object keys or free-form category content into telemetry.
+  const category = {
+    skills_match_score: normalizeOptionalNumber(v2?.skills_match_score),
+    relevant_experience_score: normalizeOptionalNumber(v2?.relevant_experience_score),
+    education_relevance_score: normalizeOptionalNumber(v2?.education_relevance_score),
+    seniority_progression_score: normalizeOptionalNumber(v2?.seniority_progression_score),
+  }
+
+  const categoryBreakdown = Object.fromEntries(
+    Object.entries(category)
+      .filter(([, value]) => value !== null),
+  )
+  const deterministicAppliedScore = normalizeOptionalNumber(deterministic?.applied_deterministic_score)
+  const v2AppliedScore = normalizeOptionalNumber(v2Apply?.applied_score)
+  // Application order in parseResumeJob is deterministic first, then V2. Metadata
+  // describes the visible source only when its applied value is still the value
+  // selected by the production results precedence.
+  const v2IsVisible = v2AppliedScore !== null && v2AppliedScore === visible.value
+  const deterministicIsVisible = !v2IsVisible
+    && deterministicAppliedScore !== null
+    && deterministicAppliedScore === visible.value
+  const scoreSource = v2IsVisible
+    ? 'ai_scoring_contract_v2'
+    : (deterministicIsVisible ? 'deterministic_jd_fit' : visible.source)
+  const displayedScoringVersion = v2IsVisible
+    ? normalizeOptionalString(v2Apply?.contract_version)
+    : (deterministicIsVisible ? normalizeOptionalString(deterministic?.scoring_contract_version) : null)
+
+  return {
+    original_ai_score: normalizeOptionalNumber(
+      deterministic?.original_ai_score ?? v2Apply?.original_visible_score ?? visible.value,
+    ),
+    v2_score: resolveV2WeightedTotalScore(candidate),
+    displayed_score: visible.value,
+    displayed_score_source: scoreSource,
+    displayed_scoring_version: displayedScoringVersion,
+    v2_confidence: normalizeOptionalString(v2?.score_confidence),
+    v2_category_breakdown: categoryBreakdown,
+  }
+}
+
 function normalizeBoolean(value) {
   if (typeof value === 'boolean') return value
   return Boolean(value)
@@ -196,6 +243,7 @@ export function buildAiScoringContractV2ScoreDeltaDiagnostic({
   const skipReason = buildSkipReason({ candidate, visibleScore, v2Score, diagnosticsDisabled: metadata.diagnosticsDisabled === true })
 
   return {
+    ...resolveScoringObservability(candidate),
     event_type: skipReason ? 'skip' : 'delta',
     skip_reason: skipReason,
     analysis_id: normalizeOptionalString(metadata.analysisId ?? metadata.analysis_id),
