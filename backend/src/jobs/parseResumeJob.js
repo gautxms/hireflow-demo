@@ -30,6 +30,11 @@ import {
 } from '../services/aiScoreCacheService.js'
 import { buildSafeScoreCacheStoragePayload, getScoreCacheEntry, upsertScoreCacheEntry } from '../services/aiScoreCacheStorageService.js'
 import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
+import {
+  V3_SHADOW_SCORING_CONTRACT_VERSION,
+  normalizeV3ShadowContract,
+  scoreCandidateWithV3Shadow,
+} from '../services/v3ShadowScoringService.js'
 import { evaluateExperienceRange } from '../utils/experienceRange.js'
 import { buildRequirementSemantics, reconcileCandidateRequirementSemantics } from '../utils/requirementSemantics.js'
 import { reconcileCandidateLocationAlignment } from '../utils/locationAlignment.js'
@@ -40,6 +45,7 @@ let upsertScoreCacheEntryOverrideForTests = null
 let getScoreCacheEntryOverrideForTests = null
 let scoreCandidateDeterministicallyOverrideForTests = null
 let runAiScoringContractV2ShadowAnalysisOverrideForTests = null
+let scoreCandidateWithV3ShadowOverrideForTests = null
 
 function safeFingerprint(value) {
   const normalized = String(value || '').trim()
@@ -71,6 +77,10 @@ function getAiScoringContractV2ShadowRunner() {
   return runAiScoringContractV2ShadowAnalysisOverrideForTests || runAiScoringContractV2ShadowAnalysis
 }
 
+function getV3ShadowScorer() {
+  return scoreCandidateWithV3ShadowOverrideForTests || scoreCandidateWithV3Shadow
+}
+
 export function __setParseResumeJobTestOverrides({
   analyzeResumeWithConfiguredFallback: analyzeOverride = null,
   cacheJobResult: cacheOverride = null,
@@ -78,6 +88,7 @@ export function __setParseResumeJobTestOverrides({
   getScoreCacheEntry: getScoreCacheEntryOverride = null,
   scoreCandidateDeterministically: scoreCandidateDeterministicallyOverride = null,
   runAiScoringContractV2ShadowAnalysis: runAiScoringContractV2ShadowAnalysisOverride = null,
+  scoreCandidateWithV3Shadow: scoreCandidateWithV3ShadowOverride = null,
 } = {}) {
   analyzeResumeWithConfiguredFallbackOverrideForTests = analyzeOverride
   cacheJobResultOverrideForTests = cacheOverride
@@ -85,6 +96,7 @@ export function __setParseResumeJobTestOverrides({
   getScoreCacheEntryOverrideForTests = getScoreCacheEntryOverride
   scoreCandidateDeterministicallyOverrideForTests = scoreCandidateDeterministicallyOverride
   runAiScoringContractV2ShadowAnalysisOverrideForTests = runAiScoringContractV2ShadowAnalysisOverride
+  scoreCandidateWithV3ShadowOverrideForTests = scoreCandidateWithV3ShadowOverride
 }
 
 export function __resetParseResumeJobTestOverrides() {
@@ -94,6 +106,7 @@ export function __resetParseResumeJobTestOverrides() {
   getScoreCacheEntryOverrideForTests = null
   scoreCandidateDeterministicallyOverrideForTests = null
   runAiScoringContractV2ShadowAnalysisOverrideForTests = null
+  scoreCandidateWithV3ShadowOverrideForTests = null
 }
 
 export function isTerminalJobFailure(job) {
@@ -524,6 +537,128 @@ function buildDeterministicJdFitApplyAllowlistDiagnostic({ userId, analysisId, e
     allowed_by_user_allowlist: allowedByUser,
     allowed_by_analysis_allowlist: allowedByAnalysis,
   }
+}
+
+function isV3ShadowScoringEnabled(env = process.env) {
+  return String(env.AI_SCORING_CONTRACT_V3_SHADOW_ENABLED || '').trim().toLowerCase() === 'true'
+}
+
+function buildV3ShadowAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
+  const userAllowlist = parseRuntimeAllowlist(env.AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_USER_IDS)
+  const analysisAllowlist = parseRuntimeAllowlist(env.AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_ANALYSIS_IDS)
+  const allowedByUser = runtimeAllowlistMatches(userId, userAllowlist)
+  const allowedByAnalysis = runtimeAllowlistMatches(analysisId, analysisAllowlist)
+  return {
+    allowlist_matched: allowedByUser || allowedByAnalysis,
+    allowed_by_user_allowlist: allowedByUser,
+    allowed_by_analysis_allowlist: allowedByAnalysis,
+  }
+}
+
+function buildSafeV3ShadowDiagnostic({
+  action,
+  candidate = {},
+  contract = null,
+  userId = null,
+  analysisId = null,
+  resumeId = null,
+} = {}) {
+  const v2Score = resolveNumericScore(candidate?.ai_scoring_contract_v2?.weighted_total_score_recomputed)
+  const v3Score = resolveNumericScore(contract?.final_score)
+  const visibleScore = resolveCurrentAiScore(candidate)
+  const components = contract?.components && typeof contract.components === 'object' ? contract.components : {}
+  return {
+    action,
+    user_id: userId ?? null,
+    analysis_id: analysisId || null,
+    resume_id: resumeId || candidate?.resumeId || null,
+    scoring_contract_version: contract?.scoring_contract_version || V3_SHADOW_SCORING_CONTRACT_VERSION,
+    status: contract?.status || null,
+    v3_score: v3Score,
+    v2_score: v2Score,
+    visible_score: visibleScore,
+    v3_vs_v2_delta: v3Score !== null && v2Score !== null ? Math.round((v3Score - v2Score) * 10) / 10 : null,
+    v3_vs_visible_delta: v3Score !== null && visibleScore !== null ? Math.round((v3Score - visibleScore) * 10) / 10 : null,
+    score_band: contract?.score_band || null,
+    confidence: contract?.confidence || null,
+    core_requirement_score: resolveNumericScore(components.core_requirements?.score),
+    core_matched_count: resolveNumericScore(components.core_requirements?.matched_count),
+    core_missing_count: resolveNumericScore(components.core_requirements?.missing_count),
+    core_unknown_count: resolveNumericScore(components.core_requirements?.unknown_count),
+    outcome_score: resolveNumericScore(components.demonstrated_outcomes?.score),
+    experience_score: resolveNumericScore(components.experience_alignment?.score),
+    experience_classification: typeof components.experience_alignment?.classification === 'string'
+      ? components.experience_alignment.classification
+      : null,
+    preferred_bonus: resolveNumericScore(contract?.adjustments?.preferred_bonus),
+    confirmed_location_penalty: resolveNumericScore(contract?.adjustments?.confirmed_location_penalty),
+    diagnostic_codes: Array.isArray(contract?.diagnostic_codes)
+      ? contract.diagnostic_codes.filter((code) => /^[a-z0-9_]+$/.test(String(code))).slice(0, 12)
+      : [],
+  }
+}
+
+function logV3ShadowDiagnostic(logger, level, diagnostic) {
+  if (level === 'warn') logger.warn?.('[AiScoringContractV3] shadow diagnostic', diagnostic)
+  else logger.info?.('[AiScoringContractV3] shadow diagnostic', diagnostic)
+}
+
+export function attachV3ShadowScoringContracts({
+  candidates = [],
+  jobDescriptionContext,
+  userId,
+  analysisId,
+  resumeId,
+  logger = console,
+  env = process.env,
+} = {}) {
+  if (!Array.isArray(candidates) || !isV3ShadowScoringEnabled(env)) return candidates
+  const allowlist = buildV3ShadowAllowlistDiagnostic({ userId, analysisId, env })
+  if (!allowlist.allowlist_matched || !jobDescriptionContext?.hasContext) return candidates
+
+  return candidates.map((candidate) => {
+    try {
+      const contract = getV3ShadowScorer()(candidate, jobDescriptionContext)
+      const safeContract = normalizeV3ShadowContract(contract) || {
+        scoring_contract_version: V3_SHADOW_SCORING_CONTRACT_VERSION,
+        scoring_mode: 'shadow_only',
+        status: 'failed_open',
+        final_score: null,
+        score_out_of_ten: null,
+        score_band: 'unavailable',
+        confidence: 'low',
+        components: null,
+        adjustments: null,
+        diagnostic_codes: ['contract_version_mismatch'],
+      }
+      logV3ShadowDiagnostic(logger, safeContract.status === 'computed' ? 'info' : 'warn', buildSafeV3ShadowDiagnostic({
+        action: safeContract.status === 'computed' ? 'computed' : 'failed_open',
+        candidate,
+        contract: safeContract,
+        userId,
+        analysisId,
+        resumeId,
+      }))
+      return { ...candidate, ai_scoring_contract_v3_shadow: safeContract }
+    } catch (error) {
+      const failedContract = {
+        scoring_contract_version: V3_SHADOW_SCORING_CONTRACT_VERSION,
+        scoring_mode: 'shadow_only',
+        status: 'failed_open',
+        final_score: null,
+        score_out_of_ten: null,
+        score_band: 'unavailable',
+        confidence: 'low',
+        components: null,
+        adjustments: null,
+        diagnostic_codes: ['scoring_exception'],
+      }
+      logV3ShadowDiagnostic(logger, 'warn', buildSafeV3ShadowDiagnostic({
+        action: 'failed_open', candidate, contract: failedContract, userId, analysisId, resumeId,
+      }))
+      return { ...candidate, ai_scoring_contract_v3_shadow: failedContract }
+    }
+  })
 }
 
 function resolveCurrentAiScore(candidate = {}) {
@@ -1996,6 +2131,15 @@ export async function runParse(job) {
     logger: console,
   })
 
+  finalCandidates = attachV3ShadowScoringContracts({
+    candidates: finalCandidates,
+    jobDescriptionContext,
+    userId: job.data.userId ?? null,
+    analysisId: analysisId || null,
+    resumeId,
+    logger: console,
+  })
+
   const finalAiAttempt = aiResponse?.attempts?.at?.(-1) || null
   const tokenBudgetAttempts = aiResponse?.tokenBudgetAttempts || finalAiAttempt?.tokenBudgetAttempts || []
   const tokenBudgetAttemptCount = Array.isArray(tokenBudgetAttempts) ? tokenBudgetAttempts.length : 0
@@ -2290,4 +2434,7 @@ export const __testables = {
   buildAiScoringContractV2VisibleScoreApplyDiagnostic,
   isAiScoringContractV2VisibleApplyAllUsersEnabled,
   buildAiScoringContractV2VisibleApplyAllowlistDiagnostic,
+  attachV3ShadowScoringContracts,
+  buildSafeV3ShadowDiagnostic,
+  buildV3ShadowAllowlistDiagnostic,
 }
