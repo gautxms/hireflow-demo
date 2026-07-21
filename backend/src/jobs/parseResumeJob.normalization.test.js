@@ -19,6 +19,7 @@ import {
 } from '../services/resumeFormatDiagnosticFixtures.js'
 import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from '../services/pdfCanonicalExtractionService.js'
 import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
+import { V3_SHADOW_SCORING_CONTRACT_VERSION, scoreCandidateWithV3Shadow } from '../services/v3ShadowScoringService.js'
 import { buildAiScoringContractV2ScoreDeltaDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
@@ -34,6 +35,7 @@ const {
   reconcileCandidateExperienceRange,
   reconcileCandidateRequirementSemantics,
   reconcileCandidateLocationAlignment,
+  attachV3ShadowScoringContracts,
 } = __testables
 
 function buildV2VisibleScoreCandidate(overrides = {}) {
@@ -302,6 +304,15 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
       }
       const locationReconciled = reconcileCandidateLocationAlignment(reconciled, jdContext)
       const deterministic = scoreCandidateDeterministically(locationReconciled, jdContext)
+      const v3 = scoreCandidateWithV3Shadow(locationReconciled, {
+        ...jdContext,
+        requirements: 'Node.js, Java, or Go\nPostgreSQL is required\nKubernetes is preferred',
+        requirementSemantics: {
+          required: ['Node.js, Java, or Go', 'PostgreSQL'],
+          preferred: ['Kubernetes'],
+          alternativeGroups: [['Node.js', 'Java', 'Go']],
+        },
+      })
       const provenance = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate: locationReconciled })
       outputs.push({
         yearsExperience: locationReconciled.years_experience,
@@ -315,6 +326,7 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
         deterministicLocation: deterministic.scoring_breakdown.location_alignment,
         deterministicScore: deterministic.final_score,
         deterministicExperience: deterministic.scoring_breakdown.experience_alignment,
+        v3Contract: v3,
         displayedScore: provenance.displayed_score,
         displayedScoreSource: provenance.displayed_score_source,
         displayedScoringVersion: provenance.displayed_scoring_version,
@@ -336,6 +348,9 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
     assert.equal(outputs[0].displayedScoreSource, 'matchScore.score')
     assert.equal(outputs[0].displayedScoringVersion, null)
     assert.equal(outputs[0].v2Score, 89.1)
+    assert.equal(outputs[0].v3Contract.scoring_contract_version, V3_SHADOW_SCORING_CONTRACT_VERSION)
+    assert.equal(outputs[0].v3Contract.components.experience_alignment.classification, 'within_range')
+    assert.equal(outputs[0].v3Contract.components.location_alignment.classification, 'unknown')
   } finally {
     if (previousEnv.legacy === undefined) delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
     else process.env.ENABLE_LEGACY_DOC_EXTRACTION = previousEnv.legacy
@@ -345,6 +360,109 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
     else process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS = previousEnv.pdfAllUsers
     __resetPdfJsClientForTests()
     __resetMammothClientForTests()
+  }
+})
+
+test('V3 shadow gate attaches one contract version without changing any visible score field', () => {
+  const candidates = [
+    {
+      score: 88,
+      matchScore: { score: 88, score_out_of_ten: 8.8 },
+      fit_assessment: { overall_fit_score: 88, matched_requirements: ['Node.js'], missing_requirements: [] },
+      matchedSkills: ['Node.js'],
+      skills_flat: ['Node.js'],
+      years_experience: 5,
+      experience: ['Built Node.js APIs used by 100 customers.'],
+    },
+    {
+      score: 62,
+      matchScore: { score: 62, score_out_of_ten: 6.2 },
+      fit_assessment: { overall_fit_score: 62, matched_requirements: [], missing_requirements: ['Node.js'] },
+      missingSkills: ['Node.js'],
+      years_experience: 2,
+      experience: ['Executed manual test cases.'],
+    },
+  ]
+  const before = structuredClone(candidates)
+  const logs = []
+  const output = attachV3ShadowScoringContracts({
+    candidates,
+    jobDescriptionContext: {
+      hasContext: true,
+      requirements: 'Node.js is required',
+      requirementSemantics: { required: ['Node.js'], preferred: [], alternativeGroups: [] },
+      experienceMin: 4,
+      experienceMax: 7,
+      employmentType: 'Remote',
+    },
+    userId: 7,
+    analysisId: 'analysis-v3-shadow',
+    resumeId: 'resume-v3-shadow',
+    env: {
+      AI_SCORING_CONTRACT_V3_SHADOW_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_ANALYSIS_IDS: 'analysis-v3-shadow',
+    },
+    logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+  })
+
+  assert.deepEqual(candidates, before)
+  assert.equal(output.length, 2)
+  assert.equal(output.every((candidate) => candidate.ai_scoring_contract_v3_shadow.scoring_contract_version === V3_SHADOW_SCORING_CONTRACT_VERSION), true)
+  assert.deepEqual(output.map(({ score, matchScore, fit_assessment: fit }) => ({
+    score,
+    matchScore: matchScore.score,
+    scoreOutOfTen: matchScore.score_out_of_ten,
+    fitScore: fit.overall_fit_score,
+  })), before.map(({ score, matchScore, fit_assessment: fit }) => ({
+    score,
+    matchScore: matchScore.score,
+    scoreOutOfTen: matchScore.score_out_of_ten,
+    fitScore: fit.overall_fit_score,
+  })))
+  assert.equal(logs.length, 2)
+  assert.equal(JSON.stringify(logs).includes('Node.js'), false)
+})
+
+test('V3 shadow is disabled without both the flag and an explicit allowlist match', () => {
+  const candidates = [{ score: 80 }]
+  const context = { hasContext: true, requirements: 'Node.js required' }
+  assert.equal(attachV3ShadowScoringContracts({ candidates, jobDescriptionContext: context, env: {} }), candidates)
+  assert.equal(attachV3ShadowScoringContracts({
+    candidates,
+    jobDescriptionContext: context,
+    userId: 7,
+    env: { AI_SCORING_CONTRACT_V3_SHADOW_ENABLED: 'true', AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_USER_IDS: '8' },
+  }), candidates)
+})
+
+test('V3 shadow scorer failures fail open and preserve production analysis fields', () => {
+  __setParseResumeJobTestOverrides({ scoreCandidateWithV3Shadow: () => { throw new Error('synthetic V3 failure') } })
+  try {
+    const candidate = {
+      score: 81,
+      matchScore: { score: 81, score_out_of_ten: 8.1 },
+      fit_assessment: { overall_fit_score: 81 },
+    }
+    const logs = []
+    const [output] = attachV3ShadowScoringContracts({
+      candidates: [candidate],
+      jobDescriptionContext: { hasContext: true, requirements: 'Node.js required' },
+      analysisId: 'analysis-v3-failure',
+      env: {
+        AI_SCORING_CONTRACT_V3_SHADOW_ENABLED: 'true',
+        AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_ANALYSIS_IDS: 'analysis-v3-failure',
+      },
+      logger: { info() {}, warn: (...args) => logs.push(args) },
+    })
+
+    assert.equal(output.score, 81)
+    assert.equal(output.matchScore.score, 81)
+    assert.equal(output.fit_assessment.overall_fit_score, 81)
+    assert.equal(output.ai_scoring_contract_v3_shadow.status, 'failed_open')
+    assert.deepEqual(output.ai_scoring_contract_v3_shadow.diagnostic_codes, ['scoring_exception'])
+    assert.equal(logs.length, 1)
+  } finally {
+    __resetParseResumeJobTestOverrides()
   }
 })
 
@@ -1238,6 +1356,12 @@ function createParseJob({ id, resumeId, filename, mimeType, originalMimeType, fi
 
 
 test('runParse preserves decimal experience in the persisted JSON and numeric column payload', async (t) => {
+  const previousV3Env = {
+    enabled: process.env.AI_SCORING_CONTRACT_V3_SHADOW_ENABLED,
+    analyses: process.env.AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_ANALYSIS_IDS,
+  }
+  process.env.AI_SCORING_CONTRACT_V3_SHADOW_ENABLED = 'true'
+  process.env.AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_ANALYSIS_IDS = 'analysis-same-base-multiformat'
   let resumeUpdateParams = null
   const cached = []
   t.mock.method(pool, 'query', async (sql, params = []) => {
@@ -1294,6 +1418,10 @@ test('runParse preserves decimal experience in the persisted JSON and numeric co
   })
   t.after(() => {
     __resetParseResumeJobTestOverrides()
+    if (previousV3Env.enabled === undefined) delete process.env.AI_SCORING_CONTRACT_V3_SHADOW_ENABLED
+    else process.env.AI_SCORING_CONTRACT_V3_SHADOW_ENABLED = previousV3Env.enabled
+    if (previousV3Env.analyses === undefined) delete process.env.AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_ANALYSIS_IDS
+    else process.env.AI_SCORING_CONTRACT_V3_SHADOW_ALLOWED_ANALYSIS_IDS = previousV3Env.analyses
     t.mock.reset()
   })
 
@@ -1315,6 +1443,10 @@ test('runParse preserves decimal experience in the persisted JSON and numeric co
   const persistedParseResult = JSON.parse(resumeUpdateParams[1])
   assert.equal(persistedParseResult.candidates[0].years_experience, 4.5)
   assert.equal(persistedParseResult.candidates[0].experience_range.classification, 'within_range')
+  assert.equal(persistedParseResult.candidates[0].ai_scoring_contract_v3_shadow.scoring_contract_version, V3_SHADOW_SCORING_CONTRACT_VERSION)
+  assert.equal(persistedParseResult.candidates[0].ai_scoring_contract_v3_shadow.status, 'computed')
+  assert.equal(persistedParseResult.candidates[0].score, 86)
+  assert.equal(persistedParseResult.candidates[0].matchScore.score, 86)
   assert.equal(result.candidates[0].years_experience, 4.5)
   assert.equal(cached.at(-1).payload.result.candidates[0].years_experience, 4.5)
 })
