@@ -2,6 +2,9 @@ import { pool } from '../db/client.js'
 import { getUsersIdReferenceType } from './adminAiSchemaCompatibility.js'
 
 export const MAX_SYSTEM_PROMPT_LENGTH = 50000
+export const DEFAULT_SYSTEM_PROMPT_VERSION = 2
+const LEGACY_DEFAULT_EXPERIENCE_INSTRUCTION = '8) For years_experience: first scan the summary/profile section for an explicit statement like "X years of experience" or "X+ years". If found, use that number (strip the +). If not found, calculate by summing all experience entry durations: subtract startDate from endDate for each role. For roles where endDate is null or "Present", use today\'s date. Sum all durations, round down to nearest integer. If neither method works, return null. Never return N/A as a string.'
+const PRECISE_DEFAULT_EXPERIENCE_INSTRUCTION = '8) For years_experience: first scan the summary/profile section for an explicit statement like "X years of experience" or "X+ years". If found, preserve that number, including a meaningful decimal (strip only the +). If not found, calculate total months from the experience entry dates, then convert once to decimal years rounded to one decimal place. Do not round, floor, or ceil to a whole year. If the dates are ambiguous or neither method works reliably, return null. Never return N/A as a string.'
 export const DEFAULT_SYSTEM_PROMPT = `You are a resume analysis engine for a single candidate profile.
 
 Primary goal:
@@ -106,7 +109,7 @@ IMPORTANT RULES:
 5) Do not hallucinate: never invent employers, dates, degrees, certifications, projects, skills, metrics, links, or contact details.
 6) If evidence is weak/ambiguous, keep the field conservative and lower confidence.
 7) Normalize dates as YYYY-MM when possible; otherwise keep raw text in duration/notes fields and set date fields to null.
-8) For years_experience: first scan the summary/profile section for an explicit statement like "X years of experience" or "X+ years". If found, use that number (strip the +). If not found, calculate by summing all experience entry durations: subtract startDate from endDate for each role. For roles where endDate is null or "Present", use today's date. Sum all durations, round down to nearest integer. If neither method works, return null. Never return N/A as a string.
+${PRECISE_DEFAULT_EXPERIENCE_INSTRUCTION}
 9) profile_score is a general quality score 0-100 based on the resume alone, independent of any JD. Score using these weights: Depth of experience (35%) years of experience, seniority of roles, career progression shown; Skill breadth (25%) variety and relevance of skills listed; Education (15%) degree level and institution quality; Achievements & certifications (15%) measurable outcomes, awards, certifications listed; Resume clarity (10%) how clearly structured and specific the resume content is. Always populate this field. It is not affected by JD availability. When a JD is available, matchScore.score is the primary ranking signal. When no JD is available, profile_score is the fallback ranking signal.
 10) strengths: Generate 3 to 5 specific, concrete strengths based on what is actually written in the resume. Reference real companies, projects, technologies, or measurable outcomes. Strengths must be drawn only from evidence in the resume. Do not fabricate strengths from JD requirements. Do not write generic statements like "strong communicator" or "team player" unless backed by specific evidence from the resume.
 11) considerations: Generate 2 to 3 honest, constructive observations a recruiter should probe in an interview. These are not negatives — they are gaps, unknowns, or risk factors.
@@ -126,6 +129,13 @@ Quality bar:
 - Keep rationale concise and evidence-based.
 - Ensure output is parseable JSON with double-quoted keys and strings.`
 
+// Keep the complete previous default so upgrades only migrate an untouched default,
+// never a prompt an administrator has customized.
+export const PREVIOUS_DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT.replace(
+  PRECISE_DEFAULT_EXPERIENCE_INSTRUCTION,
+  LEGACY_DEFAULT_EXPERIENCE_INSTRUCTION,
+)
+
 let systemPromptTableEnsured = false
 
 async function ensureSystemPromptTable() {
@@ -137,7 +147,6 @@ async function ensureSystemPromptTable() {
       id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id = true),
       system_prompt TEXT NOT NULL,
       prompt_version INTEGER NOT NULL DEFAULT 1 CHECK (prompt_version >= 1),
-      updated_by TEXT,
       updated_by ${usersIdType} REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -146,9 +155,19 @@ async function ensureSystemPromptTable() {
 
   await pool.query(
     `INSERT INTO admin_system_prompts (id, system_prompt, prompt_version)
-     VALUES (true, $1, 1)
+     VALUES (true, $1, $2)
      ON CONFLICT (id) DO NOTHING`,
-    [DEFAULT_SYSTEM_PROMPT],
+    [DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_VERSION],
+  )
+
+  await pool.query(
+    `UPDATE admin_system_prompts
+     SET system_prompt = $1,
+         prompt_version = $2,
+         updated_at = NOW()
+     WHERE id = true
+       AND system_prompt = $3`,
+    [DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_VERSION, PREVIOUS_DEFAULT_SYSTEM_PROMPT],
   )
 
   systemPromptTableEnsured = true
@@ -240,7 +259,7 @@ export async function getRuntimeSystemPromptConfig() {
   } catch {
     return {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
-      promptVersion: 1,
+      promptVersion: DEFAULT_SYSTEM_PROMPT_VERSION,
       updatedBy: null,
       updatedAt: null,
       isDefaultFallback: true,

@@ -30,6 +30,7 @@ import {
 } from '../services/aiScoreCacheService.js'
 import { buildSafeScoreCacheStoragePayload, getScoreCacheEntry, upsertScoreCacheEntry } from '../services/aiScoreCacheStorageService.js'
 import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
+import { evaluateExperienceRange } from '../utils/experienceRange.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
@@ -1188,6 +1189,120 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
   })
 }
 
+const CONFLICTING_IN_RANGE_EXPERIENCE_TEXT = /\b(?:experience|years?|yrs?)\b/i
+const CONFLICTING_IN_RANGE_JUDGMENT = /\b(?:exceed(?:s|ed|ing)?|above\s+(?:the\s+)?(?:range|requirement|maximum)|below\s+(?:the\s+)?(?:range|requirement|minimum)|underqualified|overqualified|experience\s+(?:gap|shortfall)|fail(?:s|ed|ing)?\s+(?:the\s+)?experience)\b/i
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function explicitlyComparesTotalYearsToBoundary(value, evaluation, candidateName = '') {
+  const text = String(value || '')
+  const candidateYears = escapeRegex(evaluation.candidateYears)
+  const normalizedCandidateName = String(candidateName || '').trim()
+  const candidateNameAliases = normalizedCandidateName
+    ? [...new Set([normalizedCandidateName, normalizedCandidateName.split(/\s+/)[0]].filter(Boolean))]
+    : []
+  const candidateNamePattern = candidateNameAliases.length > 0
+    ? `(?:${candidateNameAliases.map(escapeRegex).join('|')})(?:['\u2019]s)?`
+    : null
+  const boundaries = [evaluation.minimumYears, evaluation.maximumYears]
+    .filter((boundary) => boundary !== null)
+    .map(escapeRegex)
+    .join('|')
+  if (!boundaries) return false
+
+  const skillSpecificYears = new RegExp(
+    `\\b${candidateYears}\\s*(?:years?|yrs?)\\s+(?:of|with|in|using|on|at)\\s+(?!(?:(?:total|overall|cumulative|professional|work)\\s+)?experience\\b)[^,.;]{1,50}`,
+    'i',
+  )
+  if (skillSpecificYears.test(text)) return false
+
+  const totalExperienceSubject = [
+    `\\b(?:total|overall|cumulative)\\s+(?:professional\\s+|work\\s+)?experience\\b[^.\\n]{0,60}\\b${candidateYears}\\s*(?:years?|yrs?)\\b`,
+    `\\bcandidate(?:['\u2019]s\\s+|\\s+has\\s+|\\s+with\\s+)?${candidateYears}\\s*(?:years?|yrs?)(?:\\s+of)?\\s+(?:total\\s+|overall\\s+|professional\\s+|work\\s+)?experience\\b`,
+    `(?:^|[.!?;]\\s*)${candidateYears}\\s*(?:years?|yrs?)\\b`,
+    `\\b(?:they|he|she)\\s+(?:has|have|with)\\s+${candidateYears}\\s*(?:years?|yrs?)\\b`,
+  ]
+  if (candidateNamePattern) {
+    totalExperienceSubject.push(`\\b${candidateNamePattern}\\s+(?:has\\s+|with\\s+)?${candidateYears}\\s*(?:years?|yrs?)\\b`)
+  }
+  const totalYears = new RegExp(
+    `(?:${totalExperienceSubject.join('|')})`,
+    'i',
+  )
+  const range = evaluation.minimumYears !== null && evaluation.maximumYears !== null
+    ? `${escapeRegex(evaluation.minimumYears)}\\s*(?:-|\\u2013|\\u2014|to)\\s*${escapeRegex(evaluation.maximumYears)}(?:\\s*-?\\s*(?:years?|yrs?))?`
+    : null
+  const jdBoundary = new RegExp(
+    `(?:\\b(?:minimum|maximum|required|requirement|range)\\b[^.\\n]{0,50}\\b(?:${boundaries})\\s*(?:years?|yrs?)?\\b|\\b(?:${boundaries})\\s*(?:years?|yrs?)\\b[^.\\n]{0,50}\\b(?:minimum|maximum|required|requirement|range)\\b${range ? `|\\b${range}[^.\\n]{0,25}\\b(?:required|requirement|range|minimum|maximum)\\b` : ''})`,
+    'i',
+  )
+  return totalYears.test(text) && jdBoundary.test(text)
+}
+
+function reconcileConflictingExperienceText(value, conflicts) {
+  if (typeof value !== 'string' || !conflicts(value)) return value
+
+  const tokens = value.split(/((?:(?<!\d)\.(?!\d)|[!?;])\s*)/)
+  const sentences = []
+  for (let index = 0; index < tokens.length; index += 2) {
+    const content = tokens[index] || ''
+    const delimiter = tokens[index + 1] || ''
+    if (content || delimiter) sentences.push(`${content}${delimiter}`)
+  }
+  const retained = []
+  for (const sentence of sentences) {
+    if (!conflicts(sentence)) {
+      retained.push(sentence.trim())
+      continue
+    }
+
+    const clauses = sentence.split(/,\s+(?=(?:but|however|while|whereas|and)\b)/i)
+    const safeClauses = clauses
+      .filter((clause) => !conflicts(clause))
+      .map((clause) => clause.trim().replace(/^(?:but|however|while|whereas|and)\s+/i, ''))
+      .filter(Boolean)
+    if (safeClauses.length > 0) retained.push(safeClauses.join(', '))
+  }
+
+  return retained.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
+  const evaluation = evaluateExperienceRange(candidate?.years_experience, {
+    min: jobDescriptionContext?.experienceMin,
+    max: jobDescriptionContext?.experienceMax,
+  })
+  const next = { ...candidate, experience_range: evaluation }
+  if (evaluation.classification !== 'within_range') return next
+
+  const conflicts = (value) => CONFLICTING_IN_RANGE_EXPERIENCE_TEXT.test(String(value || ''))
+    && CONFLICTING_IN_RANGE_JUDGMENT.test(String(value || ''))
+    && explicitlyComparesTotalYearsToBoundary(value, evaluation, candidate?.name)
+  const reconcileArray = (values) => Array.isArray(values)
+    ? values.map((entry) => reconcileConflictingExperienceText(entry, conflicts)).filter(Boolean)
+    : values
+  const fit = candidate?.fit_assessment
+  return {
+    ...next,
+    considerations: reconcileArray(candidate?.considerations),
+    concerns: reconcileArray(candidate?.concerns),
+    missingSkills: reconcileArray(candidate?.missingSkills),
+    missingRequirementsFull: reconcileArray(candidate?.missingRequirementsFull),
+    risksOrGapsFull: reconcileArray(candidate?.risksOrGapsFull),
+    fit_assessment: fit ? {
+      ...fit,
+      missing_requirements: reconcileArray(fit.missing_requirements),
+      risks_or_gaps: reconcileArray(fit.risks_or_gaps),
+      notes: reconcileArray(fit.notes),
+      rationale: reconcileConflictingExperienceText(fit.rationale, conflicts),
+    } : fit,
+    recommendation: reconcileConflictingExperienceText(candidate?.recommendation, conflicts),
+    recommendationFull: reconcileConflictingExperienceText(candidate?.recommendationFull, conflicts),
+  }
+}
+
 
 
 function normalizeAttemptMode(value) {
@@ -1829,6 +1944,7 @@ export async function runParse(job) {
   }
 
   const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
+    .map((candidate) => reconcileCandidateExperienceRange(candidate, jobDescriptionContext))
   const scoredCandidates = applyJobDescriptionScoringMode(candidates, jobDescriptionContext)
   const normalizedCandidates = canonicalizeAnalysisScoreFields(scoredCandidates, { jobDescriptionContext })
   let finalCandidates = applyDeterministicJdFitScoresForRuntimeTest({
@@ -2135,6 +2251,7 @@ export function registerParseResumeJobProcessor() {
 export const __testables = {
   normalizeStructuredSkills,
   buildNormalizedCandidates,
+  reconcileCandidateExperienceRange,
   runParse,
   loadFileBufferBase64ForParseJob,
   withParseStageTimeout,

@@ -1,3 +1,5 @@
+import { evaluateExperienceRange } from '../utils/experienceRange.js'
+
 const CONTRACT_VERSION = 'deterministic_jd_fit_v1'
 const STRONG_STRUCTURED_FINAL_FLOOR = 86
 const STRONG_STRUCTURED_FINAL_CEILING = 91
@@ -528,6 +530,7 @@ const experienceBreakdown = (candidate, context, fitAssessment, requirement, ski
   const saferCandidateYears = belowMinEvidence.safer_years !== null && candidateYears !== null
     ? Math.min(candidateYears, belowMinEvidence.safer_years)
     : (belowMinEvidence.safer_years ?? candidateYears)
+  const rangeEvaluation = evaluateExperienceRange(saferCandidateYears, required)
   let score = 55
   let cap = null
   if (saferCandidateYears === null) score = belowMinEvidence.applies ? 55 : 35
@@ -557,6 +560,7 @@ const experienceBreakdown = (candidate, context, fitAssessment, requirement, ski
     below_min_experience_evidence_applied: belowMinEvidence.applies,
     below_min_experience_signal_count: belowMinEvidence.signal_count,
     safer_candidate_years: saferCandidateYears,
+    range_classification: rangeEvaluation.classification,
   }
 }
 
