@@ -23,6 +23,7 @@ test('frozen regression fixtures preserve broad ranking, decimal experience, and
   assert.deepEqual(fixtures.preferredQualification.requirements.preferred, ['bonus-skill'])
   assert.equal(fixtures.noEducationRequirement.requirements.education, null)
   assert.equal(Object.isFrozen(fixtures), true)
+  assert.equal(Object.isFrozen(fixtures.decimalInsideRange.requirements.experience), true)
 })
 
 test('no drift when score and matchScore.score match', () => {
@@ -538,6 +539,7 @@ test('v2 diagnostic identifies the displayed scoring source without storing resu
       score_confidence: 'high',
       skills_match_score: 86,
       relevant_experience_score: 82,
+      category_breakdown: { 'private@example.test': 'Sensitive resume evidence' },
     },
   }
 
@@ -556,6 +558,101 @@ test('v2 diagnostic identifies the displayed scoring source without storing resu
   })
   assert.deepEqual(candidate, before)
   assert.doesNotMatch(JSON.stringify(diagnostic), /Private Name|private@example|Sensitive resume evidence/)
+})
+
+test('score-source characterization follows production visible-score precedence and experiment order', () => {
+  const cases = [
+    {
+      name: 'legacy visible score with unapplied V2 shadow',
+      candidate: {
+        matchScore: { score: 71 },
+        score: 71,
+        ai_scoring_contract_v2: {
+          scoring_contract_version: 'ai_jd_fit_rubric_v2',
+          weighted_total_score_recomputed: 86,
+        },
+      },
+      expected: { score: 71, source: 'matchScore.score', version: null, original: 71 },
+    },
+    {
+      name: 'deterministic visible score only',
+      candidate: {
+        matchScore: { score: 83 },
+        score: 83,
+        deterministic_jd_fit_apply_metadata: {
+          original_ai_score: 76,
+          applied_deterministic_score: 83,
+          scoring_contract_version: 'deterministic_jd_fit_v1',
+        },
+      },
+      expected: { score: 83, source: 'deterministic_jd_fit', version: 'deterministic_jd_fit_v1', original: 76 },
+    },
+    {
+      name: 'V2 visible score only',
+      candidate: {
+        matchScore: { score: 87 },
+        score: 87,
+        v2_visible_score_experiment: {
+          original_visible_score: 78,
+          applied_score: 87,
+          contract_version: 'ai_jd_fit_rubric_v2',
+        },
+        ai_scoring_contract_v2: { weighted_total_score_recomputed: 87 },
+      },
+      expected: { score: 87, source: 'ai_scoring_contract_v2', version: 'ai_jd_fit_rubric_v2', original: 78 },
+    },
+    {
+      name: 'V2 is visible when deterministic and V2 both applied',
+      candidate: {
+        matchScore: { score: 89 },
+        score: 89,
+        deterministic_jd_fit_apply_metadata: {
+          original_ai_score: 74,
+          applied_deterministic_score: 82,
+          scoring_contract_version: 'deterministic_jd_fit_v1',
+        },
+        v2_visible_score_experiment: {
+          original_visible_score: 82,
+          applied_score: 89,
+          contract_version: 'ai_jd_fit_rubric_v2',
+        },
+        ai_scoring_contract_v2: { weighted_total_score_recomputed: 89 },
+      },
+      expected: { score: 89, source: 'ai_scoring_contract_v2', version: 'ai_jd_fit_rubric_v2', original: 74 },
+    },
+    {
+      name: 'candidate without experiment metadata',
+      candidate: { matchScore: { score: 69 }, score: 91 },
+      expected: { score: 69, source: 'matchScore.score', version: null, original: 69 },
+    },
+    {
+      name: 'conflicting fields use matchScore and ignore stale experiment metadata',
+      candidate: {
+        matchScore: { score: 62 },
+        score: 91,
+        fit_assessment: { overall_fit_score: 88 },
+        v2_visible_score_experiment: {
+          original_visible_score: 70,
+          applied_score: 91,
+          contract_version: 'ai_jd_fit_rubric_v2',
+        },
+      },
+      expected: { score: 62, source: 'matchScore.score', version: null, original: 70 },
+    },
+    {
+      name: 'missing fields remain missing',
+      candidate: {},
+      expected: { score: null, source: 'missing', version: null, original: null },
+    },
+  ]
+
+  for (const entry of cases) {
+    const diagnostic = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate: entry.candidate })
+    assert.equal(diagnostic.displayed_score, entry.expected.score, `${entry.name}: score`)
+    assert.equal(diagnostic.displayed_score_source, entry.expected.source, `${entry.name}: source`)
+    assert.equal(diagnostic.displayed_scoring_version, entry.expected.version, `${entry.name}: version`)
+    assert.equal(diagnostic.original_ai_score, entry.expected.original, `${entry.name}: original`)
+  }
 })
 
 test('v2 score delta diagnostic does not emit main event with null score_delta', () => {

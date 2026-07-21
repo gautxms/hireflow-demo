@@ -151,7 +151,9 @@ function resolveScoringObservability(candidate = {}) {
   const deterministic = candidate?.deterministic_jd_fit_apply_metadata
   const v2Apply = candidate?.v2_visible_score_experiment
   const v2 = candidate?.ai_scoring_contract_v2
-  const category = v2?.category_breakdown ?? v2?.score_breakdown ?? {
+  // Keep both keys and values constrained to the fixed V2 schema. Never copy
+  // provider-authored object keys or free-form category content into telemetry.
+  const category = {
     skills_match_score: normalizeOptionalNumber(v2?.skills_match_score),
     relevant_experience_score: normalizeOptionalNumber(v2?.relevant_experience_score),
     education_relevance_score: normalizeOptionalNumber(v2?.education_relevance_score),
@@ -159,13 +161,24 @@ function resolveScoringObservability(candidate = {}) {
   }
 
   const categoryBreakdown = Object.fromEntries(
-    Object.entries(category && typeof category === 'object' && !Array.isArray(category) ? category : {})
-      .map(([key, value]) => [key, normalizeOptionalNumber(value?.score ?? value)])
+    Object.entries(category)
       .filter(([, value]) => value !== null),
   )
-  const scoreSource = deterministic?.applied_deterministic_score != null
-    ? 'deterministic_jd_fit'
-    : (v2Apply?.applied_score != null ? 'ai_scoring_contract_v2' : visible.source)
+  const deterministicAppliedScore = normalizeOptionalNumber(deterministic?.applied_deterministic_score)
+  const v2AppliedScore = normalizeOptionalNumber(v2Apply?.applied_score)
+  // Application order in parseResumeJob is deterministic first, then V2. Metadata
+  // describes the visible source only when its applied value is still the value
+  // selected by the production results precedence.
+  const v2IsVisible = v2AppliedScore !== null && v2AppliedScore === visible.value
+  const deterministicIsVisible = !v2IsVisible
+    && deterministicAppliedScore !== null
+    && deterministicAppliedScore === visible.value
+  const scoreSource = v2IsVisible
+    ? 'ai_scoring_contract_v2'
+    : (deterministicIsVisible ? 'deterministic_jd_fit' : visible.source)
+  const displayedScoringVersion = v2IsVisible
+    ? normalizeOptionalString(v2Apply?.contract_version)
+    : (deterministicIsVisible ? normalizeOptionalString(deterministic?.scoring_contract_version) : null)
 
   return {
     original_ai_score: normalizeOptionalNumber(
@@ -174,9 +187,7 @@ function resolveScoringObservability(candidate = {}) {
     v2_score: resolveV2WeightedTotalScore(candidate),
     displayed_score: visible.value,
     displayed_score_source: scoreSource,
-    displayed_scoring_version: normalizeOptionalString(
-      deterministic?.scoring_contract_version ?? v2Apply?.contract_version ?? v2?.scoring_contract_version,
-    ),
+    displayed_scoring_version: displayedScoringVersion,
     v2_confidence: normalizeOptionalString(v2?.score_confidence),
     v2_category_breakdown: categoryBreakdown,
   }

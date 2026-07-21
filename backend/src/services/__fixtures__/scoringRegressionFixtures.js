@@ -1,13 +1,19 @@
 // Synthetic, anonymized contracts. These are characterization inputs, not target production scores.
-const fixture = (id, score, yearsExperience, requirements = {}) => Object.freeze({
+const deepFreeze = (value) => {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value
+  Object.values(value).forEach(deepFreeze)
+  return Object.freeze(value)
+}
+
+const fixture = (id, score, yearsExperience, requirements = {}) => deepFreeze({
   id,
   score,
-  matchScore: Object.freeze({ score }),
+  matchScore: { score },
   years_experience: yearsExperience,
-  requirements: Object.freeze(requirements),
+  requirements,
 })
 
-export const SCORING_REGRESSION_FIXTURES = Object.freeze({
+export const SCORING_REGRESSION_FIXTURES = deepFreeze({
   excellent: fixture('excellent-match', 91, 7.5),
   strong: fixture('strong-match', 82, 6),
   moderate: fixture('moderate-match', 68, 4),
