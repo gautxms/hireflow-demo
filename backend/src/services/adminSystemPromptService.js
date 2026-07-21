@@ -259,7 +259,7 @@ export async function getRuntimeSystemPromptConfig() {
   } catch {
     return {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
-      promptVersion: 1,
+      promptVersion: DEFAULT_SYSTEM_PROMPT_VERSION,
       updatedBy: null,
       updatedAt: null,
       isDefaultFallback: true,

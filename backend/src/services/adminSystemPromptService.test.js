@@ -6,6 +6,7 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT_VERSION,
   PREVIOUS_DEFAULT_SYSTEM_PROMPT,
+  getRuntimeSystemPromptConfig,
   resetAdminSystemPromptToDefault,
   upsertAdminSystemPrompt,
 } from './adminSystemPromptService.js'
@@ -148,4 +149,16 @@ test('DEFAULT_SYSTEM_PROMPT enforces resume-only skills extraction', () => {
   assert.match(DEFAULT_SYSTEM_PROMPT, /job description/i)
   assert.match(DEFAULT_SYSTEM_PROMPT, /missing_requirements/i)
   assert.match(DEFAULT_SYSTEM_PROMPT, /risks_or_gaps/i)
+})
+
+test('runtime fallback reports the version of the default prompt it returns', async () => {
+  pool.query = async () => {
+    throw new Error('database unavailable')
+  }
+
+  const result = await getRuntimeSystemPromptConfig()
+
+  assert.equal(result.systemPrompt, DEFAULT_SYSTEM_PROMPT)
+  assert.equal(result.promptVersion, DEFAULT_SYSTEM_PROMPT_VERSION)
+  assert.equal(result.isDefaultFallback, true)
 })

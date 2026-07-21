@@ -1196,24 +1196,71 @@ function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function explicitlyComparesTotalYearsToBoundary(value, evaluation) {
+function explicitlyComparesTotalYearsToBoundary(value, evaluation, candidateName = '') {
   const text = String(value || '')
   const candidateYears = escapeRegex(evaluation.candidateYears)
+  const normalizedCandidateName = String(candidateName || '').trim()
+  const candidateNameAliases = normalizedCandidateName
+    ? [...new Set([normalizedCandidateName, normalizedCandidateName.split(/\s+/)[0]].filter(Boolean))]
+    : []
+  const candidateNamePattern = candidateNameAliases.length > 0
+    ? `(?:${candidateNameAliases.map(escapeRegex).join('|')})(?:['\u2019]s)?`
+    : null
   const boundaries = [evaluation.minimumYears, evaluation.maximumYears]
     .filter((boundary) => boundary !== null)
     .map(escapeRegex)
     .join('|')
   if (!boundaries) return false
 
+  const totalExperienceSubject = [
+    `\\b(?:total|overall|cumulative)\\s+(?:professional\\s+|work\\s+)?experience\\b[^.\\n]{0,60}\\b${candidateYears}\\s*(?:years?|yrs?)\\b`,
+    `\\bcandidate(?:['\u2019]s\\s+|\\s+has\\s+|\\s+with\\s+)?${candidateYears}\\s*(?:years?|yrs?)(?:\\s+of)?\\s+(?:total\\s+|overall\\s+|professional\\s+|work\\s+)?experience\\b`,
+    `(?:^|[.!?;]\\s*)${candidateYears}\\s*(?:years?|yrs?)\\b`,
+    `\\b(?:they|he|she)\\s+(?:has|have|with)\\s+${candidateYears}\\s*(?:years?|yrs?)\\b`,
+  ]
+  if (candidateNamePattern) {
+    totalExperienceSubject.push(`\\b${candidateNamePattern}\\s+(?:has\\s+|with\\s+)?${candidateYears}\\s*(?:years?|yrs?)\\b`)
+  }
   const totalYears = new RegExp(
-    `(?:\\b(?:total|overall|cumulative)\\s+(?:professional\\s+|work\\s+)?experience\\b[^.\\n]{0,60}\\b${candidateYears}\\s*(?:years?|yrs?)\\b|\\bcandidate(?:'s\\s+|\\s+has\\s+)?${candidateYears}\\s*(?:years?|yrs?)(?:\\s+of)?\\s+(?:professional\\s+|work\\s+)?experience\\b)`,
+    `(?:${totalExperienceSubject.join('|')})`,
     'i',
   )
+  const range = evaluation.minimumYears !== null && evaluation.maximumYears !== null
+    ? `${escapeRegex(evaluation.minimumYears)}\\s*(?:-|\\u2013|\\u2014|to)\\s*${escapeRegex(evaluation.maximumYears)}(?:\\s*-?\\s*(?:years?|yrs?))?`
+    : null
   const jdBoundary = new RegExp(
-    `(?:\\b(?:minimum|maximum|required|requirement|range)\\b[^.\\n]{0,40}\\b(?:${boundaries})\\s*(?:years?|yrs?)?\\b|\\b(?:${boundaries})\\s*(?:years?|yrs?)\\b[^.\\n]{0,40}\\b(?:minimum|maximum|required|requirement|range)\\b)`,
+    `(?:\\b(?:minimum|maximum|required|requirement|range)\\b[^.\\n]{0,50}\\b(?:${boundaries})\\s*(?:years?|yrs?)?\\b|\\b(?:${boundaries})\\s*(?:years?|yrs?)\\b[^.\\n]{0,50}\\b(?:minimum|maximum|required|requirement|range)\\b${range ? `|\\b${range}[^.\\n]{0,25}\\b(?:required|requirement|range|minimum|maximum)\\b` : ''})`,
     'i',
   )
   return totalYears.test(text) && jdBoundary.test(text)
+}
+
+function reconcileConflictingExperienceText(value, conflicts) {
+  if (typeof value !== 'string' || !conflicts(value)) return value
+
+  const tokens = value.split(/((?:(?<!\d)\.(?!\d)|[!?;])\s*)/)
+  const sentences = []
+  for (let index = 0; index < tokens.length; index += 2) {
+    const content = tokens[index] || ''
+    const delimiter = tokens[index + 1] || ''
+    if (content || delimiter) sentences.push(`${content}${delimiter}`)
+  }
+  const retained = []
+  for (const sentence of sentences) {
+    if (!conflicts(sentence)) {
+      retained.push(sentence.trim())
+      continue
+    }
+
+    const clauses = sentence.split(/,\s+(?=(?:but|however|while|whereas|and)\b)/i)
+    const safeClauses = clauses
+      .filter((clause) => !conflicts(clause))
+      .map((clause) => clause.trim().replace(/^(?:but|however|while|whereas|and)\s+/i, ''))
+      .filter(Boolean)
+    if (safeClauses.length > 0) retained.push(safeClauses.join(', '))
+  }
+
+  return retained.join(' ').replace(/\s+/g, ' ').trim()
 }
 
 function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
@@ -1226,25 +1273,27 @@ function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
 
   const conflicts = (value) => CONFLICTING_IN_RANGE_EXPERIENCE_TEXT.test(String(value || ''))
     && CONFLICTING_IN_RANGE_JUDGMENT.test(String(value || ''))
-    && explicitlyComparesTotalYearsToBoundary(value, evaluation)
-  const filter = (values) => Array.isArray(values) ? values.filter((entry) => !conflicts(entry)) : values
+    && explicitlyComparesTotalYearsToBoundary(value, evaluation, candidate?.name)
+  const reconcileArray = (values) => Array.isArray(values)
+    ? values.map((entry) => reconcileConflictingExperienceText(entry, conflicts)).filter(Boolean)
+    : values
   const fit = candidate?.fit_assessment
   return {
     ...next,
-    considerations: filter(candidate?.considerations),
-    concerns: filter(candidate?.concerns),
-    missingSkills: filter(candidate?.missingSkills),
-    missingRequirementsFull: filter(candidate?.missingRequirementsFull),
-    risksOrGapsFull: filter(candidate?.risksOrGapsFull),
+    considerations: reconcileArray(candidate?.considerations),
+    concerns: reconcileArray(candidate?.concerns),
+    missingSkills: reconcileArray(candidate?.missingSkills),
+    missingRequirementsFull: reconcileArray(candidate?.missingRequirementsFull),
+    risksOrGapsFull: reconcileArray(candidate?.risksOrGapsFull),
     fit_assessment: fit ? {
       ...fit,
-      missing_requirements: filter(fit.missing_requirements),
-      risks_or_gaps: filter(fit.risks_or_gaps),
-      notes: filter(fit.notes),
-      rationale: conflicts(fit.rationale) ? '' : fit.rationale,
+      missing_requirements: reconcileArray(fit.missing_requirements),
+      risks_or_gaps: reconcileArray(fit.risks_or_gaps),
+      notes: reconcileArray(fit.notes),
+      rationale: reconcileConflictingExperienceText(fit.rationale, conflicts),
     } : fit,
-    recommendation: conflicts(candidate?.recommendation) ? '' : candidate?.recommendation,
-    recommendationFull: conflicts(candidate?.recommendationFull) ? '' : candidate?.recommendationFull,
+    recommendation: reconcileConflictingExperienceText(candidate?.recommendation, conflicts),
+    recommendationFull: reconcileConflictingExperienceText(candidate?.recommendationFull, conflicts),
   }
 }
 

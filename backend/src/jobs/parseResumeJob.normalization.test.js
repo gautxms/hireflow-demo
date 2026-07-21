@@ -10,9 +10,16 @@ import {
   __testables,
   applyJobDescriptionScoringMode,
 } from './parseResumeJob.js'
-import { __resetMammothClientForTests, __setMammothClientForTests } from '../services/resumeDocumentExtractionService.js'
-import { buildPdfJsTextContentMockFromFixtures, buildSyntheticPdfResumeFixture } from '../services/resumeFormatDiagnosticFixtures.js'
+import { __resetMammothClientForTests, __setMammothClientForTests, prepareResumePayloadForAnalysis } from '../services/resumeDocumentExtractionService.js'
+import {
+  buildPdfJsTextContentMockFromFixtures,
+  buildSyntheticDocxResumeFixture,
+  buildSyntheticLegacyDocResumeFixture,
+  buildSyntheticPdfResumeFixture,
+} from '../services/resumeFormatDiagnosticFixtures.js'
 import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from '../services/pdfCanonicalExtractionService.js'
+import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
+import { buildAiScoringContractV2ScoreDeltaDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
 
@@ -145,6 +152,169 @@ test('in-range reconciliation preserves skill-specific experience gaps', () => {
   assert.deepEqual(normalized.missingSkills, candidate.missingSkills)
   assert.deepEqual(normalized.fit_assessment.missing_requirements, candidate.fit_assessment.missing_requirements)
   assert.deepEqual(normalized.fit_assessment.risks_or_gaps, candidate.fit_assessment.risks_or_gaps)
+})
+
+test('in-range reconciliation handles observed name and range wording while preserving unrelated clauses', () => {
+  const candidate = {
+    name: 'Aanya Mehta',
+    years_experience: 4.5,
+    considerations: [
+      'Aanya’s 4.5 years exceeds the required 2–5-year range; Kubernetes production ownership remains limited.',
+      '4.5 years exceeds the required 2-5 year range, but Terraform experience is not documented.',
+    ],
+    recommendation: 'Aanya’s 4.5 years exceeds the 2–5 year range. Interview for API design and Kubernetes depth.',
+  }
+
+  const normalized = reconcileCandidateExperienceRange(candidate, { experienceMin: 2, experienceMax: 5 })
+
+  assert.deepEqual(normalized.considerations, [
+    'Kubernetes production ownership remains limited.',
+    'Terraform experience is not documented.',
+  ])
+  assert.equal(normalized.recommendation, 'Interview for API design and Kubernetes depth.')
+})
+
+test('removing a false total-experience clause does not remove a legitimate skill gap from deterministic scoring', () => {
+  const candidate = {
+    name: 'Aanya Mehta',
+    years_experience: 4.5,
+    skills_flat: ['Node.js', 'PostgreSQL'],
+    top_skills: ['Backend APIs'],
+    matchedSkills: ['Node.js', 'PostgreSQL'],
+    missingSkills: ['Kubernetes'],
+    profile_score: 82,
+    fit_assessment: {
+      matched_requirements: ['Node.js backend APIs', 'PostgreSQL'],
+      missing_requirements: [
+        'Aanya Mehta’s 4.5 years exceeds the required 2–5-year range; Kubernetes production experience is below the role requirement.',
+      ],
+      risks_or_gaps: [],
+    },
+  }
+  const context = { hasContext: true, required_min_years: 2, required_max_years: 5 }
+  const normalized = reconcileCandidateExperienceRange(candidate, { experienceMin: 2, experienceMax: 5 })
+  const scored = scoreCandidateDeterministically(normalized, context)
+
+  assert.deepEqual(normalized.fit_assessment.missing_requirements, ['Kubernetes production experience is below the role requirement.'])
+  assert.deepEqual(normalized.missingSkills, ['Kubernetes'])
+  assert.ok(scored.scoring_breakdown.requirement_match.missing_count >= 1)
+  assert.ok(scored.scoring_breakdown.skill_alignment.missing_count >= 1)
+  assert.equal(scored.scoring_breakdown.experience_alignment.range_classification, 'within_range')
+  assert.equal(scored.scoring_breakdown.experience_alignment.below_min_experience_evidence_applied, false)
+})
+
+test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downstream score provenance', async () => {
+  const previousEnv = {
+    legacy: process.env.ENABLE_LEGACY_DOC_EXTRACTION,
+    pdfEnabled: process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED,
+    pdfAllUsers: process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS,
+  }
+  process.env.ENABLE_LEGACY_DOC_EXTRACTION = 'true'
+  process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED = 'true'
+  process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS = 'true'
+
+  const resumeText = [
+    'Synthetic Candidate Decimal',
+    'Professional Summary: Software engineer with 4.5 years of experience.',
+    'Skills: Node.js, TypeScript, PostgreSQL, Docker.',
+    'Experience: Backend Engineer, Synthetic Labs, 2022-2026.',
+    'Education: B.S. Computer Science, Example University.',
+  ].join('\n')
+  const pdf = buildSyntheticPdfResumeFixture({ text: resumeText, id: 'synthetic-decimal-pdf' })
+  const fixtures = [
+    pdf,
+    await buildSyntheticDocxResumeFixture({ text: resumeText, filename: 'synthetic-decimal.docx' }),
+    buildSyntheticLegacyDocResumeFixture({ text: resumeText, filename: 'synthetic-decimal.doc' }),
+  ]
+  __setPdfJsClientForTests(buildPdfJsTextContentMockFromFixtures([pdf]))
+  __setMammothClientForTests({ extractRawText: async () => ({ value: resumeText }) })
+
+  try {
+    const outputs = []
+    for (const fixture of fixtures) {
+      const prepared = await prepareResumePayloadForAnalysis({
+        fileBufferBase64: fixture.buffer.toString('base64'),
+        mimeType: fixture.mimeType,
+        originalMimeType: fixture.mimeType,
+        filename: fixture.filename,
+        fileSize: fixture.buffer.length,
+        logger: { debug() {}, info() {}, warn() {} },
+        diagnosticsContext: { userId: 7, analysisId: 'synthetic-cross-format' },
+      })
+      assert.match(prepared.extractedText, /4\.5 years of experience/i)
+
+      // Frozen model evidence keeps this regression deterministic while the real
+      // format routing/extraction, normalization, range, scorer and provenance
+      // paths remain under test.
+      const frozenModelResult = {
+        candidates: [{
+          id: 'synthetic-decimal-candidate',
+          name: 'Synthetic Candidate Decimal',
+          years_experience: 4.5,
+          score: 88,
+          matchScore: { score: 88, score_out_of_ten: 8.8 },
+          profile_score: 84,
+          skills: { tools_and_platforms: ['Node.js', 'TypeScript', 'PostgreSQL', 'Docker'] },
+          top_skills: ['Node.js', 'TypeScript', 'PostgreSQL'],
+          matchedSkills: ['Node.js', 'TypeScript', 'PostgreSQL'],
+          missingSkills: ['Kubernetes'],
+          fit_assessment: {
+            overall_fit_score: 88,
+            matched_requirements: ['Backend APIs', 'Node.js', 'PostgreSQL'],
+            missing_requirements: ['Kubernetes production ownership'],
+            risks_or_gaps: [],
+          },
+          ai_scoring_contract_v2: {
+            scoring_contract_version: 'ai_jd_fit_rubric_v2',
+            weighted_total_score_recomputed: 89.1,
+            score_confidence: 'high',
+          },
+        }],
+      }
+      const [normalized] = buildNormalizedCandidates(frozenModelResult, {
+        resumeId: 'synthetic-cross-format-resume',
+        filename: fixture.filename,
+      })
+      const reconciled = reconcileCandidateExperienceRange(normalized, { experienceMin: 2, experienceMax: 5 })
+      const deterministic = scoreCandidateDeterministically(reconciled, {
+        hasContext: true,
+        required_min_years: 2,
+        required_max_years: 5,
+      })
+      const provenance = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate: reconciled })
+      outputs.push({
+        yearsExperience: reconciled.years_experience,
+        classification: reconciled.experience_range.classification,
+        skills: reconciled.skills_flat,
+        matchedRequirements: reconciled.fit_assessment.matched_requirements,
+        missingRequirements: reconciled.fit_assessment.missing_requirements,
+        deterministicScore: deterministic.final_score,
+        deterministicExperience: deterministic.scoring_breakdown.experience_alignment,
+        displayedScore: provenance.displayed_score,
+        displayedScoreSource: provenance.displayed_score_source,
+        displayedScoringVersion: provenance.displayed_scoring_version,
+        v2Score: provenance.v2_score,
+      })
+    }
+
+    assert.deepEqual(outputs[1], outputs[0])
+    assert.deepEqual(outputs[2], outputs[0])
+    assert.equal(outputs[0].yearsExperience, 4.5)
+    assert.equal(outputs[0].classification, 'within_range')
+    assert.equal(outputs[0].deterministicExperience.range_classification, 'within_range')
+    assert.equal(outputs[0].displayedScoreSource, 'matchScore.score')
+    assert.equal(outputs[0].displayedScoringVersion, null)
+    assert.equal(outputs[0].v2Score, 89.1)
+  } finally {
+    if (previousEnv.legacy === undefined) delete process.env.ENABLE_LEGACY_DOC_EXTRACTION
+    else process.env.ENABLE_LEGACY_DOC_EXTRACTION = previousEnv.legacy
+    if (previousEnv.pdfEnabled === undefined) delete process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED
+    else process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ENABLED = previousEnv.pdfEnabled
+    if (previousEnv.pdfAllUsers === undefined) delete process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS
+    else process.env.PDF_CANONICAL_TEXT_SCORING_EXPERIMENT_ALL_USERS = previousEnv.pdfAllUsers
+    __resetPdfJsClientForTests()
+    __resetMammothClientForTests()
+  }
 })
 
 test('v2 visible score experiment leaves scores unchanged when feature flag is off', () => {
@@ -1034,6 +1204,89 @@ function createParseJob({ id, resumeId, filename, mimeType, originalMimeType, fi
     },
   }
 }
+
+
+test('runParse preserves decimal experience in the persisted JSON and numeric column payload', async (t) => {
+  let resumeUpdateParams = null
+  const cached = []
+  t.mock.method(pool, 'query', async (sql, params = []) => {
+    const query = String(sql)
+    if (query.includes('FROM analyses')) {
+      return { rows: [{ id: 'analysis-same-base-multiformat', status: 'processing' }], rowCount: 1 }
+    }
+    if (query.includes('FROM job_descriptions')) {
+      return {
+        rows: [{
+          id: 'jd-decimal-persistence',
+          user_id: 7,
+          status: 'active',
+          title: 'Software Engineer',
+          requirements: '2 to 5 years of software engineering experience',
+          skills: ['Node.js', 'PostgreSQL'],
+          experience_min: 2,
+          experience_max: 5,
+        }],
+        rowCount: 1,
+      }
+    }
+    if (query.includes('FROM integration_webhooks')) return { rows: [], rowCount: 0 }
+    if (query.includes("UPDATE resumes\n     SET parse_status = 'complete'")) resumeUpdateParams = params
+    return { rows: [], rowCount: 1 }
+  })
+  __setParseResumeJobTestOverrides({
+    analyzeResumeWithConfiguredFallback: async () => ({
+      result: {
+        candidates: [{
+          id: 'candidate-decimal-persistence',
+          name: 'Synthetic Decimal Candidate',
+          years_experience: 4.5,
+          score: 86,
+          matchScore: { score: 86, score_out_of_ten: 8.6 },
+          profile_score: 82,
+          skills: ['Node.js', 'PostgreSQL'],
+          fit_assessment: {
+            overall_fit_score: 86,
+            matched_requirements: ['2 to 5 years experience', 'Node.js'],
+            missing_requirements: [],
+            risks_or_gaps: [],
+          },
+        }],
+      },
+      provider: 'test-provider',
+      model: 'test-model',
+      attempts: [{ success: true, provider: 'test-provider', tokenUsage: { usageAvailable: false, unavailableReason: 'test' } }],
+    }),
+    cacheJobResult: async (jobId, payload) => cached.push({ jobId, payload }),
+    getScoreCacheEntry: async () => null,
+    upsertScoreCacheEntry: async () => null,
+    runAiScoringContractV2ShadowAnalysis: async () => ({ contract: null }),
+  })
+  t.after(() => {
+    __resetParseResumeJobTestOverrides()
+    t.mock.reset()
+  })
+
+  const job = createParseJob({
+    id: 'parse-decimal-persistence',
+    resumeId: 'resume-decimal-persistence',
+    filename: 'synthetic-decimal.txt',
+    mimeType: 'text/plain',
+    originalMimeType: 'text/plain',
+    fileExtension: 'txt',
+    fileBuffer: Buffer.from('Synthetic candidate with 4.5 years of experience in Node.js and PostgreSQL.'),
+  })
+  job.data.jobDescriptionId = 'jd-decimal-persistence'
+
+  const result = await __testables.runParse(job)
+
+  assert.ok(resumeUpdateParams)
+  assert.equal(resumeUpdateParams[2], 4.5)
+  const persistedParseResult = JSON.parse(resumeUpdateParams[1])
+  assert.equal(persistedParseResult.candidates[0].years_experience, 4.5)
+  assert.equal(persistedParseResult.candidates[0].experience_range.classification, 'within_range')
+  assert.equal(result.candidates[0].years_experience, 4.5)
+  assert.equal(cached.at(-1).payload.result.candidates[0].years_experience, 4.5)
+})
 
 
 test('runParse score delta diagnostics use Anthropic token-ladder retry metadata', async (t) => {
