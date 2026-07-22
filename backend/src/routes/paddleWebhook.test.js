@@ -369,6 +369,27 @@ test('POST /api/paddle/webhook derives annual from subscription.updated active i
 
   assert.equal(response.status, 200)
   assert.equal(userUpdateCalls(calls)[0].params[4], 'annual')
+  assert.match(userUpdateCalls(calls)[0].sql, /subscription_renewal_date = COALESCE\(\$6, subscription_renewal_date\)/)
+  assert.match(userUpdateCalls(calls)[0].sql, /\$6::timestamp >= current_period_end/)
+})
+
+test('POST /api/paddle/webhook does not let an undated event replace a dated subscription projection', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_without_period',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      current_billing_period: null,
+      next_billed_at: null,
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+  const projectionUpsert = calls.find(({ sql }) => String(sql).includes('INSERT INTO subscriptions'))
+
+  assert.equal(response.status, 200)
+  assert.ok(projectionUpsert)
+  assert.match(projectionUpsert.sql, /IS NULL\s+AND COALESCE\(subscriptions\.latest_event_payload/)
+  assert.doesNotMatch(projectionUpsert.sql, /WHERE COALESCE\(EXCLUDED[^]*\) IS NULL\s+OR/)
 })
 
 

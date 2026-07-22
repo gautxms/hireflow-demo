@@ -367,7 +367,18 @@ async function upsertSubscriptionProjection({ subscriptionId, userId, status, ev
        latest_event_type = EXCLUDED.latest_event_type,
        latest_event_payload = EXCLUDED.latest_event_payload,
        updated_at = NOW(),
-       paddle_environment = EXCLUDED.paddle_environment`,
+       paddle_environment = EXCLUDED.paddle_environment
+     WHERE (
+       COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NOT NULL
+       AND (
+         COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+         OR COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
+            >= COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
+       )
+     ) OR (
+       COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+       AND COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+     )`,
     [subscriptionId, userId || null, status, eventType, JSON.stringify(payload), environment],
   )
 }
@@ -491,10 +502,12 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                  paddle_customer_id = COALESCE($3, paddle_customer_id),
                  subscription_plan = COALESCE($4, subscription_plan),
                  current_period_end = COALESCE($5, current_period_end),
+                 subscription_renewal_date = COALESCE($5, subscription_renewal_date),
                  next_billing_date = COALESCE($6, next_billing_date),
                  paddle_environment = $7,
                  updated_at = NOW()
-             WHERE id = $1`,
+             WHERE id = $1
+               AND ($5::timestamp IS NULL OR current_period_end IS NULL OR $5::timestamp >= current_period_end)`,
             [userId, transactionSubscriptionId, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload, paddle), payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
           )
         }
@@ -611,6 +624,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                paddle_customer_id = COALESCE($4, paddle_customer_id),
                subscription_plan = COALESCE($5, subscription_plan),
                current_period_end = COALESCE($6, current_period_end),
+               subscription_renewal_date = COALESCE($6, subscription_renewal_date),
                next_billing_date = COALESCE($7, next_billing_date),
                paddle_environment = $8,
                cancellation_effective_at = CASE
@@ -621,7 +635,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
                trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,
                updated_at = NOW()
-           WHERE id = $1`,
+           WHERE id = $1
+             AND ($6::timestamp IS NULL OR current_period_end IS NULL OR $6::timestamp >= current_period_end)`,
           [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload, paddle), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment, getScheduledCancellationEffectiveAt(payload)],
         )
       }
