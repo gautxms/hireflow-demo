@@ -488,7 +488,18 @@ test('GET /api/subscriptions/current keeps local pricing for users without Paddl
   assert.equal(paddleCalls.length, 0)
 })
 
-test('GET /api/subscriptions/current repairs mismatched renewal dates from Paddle', async () => {
+function authoritativeAnnualSubscription(overrides = {}) {
+  return { data: {
+    id: 'sub_123',
+    status: 'active',
+    items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '99900', currency_code: 'USD' } } }],
+    current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' },
+    next_billed_at: '2027-07-21T00:00:00.000Z',
+    ...overrides,
+  } }
+}
+
+test('GET /api/subscriptions/current moves earlier local dates forward from verified Paddle state', async () => {
   resetPaddleEnv()
   const user = {
     ...activeAnnualUser(),
@@ -496,13 +507,7 @@ test('GET /api/subscriptions/current repairs mismatched renewal dates from Paddl
     next_billing_date: '2027-07-21T00:00:00.000Z',
   }
   const { calls } = installDbMock(user)
-  mockPaddleResponse({ payload: { data: {
-    id: 'sub_123',
-    status: 'active',
-    items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '99900', currency_code: 'USD' } } }],
-    current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' },
-    next_billed_at: '2027-07-21T00:00:00.000Z',
-  } } })
+  mockPaddleResponse({ payload: authoritativeAnnualSubscription() })
 
   const res = await invokeRoute('/current')
 
@@ -511,7 +516,59 @@ test('GET /api/subscriptions/current repairs mismatched renewal dates from Paddl
   assert.equal(res.payload.subscription.nextBillingDate, '2027-07-21T00:00:00.000Z')
   const repair = calls.find(({ sql }) => String(sql).includes('subscription_renewal_date = $2'))
   assert.ok(repair)
-  assert.deepEqual(repair.params, [123, '2027-07-21T00:00:00.000Z', '2027-07-21T00:00:00.000Z'])
+  assert.deepEqual(repair.params.slice(0, 6), [123, '2027-07-21T00:00:00.000Z', '2027-07-21T00:00:00.000Z', 'sub_123', 'annual', 'active'])
+  assert.doesNotMatch(repair.sql, />= current_period_end/)
+})
+
+test('GET /api/subscriptions/current moves incorrectly later local dates backward from verified Paddle state', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    ...activeAnnualUser(),
+    current_period_end: '2028-07-21T00:00:00.000Z',
+    subscription_renewal_date: '2028-07-21T00:00:00.000Z',
+    next_billing_date: '2028-07-21T00:00:00.000Z',
+  })
+  mockPaddleResponse({ payload: authoritativeAnnualSubscription() })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.payload.subscription.renewalDate, '2027-07-21T00:00:00.000Z')
+  assert.equal(res.payload.subscription.nextBillingDate, '2027-07-21T00:00:00.000Z')
+  assert.ok(calls.some(({ sql }) => String(sql).includes('subscription_renewal_date = $2')))
+})
+
+test('GET /api/subscriptions/current does not reconcile a different Paddle plan or subscription ID', async () => {
+  resetPaddleEnv()
+
+  for (const payload of [
+    authoritativeAnnualSubscription({ items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }] }),
+    authoritativeAnnualSubscription({ id: 'sub_other' }),
+  ]) {
+    const { calls } = installDbMock({ ...activeAnnualUser(), subscription_renewal_date: '2028-07-21T00:00:00.000Z' })
+    mockPaddleResponse({ payload })
+    const res = await invokeRoute('/current')
+
+    assert.equal(res.payload.subscription.renewalDate, '2028-07-21T00:00:00.000Z')
+    assert.ok(!calls.some(({ sql }) => String(sql).includes('subscription_renewal_date = $2')))
+  }
+})
+
+test('GET /api/subscriptions/current does not reconcile non-current Paddle statuses or missing dates', async () => {
+  resetPaddleEnv()
+
+  for (const overrides of [
+    { status: 'past_due' },
+    { status: 'canceled' },
+    { status: null },
+    { current_billing_period: null },
+    { next_billed_at: null },
+  ]) {
+    const { calls } = installDbMock({ ...activeAnnualUser(), subscription_renewal_date: '2028-07-21T00:00:00.000Z' })
+    mockPaddleResponse({ payload: authoritativeAnnualSubscription(overrides) })
+    await invokeRoute('/current')
+
+    assert.ok(!calls.some(({ sql }) => String(sql).includes('subscription_renewal_date = $2')))
+  }
 })
 
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {

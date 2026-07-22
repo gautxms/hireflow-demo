@@ -492,32 +492,52 @@ router.get('/current', requireAuth, async (req, res) => {
     const paddleDates = extractBillingDates(planCost.paddleSubscriptionPayload)
     const paddlePlan = inferPlanFromPaddlePayload(planCost.paddleSubscriptionPayload, paddle)
     const paddleStatus = normalizeStatus(paddleDates.status)
+    const paddleSubscription = planCost.paddleSubscriptionPayload?.data || planCost.paddleSubscriptionPayload || {}
+    const paddleCurrentPeriodEnd = paddleSubscription?.current_billing_period?.ends_at || null
+    const paddleNextBillingDate = paddleSubscription?.next_billed_at || null
 
     if (
-      paddleDates.currentPeriodEnd
+      paddleSubscription.id === user.paddle_subscription_id
+      && paddlePlan === planKey
       && ['active', 'trialing'].includes(paddleStatus)
-      && (!paddlePlan || paddlePlan === planKey)
+      && paddleCurrentPeriodEnd
+      && paddleNextBillingDate
       && (
-        isoOrNull(user.current_period_end) !== isoOrNull(paddleDates.currentPeriodEnd)
-        || isoOrNull(user.subscription_renewal_date) !== isoOrNull(paddleDates.currentPeriodEnd)
-        || isoOrNull(user.next_billing_date) !== isoOrNull(paddleDates.nextBillingDate)
+        isoOrNull(user.current_period_end) !== isoOrNull(paddleCurrentPeriodEnd)
+        || isoOrNull(user.subscription_renewal_date) !== isoOrNull(paddleCurrentPeriodEnd)
+        || isoOrNull(user.next_billing_date) !== isoOrNull(paddleNextBillingDate)
       )
     ) {
       const reconciliation = await pool.query(
-        `UPDATE users
-         SET current_period_end = $2,
-             subscription_renewal_date = $2,
-             next_billing_date = $3,
-             updated_at = NOW()
-         WHERE id = $1
-           AND (current_period_end IS NULL OR $2::timestamp >= current_period_end)`,
-        [user.id, paddleDates.currentPeriodEnd, paddleDates.nextBillingDate],
+        `WITH reconciled_user AS (
+           UPDATE users
+           SET current_period_end = $2,
+               subscription_renewal_date = $2,
+               next_billing_date = $3,
+               updated_at = NOW()
+           WHERE id = $1
+             AND paddle_subscription_id = $4
+             AND subscription_plan = $5
+           RETURNING id
+         )
+         INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
+         SELECT $4, id, $6, 'subscription.reconciled', $7::jsonb, $8
+         FROM reconciled_user
+         ON CONFLICT (paddle_subscription_id)
+         DO UPDATE SET
+           user_id = EXCLUDED.user_id,
+           status = EXCLUDED.status,
+           latest_event_type = EXCLUDED.latest_event_type,
+           latest_event_payload = EXCLUDED.latest_event_payload,
+           paddle_environment = EXCLUDED.paddle_environment,
+           updated_at = NOW()`,
+        [user.id, paddleCurrentPeriodEnd, paddleNextBillingDate, user.paddle_subscription_id, planKey, paddleStatus, JSON.stringify(planCost.paddleSubscriptionPayload), paddle.environment],
       )
 
       if (reconciliation.rowCount > 0) {
-        user.current_period_end = paddleDates.currentPeriodEnd
-        user.subscription_renewal_date = paddleDates.currentPeriodEnd
-        user.next_billing_date = paddleDates.nextBillingDate
+        user.current_period_end = paddleCurrentPeriodEnd
+        user.subscription_renewal_date = paddleCurrentPeriodEnd
+        user.next_billing_date = paddleNextBillingDate
       }
     }
     const cancellationEffectiveAt = isoOrNull(user.cancellation_effective_at)

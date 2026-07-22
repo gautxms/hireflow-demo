@@ -368,10 +368,17 @@ async function upsertSubscriptionProjection({ subscriptionId, userId, status, ev
        latest_event_payload = EXCLUDED.latest_event_payload,
        updated_at = NOW(),
        paddle_environment = EXCLUDED.paddle_environment
-     WHERE COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
-        OR COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
-        OR COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
-           >= COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz`,
+     WHERE (
+       COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NOT NULL
+       AND (
+         COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+         OR COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
+            >= COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
+       )
+     ) OR (
+       COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+       AND COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+     )`,
     [subscriptionId, userId || null, status, eventType, JSON.stringify(payload), environment],
   )
 }
