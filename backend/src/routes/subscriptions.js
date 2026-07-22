@@ -489,6 +489,37 @@ router.get('/current', requireAuth, async (req, res) => {
     const plan = planKey ? (PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly) : null
     const hasBillingPortalAccess = Boolean(user.paddle_customer_id && user.paddle_subscription_id)
     const planCost = await resolveCurrentPlanCost(user, planKey, plan)
+    const paddleDates = extractBillingDates(planCost.paddleSubscriptionPayload)
+    const paddlePlan = inferPlanFromPaddlePayload(planCost.paddleSubscriptionPayload, paddle)
+    const paddleStatus = normalizeStatus(paddleDates.status)
+
+    if (
+      paddleDates.currentPeriodEnd
+      && ['active', 'trialing'].includes(paddleStatus)
+      && (!paddlePlan || paddlePlan === planKey)
+      && (
+        isoOrNull(user.current_period_end) !== isoOrNull(paddleDates.currentPeriodEnd)
+        || isoOrNull(user.subscription_renewal_date) !== isoOrNull(paddleDates.currentPeriodEnd)
+        || isoOrNull(user.next_billing_date) !== isoOrNull(paddleDates.nextBillingDate)
+      )
+    ) {
+      const reconciliation = await pool.query(
+        `UPDATE users
+         SET current_period_end = $2,
+             subscription_renewal_date = $2,
+             next_billing_date = $3,
+             updated_at = NOW()
+         WHERE id = $1
+           AND (current_period_end IS NULL OR $2::timestamp >= current_period_end)`,
+        [user.id, paddleDates.currentPeriodEnd, paddleDates.nextBillingDate],
+      )
+
+      if (reconciliation.rowCount > 0) {
+        user.current_period_end = paddleDates.currentPeriodEnd
+        user.subscription_renewal_date = paddleDates.currentPeriodEnd
+        user.next_billing_date = paddleDates.nextBillingDate
+      }
+    }
     const cancellationEffectiveAt = isoOrNull(user.cancellation_effective_at)
     const hasScheduledCancellationSignal = hasScheduledCancellationStatus(user.subscription_status)
       || hasScheduledCancellationStatus(latestSubscription?.status)
@@ -741,10 +772,31 @@ async function persistSuccessfulPlanChange(userId, context, paddleUpdate) {
            subscription_status = COALESCE($2, subscription_status),
            paddle_subscription_id = COALESCE($3, paddle_subscription_id),
            current_period_end = COALESCE($4, current_period_end),
+           subscription_renewal_date = COALESCE($4, subscription_renewal_date),
            next_billing_date = COALESCE($5, next_billing_date),
            updated_at = NOW()
        WHERE id = $6`,
       [visiblePlan, dates.status, dates.providerSubscriptionId, dates.currentPeriodEnd, dates.nextBillingDate, userId],
+    )
+
+    await client.query(
+      `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
+       VALUES ($1, $2, $3, 'subscription.reconciled', $4::jsonb, $5)
+       ON CONFLICT (paddle_subscription_id)
+       DO UPDATE SET
+         user_id = EXCLUDED.user_id,
+         status = EXCLUDED.status,
+         latest_event_type = EXCLUDED.latest_event_type,
+         latest_event_payload = EXCLUDED.latest_event_payload,
+         paddle_environment = EXCLUDED.paddle_environment,
+         updated_at = NOW()`,
+      [
+        dates.providerSubscriptionId || context.user.paddle_subscription_id,
+        userId,
+        dates.status || 'active',
+        JSON.stringify(paddleUpdate),
+        context.paddle.environment,
+      ],
     )
 
     await client.query(
@@ -818,7 +870,7 @@ router.post('/change-plan', requireAuth, async (req, res) => {
       previousItems: context.previousItems,
       startedAt: context.startedAt,
     })
-    const paddleUpdate = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}`, {
+    let paddleUpdate = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}`, {
       method: 'PATCH',
       body: JSON.stringify({
         items: context.items,
@@ -831,6 +883,29 @@ router.post('/change-plan', requireAuth, async (req, res) => {
     const updateStatus = normalizeStatus(paddleUpdate?.data?.status || paddleUpdate?.status)
     if (context.isUpgrade && updateStatus === 'past_due') {
       throw new BillingError('PLAN_CHANGE_PAYMENT_FAILED_PRESERVED', { reason: 'paddle_returned_past_due' })
+    }
+
+    const updatePlan = inferPlanFromPaddlePayload(paddleUpdate, context.paddle)
+    const updateDates = extractBillingDates(paddleUpdate)
+    if (
+      (context.isUpgrade && updatePlan !== targetPlan)
+      || !['active', 'trialing'].includes(updateStatus)
+      || !updateDates.currentPeriodEnd
+      || !updateDates.nextBillingDate
+    ) {
+      paddleUpdate = await paddleRequest(`/subscriptions/${context.user.paddle_subscription_id}`, {}, context.paddle)
+      const authoritativePlan = inferPlanFromPaddlePayload(paddleUpdate, context.paddle)
+      const authoritativeStatus = normalizeStatus(paddleUpdate?.data?.status || paddleUpdate?.status)
+      const authoritativeDates = extractBillingDates(paddleUpdate)
+
+      if (
+        (context.isUpgrade && authoritativePlan !== targetPlan)
+        || !['active', 'trialing'].includes(authoritativeStatus)
+        || !authoritativeDates.currentPeriodEnd
+        || !authoritativeDates.nextBillingDate
+      ) {
+        throw new BillingError('PADDLE_SUBSCRIPTION_UPDATE_FAILED', { reason: 'ambiguous_plan_change_state' })
+      }
     }
 
     const { effectiveAt } = await persistSuccessfulPlanChange(req.userId, context, paddleUpdate)

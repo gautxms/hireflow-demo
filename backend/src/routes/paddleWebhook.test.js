@@ -369,6 +369,8 @@ test('POST /api/paddle/webhook derives annual from subscription.updated active i
 
   assert.equal(response.status, 200)
   assert.equal(userUpdateCalls(calls)[0].params[4], 'annual')
+  assert.match(userUpdateCalls(calls)[0].sql, /subscription_renewal_date = COALESCE\(\$6, subscription_renewal_date\)/)
+  assert.match(userUpdateCalls(calls)[0].sql, /\$6::timestamp >= current_period_end/)
 })
 
 

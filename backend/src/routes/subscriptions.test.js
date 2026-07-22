@@ -158,13 +158,14 @@ function installClientMock({ failOn } = {}) {
   return { client, clientCalls, connectCalls }
 }
 
-function assertTransactionSequence(clientCalls, updatePattern) {
-  assert.equal(clientCalls.length, 5)
+function assertTransactionSequence(clientCalls, updatePattern, { includesProjection = false } = {}) {
+  assert.equal(clientCalls.length, includesProjection ? 6 : 5)
   assert.equal(clientCalls[0].sql, 'BEGIN')
   assert.match(String(clientCalls[1].sql), updatePattern)
-  assert.match(String(clientCalls[2].sql), /INSERT INTO subscription_change_events/)
-  assert.equal(clientCalls[3].sql, 'COMMIT')
-  assert.equal(clientCalls[4].sql, 'RELEASE')
+  if (includesProjection) assert.match(String(clientCalls[2].sql), /INSERT INTO subscriptions/)
+  assert.match(String(clientCalls[includesProjection ? 3 : 2].sql), /INSERT INTO subscription_change_events/)
+  assert.equal(clientCalls[includesProjection ? 4 : 3].sql, 'COMMIT')
+  assert.equal(clientCalls[includesProjection ? 5 : 4].sql, 'RELEASE')
 }
 
 function assertRollbackSequence(clientCalls) {
@@ -487,6 +488,32 @@ test('GET /api/subscriptions/current keeps local pricing for users without Paddl
   assert.equal(paddleCalls.length, 0)
 })
 
+test('GET /api/subscriptions/current repairs mismatched renewal dates from Paddle', async () => {
+  resetPaddleEnv()
+  const user = {
+    ...activeAnnualUser(),
+    subscription_renewal_date: '2026-08-20T00:00:00.000Z',
+    next_billing_date: '2027-07-21T00:00:00.000Z',
+  }
+  const { calls } = installDbMock(user)
+  mockPaddleResponse({ payload: { data: {
+    id: 'sub_123',
+    status: 'active',
+    items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '99900', currency_code: 'USD' } } }],
+    current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' },
+    next_billed_at: '2027-07-21T00:00:00.000Z',
+  } } })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.renewalDate, '2027-07-21T00:00:00.000Z')
+  assert.equal(res.payload.subscription.nextBillingDate, '2027-07-21T00:00:00.000Z')
+  const repair = calls.find(({ sql }) => String(sql).includes('subscription_renewal_date = $2'))
+  assert.ok(repair)
+  assert.deepEqual(repair.params, [123, '2027-07-21T00:00:00.000Z', '2027-07-21T00:00:00.000Z'])
+})
+
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {
   resetPaddleEnv()
   enableTestUpgrade()
@@ -510,7 +537,7 @@ test('POST /api/subscriptions/change-plan uses gated test annual price for valid
   installDbMock(activeMonthlyUser())
   const paddleCalls = mockPaddleSequence([
     { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
-    { payload: { data: { id: 'sub_123', status: 'active', current_billing_period: { ends_at: '2026-08-01T00:00:00.000Z' } } } },
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_test_annual' } }], current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' }, next_billed_at: '2027-07-21T00:00:00.000Z' } } },
   ])
   installClientMock()
 
@@ -1125,7 +1152,7 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
   })
   const paddleCalls = mockPaddleSequence([
     { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
-    { payload: { data: { id: 'sub_123', status: 'active' } } },
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_annual' } }], current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' }, next_billed_at: '2027-07-21T00:00:00.000Z' } } },
   ])
   const { clientCalls, connectCalls } = installClientMock()
 
@@ -1142,7 +1169,15 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
   assert.equal(JSON.parse(paddleCalls[1].options.body).on_payment_failure, 'prevent_change')
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 1)
-  assertTransactionSequence(clientCalls, /UPDATE users/)
+  assertTransactionSequence(clientCalls, /UPDATE users/, { includesProjection: true })
+  assert.match(clientCalls[1].sql, /subscription_renewal_date = COALESCE\(\$4, subscription_renewal_date\)/)
+  assert.deepEqual(clientCalls[1].params.slice(0, 5), [
+    'annual',
+    'active',
+    'sub_123',
+    '2027-07-21T00:00:00.000Z',
+    '2027-07-21T00:00:00.000Z',
+  ])
 })
 
 test('POST /api/subscriptions/keep-subscription removes Paddle scheduled cancellation without a charge', async () => {
@@ -1311,7 +1346,7 @@ test('POST /api/subscriptions/change-plan preserves non-recurring unrelated item
       { price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 },
       { price: { id: 'pri_setup_fee' }, quantity: 1 },
     ] } } },
-    { payload: { data: { id: 'sub_123' } } },
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_annual' } }], current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' }, next_billed_at: '2027-07-21T00:00:00.000Z' } } },
   ])
   installClientMock()
 
@@ -1335,10 +1370,13 @@ test('POST /api/subscriptions/change-plan preserves unrelated Paddle items and q
     paddle_subscription_id: 'sub_123',
     current_period_end: '2026-07-01T00:00:00.000Z',
   })
-  const paddleCalls = mockPaddleResponse({ payload: { data: { id: 'sub_123', items: [
-    { price: { id: 'pri_monthly' }, quantity: 3 },
-    { price: { id: 'pri_addon' }, quantity: 2 },
-  ] } } })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', items: [
+      { price: { id: 'pri_monthly' }, quantity: 3 },
+      { price: { id: 'pri_addon' }, quantity: 2 },
+    ] } } },
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_annual' } }], current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' }, next_billed_at: '2027-07-21T00:00:00.000Z' } } },
+  ])
   installClientMock()
 
   const res = await invokeRoute('/change-plan', { targetPlan: 'annual' })
@@ -1365,7 +1403,7 @@ test('POST /api/subscriptions/change-plan rolls back and releases checked-out cl
   })
   mockPaddleSequence([
     { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
-    { payload: { data: { id: 'sub_123', status: 'active' } } },
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_annual' } }], current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' }, next_billed_at: '2027-07-21T00:00:00.000Z' } } },
   ])
   const { clientCalls, connectCalls } = installClientMock({ failOn: 'INSERT INTO subscription_change_events' })
 
@@ -1533,7 +1571,7 @@ test('POST /api/subscriptions/change-plan canonical monthly preview still replac
   })
   const paddleCalls = mockPaddleSequence([
     { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }] } } },
-    { payload: { data: { id: 'sub_123' } } },
+    { payload: { data: { id: 'sub_123', status: 'active', items: [{ price: { id: 'pri_annual' } }], current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' }, next_billed_at: '2027-07-21T00:00:00.000Z' } } },
   ])
   installClientMock()
 
