@@ -436,7 +436,8 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           fileCount: uploadedFiles.length,
         })
         quotaReservationId = quotaPreflight.reservationId
-        for (const entry of uploadedFiles) {
+
+        const initializeUpload = async (entry, existingAnalysisId) => {
           const file = entry.file
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
           const fingerprint = getFileFingerprint(file)
@@ -453,7 +454,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 fileSize: file.size,
                 mimeType: inferResumeMimeType(file),
                 selectedJobDescriptionId,
-                analysisId,
+                analysisId: existingAnalysisId,
               }),
               ...(quotaReservationId ? { quotaReservationId } : {}),
             }),
@@ -470,8 +471,37 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
           const initPayload = await parseJsonSafe(initResponse)
           const uploadId = initPayload.uploadId
-          analysisId = analysisId || String(initPayload.analysisId || '').trim()
           const uploadedChunks = new Set(initPayload.uploadedChunks || [])
+
+          return {
+            file,
+            fingerprint,
+            totalChunks,
+            uploadId,
+            uploadedChunks,
+            analysisId: String(initPayload.analysisId || '').trim(),
+          }
+        }
+
+        // Claim every unit in the batch reservation promptly. Uploading a large
+        // first file must not allow the remaining reservation units to expire
+        // before their sessions are initialized.
+        const firstUpload = await initializeUpload(uploadedFiles[0], analysisId)
+        analysisId = analysisId || firstUpload.analysisId
+        const remainingUploads = await Promise.all(
+          uploadedFiles.slice(1).map((entry) => initializeUpload(entry, analysisId)),
+        )
+
+        for (const uploadSession of [firstUpload, ...remainingUploads]) {
+          const {
+            file,
+            fingerprint,
+            totalChunks,
+            uploadId,
+            uploadedChunks,
+            analysisId: sessionAnalysisId,
+          } = uploadSession
+          analysisId = analysisId || sessionAnalysisId
 
           const cache = readUploadCache()
           cache[fingerprint] = { uploadId, totalChunks }
