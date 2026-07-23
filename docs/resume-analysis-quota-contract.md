@@ -1,0 +1,86 @@
+# Resume analysis quota contract
+
+## Scope
+
+HireFlow paid subscriptions include 800 resume analyses in each monthly quota
+period. This allowance is monthly for both monthly and annual subscriptions; an
+annual subscription does not receive 9,600 units up front.
+
+PR 1 introduces the billing-period contract, a stable anchor, and shadow
+comparison only. Calendar-month enforcement remains authoritative until the
+reservation and accounting phases are implemented and verified.
+
+## Period contract
+
+- Quota periods use UTC timestamps with an inclusive start and exclusive end.
+- The stable `users.quota_anchor_at` timestamp is set once from a provider-backed
+  paid billing-period boundary and is not moved by renewal, plan changes,
+  scheduled cancellation, payment recovery, or reactivation.
+- Each monthly boundary is derived from that original anchor.
+- Anchors on the 29th, 30th, or 31st clamp to the last day of shorter months and
+  return to the original day when a later month supports it.
+- Monthly and annual plans use the same monthly anniversary calculation.
+- Trial and free allowances continue to use UTC calendar months.
+- An active legacy user can be backfilled from a known `current_period_end`
+  boundary. Other paid users without a valid anchor continue to use UTC calendar
+  months until trustworthy billing data is available.
+- Trial events never establish the paid quota anchor.
+
+### Subscription lifecycle rules
+
+| Event | Quota period effect |
+|---|---|
+| Monthly renewal | Continue anniversary-based monthly periods |
+| Annual renewal | Continue anniversary-based monthly periods |
+| Monthly to annual switch | No reset and no anchor change |
+| Annual to monthly switch | No reset and no anchor change |
+| Scheduled cancellation | Paid access and the existing period continue until entitlement ends |
+| Payment failure/recovery | No reset and no anchor change |
+| Reactivation/resubscription for the same user | Reuse the stable anchor; do not grant an extra immediate reset |
+| Missing or invalid anchor | Use UTC calendar-month fallback |
+
+## Counting contract
+
+The target accounting contract for the reservation and enforcement phases is:
+
+- One unit represents one resume/JD analysis item that requires new
+  provider-backed AI work.
+- A no-job resume analysis still counts when it starts new provider-backed AI
+  work.
+- A bulk upload requests one unit per resume analysis item.
+- The full bulk amount must be reserved atomically before any item starts.
+- Local validation, malware scanning, unsupported/corrupt-file rejection, and
+  local extraction failures before an AI provider request release the
+  reservation and do not consume a unit.
+- The first AI provider request for the item converts its reservation to one
+  consumed unit.
+- Retries, provider fallbacks, webhook replays, and worker restarts for the same
+  analysis item do not consume additional units.
+- A cache hit for the same resume and job that avoids all new provider work does
+  not consume a unit.
+- Failed provider work remains one consumed unit once provider-backed processing
+  has started.
+- Admin overrides remain supported and must be auditable.
+
+The current production counter records accepted uploads before scanning and AI
+processing. That behavior is intentionally unchanged in PR 1 and will be aligned
+with this contract only after atomic reservations exist.
+
+## PR 1 shadow-mode behavior
+
+- Existing calendar-month checks remain the only checks that allow or reject an
+  upload.
+- For paid users with a billing anchor, the backend also counts usage by
+  `usage_log.created_at` inside the proposed anniversary period.
+- A structured log compares legacy and proposed counts and records whether the
+  decisions would differ.
+- Shadow query failures are logged and never block an upload.
+- Set `RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE=false` to disable comparison
+  immediately without reverting the migration or period resolver.
+
+## Rollback
+
+The migration is additive. Rolling back application code leaves
+`users.quota_anchor_at` unused and does not change existing calendar-month
+enforcement. The column should be retained for forward compatibility rather than
+dropped during an emergency rollback.

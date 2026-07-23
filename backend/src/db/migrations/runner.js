@@ -46,6 +46,7 @@ const migrationFiles = [
   '042-isolate-paddle-environments',
   '043-add-trial-consumption',
   '044-allow-keep-subscription-change-events',
+  '045-add-resume-quota-anchor',
 ]
 
 async function ensureMigrationsTable(client) {
