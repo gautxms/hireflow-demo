@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime.js'
 
 const FUTURE_END = '2999-01-01T00:00:00.000Z'
+const PAST_END = '2025-01-01T00:00:00.000Z'
 const READ_ONLY_STATUSES = [
   'past_due',
   'past due',
@@ -36,7 +37,7 @@ test('logged out stale active profile cannot grant workspace access', () => {
   assert.equal(context.canViewUpgradePricing, true)
 })
 
-test('logged out stale paid-through cancellation profile cannot grant workspace access', () => {
+test('logged out stale canceled profile cannot grant workspace access', () => {
   const context = buildResolvedAccessContext({
     isAuthenticated: false,
     accessResolutionStatus: 'resolved',
@@ -52,7 +53,7 @@ test('logged out stale paid-through cancellation profile cannot grant workspace 
   assert.equal(context.isActiveSubscriber, false)
   assert.equal(context.canOpenWorkspaceDashboard, false)
   assert.equal(context.workspaceAccessForFlags, false)
-  assert.equal(context.profileBillingState.canAccessProductDashboard, true)
+  assert.equal(context.profileBillingState.canAccessProductDashboard, false)
 })
 
 test('cross-tab logout transition cannot leave public CTA resolved to Dashboard', () => {
@@ -103,13 +104,14 @@ test('authenticated resolved active and trialing profiles grant workspace access
   }
 })
 
-test('authenticated resolved paid-through cancellation grants workspace access', () => {
+test('authenticated resolved future cancellation-effective date grants paid-through access', () => {
   const authoritativeContext = buildResolvedAccessContext({
     isAuthenticated: true,
     accessResolutionStatus: 'resolved',
     subscriptionStatus: 'canceled',
     userProfile: {
       subscription_status: 'canceled',
+      cancellation_effective_at: FUTURE_END,
       currentPeriodEnd: FUTURE_END,
       cancelAtPeriodEnd: true,
     },
@@ -121,6 +123,28 @@ test('authenticated resolved paid-through cancellation grants workspace access',
   assert.equal(authoritativeContext.canOpenWorkspaceDashboard, true)
   assert.equal(authoritativeContext.workspaceAccessForFlags, true)
   assert.equal(authoritativeContext.canViewUpgradePricing, false)
+})
+
+test('final cancellation stays read-only and can open resubscription pricing', () => {
+  const context = buildResolvedAccessContext({
+    isAuthenticated: true,
+    accessResolutionStatus: 'resolved',
+    subscriptionStatus: 'cancelled',
+    userProfile: {
+      subscription_status: 'cancelled',
+      cancellation_effective_at: PAST_END,
+      current_period_end: FUTURE_END,
+      hasHistoricalData: true,
+    },
+  })
+
+  assert.equal(context.profileBillingState.canUsePaidMutation, false)
+  assert.equal(context.profileBillingState.isReadOnlyWorkspace, true)
+  assert.equal(context.isActiveSubscriber, false)
+  assert.equal(context.canOpenWorkspaceDashboard, true)
+  assert.equal(context.workspaceAccessForFlags, false)
+  assert.equal(context.canViewUpgradePricing, true)
+  assert.equal(context.requiresBillingRecovery, false)
 })
 
 test('authenticated resolved inactive profile remains upgrade eligible without workspace access', () => {
