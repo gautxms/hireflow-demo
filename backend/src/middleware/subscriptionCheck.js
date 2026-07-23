@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import {
   RESUME_ANALYSIS_USAGE_WARNING_THRESHOLD_PERCENT,
   resolveMonthlyResumeAnalysisLimit,
@@ -9,6 +10,13 @@ import {
   resolveResumeQuotaPeriod,
   RESUME_QUOTA_PERIOD_SOURCES,
 } from '../utils/resumeQuotaPeriod.js'
+import {
+  assertResumeQuotaReservationAvailable,
+  consumeResumeQuotaReservation,
+  isResumeQuotaReservationsEnabled,
+  reserveResumeQuotaUnits,
+  ResumeQuotaExceededError,
+} from '../services/resumeQuotaReservations.js'
 
 export function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
@@ -184,12 +192,13 @@ export async function requireActiveSubscription(req, res, next) {
 export async function enforceUploadLimit(req, res, next) {
   try {
     const monthStart = getMonthStart()
+    const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1))
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown'
     const usageOverride = await getUsageOverride(req.userId, monthStart)
     const quotaSubscriptionStatus = req.subscriptionStatusForQuota || req.subscriptionStatus
     const uploadLimit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride)
     const currentUsage = await getUsageCount(req.userId, monthStart, usageOverride?.reset_usage)
-    const requestedUploads = Math.max(req.files?.length || 1, 1)
+    const requestedUploads = Math.max(Number(req.quotaRequestedUploads) || req.files?.length || 1, 1)
     const projectedUsage = currentUsage + requestedUploads
     const remainingUploads = Math.max(uploadLimit - currentUsage, 0)
     const quotaPeriodShadow = await observeBillingPeriodQuota({
@@ -215,6 +224,37 @@ export async function enforceUploadLimit(req, res, next) {
       })
     }
 
+    let quotaReservation = null
+    if (isResumeQuotaReservationsEnabled()) {
+      const suppliedReservationId = String(req.body?.quotaReservationId || '').trim()
+      if (suppliedReservationId) {
+        quotaReservation = await assertResumeQuotaReservationAvailable({
+          userId: req.userId,
+          reservationId: suppliedReservationId,
+          requestedUnits: requestedUploads,
+          periodStart: monthStart,
+          periodEnd: monthEnd,
+          fileIdentity: req.body?.fileIdentity,
+        })
+      } else {
+        const idempotencyKey = String(
+          req.headers['x-quota-idempotency-key']
+          || req.body?.quotaIdempotencyKey
+          || crypto.randomUUID(),
+        ).trim()
+        const reservationResult = await reserveResumeQuotaUnits({
+          userId: req.userId,
+          periodStart: monthStart,
+          periodEnd: monthEnd,
+          uploadLimit,
+          requestedUnits: requestedUploads,
+          idempotencyKey,
+          shouldResetUsage: usageOverride?.reset_usage,
+        })
+        quotaReservation = reservationResult.reservation
+      }
+    }
+
     const percentUsed = Math.round((projectedUsage / uploadLimit) * 100)
     if (percentUsed >= RESUME_ANALYSIS_USAGE_WARNING_THRESHOLD_PERCENT) {
       res.set('X-Usage-Warning', `You have used ${percentUsed}% of your monthly upload quota.`)
@@ -229,10 +269,22 @@ export async function enforceUploadLimit(req, res, next) {
       remainingUploads,
       usageOverride,
       quotaPeriodShadow,
+      quotaReservation,
     }
 
     return next()
   } catch (error) {
+    if (error instanceof ResumeQuotaExceededError) {
+      return res.status(429).json({
+        error: 'Upload limit reached',
+        message: `This upload would exceed your monthly resume analysis limit (${error.details.limit}). Contact support or upgrade your plan to continue.`,
+        limit: error.details.limit,
+        used: error.details.used,
+        reserved: error.details.reserved,
+        requested: error.details.requested,
+        remaining: error.details.remaining,
+      })
+    }
     console.error('[Subscription] Failed to enforce upload usage limit:', error)
     return res.status(500).json({ error: 'Unable to enforce upload usage limits' })
   }
@@ -249,20 +301,66 @@ export async function recordUploadUsage({ userId, monthStart, ipAddress, uploadC
   )
 }
 
-export async function trackUploadUsage(req, _res, next) {
+export async function recordChunkUploadUsage({ userId, uploadId, monthStart, ipAddress }) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const uploadUpdate = await client.query(
+      `UPDATE upload_chunks
+       SET quota_recorded = true,
+           updated_at = NOW()
+       WHERE upload_id = $1
+         AND user_id = $2
+         AND quota_recorded = false
+       RETURNING upload_id`,
+      [uploadId, userId],
+    )
+    if (!uploadUpdate.rows[0]) {
+      await client.query('COMMIT')
+      return false
+    }
+    await client.query(
+      `INSERT INTO usage_log (user_id, ip_address, month_start)
+       VALUES ($1, $2, $3)`,
+      [userId, ipAddress, monthStart],
+    )
+    await client.query('COMMIT')
+    return true
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function trackUploadUsage(req, res, next) {
   if (!req.userId || !req.usageContext?.monthStart || !req.usageContext?.ipAddress) {
     return next()
   }
 
   try {
-    await recordUploadUsage({
-      userId: req.userId,
-      monthStart: req.usageContext.monthStart,
-      ipAddress: req.usageContext.ipAddress,
-      uploadCount: req.usageContext.requestedUploads,
-    })
+    if (req.usageContext.quotaReservation?.id) {
+      await consumeResumeQuotaReservation({
+        userId: req.userId,
+        reservationId: req.usageContext.quotaReservation.id,
+        units: req.usageContext.requestedUploads,
+        monthStart: req.usageContext.monthStart,
+        ipAddress: req.usageContext.ipAddress,
+      })
+    } else {
+      await recordUploadUsage({
+        userId: req.userId,
+        monthStart: req.usageContext.monthStart,
+        ipAddress: req.usageContext.ipAddress,
+        uploadCount: req.usageContext.requestedUploads,
+      })
+    }
   } catch (error) {
     console.error('[Subscription] Failed to track upload usage:', error)
+    if (req.usageContext.quotaReservation?.id) {
+      return res.status(500).json({ error: 'Unable to allocate resume analysis quota' })
+    }
   }
 
   return next()

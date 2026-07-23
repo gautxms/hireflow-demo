@@ -9,7 +9,11 @@ process.env.JWT_SECRET = 'test-secret'
 process.env.AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'test-bucket'
 process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1'
 
-const { default: uploadChunksRouter } = await import('./uploadChunks.js')
+const {
+  default: uploadChunksRouter,
+  shouldReleaseReservationAfterInitError,
+  shouldReleaseReservationForRecordedSession,
+} = await import('./uploadChunks.js')
 const { parseQueue } = await import('../services/jobQueue.js')
 
 after(async () => {
@@ -53,12 +57,52 @@ async function requestJson(path, { method = 'POST', headers = {}, body } = {}) {
 
 function mockChunkUploadQueries(t, handler) {
   const queries = []
-  t.mock.method(pool, 'query', async (sql, params) => {
-    queries.push({ sql, params })
-    return handler(sql, params, queries)
-  })
+  const execute = async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params })
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(text)) return { rows: [] }
+    if (text.includes('UPDATE upload_chunks') && text.includes('quota_recorded = true')) {
+      return { rows: [{ upload_id: params[0] }] }
+    }
+    return handler(text, params, queries)
+  }
+  t.mock.method(pool, 'query', execute)
+  t.mock.method(pool, 'connect', async () => ({ query: execute, release() {} }))
   return queries
 }
+
+test('same-reservation init retries preserve sibling units', () => {
+  assert.equal(shouldReleaseReservationForRecordedSession({
+    suppliedReservationId: 'reservation-batch',
+    sessionQuotaState: {
+      quotaRecorded: true,
+      quotaReservationId: 'reservation-batch',
+    },
+  }), false)
+
+  assert.equal(shouldReleaseReservationForRecordedSession({
+    suppliedReservationId: 'reservation-retry',
+    sessionQuotaState: {
+      quotaRecorded: true,
+      quotaReservationId: 'reservation-original',
+    },
+  }), true)
+})
+
+test('quota allocation failures retain the reserved unit for an idempotent retry', () => {
+  assert.equal(shouldReleaseReservationAfterInitError({
+    suppliedReservationId: 'reservation-batch',
+    sessionQuotaState: {
+      quotaRecorded: false,
+      quotaReservationId: 'reservation-batch',
+    },
+  }), false)
+
+  assert.equal(shouldReleaseReservationAfterInitError({
+    suppliedReservationId: 'reservation-batch',
+    sessionQuotaState: null,
+  }), true)
+})
 
 test('POST /api/uploads/chunks/init requires authentication', async (t) => {
   const queries = mockChunkUploadQueries(t, () => ({ rows: [] }))
@@ -106,6 +150,60 @@ test('POST /api/uploads/chunks/init enforces monthly quota before creating a ses
   assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
 })
 
+test('POST /api/uploads/chunks/preflight rejects a 795 plus 10 batch before any session starts', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 795 }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/preflight', {
+    headers: authHeader(),
+    body: { fileCount: 10, quotaIdempotencyKey: 'ten-file-batch' },
+  })
+
+  assert.equal(response.status, 429)
+  assert.equal(payload.used, 795)
+  assert.equal(payload.requested, 10)
+  assert.equal(payload.remaining, 5)
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
+})
+
+test('POST /api/uploads/chunks/preflight validates the whole-batch file count', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/preflight', {
+    headers: authHeader(),
+    body: { fileCount: 21 },
+  })
+
+  assert.equal(response.status, 400)
+  assert.match(payload.error, /between 1 and 20/)
+  assert.equal(queries.length, 1)
+})
+
+test('POST /api/uploads/chunks/reservations/:id/release clears unused units for the authenticated user', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [] }
+    if (sql.includes('FROM resume_quota_reservations')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson(
+    '/api/uploads/chunks/reservations/00000000-0000-4000-8000-000000000701/release',
+    { headers: authHeader(7) },
+  )
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.ok, true)
+  const reservationRead = queries.find(({ sql }) => sql.includes('FROM resume_quota_reservations'))
+  assert.deepEqual(reservationRead.params.slice(0, 2), ['00000000-0000-4000-8000-000000000701', 7])
+})
+
 test('POST /api/uploads/chunks/init records exactly one usage row for a new session', async (t) => {
   const queries = mockChunkUploadQueries(t, (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
@@ -128,7 +226,7 @@ test('POST /api/uploads/chunks/init records exactly one usage row for a new sess
   assert.equal(payload.resumed, false)
   const usageWrites = queries.filter(({ sql }) => sql.includes('INSERT INTO usage_log'))
   assert.equal(usageWrites.length, 1)
-  assert.equal(usageWrites[0].params[3], 1)
+  assert.deepEqual(usageWrites[0].params.slice(0, 2), [1, '::ffff:127.0.0.1'])
 })
 
 test('POST /api/uploads/chunks/init passes clientChunkSize through to session creation', async (t) => {
@@ -180,7 +278,32 @@ test('POST /api/uploads/chunks/init rejects files above the 25 MiB resume limit'
 
   assert.equal(response.status, 400)
   assert.match(payload.error, /Files above 25MB are not supported yet/)
+  assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_overrides')), false)
+  assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_log')), false)
   assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
+})
+
+test('POST /api/uploads/chunks/init requires a stable file identity for reserved uploads', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [] }
+    if (sql.includes('FROM resume_quota_reservations')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/init', {
+    headers: authHeader(),
+    body: {
+      filename: 'resume.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      quotaReservationId: '00000000-0000-4000-8000-000000000711',
+    },
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal(payload.error, 'fileIdentity is required for reserved chunk uploads')
+  assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_log')), false)
 })
 
 

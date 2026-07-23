@@ -508,7 +508,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             `UPDATE users
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
-                 quota_anchor_at = COALESCE(quota_anchor_at, $8, $5),
+                 quota_anchor_at = COALESCE(quota_anchor_at, $8),
                  trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
                  paddle_subscription_id = COALESCE($2, paddle_subscription_id),
                  paddle_customer_id = COALESCE($3, paddle_customer_id),
@@ -690,7 +690,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                END,
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
                quota_anchor_at = CASE
-                 WHEN $3 = 'active' THEN COALESCE(quota_anchor_at, $10, $6)
+                 WHEN $3 = 'active' THEN COALESCE(quota_anchor_at, $10)
                  ELSE quota_anchor_at
                END,
                trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,

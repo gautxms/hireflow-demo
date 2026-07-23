@@ -58,6 +58,103 @@ test('initChunkUpload stores a tenant-namespaced S3 prefix for new sessions with
   assert.equal(insert.params[7], `users/42/uploads/${result.uploadId}`)
 })
 
+test('initChunkUpload keeps same-named same-sized batch files in distinct identified sessions', async (t) => {
+  const queries = mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('FROM upload_chunks') && sql.includes('file_identity')) return { rows: [] }
+    if (sql.includes('FROM analyses')) return { rows: [{ id: '00000000-0000-4000-8000-000000000111' }] }
+    if (sql.includes('INSERT INTO upload_chunks')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const common = {
+    userId: 42,
+    filename: 'Resume.pdf',
+    fileSize: 1024,
+    mimeType: 'application/pdf',
+    analysisId: '00000000-0000-4000-8000-000000000111',
+  }
+  const first = await service.initChunkUpload({ ...common, fileIdentity: 'batch-key:0' })
+  const second = await service.initChunkUpload({ ...common, fileIdentity: 'batch-key:1' })
+
+  assert.notEqual(first.uploadId, second.uploadId)
+  const inserts = queries.filter(({ sql }) => sql.includes('INSERT INTO upload_chunks'))
+  assert.equal(inserts.length, 2)
+  assert.equal(inserts[0].params[11], 'batch-key:0')
+  assert.equal(inserts[1].params[11], 'batch-key:1')
+})
+
+test('initChunkUpload resumes an identified session before creating another analysis', async (t) => {
+  const existingAnalysisId = '00000000-0000-4000-8000-000000000121'
+  const existingUploadId = '00000000-0000-4000-8000-000000000122'
+  const queries = mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('FROM upload_chunks') && sql.includes('file_identity')) {
+      return {
+        rows: [{
+          upload_id: existingUploadId,
+          uploaded_chunks: [0],
+          total_chunks: 1,
+          quota_recorded: true,
+          quota_reservation_id: '00000000-0000-4000-8000-000000000123',
+          analysis_id: existingAnalysisId,
+        }],
+      }
+    }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const result = await service.initChunkUpload({
+    userId: 42,
+    filename: 'Resume.pdf',
+    fileSize: 1024,
+    mimeType: 'application/pdf',
+    fileIdentity: 'stable-batch:0',
+  })
+
+  assert.equal(result.resumed, true)
+  assert.equal(result.uploadId, existingUploadId)
+  assert.equal(result.analysisId, existingAnalysisId)
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO analyses')), false)
+})
+
+test('initChunkUpload atomically reloads the winning identified session after an insert conflict', async (t) => {
+  const winningUploadId = '00000000-0000-4000-8000-000000000131'
+  const winningAnalysisId = '00000000-0000-4000-8000-000000000132'
+  mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('FROM upload_chunks') && sql.includes('file_identity')) return { rows: [] }
+    if (sql.includes('FROM analyses')) return { rows: [{ id: winningAnalysisId }] }
+    if (sql.includes('INSERT INTO upload_chunks')) {
+      assert.match(sql, /ON CONFLICT \(user_id, file_identity\)/)
+      assert.match(sql, /RETURNING upload_id/)
+      return { rows: [{
+        upload_id: winningUploadId,
+        total_chunks: 1,
+        uploaded_chunks: [],
+        analysis_id: winningAnalysisId,
+        quota_recorded: false,
+        quota_reservation_id: '00000000-0000-4000-8000-000000000133',
+      }] }
+    }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const result = await service.initChunkUpload({
+    userId: 42,
+    filename: 'Resume.pdf',
+    fileSize: 1024,
+    mimeType: 'application/pdf',
+    analysisId: winningAnalysisId,
+    quotaReservationId: '00000000-0000-4000-8000-000000000133',
+    fileIdentity: 'stable-batch:race',
+  })
+
+  assert.equal(result.uploadId, winningUploadId)
+  assert.equal(result.resumed, true)
+  assert.equal(service.getChunkUploadQuotaState(result).quotaRecorded, false)
+})
+
 test('initChunkUpload uses clientChunkSize to calculate 25 MiB uploads with 4 MiB chunks', async (t) => {
   const fileSize = 25 * 1024 * 1024
   const clientChunkSize = 4 * 1024 * 1024

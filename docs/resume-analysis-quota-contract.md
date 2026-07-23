@@ -10,6 +10,12 @@ PR 1 introduces the billing-period contract, a stable anchor, and shadow
 comparison only. Calendar-month enforcement remains authoritative until the
 reservation and accounting phases are implemented and verified.
 
+PR 2 adds an atomic reservation ledger behind
+`RESUME_QUOTA_RESERVATIONS_ENABLED=false` by default. When enabled for
+controlled verification, classic multipart uploads reserve their full batch in
+one transaction. Chunked uploads call a batch preflight endpoint before any
+session is initialized and allocate one reserved unit per new session.
+
 ## Period contract
 
 - Quota periods use UTC timestamps with an inclusive start and exclusive end.
@@ -24,6 +30,10 @@ reservation and accounting phases are implemented and verified.
 - An active legacy user can be backfilled from a known `current_period_end`
   boundary. Other paid users without a valid anchor continue to use UTC calendar
   months until trustworthy billing data is available.
+- A legacy period end that lands on the last day of a short month is ambiguous:
+  it cannot prove whether the original anniversary was the 28th, 29th, 30th, or
+  31st. Those backfilled anchors are cleared and remain on the safe calendar
+  fallback until a provider-backed period start is observed.
 - Trial events never establish the paid quota anchor.
 
 ### Subscription lifecycle rules
@@ -66,6 +76,32 @@ The current production counter records accepted uploads before scanning and AI
 processing. That behavior is intentionally unchanged in PR 1 and will be aligned
 with this contract only after atomic reservations exist.
 
+## PR 2 reservation behavior
+
+- Reservation rollout is disabled by default.
+- Availability is serialized per user with a PostgreSQL transaction advisory
+  lock.
+- `used + unexpired reserved + requested` must be less than or equal to the
+  applicable limit.
+- A caller-provided idempotency key returns the original reservation and cannot
+  reserve the same batch twice.
+- The client retains that key across an unknown preflight outcome, so a lost
+  response can recover the original reservation instead of allocating another.
+- Reservations expire after two hours if a client abandons an upload.
+- Clients explicitly release every unused unit when initial session creation
+  fails; successful sibling sessions continue instead of being abandoned.
+- Each file receives a stable identity within its logical batch. This keeps
+  same-named, same-sized files in distinct sessions while making a lost init
+  response safely resumable.
+- A new upload session converts one reserved unit into the existing `usage_log`
+  record. Retrying that session with the same reservation is a no-op, while a
+  retry carrying a different reservation releases only the newly supplied unit.
+- If quota allocation fails after the upload session is created, its reserved
+  unit remains attached so the stable file identity can retry idempotently.
+- The current calendar-month limit, admin overrides, and pre-provider counting
+  semantics remain authoritative. Billing-period enforcement and provider-start
+  accounting remain PR 3 work.
+
 ## PR 1 shadow-mode behavior
 
 - Existing calendar-month checks remain the only checks that allow or reject an
@@ -77,6 +113,8 @@ with this contract only after atomic reservations exist.
 - Shadow query failures are logged and never block an upload.
 - Set `RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE=false` to disable comparison
   immediately without reverting the migration or period resolver.
+- Set `RESUME_QUOTA_RESERVATIONS_ENABLED=false` to bypass the reservation
+  ledger and return immediately to the legacy quota path.
 
 ## Rollback
 
