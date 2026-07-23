@@ -165,7 +165,15 @@ router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRe
     sessionQuotaState = getChunkUploadQuotaState(session)
 
     if (quotaReservationId) {
-      if (sessionQuotaState.quotaRecorded === true) {
+      if (sessionQuotaState.quotaAllocationId) {
+        if (sessionQuotaState.quotaReservationId !== quotaReservationId) {
+          await releaseResumeQuotaReservation({
+            userId: req.userId,
+            reservationId: quotaReservationId,
+            units: 1,
+          })
+        }
+      } else if (sessionQuotaState.quotaRecorded === true) {
         if (shouldReleaseReservationForRecordedSession({
           suppliedReservationId: quotaReservationId,
           sessionQuotaState,

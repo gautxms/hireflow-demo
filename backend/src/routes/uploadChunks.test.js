@@ -323,6 +323,112 @@ test('flagged chunk init allocates quota without recording provider usage', asyn
   }
 })
 
+test('resumed upload releases a replacement reservation and reuses its original allocation', async (t) => {
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
+  const replacementReservationId = '00000000-0000-4000-8000-000000000731'
+  const originalReservationId = '00000000-0000-4000-8000-000000000732'
+  const allocationId = '00000000-0000-4000-8000-000000000733'
+  const uploadId = '00000000-0000-4000-8000-000000000734'
+  const analysisId = '00000000-0000-4000-8000-000000000735'
+  const quotaAnchorAt = new Date('2020-01-20T00:00:00.000Z')
+  const period = resolveResumeQuotaPeriod({
+    subscriptionStatus: 'active',
+    quotaAnchorAt,
+  })
+  const replacementReservation = {
+    id: replacementReservationId,
+    user_id: 1,
+    idempotency_key: 'replacement-batch',
+    period_start: period.start,
+    period_end: period.end,
+    requested_units: 1,
+    consumed_units: 0,
+    released_units: 0,
+    status: 'reserved',
+    expires_at: new Date(Date.now() + 60_000),
+    allocated_reserved_units: 0,
+    has_existing_upload: false,
+  }
+
+  try {
+    const queries = mockChunkUploadQueries(t, (sql) => {
+      if (sql.includes('FROM users')) {
+        return {
+          rows: [{
+            id: 1,
+            subscription_status: 'active',
+            subscription_plan: 'annual',
+            quota_anchor_at: quotaAnchorAt,
+          }],
+        }
+      }
+      if (sql.includes('FROM usage_overrides')) return { rows: [] }
+      if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 0 }] }
+      if (sql.includes('FROM resume_quota_reservations AS reservation')) {
+        return { rows: [replacementReservation] }
+      }
+      if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) {
+        return { rows: [] }
+      }
+      if (sql.includes('FROM upload_chunks') && sql.includes('file_identity = $2')) {
+        return {
+          rows: [{
+            upload_id: uploadId,
+            uploaded_chunks: [0],
+            total_chunks: 2,
+            quota_recorded: false,
+            quota_reservation_id: originalReservationId,
+            quota_allocation_id: allocationId,
+            analysis_id: analysisId,
+          }],
+        }
+      }
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [] }
+      if (sql.includes('FROM resume_quota_reservations') && sql.includes('FOR UPDATE')) {
+        return { rows: [replacementReservation] }
+      }
+      if (sql.includes('AS allocated_count')) return { rows: [{ allocated_count: 0 }] }
+      if (sql.includes('UPDATE resume_quota_reservations')) {
+        return {
+          rows: [{
+            ...replacementReservation,
+            released_units: 1,
+            status: 'released',
+          }],
+        }
+      }
+      throw new Error(`Unexpected query: ${sql}`)
+    })
+
+    const { response, payload } = await requestJson('/api/uploads/chunks/init', {
+      headers: authHeader(),
+      body: {
+        filename: 'resume.pdf',
+        fileSize: 1024,
+        mimeType: 'application/pdf',
+        quotaReservationId: replacementReservationId,
+        fileIdentity: 'replacement-batch:0',
+      },
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(payload.resumed, true)
+    assert.equal(payload.uploadId, uploadId)
+    assert.equal(
+      queries.some(({ sql }) => sql.includes('INSERT INTO resume_quota_allocations')),
+      false,
+    )
+    assert.equal(
+      queries.some(({ sql }) => sql.includes('UPDATE resume_quota_reservations')),
+      true,
+    )
+  } finally {
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
+  }
+})
+
 test('POST /api/uploads/chunks/init passes clientChunkSize through to session creation', async (t) => {
   const queries = mockChunkUploadQueries(t, (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
