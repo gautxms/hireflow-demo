@@ -53,6 +53,17 @@ test('read-only access helper treats final cancellation as terminal despite a st
   }
 })
 
+test('expired authoritative cancellation date is not replaced by a later period end', () => {
+  const user = {
+    subscription_status: 'cancellation_scheduled',
+    cancellation_effective_at: PAST,
+    current_period_end: FUTURE,
+  }
+
+  assert.equal(hasScheduledCancellationAccess(user, NOW), false)
+  assert.equal(canUsePaidMutation(user, NOW), false)
+})
+
 test('terminal cancellation without an effective date fails closed', () => {
   for (const status of ['canceled', 'cancelled']) {
     const user = { subscription_status: status, current_period_end: FUTURE }
