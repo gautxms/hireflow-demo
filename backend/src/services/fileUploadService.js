@@ -67,15 +67,17 @@ function ensureS3Configured() {
 }
 
 async function releaseQuotaAllocationSafely({ userId, allocationId, reason }) {
-  if (!allocationId) return
+  if (!allocationId) return true
   try {
     await releaseResumeQuotaAllocation({ userId, allocationId, reason })
+    return true
   } catch (error) {
     console.error('[ChunkUpload] Failed to release pre-provider quota allocation:', {
       allocationId,
       reason,
       message: error?.message || String(error),
     })
+    return false
   }
 }
 
@@ -788,11 +790,14 @@ export async function cleanupExpiredChunkUploads() {
     try {
       await deletePrefix(resolveUploadPrefix(row))
       if (row.quota_allocation_id) {
-        await releaseQuotaAllocationSafely({
+        const quotaReleased = await releaseQuotaAllocationSafely({
           userId: row.user_id,
           allocationId: row.quota_allocation_id,
           reason: 'upload_session_expired',
         })
+        if (!quotaReleased) {
+          continue
+        }
       }
       expiredUploadIds.push(row.upload_id)
     } catch (error) {
@@ -810,7 +815,7 @@ export async function cleanupExpiredChunkUploads() {
     )
   }
 
-  return result.rowCount
+  return expiredUploadIds.length
 }
 
 export function startChunkUploadCleanupCron() {

@@ -443,3 +443,44 @@ test('cleanupExpiredChunkUploads deletes objects using stored prefixes without a
   assert.equal(commands[0].input.Prefix, prefix)
   assert.deepEqual(commands[1].input.Delete.Objects.map((object) => object.Key), [`${prefix}/chunks/0`, `${prefix}/assembled/resume.pdf`])
 })
+
+test('cleanupExpiredChunkUploads retries an expired upload when quota release fails', async (t) => {
+  const uploadId = '00000000-0000-4000-8000-000000000402'
+  const allocationId = '00000000-0000-4000-8000-000000000403'
+  const prefix = `uploads/${uploadId}`
+  let markedExpired = false
+
+  mockServiceQueries(t, (sql) => {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
+    if (sql.includes('SELECT upload_id, user_id, s3_prefix, quota_allocation_id')) {
+      return {
+        rows: [{
+          upload_id: uploadId,
+          user_id: 7,
+          s3_prefix: prefix,
+          quota_allocation_id: allocationId,
+        }],
+        rowCount: 1,
+      }
+    }
+    if (sql.includes('UPDATE upload_chunks')) {
+      markedExpired = true
+      return { rows: [] }
+    }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+  t.mock.method(pool, 'connect', async () => {
+    throw new Error('transient database failure')
+  })
+  mockS3(t, (command) => {
+    if (command.constructor.name === 'ListObjectsV2Command') {
+      return { Contents: [{ Key: `${prefix}/chunks/0` }] }
+    }
+    return {}
+  })
+
+  const count = await service.cleanupExpiredChunkUploads()
+
+  assert.equal(count, 0)
+  assert.equal(markedExpired, false)
+})
