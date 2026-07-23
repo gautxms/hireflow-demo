@@ -75,13 +75,23 @@ function getScheduledCancellationEffectiveAt(payload) {
   return scheduledChange?.effective_at || scheduledChange?.effectiveAt || null
 }
 
+function isFinalCancellationUser(user = {}, now = new Date()) {
+  const status = String(user.subscription_status || '').toLowerCase()
+  if (!['canceled', 'cancelled'].includes(status)) return false
+  if (!user.cancellation_effective_at) return true
+
+  const effectiveAt = new Date(user.cancellation_effective_at)
+  return Number.isNaN(effectiveAt.getTime()) || effectiveAt <= now
+}
+
 async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironment = false) {
   const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
 
   if (explicitUserId) {
     const result = await pool.query(
       `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, subscription_plan,
-              current_period_end, next_billing_date, subscription_renewal_date, paddle_environment, updated_at
+              current_period_end, next_billing_date, subscription_renewal_date, cancellation_effective_at,
+              paddle_environment, updated_at
        FROM users
        WHERE id = $1
        LIMIT 1`,
@@ -105,7 +115,8 @@ async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironm
 
   const result = await pool.query(
     `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, subscription_plan,
-            current_period_end, next_billing_date, subscription_renewal_date, paddle_environment, updated_at
+            current_period_end, next_billing_date, subscription_renewal_date, cancellation_effective_at,
+            paddle_environment, updated_at
      FROM users
      WHERE paddle_customer_id = $1
        AND ($2::boolean = FALSE OR COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $3)
@@ -493,7 +504,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
 
       if (!hasEnvironmentMismatch && !isRecoveredPlanChange) {
         if (userId) {
-          await pool.query(
+          const activationResult = await pool.query(
             `UPDATE users
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
@@ -505,10 +516,36 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                  current_period_end = COALESCE($5, current_period_end),
                  subscription_renewal_date = COALESCE($5, subscription_renewal_date),
                  next_billing_date = COALESCE($6, next_billing_date),
+                 cancellation_effective_at = CASE
+                   WHEN $2 IS DISTINCT FROM paddle_subscription_id THEN NULL
+                   ELSE cancellation_effective_at
+                 END,
+                 cancellation_reason = CASE
+                   WHEN $2 IS DISTINCT FROM paddle_subscription_id THEN NULL
+                   ELSE cancellation_reason
+                 END,
                  paddle_environment = $7,
                  updated_at = NOW()
              WHERE id = $1
-               AND ($5::timestamp IS NULL OR current_period_end IS NULL OR $5::timestamp >= current_period_end)`,
+               AND (
+                 (
+                   $2 IS NOT NULL
+                   AND (paddle_subscription_id IS NULL OR $2 = paddle_subscription_id)
+                   AND NOT (
+                     LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
+                     AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
+                   )
+                   AND ($5::timestamp IS NULL OR current_period_end IS NULL OR $5::timestamp >= current_period_end)
+                 )
+                 OR (
+                   $2 IS NOT NULL
+                   AND $4 IS NOT NULL
+                   AND $5::timestamp IS NOT NULL
+                   AND $2 IS DISTINCT FROM paddle_subscription_id
+                   AND LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
+                   AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
+                 )
+               )`,
             [
               userId,
               transactionSubscriptionId,
@@ -520,6 +557,15 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
               payload?.data?.billing_period?.starts_at || null,
             ],
           )
+
+          if (
+            activationResult.rowCount === 0
+            && isFinalCancellationUser(user)
+            && transactionSubscriptionId
+            && transactionSubscriptionId !== user.paddle_subscription_id
+          ) {
+            throw new Error('Completed checkout could not replace the cancelled subscription lifecycle')
+          }
         }
 
         await markPaymentAttemptSucceeded(payload)
@@ -627,7 +673,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       }
 
       if (user?.id && updatedStatus && !preservePaidPlan) {
-        await pool.query(
+        const subscriptionUpdateResult = await pool.query(
           `UPDATE users
            SET paddle_subscription_id = COALESCE($2, paddle_subscription_id),
                subscription_status = $3,
@@ -650,7 +696,25 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,
                updated_at = NOW()
            WHERE id = $1
-             AND ($6::timestamp IS NULL OR current_period_end IS NULL OR $6::timestamp >= current_period_end)`,
+             AND (
+               (
+                 $2 IS NOT NULL
+                 AND (paddle_subscription_id IS NULL OR $2 = paddle_subscription_id)
+                 AND NOT (
+                   LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
+                   AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
+                 )
+                 AND ($6::timestamp IS NULL OR current_period_end IS NULL OR $6::timestamp >= current_period_end)
+               )
+               OR (
+                 $2 IS NOT NULL
+                 AND $5 IS NOT NULL
+                 AND $6::timestamp IS NOT NULL
+                 AND $2 IS DISTINCT FROM paddle_subscription_id
+                 AND LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
+                 AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
+               )
+             )`,
           [
             user.id,
             subscriptionFromEvent,
@@ -664,6 +728,15 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             payload?.data?.current_billing_period?.starts_at || null,
           ],
         )
+
+        if (
+          subscriptionUpdateResult.rowCount === 0
+          && isFinalCancellationUser(user)
+          && subscriptionFromEvent
+          && subscriptionFromEvent !== user.paddle_subscription_id
+        ) {
+          throw new Error('Active subscription could not replace the cancelled subscription lifecycle')
+        }
       }
     }
 
@@ -682,7 +755,9 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                cancellation_effective_at = COALESCE($5, cancellation_effective_at, $4, NOW()),
                paddle_environment = $6,
                updated_at = NOW()
-           WHERE id = $1`,
+           WHERE id = $1
+             AND $2 IS NOT NULL
+             AND (paddle_subscription_id IS NULL OR paddle_subscription_id = $2)`,
           [
             user.id,
             canceledSubscriptionId,
