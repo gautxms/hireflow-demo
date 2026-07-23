@@ -80,9 +80,16 @@ export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, no
   const cancellationEffectiveAt = subscriptionStateOrSubscription?.cancellationEffectiveAt
     ?? subscriptionStateOrSubscription?.cancellation_effective_at
 
-  // A terminal Paddle cancellation must not inherit access from a stale billing
-  // period. Only its explicit effective timestamp can prove paid-through access.
-  if (CANCELED_STATUSES.has(status)) {
+  const hasCancellationEffectiveAt = cancellationEffectiveAt !== undefined
+    && cancellationEffectiveAt !== null
+    && cancellationEffectiveAt !== ''
+
+  // An explicit cancellation-effective timestamp is authoritative for every
+  // cancellation signal. A terminal canceled status without one fails closed.
+  if (
+    CANCELED_STATUSES.has(status)
+    || (hasCancellationEffectiveAt && hasExplicitScheduledCancellationSignal(subscriptionStateOrSubscription))
+  ) {
     return parseFutureDate(cancellationEffectiveAt, comparisonDate)
   }
 
