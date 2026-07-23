@@ -4,6 +4,11 @@ import {
 } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
 import { canUsePaidMutation, hasActivePaidAccess, hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
+import {
+  isResumeQuotaBillingPeriodShadowEnabled,
+  resolveResumeQuotaPeriod,
+  RESUME_QUOTA_PERIOD_SOURCES,
+} from '../utils/resumeQuotaPeriod.js'
 
 export function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
@@ -37,10 +42,105 @@ export async function getUsageCount(userId, monthStart, shouldResetUsage = false
   return usageResult.rows[0]?.usage_count ?? 0
 }
 
+export async function getUsageCountForPeriod(userId, periodStart, periodEnd, shouldResetUsage = false) {
+  if (shouldResetUsage) {
+    return 0
+  }
+
+  const usageResult = await pool.query(
+    `SELECT COUNT(*)::INT AS usage_count
+     FROM usage_log
+     WHERE user_id = $1
+       AND created_at >= $2
+       AND created_at < $3`,
+    [userId, periodStart, periodEnd],
+  )
+
+  return usageResult.rows[0]?.usage_count ?? 0
+}
+
+export async function observeBillingPeriodQuota({
+  userId,
+  subscriptionContext,
+  legacyPeriodStart,
+  legacyUsage,
+  uploadLimit,
+  requestedUploads,
+  shouldResetUsage = false,
+  referenceDate = new Date(),
+}) {
+  const proposedPeriod = resolveResumeQuotaPeriod({
+    subscriptionStatus: subscriptionContext?.status,
+    quotaAnchorAt: subscriptionContext?.quotaAnchorAt,
+    referenceDate,
+  })
+
+  const observation = {
+    mode: 'shadow',
+    source: proposedPeriod.source,
+    fallbackReason: proposedPeriod.fallbackReason || null,
+    legacyPeriodStart,
+    proposedPeriodStart: proposedPeriod.start,
+    proposedPeriodEnd: proposedPeriod.end,
+    legacyUsage,
+    proposedUsage: legacyUsage,
+  }
+
+  if (!isResumeQuotaBillingPeriodShadowEnabled()) {
+    return { ...observation, mode: 'disabled' }
+  }
+
+  if (proposedPeriod.source !== RESUME_QUOTA_PERIOD_SOURCES.BILLING_ANCHOR) {
+    return observation
+  }
+
+  try {
+    const proposedUsage = await getUsageCountForPeriod(
+      userId,
+      proposedPeriod.start,
+      proposedPeriod.end,
+      shouldResetUsage,
+    )
+    const legacyWouldBlock = legacyUsage + requestedUploads > uploadLimit
+    const proposedWouldBlock = proposedUsage + requestedUploads > uploadLimit
+
+    console.info('[Resume quota billing-period shadow]', {
+      userId,
+      subscriptionPlan: subscriptionContext?.plan || null,
+      legacyPeriodStart: legacyPeriodStart.toISOString(),
+      proposedPeriodStart: proposedPeriod.start.toISOString(),
+      proposedPeriodEnd: proposedPeriod.end.toISOString(),
+      legacyUsage,
+      proposedUsage,
+      requestedUploads,
+      uploadLimit,
+      legacyWouldBlock,
+      proposedWouldBlock,
+      decisionDiffers: legacyWouldBlock !== proposedWouldBlock,
+    })
+
+    return {
+      ...observation,
+      proposedUsage,
+      legacyWouldBlock,
+      proposedWouldBlock,
+      decisionDiffers: legacyWouldBlock !== proposedWouldBlock,
+    }
+  } catch (error) {
+    console.warn('[Resume quota billing-period shadow] comparison failed; legacy enforcement unchanged', {
+      userId,
+      code: error?.code || error?.name || 'UNKNOWN_ERROR',
+      message: error?.message || String(error),
+    })
+    return { ...observation, comparisonFailed: true }
+  }
+}
+
 export async function requireActiveSubscription(req, res, next) {
   try {
     const userResult = await pool.query(
-      `SELECT id, subscription_status, cancellation_effective_at, current_period_end
+      `SELECT id, subscription_status, subscription_plan, quota_anchor_at,
+              cancellation_effective_at, current_period_end
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -69,6 +169,11 @@ export async function requireActiveSubscription(req, res, next) {
     req.hasScheduledCancellationAccess = hasScheduledCancellationPaidAccess
     req.subscriptionStatus = hasScheduledCancellationPaidAccess ? 'active' : rawSubscriptionStatus
     req.subscriptionStatusForQuota = hasScheduledCancellationPaidAccess ? 'active' : rawSubscriptionStatus
+    req.subscriptionQuotaContext = {
+      status: req.subscriptionStatusForQuota,
+      plan: user.subscription_plan || null,
+      quotaAnchorAt: user.quota_anchor_at || null,
+    }
     return next()
   } catch (error) {
     console.error('[Subscription] Failed to validate subscription status:', error)
@@ -87,6 +192,17 @@ export async function enforceUploadLimit(req, res, next) {
     const requestedUploads = Math.max(req.files?.length || 1, 1)
     const projectedUsage = currentUsage + requestedUploads
     const remainingUploads = Math.max(uploadLimit - currentUsage, 0)
+    const quotaPeriodShadow = await observeBillingPeriodQuota({
+      userId: req.userId,
+      subscriptionContext: req.subscriptionQuotaContext || {
+        status: quotaSubscriptionStatus,
+      },
+      legacyPeriodStart: monthStart,
+      legacyUsage: currentUsage,
+      uploadLimit,
+      requestedUploads,
+      shouldResetUsage: usageOverride?.reset_usage,
+    })
 
     if (projectedUsage > uploadLimit) {
       return res.status(429).json({
@@ -112,6 +228,7 @@ export async function enforceUploadLimit(req, res, next) {
       requestedUploads,
       remainingUploads,
       usageOverride,
+      quotaPeriodShadow,
     }
 
     return next()

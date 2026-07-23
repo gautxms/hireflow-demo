@@ -299,6 +299,37 @@ test('keep-subscription audit migration safely replaces the change type constrai
   }
 })
 
+test('migration runner adds the resume quota anchor after subscription lifecycle migrations', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'045-add-resume-quota-anchor'/)
+  assert.ok(
+    source.indexOf("'044-allow-keep-subscription-change-events'") <
+      source.indexOf("'045-add-resume-quota-anchor'"),
+  )
+})
+
+test('resume quota anchor migration is additive and only backfills known active billing boundaries', async () => {
+  const queries = []
+  const { up } = await import('./045-add-resume-quota-anchor.js')
+
+  await up({
+    query(sql) {
+      queries.push(String(sql))
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 3)
+  assert.match(queries[0], /ALTER TABLE users/)
+  assert.match(queries[0], /ADD COLUMN IF NOT EXISTS quota_anchor_at TIMESTAMP/)
+  assert.match(queries[1], /SET quota_anchor_at = current_period_end/)
+  assert.match(queries[1], /quota_anchor_at IS NULL/)
+  assert.match(queries[1], /subscription_status/)
+  assert.match(queries[1], /current_period_end IS NOT NULL/)
+  assert.match(queries[2], /CREATE INDEX IF NOT EXISTS idx_usage_log_user_created_at/)
+  assert.match(queries[2], /ON usage_log \(user_id, created_at\)/)
+})
+
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
   const queries = []
   const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')

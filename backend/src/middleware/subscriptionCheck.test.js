@@ -2,7 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { PAID_MONTHLY_RESUME_ANALYSIS_LIMIT, TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
-import { enforceUploadLimit, requireActiveSubscription, trackUploadUsage } from './subscriptionCheck.js'
+import {
+  enforceUploadLimit,
+  observeBillingPeriodQuota,
+  requireActiveSubscription,
+  trackUploadUsage,
+} from './subscriptionCheck.js'
 
 function createRes() {
   return {
@@ -26,7 +31,14 @@ function createRes() {
 
 test('requireActiveSubscription allows active subscribers', async () => {
   const originalQuery = pool.query
-  pool.query = async () => ({ rows: [{ id: 1, subscription_status: 'active' }] })
+  pool.query = async () => ({
+    rows: [{
+      id: 1,
+      subscription_status: 'active',
+      subscription_plan: 'annual',
+      quota_anchor_at: '2026-01-20T08:30:00.000Z',
+    }],
+  })
 
   try {
     const req = { userId: 1 }
@@ -43,8 +55,86 @@ test('requireActiveSubscription allows active subscribers', async () => {
     assert.equal(req.rawSubscriptionStatus, 'active')
     assert.equal(req.hasActivePaidAccess, true)
     assert.equal(req.hasScheduledCancellationAccess, false)
+    assert.deepEqual(req.subscriptionQuotaContext, {
+      status: 'active',
+      plan: 'annual',
+      quotaAnchorAt: '2026-01-20T08:30:00.000Z',
+    })
   } finally {
     pool.query = originalQuery
+  }
+})
+
+test('billing-period quota observation compares counts without changing the legacy decision', async () => {
+  const originalQuery = pool.query
+  const originalFlag = process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE
+  const queries = []
+  process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE = 'true'
+  pool.query = async (sql, params) => {
+    queries.push({ sql, params })
+    return { rows: [{ usage_count: 801 }] }
+  }
+
+  try {
+    const observation = await observeBillingPeriodQuota({
+      userId: 1,
+      subscriptionContext: {
+        status: 'active',
+        plan: 'annual',
+        quotaAnchorAt: '2026-01-20T08:30:00.000Z',
+      },
+      legacyPeriodStart: new Date('2026-07-01T00:00:00.000Z'),
+      legacyUsage: 799,
+      uploadLimit: 800,
+      requestedUploads: 1,
+      referenceDate: new Date('2026-07-23T12:00:00.000Z'),
+    })
+
+    assert.equal(observation.mode, 'shadow')
+    assert.equal(observation.legacyWouldBlock, false)
+    assert.equal(observation.proposedWouldBlock, true)
+    assert.equal(observation.decisionDiffers, true)
+    assert.equal(observation.proposedUsage, 801)
+    assert.equal(queries.length, 1)
+    assert.match(queries[0].sql, /created_at >= \$2/)
+    assert.equal(queries[0].params[1].toISOString(), '2026-07-20T08:30:00.000Z')
+    assert.equal(queries[0].params[2].toISOString(), '2026-08-20T08:30:00.000Z')
+  } finally {
+    pool.query = originalQuery
+    if (originalFlag === undefined) delete process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE
+    else process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE = originalFlag
+  }
+})
+
+test('billing-period shadow failures never block legacy quota enforcement', async () => {
+  const originalQuery = pool.query
+  const originalFlag = process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE
+  process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE = 'true'
+  pool.query = async () => {
+    throw Object.assign(new Error('shadow database failure'), { code: 'TEST_FAILURE' })
+  }
+
+  try {
+    const observation = await observeBillingPeriodQuota({
+      userId: 1,
+      subscriptionContext: {
+        status: 'active',
+        plan: 'monthly',
+        quotaAnchorAt: '2026-01-20T08:30:00.000Z',
+      },
+      legacyPeriodStart: new Date('2026-07-01T00:00:00.000Z'),
+      legacyUsage: 10,
+      uploadLimit: 800,
+      requestedUploads: 1,
+      referenceDate: new Date('2026-07-23T12:00:00.000Z'),
+    })
+
+    assert.equal(observation.comparisonFailed, true)
+    assert.equal(observation.legacyUsage, 10)
+  } finally {
+    pool.query = originalQuery
+    if (originalFlag === undefined) delete process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE
+    else process.env.RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE = originalFlag
   }
 })
 

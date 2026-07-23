@@ -497,6 +497,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             `UPDATE users
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
+                 quota_anchor_at = COALESCE(quota_anchor_at, $8, $5),
                  trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
                  paddle_subscription_id = COALESCE($2, paddle_subscription_id),
                  paddle_customer_id = COALESCE($3, paddle_customer_id),
@@ -508,7 +509,16 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                  updated_at = NOW()
              WHERE id = $1
                AND ($5::timestamp IS NULL OR current_period_end IS NULL OR $5::timestamp >= current_period_end)`,
-            [userId, transactionSubscriptionId, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload, paddle), payload?.data?.billing_period?.ends_at || null, payload?.data?.billing_period?.ends_at || null, paddle.environment],
+            [
+              userId,
+              transactionSubscriptionId,
+              getPaddleCustomerId(payload),
+              getStoredSubscriptionPlan(payload, paddle),
+              payload?.data?.billing_period?.ends_at || null,
+              payload?.data?.billing_period?.ends_at || null,
+              paddle.environment,
+              payload?.data?.billing_period?.starts_at || null,
+            ],
           )
         }
 
@@ -633,11 +643,26 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                  ELSE cancellation_effective_at
                END,
                subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
+               quota_anchor_at = CASE
+                 WHEN $3 = 'active' THEN COALESCE(quota_anchor_at, $10, $6)
+                 ELSE quota_anchor_at
+               END,
                trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,
                updated_at = NOW()
            WHERE id = $1
              AND ($6::timestamp IS NULL OR current_period_end IS NULL OR $6::timestamp >= current_period_end)`,
-          [user.id, subscriptionFromEvent, updatedStatus, getPaddleCustomerId(payload), getStoredSubscriptionPlan(payload, paddle), payload?.data?.current_billing_period?.ends_at || null, payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null, paddle.environment, getScheduledCancellationEffectiveAt(payload)],
+          [
+            user.id,
+            subscriptionFromEvent,
+            updatedStatus,
+            getPaddleCustomerId(payload),
+            getStoredSubscriptionPlan(payload, paddle),
+            payload?.data?.current_billing_period?.ends_at || null,
+            payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null,
+            paddle.environment,
+            getScheduledCancellationEffectiveAt(payload),
+            payload?.data?.current_billing_period?.starts_at || null,
+          ],
         )
       }
     }

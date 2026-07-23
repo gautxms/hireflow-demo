@@ -153,6 +153,7 @@ function buildSubscriptionUpdatedPayload(overrides = {}) {
         paddleEnvironment: 'sandbox',
       },
       current_billing_period: {
+        starts_at: '2026-06-24T00:00:00.000Z',
         ends_at: '2026-07-24T00:00:00.000Z',
       },
       next_billed_at: '2026-07-24T00:00:00.000Z',
@@ -176,6 +177,7 @@ function buildSubscriptionCreatedPayload(overrides = {}) {
       },
       scheduled_change: null,
       current_billing_period: {
+        starts_at: '2026-07-10T09:44:40.151545Z',
         ends_at: '2026-08-10T09:44:40.151545Z',
       },
       next_billed_at: '2026-08-10T09:44:40.151545Z',
@@ -282,6 +284,8 @@ test('POST /api/paddle/webhook clears stale cancellation_effective_at when subsc
   assert.match(updateCall.sql, /cancellation_effective_at = CASE/)
   assert.equal(updateCall.params[2], 'active')
   assert.equal(updateCall.params[8], null)
+  assert.equal(updateCall.params[9], '2026-06-24T00:00:00.000Z')
+  assert.match(updateCall.sql, /quota_anchor_at = CASE/)
 })
 
 test('POST /api/paddle/webhook processes active subscription.created with null scheduled_change', async (t) => {
@@ -297,6 +301,7 @@ test('POST /api/paddle/webhook processes active subscription.created with null s
   assert.equal(updateCall.params[1], 'sub_01kx5pmebr2rska4ygrxz2zbeb')
   assert.equal(updateCall.params[2], 'active')
   assert.equal(updateCall.params[8], null)
+  assert.equal(updateCall.params[9], '2026-07-10T09:44:40.151545Z')
   assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
 })
 
@@ -459,7 +464,10 @@ test('POST /api/paddle/webhook derives monthly from transaction.completed test m
       subscription_id: 'sub_test_123',
       customer_id: 'ctm_test_123',
       custom_data: { userId: 42, plan: 'annual', paddleEnvironment: 'sandbox' },
-      billing_period: { ends_at: '2026-08-24T00:00:00.000Z' },
+      billing_period: {
+        starts_at: '2026-07-24T00:00:00.000Z',
+        ends_at: '2026-08-24T00:00:00.000Z',
+      },
       items: [
         { price: { id: 'pri_test_annual' }, quantity: -1, totals: { total: '-1200' }, description: 'Credit for removed test annual plan' },
         { price: { id: 'pri_test_monthly' }, quantity: 1, totals: { total: '100' }, description: 'Test monthly plan' },
@@ -1391,7 +1399,10 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
       subscription_id: 'sub_test_123',
       customer_id: 'ctm_test_123',
       custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
-      billing_period: { ends_at: '2026-08-24T00:00:00.000Z' },
+      billing_period: {
+        starts_at: '2026-07-24T00:00:00.000Z',
+        ends_at: '2026-08-24T00:00:00.000Z',
+      },
     },
   }
   const rawBody = JSON.stringify(payload)
@@ -1409,4 +1420,7 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
 
   assert.equal(response.status, 200)
   assert.equal(calls.some(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql)), true)
+  const activeUpdate = calls.find(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql))
+  assert.match(activeUpdate.sql, /quota_anchor_at = COALESCE/)
+  assert.equal(activeUpdate.params[7], '2026-07-24T00:00:00.000Z')
 })
