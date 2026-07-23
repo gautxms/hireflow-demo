@@ -47,6 +47,7 @@ const migrationFiles = [
   '043-add-trial-consumption',
   '044-allow-keep-subscription-change-events',
   '045-add-resume-quota-anchor',
+  '046-add-resume-quota-reservations',
 ]
 
 async function ensureMigrationsTable(client) {

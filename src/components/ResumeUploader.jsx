@@ -23,6 +23,7 @@ import { buildFailedAnalysisState } from './resumeUploaderRecoveryState'
 import { shouldSkipStateUpdate, waitWithAbort } from './abortableAsync'
 import { mergeCandidatesByResumeId, summarizeJobStatus } from './resumeAnalysisAggregation'
 import '../styles/resume-uploader.css'
+import { preflightResumeQuota } from '../utils/resumeQuotaPreflight.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
@@ -428,6 +429,11 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       let analysisId = ''
 
       try {
+        const quotaPreflight = await preflightResumeQuota({
+          apiBase: API_BASE,
+          token,
+          fileCount: uploadedFiles.length,
+        })
         for (const entry of uploadedFiles) {
           const file = entry.file
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
@@ -439,13 +445,16 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(buildChunkInitPayload({
-              filename: file.name,
-              fileSize: file.size,
-              mimeType: inferResumeMimeType(file),
-              selectedJobDescriptionId,
-              analysisId,
-            })),
+            body: JSON.stringify({
+              ...buildChunkInitPayload({
+                filename: file.name,
+                fileSize: file.size,
+                mimeType: inferResumeMimeType(file),
+                selectedJobDescriptionId,
+                analysisId,
+              }),
+              ...(quotaPreflight.reservationId ? { quotaReservationId: quotaPreflight.reservationId } : {}),
+            }),
           })
 
           if (!initResponse.ok) {

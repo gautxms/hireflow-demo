@@ -53,10 +53,17 @@ async function requestJson(path, { method = 'POST', headers = {}, body } = {}) {
 
 function mockChunkUploadQueries(t, handler) {
   const queries = []
-  t.mock.method(pool, 'query', async (sql, params) => {
-    queries.push({ sql, params })
-    return handler(sql, params, queries)
-  })
+  const execute = async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params })
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(text)) return { rows: [] }
+    if (text.includes('UPDATE upload_chunks') && text.includes('quota_recorded = true')) {
+      return { rows: [{ upload_id: params[0] }] }
+    }
+    return handler(text, params, queries)
+  }
+  t.mock.method(pool, 'query', execute)
+  t.mock.method(pool, 'connect', async () => ({ query: execute, release() {} }))
   return queries
 }
 
@@ -106,6 +113,42 @@ test('POST /api/uploads/chunks/init enforces monthly quota before creating a ses
   assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
 })
 
+test('POST /api/uploads/chunks/preflight rejects a 795 plus 10 batch before any session starts', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 795 }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/preflight', {
+    headers: authHeader(),
+    body: { fileCount: 10, quotaIdempotencyKey: 'ten-file-batch' },
+  })
+
+  assert.equal(response.status, 429)
+  assert.equal(payload.used, 795)
+  assert.equal(payload.requested, 10)
+  assert.equal(payload.remaining, 5)
+  assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
+})
+
+test('POST /api/uploads/chunks/preflight validates the whole-batch file count', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/preflight', {
+    headers: authHeader(),
+    body: { fileCount: 21 },
+  })
+
+  assert.equal(response.status, 400)
+  assert.match(payload.error, /between 1 and 20/)
+  assert.equal(queries.length, 1)
+})
+
 test('POST /api/uploads/chunks/init records exactly one usage row for a new session', async (t) => {
   const queries = mockChunkUploadQueries(t, (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
@@ -128,7 +171,7 @@ test('POST /api/uploads/chunks/init records exactly one usage row for a new sess
   assert.equal(payload.resumed, false)
   const usageWrites = queries.filter(({ sql }) => sql.includes('INSERT INTO usage_log'))
   assert.equal(usageWrites.length, 1)
-  assert.equal(usageWrites[0].params[3], 1)
+  assert.deepEqual(usageWrites[0].params.slice(0, 2), [1, '::ffff:127.0.0.1'])
 })
 
 test('POST /api/uploads/chunks/init passes clientChunkSize through to session creation', async (t) => {

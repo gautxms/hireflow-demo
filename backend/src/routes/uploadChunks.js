@@ -3,19 +3,25 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import {
   enforceUploadLimit,
-  recordUploadUsage,
+  recordChunkUploadUsage,
   requireActiveSubscription,
 } from '../middleware/subscriptionCheck.js'
+import {
+  consumeResumeQuotaReservation,
+  releaseResumeQuotaReservation,
+} from '../services/resumeQuotaReservations.js'
 import {
   CHUNK_SIZE_BYTES,
   MAX_FILE_SIZE_BYTES,
   completeChunkUpload,
+  getChunkUploadQuotaState,
   getChunkUploadStatus,
   initChunkUpload,
   storeChunk,
 } from '../services/fileUploadService.js'
 
 const router = Router()
+const MAX_BATCH_FILE_COUNT = 20
 
 const chunkUpload = multer({
   storage: multer.memoryStorage(),
@@ -25,7 +31,27 @@ const chunkUpload = multer({
   },
 })
 
+router.post('/preflight', requireAuth, requireActiveSubscription, (req, res, next) => {
+  const fileCount = Number(req.body?.fileCount)
+  if (!Number.isInteger(fileCount) || fileCount <= 0 || fileCount > MAX_BATCH_FILE_COUNT) {
+    return res.status(400).json({
+      error: `fileCount must be an integer between 1 and ${MAX_BATCH_FILE_COUNT}`,
+    })
+  }
+  req.quotaRequestedUploads = fileCount
+  return next()
+}, enforceUploadLimit, (req, res) => res.json({
+  ok: true,
+  reservationId: req.usageContext?.quotaReservation?.id || null,
+  requested: req.usageContext?.requestedUploads || 0,
+  limit: req.usageContext?.uploadLimit || 0,
+  used: req.usageContext?.currentUsage || 0,
+  remaining: req.usageContext?.remainingUploads || 0,
+}))
+
 router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit, async (req, res) => {
+  const quotaReservationId = req.usageContext?.quotaReservation?.id || null
+  let quotaSettled = false
   try {
     const { filename, fileSize, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize } = req.body || {}
     console.log(
@@ -56,19 +82,50 @@ router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit,
       analysisId: analysisId || null,
       analysisName: analysisName || null,
       clientChunkSize,
+      quotaReservationId,
     })
+    const sessionQuotaState = getChunkUploadQuotaState(session)
 
-    if (session.resumed !== true) {
-      await recordUploadUsage({
+    if (sessionQuotaState.quotaRecorded !== true) {
+      if (quotaReservationId) {
+        await consumeResumeQuotaReservation({
+          userId: req.userId,
+          reservationId: quotaReservationId,
+          units: 1,
+          monthStart: req.usageContext.monthStart,
+          ipAddress: req.usageContext.ipAddress,
+          uploadId: session.uploadId,
+        })
+      } else {
+        await recordChunkUploadUsage({
+          userId: req.userId,
+          uploadId: session.uploadId,
+          monthStart: req.usageContext.monthStart,
+          ipAddress: req.usageContext.ipAddress,
+        })
+      }
+    } else if (quotaReservationId) {
+      await releaseResumeQuotaReservation({
         userId: req.userId,
-        monthStart: req.usageContext.monthStart,
-        ipAddress: req.usageContext.ipAddress,
-        uploadCount: req.usageContext.requestedUploads,
+        reservationId: quotaReservationId,
+        units: 1,
       })
     }
+    quotaSettled = true
 
     return res.json(session)
   } catch (error) {
+    if (quotaReservationId && !quotaSettled) {
+      try {
+        await releaseResumeQuotaReservation({
+          userId: req.userId,
+          reservationId: quotaReservationId,
+          units: 1,
+        })
+      } catch (releaseError) {
+        console.error('[UploadChunks] failed to release quota reservation after init error:', releaseError)
+      }
+    }
     console.error('[UploadChunks] init failed:', error)
     const message = error.message || 'Unable to initialize chunk upload'
     const statusCode = message.startsWith('clientChunkSize ') ? 400 : 500

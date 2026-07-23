@@ -30,6 +30,19 @@ const s3Client = new S3Client({
       }
     : undefined,
 })
+const chunkUploadQuotaState = new WeakMap()
+
+function withChunkUploadQuotaState(session, state) {
+  chunkUploadQuotaState.set(session, state)
+  return session
+}
+
+export function getChunkUploadQuotaState(session) {
+  return chunkUploadQuotaState.get(session) || {
+    quotaRecorded: true,
+    quotaReservationId: null,
+  }
+}
 
 function toBuffer(streamOrBuffer) {
   if (Buffer.isBuffer(streamOrBuffer)) {
@@ -201,7 +214,7 @@ export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
   return true
 }
 
-export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null, clientChunkSize = undefined }) {
+export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null, clientChunkSize = undefined, quotaReservationId = null }) {
   ensureS3Configured()
   await ensureUploadChunkTables()
   await ensureAnalysisTables()
@@ -266,7 +279,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   }
 
   const existingResult = await pool.query(
-    `SELECT upload_id, uploaded_chunks, total_chunks
+    `SELECT upload_id, uploaded_chunks, total_chunks, quota_recorded, quota_reservation_id
      FROM upload_chunks
      WHERE user_id = $1
        AND filename = $2
@@ -280,13 +293,16 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   )
 
   if (existingResult.rows[0]) {
-    return {
+    return withChunkUploadQuotaState({
       uploadId: existingResult.rows[0].upload_id,
       totalChunks: Number(existingResult.rows[0].total_chunks),
       uploadedChunks: existingResult.rows[0].uploaded_chunks || [],
       resumed: true,
       analysisId: resolvedAnalysisId,
-    }
+    }, {
+      quotaRecorded: existingResult.rows[0].quota_recorded !== false,
+      quotaReservationId: existingResult.rows[0].quota_reservation_id || null,
+    })
   }
 
   const uploadId = crypto.randomUUID()
@@ -294,19 +310,22 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
 
   await pool.query(
     `INSERT INTO upload_chunks
-      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, analysis_id, expires_at)
+      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, analysis_id, quota_reservation_id, quota_recorded, expires_at)
      VALUES
-      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, $10, NOW() + INTERVAL '24 hours')`,
-    [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId, resolvedAnalysisId],
+      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, $10, $11, false, NOW() + INTERVAL '24 hours')`,
+    [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId, resolvedAnalysisId, quotaReservationId],
   )
 
-  return {
+  return withChunkUploadQuotaState({
     uploadId,
     totalChunks,
     uploadedChunks: [],
     resumed: false,
     analysisId: resolvedAnalysisId,
-  }
+  }, {
+    quotaRecorded: false,
+    quotaReservationId: quotaReservationId || null,
+  })
 }
 
 export async function storeChunk({ userId, uploadId, chunkIndex, totalChunks, chunkBuffer }) {
