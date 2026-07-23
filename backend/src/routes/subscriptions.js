@@ -458,7 +458,27 @@ router.get('/current', requireAuth, async (req, res) => {
               trial_ends_at, trial_consumed_at,
               payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
               paddle_environment,
-              EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts
+              EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts,
+              (
+                SELECT attempt.next_retry_at
+                FROM payment_attempts attempt
+                WHERE attempt.user_id = users.id
+                  AND attempt.status IN ('failed', 'retrying')
+                  AND attempt.next_retry_at IS NOT NULL
+                  AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+                    = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+                  AND (
+                    users.paddle_subscription_id IS NULL
+                    OR COALESCE(
+                      attempt.payload->'data'->>'subscription_id',
+                      attempt.payload->'data'->>'subscriptionId',
+                      attempt.payload->>'subscription_id',
+                      attempt.payload->>'subscriptionId'
+                    ) = users.paddle_subscription_id
+                  )
+                ORDER BY attempt.updated_at DESC, attempt.id DESC
+                LIMIT 1
+              ) AS next_payment_retry_at
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -571,6 +591,9 @@ router.get('/current', requireAuth, async (req, res) => {
           && ['inactive', 'no_subscription', 'none', 'free', ''].includes(normalizeStatus(user.subscription_status)),
         renewalDate: isFinalCancellation ? null : isoOrNull(user.subscription_renewal_date || user.current_period_end),
         nextBillingDate: isFinalCancellation ? null : isoOrNull(user.next_billing_date || user.current_period_end),
+        nextRetryAt: ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
+          ? isoOrNull(user.next_payment_retry_at)
+          : null,
         cancellationEffectiveAt,
         cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: isFinalCancellation ? null : user.payment_method_last4

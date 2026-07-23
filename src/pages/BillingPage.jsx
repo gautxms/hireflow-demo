@@ -15,6 +15,12 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : '—'
 }
 
+function formatDateTime(value) {
+  return value
+    ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : '—'
+}
+
 function isRetryablePreviewError(code) {
   return code === 'PADDLE_SUBSCRIPTION_UPDATE_FAILED' || code === 'UNKNOWN'
 }
@@ -152,7 +158,13 @@ export default function BillingPage() {
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
   const shouldShowCancelAction = canShowCancelAction(subscriptionState, subscription)
-  const billingMetadataRows = getBillingMetadataRows(subscriptionState, subscription, formatDate)
+  const billingMetadataRows = getBillingMetadataRows(
+    subscriptionState,
+    subscription,
+    formatDate,
+    new Date(),
+    formatDateTime,
+  )
   const pastDueBillingNotice = subscriptionState.isPastDue ? getPastDueBillingNotice() : ''
   const hasBillingHistory = shouldRenderBillingHistory(history)
   const hasScheduledCancellation = subscriptionState.isCancellationScheduled

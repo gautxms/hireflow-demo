@@ -319,6 +319,47 @@ test('GET /api/subscriptions/current removes stale renewal and payment metadata 
   assert.equal(res.payload.subscription.cancellationEffectiveAt, '2020-01-07T00:00:00.000Z')
 })
 
+test('GET /api/subscriptions/current exposes only the pending retry for the current subscription lifecycle', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    ...activeMonthlyUser(),
+    subscription_status: 'past_due',
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'sandbox',
+    next_billing_date: '2026-08-23T00:00:00.000Z',
+    next_payment_retry_at: '2026-07-23T16:30:00.000Z',
+  })
+  mockPaddleResponse({ payload: { data: { id: 'sub_123', status: 'past_due' } } })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.nextBillingDate, '2026-08-23T00:00:00.000Z')
+  assert.equal(res.payload.subscription.nextRetryAt, '2026-07-23T16:30:00.000Z')
+
+  const userQuery = String(calls.find(({ sql }) => String(sql).includes('FROM users'))?.sql)
+  assert.match(userQuery, /attempt\.status IN \('failed', 'retrying'\)/)
+  assert.match(userQuery, /attempt\.next_retry_at IS NOT NULL/)
+  assert.match(userQuery, /attempt\.paddle_environment/)
+  assert.match(userQuery, /attempt\.payload->'data'->>'subscription_id'/)
+  assert.match(userQuery, /= users\.paddle_subscription_id/)
+})
+
+test('GET /api/subscriptions/current hides retry timestamps outside payment-recovery states', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    next_payment_retry_at: '2026-07-23T16:30:00.000Z',
+  })
+  mockPaddleResponse({ payload: { data: { id: 'sub_123', status: 'active' } } })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.nextRetryAt, null)
+})
+
 test('GET /api/subscriptions/current returns Paddle actual annual INR price for gated test annual price', async () => {
   resetPaddleEnv()
   enableTestUpgrade()

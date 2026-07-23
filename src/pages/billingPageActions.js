@@ -115,7 +115,13 @@ export function shouldRenderBillingHistory(history) {
   return Array.isArray(history) && history.length > 0
 }
 
-export function getBillingMetadataRows(subscriptionState, subscription, formatDate = (value) => value, now = new Date()) {
+export function getBillingMetadataRows(
+  subscriptionState,
+  subscription,
+  formatDate = (value) => value,
+  now = new Date(),
+  formatDateTime = formatDate,
+) {
   const rows = []
   const scheduledCancellation = hasScheduledCancellation(subscriptionState, subscription, now)
   const finalCancellation = isFinalCancellationBillingState(subscriptionState, subscription, now)
@@ -133,7 +139,13 @@ export function getBillingMetadataRows(subscriptionState, subscription, formatDa
   }
 
   if (isPastDue) {
-    rows.push({ label: subscription?.nextBillingDate ? 'Retry date' : 'Payment due', value: subscription?.nextBillingDate ? formatDate(subscription.nextBillingDate) : 'Now' })
+    const nextRetryAt = subscription?.nextRetryAt || subscription?.next_retry_at
+    const retryDate = nextRetryAt ? new Date(nextRetryAt) : null
+    const hasFutureRetry = retryDate && !Number.isNaN(retryDate.getTime()) && retryDate > now
+    rows.push({
+      label: hasFutureRetry ? 'Retry date' : 'Payment due',
+      value: hasFutureRetry ? formatDateTime(nextRetryAt) : 'Now',
+    })
   } else {
     if (!scheduledCancellation) {
       rows.push({ label: 'Renewal date', value: formatDate(subscription?.renewalDate) })
