@@ -57,6 +57,19 @@ test('explicit scheduled cancellation status can use a future currentPeriodEnd',
   assert.equal(resolved.paidThroughDate, '2027-01-07T00:00:00.000Z')
 })
 
+test('expired authoritative cancellation date is not replaced by a later period end', () => {
+  const resolved = state({
+    status: 'cancellation_scheduled',
+    cancellationEffectiveAt: PAST,
+    currentPeriodEnd: FUTURE,
+    hasHistoricalData: true,
+  })
+
+  assert.equal(resolved.isCancellationScheduled, false)
+  assert.equal(resolved.hasActivePaidAccess, false)
+  assert.equal(resolved.canUsePaidMutation, false)
+})
+
 test('terminal cancelled subscription does not use a stale future currentPeriodEnd', () => {
   const resolved = state({
     status: 'cancelled',
